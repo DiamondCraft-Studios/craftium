@@ -1,0 +1,52 @@
+name: Build Craftium 1.21.10
+
+# Runs when shared code or anything 1.21.10 owns changes. Branches: main and the 1.21.10 release branch.
+on:
+  push:
+    branches: [main, release/1.21.10]
+    paths:
+      - 'src/**'
+      - 'versions/1.21.10/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'branding/**'
+      - 'LICENSE'
+      - 'THIRD-PARTY-NOTICES.md'
+      - '.github/workflows/build-1.21.10.yml'
+      - '.github/workflows/build-version.yml'
+  pull_request:
+    branches: [main, release/1.21.10]
+    paths:
+      - 'src/**'
+      - 'versions/1.21.10/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'branding/**'
+      - 'LICENSE'
+      - 'THIRD-PARTY-NOTICES.md'
+      - '.github/workflows/build-1.21.10.yml'
+      - '.github/workflows/build-version.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-1.21.10-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-version.yml
+    with:
+      artifact: craftium-1.21.10
+      tasks: ':versions:mc-1.21.10:build :versions:mc-1.21.10:compileGametestJava'
+      jars: |
+        versions/1.21.10/build/libs/*.jar
+        !**/*-sources.jar
+      reports: |
+        versions/1.21.10/build/reports/tests/test/

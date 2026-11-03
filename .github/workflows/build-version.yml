@@ -1,17 +1,28 @@
-name: Build Craftium
+name: Build one version
 
+# Reusable job shared by build-26.2.yml and build-1.21.10.yml.
 on:
-  push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tasks:
+        description: Gradle tasks to run
+        type: string
+        required: true
+      jars:
+        description: Paths of the JARs to upload, one per line
+        type: string
+        required: true
+      reports:
+        description: Paths of the test reports to upload, one per line
+        type: string
+        required: true
+      artifact:
+        description: Name prefix for the uploaded artifacts
+        type: string
+        required: true
 
 permissions:
   contents: read
-
-concurrency:
-  group: build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -34,25 +45,20 @@ jobs:
         with:
           cache-provider: basic
 
-      - name: Build mod and companion, run unit tests, compile game tests
-        run: ./gradlew build :server-plugin:build compileGametestJava --no-daemon
+      - name: Build, run unit tests, compile game tests
+        run: ./gradlew ${{ inputs.tasks }} --no-daemon
 
       - name: Upload JARs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: craftium-jars
-          path: |
-            build/libs/*.jar
-            server-plugin/build/libs/*.jar
-            !**/*-sources.jar
+          name: ${{ inputs.artifact }}-jars
+          path: ${{ inputs.jars }}
           if-no-files-found: error
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: craftium-test-reports
-          path: |
-            build/reports/tests/test/
-            server-plugin/build/reports/tests/test/
+          name: ${{ inputs.artifact }}-test-reports
+          path: ${{ inputs.reports }}
           if-no-files-found: warn
