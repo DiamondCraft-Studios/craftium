@@ -34,6 +34,7 @@ public final class Options {
     }
     /** The radius the shape's outer edge is at: the radius, plus {@link #outlineShift()}, within the reach shapes may have. */
     public int outerRadius() { return Math.min(radius + outlineShift(), BrushMath.MAX_REACH); }
+    /** Hand placement and breaking only; blocks the editor's tools write never update anything (see BlockSnapshot.NO_UPDATES). */
     public boolean noUpdates, forcePlace, replaceMode, enhancedFlight, bulldozer, tinker;
     public boolean inSelection;
     /** Whether undo and redo flash the blocks they change. */

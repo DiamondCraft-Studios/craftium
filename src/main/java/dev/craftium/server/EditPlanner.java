@@ -265,6 +265,6 @@ final class EditPlanner {
         }
     }
     Session.Edit finish(String name) {
-        return new Session.Edit(name,List.copyOf(changes.values()),List.copyOf(biomes.values()),o.noUpdates?2|16:3);
+        return new Session.Edit(name,List.copyOf(changes.values()),List.copyOf(biomes.values()),BlockSnapshot.NO_UPDATES);
     }
 }
