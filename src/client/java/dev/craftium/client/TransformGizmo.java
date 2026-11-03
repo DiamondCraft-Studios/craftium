@@ -12,7 +12,17 @@ import java.util.*;
 /** Shared editor handles: world/local axes, centre and plane moves, rotation rings and scale nodes. */
 final class TransformGizmo {
     /** MODEL is the selected blocks under the Move, Rotate and Scale tools, which turn about the pivot; PIVOT is the pivot itself. */
-    private enum Kind { PLACEMENT,NODE,ENTITY,SELECTION,MODEL,PIVOT }
+    private enum Kind { PLACEMENT,NODE,ENTITY,SELECTION,MODEL,PIVOT,SHAPE }
+    /** SHAPE is the Shape tool's unbuilt shape. Like MODEL it is measured in blocks, but it is made again from a new pose, never resampled. */
+    private static boolean blocky(Kind kind){return kind==Kind.MODEL||kind==Kind.SHAPE;}
+    /** True while the handles are the shape's own axes, which is when the Scale tool works on it. */
+    private static boolean localBasis;
+    /** The shape is scaled about its centre, and so are blocks with Alt held, so the handle you drag meets the pointer at half the move. */
+    private static boolean centred(){return altDown()||dragging!=null&&dragging.kind==Kind.SHAPE;}
+    /** The shape's pose with the drag in progress applied, or {@code base} when none is. */
+    static ShapeObject.Pose shapeDuringDrag(ShapeObject.Pose base){
+        return dragging!=null&&dragging.kind==Kind.SHAPE?ShapeObject.apply(base,mode,delta,angles,size):base;
+    }
     private record Target(Kind kind,Vec3 anchor,Entity entity){}
     private static final int[] COLORS={0xffff7777,0xff8bef9a,0xff78b9ff};
     private static Target dragging;
@@ -32,6 +42,7 @@ final class TransformGizmo {
         if(ClientState.status.busy())return true;Target target=target(screen);if(target==null)return false;
         if(target.kind==Kind.PLACEMENT){PlacementPreview.origin=PlacementPreview.origin.add(step.x(),step.y(),step.z());return true;}
         if(target.kind==Kind.NODE){screen.moveHandle(screen.handlePoint().add(step.x(),step.y(),step.z()));return true;}
+        if(target.kind==Kind.SHAPE){ShapeObject.move(step);return true;}
         Options original=ClientState.options,request=Packets.JSON.fromJson(Packets.JSON.toJson(original),Options.class);
         try{ClientState.options=request;request.yaw=request.pitch=request.roll=0;request.sizeX=request.sizeY=request.sizeZ=1;request.offsetX=step.x();request.offsetY=step.y();request.offsetZ=step.z();
             if(target.kind==Kind.ENTITY){double size=Minecraft.getInstance().hasShiftDown()?.0001:Minecraft.getInstance().hasControlDown()?1:1d/16;request.entityX=step.x()*size;request.entityY=step.y()*size;request.entityZ=step.z()*size;request.entityScaleX=request.entityScaleY=request.entityScaleZ=1;CraftiumClient.send("entity_gizmo",CraftiumClient.point(target.entity.blockPosition()),null);}
@@ -41,6 +52,7 @@ final class TransformGizmo {
     private static Target target(EditorScreen screen){
         if(PlacementPreview.active()){AABB bounds=bounds();Point p=PlacementPreview.origin;return new Target(Kind.PLACEMENT,new Vec3(p.x(),p.y(),p.z()).add(bounds.getCenter()),null);}
         Point node=screen.handlePoint();if(node!=null)return new Target(Kind.NODE,new Vec3(node.x(),node.y(),node.z()),null);
+        if(ShapeObject.gizmoOn())return new Target(Kind.SHAPE,ShapeObject.centre(),null);
         var status=ClientState.status;var o=ClientState.options;
         if(o.tool.transform()){
             if(o.tool==Tool.PIVOT)return new Target(Kind.PIVOT,pivot(),null);
@@ -51,7 +63,7 @@ final class TransformGizmo {
         return null;
     }
     private static AABB bounds(){AABB bounds=PlacementPreview.shape.bounds();return bounds==null?new AABB(0,0,0,1,1,1):bounds;}
-    private static Vec3[] axes(){var o=ClientState.options;Vec3[] result={new Vec3(1,0,0),new Vec3(0,1,0),new Vec3(0,0,1)};if(o.gizmoLocal)for(int i=0;i<3;i++){var v=Geometry.rotate(new Geometry.Vector(result[i].x,result[i].y,result[i].z),o.gizmoYaw,o.gizmoPitch,o.gizmoRoll);result[i]=new Vec3(v.x(),v.y(),v.z());}return result;}
+    private static Vec3[] axes(){var o=ClientState.options;if(localBasis&&ShapeObject.active())return ShapeObject.axes();Vec3[] result={new Vec3(1,0,0),new Vec3(0,1,0),new Vec3(0,0,1)};if(o.gizmoLocal)for(int i=0;i<3;i++){var v=Geometry.rotate(new Geometry.Vector(result[i].x,result[i].y,result[i].z),o.gizmoYaw,o.gizmoPitch,o.gizmoRoll);result[i]=new Vec3(v.x(),v.y(),v.z());}return result;}
     private static double[] project(Vec3 at){var mc=Minecraft.getInstance();var camera=ClientCompat.camera(mc);Vec3 v=at.subtract(camera.position()),plane=ClientCompat.nearPlane(camera).getPointOnPlane(0,0);var near=ClientCompat.nearPlane(camera);Vec3 right=near.getPointOnPlane(1,0).subtract(plane).normalize(),up=near.getPointOnPlane(0,1).subtract(plane).normalize();double depth=v.dot(plane.normalize());if(depth<=.05)return null;double focal=mc.getWindow().getGuiScaledHeight()/(2*Math.tan(Math.toRadians(ClientCompat.fov(mc,camera))/2));return new double[]{mc.getWindow().getGuiScaledWidth()/2d+v.dot(right)*focal/depth,mc.getWindow().getGuiScaledHeight()/2d-v.dot(up)*focal/depth};}
     private static double distance(double x,double y,double[] a,double[] b){if(a==null||b==null)return Double.POSITIVE_INFINITY;double dx=b[0]-a[0],dy=b[1]-a[1],length=dx*dx+dy*dy,t=length<.001?0:Math.clamp(((x-a[0])*dx+(y-a[1])*dy)/length,0,1);return Math.pow(x-a[0]-dx*t,2)+Math.pow(y-a[1]-dy*t,2);}
     static boolean click(EditorScreen screen,double x,double y){
@@ -61,10 +73,10 @@ final class TransformGizmo {
     }
     /** Which handle of the gizmo is under the pointer, or -1: 0 to 2 are the axes, 3 the centre, 4 to 6 the plane handles. */
     private static int pick(Target t,double x,double y){
-        mode=effectiveMode(t);basis=axesAt(t.anchor);pickScale=screenScale(t.anchor);pickExtent=extent(t);pickReach=reach(t,pickExtent);double best=100;int chosen=-1;double[] center=project(t.anchor);
-        boolean plain=t.kind==Kind.MODEL||t.kind==Kind.PIVOT; // the transform tools show only their own handles
+        mode=effectiveMode(t);localBasis=t.kind==Kind.SHAPE&&mode==Options.GizmoMode.SCALE;basis=axesAt(t.anchor);pickScale=screenScale(t.anchor);pickExtent=extent(t);pickReach=reach(t,pickExtent);double best=100;int chosen=-1;double[] center=project(t.anchor);
+        boolean plain=t.kind==Kind.MODEL||t.kind==Kind.PIVOT||t.kind==Kind.SHAPE&&ClientState.options.tool.transform(); // the transform tools show only their own handles
         // The centre: free move, even scaling for the Scale tool's circle; Rotate has the trackball instead, below.
-        if((!plain||mode==Options.GizmoMode.SCALE&&t.kind==Kind.MODEL)&&mode!=Options.GizmoMode.ROTATE&&center!=null&&Math.pow(x-center[0],2)+Math.pow(y-center[1],2)<81)chosen=3;
+        if((!plain||mode==Options.GizmoMode.SCALE&&blocky(t.kind))&&mode!=Options.GizmoMode.ROTATE&&center!=null&&Math.pow(x-center[0],2)+Math.pow(y-center[1],2)<81)chosen=3;
         if(chosen<0)for(int i=0;i<3;i++){
             if(mode==Options.GizmoMode.ROTATE){Vec3 a=basis[(i+1)%3],b=basis[(i+2)%3];for(int j=0;j<96;j++){double v=j*Math.PI/48,w=(j+1)*Math.PI/48;double d=distance(x,y,project(t.anchor.add(a.scale(Math.cos(v)*3.5*pickScale)).add(b.scale(Math.sin(v)*3.5*pickScale))),project(t.anchor.add(a.scale(Math.cos(w)*3.5*pickScale)).add(b.scale(Math.sin(w)*3.5*pickScale))));if(d<best){best=d;chosen=i;}}}
             else if(mode==Options.GizmoMode.SCALE&&pickExtent!=null){var pixel=project(faceCenter(faceBase(t),basis,pickExtent,i));double d=pixel==null?Double.POSITIVE_INFINITY:Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2);if(d<144&&d<best){best=d;chosen=i;}}
@@ -97,11 +109,11 @@ final class TransformGizmo {
         }
         if(mode==Options.GizmoMode.ROTATE&&handle==7){ // the ring facing the camera: turn about the view
             double view=Math.IEEEremainder(Math.toDegrees(screenAngle(x,y,dragging.anchor)-startAngle),360);
-            view=snap(view,mc.hasShiftDown()?1:mc.hasControlDown()?5:dragging.kind==Kind.MODEL?15:5);
+            view=snap(view,mc.hasShiftDown()?1:mc.hasControlDown()?5:blocky(dragging.kind)?15:5);
             setRotation(axisAngle(cameraAxes()[2],Math.toRadians(view)));
             return true;
         }
-        if(mode==Options.GizmoMode.ROTATE){double degrees=Math.toDegrees(angle(x,y,dragging.anchor,handle)-startAngle);degrees=Math.IEEEremainder(degrees,360);degrees=snap(degrees,mc.hasShiftDown()?1:mc.hasControlDown()?(dragging.kind==Kind.MODEL?5:15):entity||ClientState.options.unlockRotation?5:dragging.kind==Kind.MODEL?15:90);Vec3 vector=basis[handle].scale(degrees);angles=new Vec3(vector.x,vector.y,vector.z);return true;}
+        if(mode==Options.GizmoMode.ROTATE){double degrees=Math.toDegrees(angle(x,y,dragging.anchor,handle)-startAngle);degrees=Math.IEEEremainder(degrees,360);degrees=snap(degrees,mc.hasShiftDown()?1:mc.hasControlDown()?(blocky(dragging.kind)?5:15):entity||ClientState.options.unlockRotation?5:blocky(dragging.kind)?15:90);Vec3 vector=basis[handle].scale(degrees);angles=new Vec3(vector.x,vector.y,vector.z);return true;}
         var center=project(dragging.anchor);if(center==null)return true;
         if(handle==3&&mode==Options.GizmoMode.MOVE){
             // The handle stays under the pointer at the depth it was grabbed, so it goes along when the camera does.
@@ -115,16 +127,16 @@ final class TransformGizmo {
             double sx=(pa[0]-center[0])+(pb[0]-center[0]),sy=(pa[1]-center[1])+(pb[1]-center[1]),span=sx*sx+sy*sy;if(span<.001)return true;
             double amount=((x-startX)*sx+(y-startY)*sy)/span; // blocks along each of the two axes
             double[] factor={1,1,1};
-            if(dragging.kind==Kind.MODEL&&pickExtent!=null){
+            if(blocky(dragging.kind)&&pickExtent!=null){
                 double[] blocks={pickExtent.x,pickExtent.y,pickExtent.z};
-                for(int axis:new int[]{a,b})factor[axis]=gridFactor(blocks[axis],Math.max(1,blocks[axis])+amount*(altDown()?2:1),mc.hasControlDown());
+                for(int axis:new int[]{a,b})factor[axis]=gridFactor(blocks[axis],Math.max(1,blocks[axis])+amount*(centred()?2:1),mc.hasControlDown());
             }else{double all=Math.clamp(snap(1+amount/(5*pickScale),1d/16),.1,8);factor[a]=factor[b]=all;}
             size=new Vec3(factor[0],factor[1],factor[2]);
             return true;
         }
         if(mode==Options.GizmoMode.SCALE&&handle==3){ // the circle in the middle scales every axis: drag up to grow
             double all=Math.clamp(1+(startY-y)/120d,.05,8);
-            if(dragging.kind==Kind.MODEL&&pickExtent!=null){
+            if(blocky(dragging.kind)&&pickExtent!=null){
                 boolean smooth=mc.hasControlDown();
                 size=new Vec3(gridFactor(pickExtent.x,pickExtent.x*all,smooth),gridFactor(pickExtent.y,pickExtent.y*all,smooth),gridFactor(pickExtent.z,pickExtent.z*all,smooth));
             }else size=new Vec3(all,all,all);
@@ -132,11 +144,11 @@ final class TransformGizmo {
         }
         if(handle>=4){int a=(handle-4+1)%3,b=(handle-4+2)%3;double[] pa=project(dragging.anchor.add(basis[a])),pb=project(dragging.anchor.add(basis[b]));if(pa==null||pb==null)return true;double ax=pa[0]-center[0],ay=pa[1]-center[1],bx=pb[0]-center[0],by=pb[1]-center[1],det=ax*by-ay*bx;if(Math.abs(det)<.001)return true;double dx=x-startX,dy=y-startY;delta=basis[a].scale(snap((dx*by-dy*bx)/det,increment)).add(basis[b].scale(snap((dy*ax-dx*ay)/det,increment)));return true;}
         int axis=handle==3?1:handle;var end=project(dragging.anchor.add(basis[axis]));if(end==null)return true;double dx=end[0]-center[0],dy=end[1]-center[1],length=dx*dx+dy*dy;if(length<.001)return true;double amount=((x-startX)*dx+(y-startY)*dy)/length;
-        if(mode==Options.GizmoMode.SCALE&&dragging.kind==Kind.MODEL&&pickExtent!=null){
+        if(mode==Options.GizmoMode.SCALE&&blocky(dragging.kind)&&pickExtent!=null){
             // The handle sits on a face, so the face follows the pointer: the far side stays put, or with Alt the centre does.
             // The size is a whole number of blocks unless Ctrl is held, which allows any size.
             double n=Math.max(1,new double[]{pickExtent.x,pickExtent.y,pickExtent.z}[axis]);
-            double target=n+amount*(altDown()?2:1);
+            double target=n+amount*(centred()?2:1);
             if(!mc.hasControlDown())target=Math.rint(target);
             double factor=Math.clamp(Math.max(target,mc.hasControlDown()?.1:1)/n,.01,64);
             size=new Vec3(axis==0?factor:1,axis==1?factor:1,axis==2?factor:1);
@@ -148,6 +160,7 @@ final class TransformGizmo {
     static boolean release(EditorScreen screen){
         if(dragging==null)return false;Target t=dragging;Options original=ClientState.options,request=Packets.JSON.fromJson(Packets.JSON.toJson(original),Options.class);try{
             if(t.kind==Kind.NODE){Point p=new Point((int)Math.round(t.anchor.x+delta.x),(int)Math.round(t.anchor.y+delta.y),(int)Math.round(t.anchor.z+delta.z));screen.moveHandle(p);screen.handlesMoved();return true;}
+            if(t.kind==Kind.SHAPE){ShapeObject.set(ShapeObject.apply(ShapeObject.pose(),mode,delta,angles,size));return true;} // the shape is made again from its new pose
             if(t.kind==Kind.PIVOT){original.pivotSet=true;original.pivotX=t.anchor.x+delta.x;original.pivotY=t.anchor.y+delta.y;original.pivotZ=t.anchor.z+delta.z;return true;}
             request.yaw=angles.y;request.pitch=angles.x;request.roll=angles.z;request.sizeX=size.x;request.sizeY=size.y;request.sizeZ=size.z;request.offsetX=(int)Math.round(delta.x);request.offsetY=(int)Math.round(delta.y);request.offsetZ=(int)Math.round(delta.z);ClientState.options=request;
             if(t.kind==Kind.PLACEMENT){PlacementPreview.origin=PlacementPreview.origin.add(request.offsetX,request.offsetY,request.offsetZ);if(mode!=Options.GizmoMode.MOVE)CraftiumClient.send("clipboard_transform",null,null);}
@@ -224,9 +237,10 @@ final class TransformGizmo {
     static void draw(EditorScreen screen){
         Target t=dragging==null?target(screen):dragging;if(t==null)return;
         if(dragging==null)updateHover(screen);else followCamera(screen);
-        faceBase=faceBase(t).add(delta);plainHandles=t.kind==Kind.MODEL||t.kind==Kind.PIVOT;
+        localBasis=t.kind==Kind.SHAPE&&effectiveMode(t)==Options.GizmoMode.SCALE;
+        faceBase=faceBase(t).add(delta);plainHandles=t.kind==Kind.MODEL||t.kind==Kind.PIVOT||t.kind==Kind.SHAPE&&ClientState.options.tool.transform();
         render(t.anchor.add(delta),effectiveMode(t),dragging!=null?handle:hovered,extent(t));
-        faceBase=null;plainHandles=false;
+        faceBase=null;plainHandles=false;localBasis=false;
         if(t.kind==Kind.PIVOT)Overlay.point(t.anchor.add(delta),0xffffd66d,11); // the pivot
     }
     /** The handles at {@code anchor} for show only, as in builder mode where they can't be dragged. */
@@ -241,13 +255,14 @@ final class TransformGizmo {
      */
     private static Options.GizmoMode effectiveMode(Target t){
         if(t.kind==Kind.NODE||t.kind==Kind.PIVOT||t.kind==Kind.SELECTION&&ClientState.options.tool==Tool.BOX_SELECT)return Options.GizmoMode.MOVE;
-        if(t.kind==Kind.MODEL)return switch(ClientState.options.tool){case ROTATE->Options.GizmoMode.ROTATE;case SCALE->Options.GizmoMode.SCALE;default->Options.GizmoMode.MOVE;};
+        if(t.kind==Kind.MODEL||t.kind==Kind.SHAPE&&ClientState.options.tool.transform())return switch(ClientState.options.tool){case ROTATE->Options.GizmoMode.ROTATE;case SCALE->Options.GizmoMode.SCALE;default->Options.GizmoMode.MOVE;};
         return ClientState.options.gizmoMode;
     }
     /** How far the target reaches along each axis, so scale handles can sit on its faces; null when it has no extent, like an entity. */
     private static Vec3 extent(Target t){
         if(t.kind==Kind.SELECTION||t.kind==Kind.MODEL){var s=ClientState.status;Point min=s.min(),max=s.max();return new Vec3(max.x()-min.x()+1,max.y()-min.y()+1,max.z()-min.z()+1);}
         if(t.kind==Kind.PLACEMENT){AABB b=bounds();return new Vec3(b.getXsize(),b.getYsize(),b.getZsize());}
+        if(t.kind==Kind.SHAPE)return ShapeObject.dims();
         return null;
     }
     /** The middle of the face of the target that the scale handle for {@code axis} sits on: the far side along that axis. */
@@ -361,6 +376,10 @@ final class TransformGizmo {
     private static Vec3 faceBase(Target t){
         if(t.kind==Kind.MODEL){Point min=ClientState.status.min();return new Vec3(min.x(),min.y(),min.z());}
         if(t.kind==Kind.PLACEMENT){Point p=PlacementPreview.origin;AABB b=bounds();return new Vec3(p.x()+b.minX,p.y()+b.minY,p.z()+b.minZ);}
+        if(t.kind==Kind.SHAPE){ // the corner of the shape's own box, so the scale handles sit on the middle of its faces
+            Vec3 e=ShapeObject.dims();Vec3[] d=ShapeObject.axes();
+            return t.anchor.subtract(d[0].scale(e.x/2)).subtract(d[1].scale(e.y/2)).subtract(d[2].scale(e.z/2));
+        }
         return t.anchor;
     }
     private static Vec3 faceBase;

@@ -121,7 +121,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void deselectTool(){cancelSelectionJobs();toolActive=false;}
     private void select(Tool tool){
         cancelSelectionJobs();
-        if(tool.transform()&&tool!=Tool.PIVOT&&ClientState.status.selectionSize()==0)ClientState.notify("Select blocks first, then use "+tool.label);
+        if(tool.transform()&&tool!=Tool.PIVOT&&ClientState.status.selectionSize()==0&&!ShapeObject.active())ClientState.notify("Select blocks first, then use "+tool.label);
         toolActive=true;previousTool=o().tool;selectedNode=-1;if(tool!=Tool.BOX_SELECT)ClientState.boxCorners.clear();o().tool=tool;o().gizmoTarget=Options.GizmoTarget.AUTO;builder=false;init();}
     /** Set while a pop-up such as the block picker draws this screen as its backdrop: no flight or cursor handling then. */
     boolean suspended;
@@ -747,11 +747,14 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** Turns a placement waiting to be put down, or else the selection, by quarter turns about the vertical axis through its centre or pivot. */
     private void rotateBy(int quarters){
+        if(ShapeObject.active()){ShapeObject.turn(1,90*quarters);return;}
         if(PlacementPreview.active()){for(int i=0;i<quarters;i++)action("rotate");return;}
         transformSelection(90*quarters,1,1,1);
     }
     /** Mirrors a placement waiting to be put down, or else the selection, across the plane through its centre or pivot normal to axis 0, 1 or 2 (X, Y, Z). */
     private void flip(int axis){
+        // Every shape is the same mirrored sideways, so flipping X or Z is a half turn about Y and flipping Y a half turn about X.
+        if(ShapeObject.active()){ShapeObject.turn(axis==1?0:1,180);return;}
         if(PlacementPreview.active()){action(new String[]{"flip_x","flip_y","flip_z"}[axis]);return;}
         transformSelection(0,axis==0?-1:1,axis==1?-1:1,axis==2?-1:1);
     }
@@ -885,6 +888,11 @@ public final class EditorScreen extends CraftiumScreen {
             return;
         }
         if(o().tool.transform())return; // these work through their handles, not by clicking
+        if(o().tool==Tool.SHAPE){ // the shape is put down, not built: dragging with the button held carries it along
+            var hit=target();
+            if(hit!=null)ShapeObject.place(CraftiumClient.point(hit.getBlockPos()));
+            return;
+        }
         if(o().tool==Tool.BOX_SELECT){
             var hit=target();
             if(hit!=null){
@@ -1055,7 +1063,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(event.key()==GLFW.GLFW_KEY_ESCAPE){cancelLargeSelection();return true;}
         }
         if(CraftiumClient.editorKey.matches(event)){onClose();return true;}
-        if(event.key()==GLFW.GLFW_KEY_ESCAPE){if(ClientState.hasPending())CraftiumClient.send("pending_cancel",null,null);else if(PlacementPreview.active())PlacementPreview.cancel();else if(shapeMenu)shapeMenu=false;else if(ctxCell>=0)ctxCell=-1;else if(help)help=false;else if(transform){transform=false;init();}else if(menu>=0)menu=-1;else onClose();return true;}
+        if(event.key()==GLFW.GLFW_KEY_ESCAPE){if(ClientState.hasPending())CraftiumClient.send("pending_cancel",null,null);else if(ShapeObject.active())ShapeObject.cancel();else if(PlacementPreview.active())PlacementPreview.cancel();else if(shapeMenu)shapeMenu=false;else if(ctxCell>=0)ctxCell=-1;else if(help)help=false;else if(transform){transform=false;init();}else if(menu>=0)menu=-1;else onClose();return true;}
         if(EditorBindings.matches(Action.HELP,event)){perform(Action.HELP);return true;}
         if(help||transform)return true;
         // Shared chords are resolved by the active context, before ordinary tool letters.
@@ -1073,12 +1081,12 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private boolean perform(Action binding){
         switch(binding){
-            case CONFIRM -> {if(ClientState.hasPending())CraftiumClient.send("pending_confirm",null,null);else if(PlacementPreview.active())PlacementPreview.confirm();else action(o().tool==Tool.PATH||o().tool==Tool.MODELLING||o().tool==Tool.MODIFY?"use":"clear");}
+            case CONFIRM -> {if(ClientState.hasPending())CraftiumClient.send("pending_confirm",null,null);else if(ShapeObject.active())ShapeObject.confirm();else if(PlacementPreview.active())PlacementPreview.confirm();else action(o().tool==Tool.PATH||o().tool==Tool.MODELLING||o().tool==Tool.MODIFY?"use":"clear");}
             case UNDO,UNDO_ALT -> action("undo");
             case TOGGLE_MOVE -> toggleTool(Tool.MOVE);case TOGGLE_ROTATE -> toggleTool(Tool.ROTATE);case TOGGLE_SCALE -> toggleTool(Tool.SCALE);case TOGGLE_PIVOT -> toggleTool(Tool.PIVOT);
 case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut");case DUPLICATE -> action("duplicate");case PASTE -> action("paste");
             case COPY_AIR -> {boolean old=o().pasteAir;o().pasteAir=true;action("copy");o().pasteAir=old;}
-            case DELETE -> {if(PlacementPreview.active())PlacementPreview.cancel();else action("delete");}
+            case DELETE -> {if(ShapeObject.active())ShapeObject.cancel();else if(PlacementPreview.active())PlacementPreview.cancel();else action("delete");}
             case SWAP_BLOCKS -> swapBlocks();
             case QUICK_FILL -> action("fill");case QUICK_REPLACE -> action("replace");
             case ROTATE_PLACEMENT -> {if(!PlacementPreview.active())return false;action("rotate");}
