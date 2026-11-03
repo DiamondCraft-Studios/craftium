@@ -71,8 +71,10 @@ public final class Overlay {
             }
             case Line l->{if(visible(l.color))strip(quads,pose,view,l.from,l.to,l.color,l.width);}
             case Point p->{if(visible(p.color))square(quads,pose,view,p);}
-            case Label t->label(context,mc,camera,view,t);
+            case Label ignored->{}
         }
+        // Text asks the buffer source for its own buffers, which closes the one held above, so labels go last.
+        for(var prim:prims)if(prim instanceof Label t)label(context,mc,camera,view,t);
     }
 
     /** Camera position, its screen axes, and how many world units one pixel spans one block away. */
