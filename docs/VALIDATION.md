@@ -10,7 +10,7 @@ Test environment: 21 October 2026, Minecraft 26.2, Fabric Loader 0.20.1, Fabric 
 
 The test mod creates a disposable Creative world and uses the actual Fabric networking channel. The final complete runtime scenario is run with:
 
-`gradlew.bat build runClientGameTest`
+`gradlew.bat build :versions:mc-26.2:runClientGameTest`
 
 **0.2 baseline full-run status: passed.** The combined build and Minecraft run completed successfully in 3 minutes 27 seconds. All scenario markers, including gizmos, vertical block-state rotation and UI checks, passed. Minecraft closed normally. An additional focused builder regression passed in 1 minute 11 seconds, including overlapping movement with Keep Existing enabled.
 

@@ -17,4 +17,4 @@ Upload in the order below. Use **01-editor-overview.png** as the featured image.
 
 All eight are mod gallery screenshots from Fabric singleplayer. They are not presented as Paper/Purpur runtime captures. The companion uses the same client UI, but the plugin listing should explain that players need the Fabric mod.
 
-To reproduce the captures, set `CRAFTIUM_TEST_SCOPE=gallery` and run `gradlew.bat runClientGameTest`. The showcase fixture only belongs to the test source set; it is not included in the published mod or server plugin.
+To reproduce the captures, set `CRAFTIUM_TEST_SCOPE=gallery` and run `gradlew.bat :versions:mc-26.2:runClientGameTest`. The showcase fixture only belongs to the test source set; it is not included in the published mod or server plugin.

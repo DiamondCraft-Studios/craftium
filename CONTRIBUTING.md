@@ -4,13 +4,32 @@ Craftium is a vibe-coded, open-source competitor to Axiom. AI assistance is part
 
 ## Build
 
-Use Java 25 and the checked-in Gradle wrapper. The project targets Minecraft Java 26.2.
+Use Java 25 and the checked-in Gradle wrapper. Craftium builds for Minecraft Java 26.2 and 1.21.10; the Paper/Purpur companion targets 26.2 only.
 
 ```sh
 ./gradlew build :server-plugin:build compileGametestJava
 ```
 
-On Windows, use `gradlew.bat`. Fabric mod JARs are written to `build/libs/`; Paper/Purpur companion JARs are written to `server-plugin/build/libs/`. Use the same version on the client and server.
+To work on one version, name its module: `:versions:mc-26.2:build` or `:versions:mc-1.21.10:build`.
+
+On Windows, use `gradlew.bat`. Fabric mod JARs are written to `versions/<version>/build/libs/`; Paper/Purpur companion JARs are written to `server-plugin/build/libs/`. Use the same version on the client and server.
+
+## Layout
+
+Shared code lives in `src/` and must not contain anything that differs between Minecraft versions. Each supported version is a module in `versions/<version>/` that adds the code and metadata specific to it: the `compat` adapter classes, mixins that target changed internals, `fabric.mod.json` and the mixin configs. A file in a module replaces the shared file at the same path.
+
+When shared code needs a Minecraft API that differs between versions, call it through an adapter (`Compat`, `ClientCompat`, `Gfx`, `Overlay` and similar) and implement that adapter method in every `versions/<version>/` module. A change inside one module affects only that version.
+
+## Branches and releases
+
+- `main` is the trunk: shared code and every version module. Open pull requests against it.
+- `release/<version>` (for example `release/26.2`) is cut from `main` to ship that version and take hotfixes. Cherry-pick fixes into it; do not develop on it.
+- Tag releases `v<mod version>-mc<version>`, for example `v0.3.1-mc26.2`.
+- CI builds only the versions a change touches. Shared code, the root build files and the workflows build all of them.
+
+## Commit messages
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) without a scope: `type: subject`, in the imperative, with the reason in the body. Types are `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci` and `chore`. Mark breaking changes with `!` after the type, for example `refactor!: rename the Gfx adapter`.
 
 ## Verify changes
 
@@ -19,7 +38,13 @@ The build runs the core and companion JUnit tests. Changes to world edits should
 The Minecraft integration scenario creates a disposable Creative world and opens a real game window:
 
 ```sh
-./gradlew runClientGameTest
+./gradlew :versions:mc-26.2:runClientGameTest
+```
+
+The 1.21.10 module has a smaller smoke test that launches the client, applies every mixin, opens the editor and draws each overlay, and writes screenshots to `versions/1.21.10/build/run/clientGameTest/screenshots/`:
+
+```sh
+./gradlew :versions:mc-1.21.10:runClientGameTest
 ```
 
 Set `CRAFTIUM_TEST_SCOPE` to `keybinds`, `builder`, `gizmos` or `gallery` for a focused scenario. Leave it unset for the full Fabric regression. The Paper/Purpur scenario needs separate local server fixtures; it is not part of the ordinary build. See [validation](docs/VALIDATION.md).
