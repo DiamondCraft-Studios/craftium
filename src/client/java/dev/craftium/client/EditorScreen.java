@@ -286,8 +286,31 @@ public final class EditorScreen extends CraftiumScreen {
         String notice=System.currentTimeMillis()<ClientState.noticeUntil?ClientState.notice:ClientState.status.message();
         if(!CraftiumClient.supported())notice="Craftium must also be installed on the server";
         int tw=Math.min(r-l-24,font.width(notice)+20);
-        if(tw>40){g.fill(l+8,54,l+8+tw,77,ClientState.status.error()?0xe14b252a:0xd916202d);text(g,shorten(notice,tw-16),l+16,62,ClientState.status.error()?0xffffb6ae:0xffbfd4e8);}
+        int noticeY=pinnedBounds()[1]+pinnedBounds()[3]+4;
+        if(tw>40){g.fill(l+8,noticeY,l+8+tw,noticeY+23,ClientState.status.error()?0xe14b252a:0xd916202d);text(g,shorten(notice,tw-16),l+16,noticeY+8,ClientState.status.error()?0xffffb6ae:0xffbfd4e8);}
+        pinnedTools(g);
         if(minecraft.level==null){g.fill(l,80,r,h-28,0xff14202e);text(g,"Open a Creative world to start building",l+30,105,TEXT);}
+    }
+    private static final Tool[] PINNED={Tool.MOVE,Tool.ROTATE,Tool.SCALE,Tool.PIVOT};
+    /** The four transform tools stay pinned at the top of the viewport, just above the notice message, which sits below them. */
+    private int[] pinnedBounds(){
+        int size=26,gap=4,total=PINNED.length*size+(PINNED.length-1)*gap;
+        int left=panels?LEFT+6:6;
+        return new int[]{left+8,49,total+8,size+8};
+    }
+    private void pinnedTools(Gfx g){
+        int[] b=pinnedBounds();
+        g.fill(b[0],b[1],b[0]+b[2],b[1]+b[3],0xdd131d29);g.outline(b[0],b[1],b[2],b[3],LINE);
+        for(int i=0;i<PINNED.length;i++){
+            final Tool tool=PINNED[i];int x=b[0]+4+i*30,y=b[1]+4;
+            boolean selected=toolActive&&o().tool==tool;
+            g.fill(x,y,x+26,y+26,selected?0xff315b84:0xff223247);
+            if(mx>=x&&mx<x+26&&my>=y&&my<y+26)g.fill(x,y,x+26,y+26,0xff3b5875);
+            if(selected){g.outline(x,y,26,26,0xff8bc7ff);g.fill(x,y+24,x+26,y+26,ACCENT);}
+            g.pose().pushMatrix();g.pose().translate(x+1,y+1);g.pose().scale(1f,1f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
+            int key=EditorControls.toolDefault(tool);
+            controls.add(new Control(x,y,26,26,()->{if(toolActive&&o().tool==tool)toolActive=false;else select(tool);},tool.label+(key>0?" · "+(char)key:"")+" · "+tool.description));
+        }
     }
     private void statusbar(Gfx g) {
         g.fill(0,h-20,w,h,0xff1b222c);g.fill(0,h-21,w,h-20,LINE);
@@ -404,7 +427,11 @@ public final class EditorScreen extends CraftiumScreen {
         }
         CraftiumClient.send(action,hit==null?null:CraftiumClient.point(hit.getBlockPos()),hit==null?null:CraftiumClient.normal(hit));
     }
-    private boolean inViewport(double x,double y){return !ReferenceImages.hit(x*scale,y*scale)&&y>27&&y<(height/scale)-23&&(!panels||WorkspaceLayout.hit(x,y,false).isBlank());}
+    private boolean inViewport(double x,double y){
+        int[] pin=pinnedBounds();
+        if(x>=pin[0]&&x<pin[0]+pin[2]&&y>=pin[1]&&y<pin[1]+pin[3])return false; // the pinned tools are not the world
+        return !ReferenceImages.hit(x*scale,y*scale)&&y>27&&y<(height/scale)-23&&(!panels||WorkspaceLayout.hit(x,y,false).isBlank());
+    }
     private void use(){
         if(o().tool==Tool.ANNOTATION){var hit=target();if(hit!=null){o().annotationNormal=CraftiumClient.normal(hit);if(o().annotationMode.equals("DRAW")){Point p=CraftiumClient.point(hit.getBlockPos());if(o().annotationPoints.size()<256&&(o().annotationPoints.isEmpty()||!o().annotationPoints.getLast().equals(p)))o().annotationPoints.add(p);return;}}}
         long now=System.currentTimeMillis();if(now-lastUse<140||ClientState.status.busy())return;lastUse=now;
