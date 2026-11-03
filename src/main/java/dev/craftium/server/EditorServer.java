@@ -236,6 +236,7 @@ public final class EditorServer {
                     var plan=new EditPlanner(player.level(),s,o);if(r.action().equals("autoshade"))Autoshade.apply(plan,player);else SelectionOperations.apply(r.action(),plan);start(player,s,plan.finish(r.action().replace('_',' ')));
                 }
                 case "rotate", "flip", "flip_facing" -> {var look=player.getLookAngle();int axis=r.action().equals("flip_facing")?net.minecraft.core.Direction.getApproximateNearest(look.x,look.y,look.z).getAxis().ordinal():0;transform(player,s,r.action().equals("rotate"),axis);}
+                case "flip_x","flip_y","flip_z" -> transform(player,s,false,r.action().charAt(5)-'x');
                 case "clipboard_transform" -> {ClipboardTransforms.transform(s,o);send(player,s,"Clipboard transformed with nearest-neighbour sampling",false);}
                 case "copy" -> copy(player,s,o,false);
                 case "cut" -> copy(player,s,o,true);

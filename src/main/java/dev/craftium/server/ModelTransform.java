@@ -2,6 +2,8 @@ package dev.craftium.server;
 
 import dev.craftium.core.*;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 import java.util.*;
 
 /**
@@ -22,7 +24,8 @@ final class ModelTransform {
         if(selection.size()==0)throw new IllegalArgumentException("Create a selection first");
         boolean identity=o.offsetX==0&&o.offsetY==0&&o.offsetZ==0&&o.yaw==0&&o.pitch==0&&o.roll==0&&o.sizeX==1&&o.sizeY==1&&o.sizeZ==1;
         if(identity)throw new IllegalArgumentException("Nothing to transform");
-        double sx=Math.max(.05,o.sizeX),sy=Math.max(.05,o.sizeY),sz=Math.max(.05,o.sizeZ);
+        // A negative size flips the blocks along that axis.
+        double sx=scale(o.sizeX),sy=scale(o.sizeY),sz=scale(o.sizeZ);
 
         var source=new LinkedHashMap<Point,BlockSnapshot>();
         for(Point at:selection.points()){plan.validate(at);source.put(at,BlockSnapshot.capture(plan.level,EditPlanner.pos(at)));}
@@ -56,6 +59,18 @@ final class ModelTransform {
         SHIFTS=list.toArray(new double[0][]);
     }
 
+    private static double scale(double size){return (size<0?-1:1)*Math.max(.05,Math.abs(size));}
+
+    /** The block as it stands after a turn and flips of whole quarters, for the Edit menu: stairs and the like face the new way. */
+    private static BlockSnapshot turned(BlockSnapshot block,Options o){
+        var state=block.state();
+        if(o.sizeX<0)state=state.mirror(Mirror.FRONT_BACK);
+        if(o.sizeY<0)state=BuilderEdits.verticalMirror(state);
+        if(o.sizeZ<0)state=state.mirror(Mirror.LEFT_RIGHT);
+        state=state.rotate(Rotation.values()[Math.floorMod((int)Math.round(o.yaw/90),4)]);
+        return new BlockSnapshot(state,block.data());
+    }
+
     private static boolean quarterTurns(Options o){
         for(double a:new double[]{o.yaw,o.pitch,o.roll})if(Math.abs(a/90-Math.rint(a/90))>1e-9)return false;
         return true;
@@ -76,7 +91,7 @@ final class ModelTransform {
         for(int x=x0;x<x1;x++)for(int y=y0;y<y1;y++)for(int z=z0;z<z1;z++){
             var from=backward(new Geometry.Vector(x+.5,y+.5,z+.5),pivot,sx,sy,sz,o);
             var block=source.get(new Point((int)Math.floor(from.x()+1e-9),(int)Math.floor(from.y()+1e-9),(int)Math.floor(from.z()+1e-9)));
-            if(block!=null)landed.put(new Point(x,y,z),block);
+            if(block!=null)landed.put(new Point(x,y,z),o.turnBlocks?turned(block,o):block);
         }
         return landed;
     }

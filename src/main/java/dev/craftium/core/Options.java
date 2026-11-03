@@ -46,6 +46,8 @@ public final class Options {
     public double selectionWidth=1;
     /** The point one transform request works about, which can differ from the player's pivot, as when scaling from the far side. */
     public boolean aboutSet;
+    /** A selection transform that also turns and mirrors the blocks' states, as the Edit menu's Rotate and Flip do; the gizmo only moves them. */
+    public boolean turnBlocks;
     public double aboutX,aboutY,aboutZ;
     public boolean pivotSet;
     public double pivotX,pivotY,pivotZ;
@@ -174,7 +176,7 @@ public final class Options {
         selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);magicPreviewLimit=Math.clamp(magicPreviewLimit,1,4096);selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
         octaves=Math.clamp(octaves,1,8);lacunarity=bounded(lacunarity,1,4);gain=bounded(gain,.01,1);jitter=bounded(jitter,0,1);
         scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);
-        sizeX=bounded(sizeX,.1,8);sizeY=bounded(sizeY,.1,8);sizeZ=bounded(sizeZ,.1,8);
+        sizeX=Math.copySign(bounded(Math.abs(sizeX),.1,8),sizeX);sizeY=Math.copySign(bounded(Math.abs(sizeY),.1,8),sizeY);sizeZ=Math.copySign(bounded(Math.abs(sizeZ),.1,8),sizeZ); // negative flips
         yaw=bounded(yaw,-360,360);pitch=bounded(pitch,-360,360);roll=bounded(roll,-360,360);
         exponent=bounded(exponent,.25,16);innerRadius=bounded(innerRadius,.05,.95);slack=bounded(slack,-64,64);
         baseChance=bounded(baseChance,0,1);minSpacing=bounded(minSpacing,.1,8);smoothing=bounded(smoothing,.1,5);threshold=bounded(threshold,0,1);meldStrength=bounded(meldStrength,0,3);
