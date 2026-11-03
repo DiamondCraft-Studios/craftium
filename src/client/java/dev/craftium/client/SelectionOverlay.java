@@ -2,23 +2,28 @@ package dev.craftium.client;
 
 import dev.craftium.core.*;
 import dev.craftium.client.compat.Overlay;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
 final class SelectionOverlay {
-    private static final int STROKE=0xffffd66d,FILL=0x225d91ff;
+    private static final int STROKE=0xffffd66d,FILL=0x225d91ff,GHOST=0x805d91ff;
+    /** Past this many blocks the real models are not drawn, because a frame would have to draw all of them. */
+    private static final int MAX_GHOST_BLOCKS=4096;
     /** Beyond these the outline is too detailed to draw every tick, so the selection falls back to its bounding box. */
     private static final int MAX_EDGES=8192,MAX_FACES=4096;
     private static String encoded="";
     private static SelectionOutline.Result outline=SelectionOutline.Result.EMPTY;
     private static AABB bounds;
+    private static List<BlockPos> blocks=List.of();
     private SelectionOverlay(){}
     static void update(String data){
         if(Objects.equals(encoded,data))return;encoded=data;
         var points=SelectionCodec.decode(data);
         outline=SelectionOutline.of(points);
         bounds=null;
+        blocks=points.size()>MAX_GHOST_BLOCKS?List.of():points.stream().map(p->new BlockPos(p.x(),p.y(),p.z())).toList();
         for(Point p:points){var cell=new AABB(p.x(),p.y(),p.z(),p.x()+1,p.y()+1,p.z()+1);bounds=bounds==null?cell:bounds.minmax(cell);}
     }
     /**
@@ -35,8 +40,9 @@ final class SelectionOverlay {
             Vec3 a=new Vec3(s.x0(),s.y0(),s.z0()),b=new Vec3(s.x1(),s.y1(),s.z1());
             if(transforming)TransformGizmo.line(a,b);else Overlay.line(a,b,STROKE,1);
         }
-        if(transforming||outline.faces().size()>MAX_FACES)return;
-        for(var f:outline.faces())face(f);
+        if(transforming)return;
+        if(!blocks.isEmpty())Overlay.blocks(blocks,GHOST);
+        if(outline.faces().size()<=MAX_FACES)for(var f:outline.faces())face(f);
     }
     /** Sends one exterior rectangle to the overlay, wound so it faces outward. */
     private static void face(SelectionOutline.Face f){
