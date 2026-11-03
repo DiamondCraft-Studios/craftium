@@ -91,11 +91,38 @@ public final class BuilderMode {
     public static void draw(){
         var o=ClientState.options;if(!active())return;
         if(first!=null){Point min=min(),max=max();Overlay.box(new AABB(min.x(),min.y(),min.z(),max.x()+1,max.y()+1,max.z()+1),0xffffd66d,2,0);
-            if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?java.util.stream.IntStream.rangeClosed(1,o.copies).mapToObj(i->new Point(offset.x()*i,offset.y()*i,offset.z()*i)).toList():List.of(offset);int drawn=0;
-                outer:for(Point step:steps)for(Point at:cells){if(++drawn>4096)break outer;Point q=BuilderTransform.apply(at.subtract(min),size,o.builderRotation,o.builderFlipAxis).add(min.x()+step.x(),min.y()+step.y(),min.z()+step.z());Overlay.box(new AABB(q.x(),q.y(),q.z(),q.x()+1,q.y()+1,q.z()+1),0xff8be3b5,1,0x333dd29b);}
-                if(drawn>4096)Overlay.box(new AABB(min.x()+offset.x(),min.y()+offset.y(),min.z()+offset.z(),max.x()+offset.x()+1,max.y()+offset.y()+1,max.z()+offset.z()+1),0xff8be3b5,2,0);
+            if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?java.util.stream.IntStream.rangeClosed(1,o.copies).mapToObj(i->new Point(offset.x()*i,offset.y()*i,offset.z()*i)).toList():List.of(offset);
+                var shown=preview(o,min,size,steps);
+                if(shown==null)Overlay.box(new AABB(min.x()+offset.x(),min.y()+offset.y(),min.z()+offset.z(),max.x()+offset.x()+1,max.y()+offset.y()+1,max.z()+offset.z()+1),0xff8be3b5,2,0);
+                else{shown.shape().draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,0xff8be3b5,1),0xff8be3b5,0x333dd29b,true);if(!shown.places().isEmpty())Overlay.blocks(shown.models(),shown.places(),0x803dd29b);}
             }
         }
+    }
+    /** Past this many blocks the preview is just a box around where they land. */
+    private static final int PREVIEW_LIMIT=4096;
+    /** Where the cells would land: one outline around them, plus each block's model drawn at its destination. */
+    private record Preview(OutlineShape shape,List<net.minecraft.core.BlockPos> models,List<net.minecraft.core.BlockPos> places){}
+    private static Preview cachedPreview;
+    private static Object[] cachedFor;
+    private static List<Point> cachedCells;
+
+    /** Rebuilt only when something it depends on changes, because the outline costs more than a frame can spare. Null when too large. */
+    private static Preview preview(Options o,Point min,Point size,List<Point> steps){
+        Object[] key={min,size,offset,o.builderRotation,o.builderFlipAxis,o.builderTool,o.copies};
+        if(cachedFor!=null&&cells==cachedCells&&Arrays.equals(key,cachedFor))return cachedPreview;
+        var landing=new LinkedHashMap<Point,Point>();
+        outer:for(Point step:steps)for(Point at:cells){
+            Point q=BuilderTransform.apply(at.subtract(min),size,o.builderRotation,o.builderFlipAxis).add(min.x()+step.x(),min.y()+step.y(),min.z()+step.z());
+            if(landing.putIfAbsent(q,at)==null&&landing.size()>PREVIEW_LIMIT){landing=null;break outer;}
+        }
+        Preview built=null;
+        if(landing!=null){
+            var models=new ArrayList<net.minecraft.core.BlockPos>(landing.size());var places=new ArrayList<net.minecraft.core.BlockPos>(landing.size());
+            landing.forEach((to,from)->{places.add(new net.minecraft.core.BlockPos(to.x(),to.y(),to.z()));models.add(new net.minecraft.core.BlockPos(from.x(),from.y(),from.z()));});
+            built=new Preview(OutlineShape.of(landing.keySet()),models,places);
+        }
+        cachedFor=key;cachedCells=cells;cachedPreview=built;
+        return built;
     }
     public static void hud(Gfx g){
         if(!active())return;var mc=Minecraft.getInstance();int x=g.guiWidth()/2+94,y=g.guiHeight()-23;g.fill(x,y,x+23,y+23,0xff172330);g.outline(x,y,23,23,0xffffd66d);g.text(mc.font,"0",x+9,y+8,0xffffd66d,false);

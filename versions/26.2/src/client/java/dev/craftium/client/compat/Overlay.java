@@ -17,7 +17,6 @@ import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -28,7 +27,7 @@ import java.util.List;
  * block models have no gizmo, so they are queued here and submitted from the level render event each frame.
  */
 public final class Overlay {
-    private record Ghost(Collection<BlockPos> positions,int tint){}
+    private record Ghost(List<BlockPos> models,List<BlockPos> places,int tint){}
     private static final List<Ghost> building=new ArrayList<>();
     private static List<Ghost> shown=List.of();
     /** Each model is scaled this much about its centre so the ghost clears the real block instead of fighting it for depth. */
@@ -63,7 +62,12 @@ public final class Overlay {
      * The real models of the blocks at {@code positions}, drawn translucent and tinted by {@code tint} (ARGB)
      * over the blocks themselves. The list is not copied and must not change after this call.
      */
-    public static void blocks(Collection<BlockPos> positions,int tint){building.add(new Ghost(positions,tint));}
+    public static void blocks(List<BlockPos> positions,int tint){blocks(positions,positions,tint);}
+    /**
+     * Like {@link #blocks(List,int)}, but the model of {@code models.get(i)} is drawn at {@code places.get(i)}. This
+     * previews blocks that are about to move. Both lists must have the same size and are not copied.
+     */
+    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){building.add(new Ghost(models,places,tint));}
     public static void point(Vec3 at,int color,float size){Gizmos.point(at,color,size).setAlwaysOnTop();}
     /**
      * A label that always faces the camera, floating over the block at {@code pos}. {@code scale} is world
@@ -91,8 +95,9 @@ public final class Overlay {
             quad.setColor(ghost.tint());
             quad.setLightCoords(FULL_BRIGHT);
             quad.setOverlayCoords(OverlayTexture.NO_OVERLAY);
-            for(BlockPos pos:ghost.positions()){
-                var state=mc.level.getBlockState(pos);
+            for(int i=0;i<ghost.places().size();i++){
+                BlockPos pos=ghost.places().get(i);
+                var state=mc.level.getBlockState(ghost.models().get(i));
                 if(state.isAir()||state.getRenderShape()!=RenderShape.MODEL)continue; // fluids and block entities have no plain model
                 random.setSeed(state.getSeed(pos));
                 var parts=new ArrayList<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart>();
