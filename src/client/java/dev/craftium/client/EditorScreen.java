@@ -100,7 +100,17 @@ public final class EditorScreen extends CraftiumScreen {
         var box=new EditBox(font,x,y,width,18,Component.literal(id));box.setMaxLength(id.equals("text")?48:256);box.setValue(value);
         box.setResponder(set);box.setBordered(false);box.setTextColor(TEXT);fields.put(id,box);
     }
+    /**
+     * Drops every selection job still in flight: the large-selection popup goes back to the previous selection, and a
+     * selection still being built is forgotten, so its result is ignored when it arrives and no popup follows.
+     */
+    private void cancelSelectionJobs(){
+        if(ClientState.largeSelection>0)cancelLargeSelection();
+        ClientState.selectionPending=false;ClientState.selectingSince=0;
+    }
+    private void deselectTool(){cancelSelectionJobs();toolActive=false;}
     private void select(Tool tool){
+        cancelSelectionJobs();
         if(tool.transform()&&tool!=Tool.PIVOT&&ClientState.status.selectionSize()==0)ClientState.notify("Select blocks first, then use "+tool.label);
         toolActive=true;previousTool=o().tool;selectedNode=-1;if(tool!=Tool.BOX_SELECT)ClientState.boxCorners.clear();o().tool=tool;o().gizmoTarget=Options.GizmoTarget.AUTO;builder=false;init();}
     @Override public boolean isPauseScreen(){return false;}
@@ -203,7 +213,7 @@ public final class EditorScreen extends CraftiumScreen {
                 if(mx>=x&&mx<x+21&&my>=y&&my<y+21)g.fill(x,y,x+21,y+21,0xff3b5875);
                 if(selected){g.outline(x,y,21,21,0xff8bc7ff);g.fill(x,y+19,x+21,y+21,ACCENT);}
                 g.pose().pushMatrix();g.pose().translate(x,y);g.pose().scale(.82f,.82f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
-                controls.add(new Control(x,y,21,21,()->{if(toolActive&&o().tool==tool)toolActive=false;else select(tool);},tool.label+" · "+tool.description));
+                controls.add(new Control(x,y,21,21,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},tool.label+" · "+tool.description));
             }
             y+=TOOL_PITCH;
         }
@@ -457,7 +467,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,px,b[1]+b[3]-28,ColourPicker.WIDTH,20,"Reset",false,()->{o().selectionColor=0xffffd66d;o().selectionWidth=1;},"Back to the default colour and width");
     }
     /** Picks the tool, or puts it away when it is already the one in use, as clicking it in the pinned bar does. */
-    private void toggleTool(Tool tool){if(toolActive&&o().tool==tool)toolActive=false;else select(tool);}
+    private void toggleTool(Tool tool){if(toolActive&&o().tool==tool)deselectTool();else select(tool);}
     private static final Tool[] PINNED={Tool.MOVE,Tool.ROTATE,Tool.SCALE,Tool.PIVOT};
     /** The four transform tools stay pinned at the top of the viewport, just above the notice message, which sits below them. */
     private int[] pinnedBounds(){
@@ -476,7 +486,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(selected){g.outline(x,y,26,26,0xff8bc7ff);g.fill(x,y+24,x+26,y+26,ACCENT);}
             g.pose().pushMatrix();g.pose().translate(x+1,y+1);g.pose().scale(1f,1f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
             int key=EditorControls.toolDefault(tool);
-            controls.add(new Control(x,y,26,26,()->{if(toolActive&&o().tool==tool)toolActive=false;else select(tool);},tool.label+(key>0?" · "+(char)key+" / "+(slot+1):" · "+(slot+1))+" · "+tool.description));
+            controls.add(new Control(x,y,26,26,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},tool.label+(key>0?" · "+(char)key+" / "+(slot+1):" · "+(slot+1))+" · "+tool.description));
         }
     }
     private void statusbar(Gfx g) {
@@ -858,7 +868,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
      * comes back where it was when the handle was grabbed.
      */
     private void syncCursor(){
-        boolean grab=TransformGizmo.dragging()||draggingNode||draggingPlacement;
+        boolean grab=TransformGizmo.dragging()||draggingNode||draggingPlacement||cameraGesture==CameraGesture.ROTATE; // holding the rotate button is a first-person look
         if(grab==cursorHidden)return;
         cursorHidden=grab;
         GLFW.glfwSetInputMode(minecraft.getWindow().handle(),GLFW.GLFW_CURSOR,grab?GLFW.GLFW_CURSOR_DISABLED:GLFW.GLFW_CURSOR_NORMAL);
@@ -881,7 +891,13 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         double[] axes=flightAxes();double forward=axes[0],side=axes[1],up=axes[2];
         if(forward==0&&side==0&&up==0)return;
         double yaw=Math.toRadians(player.getYRot());
-        Vec3 delta=new Vec3(-Math.sin(yaw)*forward-Math.cos(yaw)*side,up,Math.cos(yaw)*forward-Math.sin(yaw)*side).normalize().scale(.35*20*o().flySpeed*seconds);
+        // Alt slows the camera like sneaking and Ctrl speeds it up like sprinting, both relative to the Fly speed setting.
+        double modifier=minecraft.hasAltDown()?.3:minecraft.hasControlDown()?2.5:1;
+        Vec3 direction=new Vec3(-Math.sin(yaw)*forward-Math.cos(yaw)*side,up,Math.cos(yaw)*forward-Math.sin(yaw)*side);
+        // Only with the right button held, forward follows where the camera looks, pitch included, like a first-person fly camera.
+        if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT)
+            direction=minecraft.player.getLookAngle().scale(forward).add(new Vec3(-Math.cos(yaw)*side,0,-Math.sin(yaw)*side)).add(0,up,0);
+        Vec3 delta=direction.normalize().scale(.35*20*o().flySpeed*modifier*seconds);
         if(!player.getAbilities().flying){player.getAbilities().flying=true;player.onUpdateAbilities();}
         player.setDeltaMovement(Vec3.ZERO);player.setPos(player.position().add(delta));
         player.setOldPosAndRot(); // the renderer interpolates from the previous position, so make it the current one
@@ -906,6 +922,6 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         return best<100;
     }
     private int key(long handle,int key){return GLFW.glfwGetKey(handle,key)==GLFW.GLFW_PRESS?1:0;}
-    @Override public void removed(){TransformGizmo.cancel();draggingNode=draggingPlacement=false;syncCursor();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
+    @Override public void removed(){TransformGizmo.cancel();draggingNode=draggingPlacement=false;cameraGesture=CameraGesture.NONE;syncCursor();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
     @Override public void onClose(){if(ClientState.largeSelection>0)confirmLargeSelection();ClientCompat.setScreen(minecraft,null);if(ClientState.hasPending()&&CraftiumClient.supported())CraftiumClient.send("pending_cancel",null,null);if(CraftiumClient.supported()&&minecraft.player!=null&&minecraft.player.isSpectator())CraftiumClient.send("gamemode_restore",null,null);}
 }
