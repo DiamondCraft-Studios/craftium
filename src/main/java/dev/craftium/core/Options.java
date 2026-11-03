@@ -32,6 +32,8 @@ public final class Options {
     /** Edits that place or remove blocks are shown as a ghost first and only applied when confirmed with Enter. */
     public boolean confirmEdits=true;
     /** The point the Rotate and Scale tools work around. When not set it is the centre of the selection. */
+    /** Draw every crease of a selection's outline instead of only its silhouette as seen from the camera. */
+    public boolean selectionAllEdges;
     public boolean pivotSet;
     public double pivotX,pivotY,pivotZ;
     public int expandAmount=5;

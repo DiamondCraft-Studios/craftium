@@ -19,9 +19,17 @@ public final class SelectionOutline {
      * It faces outward along {@code axis} in the direction of {@code sign}. Corners are block corners.
      */
     public record Face(int axis,int sign,int x0,int y0,int z0,int x1,int y1,int z1){}
-    public record Result(List<Segment> edges,List<Face> faces){
-        public static final Result EMPTY=new Result(List.of(),List.of());
+    /**
+     * An outline segment together with the two faces that meet along it, as indices into the six directions (+x, -x, +y, -y,
+     * +z, -z). From a camera, a crease is on the silhouette exactly when one of its faces points toward the camera and the
+     * other points away.
+     */
+    public record Crease(Segment segment,int normalA,int normalB){}
+    public record Result(List<Segment> edges,List<Face> faces,List<Crease> creases){
+        public static final Result EMPTY=new Result(List.of(),List.of(),List.of());
     }
+    /** The outward direction of a face, by index. */
+    public static int[] normal(int index){return DIRECTIONS[index];}
 
     private static final int[][] DIRECTIONS={{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
 
@@ -37,6 +45,7 @@ public final class SelectionOutline {
         // Exterior faces, and the unit edges where the surface bends.
         var faces=new ArrayList<int[]>();                  // {x, y, z, direction index}
         var edges=new HashSet<Segment>();
+        var normals=new HashMap<Segment,int[]>();
         for(Point p:solid)for(int d=0;d<6;d++){
             int[] n=DIRECTIONS[d];
             Point outside=new Point(p.x()+n[0],p.y()+n[1],p.z()+n[2]);
@@ -51,11 +60,47 @@ public final class SelectionOutline {
                     Point beside=new Point(p.x()+u[0],p.y()+u[1],p.z()+u[2]);
                     Point diagonal=new Point(beside.x()+n[0],beside.y()+n[1],beside.z()+n[2]);
                     if(solid.contains(beside)&&!solid.contains(diagonal))continue; // the surface carries straight on
-                    edges.add(unitEdge(p,axis,sign,sideAxis,side,edgeAxis));
+                    var unit=unitEdge(p,axis,sign,sideAxis,side,edgeAxis);
+                    edges.add(unit);
+                    // The other face on this edge: the cell's own side face when the cell beside is air (a convex edge), or the
+                    // face of the cell diagonally across, looking back, when it is solid (a concave one).
+                    int other=direction(u[0]*(solid.contains(beside)?-1:1),u[1]*(solid.contains(beside)?-1:1),u[2]*(solid.contains(beside)?-1:1));
+                    normals.putIfAbsent(unit,new int[]{Math.min(d,other),Math.max(d,other)});
                 }
             }
         }
-        return new Result(mergeEdges(edges),mergeFaces(faces));
+        return new Result(mergeEdges(edges),mergeFaces(faces),mergeCreases(normals));
+    }
+
+    private static int direction(int x,int y,int z){
+        int axis=x!=0?0:y!=0?1:2,value=x!=0?x:y!=0?y:z;
+        return axis*2+(value>0?0:1);
+    }
+
+    /** Joins end-to-end unit edges on one line that have the same two faces into long creases. */
+    private static List<Crease> mergeCreases(Map<Segment,int[]> units){
+        var lines=new HashMap<List<Integer>,TreeSet<Integer>>();
+        for(var entry:units.entrySet()){
+            Segment s=entry.getKey();int[] pair=entry.getValue();
+            int axis=s.x1()!=s.x0()?0:s.y1()!=s.y0()?1:2;
+            int[] a={s.x0(),s.y0(),s.z0()};
+            var key=new ArrayList<Integer>(5);key.add(axis);
+            for(int i=0;i<3;i++)if(i!=axis)key.add(a[i]);
+            key.add(pair[0]);key.add(pair[1]);
+            lines.computeIfAbsent(key,k->new TreeSet<>()).add(a[axis]);
+        }
+        var result=new ArrayList<Crease>();
+        for(var entry:lines.entrySet()){
+            var key=entry.getKey();int axis=key.get(0),na=key.get(3),nb=key.get(4);
+            int first=-1,length=0;
+            for(int start:entry.getValue()){
+                if(length>0&&start==first+length){length++;continue;}
+                if(length>0)result.add(new Crease(segment(axis,key,first,first+length),na,nb));
+                first=start;length=1;
+            }
+            if(length>0)result.add(new Crease(segment(axis,key,first,first+length),na,nb));
+        }
+        return List.copyOf(result);
     }
 
     private static Segment unitEdge(Point p,int axis,int sign,int sideAxis,int side,int edgeAxis){

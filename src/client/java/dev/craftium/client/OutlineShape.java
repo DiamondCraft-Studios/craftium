@@ -2,6 +2,8 @@ package dev.craftium.client;
 
 import dev.craftium.client.compat.Overlay;
 import dev.craftium.core.*;
+import dev.craftium.client.compat.ClientCompat;
+import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import java.util.*;
@@ -48,10 +50,33 @@ final class OutlineShape {
             if(withFill)Overlay.box(box,stroke,1,fill);else boxLines(box,lines);
             return;
         }
-        for(var s:outline.edges())lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
+        // Only the outline as the camera sees it, unless every edge was asked for or the camera is inside the shape.
+        if(ClientState.options.selectionAllEdges||!silhouette(lines,at))
+            for(var s:outline.edges())lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
         if(withFill&&outline.faces().size()<=MAX_FACES)for(var f:outline.faces())face(f,at,fill);
     }
 
+    /**
+     * Draws the creases where one of the two faces points toward the camera and the other away, which is the outline of
+     * the shape on the screen. Returns false when there are none, as when the camera is inside the shape.
+     */
+    private boolean silhouette(Lines lines,Vec3 at){
+        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
+        int drawn=0;
+        for(var crease:outline.creases()){
+            var s=crease.segment();
+            double mx=(s.x0()+s.x1())/2d+at.x,my=(s.y0()+s.y1())/2d+at.y,mz=(s.z0()+s.z1())/2d+at.z;
+            if(towards(crease.normalA(),eye,mx,my,mz)!=towards(crease.normalB(),eye,mx,my,mz)){
+                lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));drawn++;
+            }
+        }
+        return drawn>0;
+    }
+    /** True when the face with this direction, on a plane through the point, faces the eye. */
+    private static boolean towards(int direction,Vec3 eye,double x,double y,double z){
+        int[] n=SelectionOutline.normal(direction);
+        return n[0]*(eye.x-x)+n[1]*(eye.y-y)+n[2]*(eye.z-z)>0;
+    }
     private static void boxLines(AABB box,Lines lines){
         for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)lines.line(corner(box,i),corner(box,i|bit));
     }

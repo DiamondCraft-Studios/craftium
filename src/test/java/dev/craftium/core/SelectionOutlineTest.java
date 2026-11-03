@@ -94,4 +94,13 @@ class SelectionOutlineTest {
         assertEquals(24,r.edges().size());
         assertTrue(r.edges().stream().noneMatch(s->s.x0()==s.x1()&&s.y0()==s.y1()&&s.z0()==s.z1()),"no degenerate segments");
     }
+
+    @Test void everyCreaseOfACubeIsBetweenTwoDifferentFaces(){
+        var r=SelectionOutline.of(java.util.List.of(new Point(0,0,0)));
+        assertEquals(12,r.creases().size());
+        for(var c:r.creases()){
+            assertNotEquals(c.normalA(),c.normalB());
+            assertNotEquals(c.normalA()/2,c.normalB()/2,"the two faces of a cube's edge are on different axes");
+        }
+    }
 }
