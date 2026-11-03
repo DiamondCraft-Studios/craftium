@@ -5,14 +5,44 @@ import java.util.List;
 
 public final class BrushMath {
     private BrushMath() {}
-    public enum Shape { SPHERE, CUBE, OCTAHEDRON, CYLINDER }
+    /**
+     * New shapes go at the end: a saved setting names its shape, and the order here is not the order the picker shows.
+     * Pointed shapes stand on their base (the apex is at +radius), flat ones lie in the horizontal plane through the centre.
+     */
+    public enum Shape { SPHERE, CUBE, OCTAHEDRON, CYLINDER, PLANE, DISK, PYRAMID, CONE, HEMISPHERE, TORUS, TUBE }
+
+    /**
+     * The picker's sections in display order, each with its shapes in the order they are shown: the common solids first,
+     * then the curved and hollow forms, then the flat ones.
+     */
+    public static final java.util.Map<String, List<Shape>> GROUPS = groups();
+    private static java.util.Map<String, List<Shape>> groups() {
+        var all = new java.util.LinkedHashMap<String, List<Shape>>();
+        all.put("Solids", List.of(Shape.CUBE, Shape.SPHERE, Shape.CYLINDER, Shape.CONE, Shape.PYRAMID, Shape.OCTAHEDRON));
+        all.put("Curved", List.of(Shape.HEMISPHERE, Shape.TORUS, Shape.TUBE));
+        all.put("Flat", List.of(Shape.PLANE, Shape.DISK));
+        return java.util.Collections.unmodifiableMap(all);
+    }
 
     public static boolean contains(Shape shape, int x, int y, int z, int radius) {
+        // Round shapes are measured to radius + 0.5: with the plain radius the block at the end of each axis passes while
+        // its neighbours just miss, leaving a one block nub at every pole.
+        int radial = x * x + z * z, side = Math.max(Math.abs(x), Math.abs(z)), rise = radius - y;
+        double reach = radius + .5, reach2 = reach * reach;
         return switch (shape) {
-            case SPHERE -> x * x + y * y + z * z <= radius * radius;
-            case CUBE -> Math.max(Math.max(Math.abs(x), Math.abs(y)), Math.abs(z)) <= radius;
+            case SPHERE -> radial + y * y <= reach2;
+            case CUBE -> Math.max(side, Math.abs(y)) <= radius;
             case OCTAHEDRON -> Math.abs(x) + Math.abs(y) + Math.abs(z) <= radius;
-            case CYLINDER -> x * x + z * z <= radius * radius && Math.abs(y) <= radius;
+            case CYLINDER -> radial <= reach2 && Math.abs(y) <= radius;
+            case PLANE -> y == 0 && side <= radius;
+            case DISK -> y == 0 && radial <= reach2;
+            // The width falls evenly from the full radius at the bottom to nothing at the top.
+            case PYRAMID -> Math.abs(y) <= radius && 2 * side <= rise;
+            case CONE -> Math.abs(y) <= radius && 4.0 * radial * radius * radius <= reach2 * rise * rise;
+            case HEMISPHERE -> y >= 0 && radial + y * y <= reach2;
+            // A ring whose tube is a quarter of the radius thick, centred three quarters of the way out.
+            case TORUS -> { double d = Math.sqrt(radial) - .75 * radius, tube = .25 * radius + .5; yield d * d + y * y <= tube * tube; }
+            case TUBE -> Math.abs(y) <= radius && radial <= reach2 && 4.0 * radial >= (double) radius * radius;
         };
     }
 

@@ -46,10 +46,20 @@ public final class Geometry {
         double r=Math.max(.25,o.radius-1);
         return !inside(v.x/(r*o.sizeX),v.y/(r*o.sizeY),v.z/(r*o.sizeZ),o);
     }
-    private static boolean inside(double x,double y,double z,Options o) {
-        double radial=Math.sqrt(x*x+z*z),max=Math.max(Math.abs(x),Math.max(Math.abs(y),Math.abs(z)));
-        return switch(o.shapeKind){
-            case BRUSH -> switch(o.shape){case SPHERE->x*x+y*y+z*z<=1;case CUBE->max<=1;case OCTAHEDRON->Math.abs(x)+Math.abs(y)+Math.abs(z)<=1;case CYLINDER->radial<=1&&Math.abs(y)<=1;};
+    private static boolean inside(double x,double y,double z,Options o) {return inside(x,y,z,o,o.shapeKind);}
+    private static boolean inside(double x,double y,double z,Options o,Options.ShapeKind kind) {
+        double radial=Math.sqrt(x*x+z*z),max=Math.max(Math.abs(x),Math.max(Math.abs(y),Math.abs(z))),reach=(o.radius+.5)/o.radius;
+        return switch(kind){
+            case BRUSH -> switch(o.shape){
+                // The round shapes reach half a block past the radius, as in BrushMath, so they have no nub at the poles.
+                case SPHERE->x*x+y*y+z*z<=reach*reach;case CUBE->max<=1;case OCTAHEDRON->Math.abs(x)+Math.abs(y)+Math.abs(z)<=1;case CYLINDER->radial<=reach&&Math.abs(y)<=1;
+                case HEMISPHERE->y>=0&&x*x+y*y+z*z<=reach*reach;
+                case DISK->radial<=reach&&Math.abs(y)<=.5/o.radius;
+                case CONE->Math.abs(y)<=1&&radial<=reach*(1-y)/2;
+                case TORUS->Math.pow(radial-.75,2)+y*y<=Math.pow(.25+.5/o.radius,2);
+                case TUBE->radial<=reach&&radial>=.5&&Math.abs(y)<=1;
+                case PLANE->inside(x,y,z,o,Options.ShapeKind.PLANE);case PYRAMID->inside(x,y,z,o,Options.ShapeKind.PYRAMID);
+            };
             case SPHERE -> x*x+y*y+z*z<=1;
             case CUBOID -> max<=1;
             case OCTAHEDRON -> Math.abs(x)+Math.abs(y)+Math.abs(z)<=1;

@@ -141,6 +141,7 @@ public final class EditorScreen extends CraftiumScreen {
         statusbar(g);
         if(menu>=0)dropdown(g);
         if(ctxCell>=0)maskMenu(g);
+        if(shapeMenu)shapeMenu(g);
         if(help)help(g);
         if(transform)transform(g);
         if((panels||transform) && menu<0 && !help)for(var field:fields.entrySet()) {
@@ -284,7 +285,7 @@ public final class EditorScreen extends CraftiumScreen {
             return;
         }
         if(o().tool!=Tool.TEXT) {
-            button(g,10,305,LEFT-20,19,"Shape: "+nice(o().shape.name())+"  ▾",false,()->o().shape=BrushMath.Shape.values()[(o().shape.ordinal()+1)%BrushMath.Shape.values().length],()->o().shape=BrushMath.Shape.values()[Math.floorMod(o().shape.ordinal()-1,BrushMath.Shape.values().length)],"Cycle sphere, cube, octahedron and cylinder");
+            shapeSelector(g,305);
             slider(g,10,347,LEFT-20,"Radius",o().radius,1,24,DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
             if(EnumSet.of(Tool.SCULPT_DRAW,Tool.ROCK,Tool.ELEVATION,Tool.FLATTEN,Tool.SLOPE,Tool.DISTORT,Tool.SHATTER,Tool.EXTRUDE).contains(o().tool))
                 slider(g,10,375,LEFT-20,"Strength",o().strength,.1,5,DEFAULTS.strength,v->o().strength=v,false);
@@ -660,6 +661,7 @@ public final class EditorScreen extends CraftiumScreen {
             case 0 -> List.of(item("Open reference image…","",ReferenceImages::choose),item("Save tool settings","",()->{ClientState.save();ClientState.notify("Tool settings saved");}),item("Reset tool settings","",()->{ClientState.options=new Options();init();}),submenu("Preferences",item("Keyboard Shortcuts…","",()->ClientCompat.setScreen(minecraft,new KeyboardShortcutsScreen(this))),submenu("Options",item("Undo / redo pulse: "+(o().historyPulse?"On":"Off"),"",()->{o().historyPulse=!o().historyPulse;ClientState.save();}))),item("Exit editor","RShift",this::onClose));
             case 1 -> List.of(item("Undo","Ctrl+Z",()->action("undo")),item("Redo","Ctrl+Y",()->action("redo")),divider(),
                 item("Copy","Ctrl+C",()->action("copy")),item("Cut","Ctrl+X",()->action("cut")),item("Paste","Ctrl+V",()->action("paste")),
+                item("Delete","Del",()->perform(Action.DELETE)),
                 item("Paste at cursor","",this::pasteAtCursor),item("Paste in place","",()->CraftiumClient.send("paste_in_place",null,null)),divider(),
                 item("Edits history","",()->ClientCompat.setScreen(minecraft,new HistoryScreen(this))));
             case 2 -> List.of(item("Deselect","",()->action("clear")),item("Inverse","",()->action("selection_invert")),
@@ -691,6 +693,54 @@ public final class EditorScreen extends CraftiumScreen {
             final var kind=kinds[i];int x=10+i*(width+4);boolean active=o().compare==kind;
             button(g,x,y,width,22,"",active,()->o().compare=kind,tips[i]);
             g.pose().pushMatrix();g.pose().translate(x+(width-18)/2f,y+2);g.pose().scale(.75f,.75f);ToolIcons.compare(g,kind,0,0,active?0xffffffff:0xffd0deeb);g.pose().popMatrix();
+        }
+    }
+    // The shape picker is a popup of icons in groups, because there are too many shapes for the narrow options panel.
+    private static final int SHAPE_COLS=4,SHAPE_CELL_W=56,SHAPE_CELL_H=44,SHAPE_HEAD=14,SHAPE_PAD=6,SHAPE_MENU_WIDTH=SHAPE_COLS*SHAPE_CELL_W+2*SHAPE_PAD;
+    private boolean shapeMenu;private int shapeX,shapeY;
+    private record ShapeCell(BrushMath.Shape shape,int x,int y){}
+    /** The button that shows the current shape and opens the picker. */
+    private void shapeSelector(Gfx g,int y){
+        var shape=o().shape;
+        button(g,10,y,LEFT-20,24,"",shapeMenu,()->{
+            shapeMenu=!shapeMenu;shapeX=Math.clamp(mx-24,4,w-SHAPE_MENU_WIDTH-4);shapeY=Math.clamp(my+8,4,h-shapeMenuHeight()-4);
+        },"Choose the shape: solids, curved forms and flat ones");
+        g.pose().pushMatrix();g.pose().translate(14,y+3);g.pose().scale(.75f,.75f);ToolIcons.shape(g,shape,0,0,0xffffffff);g.pose().popMatrix();
+        text(g,nice(shape.name())+"  ▾",36,y+8,TEXT);
+    }
+    private int shapeMenuHeight(){
+        int height=2*SHAPE_PAD;
+        for(var shapes:BrushMath.GROUPS.values())height+=SHAPE_HEAD+(shapes.size()+SHAPE_COLS-1)/SHAPE_COLS*SHAPE_CELL_H;
+        return height;
+    }
+    private List<ShapeCell> shapeCells(){
+        var cells=new ArrayList<ShapeCell>();int y=shapeY+SHAPE_PAD;
+        for(var shapes:BrushMath.GROUPS.values()){
+            y+=SHAPE_HEAD;
+            for(int i=0;i<shapes.size();i++)cells.add(new ShapeCell(shapes.get(i),shapeX+SHAPE_PAD+i%SHAPE_COLS*SHAPE_CELL_W,y+i/SHAPE_COLS*SHAPE_CELL_H));
+            y+=(shapes.size()+SHAPE_COLS-1)/SHAPE_COLS*SHAPE_CELL_H;
+        }
+        return cells;
+    }
+    private BrushMath.Shape shapeAt(double x,double y){
+        for(var cell:shapeCells())if(x>=cell.x()&&x<cell.x()+SHAPE_CELL_W&&y>=cell.y()&&y<cell.y()+SHAPE_CELL_H)return cell.shape();
+        return null;
+    }
+    private void shapeMenu(Gfx g){
+        int height=shapeMenuHeight();
+        g.fill(shapeX,shapeY,shapeX+SHAPE_MENU_WIDTH,shapeY+height,0xf5222d3b);g.outline(shapeX,shapeY,SHAPE_MENU_WIDTH,height,LINE);
+        int y=shapeY+SHAPE_PAD;
+        for(var group:BrushMath.GROUPS.entrySet()){
+            text(g,group.getKey().toUpperCase(Locale.ROOT),shapeX+SHAPE_PAD+2,y+3,MUTED);y+=SHAPE_HEAD;
+            y+=(group.getValue().size()+SHAPE_COLS-1)/SHAPE_COLS*SHAPE_CELL_H;
+        }
+        for(var cell:shapeCells()){
+            boolean active=o().shape==cell.shape(),hover=mx>=cell.x()&&mx<cell.x()+SHAPE_CELL_W&&my>=cell.y()&&my<cell.y()+SHAPE_CELL_H;
+            g.fill(cell.x()+1,cell.y()+1,cell.x()+SHAPE_CELL_W-1,cell.y()+SHAPE_CELL_H-1,active?0xff315b84:hover?0xff34485e:0xff243246);
+            if(active)g.fill(cell.x()+1,cell.y()+SHAPE_CELL_H-3,cell.x()+SHAPE_CELL_W-1,cell.y()+SHAPE_CELL_H-1,ACCENT);
+            g.pose().pushMatrix();g.pose().translate(cell.x()+(SHAPE_CELL_W-24)/2f,cell.y()+3);g.pose().scale(1f,1f);ToolIcons.shape(g,cell.shape(),0,0,active?0xffffffff:0xffd0deeb);g.pose().popMatrix();
+            String label=nice(cell.shape().name());
+            text(g,label,cell.x()+(SHAPE_CELL_W-font.width(label))/2,cell.y()+SHAPE_CELL_H-13,active?0xffffffff:TEXT);
         }
     }
     private MenuItem item(String label,String shortcut,Runnable action){return new MenuItem(label,shortcut,action);}
@@ -831,6 +881,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(ReferenceImages.click(event.x(),event.y(),event.button()))return true;
         double x=event.x()/scale,y=event.y()/scale;mx=(int)x;my=(int)y;pointerX=event.x();pointerY=event.y();
         if(typing!=null){finishTyping(true);return true;} // a click anywhere else keeps what was typed
+        if(shapeMenu){shapeMenu=false;var picked=event.button()==0?shapeAt(x,y):null;if(picked!=null)o().shape=picked;return true;} // any click closes the picker
         if(ctxCell>=0){int cell=ctxCell;ctxCell=-1;if(x>=ctxX&&x<ctxX+MASK_MENU_WIDTH&&y>=ctxY&&y<ctxY+2*MASK_MENU_ROW&&cell<o().maskBlocks.size()){if(y<ctxY+MASK_MENU_ROW)removeMaskBlock(cell);else editMaskState(cell);}return true;}
         if(event.button()==2&&!help&&!transform&&menu<0)for(int i=sliderAreas.size()-1;i>=0;i--){var a=sliderAreas.get(i);if(a.control().contains(x,y)){a.slider().reset();return true;}} // back to the default, at once
         if(event.button()==0) {
@@ -980,7 +1031,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(event.key()==GLFW.GLFW_KEY_ESCAPE){cancelLargeSelection();return true;}
         }
         if(CraftiumClient.editorKey.matches(event)){onClose();return true;}
-        if(event.key()==GLFW.GLFW_KEY_ESCAPE){if(ClientState.hasPending())CraftiumClient.send("pending_cancel",null,null);else if(PlacementPreview.active())PlacementPreview.cancel();else if(ctxCell>=0)ctxCell=-1;else if(help)help=false;else if(transform){transform=false;init();}else if(menu>=0)menu=-1;else onClose();return true;}
+        if(event.key()==GLFW.GLFW_KEY_ESCAPE){if(ClientState.hasPending())CraftiumClient.send("pending_cancel",null,null);else if(PlacementPreview.active())PlacementPreview.cancel();else if(shapeMenu)shapeMenu=false;else if(ctxCell>=0)ctxCell=-1;else if(help)help=false;else if(transform){transform=false;init();}else if(menu>=0)menu=-1;else onClose();return true;}
         if(EditorBindings.matches(Action.HELP,event)){perform(Action.HELP);return true;}
         if(help||transform)return true;
         // Shared chords are resolved by the active context, before ordinary tool letters.
