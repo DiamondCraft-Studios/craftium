@@ -10,8 +10,5 @@ include('server-plugin')
 include('versions:26.2')
 project(':versions:26.2').name = 'mc-26.2'
 
-// Older Minecraft versions are opt-in until their clients compile: -PlegacyVersions=true
-if (providers.gradleProperty('legacyVersions').orNull == 'true') {
-    include('versions:1.21.10')
-    project(':versions:1.21.10').name = 'mc-1.21.10'
-}
+include('versions:1.21.10')
+project(':versions:1.21.10').name = 'mc-1.21.10'

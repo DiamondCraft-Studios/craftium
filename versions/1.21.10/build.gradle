@@ -23,6 +23,7 @@ def mergeTask = { String name, String set ->
 }
 def mergeMain = mergeTask('mergeMainSources', 'main')
 def mergeClient = mergeTask('mergeClientSources', 'client')
+def mergeTest = mergeTask('mergeTestSources', 'test')
 
 loom {
     splitEnvironmentSourceSets()
@@ -42,10 +43,14 @@ sourceSets {
     client {
         java.srcDirs = [merged.map { it.dir('client/java') }]
     }
+    test {
+        java.srcDirs = [merged.map { it.dir('test/java') }]
+    }
 }
 tasks.named('compileJava') { dependsOn mergeMain }
 tasks.named('processResources') { dependsOn mergeMain }
 tasks.named('compileClientJava') { dependsOn mergeClient }
+tasks.named('compileTestJava') { dependsOn mergeTest }
 tasks.matching { it.name == 'sourcesJar' }.configureEach { dependsOn mergeMain, mergeClient }
 
 dependencies {
@@ -55,6 +60,9 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
     implementation 'org.luaj:luaj-jse:3.0.1'
     include 'org.luaj:luaj-jse:3.0.1'
+    testImplementation platform('org.junit:junit-bom:5.13.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 processResources {
@@ -70,12 +78,14 @@ java {
     targetCompatibility = JavaVersion.VERSION_21
 }
 
+test { useJUnitPlatform() }
+
 jar {
     from(rootProject.file('LICENSE')) { rename { 'LICENSE_Craftium' } }
     from(rootProject.file('THIRD-PARTY-NOTICES.md'))
 }
 
-// Smoke test that launches 1.21.10 and renders the editor and overlays: gradlew -PlegacyVersions=true :versions:mc-1.21.10:runClientGameTest
+// Smoke test that launches 1.21.10 and renders the editor and overlays: gradlew :versions:mc-1.21.10:runClientGameTest
 fabricApi {
     configureTests {
         createSourceSet = true
