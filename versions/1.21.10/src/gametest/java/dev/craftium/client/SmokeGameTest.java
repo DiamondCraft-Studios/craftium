@@ -14,7 +14,8 @@ import net.minecraft.core.BlockPos;
  */
 public final class SmokeGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext ctx) {
-        if("paper".equals(System.getenv("CRAFTIUM_TEST_SCOPE")))return; // the live Paper check runs instead
+        String scope=System.getenv("CRAFTIUM_TEST_SCOPE");
+        if("paper".equals(scope)||"viewport".equals(scope))return; // a focused scope runs instead
         try(var world=ctx.worldBuilder().adjustSettings(s->{s.setGameMode(WorldCreationUiState.SelectedGameMode.CREATIVE);s.setAllowCommands(true);}).create()) {
             ctx.waitTicks(40);
             world.getClientWorld().waitForChunksDownload();
