@@ -85,6 +85,18 @@ public final class SmokeGameTest implements FabricClientGameTest {
             ctx.takeScreenshot("selection-l-shape");
             System.out.println("CRAFTIUM_SMOKE l_selection_drawn");
             ctx.runOnClient(mc->ClientCompat.setScreen(mc,null));
+
+            // The builder's clone preview is the same single outline, with the real blocks drawn where they would land.
+            ctx.runOnClient(mc->{
+                BlockPos base=mc.player.blockPosition().offset(-3,0,6);
+                BuilderMode.select(Options.BuilderTool.CLONE);
+                BuilderMode.corners(new Point(base.getX(),base.getY(),base.getZ()),new Point(base.getX()+4,base.getY()+3,base.getZ()+1));
+                BuilderMode.nudge(new Point(0,0,1),4);
+            });
+            ctx.waitTicks(10);
+            ctx.takeScreenshot("builder-preview");
+            System.out.println("CRAFTIUM_SMOKE builder_preview_drawn");
+            ctx.runOnClient(mc->BuilderMode.reset());
         }
         System.out.println("CRAFTIUM_SMOKE done");
     }
