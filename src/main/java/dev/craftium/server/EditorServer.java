@@ -295,6 +295,27 @@ public final class EditorServer {
                         plan.put(target,Blocks.AIR.defaultBlockState());start(player,s,plan.finish("Bulldozer"));
                     } else use(player,s,o,target,normal,plan);
                 }
+                case "bucket_fill" -> {
+                    // Dragging a block into the world: the Magic Wand, always comparing by block, then a replace with the active block.
+                    if(target==null)throw new IllegalArgumentException("Drop the block onto a block within reach");
+                    var plan=new EditPlanner(player.level(),s,o);var origin=plan.state(target);
+                    if(origin.isAir())throw new IllegalArgumentException("Drop the block onto a block, not empty space");
+                    var found=MagicWand.select(target,new MagicWand.World(){
+                        public boolean loaded(Point at){return player.level().hasChunk(at.x()>>4,at.z()>>4);}
+                        public boolean air(Point at){return plan.state(at).isAir();}
+                        public boolean matches(Point at){return plan.state(at).is(origin.getBlock());}
+                        public boolean surface(Point at){return plan.surface(at);}
+                    },new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,Selection.LIMIT*4)).found();
+                    if(found.isEmpty())throw new IllegalArgumentException("Bucket fill found no connected blocks there; check the Magic Wand range and surface settings");
+                    for(Point at:found)plan.put(at,plan.preserve(plan.state(at),plan.material));
+                    if(plan.changes.isEmpty()){
+                        String why=origin.getBlock()==plan.material.getBlock()?"those blocks are already that block"
+                            :!BlockMask.of(o).allows(origin)||!o.mask.isBlank()?"the block mask excludes them"
+                            :o.inSelection?"Only in selection is on":"the Y range, or the block can't be placed there (enable force place)";
+                        throw new IllegalArgumentException("Bucket fill changed nothing: "+why+" ("+found.size()+" blocks matched)");
+                    }
+                    start(player,s,plan.finish("Bucket fill"));
+                }
                 default -> throw new IllegalArgumentException("Unknown editor action");
             }
         } catch(IllegalArgumentException e) {s.historyRemaining=0;send(player,s,e.getMessage(),true);}
@@ -422,7 +443,8 @@ public final class EditorServer {
         if(++historyTicks%100==0)for(var session:SESSIONS.values())HistoryStore.save(session);
         var reachId=dev.craftium.compat.Compat.id("craftium","builder_reach");
         for(var player:server.getPlayerList().getPlayers()){
-            var s=SESSIONS.get(player.getUUID());var range=player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.BLOCK_INTERACTION_RANGE);
+            var s=SESSIONS.get(player.getUUID());
+            var range=player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.BLOCK_INTERACTION_RANGE);
             boolean enabled=s!=null&&s.infiniteReach&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities");
             if(range!=null){if(enabled&&!range.hasModifier(reachId))range.addTransientModifier(new net.minecraft.world.entity.ai.attributes.AttributeModifier(reachId,250,net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE));else if(!enabled&&range.hasModifier(reachId))range.removeModifier(reachId);}
         }

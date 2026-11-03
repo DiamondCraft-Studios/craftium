@@ -131,7 +131,7 @@ public final class EditorScreen extends CraftiumScreen {
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta) {
         if(!suspended){fly();syncCursor();}
         BG=o().uiBackground;PANEL=o().uiPanel;LINE=o().uiBorder;ACCENT=o().uiAccent;TEXT=o().uiText;MUTED=o().uiMuted;
-        pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();sliderAreas.clear();
+        pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();sliderAreas.clear();dragSources.clear();
         g.pose().pushMatrix();g.pose().scale(scale,scale);
         topbar(g);
         if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);}
@@ -158,6 +158,7 @@ public final class EditorScreen extends CraftiumScreen {
                 g.text(font,shorten(tooltip,tw-12),tx+6,ty+7,TEXT,false);
             }
         }
+        if(dragBlock!=null&&dragMoved){g.fill(mx-13,my-13,mx+13,my+13,0xdd1b2838);g.outline(mx-13,my-13,26,26,ACCENT);BlockPickerScreen.icon(g,font,dragBlock,mx-8,my-8);}
         g.pose().popMatrix();ReferenceImages.draw(g,true,mouseX,mouseY);
     }
     private void topbar(Gfx g) {
@@ -411,15 +412,55 @@ public final class EditorScreen extends CraftiumScreen {
             int bx=x+10+i*26,by=298;i++;
             boolean active=o().block.equals(block);g.fill(bx,by,bx+23,by+23,active?0xff315b84:0xff1b2838);if(active)g.outline(bx,by,23,23,ACCENT);
             BlockPickerScreen.icon(g,font,block,bx+3,by+3);
-            controls.add(new Control(bx,by,23,23,()->ClientState.pick(block),block+" · Recent blocks set the foreground"));
+            dragSource(new Control(bx,by,23,23,()->ClientState.pick(block),block+" · Click to set the foreground · Drag into the world to bucket fill"),block);
         }
     }
     /** A 30px swatch for one of the two selected blocks; clicking it opens the block chooser to replace it. */
     private void blockSlot(Gfx g,int x,int y,String label,String block,java.util.function.Consumer<String> set) {
         g.fill(x,y,x+30,y+30,0xff1b2838);g.outline(x,y,30,30,label.startsWith("Fore")?ACCENT:LINE);
         BlockPickerScreen.icon(g,font,block,x+7,y+7);
-        controls.add(new Control(x,y,30,30,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,label,block,id->{set.accept(id);ClientState.save();})),label+" · "+block+" · Click to replace"));
+        dragSource(new Control(x,y,30,30,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,label,block,id->{set.accept(id);ClientState.save();})),label+" · "+block+" · Click to replace · Drag into the world to bucket fill"),block);
     }
+    /** A block cell that is clicked as usual, or dragged into the world to bucket fill with it. */
+    private record DragSource(Control area,String block){}
+    private final List<DragSource> dragSources=new ArrayList<>();
+    private String dragBlock;private Runnable dragClick;private double dragStartX,dragStartY;private boolean dragMoved;
+    /** Whether a block is being dragged out of the palette, so the world shows where it would fill. */
+    boolean bucketDragging(){return dragBlock!=null&&dragMoved;}
+    /** The block under the pointer for that fill, or null while the pointer is over a panel rather than the world. */
+    BlockHitResult bucketTarget(){return bucketDragging()&&inViewport(pointerX/scale,pointerY/scale)?target():null;}
+    private void dragSource(Control control,String block){controls.add(control);dragSources.add(new DragSource(control,block));}
+    /** Ends a drag from a block cell: a plain click does what the cell does, a drop in the world bucket fills where it lands. */
+    private void finishBlockDrag(MouseButtonEvent event){
+        String block=dragBlock;Runnable click=dragClick;boolean moved=dragMoved;dragBlock=null;dragClick=null;dragMoved=false;
+        if(!moved){click.run();return;}
+        if(!inViewport(event.x()/scale,event.y()/scale))return;
+        pointerX=event.x();pointerY=event.y();var hit=CraftiumClient.raycast(event.x(),event.y());
+        if(hit==null){ClientState.notify("Drop the block onto a block in the world");return;}
+        if(ClientState.status.busy()){ClientState.notify("Wait for the current edit to finish");return;}
+        var at=hit.getBlockPos();Point point=CraftiumClient.point(at),normal=CraftiumClient.normal(hit);
+        // A fill this big is confirmed first, as a large selection is.
+        int count=minecraft.level==null?0:MagicPreview.bucketCount(minecraft,at,o());
+        if(count>=ClientState.LARGE_SELECTION){
+            String size=count>=MagicPreview.BUCKET_LIMIT?count+"+":Integer.toString(count);
+            confirm=new Confirm("Fill "+size+" blocks with "+block.replace("minecraft:","")+"?","Fill these blocks",()->{
+                if(ClientState.status.busy()){ClientState.notify("Wait for the current edit to finish");return;}
+                sendBucket(block,point,normal);
+            });
+            return;
+        }
+        sendBucket(block,point,normal);
+    }
+    /** A question the player answers before something happens: the text, what Confirm is for, and what Confirm does. */
+    private record Confirm(String text,String hint,Runnable action){}
+    private Confirm confirm;
+    private void sendBucket(String block,Point target,Point normal){
+        // The server fills with the active block, so the dragged one stands in for it for this one request.
+        String prior=o().block;o().block=block;
+        try{CraftiumClient.send("bucket_fill",target,normal);}finally{o().block=prior;}
+    }
+    private void acceptConfirm(){var pending=confirm;confirm=null;if(pending!=null)pending.action().run();}
+    private void dismissConfirm(){confirm=null;}
     private void swapBlocks() {String front=o().block;ClientState.pick(o().secondary);o().secondary=front;ClientState.save();}
     private void history(Gfx g) {
         int x=w-RIGHT,y=333,height=h-551;
@@ -498,7 +539,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** Where the large-selection popup is, or null when it is not showing. It sits in the middle of the viewport. */
     private int[] popupBounds(){
-        if(ClientState.largeSelection<=0)return null;
+        if(ClientState.largeSelection<=0&&confirm==null)return null;
         int left=panels?LEFT+6:6,right=panels?w-RIGHT-6:w-6;
         return new int[]{(left+right-250)/2,h/2-70,250,62};
     }
@@ -507,6 +548,12 @@ public final class EditorScreen extends CraftiumScreen {
         int[] b=popupBounds();
         if(b==null)return;
         g.fill(b[0],b[1],b[0]+b[2],b[1]+b[3],0xf0141d29);g.outline(b[0],b[1],b[2],b[3],ACCENT);
+        if(confirm!=null){
+            text(g,shorten(confirm.text(),b[2]-20),b[0]+10,b[1]+9,TEXT);
+            button(g,b[0]+10,b[1]+30,112,22,"Confirm",true,this::acceptConfirm,confirm.hint()+" · Enter");
+            button(g,b[0]+128,b[1]+30,112,22,"Cancel",false,this::dismissConfirm,"Leave things as they are · Esc");
+            return;
+        }
         text(g,"Selected "+ClientState.largeSelection+" blocks, confirm?",b[0]+10,b[1]+9,TEXT);
         button(g,b[0]+10,b[1]+30,112,22,"Confirm",true,this::confirmLargeSelection,"Keep the selection · Enter");
         button(g,b[0]+128,b[1]+30,112,22,"Cancel",false,this::cancelLargeSelection,"Go back to the selection you had · Esc");
@@ -776,6 +823,7 @@ public final class EditorScreen extends CraftiumScreen {
                 }
                 if(selected!=null){selected.setFocused(true);String id="";for(var entry:fields.entrySet())if(entry.getValue()==selected)id=entry.getKey();var point=WorkspaceLayout.inverse(WorkspaceLayout.fieldPanel(id),x,y);selected.mouseClicked(new MouseButtonEvent(point[0],point[1],event.buttonInfo()),doubleClick);return true;}
             }
+            if(!help&&!transform&&menu<0)for(int i=dragSources.size()-1;i>=0;i--){var d=dragSources.get(i);if(d.area().contains(x,y)){dragBlock=d.block();dragClick=d.area().action();dragStartX=event.x();dragStartY=event.y();dragMoved=false;return true;}}
             for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(c.contains(x,y)){c.action.run();return true;}}
             if(help||transform)return true;if(menu>=0){menu=-1;return true;}
             if(panels){String id=WorkspaceLayout.hit(x,y,true);if(!id.isBlank()){var r=WorkspaceLayout.windows.get(id);draggedPanel=id;resizePanel=false;dragOriginX=r.x;dragOriginY=r.y;dragPointerX=x;dragPointerY=y;return true;}
@@ -841,8 +889,9 @@ public final class EditorScreen extends CraftiumScreen {
         String block=BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(hit.getBlockPos()).getBlock()).toString();
         ClientState.pick(block);
     }
-    @Override public boolean mouseReleased(MouseButtonEvent event){outlinePicker.release();if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting&&o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW")&&o().annotationPoints.size()>1)action("annotation_create");painting=false;ClientState.strokeId=0;if(o().tool==Tool.LASSO_SELECT&&!lasso.isEmpty()){o().selectionPoints=new ArrayList<>(LassoSelection.project(lasso));action("lasso_select");o().selectionPoints.clear();lasso.clear();}}return true;}
+    @Override public boolean mouseReleased(MouseButtonEvent event){if(dragBlock!=null&&event.button()==0){finishBlockDrag(event);return true;}outlinePicker.release();if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting&&o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW")&&o().annotationPoints.size()>1)action("annotation_create");painting=false;ClientState.strokeId=0;if(o().tool==Tool.LASSO_SELECT&&!lasso.isEmpty()){o().selectionPoints=new ArrayList<>(LassoSelection.project(lasso));action("lasso_select");o().selectionPoints.clear();lasso.clear();}}return true;}
     @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy) {
+        if(dragBlock!=null){if(!dragMoved&&Math.hypot(event.x()-dragStartX,event.y()-dragStartY)>5)dragMoved=true;return true;}
         if(outlinePicker.active()){outlinePicker.drag(event.x()/scale,event.y()/scale);return true;}
         if(ReferenceImages.drag(event.x(),event.y()))return true;
         pointerX=event.x();pointerY=event.y();
@@ -900,6 +949,10 @@ public final class EditorScreen extends CraftiumScreen {
         for(EditBox field:fields.values())if(field.isFocused()){
             if(event.key()==GLFW.GLFW_KEY_ESCAPE||event.key()==GLFW.GLFW_KEY_ENTER){field.setFocused(false);return true;}
             return field.keyPressed(event);
+        }
+        if(confirm!=null){
+            if(event.key()==GLFW.GLFW_KEY_ENTER){acceptConfirm();return true;}
+            if(event.key()==GLFW.GLFW_KEY_ESCAPE){dismissConfirm();return true;}
         }
         if(ClientState.largeSelection>0){
             if(event.key()==GLFW.GLFW_KEY_ENTER){confirmLargeSelection();return true;}
