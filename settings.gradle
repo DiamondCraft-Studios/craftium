@@ -7,3 +7,9 @@ pluginManagement {
 }
 rootProject.name = 'Craftium'
 include('server-plugin')
+
+// Older Minecraft versions are opt-in until their clients compile: -PlegacyVersions=true
+if (providers.gradleProperty('legacyVersions').orNull == 'true') {
+    include('versions:1.21.10')
+    project(':versions:1.21.10').name = 'mc-1.21.10'
+}
