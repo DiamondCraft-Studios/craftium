@@ -23,6 +23,8 @@ public final class Compat {
 
     public static Identifier id(String namespace,String path){return Identifier.fromNamespaceAndPath(namespace,path);}
     public static Identifier parse(String id){return Identifier.parse(id);}
+    /** Like {@link #parse} but returns null for text that is not a valid identifier. */
+    public static Identifier tryParse(String id){return Identifier.tryParse(id);}
     public static Identifier vanilla(String path){return Identifier.withDefaultNamespace(path);}
     /** Namespaced name of a registry or dimension key, e.g. {@code minecraft:overworld}. */
     public static String keyName(ResourceKey<?> key){return key.identifier().toString();}

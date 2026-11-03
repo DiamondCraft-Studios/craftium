@@ -1,8 +1,9 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.core.*;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import dev.craftium.client.compat.Gfx;
 import net.minecraft.core.Direction;
 import net.minecraft.gizmos.*;
 import net.minecraft.world.phys.*;
@@ -17,7 +18,7 @@ public final class BuilderMode {
     private static List<Point> cells=List.of();
     private static double wheel;
     private BuilderMode(){}
-    public static boolean active(){var mc=Minecraft.getInstance();return enabled&&available()&&mc.gui.screen()==null;}
+    public static boolean active(){var mc=Minecraft.getInstance();return enabled&&available()&&ClientCompat.screen(mc)==null;}
     private static boolean available(){var mc=Minecraft.getInstance();return mc.player!=null&&mc.player.isCreative()&&mc.level!=null&&CraftiumClient.supported();}
     public static void reset(){enabled=false;clear();}
     private static void clear(){first=null;second=null;preview=false;clonePlaced=false;offset=new Point(0,0,0);cells=List.of();stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;}
@@ -25,7 +26,7 @@ public final class BuilderMode {
     public static void select(Options.BuilderTool tool){enable();ClientState.options.builderTool=tool;clear();}
     private static String name(){return ClientState.options.builderTool.name().replace('_',' ');}
     public static boolean scroll(double delta){
-        if(!available()||Minecraft.getInstance().gui.screen()!=null)return false;
+        if(!available()||ClientCompat.screen(Minecraft.getInstance())!=null)return false;
         var mc=Minecraft.getInstance();wheel+=delta;int steps=(int)wheel;if(steps==0)return enabled;wheel-=steps;
         if(!enabled){int slot=mc.player.getInventory().getSelectedSlot();if(slot==8&&steps<0||slot==0&&steps>0){enable();return true;}return false;}
         if(CraftiumClient.held(CraftiumClient.contextKey)){var all=Options.BuilderTool.values();ClientState.options.builderTool=all[Math.floorMod(ClientState.options.builderTool.ordinal()-steps,all.length)];clear();ClientState.notify("Builder: "+name());return true;}
@@ -43,7 +44,7 @@ public final class BuilderMode {
     }
     private static boolean down(int key){return com.mojang.blaze3d.platform.InputConstants.isKeyDown(Minecraft.getInstance().getWindow(),key);}
     public static boolean key(int key,int action,boolean control){
-        if(!available()||Minecraft.getInstance().gui.screen()!=null)return false;
+        if(!available()||ClientCompat.screen(Minecraft.getInstance())!=null)return false;
         if(key==GLFW.GLFW_KEY_0){if(action==GLFW.GLFW_PRESS)enable();return true;}
         if(!enabled)return false;
         if(CraftiumClient.contextKey.matches(new net.minecraft.client.input.KeyEvent(key,0,0)))return true;
@@ -96,7 +97,7 @@ public final class BuilderMode {
             }
         }
     }
-    public static void hud(GuiGraphicsExtractor g){
+    public static void hud(Gfx g){
         if(!active())return;var mc=Minecraft.getInstance();int x=g.guiWidth()/2+94,y=g.guiHeight()-23;g.fill(x,y,x+23,y+23,0xff172330);g.outline(x,y,23,23,0xffffd66d);g.text(mc.font,"0",x+9,y+8,0xffffd66d,false);
         if(CraftiumClient.held(CraftiumClient.contextKey)){int left=g.guiWidth()/2+100,top=g.guiHeight()-205;var all=Options.BuilderTool.values();g.fill(left-4,top-20,left+144,top+all.length*22+4,0xf510151c);g.text(mc.font,"Builder tools",left,top-14,0xffdce6ef,false);for(int i=0;i<all.length;i++){g.fill(left,top+i*22,left+140,top+i*22+21,all[i]==ClientState.options.builderTool?0xff315b84:0xff223247);g.text(mc.font,all[i].name().replace('_',' '),left+6,top+i*22+6,0xffdce6ef,false);}}
         String label=name()+"  ·  Hold Alt + wheel: tools";g.text(mc.font,label,g.guiWidth()/2-mc.font.width(label)/2,g.guiHeight()-69,0xffe6cf8b,false);

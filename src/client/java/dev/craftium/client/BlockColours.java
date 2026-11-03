@@ -5,7 +5,6 @@ import dev.craftium.core.ColourMath;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import javax.imageio.ImageIO;
 import java.util.*;
 
@@ -23,7 +22,7 @@ final class BlockColours {
             var state=block.defaultBlockState();if(state.isAir()||block.asItem()==net.minecraft.world.item.Items.AIR)continue;
             String id=BuiltInRegistries.BLOCK.getKey(block).toString();
             try{
-                var key=Identifier.parse(id);JsonObject blockstate=json(Identifier.fromNamespaceAndPath(key.getNamespace(),"blockstates/"+key.getPath()+".json"));
+                var key=dev.craftium.compat.Compat.parse(id);JsonObject blockstate=json(key.getNamespace(),"blockstates/"+key.getPath()+".json");
                 String model=findModel(blockstate);if(model==null)continue;var textures=new LinkedHashMap<String,String>();readModel(model,textures,0);
                 var paths=new LinkedHashSet<String>();for(String value:textures.values()){int attempts=0;while(value.startsWith("#")&&attempts++<16)value=textures.getOrDefault(value.substring(1),"");if(!value.isBlank()&&!value.startsWith("#"))paths.add(value);}
                 if(paths.isEmpty())continue;long r=0,g=0,b=0;int n=0;
@@ -36,15 +35,15 @@ final class BlockColours {
             }catch(Exception ignored){/* Blocks without an item model or a readable texture cannot be colour matched. */}
         }
     }
-    private static JsonObject json(Identifier id)throws Exception{try(var reader=Minecraft.getInstance().getResourceManager().getResourceOrThrow(id).openAsReader()){return JsonParser.parseReader(reader).getAsJsonObject();}}
+    private static JsonObject json(String namespace,String path)throws Exception{try(var reader=Minecraft.getInstance().getResourceManager().getResourceOrThrow(dev.craftium.compat.Compat.id(namespace,path)).openAsReader()){return JsonParser.parseReader(reader).getAsJsonObject();}}
     private static String findModel(JsonElement value){if(value.isJsonObject()){var obj=value.getAsJsonObject();if(obj.has("model"))return obj.get("model").getAsString();for(var child:obj.entrySet()){String found=findModel(child.getValue());if(found!=null)return found;}}else if(value.isJsonArray())for(var child:value.getAsJsonArray()){String found=findModel(child);if(found!=null)return found;}return null;}
     private static void readModel(String id,Map<String,String> textures,int depth)throws Exception{
-        if(depth>16)return;JsonObject model=models.get(id);if(model==null){var key=Identifier.parse(id);model=json(Identifier.fromNamespaceAndPath(key.getNamespace(),"models/"+key.getPath()+".json"));models.put(id,model);}
+        if(depth>16)return;JsonObject model=models.get(id);if(model==null){var key=dev.craftium.compat.Compat.parse(id);model=json(key.getNamespace(),"models/"+key.getPath()+".json");models.put(id,model);}
         if(model.has("parent"))readModel(model.get("parent").getAsString(),textures,depth+1);
         if(model.has("textures"))for(var entry:model.getAsJsonObject("textures").entrySet())textures.put(entry.getKey(),entry.getValue().getAsString());
     }
     private static int average(String texture){return averages.computeIfAbsent(texture,key->{
-        var id=Identifier.parse(key);try(var stream=Minecraft.getInstance().getResourceManager().getResourceOrThrow(Identifier.fromNamespaceAndPath(id.getNamespace(),"textures/"+id.getPath()+".png")).open()){
+        var id=dev.craftium.compat.Compat.parse(key);try(var stream=Minecraft.getInstance().getResourceManager().getResourceOrThrow(dev.craftium.compat.Compat.id(id.getNamespace(),"textures/"+id.getPath()+".png")).open()){
             var image=ImageIO.read(stream);if(image==null)return -1;long r=0,g=0,b=0,weight=0;int height=Math.min(image.getHeight(),image.getWidth());
             for(int x=0;x<image.getWidth();x++)for(int y=0;y<height;y++){int c=image.getRGB(x,y),a=c>>>24;r+=((c>>16)&255)*a;g+=((c>>8)&255)*a;b+=(c&255)*a;weight+=a;}
             return weight==0?-1:(int)(r/weight)<<16|(int)(g/weight)<<8|(int)(b/weight);
@@ -52,6 +51,6 @@ final class BlockColours {
     });}
     static List<Entry> nearest(int color,boolean full,boolean solid,boolean opaque,boolean uniform,int count){double[] lab=ColourMath.lab(color);return entries.stream().filter(e->(!full||e.full)&&(!solid||e.solid)&&(!opaque||e.opaque)&&(!uniform||e.uniform)).sorted(Comparator.comparingDouble(e->ColourMath.distance(lab,e.lab))).limit(count).toList();}
     static Entry get(String id){return entries.stream().filter(e->e.id.equals(id)).findFirst().orElse(null);}
-    static java.util.List<dev.craftium.core.BlockColour> snapshot(){build();var result=new java.util.ArrayList<dev.craftium.core.BlockColour>();for(var e:entries){var id=Identifier.parse(e.id);boolean entity=BuiltInRegistries.BLOCK.getValue(id).defaultBlockState().hasBlockEntity();int flags=(e.solid?1:0)|(e.opaque?2:0)|(e.full?4:0)|(e.uniform?8:0)|(!e.id.contains("_ore")&&!e.id.contains("ancient_debris")?16:0)|(!e.id.contains("glazed_terracotta")?32:0)|(!entity?64:0);result.add(new dev.craftium.core.BlockColour(e.id,e.rgb,flags));}return result;}
+    static java.util.List<dev.craftium.core.BlockColour> snapshot(){build();var result=new java.util.ArrayList<dev.craftium.core.BlockColour>();for(var e:entries){var id=dev.craftium.compat.Compat.parse(e.id);boolean entity=BuiltInRegistries.BLOCK.getValue(id).defaultBlockState().hasBlockEntity();int flags=(e.solid?1:0)|(e.opaque?2:0)|(e.full?4:0)|(e.uniform?8:0)|(!e.id.contains("_ore")&&!e.id.contains("ancient_debris")?16:0)|(!e.id.contains("glazed_terracotta")?32:0)|(!entity?64:0);result.add(new dev.craftium.core.BlockColour(e.id,e.rgb,flags));}return result;}
     static int size(){return entries.size();}
 }

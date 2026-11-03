@@ -1,12 +1,12 @@
 package dev.craftium.client;
 
 import dev.craftium.core.Tool;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import dev.craftium.client.compat.Gfx;
 
 /** Small original line icons, drawn at UI resolution without Axiom assets. */
 final class ToolIcons {
     private ToolIcons() {}
-    static void draw(GuiGraphicsExtractor g,Tool tool,int x,int y,int color) {
+    static void draw(Gfx g,Tool tool,int x,int y,int color) {
         switch(tool) {
             case LASSO_SELECT -> {line(g,x+3,y+7,x+11,y+3,color);line(g,x+11,y+3,x+21,y+9,color);line(g,x+21,y+9,x+17,y+18,color);line(g,x+17,y+18,x+5,y+18,color);line(g,x+5,y+18,x+3,y+7,color);line(g,x+11,y+18,x+7,y+23,color);}
             case PATH,MODELLING -> {line(g,x+3,y+19,x+9,y+5,color);line(g,x+9,y+5,x+20,y+17,color);for(int[] p:new int[][]{{3,19},{9,5},{20,17}})g.fill(x+p[0]-2,y+p[1]-2,x+p[0]+3,y+p[1]+3,color);}
@@ -34,10 +34,10 @@ final class ToolIcons {
             case TINKER -> {line(g,x+4,y+21,x+17,y+8,color);g.fill(x+14,y+3,x+18,y+9,color);g.fill(x+18,y+7,x+22,y+12,color);}
         }
     }
-    static void line(GuiGraphicsExtractor g,int x1,int y1,int x2,int y2,int c) {
+    static void line(Gfx g,int x1,int y1,int x2,int y2,int c) {
         int steps=Math.max(Math.abs(x2-x1),Math.abs(y2-y1));
         for(int i=0;i<=steps;i++){float t=steps==0?0:(float)i/steps;int x=Math.round(x1+(x2-x1)*t),y=Math.round(y1+(y2-y1)*t);g.fill(x,y,x+2,y+2,c);}
     }
-    private static void star(GuiGraphicsExtractor g,int x,int y,int c){g.fill(x-3,y,x+4,y+1,c);g.fill(x,y-3,x+1,y+4,c);}
-    private static void dotted(GuiGraphicsExtractor g,int x,int y,int w,int h,int c){for(int i=0;i<w;i+=3){g.fill(x+i,y,x+i+2,y+1,c);g.fill(x+i,y+h,x+i+2,y+h+1,c);}for(int i=0;i<h;i+=3){g.fill(x,y+i,x+1,y+i+2,c);g.fill(x+w,y+i,x+w+1,y+i+2,c);}}
+    private static void star(Gfx g,int x,int y,int c){g.fill(x-3,y,x+4,y+1,c);g.fill(x,y-3,x+1,y+4,c);}
+    private static void dotted(Gfx g,int x,int y,int w,int h,int c){for(int i=0;i<w;i+=3){g.fill(x+i,y,x+i+2,y+1,c);g.fill(x+i,y+h,x+i+2,y+h+1,c);}for(int i=0;i<h;i+=3){g.fill(x,y+i,x+1,y+i+2,c);g.fill(x+w,y+i,x+w+1,y+i+2,c);}}
 }

@@ -1,7 +1,8 @@
 package dev.craftium.client;
 
 import dev.craftium.core.*;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import dev.craftium.client.compat.CraftiumScreen;
+import dev.craftium.client.compat.Gfx;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -9,7 +10,7 @@ import net.minecraft.network.chat.Component;
 import java.util.*;
 
 /** Nested drag-and-drop rule blocks, with the editable expression always available. */
-public final class MaskScreen extends Screen {
+public final class MaskScreen extends CraftiumScreen {
     private final Screen parent;
     private MaskTree.Node root,selected,dragged;
     private final List<Row> rows=new ArrayList<>();
@@ -36,11 +37,11 @@ public final class MaskScreen extends Screen {
     private void wrap(String rule){var parent=MaskTree.parent(root,selected);var group=new MaskTree.Node(rule);group.children.add(selected);if(parent==null)root=group;else parent.children.set(parent.children.indexOf(selected),group);selected=group;init();}
     private void button(String label,int x,int y,int w,int h,Runnable action){addRenderableWidget(new FlatButton(x,y,w,h,label,()->{try{action.run();}catch(Exception e){message=e.getMessage();}}));}
     private static void validate(String expression){MaskExpression.compile(expression,new MaskExpression.Context(){public boolean block(Point p,String state){return false;}public boolean selection(Point p){return false;}public boolean sky(Point p){return false;}public boolean surface(Point p){return false;}public double angle(Point p){return 0;}});}
-    @Override public void extractBackground(GuiGraphicsExtractor g,int x,int y,float delta){}
-    @Override public void extractRenderState(GuiGraphicsExtractor g,int mouseX,int mouseY,float delta){
+    @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
+    @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){
         int mx=(int)(mouseX/scale),my=(int)(mouseY/scale);g.pose().pushMatrix();g.pose().scale(scale,scale);g.fill(0,0,cw,ch,0xef101923);g.fill(left-12,top-25,left+692,top+414,0xff172330);g.text(font,"CRAFTIUM  /  TOOL MASKS",left,top-17,0xffb5dcfc,false);g.text(font,font.plainSubstrByWidth(root.expression(),665),left,top+5,0xffe6cf8b,false);g.text(font,"Drag a rule into an AND / OR / NOT / OFFSET block",left,top+23,0xff9db5cb,false);
         for(int i=scroll;i<Math.min(rows.size(),scroll+9);i++){var row=rows.get(i);int x=left+Math.min(9,row.depth())*17,y=top+45+(i-scroll)*29;g.fill(x,y,left+430,y+26,row.node()==selected?0xff365576:row.node().group()?0xff263d56:0xff223247);g.outline(x,y,left+430-x,26,row.node()==dragged?0xffffd66d:0xff3a4d60);g.text(font,(row.node().group()?"▾ ":"• ")+font.plainSubstrByWidth(row.node().rule,390-(x-left)),x+8,y+8,0xffdce6ef,false);}
-        g.text(font,"Selected rule / offset coordinates",left,top+314,0xff9db5cb,false);super.extractRenderState(g,mx,my,delta);g.text(font,font.plainSubstrByWidth(message,670),left,top+358,0xffffdca8,false);g.pose().popMatrix();
+        g.text(font,"Selected rule / offset coordinates",left,top+314,0xff9db5cb,false);drawWidgets(g,mx,my,delta);g.text(font,font.plainSubstrByWidth(message,670),left,top+358,0xffffdca8,false);g.pose().popMatrix();
     }
     private MaskTree.Node rowAt(double x,double y){if(x<left||x>left+430)return null;int index=scroll+(int)((y-top-45)/29);return y>=top+45&&index>=scroll&&index<Math.min(rows.size(),scroll+9)?rows.get(index).node():null;}
     @Override public boolean mouseClicked(MouseButtonEvent event,boolean twice){double x=event.x()/scale,y=event.y()/scale;var node=rowAt(x,y);if(node!=null){selected=node;init();dragged=node;return true;}return super.mouseClicked(new MouseButtonEvent(x,y,event.buttonInfo()),twice);}

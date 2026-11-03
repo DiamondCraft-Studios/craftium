@@ -1,7 +1,8 @@
 package dev.craftium.client;
 
 import dev.craftium.core.*;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import dev.craftium.client.compat.CraftiumScreen;
+import dev.craftium.client.compat.Gfx;
 import net.minecraft.client.gui.components.*;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -9,7 +10,7 @@ import java.lang.reflect.Field;
 import java.util.*;
 
 /** Paged inspector for the detailed controls; keeps settings out of the world viewport. */
-public final class StudioScreen extends Screen {
+public final class StudioScreen extends CraftiumScreen {
     private final EditorScreen editor;
     private String tab="Selection",message="";
     private int page,left,top,columns=2,rows;
@@ -138,12 +139,12 @@ public final class StudioScreen extends Screen {
     private void actionRow(String[] names,Runnable[] actions){for(int i=0;i<names.length;i++){Runnable action=actions[i];button(names[i],left+i*125,canvasH-89,119,21,()->{try{action.run();init();}catch(Exception e){message=e.getMessage();}});}}
     private void button(String text,int x,int y,int width,int height,Runnable action){addRenderableWidget(new FlatButton(x,y,width,height,text,()->{try{action.run();}catch(Exception e){message=e.getMessage();}}));}
     private void send(String action){try{if(action.startsWith("entity_"))ClientState.options.gizmoTarget=Options.GizmoTarget.ENTITY;if(action.equals("use")&&(ClientState.options.tool==Tool.LASSO_SELECT||ClientState.options.tool==Tool.RULER)){message="Return to the viewport to draw a lasso or place ruler points";return;}ClientState.options.validate();var hit=editor.target();CraftiumClient.send(action,hit==null?ClientState.options.position1:CraftiumClient.point(hit.getBlockPos()),hit==null?new Point(0,1,0):CraftiumClient.normal(hit));message="Sent "+human(action);}catch(Exception e){message=e.getMessage();}}
-    @Override public void extractBackground(GuiGraphicsExtractor g,int x,int y,float delta){}
-    @Override public void extractRenderState(GuiGraphicsExtractor g,int x,int y,float delta){
+    @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
+    @Override protected void draw(Gfx g,int x,int y,float delta){
         g.pose().pushMatrix();g.pose().scale(uiScale,uiScale);
         g.fill(0,0,canvasW,canvasH,0xee101923);g.fill(left-12,top-13,Math.min(canvasW-5,left+640),canvasH-25,0xff172330);g.text(font,"CRAFTIUM  /  "+tab.toUpperCase(Locale.ROOT),left,top-25,0xffb5dcfc,false);
         for(Label label:labels)g.text(font,font.plainSubstrByWidth(label.text,625),label.x,label.y,0xff9db5cb,false);
-        super.extractRenderState(g,(int)(x/uiScale),(int)(y/uiScale),delta);g.text(font,font.plainSubstrByWidth(message.isBlank()?ClientState.status.message():message,canvasW-30),15,canvasH-17,0xffffdca8,false);g.pose().popMatrix();
+        drawWidgets(g,(int)(x/uiScale),(int)(y/uiScale),delta);g.text(font,font.plainSubstrByWidth(message.isBlank()?ClientState.status.message():message,canvasW-30),15,canvasH-17,0xffffdca8,false);g.pose().popMatrix();
     }
     @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event,boolean twice){return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(event.x()/uiScale,event.y()/uiScale,event.buttonInfo()),twice);}
     @Override public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event){return super.mouseReleased(new net.minecraft.client.input.MouseButtonEvent(event.x()/uiScale,event.y()/uiScale,event.buttonInfo()));}

@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gizmos.*;
@@ -20,7 +21,7 @@ final class WorldDiagnostics {
         }
     }
     static void draw(Minecraft mc){
-        var o=ClientState.options;if(o.showBiomes&&(mc.gui.screen() instanceof EditorScreen||mc.gui.screen() instanceof StudioScreen))drawBiomes(mc);if(!o.showCollisionMesh&&!o.showLightBlocks&&!o.showStructureVoid){marks.clear();return;}
+        var o=ClientState.options;if(o.showBiomes&&(ClientCompat.screen(mc) instanceof EditorScreen||ClientCompat.screen(mc) instanceof StudioScreen))drawBiomes(mc);if(!o.showCollisionMesh&&!o.showLightBlocks&&!o.showStructureVoid){marks.clear();return;}
         if(++ticks%10==1){
             marks.clear();BlockPos center=mc.player.blockPosition();
             for(int x=-7;x<=7;x++)for(int y=-5;y<=5;y++)for(int z=-7;z<=7;z++){

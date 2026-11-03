@@ -1,18 +1,18 @@
 package dev.craftium.client;
 
 import dev.craftium.core.*;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import dev.craftium.client.compat.CraftiumScreen;
+import dev.craftium.client.compat.Gfx;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.BlockItem;
 import java.util.*;
 
 /** Ordered, weighted palette with block search, inventory input and drag-to-reorder. */
-public final class PaletteScreen extends Screen {
+public final class PaletteScreen extends CraftiumScreen {
     private final Screen parent;
     private final List<String> blocks=new ArrayList<>();
     private final List<Double> weights=new ArrayList<>();
@@ -36,15 +36,15 @@ public final class PaletteScreen extends Screen {
     private void search(){results=java.util.stream.StreamSupport.stream(BuiltInRegistries.BLOCK.spliterator(),false).filter(b->b.asItem()!=net.minecraft.world.item.Items.AIR).map(b->BuiltInRegistries.BLOCK.getKey(b).toString()).filter(id->id.toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT))).sorted().toList();resultPage=Math.clamp(resultPage,0,Math.max(0,(results.size()-1)/24));}
     private void button(String text,int x,int y,int w,int h,Runnable action){addRenderableWidget(new FlatButton(x,y,w,h,text,()->{try{action.run();}catch(Exception e){message=e.getMessage();}}));}
     private void apply(){ClientState.options.materials=String.join(",",blocks);ClientState.options.materialWeights=new ArrayList<>(weights);ClientState.save();}
-    private void item(GuiGraphicsExtractor g,String block,int x,int y){var id=Identifier.tryParse(block.split("\\[",2)[0]);if(id!=null)BuiltInRegistries.BLOCK.getOptional(id).ifPresent(b->g.item(b.asItem().getDefaultInstance(),x,y));}
-    @Override public void extractBackground(GuiGraphicsExtractor g,int x,int y,float delta){}
-    @Override public void extractRenderState(GuiGraphicsExtractor g,int mouseX,int mouseY,float delta){
+    private void item(Gfx g,String block,int x,int y){var id=dev.craftium.compat.Compat.tryParse(block.split("\\[",2)[0]);if(id!=null)BuiltInRegistries.BLOCK.getOptional(id).ifPresent(b->g.item(b.asItem().getDefaultInstance(),x,y));}
+    @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
+    @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){
         int mx=(int)(mouseX/scale),my=(int)(mouseY/scale);g.pose().pushMatrix();g.pose().scale(scale,scale);g.fill(0,0,cw,ch,0xef101923);g.fill(left-12,top-25,left+672,top+420,0xff172330);g.text(font,"CRAFTIUM  /  PALETTE",left,top-17,0xffb5dcfc,false);g.text(font,"DARK → LIGHT  ·  drag icons to reorder",left,top+12,0xff9db5cb,false);g.text(font,"SEARCH BLOCKS",left+378,top+12,0xff9db5cb,false);
         for(int i=page*8;i<Math.min(blocks.size(),page*8+8);i++){int y=top+45+(i-page*8)*36;g.fill(left,y,left+347,y+34,i==drag?0xff365576:0xff213146);item(g,blocks.get(i),left+8,y+9);g.text(font,font.plainSubstrByWidth(blocks.get(i),270),left+40,y+1,0xffdce6ef,false);}
         for(int i=resultPage*24;i<Math.min(results.size(),resultPage*24+24);i++){int j=i-resultPage*24,x=left+378+(j%6)*45,y=top+65+(j/6)*46;g.fill(x,y,x+40,y+39,0xff223247);item(g,results.get(i),x+12,y+7);if(mx>=x&&mx<x+40&&my>=y&&my<y+39)message=results.get(i);}
         g.text(font,(page+1)+" / "+Math.max(1,(blocks.size()+7)/8),left+62,top+349,0xff9db5cb,false);g.text(font,results.size()+" blocks · page "+(resultPage+1),left+445,top+260,0xff9db5cb,false);
         g.text(font,"YOUR HOTBAR · click or drag blocks",left+378,top+292,0xff9db5cb,false);for(int i=0;i<9;i++){int x=left+378+i*30,y=top+309;g.fill(x,y,x+27,y+27,0xff25364a);g.item(minecraft.player.getInventory().getItem(i),x+5,y+5);}
-        super.extractRenderState(g,mx,my,delta);if(dragBlock!=null){item(g,dragBlock,mx-8,my-8);}g.text(font,font.plainSubstrByWidth(message,650),left,top+410,0xffffdca8,false);g.pose().popMatrix();
+        drawWidgets(g,mx,my,delta);if(dragBlock!=null){item(g,dragBlock,mx-8,my-8);}g.text(font,font.plainSubstrByWidth(message,650),left,top+410,0xffffdca8,false);g.pose().popMatrix();
     }
     @Override public boolean mouseClicked(MouseButtonEvent event,boolean twice){double x=event.x()/scale,y=event.y()/scale;
         for(int i=page*8;i<Math.min(blocks.size(),page*8+8);i++){int by=top+45+(i-page*8)*36;if(x>=left&&x<left+35&&y>=by&&y<by+34){drag=i;dragBlock=blocks.get(i);dragging=false;return true;}}

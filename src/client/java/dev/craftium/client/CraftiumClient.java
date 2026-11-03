@@ -1,5 +1,7 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
+import dev.craftium.client.compat.Gfx;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.craftium.core.*;
 import dev.craftium.net.Packets;
@@ -16,7 +18,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gizmos.Gizmos;
 import net.minecraft.gizmos.GizmoStyle;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.ClipContext;
@@ -36,7 +37,7 @@ public final class CraftiumClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(Packets.Bridge.TYPE,(payload,context)->context.client().execute(()->receiveBridge(payload.bytes())));
         ClientCommands.register();
         ClientPlayNetworking.registerGlobalReceiver(Packets.Download.TYPE,(payload,context)->context.client().execute(()->ClientAssets.receive(payload)));
-        var category=KeyMapping.Category.register(Identifier.fromNamespaceAndPath("craftium","studio"));
+        var category=KeyMapping.Category.register(dev.craftium.compat.Compat.id("craftium","studio"));
         editorKey=KeyMappingHelper.registerKeyMapping(new KeyMapping("key.craftium.editor",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_RIGHT_SHIFT,category));
         contextKey=KeyMappingHelper.registerKeyMapping(new KeyMapping("key.craftium.context",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_LEFT_ALT,category));
         swapKey=KeyMappingHelper.registerKeyMapping(new KeyMapping("key.craftium.hotbar",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_UNKNOWN,category));
@@ -45,7 +46,7 @@ public final class CraftiumClient implements ClientModInitializer {
             int key=EditorControls.toolDefault(tool);
             toolKeys.put(tool,KeyMappingHelper.registerKeyMapping(new KeyMapping("key.craftium.tool."+tool.name().toLowerCase(java.util.Locale.ROOT),InputConstants.Type.KEYSYM,key,category)));
         }
-        ClientPlayNetworking.registerGlobalReceiver(Packets.Report.TYPE,(payload,context)->context.client().execute(()->context.client().gui.setScreen(new ReportScreen(context.client().gui.screen(),payload.text()))));
+        ClientPlayNetworking.registerGlobalReceiver(Packets.Report.TYPE,(payload,context)->context.client().execute(()->context.client().gui.setScreen(new ReportScreen(ClientCompat.screen(context.client()),payload.text()))));
         ClientPlayNetworking.registerGlobalReceiver(Packets.Update.TYPE,(payload,context)->context.client().execute(()->{
             receiveStatus(payload.json());
         }));
@@ -64,13 +65,14 @@ public final class CraftiumClient implements ClientModInitializer {
             var o=ClientState.options;
             boolean place=player.getMainHandItem().getItem() instanceof BlockItem && (ClientState.symmetry()||o.replaceMode||o.forcePlace||o.noUpdates||o.fastPlace||o.infiniteReach||o.angelPlacement||o.preventInteractions);
             boolean tinker=player.getMainHandItem().isEmpty()&&o.tinker&&!player.isShiftKeyDown();
-            if(level.isClientSide() && player.isCreative() && supported() && Minecraft.getInstance().gui.screen()==null && (place||tinker))return InteractionResult.FAIL;
+            if(level.isClientSide() && player.isCreative() && supported() && ClientCompat.screen(Minecraft.getInstance())==null && (place||tinker))return InteractionResult.FAIL;
             return InteractionResult.PASS;
         });
         AttackBlockCallback.EVENT.register((player,level,hand,pos,face)->
             level.isClientSide() && player.isCreative() && supported() && (ClientState.symmetry()||ClientState.options.bulldozer||ClientState.options.infiniteReach) ? InteractionResult.FAIL:InteractionResult.PASS);
-        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("craftium","builder"),(g,delta)->{
-            var mc=Minecraft.getInstance();if(mc.player==null || !mc.player.isCreative() || mc.gui.screen()!=null)return;
+        HudElementRegistry.addLast(dev.craftium.compat.Compat.id("craftium","builder"),(raw,delta)->{
+            var mc=Minecraft.getInstance();if(mc.player==null || !mc.player.isCreative() || ClientCompat.screen(mc)!=null)return;
+            var g=Gfx.of(raw);
             ReferenceImages.draw(g,false,0,0);
             int h=g.guiHeight();String mode=ClientState.options.replaceMode?"REPLACE":"BUILD";
             g.fill(5,h-47,155,h-21,0xd9161d28);g.fill(5,h-47,7,h-21,0xff599cda);
@@ -94,7 +96,7 @@ public final class CraftiumClient implements ClientModInitializer {
             var mc=Minecraft.getInstance();
             switch(message.kind()){
                 case "status" -> receiveStatus(message.data());
-                case "report" -> mc.gui.setScreen(new ReportScreen(mc.gui.screen(),message.data()));
+                case "report" -> mc.gui.setScreen(new ReportScreen(ClientCompat.screen(mc),message.data()));
                 case "download" -> ClientAssets.receive(Packets.JSON.fromJson(message.data(),Packets.Download.class));
                 case "hello" -> send("status",null,null);
                 default -> throw new IllegalArgumentException("Unknown Craftium server message");
@@ -106,17 +108,17 @@ public final class CraftiumClient implements ClientModInitializer {
         if(mc.player==null || mc.level==null){hadWorld=false;toolCursor=false;return;}
         ClientCommands.tick();
         if(BuilderMode.active()&&held(contextKey)){if(!toolCursor){mc.mouseHandler.releaseMouse();toolCursor=true;}}
-        else if(toolCursor){if(mc.gui.screen()==null)mc.mouseHandler.grabMouse();toolCursor=false;}
+        else if(toolCursor){if(ClientCompat.screen(mc)==null)mc.mouseHandler.grabMouse();toolCursor=false;}
         if(lastLiquidOpacity!=ClientState.options.liquidOpacity){lastLiquidOpacity=ClientState.options.liquidOpacity;mc.levelRenderer.invalidateCompiledGeometry(mc.level,mc.options,mc.gameRenderer.mainCamera(),mc.getBlockColors());}
         if(!hadWorld){hadWorld=true;if(supported())send("status",null,null);}
         while(editorKey.consumeClick()) {
-            if(mc.gui.screen() instanceof EditorScreen)mc.gui.setScreen(null);
-            else if(mc.gui.screen()==null)open(false);
+            if(ClientCompat.screen(mc) instanceof EditorScreen)mc.gui.setScreen(null);
+            else if(ClientCompat.screen(mc)==null)open(false);
         }
         while(contextKey.consumeClick()){}
-        if(mc.gui.screen()==null&&held(contextKey)&&!BuilderMode.active())open(true,true);
+        if(ClientCompat.screen(mc)==null&&held(contextKey)&&!BuilderMode.active())open(true,true);
         preview(mc);
-        if(mc.gui.screen()!=null)return;
+        if(ClientCompat.screen(mc)!=null)return;
         for(var entry:toolKeys.entrySet())while(entry.getValue().consumeClick()){}
         while(swapKey.consumeClick())if(!mc.hasControlDown())send("hotbar",null,null);
         while(replaceKey.consumeClick()) {ClientState.options.replaceMode=!ClientState.options.replaceMode;ClientState.notify("Replace mode "+(ClientState.options.replaceMode?"enabled":"disabled"));ClientState.save();}
@@ -143,7 +145,7 @@ public final class CraftiumClient implements ClientModInitializer {
         if(mapping.isUnbound())return false;var key=InputConstants.getKey(mapping.saveString());long window=Minecraft.getInstance().getWindow().handle();return key.getType()==InputConstants.Type.MOUSE?GLFW.glfwGetMouseButton(window,key.getValue())==GLFW.GLFW_PRESS:InputConstants.isKeyDown(Minecraft.getInstance().getWindow(),key.getValue());
     }
     public static boolean ingameKey(net.minecraft.client.input.KeyEvent event,int action){
-        var mc=Minecraft.getInstance();if(action!=GLFW.GLFW_PRESS||mc.gui.screen()!=null||mc.player==null||!mc.player.isCreative()||!supported())return false;
+        var mc=Minecraft.getInstance();if(action!=GLFW.GLFW_PRESS||ClientCompat.screen(mc)!=null||mc.player==null||!mc.player.isCreative()||!supported())return false;
         if(EntityShortcuts.ingame(event))return true;
         if(EditorBindings.matches(EditorControls.Action.INGAME_COPY,event)){
             var hit=mc.hitResult instanceof BlockHitResult b&&b.getType()==HitResult.Type.BLOCK?b:null;
@@ -184,7 +186,7 @@ public final class CraftiumClient implements ClientModInitializer {
         return hit.getType()==HitResult.Type.BLOCK?hit:null;
     }
     private static void preview(Minecraft mc) {
-        var screen=mc.gui.screen() instanceof EditorScreen editor?editor:mc.gui.screen() instanceof StudioScreen studio?studio.editor():null;
+        var screen=ClientCompat.screen(mc) instanceof EditorScreen editor?editor:ClientCompat.screen(mc) instanceof StudioScreen studio?studio.editor():null;
         var hit=screen==null?null:screen.target();
         try(var collector=mc.collectPerTickGizmos()) {
             WorldDiagnostics.draw(mc);

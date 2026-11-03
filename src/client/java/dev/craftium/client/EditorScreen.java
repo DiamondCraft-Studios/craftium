@@ -2,19 +2,19 @@ package dev.craftium.client;
 
 import dev.craftium.core.*;
 import dev.craftium.core.EditorControls.Action;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import dev.craftium.client.compat.CraftiumScreen;
+import dev.craftium.client.compat.Gfx;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.*;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.*;
 import org.lwjgl.glfw.GLFW;
 import java.util.*;
 import java.util.function.*;
 
-public final class EditorScreen extends Screen {
+public final class EditorScreen extends CraftiumScreen {
     private static int BG=0xf510141a,PANEL=0xff10151c,LINE=0xff303b49,ACCENT=0xff5b9fdb,TEXT=0xffdce6ef,MUTED=0xff8595a8;
     private static final int LEFT=182,RIGHT=200;
     private float scale=1;
@@ -93,8 +93,8 @@ public final class EditorScreen extends Screen {
     private void select(Tool tool){toolActive=true;previousTool=o().tool;selectedNode=-1;o().tool=tool;o().gizmoTarget=Options.GizmoTarget.AUTO;builder=false;init();}
     @Override public boolean isPauseScreen(){return false;}
     @Override public boolean isInGameUi(){return true;}
-    @Override public void extractBackground(GuiGraphicsExtractor g,int x,int y,float delta) {}
-    @Override public void extractRenderState(GuiGraphicsExtractor g,int mouseX,int mouseY,float delta) {
+    @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
+    @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta) {
         BG=o().uiBackground;PANEL=o().uiPanel;LINE=o().uiBorder;ACCENT=o().uiAccent;TEXT=o().uiText;MUTED=o().uiMuted;
         pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();
         g.pose().pushMatrix();g.pose().scale(scale,scale);
@@ -112,7 +112,7 @@ public final class EditorScreen extends Screen {
             String panel=WorkspaceLayout.fieldPanel(field.getKey());if(!WorkspaceLayout.visible(panel))continue;g.pose().pushMatrix();WorkspaceLayout.apply(g,panel);var point=WorkspaceLayout.inverse(panel,mx,my);
             var f=field.getValue();g.fill(f.getX()-3,f.getY()-4,f.getX()+f.getWidth()+3,f.getY()+14,0xff1b2838);
             if(f.isFocused())g.outline(f.getX()-4,f.getY()-5,f.getWidth()+8,20,ACCENT);
-            f.extractRenderState(g,(int)point[0],(int)point[1],delta);g.pose().popMatrix();
+            g.widget(f,(int)point[0],(int)point[1],delta);g.pose().popMatrix();
         }
         if(!help&&menu<0) {
             String tooltip="";for(var c:controls)if(c.contains(mx,my)&&!c.tip.isEmpty())tooltip=c.tip;
@@ -124,7 +124,7 @@ public final class EditorScreen extends Screen {
         }
         g.pose().popMatrix();ReferenceImages.draw(g,true,mouseX,mouseY);
     }
-    private void topbar(GuiGraphicsExtractor g) {
+    private void topbar(Gfx g) {
         g.fill(0,0,w,23,0xff1b222c);g.fill(0,22,w,23,LINE);
         CraftiumBrand.draw(g,6,3,18);text(g,"CRAFTIUM",26,8,TEXT);
         String[] names={"File","Edit","Select","View","Create","Operations","Masks","Window","Help"};int x=108;
@@ -134,7 +134,7 @@ public final class EditorScreen extends Screen {
         }
         button(g,w-58,3,52,17,"Exit  ×",false,this::onClose,"Return to building · Right Shift");
     }
-    private void panel(GuiGraphicsExtractor g,int x,int y,int width,int height,String title) {
+    private void panel(Gfx g,int x,int y,int width,int height,String title) {
         finishPanel(g);String id=WorkspaceLayout.key(title);if(!id.isBlank()){
             WorkspaceLayout.prepare(id,x,y,width,height);drawingPanel=id;g.pose().pushMatrix();WorkspaceLayout.apply(g,id);
             if(!WorkspaceLayout.visible(id)){g.enableScissor(0,0,0,0);panelScissor=true;}
@@ -144,8 +144,8 @@ public final class EditorScreen extends Screen {
         text(g,"▾",x+7,y+6,MUTED);text(g,title,x+17,y+6,TEXT);
         if(!id.isBlank()){text(g,"×",x+width-12,y+5,MUTED);controls.add(new Control(x+width-17,y+2,15,14,()->WorkspaceLayout.toggle(id),"Close panel · reopen from Window"));g.fill(x+width-5,y+height-5,x+width-2,y+height-2,LINE);}
     }
-    private void finishPanel(GuiGraphicsExtractor g){if(!drawingPanel.isBlank()){if(panelScissor){g.disableScissor();panelScissor=false;}g.pose().popMatrix();drawingPanel="";}}
-    private void tools(GuiGraphicsExtractor g) {
+    private void finishPanel(Gfx g){if(!drawingPanel.isBlank()){if(panelScissor){g.disableScissor();panelScissor=false;}g.pose().popMatrix();drawingPanel="";}}
+    private void tools(Gfx g) {
         panel(g,0,27,LEFT,166,"Tools");int i=0;
         for(Tool tool:Tool.values()) {
             int x=9+(i%7)*23,y=50+(i/7)*23;i++;
@@ -157,7 +157,7 @@ public final class EditorScreen extends Screen {
             controls.add(new Control(x,y,21,21,()->{if(toolActive&&o().tool==tool)toolActive=false;else select(tool);},tool.label+" · "+tool.description));
         }
     }
-    private void options(GuiGraphicsExtractor g) {
+    private void options(Gfx g) {
         panel(g,0,199,LEFT,h-224,builder?"Builder controls":"Tool options");
         button(g,10,222,79,19,"Tool options",!builder,()->{builder=false;init();},"");
         button(g,93,222,79,19,"Builder",builder,()->{builder=true;init();},"");
@@ -219,7 +219,7 @@ public final class EditorScreen extends Screen {
         }
         if(o().tool.selection()){button(g,10,h-52,78,20,"Fill",false,()->action("fill"),"Fill the selection with the active block");button(g,94,h-52,78,20,"Clear",false,()->action("clear"),"Clear the selection");}
     }
-    private void builderOptions(GuiGraphicsExtractor g) {
+    private void builderOptions(Gfx g) {
         text(g,"CAPABILITIES",10,254,MUTED);
         toggle(g,10,273,"Enhanced flight",o().enhancedFlight,()->o().enhancedFlight=!o().enhancedFlight);
         toggle(g,10,296,"Bulldozer",o().bulldozer,()->o().bulldozer=!o().bulldozer);
@@ -233,13 +233,13 @@ public final class EditorScreen extends Screen {
         button(g,94,478,78,20,"Game mode",false,()->action("gamemode"),"Switch between Creative and Spectator");
         button(g,10,506,LEFT-20,20,"Builder tool: "+o().builderTool.name(),false,()->{o().builderTool=Options.BuilderTool.values()[(o().builderTool.ordinal()+1)%Options.BuilderTool.values().length];},"Press 0 in the world · Alt + wheel changes tools");
     }
-    private void targetInfo(GuiGraphicsExtractor g) {
+    private void targetInfo(Gfx g) {
         int x=w-RIGHT;panel(g,x,27,RIGHT,82,"Target info");var hit=target();
         if(hit!=null&&minecraft.level!=null){var p=hit.getBlockPos();text(g,p.getX()+"  /  "+p.getY()+"  /  "+p.getZ(),x+10,53,TEXT);text(g,shorten(BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(p).getBlock()).toString(),RIGHT-20),x+10,69,MUTED);}
         else text(g,"Point at a block",x+10,53,MUTED);
         text(g,ClientState.status.selectionSize()+" blocks selected",x+10,89,0xffa5cef2);
     }
-    private void clipboard(GuiGraphicsExtractor g) {
+    private void clipboard(Gfx g) {
         int x=w-RIGHT;panel(g,x,115,RIGHT,101,"Clipboard");
         text(g,ClientState.status.clipboardSize()==0?"No copied blocks":ClientState.status.clipboardSize()+" blocks ready to place",x+10,141,MUTED);
         button(g,x+10,159,56,20,"Copy",false,()->action("copy"),"Copy selection · Ctrl+C");
@@ -248,30 +248,30 @@ public final class EditorScreen extends Screen {
         button(g,x+10,186,85,20,"Rotate 90°",false,()->action("rotate"),"Rotate clipboard · Ctrl+R");
         button(g,x+104,186,86,20,"Mirror X",false,()->action("flip"),"Mirror clipboard · Ctrl+F");
     }
-    private void palette(GuiGraphicsExtractor g) {
+    private void palette(Gfx g) {
         int x=w-RIGHT;panel(g,x,222,RIGHT,105,"Active block / Palette");
         var blocks=ClientState.palette;int i=0;
         for(String block:blocks.subList(0,Math.min(14,blocks.size()))) {
             int bx=x+10+(i%7)*26,by=270+(i/7)*26;i++;
             boolean active=o().block.equals(block);g.fill(bx,by,bx+23,by+23,active?0xff315b84:0xff1b2838);if(active)g.outline(bx,by,23,23,ACCENT);
-            var id=Identifier.tryParse(block);if(id!=null)BuiltInRegistries.BLOCK.getOptional(id).ifPresent(b->g.item(b.asItem().getDefaultInstance(),bx+3,by+3));
+            var id=dev.craftium.compat.Compat.tryParse(block);if(id!=null)BuiltInRegistries.BLOCK.getOptional(id).ifPresent(b->g.item(b.asItem().getDefaultInstance(),bx+3,by+3));
             controls.add(new Control(bx,by,23,23,()->{ClientState.pick(block);fields.get("block").setValue(block);},block));
         }
     }
-    private void history(GuiGraphicsExtractor g) {
+    private void history(Gfx g) {
         int x=w-RIGHT,y=333,height=h-477;
         panel(g,x,y,RIGHT,Math.max(50,height),"History");
         button(g,x+10,y+24,85,19,"Undo "+ClientState.status.undo(),false,()->action("undo"),"Undo · Ctrl+Z");
         button(g,x+104,y+24,86,19,"Redo "+ClientState.status.redo(),false,()->action("redo"),"Redo · Ctrl+Y");
         int row=y+51,index=0;for(String event:ClientState.status.history()){if(row>y+height-12)break;int steps=++index;text(g,shorten(event,RIGHT-20),x+10,row,MUTED);controls.add(new Control(x+7,row-3,RIGHT-14,14,()->{o().historySteps=steps;action("history_undo_many");},"Undo through this edit"));row+=15;}
     }
-    private void masks(GuiGraphicsExtractor g) {
+    private void masks(Gfx g) {
         int x=w-RIGHT;panel(g,x,h-138,RIGHT,113,"Tool masks");
         text(g,"Only replace block (optional)",x+10,h-112,MUTED);
         text(g,"Min Y",x+10,h-78,MUTED);text(g,"Max Y",w-90,h-78,MUTED);
         toggle(g,x+10,h-43,"Only in selection",o().inSelection,()->o().inSelection=!o().inSelection);
     }
-    private void viewport(GuiGraphicsExtractor g) {
+    private void viewport(Gfx g) {
         int l=panels?LEFT+6:6,r=panels?w-RIGHT-6:w-6;
         g.fill(l,27,l+100,45,0xd9212c3a);text(g,"Main viewport",l+8,33,TEXT);
         text(g,"+",l+110,33,MUTED);
@@ -283,12 +283,12 @@ public final class EditorScreen extends Screen {
         if(tw>40){g.fill(l+8,54,l+8+tw,77,ClientState.status.error()?0xe14b252a:0xd916202d);text(g,shorten(notice,tw-16),l+16,62,ClientState.status.error()?0xffffb6ae:0xffbfd4e8);}
         if(minecraft.level==null){g.fill(l,80,r,h-28,0xff14202e);text(g,"Open a Creative world to start building",l+30,105,TEXT);}
     }
-    private void statusbar(GuiGraphicsExtractor g) {
+    private void statusbar(Gfx g) {
         g.fill(0,h-20,w,h,0xff1b222c);g.fill(0,h-21,w,h-20,LINE);
         text(g,"LMB Drag: Camera     MMB: Pick block     RMB: Use tool     WASD / Space Shift: Fly",9,h-13,MUTED);
         text(g,(ClientState.status.busy()?"APPLYING…":"● READY")+"   "+String.format(Locale.ROOT,"%.1f×",o().flySpeed),w-132,h-13,ClientState.status.busy()?0xffffd783:0xff89c9ac);
     }
-    private void dropdown(GuiGraphicsExtractor g) {
+    private void dropdown(Gfx g) {
         List<MenuItem> items=menuItems(menu);int x=108;String[] names={"File","Edit","Select","View","Create","Operations","Masks","Window","Help"};for(int i=0;i<menu;i++)x+=font.width(names[i])+16;
         g.fill(x,24,x+226,28+items.size()*25,0xff1c2735);g.outline(x,24,226,4+items.size()*25,LINE);
         int y=27;for(MenuItem item:items){final var action=item.action;button(g,x+3,y,220,24,item.label,false,()->{menu=-1;action.run();},"");if(!item.shortcut.isEmpty())text(g,item.shortcut,x+212-font.width(item.shortcut),y+8,MUTED);y+=25;}
@@ -307,7 +307,7 @@ public final class EditorScreen extends Screen {
         };
     }
     private MenuItem item(String label,String shortcut,Runnable action){return new MenuItem(label,shortcut,action);}
-    private void transform(GuiGraphicsExtractor g) {
+    private void transform(Gfx g) {
         controls.clear();
         g.fill(0,23,w,h-21,0x9910151c);int x=w/2-210,y=h/2-92;
         panel(g,x,y,420,184,"Move / clone / stack selection");
@@ -318,7 +318,7 @@ public final class EditorScreen extends Screen {
         button(g,x+210,y+145,85,22,"Stack",false,()->{action("stack");transform=false;init();},"");
         button(g,x+305,y+145,95,22,"Cancel",false,()->{transform=false;init();},"");
     }
-    private void help(GuiGraphicsExtractor g) {
+    private void help(Gfx g) {
         controls.clear();
         g.fill(0,23,w,h-21,0x9910151c);int x=w/2-230,y=h/2-145;
         panel(g,x,y,460,290,"Craftium / Building Studio");
@@ -326,27 +326,27 @@ public final class EditorScreen extends Screen {
         int row=y+30;for(String line:lines){text(g,line,x+18,row,MUTED);row+=14;}
         button(g,x+350,y+258,92,22,"Back to editor",false,()->help=false,"");
     }
-    private void button(GuiGraphicsExtractor g,int x,int y,int width,int height,String label,boolean active,Runnable action,String tip) {
+    private void button(Gfx g,int x,int y,int width,int height,String label,boolean active,Runnable action,String tip) {
         var pointer=WorkspaceLayout.inverse(drawingPanel,mx,my);boolean hover=pointer[0]>=x&&pointer[0]<x+width&&pointer[1]>=y&&pointer[1]<y+height;
         g.fill(x,y,x+width,y+height,active?0xff315b84:hover?0xff34485e:0xff243246);
         if(active)g.fill(x,y+height-2,x+width,y+height,ACCENT);
         text(g,label,x+6,y+(height-8)/2,active?0xffffffff:TEXT);
         controls.add(new Control(x,y,width,height,action,tip));
     }
-    private void toggle(GuiGraphicsExtractor g,int x,int y,String label,boolean value,Runnable action) {
+    private void toggle(Gfx g,int x,int y,String label,boolean value,Runnable action) {
         g.fill(x,y,x+12,y+12,value?0xff386e9d:0xff233247);g.outline(x,y,12,12,LINE);
         if(value){ToolIcons.line(g,x+2,y+6,x+5,y+9,TEXT);ToolIcons.line(g,x+5,y+9,x+10,y+3,TEXT);}
         text(g,label,x+19,y+3,TEXT);controls.add(new Control(x,y,Math.min(LEFT-20,font.width(label)+24),15,action,""));
     }
-    private void slider(GuiGraphicsExtractor g,int x,int y,int width,String label,double value,double min,double max,DoubleConsumer set,boolean integer) {
+    private void slider(Gfx g,int x,int y,int width,String label,double value,double min,double max,DoubleConsumer set,boolean integer) {
         text(g,label,x,y-10,MUTED);g.fill(x,y,x+width,y+17,0xff1b2b40);
         int fill=(int)((value-min)/(max-min)*(width-4));g.fill(x+2,y+2,x+Math.clamp(fill,3,width-2),y+15,0xff2c5074);
         String display=integer?Integer.toString((int)value):String.format(Locale.ROOT,"%.2f",value);g.centeredText(font,display,x+width/2,y+5,TEXT);
         var slider=new Slider(x,width,min,max,set);String panel=drawingPanel;controls.add(new Control(x,y,width,17,()->{dragging=slider;draggingSliderPanel=panel;slider.update(WorkspaceLayout.inverse(panel,mx,my)[0]);},"Drag to change "+label.toLowerCase(Locale.ROOT)));
     }
-    private void text(GuiGraphicsExtractor g,String text,int x,int y,int color){g.text(font,text,x,y,color,false);}
+    private void text(Gfx g,String text,int x,int y,int color){g.text(font,text,x,y,color,false);}
     private String shorten(String text,int pixels){if(font.width(text)<=pixels)return text;return font.plainSubstrByWidth(text,Math.max(0,pixels-9))+"…";}
-    private void wrap(GuiGraphicsExtractor g,String text,int x,int y,int width,int color,int maxLines){int line=0;for(var row:font.split(Component.literal(text),width)){if(line>=maxLines)break;g.text(font,row,x,y+line*11,color,false);line++;}}
+    private void wrap(Gfx g,String text,int x,int y,int width,int color,int maxLines){int line=0;for(var row:font.split(Component.literal(text),width)){if(line>=maxLines)break;g.text(font,row,x,y+line*11,color,false);line++;}}
     private String nice(String name){String s=name.toLowerCase(Locale.ROOT).replace('_',' ');return Character.toUpperCase(s.charAt(0))+s.substring(1);}
     public BlockHitResult target(){
         if(inViewport(pointerX/scale,pointerY/scale))lastHit=CraftiumClient.raycast(pointerX,pointerY);

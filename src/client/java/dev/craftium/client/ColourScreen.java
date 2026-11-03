@@ -1,17 +1,17 @@
 package dev.craftium.client;
 
 import dev.craftium.core.*;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import dev.craftium.client.compat.CraftiumScreen;
+import dev.craftium.client.compat.Gfx;
 import net.minecraft.client.gui.components.*;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import java.awt.Color;
 import java.util.*;
 
 /** Colour matching, texture filters and an editable nine-slot OKLab gradient. */
-public final class ColourScreen extends Screen {
+public final class ColourScreen extends CraftiumScreen {
     private final Screen parent;
     private int color=0x8b9194,left,top,canvasW,canvasH;
     private float scale=1;
@@ -63,16 +63,16 @@ public final class ColourScreen extends Screen {
     private void field(String value,int x,int y,int w,java.util.function.Consumer<String> listener){var f=new EditBox(font,x,y,w,20,Component.literal("Block or hex colour"));f.setValue(value);if(value.startsWith("#"))hexField=f;f.setResponder(text->{if(!updatingHex)listener.accept(text);});addRenderableWidget(f);}
     private void filter(String text,int x,int y,Runnable action){button(text,x,y,157,22,()->{action.run();matches();gradient();});}
     private void button(String label,int x,int y,int w,int h,Runnable action){addRenderableWidget(new FlatButton(x,y,w,h,label,action));}
-    private void item(GuiGraphicsExtractor g,String id,int x,int y){var key=Identifier.tryParse(id);if(key!=null)BuiltInRegistries.BLOCK.getOptional(key).ifPresent(block->g.item(block.asItem().getDefaultInstance(),x,y));}
-    @Override public void extractBackground(GuiGraphicsExtractor g,int x,int y,float delta){}
-    @Override public void extractRenderState(GuiGraphicsExtractor g,int mouseX,int mouseY,float delta){
+    private void item(Gfx g,String id,int x,int y){var key=dev.craftium.compat.Compat.tryParse(id);if(key!=null)BuiltInRegistries.BLOCK.getOptional(key).ifPresent(block->g.item(block.asItem().getDefaultInstance(),x,y));}
+    @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
+    @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){
         int mx=(int)(mouseX/scale),my=(int)(mouseY/scale);g.pose().pushMatrix();g.pose().scale(scale,scale);g.fill(0,0,canvasW,canvasH,0xef101923);g.fill(left-12,top-25,left+672,top+414,0xff172330);
         g.text(font,"CRAFTIUM  /  COLOUR STUDIO",left,top-17,0xffb5dcfc,false);g.text(font,"SIMILAR BLOCKS · "+BlockColours.size()+" texture averages",left+8,top+4,0xff9db5cb,false);
         for(int i=0;i<matches.size();i++){var e=matches.get(i);int x=left+8+(i%8)*53,y=top+25+(i/8)*43;g.fill(x,y,x+48,y+38,0xff223247);g.fill(x+3,y+32,x+45,y+35,0xff000000|e.rgb());item(g,e.id(),x+16,y+6);if(mx>=x&&mx<x+48&&my>=y&&my<y+38)g.text(font,e.id(),left+8,top+199,0xffffdca8,false);}
         g.fill(left+581,top+5,left+645,top+24,0xff000000|color);g.text(font,"GRADIENT · OKLab",left+8,top+245,0xffb5dcfc,false);
         for(int i=0;i<9;i++){int x=left+10+i*72,y=top+299;g.fill(x,y,x+56,y+35,0xff25364a);item(g,gradient[i],x+20,y+7);if(mx>=x&&mx<x+56&&my>=y&&my<y+35)g.text(font,gradient[i],left+8,top+402,0xffffdca8,false);}
         String filters="Filters: "+(full?"F ":"")+(solid?"S ":"")+(opaque?"O ":"")+(uniform?"T":"");g.text(font,filters,left+8,top+234,0xff9db5cb,false);
-        super.extractRenderState(g,mx,my,delta);if(!message.isBlank())g.text(font,message,left+8,top+402,0xffffdca8,false);g.pose().popMatrix();
+        drawWidgets(g,mx,my,delta);if(!message.isBlank())g.text(font,message,left+8,top+402,0xffffdca8,false);g.pose().popMatrix();
     }
     @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event,boolean twice){double x=event.x()/scale,y=event.y()/scale;for(int i=0;i<matches.size();i++){int bx=left+8+(i%8)*53,by=top+25+(i/8)*43;if(x>=bx&&x<bx+48&&y>=by&&y<by+38){var e=matches.get(i);if(event.button()==1){last=e.id();gradient();}else{ClientState.pick(e.id());color=e.rgb();first=e.id();init();}return true;}}return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(x,y,event.buttonInfo()),twice);}
     @Override public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event){return super.mouseReleased(new net.minecraft.client.input.MouseButtonEvent(event.x()/scale,event.y()/scale,event.buttonInfo()));}
