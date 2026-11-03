@@ -50,7 +50,7 @@ public final class ColourScreen extends CraftiumScreen {
                     else {float[] current=Color.RGBtoHSB((color>>16)&255,(color>>8)&255,color&255,null);current[index-3]=(float)value;color=Color.HSBtoRGB(current[0],current[1],current[2])&0xffffff;}
                     syncSliders();matches();gradient();
                 }
-            };slider.setMessage(Component.literal(labels[i]+": "+Math.round(value*(i==3?360:i<3?255:100))));addRenderableWidget(slider);colorWidgets.add(slider);
+            };slider.setMessage(Component.literal(labels[i]+": "+Math.round(value*(i==3?360:i<3?255:100))));slider.range(0,i<3?255:i==3?360:100,value*(i<3?255:i==3?360:100));addRenderableWidget(slider);colorWidgets.add(slider);
         }
         field(String.format(Locale.ROOT,"#%06X",color),left+445,top+5,128,value->{try{color=Integer.parseUnsignedInt(value.replace("#",""),16)&0xffffff;syncSliders();matches();gradient();}catch(Exception ignored){}});
     }
