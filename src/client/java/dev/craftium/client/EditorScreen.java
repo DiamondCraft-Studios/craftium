@@ -661,7 +661,9 @@ public final class EditorScreen extends CraftiumScreen {
             case 0 -> List.of(item("Open reference image…","",ReferenceImages::choose),item("Save tool settings","",()->{ClientState.save();ClientState.notify("Tool settings saved");}),item("Reset tool settings","",()->{ClientState.options=new Options();init();}),submenu("Preferences",item("Keyboard Shortcuts…","",()->ClientCompat.setScreen(minecraft,new KeyboardShortcutsScreen(this))),submenu("Options",item("Undo / redo pulse: "+(o().historyPulse?"On":"Off"),"",()->{o().historyPulse=!o().historyPulse;ClientState.save();}))),item("Exit editor","RShift",this::onClose));
             case 1 -> List.of(item("Undo","Ctrl+Z",()->action("undo")),item("Redo","Ctrl+Y",()->action("redo")),divider(),
                 item("Copy","Ctrl+C",()->action("copy")),item("Cut","Ctrl+X",()->action("cut")),item("Paste","Ctrl+V",()->action("paste")),
-                item("Delete","Del",()->perform(Action.DELETE)),
+                item("Delete","Del",()->perform(Action.DELETE)),divider(),
+                submenu("Rotate",item("Rotate 90","",()->rotateBy(1)),item("Rotate 180","",()->rotateBy(2)),item("Rotate 270","",()->rotateBy(3))),
+                submenu("Flip",item("Flip X","",()->flip(0)),item("Flip Y","",()->flip(1)),item("Flip Z","",()->flip(2))),divider(),
                 item("Paste at cursor","",this::pasteAtCursor),item("Paste in place","",()->CraftiumClient.send("paste_in_place",null,null)),divider(),
                 item("Edits history","",()->ClientCompat.setScreen(minecraft,new HistoryScreen(this))));
             case 2 -> List.of(item("Deselect","",()->action("clear")),item("Inverse","",()->action("selection_invert")),
@@ -742,6 +744,28 @@ public final class EditorScreen extends CraftiumScreen {
             String label=nice(cell.shape().name());
             text(g,label,cell.x()+(SHAPE_CELL_W-font.width(label))/2,cell.y()+SHAPE_CELL_H-13,active?0xffffffff:TEXT);
         }
+    }
+    /** Turns a placement waiting to be put down, or else the selection, by quarter turns about the vertical axis through its centre or pivot. */
+    private void rotateBy(int quarters){
+        if(PlacementPreview.active()){for(int i=0;i<quarters;i++)action("rotate");return;}
+        transformSelection(90*quarters,1,1,1);
+    }
+    /** Mirrors a placement waiting to be put down, or else the selection, across the plane through its centre or pivot normal to axis 0, 1 or 2 (X, Y, Z). */
+    private void flip(int axis){
+        if(PlacementPreview.active()){action(new String[]{"flip_x","flip_y","flip_z"}[axis]);return;}
+        transformSelection(0,axis==0?-1:1,axis==1?-1:1,axis==2?-1:1);
+    }
+    /** Sends the selection's transform with this turn and scale (negative flips), also turning the blocks' states. */
+    private void transformSelection(double yaw,double sizeX,double sizeY,double sizeZ){
+        if(ClientState.status.selectionSize()==0){ClientState.notify("Select blocks first");return;}
+        if(ClientState.status.busy())return;
+        Options original=ClientState.options,request=dev.craftium.net.Packets.JSON.fromJson(dev.craftium.net.Packets.JSON.toJson(original),Options.class);
+        try{
+            ClientState.options=request;
+            request.yaw=yaw;request.pitch=request.roll=0;request.sizeX=sizeX;request.sizeY=sizeY;request.sizeZ=sizeZ;
+            request.offsetX=request.offsetY=request.offsetZ=0;request.aboutSet=false;request.turnBlocks=true;
+            CraftiumClient.send("selection_transform",null,null);
+        }finally{ClientState.options=original;}
     }
     private MenuItem item(String label,String shortcut,Runnable action){return new MenuItem(label,shortcut,action);}
     /** A menu entry that opens a submenu beside it instead of doing something. */
