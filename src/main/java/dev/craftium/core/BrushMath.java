@@ -46,25 +46,39 @@ public final class BrushMath {
         };
     }
 
+    /** The largest radius that can be set, typed or dragged to; the slider stops short of it, at 64. */
+    public static final int MAX_RADIUS = 128;
+    /** The farthest from its centre any block of a shape may be, however its wall is aligned or it is scaled. The work grows with its cube. */
+    public static final int MAX_REACH = 128;
+
     public static List<Point> brush(Point center, int radius, Shape shape, boolean hollow) {
-        return brush(center, radius, shape, hollow, 1, false);
+        return brush(center, radius, shape, hollow, 1, false, 0);
+    }
+    public static List<Point> brush(Point center, int radius, Shape shape, boolean hollow, int thickness, boolean pixelPerfect) {
+        return brush(center, radius, shape, hollow, thickness, pixelPerfect, 0);
     }
 
     /**
-     * The blocks of the shape. A hollow one keeps a wall {@code thickness} blocks thick: by cutting off an inner copy of the
-     * shape, or with {@code pixelPerfect} by keeping the blocks nearest the outside along each part of the wall's own direction
-     * (see {@link OutlineMath#thin}), which is even all the way round.
+     * The blocks of the shape. A hollow one keeps a wall {@code thickness} blocks thick (no more than the radius): by cutting off an
+     * inner copy of the shape, or with {@code pixelPerfect} by keeping the blocks nearest the outside along each part of the wall's
+     * own direction (see {@link OutlineMath#thin}), which is even all the way round. {@code shift} puts the outer edge that many
+     * blocks past the radius, which is how the wall is aligned to the edge the radius gives (see {@link Options#outlineShift()}).
+     * A shape of more than {@link Selection#LIMIT} blocks is refused as soon as it passes the limit.
      */
-    public static List<Point> brush(Point center, int radius, Shape shape, boolean hollow, int thickness, boolean pixelPerfect) {
-        if (radius < 1 || radius > 24) throw new IllegalArgumentException("Radius must be 1–24");
+    public static List<Point> brush(Point center, int radius, Shape shape, boolean hollow, int thickness, boolean pixelPerfect, int shift) {
+        if (radius < 1 || radius > MAX_RADIUS) throw new IllegalArgumentException("Radius must be 1–" + MAX_RADIUS);
+        int wall = Math.clamp(thickness, 1, radius);
+        int outer = Math.min(radius + (hollow ? Math.max(0, shift) : 0), MAX_REACH);
         var points = new ArrayList<Point>();
-        int inner = radius - Math.max(1, thickness); // below zero there is nothing to cut out, so the shape stays solid
+        int inner = outer - wall; // the edge of the cut; below zero there is nothing to cut out, so the shape stays solid
         boolean cut = hollow && !pixelPerfect && inner >= 0;
-        for (int x = -radius; x <= radius; x++) for (int y = -radius; y <= radius; y++)
-            for (int z = -radius; z <= radius; z++) {
-                if (contains(shape, x, y, z, radius) && (!cut || !contains(shape, x, y, z, inner))) points.add(center.add(x, y, z));
+        for (int x = -outer; x <= outer; x++) for (int y = -outer; y <= outer; y++)
+            for (int z = -outer; z <= outer; z++) {
+                if (!contains(shape, x, y, z, outer) || cut && contains(shape, x, y, z, inner)) continue;
+                points.add(center.add(x, y, z));
+                if (points.size() > Selection.LIMIT) throw new IllegalArgumentException("Shape exceeds the " + String.format("%,d", Selection.LIMIT) + " block limit; use a smaller radius, or make it hollow");
             }
-        return hollow && pixelPerfect ? OutlineMath.thin(points, Math.max(1, thickness)) : points;
+        return hollow && pixelPerfect ? OutlineMath.thin(points, wall) : points;
     }
 
     public static List<Point> line(Point a, Point b) {

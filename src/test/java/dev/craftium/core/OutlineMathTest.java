@@ -60,6 +60,45 @@ class OutlineMathTest {
         assertTrue(one.size() < two.size() && two.size() < three.size());
     }
 
+    private static Set<Point> aligned(int radius, int thickness, Options.StrokeAlign align, boolean pixelPerfect) {
+        var o = new Options(); o.shape = BrushMath.Shape.SPHERE; o.radius = radius; o.hollow = true; o.outlineThickness = thickness; o.strokeAlign = align; o.pixelPerfect = pixelPerfect;
+        o.validate();
+        return new HashSet<>(BrushMath.brush(new Point(0,0,0), o.radius, o.shape, true, o.outlineThickness, o.pixelPerfect, o.outlineShift()));
+    }
+
+    @Test void aWallIsNeverThickerThanTheRadius() {
+        assertEquals(aligned(3, 3, Options.StrokeAlign.INSIDE, false), aligned(3, 50, Options.StrokeAlign.INSIDE, false));
+        var o = new Options(); o.radius = 5; o.outlineThickness = 99; o.validate();
+        assertEquals(5, o.outlineThickness);
+        o.radius = 500; o.validate();
+        assertEquals(BrushMath.MAX_RADIUS, o.radius);
+    }
+
+    @Test void theWallSitsInsideOnOrOutsideTheEdgeTheRadiusGives() {
+        var edge = solid(BrushMath.Shape.SPHERE, 8);
+        var inside = aligned(8, 3, Options.StrokeAlign.INSIDE, false);
+        var outside = aligned(8, 3, Options.StrokeAlign.OUTSIDE, false);
+        var centre = aligned(8, 3, Options.StrokeAlign.CENTER, false);
+        assertTrue(edge.containsAll(inside));
+        assertTrue(outside.stream().noneMatch(edge::contains), "the radius is the size of the hole");
+        assertTrue(centre.stream().anyMatch(edge::contains) && centre.stream().anyMatch(p -> !edge.contains(p)), "the edge runs through the wall");
+        assertTrue(solid(BrushMath.Shape.SPHERE, 11).containsAll(outside));
+        // The same thickness whichever way it faces, so the same number of blocks to within the rounding of the curve.
+        assertTrue(Math.abs(inside.size() - centre.size()) < inside.size() / 2 && outside.size() > inside.size());
+    }
+
+    @Test void pixelPerfectFollowsTheAlignmentToo() {
+        var edge = solid(BrushMath.Shape.SPHERE, 8);
+        assertTrue(aligned(8, 1, Options.StrokeAlign.OUTSIDE, true).stream().noneMatch(edge::contains));
+        assertTrue(edge.containsAll(aligned(8, 1, Options.StrokeAlign.INSIDE, true)));
+    }
+
+    @Test void bigShapesAreRefusedAtTheBlockLimitAndHollowOnesAreNot() {
+        assertThrows(IllegalArgumentException.class, () -> BrushMath.brush(new Point(0,0,0), 50, BrushMath.Shape.SPHERE, false));
+        assertThrows(IllegalArgumentException.class, () -> BrushMath.brush(new Point(0,0,0), BrushMath.MAX_RADIUS + 1, BrushMath.Shape.SPHERE, true));
+        assertTrue(BrushMath.brush(new Point(0,0,0), 60, BrushMath.Shape.SPHERE, true).size() < Selection.LIMIT);
+    }
+
     @Test void aCircleIsOneBlockWideInEachColumnOrRow() {
         var ring = thin(BrushMath.Shape.DISK, 10, 1);
         // Seen from above a pixel perfect circle has no block with two neighbours on opposite faces that already link it up.
