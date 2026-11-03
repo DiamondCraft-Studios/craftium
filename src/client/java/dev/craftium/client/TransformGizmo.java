@@ -18,6 +18,8 @@ final class TransformGizmo {
     private static Target dragging;
     private static int handle=-1;
     private static double startX,startY,startAngle;
+    /** Where the Move tool takes the pointer to be: it follows the real one, at half the speed while Ctrl is held, for fine placement. */
+    private static double slowX,slowY,lastX,lastY;
     private static Vec3 delta=Vec3.ZERO,angles=Vec3.ZERO,size=new Vec3(1,1,1);
     private static Vec3 normalization=Vec3.ZERO;
     private static boolean normalizationDirty=true;
@@ -55,7 +57,7 @@ final class TransformGizmo {
     static boolean click(EditorScreen screen,double x,double y){
         if(ClientState.status.busy())return false;Target t=target(screen);if(t==null)return selectEntity(x,y);
         int chosen=pick(t,x,y);
-        if(chosen<0)return selectEntity(x,y);dragging=t;handle=chosen;startX=x;startY=y;if(chosen==3&&mode==Options.GizmoMode.MOVE)grabFree(t.anchor,x,y);dragFlips=t.kind==Kind.NODE?flipsFor(t.anchor):null;delta=angles=Vec3.ZERO;size=new Vec3(1,1,1);startAngle=mode==Options.GizmoMode.ROTATE?(chosen==7?screenAngle(x,y,t.anchor):chosen<3?angle(x,y,t.anchor,handle):0):0;return true;
+        if(chosen<0)return selectEntity(x,y);dragging=t;handle=chosen;startX=slowX=lastX=x;startY=slowY=lastY=y;if(chosen==3&&mode==Options.GizmoMode.MOVE)grabFree(t.anchor,x,y);dragFlips=t.kind==Kind.NODE?flipsFor(t.anchor):null;delta=angles=Vec3.ZERO;size=new Vec3(1,1,1);startAngle=mode==Options.GizmoMode.ROTATE?(chosen==7?screenAngle(x,y,t.anchor):chosen<3?angle(x,y,t.anchor,handle):0):0;return true;
     }
     /** Which handle of the gizmo is under the pointer, or -1: 0 to 2 are the axes, 3 the centre, 4 to 6 the plane handles. */
     private static int pick(Target t,double x,double y){
@@ -84,6 +86,9 @@ final class TransformGizmo {
     private static double snap(double value,double increment){return Math.rint(value/increment)*increment;}
     static boolean drag(double x,double y){
         if(dragging==null)return false;normalizationDirty=true;var mc=Minecraft.getInstance();boolean entity=dragging.kind==Kind.ENTITY;double increment=entity?(mc.hasShiftDown()?.0001:mc.hasControlDown()?1:1d/16):1;
+        if(mode==Options.GizmoMode.MOVE){ // Ctrl halves the speed of a move; what the pointer travelled while it was held counts half
+            double speed=mc.hasControlDown()?.5:1;slowX+=(x-lastX)*speed;slowY+=(y-lastY)*speed;lastX=x;lastY=y;x=slowX;y=slowY;
+        }
         if(mode==Options.GizmoMode.ROTATE&&handle==3){ // trackball: a drag turns the blocks as if they were grabbed
             Vec3[] cam=cameraAxes();
             double sideways=Math.toRadians((x-startX)*.6),vertical=Math.toRadians((y-startY)*.6);

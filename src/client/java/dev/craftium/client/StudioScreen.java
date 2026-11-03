@@ -7,7 +7,6 @@ import dev.craftium.client.compat.Gfx;
 import net.minecraft.client.gui.components.*;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import java.lang.reflect.Field;
 import java.util.*;
 
 /** Paged inspector for the detailed controls; keeps settings out of the world viewport. */
@@ -20,7 +19,7 @@ public final class StudioScreen extends CraftiumScreen {
     private boolean previousHud,initialized;
     private final List<Label> labels=new ArrayList<>();
     private record Label(String text,int x,int y){}
-    private static final LinkedHashMap<String,List<String>> GROUPS=new LinkedHashMap<>();
+    static final LinkedHashMap<String,List<String>> GROUPS=new LinkedHashMap<>();
     static {
         GROUPS.put("Selection",List.of("compare","selectLimit","selectRange","selectUp","selectDown","selectHorizontal","selectCorners","includeNonSolid","position1","position2","lassoDepth","mode"));
         GROUPS.put("Brush",List.of("radius","strength","shape","invert","hollow","surfaceOnly","keepExisting","pasteAir","smoothing","threshold","meldStrength","denoise","maskY","fractureMaterial","exposedFaces","property"));
@@ -53,7 +52,7 @@ public final class StudioScreen extends CraftiumScreen {
         List<String> names=tab.equals("Script")?List.of():GROUPS.get(tab);int count=rows*columns,total=Math.max(1,(names.size()+count-1)/count);page=Math.clamp(page,0,total-1);
         for(int i=page*count;i<Math.min(names.size(),(page+1)*count);i++){
             String name=names.get(i);int index=i-page*count,x=left+(index%columns)*316,y=top+70+(index/columns)*46;
-            labels.add(new Label(human(name),x,y-11));createField(name,x,y,300);
+            createField(name,x,y,300);
         }
         int bottom=canvasH-57;
         button("‹",left,bottom,24,20,()->{page=Math.max(0,page-1);init();});button("›",left+29,bottom,24,20,()->{page=Math.min(total-1,page+1);init();});
@@ -121,24 +120,44 @@ public final class StudioScreen extends CraftiumScreen {
     }
     private void createField(String name,int x,int y,int width){
         try{
-            Field f=Options.class.getField(name);Object value=f.get(ClientState.options);
-            if(f.getType()==boolean.class){button((Boolean)value?"Enabled":"Disabled",x,y,width,22,()->{try{f.setBoolean(ClientState.options,!f.getBoolean(ClientState.options));init();}catch(Exception e){message=e.getMessage();}});return;}
-            if(f.getType().isEnum()){button(human(value.toString()),x,y,width,22,()->{try{Object[] values=f.getType().getEnumConstants();f.set(ClientState.options,values[(((Enum<?>)value).ordinal()+1)%values.length]);init();}catch(Exception e){message=e.getMessage();}});return;}
-            boolean color=name.startsWith("ui")||name.equals("annotationColor");String text=color?String.format(Locale.ROOT,"#%08X",(Integer)value):value instanceof Point p?p.coordinates():value instanceof List<?> list?String.join("; ",list.stream().map(v->((Point)v).coordinates()).toList()):String.valueOf(value).replace("\n","\\n");
-            EditBox field=new EditBox(font,x,y,width,22,Component.literal(human(name)));field.setMaxLength(16384);field.setValue(text);field.setResponder(input->{
-                try{Object parsed;
-                    if(color)parsed=(int)Long.parseUnsignedLong(input.replaceFirst("^(#|0x)",""),16);else if(f.getType()==int.class)parsed=Integer.parseInt(input);else if(f.getType()==long.class)parsed=Long.parseLong(input);else if(f.getType()==double.class)parsed=Double.parseDouble(input);else if(f.getType()==float.class)parsed=Float.parseFloat(input);
-                    else if(f.getType()==Point.class)parsed=point(input);else if(List.class.isAssignableFrom(f.getType())){var points=new ArrayList<Point>();if(!input.isBlank())for(String token:input.split(";"))points.add(point(token));parsed=points;}
-                    else parsed=input.replace("\\n","\n");f.set(ClientState.options,parsed);message="";
-                }catch(Exception e){message="Enter a valid value for "+human(name);}
-            });addRenderableWidget(field);
+            var kind=OptionFields.kind(name);
+            if(kind!=OptionFields.Kind.BOOLEAN)labels.add(new Label(human(name),x,y-11));
+            boolean pinned=OptionFields.pinned(name);
+            button(pinned?"Unpin":"Pin",x+width-46,y-14,46,13,()->{OptionFields.togglePin(name);init();}).lit(pinned);
+            switch(kind){
+                case BOOLEAN -> addRenderableWidget(new FlatCheckbox(x,y,width,22,human(name),OptionFields.bool(name),()->{OptionFields.toggle(name);init();}));
+                case ENUM -> button(OptionFields.choice(name),x,y,width,22,()->{OptionFields.cycle(name,1);init();}).back(()->{OptionFields.cycle(name,-1);init();});
+                case VECTOR -> vectorFields(name,x,y,width);
+                default -> {
+                    EditBox field=new EditBox(font,x,y,width,22,Component.literal(human(name)));field.setMaxLength(16384);field.setValue(OptionFields.text(name));field.setResponder(input->{
+                        try{OptionFields.parse(name,input);message="";}
+                        catch(Exception e){message="Enter a valid value for "+human(name);}
+                    });addRenderableWidget(field);
+                }
+            }
         }catch(Exception e){message=e.getMessage();}
     }
-    private static Point point(String input){String[] parts=input.trim().split("[,\\s]+");if(parts.length!=3)throw new IllegalArgumentException();return new Point(Integer.parseInt(parts[0]),Integer.parseInt(parts[1]),Integer.parseInt(parts[2]));}
-    private String human(String name){String s=name.replaceAll("([a-z])([A-Z])","$1 $2").replace('_',' ').toLowerCase(Locale.ROOT);return s.isEmpty()?s:Character.toUpperCase(s.charAt(0))+s.substring(1);}
+    /** A vector as an input for each axis, or as one space-delimited input, whichever the button beside it has chosen. */
+    private void vectorFields(String name,int x,int y,int width){
+        boolean single=OptionFields.SINGLE_LINE.contains(name);int toggle=40,room=width-toggle-4;
+        button(single?"Axes":"Text",x+room+4,y,toggle,22,()->{if(!OptionFields.SINGLE_LINE.remove(name))OptionFields.SINGLE_LINE.add(name);init();});
+        if(single){
+            EditBox field=new EditBox(font,x,y,room,22,Component.literal(human(name)));field.setMaxLength(64);field.setValue(OptionFields.text(name));
+            field.setResponder(input->{try{OptionFields.parse(name,input);message="";}catch(Exception e){message="Enter three whole numbers, such as 4 64 -2, for "+human(name);}});addRenderableWidget(field);
+            return;
+        }
+        String[] values=OptionFields.axes(name),letters={"X","Y","Z"};int gap=4,cell=(room-2*gap)/3,box=cell-12;
+        for(int axis=0;axis<3;axis++){
+            int at=x+axis*(cell+gap);int index=axis;
+            labels.add(new Label(letters[axis],at+2,y+7));
+            EditBox field=new EditBox(font,at+12,y,box,22,Component.literal(human(name)+" "+letters[axis]));field.setMaxLength(12);field.setValue(values[axis]);
+            field.setResponder(input->{try{OptionFields.setAxis(name,index,input);message="";}catch(Exception e){message="Enter a whole number for "+letters[index]+" of "+human(name);}});addRenderableWidget(field);
+        }
+    }
+    private String human(String name){return OptionFields.human(name);}
     private void actionRow(String[] names,String[] actions){Runnable[] run=new Runnable[actions.length];for(int i=0;i<actions.length;i++){String action=actions[i];run[i]=()->send(action);}actionRow(names,run);}
     private void actionRow(String[] names,Runnable[] actions){for(int i=0;i<names.length;i++){Runnable action=actions[i];button(names[i],left+i*125,canvasH-89,119,21,()->{try{action.run();init();}catch(Exception e){message=e.getMessage();}});}}
-    private void button(String text,int x,int y,int width,int height,Runnable action){addRenderableWidget(new FlatButton(x,y,width,height,text,()->{try{action.run();}catch(Exception e){message=e.getMessage();}}));}
+    private FlatButton button(String text,int x,int y,int width,int height,Runnable action){var button=new FlatButton(x,y,width,height,text,()->{try{action.run();}catch(Exception e){message=e.getMessage();}});addRenderableWidget(button);return button;}
     private void send(String action){try{if(action.startsWith("entity_"))ClientState.options.gizmoTarget=Options.GizmoTarget.ENTITY;if(action.equals("use")&&(ClientState.options.tool==Tool.LASSO_SELECT||ClientState.options.tool==Tool.RULER)){message="Return to the viewport to draw a lasso or place ruler points";return;}ClientState.options.validate();var hit=editor.target();CraftiumClient.send(action,hit==null?ClientState.options.position1:CraftiumClient.point(hit.getBlockPos()),hit==null?new Point(0,1,0):CraftiumClient.normal(hit));message="Sent "+human(action);}catch(Exception e){message=e.getMessage();}}
     @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
     @Override protected void draw(Gfx g,int x,int y,float delta){
@@ -147,7 +166,11 @@ public final class StudioScreen extends CraftiumScreen {
         for(Label label:labels)g.text(font,font.plainSubstrByWidth(label.text,625),label.x,label.y,0xff9db5cb,false);
         drawWidgets(g,(int)(x/uiScale),(int)(y/uiScale),delta);g.text(font,font.plainSubstrByWidth(message.isBlank()?ClientState.status.message():message,canvasW-30),15,canvasH-17,0xffffdca8,false);g.pose().popMatrix();
     }
-    @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event,boolean twice){return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(event.x()/uiScale,event.y()/uiScale,event.buttonInfo()),twice);}
+    @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event,boolean twice){
+        var scaled=new net.minecraft.client.input.MouseButtonEvent(event.x()/uiScale,event.y()/uiScale,event.buttonInfo());
+        if(event.button()==1)for(var child:children())if(child instanceof FlatButton button&&button.rightClick(scaled.x(),scaled.y()))return true; // a cycling button steps back
+        return super.mouseClicked(scaled,twice);
+    }
     @Override public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event){return super.mouseReleased(new net.minecraft.client.input.MouseButtonEvent(event.x()/uiScale,event.y()/uiScale,event.buttonInfo()));}
     @Override public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event,double x,double y){return super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(event.x()/uiScale,event.y()/uiScale,event.buttonInfo()),x/uiScale,y/uiScale);}
     @Override public boolean isPauseScreen(){return false;}
