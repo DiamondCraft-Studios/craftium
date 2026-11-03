@@ -1,6 +1,6 @@
 # Craftium Server
 
-The server companion for the Craftium building mod. It runs Craftium's editing engine on **Paper and Purpur for Minecraft Java 26.2**, while players use the Fabric client for the editor and building controls.
+The server companion for the Craftium building mod. It runs Craftium's editing engine on **Paper and Purpur for Minecraft Java 26.2 and 1.21.10**, while players use the Fabric client for the editor and building controls.
 
 ## Features
 
@@ -14,8 +14,8 @@ The editor UI, previews and keybinds run on the client. Vanilla clients can join
 
 ## Installation
 
-1. Stop your Paper or Purpur **26.2** server running **Java 25**.
-2. Put `craftium-server-0.3.1-dev.jar` in `plugins/`, then start the server.
+1. Stop your Paper or Purpur server. Use the **26.2** build on Java 25, or the **1.21.10** build on Java 21.
+2. Put the jar for your Minecraft version in `plugins/` (`craftium-server-0.3.1-dev.jar` for 26.2, `craftium-server-0.3.1-dev+mc1.21.10.jar` for 1.21.10), then start the server.
 3. Players install the matching **Craftium Fabric mod** and **Fabric API** on their clients.
 4. Join in Creative mode. Operators can edit immediately; grant `craftium.edit` to other builders.
 

@@ -2,7 +2,7 @@
 
 **A vibe-coded, open-source competitor to Axiom.**
 
-Craftium is an AI-assisted, independently implemented Fabric building studio with a Paper/Purpur server companion for **Minecraft Java 26.2**. It follows familiar Axiom building workflows and documented default keybinds, with original code and icons under the MIT license.
+Craftium is an AI-assisted, independently implemented Fabric building studio with a Paper/Purpur server companion for **Minecraft Java 26.2** and **1.21.10**. It follows familiar Axiom building workflows and documented default keybinds, with original code and icons under the MIT license.
 
 ![Craftium editor with a selected watchtower, clipboard and material palette](docs/gallery/01-editor-overview.png)
 
@@ -12,12 +12,12 @@ Craftium is an AI-assisted, independently implemented Fabric building studio wit
 
 ## Install
 
-1. Install Fabric Loader for Minecraft **26.2** (tested with **0.20.1**).
-2. Put `craftium-0.3.1-dev.jar` and **Fabric API 0.161.0+26.2** in the instance's `mods` folder.
-3. Run Minecraft with **Java 25**. Open a Creative world with cheats enabled.
+1. Install Fabric Loader for Minecraft **26.2** (tested with **0.20.1**), or for **1.21.10**.
+2. Put the matching jar and Fabric API in the instance's `mods` folder: `craftium-0.3.1-dev.jar` with **Fabric API 0.161.0+26.2**, or `craftium-0.3.1-dev+mc1.21.10.jar` with **Fabric API 0.138.4+1.21.10** or newer.
+3. Run Minecraft with **Java 25** (26.2) or **Java 21** (1.21.10). Open a Creative world with cheats enabled.
 4. Press **Right Shift** to open Craftium; **View → Studio inspector** opens the detailed inspector.
 
-For multiplayer, choose a Fabric server with the same mod, or install `craftium-server-0.3.1-dev.jar` on **Paper/Purpur 26.2**. Players use the updated Fabric client in both cases. The companion defaults to operators and supports permission grants, protected edits and large transfers. Read [Server installation and permissions](docs/SERVER-PLUGIN.md).
+For multiplayer, choose a Fabric server with the same mod, or install the companion on **Paper/Purpur**: `craftium-server-0.3.1-dev.jar` for 26.2, or `craftium-server-0.3.1-dev+mc1.21.10.jar` for 1.21.10. Players use the updated Fabric client in both cases. The companion defaults to operators and supports permission grants, protected edits and large transfers. Read [Server installation and permissions](docs/SERVER-PLUGIN.md).
 
 On Fabric servers, editing requires operator permission level 2 and Creative mode. On Paper/Purpur, grant `craftium.edit` and use Creative mode. Creative No Clip and four custom Fabric world rules are currently unavailable on Paper/Purpur.
 
