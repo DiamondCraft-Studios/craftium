@@ -18,7 +18,7 @@ final class LargeSelectionScreen extends CraftiumScreen {
         addRenderableWidget(new FlatButton(x+7,y+8,100,22,"Cancel",this::cancel));
     }
     private void confirm(){ClientCompat.setScreen(minecraft,parent);}
-    private void cancel(){CraftiumClient.send("selection_restore",null,null);ClientCompat.setScreen(minecraft,parent);}
+    private void cancel(){ClientState.boxCorners.clear();CraftiumClient.send("selection_restore",null,null);ClientCompat.setScreen(minecraft,parent);}
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){
         g.fill(0,0,width,height,0x99000000);
         int left=width/2-125,top=height/2-48;

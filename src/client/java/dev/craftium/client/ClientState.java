@@ -21,6 +21,8 @@ public final class ClientState {
     /** An edit the server has worked out and is holding until it is confirmed with Enter. */
     public static GhostBlocks pending=GhostBlocks.EMPTY;
     public static boolean hasPending(){return pending.total()>0;}
+    /** The corners of the box being selected, which stay as handles the player can drag to resize it. At most two. */
+    public static final List<Point> boxCorners=new ArrayList<>();
     public static boolean selectionPending;
     public static int selectionSizeBefore;
     /** A selection this many blocks bigger than before is confirmed with the player first. */

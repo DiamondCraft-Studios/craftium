@@ -138,7 +138,11 @@ public final class BuilderMode {
         for(int i=0;i<text.length;i++){g.text(font,text[i],x,y,colors[i],false);x+=font.width(text[i]);}
     }
     /** Where the transform handles are shown: the corner of the selection, where it would land. Null with no selection. */
-    public static Vec3 gizmoAnchor(){if(!active()||first==null)return null;Point m=min();return new Vec3(m.x()+offset.x(),m.y()+offset.y(),m.z()+offset.z());}
+    public static Vec3 gizmoAnchor(){
+        var tool=ClientState.options.builderTool;
+        // Only the tools that move blocks have anything to drag: erase, extrude and symmetry do not.
+        if(!active()||first==null||tool!=Options.BuilderTool.MOVE&&tool!=Options.BuilderTool.CLONE&&tool!=Options.BuilderTool.STACK&&tool!=Options.BuilderTool.SMEAR)return null;
+Point m=min();return new Vec3(m.x()+offset.x(),m.y()+offset.y(),m.z()+offset.z());}
     public static void hud(Gfx g){
         if(!available())return;var mc=Minecraft.getInstance();int x=g.guiWidth()/2+94,y=g.guiHeight()-23;
         // The builder slot beside the hotbar is always there; it is dim until the builder is on.

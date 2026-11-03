@@ -93,7 +93,9 @@ public final class EditorScreen extends CraftiumScreen {
         var box=new EditBox(font,x,y,width,18,Component.literal(id));box.setMaxLength(id.equals("text")?48:256);box.setValue(value);
         box.setResponder(set);box.setBordered(false);box.setTextColor(TEXT);fields.put(id,box);
     }
-    private void select(Tool tool){toolActive=true;previousTool=o().tool;selectedNode=-1;o().tool=tool;o().gizmoTarget=Options.GizmoTarget.AUTO;builder=false;init();}
+    private void select(Tool tool){
+        if(tool.transform()&&tool!=Tool.PIVOT&&ClientState.status.selectionSize()==0)ClientState.notify("Select blocks first, then use "+tool.label);
+        toolActive=true;previousTool=o().tool;selectedNode=-1;if(tool!=Tool.BOX_SELECT)ClientState.boxCorners.clear();o().tool=tool;o().gizmoTarget=Options.GizmoTarget.AUTO;builder=false;init();}
     @Override public boolean isPauseScreen(){return false;}
     @Override public boolean isInGameUi(){return true;}
     @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
@@ -190,6 +192,13 @@ public final class EditorScreen extends CraftiumScreen {
                 if(o().tool==Tool.MAGIC_SELECT)toggle(g,10,468,"Hover preview (under "+o().magicPreviewLimit+")",o().magicPreview,()->o().magicPreview=!o().magicPreview);
                 button(g,10,h-52,78,20,"Fill",false,()->action("fill"),"Fill the selection with the active block");button(g,94,h-52,78,20,"Clear",false,()->action("clear"),"Clear the selection");
             }
+            return;
+        }
+        if(o().tool.transform()){
+            text(g,"PIVOT",10,311,MUTED);
+            text(g,o().pivotSet?String.format(Locale.ROOT,"%.1f, %.1f, %.1f",o().pivotX,o().pivotY,o().pivotZ):"Centre of the selection",10,327,TEXT);
+            button(g,10,350,LEFT-20,20,"Reset pivot",false,()->o().pivotSet=false,"Go back to the centre of the selection");
+            wrap(g,"Drag a handle, then press Enter to apply. Esc cancels.",10,382,LEFT-20,MUTED,3);
             return;
         }
         if(o().tool!=Tool.TEXT) {
@@ -418,6 +427,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void action(String action){
         if(EntityShortcuts.editor(action,this))return;
         var hit=target();
+        if(action.equals("clear")){ClientState.boxCorners.clear();o().pivotSet=false;}
         if(action.equals("duplicate")||action.equals("cut")){ClientState.duplicatePending=true;CraftiumClient.send(action.equals("cut")?"cut":"copy",null,null);return;}
         if(action.equals("paste")){
             if(PlacementPreview.active()){PlacementPreview.confirm();return;}
@@ -443,7 +453,27 @@ public final class EditorScreen extends CraftiumScreen {
             }
             return;
         }
+        if(o().tool==Tool.PIVOT){
+            var hit=target();
+            if(hit!=null){var p=hit.getBlockPos();o().pivotSet=true;o().pivotX=p.getX()+.5;o().pivotY=p.getY()+.5;o().pivotZ=p.getZ()+.5;ClientState.notify("Pivot set");}
+            return;
+        }
+        if(o().tool.transform())return; // these work through their handles, not by clicking
+        if(o().tool==Tool.BOX_SELECT){
+            var hit=target();
+            if(hit!=null){
+                Point p=CraftiumClient.point(hit.getBlockPos());var corners=ClientState.boxCorners;
+                // The first click leaves one handle, the second a second one; each can be dragged afterwards.
+                if(corners.size()==1){corners.add(p);selectedNode=1;}else{corners.clear();corners.add(p);selectedNode=0;}
+            }
+        }
         action("use");
+    }
+    /** Called when a handle has been let go of: the box follows the handles, replacing the box it made before. */
+    void handlesMoved(){
+        if(o().tool!=Tool.BOX_SELECT||ClientState.boxCorners.size()!=2||ClientState.status.busy())return;
+        o().position1=ClientState.boxCorners.get(0);o().position2=ClientState.boxCorners.get(1);
+        CraftiumClient.send("select_box_adjust",null,null);
     }
     @Override public boolean mouseClicked(MouseButtonEvent event,boolean doubleClick) {
         if(ReferenceImages.click(event.x(),event.y(),event.button()))return true;
@@ -490,7 +520,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(EditorBindings.matches(Action.PICK_BLOCK,event)){var hit=target();if(hit!=null&&minecraft.level!=null){String block=BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(hit.getBlockPos()).getBlock()).toString();ClientState.pick(block);fields.get("block").setValue(block);}}
         return true;
     }
-    @Override public boolean mouseReleased(MouseButtonEvent event){if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting&&o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW")&&o().annotationPoints.size()>1)action("annotation_create");painting=false;ClientState.strokeId=0;if(o().tool==Tool.LASSO_SELECT&&!lasso.isEmpty()){o().selectionPoints=new ArrayList<>(LassoSelection.project(lasso));action("lasso_select");o().selectionPoints.clear();lasso.clear();}}return true;}
+    @Override public boolean mouseReleased(MouseButtonEvent event){if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting&&o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW")&&o().annotationPoints.size()>1)action("annotation_create");painting=false;ClientState.strokeId=0;if(o().tool==Tool.LASSO_SELECT&&!lasso.isEmpty()){o().selectionPoints=new ArrayList<>(LassoSelection.project(lasso));action("lasso_select");o().selectionPoints.clear();lasso.clear();}}return true;}
     @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy) {
         if(ReferenceImages.drag(event.x(),event.y()))return true;
         pointerX=event.x();pointerY=event.y();
@@ -606,7 +636,10 @@ public final class EditorScreen extends CraftiumScreen {
         player.setDeltaMovement(Vec3.ZERO);player.setPos(player.position().add(delta));
         player.setOldPosAndRot(); // the renderer interpolates from the previous position, so make it the current one
     }
-    private List<Point> handleNodes(){return o().tool==Tool.RULER?ClientState.rulerPoints:EnumSet.of(Tool.PATH,Tool.MODELLING,Tool.GRADIENT_PAINTER,Tool.SLOPE).contains(o().tool)?o().nodes:new ArrayList<>();}
+    private List<Point> handleNodes(){return o().tool==Tool.RULER?ClientState.rulerPoints:o().tool==Tool.BOX_SELECT?ClientState.boxCorners:EnumSet.of(Tool.PATH,Tool.MODELLING,Tool.GRADIENT_PAINTER,Tool.SLOPE).contains(o().tool)?o().nodes:new ArrayList<>();}
+    double pointerX(){return pointerX;}
+    double pointerY(){return pointerY;}
+    boolean pointerInViewport(){return inViewport(pointerX/scale,pointerY/scale);}
     public Point handlePoint(){return selectedNode>=0&&selectedNode<handleNodes().size()?handleNodes().get(selectedNode):null;}
     public int handleAxis(){return nodeAxis;}
     public void moveHandle(Point point){if(selectedNode>=0&&selectedNode<handleNodes().size())handleNodes().set(selectedNode,point);}
