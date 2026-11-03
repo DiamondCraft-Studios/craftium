@@ -21,6 +21,8 @@ final class Session {
     net.minecraft.world.level.GameType previousMode;
     /** Where the clipboard's blocks were copied from (its minimum corner), or null when they came from elsewhere, like a blueprint. */
     Point clipboardOrigin;
+    /** The selection as it was before the last selection action, so a mistaken one can be taken back. Null when there is none. */
+    List<Point> selectionBefore;
     long requestStroke, lastStroke;
     boolean busy;
     UUID selectedEntity;

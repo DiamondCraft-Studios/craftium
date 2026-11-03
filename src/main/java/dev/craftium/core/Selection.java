@@ -11,6 +11,8 @@ public final class Selection {
     public Set<Point> points() { return Collections.unmodifiableSet(points); }
     public int size() { return points.size(); }
     public void clear() { points.clear();revision++; }
+    /** Replaces the selection outright, as when taking back a selection action. */
+    public void restore(Collection<Point> before){points.clear();points.addAll(before);revision++;}
     public boolean contains(Point p) { return points.contains(p); }
     public void combine(Collection<Point> incoming, Mode mode) {
         var next = new LinkedHashSet<>(points);

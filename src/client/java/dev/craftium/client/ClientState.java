@@ -17,6 +17,11 @@ public final class ClientState {
     public static long strokeId;
     public static boolean duplicatePending;
     public static Point pendingPlacementOrigin;
+    /** Set while a selection action is in flight, so its result can be checked for being suspiciously large. */
+    public static boolean selectionPending;
+    public static int selectionSizeBefore;
+    /** A selection this many blocks bigger than before is confirmed with the player first. */
+    public static final int LARGE_SELECTION=1024;
     public static Point rulerStart,rulerEnd;
     public static final List<Point> rulerPoints=new ArrayList<>();
     public static List<BlueprintInfo> blueprints=List.of();

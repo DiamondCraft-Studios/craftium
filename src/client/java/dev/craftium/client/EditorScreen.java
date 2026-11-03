@@ -187,6 +187,7 @@ public final class EditorScreen extends CraftiumScreen {
                 text(g,s.selectionSize()+" blocks",10,379,0xffa5cef2);
                 button(g,10,406,LEFT-20,20,"Mode: "+nice(o().mode.name())+"  ▾",false,()->o().mode=Selection.Mode.values()[(o().mode.ordinal()+1)%4],"Replace, add, subtract or intersect the selection");
                 if(o().tool==Tool.MAGIC_SELECT)toggle(g,10,444,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
+                if(o().tool==Tool.MAGIC_SELECT)toggle(g,10,468,"Hover preview (under "+o().magicPreviewLimit+")",o().magicPreview,()->o().magicPreview=!o().magicPreview);
                 button(g,10,h-52,78,20,"Fill",false,()->action("fill"),"Fill the selection with the active block");button(g,94,h-52,78,20,"Clear",false,()->action("clear"),"Clear the selection");
             }
             return;
@@ -295,14 +296,26 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void dropdown(Gfx g) {
         List<MenuItem> items=menuItems(menu);int x=108;String[] names={"File","Edit","Select","View","Create","Operations","Masks","Window","Help"};for(int i=0;i<menu;i++)x+=font.width(names[i])+16;
-        g.fill(x,24,x+226,28+items.size()*25,0xff1c2735);g.outline(x,24,226,4+items.size()*25,LINE);
-        int y=27;for(MenuItem item:items){final var action=item.action;button(g,x+3,y,220,24,item.label,false,()->{menu=-1;action.run();},"");if(!item.shortcut.isEmpty())text(g,item.shortcut,x+212-font.width(item.shortcut),y+8,MUTED);y+=25;}
+        int height=4;for(MenuItem item:items)height+=item.action==null?9:25;
+        g.fill(x,24,x+226,24+height,0xff1c2735);g.outline(x,24,226,height,LINE);
+        int y=27;
+        for(MenuItem item:items){
+            if(item.action==null){g.fill(x+8,y+4,x+218,y+5,LINE);y+=9;continue;}
+            final var action=item.action;button(g,x+3,y,220,24,item.label,false,()->{menu=-1;action.run();},"");
+            if(!item.shortcut.isEmpty())text(g,item.shortcut,x+212-font.width(item.shortcut),y+8,MUTED);y+=25;
+        }
     }
     private List<MenuItem> menuItems(int which) {
         return switch(which) {
             case 0 -> List.of(item("Open reference image…","",ReferenceImages::choose),item("Save tool settings","",()->{ClientState.save();ClientState.notify("Tool settings saved");}),item("Reset tool settings","",()->{ClientState.options=new Options();init();}),item("Exit editor","RShift",this::onClose));
-            case 1 -> List.of(item("History browser…","",()->ClientCompat.setScreen(minecraft,new HistoryScreen(this))),item("Undo","Ctrl+Z",()->action("undo")),item("Redo","Ctrl+Y",()->action("redo")),item("Copy","Ctrl+C",()->action("copy")),item("Cut","Ctrl+X",()->action("cut")),item("Paste at cursor","Ctrl+V",()->action("paste")),item("Save blueprint…","Ctrl+P",()->ClientCompat.setScreen(minecraft,new SaveBlueprintScreen(this))),item("Rotate clipboard","",()->action("rotate")),item("Mirror clipboard","",()->action("flip")));
-            case 2 -> List.of(item("Box select","B",()->select(Tool.BOX_SELECT)),item("Magic select","M",()->select(Tool.MAGIC_SELECT)),item("Freehand select","N",()->select(Tool.FREEHAND_SELECT)),item("Clear selection","Enter",()->action("clear")));
+            case 1 -> List.of(item("Undo","Ctrl+Z",()->action("undo")),item("Redo","Ctrl+Y",()->action("redo")),divider(),
+                item("Copy","Ctrl+C",()->action("copy")),item("Cut","Ctrl+X",()->action("cut")),item("Paste","Ctrl+V",()->action("paste")),
+                item("Paste at cursor","",this::pasteAtCursor),item("Paste in place","",()->CraftiumClient.send("paste_in_place",null,null)),divider(),
+                item("Edits history","",()->ClientCompat.setScreen(minecraft,new HistoryScreen(this))));
+            case 2 -> List.of(item("Deselect","",()->action("clear")),item("Inverse","",()->action("selection_invert")),
+                item(showSelection?"Hide selection":"Show selection","",()->showSelection=!showSelection),divider(),
+                item("Expand","by "+o().expandAmount,()->resizeSelection("selection_expand",o().expandAmount)),item("Shrink","by "+o().expandAmount,()->resizeSelection("selection_shrink",o().expandAmount)),
+                item("Expand by 1","",()->resizeSelection("selection_expand",1)),item("Shrink by 1","",()->resizeSelection("selection_shrink",1)));
             case 3 -> List.of(item("Toggle side panels","",()->panels=!panels),item("Tool options","",()->{builder=false;init();}),item("Builder controls","Alt",()->{builder=true;init();}),item("Studio inspector","",()->ClientCompat.setScreen(minecraft,new StudioScreen(this))),item("Colour picker / gradient","",()->ClientCompat.setScreen(minecraft,new ColourScreen(this))),item("Keybinds","",()->ClientCompat.setScreen(minecraft,new EditorKeybindScreen(this))),item("Show controls","",()->help=true));
             case 7 -> {var items=new ArrayList<MenuItem>();for(String id:WorkspaceLayout.windows.keySet())items.add(item("Toggle "+id,"",()->WorkspaceLayout.toggle(id)));items.add(item("Save layout","",WorkspaceLayout::save));items.add(item("Reset layout","",WorkspaceLayout::reset));items.add(item("Copy layout","",()->minecraft.keyboardHandler.setClipboard(WorkspaceLayout.json())));items.add(item("Paste layout","",()->{try{WorkspaceLayout.importJson(minecraft.keyboardHandler.getClipboard());WorkspaceLayout.save();}catch(Exception e){ClientState.notify("Invalid layout JSON");}}));yield items;}
             case 4 -> List.of(item("Shape","",()->select(Tool.SHAPE)),item("Block text","",()->select(Tool.TEXT)),item("Line","",()->select(Tool.LINE)),item("Rock","",()->select(Tool.ROCK)));
@@ -312,6 +325,19 @@ public final class EditorScreen extends CraftiumScreen {
         };
     }
     private MenuItem item(String label,String shortcut,Runnable action){return new MenuItem(label,shortcut,action);}
+    /** A thin line between groups of menu entries; it has no action. */
+    private MenuItem divider(){return new MenuItem("","",null);}
+    /** Grows or shrinks the selection by {@code amount} blocks all round, the server repeating one block at a time. */
+    private void resizeSelection(String action,int amount){
+        o().selectionResize=amount;
+        try{action(action);}finally{o().selectionResize=0;}
+    }
+    /** Pastes straight away at the block last under the cursor, without the placement preview. */
+    private void pasteAtCursor(){
+        var hit=target();
+        if(hit==null){ClientState.notify("Point at a block to paste on");return;}
+        CraftiumClient.send("paste",CraftiumClient.point(hit.getBlockPos()),CraftiumClient.normal(hit));
+    }
     private void transform(Gfx g) {
         controls.clear();
         g.fill(0,23,w,h-21,0x9910151c);int x=w/2-210,y=h/2-92;

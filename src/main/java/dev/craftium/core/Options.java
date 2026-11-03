@@ -28,6 +28,13 @@ public final class Options {
     public int offsetX, offsetY = 1, offsetZ, copies = 3;
     public Compare compare=Compare.BLOCK;
     public int selectLimit=100_000,selectRange=1,lassoDepth=64;
+    /** How many blocks the Select menu's Expand and Shrink move the selection's surface. */
+    public int expandAmount=5;
+    /** When above zero, how many blocks one expand or shrink request moves the surface, instead of the brush strength. */
+    public int selectionResize;
+    /** Hovering with the Magic Wand outlines what a click would select, unless that is this many blocks or more: likely terrain, not an object. */
+    public boolean magicPreview=true;
+    public int magicPreviewLimit=500;
     public boolean selectUp=true,selectDown=true,selectHorizontal=true,selectCorners,includeNonSolid;
     public Noise noise=Noise.SIMPLEX;
     public int octaves=1;
@@ -136,7 +143,7 @@ public final class Options {
         if(author==null||tags==null||author.length()>80||tags.length()>256)throw new IllegalArgumentException("Blueprint metadata is too long");
         if(entityGroup==null||!entityGroup.matches("[A-Za-z0-9_. -]{0,64}"))throw new IllegalArgumentException("Use a plain entity group name");
         entityX=bounded(entityX,-128,128);entityY=bounded(entityY,-128,128);entityZ=bounded(entityZ,-128,128);entityScaleX=bounded(entityScaleX,.01,16);entityScaleY=bounded(entityScaleY,.01,16);entityScaleZ=bounded(entityScaleZ,.01,16);
-        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
+        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);magicPreviewLimit=Math.clamp(magicPreviewLimit,1,4096);expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
         octaves=Math.clamp(octaves,1,8);lacunarity=bounded(lacunarity,1,4);gain=bounded(gain,.01,1);jitter=bounded(jitter,0,1);
         scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);
         sizeX=bounded(sizeX,.1,8);sizeY=bounded(sizeY,.1,8);sizeZ=bounded(sizeZ,.1,8);

@@ -81,6 +81,8 @@ public final class EditorServer {
             long now=System.nanoTime();
             if(now-s.lastRequest<65_000_000L&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             s.lastRequest=now;
+            if(r.action().equals("selection_restore")){if(s.selectionBefore!=null){s.selection.restore(s.selectionBefore);s.selectionBefore=null;}send(player,s,"Selection cancelled",false);return;}
+            if(r.action().equals("select_box")||r.action().equals("lasso_select")||r.action().equals("use")&&o.tool.selection())s.selectionBefore=new ArrayList<>(s.selection.points());
             if(r.action().equals("gamemode")||r.action().startsWith("gamemode_")) {
                 s.previousMode=null; // choosing a mode by hand replaces whatever the editor would have restored
                 boolean wasSpectator=player.isSpectator();
@@ -165,7 +167,7 @@ public final class EditorServer {
                     if(r.action().equals("selection_move")){next.clear();for(Point p:s.selection.points())next.add(p.add(o.offsetX,o.offsetY,o.offsetZ));}
                     else if(r.action().equals("selection_invert")){var all=new LinkedHashSet<>(Selection.box(s.selection.min(),s.selection.max()));all.removeAll(next);next=all;}
                     else if(r.action().equals("selection_convex")){next=new LinkedHashSet<>(ConvexHull.fill(s.selection.points()));}
-                    else for(int i=0;i<Math.max(1,(int)o.strength);i++){
+                    else for(int i=0;i<Math.max(1,o.selectionResize>0?o.selectionResize:(int)o.strength);i++){
                         var previous=next;var step=new LinkedHashSet<>(previous);
                         if(r.action().equals("selection_expand")){for(Point p:previous)for(Point n:EditPlanner.NEIGHBOURS)step.add(p.add(n.x(),n.y(),n.z()));}
                         else step.removeIf(p->{for(Point n:EditPlanner.NEIGHBOURS)if(!previous.contains(p.add(n.x(),n.y(),n.z())))return true;return false;});
@@ -247,21 +249,14 @@ public final class EditorServer {
                 s.selection.combine(plan.brush(p),o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
             }
             case MAGIC_SELECT -> {
-                var found=new LinkedHashSet<Point>();var visited=new HashSet<Point>();var queue=new ArrayDeque<Point>();
-                var block=plan.state(p).getBlock();queue.add(p);visited.add(p);
-                while(!queue.isEmpty() && found.size()<o.selectLimit) {
-                    Point current=queue.removeFirst();
-                    if(current.distanceSquared(p)>128*128 || !player.level().hasChunk(current.x()>>4,current.z()>>4))continue;
-                    if(!AdvancedTools.matches(plan,plan.state(p),current) || plan.state(current).isAir())continue;
-                    if((!o.selectUp&&current.y()>p.y())||(!o.selectDown&&current.y()<p.y())||(!o.selectHorizontal&&(current.x()!=p.x()||current.z()!=p.z())))continue;
-                    if(!o.surfaceOnly || plan.surface(current))found.add(current);
-                    for(int dx=-o.selectRange;dx<=o.selectRange;dx++)for(int dy=-o.selectRange;dy<=o.selectRange;dy++)for(int dz=-o.selectRange;dz<=o.selectRange;dz++){
-                        int distance=Math.abs(dx)+Math.abs(dy)+Math.abs(dz);if(distance==0||(!o.selectCorners&&distance>o.selectRange)||Math.max(Math.abs(dx),Math.max(Math.abs(dy),Math.abs(dz)))>o.selectRange)continue;
-                        var next=current.add(dx,dy,dz);if(visited.size()>=Selection.LIMIT*4)break;if(visited.add(next))queue.add(next);
-                    }
-                    if(visited.size()>Selection.LIMIT*4)break;
-                }
-                s.selection.combine(found,o.mode);send(player,s,"Magic selection: "+s.selection.size()+" blocks (128-block search radius)",false);
+                var origin=plan.state(p);
+                var found=MagicWand.select(p,new MagicWand.World(){
+                    public boolean loaded(Point at){return player.level().hasChunk(at.x()>>4,at.z()>>4);}
+                    public boolean air(Point at){return plan.state(at).isAir();}
+                    public boolean matches(Point at){return AdvancedTools.matches(plan,origin,at);}
+                    public boolean surface(Point at){return plan.surface(at);}
+                },new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,Selection.LIMIT*4)).found();
+                s.selection.combine(found,o.mode);send(player,s,"Magic Wand: "+s.selection.size()+" blocks (128-block search radius)",false);
             }
             case RULER -> {
                 if(s.ruler==null) {s.ruler=p;send(player,s,"Ruler start: "+p.coordinates(),false);}

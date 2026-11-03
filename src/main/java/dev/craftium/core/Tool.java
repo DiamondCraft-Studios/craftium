@@ -1,7 +1,7 @@
 package dev.craftium.core;
 
 public enum Tool {
-    MAGIC_SELECT("Magic Select", "MS", "Selection", "Select connected blocks of the same type."),
+    MAGIC_SELECT("Magic Wand", "MW", "Selection", "Select connected blocks of the same type."),
     BOX_SELECT("Box Select", "BX", "Selection", "Right-click two corners to select a cuboid."),
     FREEHAND_SELECT("Freehand Select", "FS", "Selection", "Brush a selection; use selection mode to add or subtract."),
     RULER("Ruler", "RL", "Utility", "Add measurement points; use the inspector for circles, splits and center selection."),

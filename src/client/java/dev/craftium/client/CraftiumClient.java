@@ -86,7 +86,18 @@ public final class CraftiumClient implements ClientModInitializer {
     private static final BridgeCodec.Assembler bridge=new BridgeCodec.Assembler();
     private static void receiveStatus(String json){
             var next=Packets.JSON.fromJson(json,Packets.Status.class);
-            if(next!=null){ClientState.status=next;if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());}
+            if(next!=null){ClientState.status=next;checkLargeSelection(next);if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());}
+    }
+    /** Opens the confirmation when a selection action has just selected a suspiciously large area. */
+    private static void checkLargeSelection(Packets.Status next){
+        if(!ClientState.selectionPending)return;
+        if(next.error()){ClientState.selectionPending=false;return;}
+        String message=next.message();
+        if(!(message.startsWith("Selected ")||message.startsWith("Lasso selected ")||message.startsWith("Magic Wand: ")))return;
+        ClientState.selectionPending=false;
+        if(next.selectionSize()-ClientState.selectionSizeBefore<ClientState.LARGE_SELECTION)return;
+        var mc=Minecraft.getInstance();
+        mc.execute(()->{if(ClientCompat.screen(mc) instanceof EditorScreen editor)ClientCompat.setScreen(mc,new LargeSelectionScreen(editor,next.selectionSize()));});
     }
     private static void receiveBridge(byte[] frame){
         try{bridge.accept(frame).ifPresent(json->{
@@ -170,6 +181,7 @@ public final class CraftiumClient implements ClientModInitializer {
         if(!supported()){ClientState.notify("Install Craftium on this server to edit worlds");return;}
         var options=ClientState.options;boolean colours=action.equals("autoshade")&&options.shadeAutomatic||action.equals("use")&&(options.script.contains("getBlockRGB")||options.script.contains("findClosestBlockToRGB"))||options.maskScript.contains("getBlockRGB")||options.maskScript.contains("findClosestBlockToRGB");options.scriptColours=colours?new java.util.ArrayList<>(BlockColours.snapshot()):new java.util.ArrayList<>();
         ClientAssets.expect(action);
+        if(action.equals("select_box")||action.equals("lasso_select")||action.equals("use")&&ClientState.options.tool.selection()){ClientState.selectionPending=true;ClientState.selectionSizeBefore=ClientState.status.selectionSize();}
         try{String request=Packets.JSON.toJson(new Packets.Request(action,target,normal,ClientState.options,action.equals("use")?ClientState.strokeId:0));
             if(ClientPlayNetworking.canSend(Packets.Edit.TYPE))ClientPlayNetworking.send(new Packets.Edit(request));
             else for(byte[] frame:BridgeCodec.encode(Packets.JSON.toJson(new BridgeCodec.Message("edit",request))))ClientPlayNetworking.send(new Packets.Bridge(frame));}finally{options.scriptColours=new java.util.ArrayList<>();}
@@ -191,6 +203,7 @@ public final class CraftiumClient implements ClientModInitializer {
         try(var collector=Overlay.begin(mc)) {
             WorldDiagnostics.draw(mc);
             BuilderMode.draw();
+            MagicPreview.draw(mc,hit);
             if(ClientState.options.showMarkerGizmos||ClientState.options.showDisplayGizmos){int count=0;for(var entity:mc.level.entitiesForRendering()){boolean show=entity instanceof net.minecraft.world.entity.Marker&&ClientState.options.showMarkerGizmos||entity instanceof net.minecraft.world.entity.Display&&ClientState.options.showDisplayGizmos;if(!show||entity.distanceToSqr(mc.player)>128*128||++count>256)continue;Vec3 at=entity.position();int color=entity.getUUID().toString().equals(ClientState.options.entityUuid)?0xffffd66d:0xffe6edf7;Overlay.point(at,color,6);Overlay.box(new AABB(at.add(-.08,-.08,-.08),at.add(.08,.08,.08)),color,1,0);}}
             if(ClientState.options.showAnnotations&&ClientState.status.annotations()!=null)for(var note:ClientState.status.annotations()){
                 Point a=note.from(),b=note.to();Vec3 start=new Vec3(a.x()+.5,a.y()+.5,a.z()+.5),end=new Vec3(b.x()+.5,b.y()+.5,b.z()+.5);
