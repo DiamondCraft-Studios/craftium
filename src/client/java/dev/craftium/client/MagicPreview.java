@@ -46,7 +46,7 @@ final class MagicPreview {
                     case ANY->!s.isAir();
                     case BLOCK->s.is(origin.getBlock());
                     case STATE->s==origin;
-                    case TAG->s.is(origin.getBlock())||origin.getTags().anyMatch(s::is);
+                    case TAG->s.is(origin.getBlock())||net.minecraft.core.registries.BuiltInRegistries.BLOCK.wrapAsHolder(origin.getBlock()).tags().anyMatch(s::is);
                     case NBT->s.is(origin.getBlock())&&Objects.equals(originData,data(level,pos(p)));
                 };
             }

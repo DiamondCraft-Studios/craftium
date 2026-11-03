@@ -99,7 +99,8 @@ final class AdvancedTools {
         boolean slope=next.y()!=at.y();var block=BuiltInRegistries.BLOCK.getOptional(dev.craftium.compat.Compat.vanilla(base+(slope?"_stairs":"_slab")));if(block.isEmpty())return p.material;var state=block.get().defaultBlockState();
         if(slope&&state.hasProperty(BlockStateProperties.HORIZONTAL_FACING)){int dx=next.x()-at.x(),dz=next.z()-at.z();var facing=Math.abs(dx)>Math.abs(dz)?(dx>=0?net.minecraft.core.Direction.EAST:net.minecraft.core.Direction.WEST):(dz>=0?net.minecraft.core.Direction.SOUTH:net.minecraft.core.Direction.NORTH);if(next.y()<at.y())facing=facing.getOpposite();state=state.setValue(BlockStateProperties.HORIZONTAL_FACING,facing);}return state;
     }
-    static boolean matches(EditPlanner p,BlockState original,Point at){return matches(p,original,null,at);}
+    /** For a block with no position of its own, such as the active material, so NBT has no data to compare and falls back to the same block. */
+    static boolean matches(EditPlanner p,BlockState original,Point at){return p.o.compare==Options.Compare.NBT?p.state(at).is(original.getBlock()):matches(p,original,null,at);}
     /** {@code originData} is the block entity data of the block the search started on, used by the NBT comparison. */
     static boolean matches(EditPlanner p,BlockState original,net.minecraft.nbt.CompoundTag originData,Point at){
         var s=p.state(at);
@@ -107,7 +108,7 @@ final class AdvancedTools {
             case ANY->!s.isAir();
             case BLOCK->s.is(original.getBlock());
             case STATE->s==original;
-            case TAG->s.is(original.getBlock())||original.getTags().anyMatch(s::is);
+            case TAG->s.is(original.getBlock())||net.minecraft.core.registries.BuiltInRegistries.BLOCK.wrapAsHolder(original.getBlock()).tags().anyMatch(s::is);
             case NBT->s.is(original.getBlock())&&Objects.equals(originData,data(p,at));
         };
     }

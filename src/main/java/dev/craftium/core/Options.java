@@ -150,7 +150,8 @@ public final class Options {
         density = Double.isFinite(density) ? Math.clamp(density,0,1) : 0.5;
         flySpeed = Float.isFinite(flySpeed) ? Math.clamp(flySpeed,0.1f,10f) : 1;
         offsetX=Math.clamp(offsetX,-128,128);offsetY=Math.clamp(offsetY,-128,128);offsetZ=Math.clamp(offsetZ,-128,128);copies=Math.clamp(copies,1,16);
-        if(compare==null||noise==null||pathMode==null||modelMode==null||modifyMode==null||shapeKind==null||rulerMode==null)throw new IllegalArgumentException("Missing advanced options");
+        if(compare==null)compare=Compare.ANY; // Gson reads a constant that no longer exists, the old SOLID, as null
+        if(noise==null||pathMode==null||modelMode==null||modifyMode==null||shapeKind==null||rulerMode==null)throw new IllegalArgumentException("Missing advanced options");
         rulerSplit=Math.clamp(rulerSplit,2,16);
         historySteps=Math.clamp(historySteps,1,32);
         if(colourField==null||colourField.size()>4096||colourField.contains(null))throw new IllegalArgumentException("Colour field limit: 4096 blocks");for(var placement:colourField)if(placement.point()==null||placement.block()==null||placement.block().length()>256)throw new IllegalArgumentException("Invalid colour field entry");
