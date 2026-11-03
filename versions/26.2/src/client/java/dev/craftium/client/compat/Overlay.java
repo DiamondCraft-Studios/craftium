@@ -27,7 +27,7 @@ import java.util.List;
  * block models have no gizmo, so they are queued here and submitted from the level render event each frame.
  */
 public final class Overlay {
-    private record Ghost(List<BlockPos> models,List<BlockPos> places,int tint){}
+    private record Ghost(List<BlockPos> models,List<BlockPos> places,java.util.Set<BlockPos> placed,int tint){}
     private static final List<Ghost> building=new ArrayList<>();
     private static List<Ghost> shown=List.of();
     /** Each model is scaled this much about its centre so the ghost clears the real block instead of fighting it for depth. */
@@ -67,7 +67,7 @@ public final class Overlay {
      * Like {@link #blocks(List,int)}, but the model of {@code models.get(i)} is drawn at {@code places.get(i)}. This
      * previews blocks that are about to move. Both lists must have the same size and are not copied.
      */
-    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){building.add(new Ghost(models,places,tint));}
+    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){building.add(new Ghost(models,places,new java.util.HashSet<>(places),tint));}
     public static void point(Vec3 at,int color,float size){Gizmos.point(at,color,size).setAlwaysOnTop();}
     /**
      * A label that always faces the camera, floating over the block at {@code pos}. {@code scale} is world
@@ -80,6 +80,16 @@ public final class Overlay {
     private static boolean hidden(net.minecraft.world.level.BlockGetter level,BlockPos pos,Direction face){
         BlockPos next=pos.relative(face);
         return level.getBlockState(next).isFaceSturdy(level,next,face.getOpposite());
+    }
+
+    /**
+     * True when a quad facing {@code d} can be seen from the camera, whose offset from the block's centre is
+     * ({@code dx},{@code dy},{@code dz}). {@code reach} is how far out the quad sits: 0.5 for the block's own sides,
+     * 0 for quads inside the model. Back faces are skipped, because the pipeline does not cull them and they
+     * would show through the near side as the inside of the selection.
+     */
+    private static boolean facing(Direction d,double dx,double dy,double dz,double reach){
+        return d.getStepX()*dx+d.getStepY()*dy+d.getStepZ()*dz>reach;
     }
 
     private static void submitBlocks(LevelRenderContext context){
@@ -102,15 +112,17 @@ public final class Overlay {
                 random.setSeed(state.getSeed(pos));
                 var parts=new ArrayList<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart>();
                 mc.getModelManager().getBlockStateModelSet().get(state).collectParts(random,parts);
+                final double dx=eye.x-pos.getX()-.5,dy=eye.y-pos.getY()-.5,dz=eye.z-pos.getZ()-.5;
                 stack.pushPose();
                 stack.translate(pos.getX()+.5-eye.x,pos.getY()+.5-eye.y,pos.getZ()+.5-eye.z);
                 stack.scale(GHOST_SCALE,GHOST_SCALE,GHOST_SCALE);
                 stack.translate(-.5,-.5,-.5);
                 context.submitNodeCollector().submitCustomGeometry(stack,type,(pose,consumer)->{
                     for(var part:parts){
-                        for(var q:part.getQuads(null))consumer.putBakedQuad(pose,q,quad);
+                        for(var q:part.getQuads(null))if(facing(q.direction(),dx,dy,dz,0))consumer.putBakedQuad(pose,q,quad);
                         for(Direction face:FACES){
-                            if(hidden(mc.level,pos,face))continue; // the block next to it covers this side, as in the world
+                            // Only the outer surface: not a side that touches another ghost, is covered as in the world, or faces away.
+                            if(ghost.placed().contains(pos.relative(face))||hidden(mc.level,pos,face)||!facing(face,dx,dy,dz,.5))continue;
                             for(var q:part.getQuads(face))consumer.putBakedQuad(pose,q,quad);
                         }
                     }

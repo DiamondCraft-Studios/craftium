@@ -35,7 +35,7 @@ public final class Overlay {
     private record Point(Vec3 at,int color,float size) implements Prim {}
     private record Label(String text,BlockPos pos,int color,int background,float scale) implements Prim {}
     private record Quad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color) implements Prim {}
-    private record Blocks(List<BlockPos> models,List<BlockPos> places,int tint) implements Prim {}
+    private record Blocks(List<BlockPos> models,List<BlockPos> places,java.util.Set<BlockPos> placed,int tint) implements Prim {}
 
     private static final List<Prim> building=new ArrayList<>();
     private static List<Prim> shown=List.of();
@@ -70,7 +70,7 @@ public final class Overlay {
      * Like {@link #blocks(List,int)}, but the model of {@code models.get(i)} is drawn at {@code places.get(i)}. This
      * previews blocks that are about to move. Both lists must have the same size and are not copied.
      */
-    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){building.add(new Blocks(models,places,tint));}
+    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){building.add(new Blocks(models,places,new java.util.HashSet<>(places),tint));}
     public static void text(String text,BlockPos pos,int color,int background,float scale){building.add(new Label(text,pos,color,background,scale));}
 
     // ---- drawing
@@ -170,6 +170,16 @@ public final class Overlay {
         return level.getBlockState(next).isFaceSturdy(level,next,face.getOpposite());
     }
 
+    /**
+     * True when a quad facing {@code d} can be seen from the camera, whose offset from the block's centre is
+     * ({@code dx},{@code dy},{@code dz}). {@code reach} is how far out the quad sits: 0.5 for the block's own sides,
+     * 0 for quads inside the model. Back faces are skipped, because the pipeline does not cull them and they
+     * would show through the near side as the inside of the selection.
+     */
+    private static boolean facing(Direction d,double dx,double dy,double dz,double reach){
+        return d.getStepX()*dx+d.getStepY()*dy+d.getStepZ()*dz>reach;
+    }
+
     private static void blocks(WorldRenderContext context,Minecraft mc,View view,Blocks ghost){
         var level=mc.level;
         var consumer=context.consumers().getBuffer(RenderType.entityTranslucent(TextureAtlas.LOCATION_BLOCKS));
@@ -182,15 +192,17 @@ public final class Overlay {
             if(state.isAir()||state.getRenderShape()!=RenderShape.MODEL)continue; // fluids and block entities have no plain model
             random.setSeed(state.getSeed(pos));
             var parts=mc.getBlockRenderer().getBlockModel(state).collectParts(random);
+            double dx=view.eye.x-pos.getX()-.5,dy=view.eye.y-pos.getY()-.5,dz=view.eye.z-pos.getZ()-.5;
             stack.pushPose();
             stack.translate(pos.getX()+.5-view.eye.x,pos.getY()+.5-view.eye.y,pos.getZ()+.5-view.eye.z);
             stack.scale(GHOST_SCALE,GHOST_SCALE,GHOST_SCALE);
             stack.translate(-.5,-.5,-.5);
             var pose=stack.last();
             for(var part:parts){
-                for(var quad:part.getQuads(null))consumer.putBulkData(pose,quad,r,g,b,a,LightTexture.FULL_BRIGHT,OverlayTexture.NO_OVERLAY);
+                for(var quad:part.getQuads(null))if(facing(quad.direction(),dx,dy,dz,0))consumer.putBulkData(pose,quad,r,g,b,a,LightTexture.FULL_BRIGHT,OverlayTexture.NO_OVERLAY);
                 for(Direction face:FACES){
-                    if(hidden(level,pos,face))continue; // the block next to it covers this side, as in the world
+                    // Only the outer surface: not a side that touches another ghost, is covered as in the world, or faces away.
+                    if(ghost.placed.contains(pos.relative(face))||hidden(level,pos,face)||!facing(face,dx,dy,dz,.5))continue;
                     for(var quad:part.getQuads(face))consumer.putBulkData(pose,quad,r,g,b,a,LightTexture.FULL_BRIGHT,OverlayTexture.NO_OVERLAY);
                 }
             }
