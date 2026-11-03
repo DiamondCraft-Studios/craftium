@@ -4,7 +4,6 @@ import dev.craftium.core.*;
 import dev.craftium.vendor.FastNoiseLite;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.registries.*;
-import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -32,7 +31,7 @@ final class LuaFunctions {
         bind(globals,"getHighestBlockYAt",args->{int x=args.arg(1).checkint(),z=args.arg(2).checkint();plan.validate(new Point(x,plan.level.getMinY(),z));return LuaValue.valueOf(plan.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE,x,z)-1);});
         bind(globals,"withBlockProperty",args->{BlockState current=state(args.arg1());for(String property:args.arg(2).checkjstring().split(",")){String[] pair=property.trim().split("=",2);if(pair.length!=2)throw new LuaError("Use property=value");Property<?> definition=current.getBlock().getStateDefinition().getProperty(pair[0]);if(definition==null)throw new LuaError("Unknown block property "+pair[0]);current=with(current,definition,pair[1]);}return id(current);});
         bind(globals,"getBlockProperty",args->{var current=state(args.arg1());var property=current.getBlock().getStateDefinition().getProperty(args.arg(2).checkjstring());return property==null?LuaValue.NIL:LuaValue.valueOf(property(current,property));});
-        bind(globals,"isBlockTagged",args->{String tag=args.arg(2).checkjstring().replaceFirst("^#","");return LuaValue.valueOf(state(args.arg1()).is(TagKey.create(Registries.BLOCK,Identifier.parse(tag))));});
+        bind(globals,"isBlockTagged",args->{String tag=args.arg(2).checkjstring().replaceFirst("^#","");return LuaValue.valueOf(state(args.arg1()).is(TagKey.create(Registries.BLOCK,dev.craftium.compat.Compat.parse(tag))));});
         bind(globals,"getBlockRGB",args->{var value=state(args.arg1());if(value.isAir())return LuaValue.NIL;prepareColours();Integer color=rgb.get(BuiltInRegistries.BLOCK.getKey(value.getBlock()).toString());return color==null?LuaValue.NIL:LuaValue.valueOf(color);});
         bind(globals,"findClosestBlockToRGB",args->closest(args.arg1().checkint()&0xffffff,args.arg(2).optint(0)&127,args.arg(3).optint(1)));
         bind(globals,"getSimplexNoise",args->noise(args,false));bind(globals,"getVoroniEdgeNoise",args->noise(args,true));bind(globals,"getVoronoiEdgeNoise",args->noise(args,true));

@@ -8,7 +8,6 @@ import net.minecraft.core.Holder;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
@@ -318,7 +317,7 @@ public final class EditorServer {
     public static void tick(MinecraftServer server) {
         AnimatedRebuild.tick(server);
         if(++historyTicks%100==0)for(var session:SESSIONS.values())HistoryStore.save(session);
-        var reachId=net.minecraft.resources.Identifier.fromNamespaceAndPath("craftium","builder_reach");
+        var reachId=dev.craftium.compat.Compat.id("craftium","builder_reach");
         for(var player:server.getPlayerList().getPlayers()){
             var s=SESSIONS.get(player.getUUID());var range=player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.BLOCK_INTERACTION_RANGE);
             boolean enabled=s!=null&&s.infiniteReach&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities");
@@ -368,7 +367,7 @@ public final class EditorServer {
         for(var c:j.edit.biomes()) {
             Point p=c.cell();boolean allowed=true;for(int x=0;x<4;x++)for(int y=0;y<4;y++)for(int z=0;z<4;z++)if(!ServerPlatform.canChange(j.owner,j.level,new Point(p.x()*4+x,p.y()*4+y,p.z()*4+z)))allowed=false;if(!allowed)continue;if(!j.level.hasChunk(p.x()>>2,p.z()>>2))continue;
             var expected=j.backwards?c.after():c.before();if(!j.level.getNoiseBiome(p.x(),p.y(),p.z()).equals(expected))continue;
-            long key=net.minecraft.world.level.ChunkPos.pack(p.x()>>2,p.z()>>2);
+            long key=dev.craftium.compat.Compat.chunkKey(p.x()>>2,p.z()>>2);
             groups.computeIfAbsent(key,k->new HashMap<>()).put(p,j.backwards?c.before():c.after());applied.add(c);
         }
         var chunks=new ArrayList<ChunkAccess>();

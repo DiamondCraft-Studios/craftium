@@ -27,7 +27,7 @@ final class WorldControls {
         if(!o.name.matches("[A-Za-z0-9 _.-]{1,80}"))throw new IllegalArgumentException("Use a plain view name");
         Path path=server.getWorldPath(LevelResource.ROOT).resolve("craftium/views").resolve(player.getUUID()+"-"+o.name+".json");
         try{
-            if(action.equals("view_save")){var view=new View(player.level().dimension().identifier().toString(),player.getX(),player.getY(),player.getZ(),player.getYRot(),player.getXRot());Files.createDirectories(path.getParent());Files.writeString(path,Packets.JSON.toJson(view));return "Saved view "+o.name;}
+            if(action.equals("view_save")){var view=new View(dev.craftium.compat.Compat.keyName(player.level().dimension()),player.getX(),player.getY(),player.getZ(),player.getYRot(),player.getXRot());Files.createDirectories(path.getParent());Files.writeString(path,Packets.JSON.toJson(view));return "Saved view "+o.name;}
             if(action.equals("view_load")){var view=Packets.JSON.fromJson(Files.readString(path),View.class);server.getCommands().performPrefixedCommand(dev.craftium.runtime.ServerPlatform.commands(player),String.format(Locale.ROOT,"execute in %s run tp @s %.6f %.6f %.6f %.6f %.6f",view.dimension,view.x,view.y,view.z,view.yaw,view.pitch));return "Opened view "+o.name;}
             throw new IllegalArgumentException("Unknown world control");
         }catch(java.io.IOException e){throw new IllegalArgumentException("Cannot access view: "+o.name,e);}

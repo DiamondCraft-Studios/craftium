@@ -4,7 +4,6 @@ import dev.craftium.core.Point;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.*;
-import net.minecraft.server.permissions.Permissions;
 import org.slf4j.*;
 import java.nio.file.Path;
 import java.util.*;
@@ -15,7 +14,7 @@ public final class ServerPlatform {
     public interface Host {
         boolean canSend(ServerPlayer player);
         void send(ServerPlayer player,CustomPacketPayload payload);
-        default boolean permitted(ServerPlayer player,String action){return player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);}
+        default boolean permitted(ServerPlayer player,String action){return dev.craftium.compat.Compat.isGamemaster(player);}
         default CommandSourceStack commands(ServerPlayer player){return player.createCommandSourceStack();}
         default boolean requiresProtection(){return false;}
         /** Biomes are quart coordinates; each cell affects 4 by 4 by 4 blocks. */

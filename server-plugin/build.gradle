@@ -21,7 +21,7 @@ dependencies {
 
 sourceSets.main.java {
     setSrcDirs(['../src/main/java', 'src/main/java'])
-    exclude 'dev/craftium/Craftium.java', 'dev/craftium/mixin/**', 'dev/craftium/server/ServerCommands.java'
+    exclude 'dev/craftium/Craftium.java', 'dev/craftium/mixin/**', 'dev/craftium/compat/FabricCompat.java', 'dev/craftium/server/ServerCommands.java'
 }
 sourceSets {
     liveTest {

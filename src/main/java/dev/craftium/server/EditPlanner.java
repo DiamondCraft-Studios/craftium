@@ -6,7 +6,6 @@ import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.biome.Biome;
@@ -237,7 +236,7 @@ final class EditPlanner {
     }
     void paintBiomes(List<Point> points) {
         var registry=level.registryAccess().lookupOrThrow(Registries.BIOME);
-        Holder<Biome> biome=registry.get(ResourceKey.create(Registries.BIOME,Identifier.parse(o.biome)))
+        Holder<Biome> biome=registry.get(ResourceKey.create(Registries.BIOME,dev.craftium.compat.Compat.parse(o.biome)))
             .orElseThrow(()->new IllegalArgumentException("Unknown biome: "+o.biome));
         for(Point p:points) {
             if(!accepted(p))continue;

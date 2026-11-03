@@ -2,7 +2,6 @@ package dev.craftium.server;
 
 import dev.craftium.core.*;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -97,7 +96,7 @@ final class AdvancedTools {
     }
     private static BlockState pathMaterial(EditPlanner p,Point at,Point next){
         String base=BuiltInRegistries.BLOCK.getKey(p.material.getBlock()).getPath().replaceAll("(_planks|_block)$","").replaceAll("_bricks$","_brick").replaceAll("_tiles$","_tile");
-        boolean slope=next.y()!=at.y();var block=BuiltInRegistries.BLOCK.getOptional(Identifier.withDefaultNamespace(base+(slope?"_stairs":"_slab")));if(block.isEmpty())return p.material;var state=block.get().defaultBlockState();
+        boolean slope=next.y()!=at.y();var block=BuiltInRegistries.BLOCK.getOptional(dev.craftium.compat.Compat.vanilla(base+(slope?"_stairs":"_slab")));if(block.isEmpty())return p.material;var state=block.get().defaultBlockState();
         if(slope&&state.hasProperty(BlockStateProperties.HORIZONTAL_FACING)){int dx=next.x()-at.x(),dz=next.z()-at.z();var facing=Math.abs(dx)>Math.abs(dz)?(dx>=0?net.minecraft.core.Direction.EAST:net.minecraft.core.Direction.WEST):(dz>=0?net.minecraft.core.Direction.SOUTH:net.minecraft.core.Direction.NORTH);if(next.y()<at.y())facing=facing.getOpposite();state=state.setValue(BlockStateProperties.HORIZONTAL_FACING,facing);}return state;
     }
     static boolean matches(EditPlanner p,BlockState original,Point at){var s=p.state(at);return switch(p.o.compare){case BLOCK->s.is(original.getBlock());case STATE->s==original;case SOLID->p.solid(at);case ANY->!s.isAir();};}
@@ -136,8 +135,8 @@ final class AdvancedTools {
         String from=BuiltInRegistries.BLOCK.getKey(old.getBlock()).getPath(),to=BuiltInRegistries.BLOCK.getKey(target.getBlock()).getPath();
         for(String suffix:new String[]{"_stairs","_slab","_wall","_fence","_fence_gate","_button","_pressure_plate","_door","_trapdoor"})if(from.endsWith(suffix)){
             String base=to.replaceAll("(_planks|_block|_stairs|_slab|_wall|_fence|_fence_gate)$","").replaceAll("_bricks$","_brick").replaceAll("_tiles$","_tile");
-            var id=Identifier.withDefaultNamespace(base+suffix);var block=BuiltInRegistries.BLOCK.getOptional(id);if(block.isPresent())return p.preserve(old,block.get().defaultBlockState());
-            id=Identifier.withDefaultNamespace(to+suffix);block=BuiltInRegistries.BLOCK.getOptional(id);if(block.isPresent())return p.preserve(old,block.get().defaultBlockState());
+            var id=dev.craftium.compat.Compat.vanilla(base+suffix);var block=BuiltInRegistries.BLOCK.getOptional(id);if(block.isPresent())return p.preserve(old,block.get().defaultBlockState());
+            id=dev.craftium.compat.Compat.vanilla(to+suffix);block=BuiltInRegistries.BLOCK.getOptional(id);if(block.isPresent())return p.preserve(old,block.get().defaultBlockState());
         }return p.preserve(old,target);
     }
 }

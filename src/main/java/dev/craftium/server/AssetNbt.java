@@ -2,7 +2,6 @@ package dev.craftium.server;
 
 import dev.craftium.core.Point;
 import net.minecraft.nbt.*;
-import net.minecraft.resources.Identifier;
 import net.minecraft.core.registries.*;
 import net.minecraft.util.datafix.fixes.References;
 import java.util.*;
@@ -13,7 +12,7 @@ final class AssetNbt {
     static int current(){return net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version();}
     static CompoundTag upgrade(CompoundTag tag,com.mojang.datafixers.DSL.TypeReference type,int version,EditPlanner p){if(version>current())throw new IllegalArgumentException("This asset is from a newer Minecraft version");if(version==current())return tag;var value=p.level.getServer().getFixerUpper().update(type,new com.mojang.serialization.Dynamic<>(NbtOps.INSTANCE,tag),version,current()).getValue();if(value instanceof CompoundTag result)return result;throw new IllegalArgumentException("Asset data upgrade failed");}
     static CompoundTag structure(CompoundTag root,EditPlanner p){if(root.contains("palette")&&root.getIntOr("DataVersion",current())<current()){var upgraded=net.minecraft.util.datafix.DataFixTypes.STRUCTURE.updateToCurrentVersion(p.level.getServer().getFixerUpper(),root,root.getIntOr("DataVersion",current()));upgraded.putInt("DataVersion",current());return upgraded;}return root;}
-    static net.minecraft.world.level.block.state.BlockState state(CompoundTag tag,EditPlanner p){String name=tag.getStringOr("Name","");if(!BuiltInRegistries.BLOCK.containsKey(Identifier.parse(name)))throw new IllegalArgumentException("Asset requires missing block "+name);return NbtUtils.readBlockState(p.level.registryAccess().lookupOrThrow(Registries.BLOCK),tag);}
+    static net.minecraft.world.level.block.state.BlockState state(CompoundTag tag,EditPlanner p){String name=tag.getStringOr("Name","");if(!BuiltInRegistries.BLOCK.containsKey(dev.craftium.compat.Compat.parse(name)))throw new IllegalArgumentException("Asset requires missing block "+name);return NbtUtils.readBlockState(p.level.registryAccess().lookupOrThrow(Registries.BLOCK),tag);}
     static net.minecraft.world.level.block.state.BlockState state(String text,int version,EditPlanner p){if(version>=current())return p.parse(text);var tag=new CompoundTag();int start=text.indexOf('[');tag.putString("Name",start<0?text:text.substring(0,start));if(start>=0){var properties=new CompoundTag();for(String pair:text.substring(start+1,text.length()-1).split(",")){String[] kv=pair.split("=",2);if(kv.length!=2)throw new IllegalArgumentException("Invalid asset block state");properties.putString(kv[0],kv[1]);}tag.put("Properties",properties);}return state(upgrade(tag,References.BLOCK_STATE,version,p),p);}
     static CompoundTag blockEntity(CompoundTag source,int version,EditPlanner p){var tag=source.getCompound("Data").orElse(source).copy();String id=source.getStringOr("Id",tag.getStringOr("id",""));if(id.isBlank())throw new IllegalArgumentException("Schematic block entity is missing its type");tag.putString("id",id);tag.remove("Id");tag.remove("Pos");return upgrade(tag,References.BLOCK_ENTITY,version,p);}
     static List<CompoundTag> entities(CompoundTag raw,EditPlanner p){
