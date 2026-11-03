@@ -722,7 +722,8 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         return new double[]{
             (CraftiumClient.held(minecraft.options.keyUp)?1:0)-(CraftiumClient.held(minecraft.options.keyDown)?1:0),
             (CraftiumClient.held(minecraft.options.keyRight)?1:0)-(CraftiumClient.held(minecraft.options.keyLeft)?1:0),
-            (CraftiumClient.held(minecraft.options.keyJump)?1:0)-(CraftiumClient.held(minecraft.options.keyShift)?1:0)};
+            // Shift flies down, but not with Ctrl held: Ctrl+Shift is a shortcut, like Ctrl+Shift+Z, not a move.
+            (CraftiumClient.held(minecraft.options.keyJump)?1:0)-(CraftiumClient.held(minecraft.options.keyShift)&&!minecraft.hasControlDown()?1:0)};
     }
     @Override public void tick() {
         if(heldContext){if(!CraftiumClient.held(CraftiumClient.contextKey))onClose();return;}
