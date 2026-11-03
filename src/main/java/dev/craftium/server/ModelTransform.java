@@ -18,6 +18,7 @@ final class ModelTransform {
     /** Queues the changes in {@code plan} and returns the cells the blocks end up in. */
     static LinkedHashSet<Point> apply(EditPlanner plan,Session session,Options o){
         var selection=session.selection;
+        plan.exact=true;
         if(selection.size()==0)throw new IllegalArgumentException("Create a selection first");
         boolean identity=o.offsetX==0&&o.offsetY==0&&o.offsetZ==0&&o.yaw==0&&o.pitch==0&&o.roll==0&&o.sizeX==1&&o.sizeY==1&&o.sizeZ==1;
         if(identity)throw new IllegalArgumentException("Nothing to transform");

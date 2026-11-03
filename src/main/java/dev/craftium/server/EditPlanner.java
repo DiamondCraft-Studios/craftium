@@ -88,8 +88,15 @@ final class EditPlanner {
         }
         put(p,value);
     }
+    /**
+     * Set by the transform tools: the blocks of a selection go exactly where the transform sends them, whatever the mask,
+     * height range, keep-existing, survival and symmetry settings of the brush tools say. Otherwise those settings would
+     * quietly leave parts of some selections behind.
+     */
+    boolean exact;
     void put(Point p, BlockSnapshot value) {
         putOne(p,value);
+        if(exact)return;
         if(!o.symmetryX&&!o.symmetryY&&!o.symmetryZ&&o.symmetryRotations==1)return;
         var origin=o.symmetryOrigin;
         for(int bits=0;bits<8;bits++){
@@ -105,8 +112,8 @@ final class EditPlanner {
     private void putOne(Point p,BlockSnapshot value) {
         validate(p);
         var planned=changes.get(p);
-        if(!accepted(p) || (o.keepExisting && !value.state().isAir() && !state(p).isAir() && (planned==null||!planned.after().state().isAir()))) return;
-        if(!o.forcePlace && !value.state().canSurvive(level,pos(p))) return;
+        if(!exact && (!accepted(p) || (o.keepExisting && !value.state().isAir() && !state(p).isAir() && (planned==null||!planned.after().state().isAir())))) return;
+        if(!exact && !o.forcePlace && !value.state().canSurvive(level,pos(p))) return;
         if(value.data()!=null) {
             var tag=value.data().copy();tag.putInt("x",p.x());tag.putInt("y",p.y());tag.putInt("z",p.z());
             value=new BlockSnapshot(value.state(),tag);

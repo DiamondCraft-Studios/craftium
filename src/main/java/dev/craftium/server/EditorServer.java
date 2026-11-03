@@ -358,6 +358,19 @@ public final class EditorServer {
                 else {for(Point point:BrushMath.line(s.line,p))for(Point at:BrushMath.brush(point,Math.min(o.radius,4),o.shape,o.hollow))plan.put(at,plan.material);
                     s.line=null;start(player,s,plan.finish("Draw line"));}
             }
+            case SHAPE -> {
+                plan.tool(p,normal);
+                var edit=plan.finish(o.tool.label);
+                // What was placed becomes the selection, so the transform tools can take hold of it. Carving leaves nothing to select.
+                var placed=new LinkedHashSet<Point>();
+                if(!o.invert)for(var change:edit.changes())placed.add(change.pos());
+                if(placed.isEmpty()){start(player,s,edit);return;}
+                var before=new ArrayList<>(s.selection.points());
+                if(s.confirmEdits&&!s.bypassConfirm&&s.pendingSelectionBefore==null)s.pendingSelectionBefore=before;
+                s.selection.combine(placed,Selection.Mode.REPLACE);
+                try{start(player,s,edit.withSelection(new Session.SelectionChange(before,new ArrayList<>(placed))));}
+                catch(RuntimeException e){s.selection.restore(before);s.pendingSelectionBefore=null;throw e;}
+            }
             default -> {plan.tool(p,normal);start(player,s,plan.finish(o.tool.label));}
         }
     }
