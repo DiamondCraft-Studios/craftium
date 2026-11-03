@@ -50,7 +50,7 @@ public final class CraftiumClient implements ClientModInitializer {
             receiveStatus(payload.json());
         }));
         ClientPlayConnectionEvents.DISCONNECT.register((handler,client)-> {
-            ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);ClientState.pending=GhostBlocks.EMPTY;
+            ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);ClientState.pending=GhostBlocks.EMPTY;ClientState.largeSelection=0;
             ClientState.save();ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
             BuilderMode.reset();
             ClientCommands.reset();
@@ -82,7 +82,7 @@ public final class CraftiumClient implements ClientModInitializer {
     private static final BridgeCodec.Assembler bridge=new BridgeCodec.Assembler();
     private static void receiveStatus(String json){
             var next=Packets.JSON.fromJson(json,Packets.Status.class);
-            if(next!=null){ClientState.status=next;checkLargeSelection(next);if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());}
+            if(next!=null){ClientState.status=next;checkLargeSelection(next);if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());}
     }
     /** Opens the confirmation when a selection action has just selected a suspiciously large area. */
     private static void checkLargeSelection(Packets.Status next){
@@ -93,7 +93,8 @@ public final class CraftiumClient implements ClientModInitializer {
         ClientState.selectionPending=false;
         if(next.selectionSize()-ClientState.selectionSizeBefore<ClientState.LARGE_SELECTION)return;
         var mc=Minecraft.getInstance();
-        mc.execute(()->{if(ClientCompat.screen(mc) instanceof EditorScreen editor)ClientCompat.setScreen(mc,new LargeSelectionScreen(editor,next.selectionSize()));});
+        // Set at once, before this status is drawn, so the popup comes first and the selection is not built until it is confirmed.
+        if(ClientCompat.screen(mc) instanceof EditorScreen)ClientState.largeSelection=next.selectionSize();
     }
     private static void receiveBridge(byte[] frame){
         try{bridge.accept(frame).ifPresent(json->{

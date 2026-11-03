@@ -299,8 +299,29 @@ public final class EditorScreen extends CraftiumScreen {
         int noticeY=pinnedBounds()[1]+pinnedBounds()[3]+4;
         if(tw>40){g.fill(l+8,noticeY,l+8+tw,noticeY+23,ClientState.status.error()?0xe14b252a:0xd916202d);text(g,shorten(notice,tw-16),l+16,noticeY+8,ClientState.status.error()?0xffffb6ae:0xffbfd4e8);}
         pinnedTools(g);
+        largeSelectionPopup(g);
         outlineSettingsPopup(g);
         if(minecraft.level==null){g.fill(l,80,r,h-28,0xff14202e);text(g,"Open a Creative world to start building",l+30,105,TEXT);}
+    }
+    /** Where the large-selection popup is, or null when it is not showing. It sits in the middle of the viewport. */
+    private int[] popupBounds(){
+        if(ClientState.largeSelection<=0)return null;
+        int left=panels?LEFT+6:6,right=panels?w-RIGHT-6:w-6;
+        return new int[]{(left+right-250)/2,h/2-70,250,62};
+    }
+    /** A small popup beside the work, not over it: the editor stays visible and nothing is dimmed. */
+    private void largeSelectionPopup(Gfx g){
+        int[] b=popupBounds();
+        if(b==null)return;
+        g.fill(b[0],b[1],b[0]+b[2],b[1]+b[3],0xf0141d29);g.outline(b[0],b[1],b[2],b[3],ACCENT);
+        text(g,"Selected "+ClientState.largeSelection+" blocks, confirm?",b[0]+10,b[1]+9,TEXT);
+        button(g,b[0]+10,b[1]+30,112,22,"Confirm",true,this::confirmLargeSelection,"Keep the selection · Enter");
+        button(g,b[0]+128,b[1]+30,112,22,"Cancel",false,this::cancelLargeSelection,"Go back to the selection you had · Esc");
+    }
+    private void confirmLargeSelection(){ClientState.largeSelection=0;SelectionOverlay.update(ClientState.heldSelection);}
+    private void cancelLargeSelection(){
+        ClientState.largeSelection=0;ClientState.boxCorners.clear();
+        CraftiumClient.send("selection_restore",null,null);
     }
     private final ColourPicker outlinePicker=new ColourPicker(colour->ClientState.options.selectionColor=colour);
     /** Where the selection outline settings are, or null when they are not showing: the top right of the viewport. */
@@ -464,6 +485,8 @@ public final class EditorScreen extends CraftiumScreen {
     private boolean inViewport(double x,double y){
         int[] pin=pinnedBounds();
         if(x>=pin[0]&&x<pin[0]+pin[2]&&y>=pin[1]&&y<pin[1]+pin[3])return false; // the pinned tools are not the world
+        int[] popup=popupBounds();
+        if(popup!=null&&x>=popup[0]&&x<popup[0]+popup[2]&&y>=popup[1]&&y<popup[1]+popup[3])return false;
         int[] outline=outlineBounds();
         if(outline!=null&&x>=outline[0]&&x<outline[0]+outline[2]&&y>=outline[1]&&y<outline[1]+outline[3])return false;
         return !ReferenceImages.hit(x*scale,y*scale)&&y>27&&y<(height/scale)-23&&(!panels||WorkspaceLayout.hit(x,y,false).isBlank());
@@ -626,6 +649,10 @@ public final class EditorScreen extends CraftiumScreen {
             if(event.key()==GLFW.GLFW_KEY_ESCAPE||event.key()==GLFW.GLFW_KEY_ENTER){field.setFocused(false);return true;}
             return field.keyPressed(event);
         }
+        if(ClientState.largeSelection>0){
+            if(event.key()==GLFW.GLFW_KEY_ENTER){confirmLargeSelection();return true;}
+            if(event.key()==GLFW.GLFW_KEY_ESCAPE){cancelLargeSelection();return true;}
+        }
         if(CraftiumClient.editorKey.matches(event)){onClose();return true;}
         if(event.key()==GLFW.GLFW_KEY_ESCAPE){if(ClientState.hasPending())CraftiumClient.send("pending_cancel",null,null);else if(PlacementPreview.active())PlacementPreview.cancel();else if(help)help=false;else if(transform){transform=false;init();}else if(menu>=0)menu=-1;else onClose();return true;}
         if(EditorBindings.matches(Action.HELP,event)){perform(Action.HELP);return true;}
@@ -730,5 +757,5 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private int key(long handle,int key){return GLFW.glfwGetKey(handle,key)==GLFW.GLFW_PRESS?1:0;}
     @Override public void removed(){TransformGizmo.cancel();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
-    @Override public void onClose(){ClientCompat.setScreen(minecraft,null);if(ClientState.hasPending()&&CraftiumClient.supported())CraftiumClient.send("pending_cancel",null,null);if(CraftiumClient.supported()&&minecraft.player!=null&&minecraft.player.isSpectator())CraftiumClient.send("gamemode_restore",null,null);}
+    @Override public void onClose(){if(ClientState.largeSelection>0)confirmLargeSelection();ClientCompat.setScreen(minecraft,null);if(ClientState.hasPending()&&CraftiumClient.supported())CraftiumClient.send("pending_cancel",null,null);if(CraftiumClient.supported()&&minecraft.player!=null&&minecraft.player.isSpectator())CraftiumClient.send("gamemode_restore",null,null);}
 }
