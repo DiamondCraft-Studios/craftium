@@ -21,6 +21,13 @@ final class Session {
     net.minecraft.world.level.GameType previousMode;
     /** Where the clipboard's blocks were copied from (its minimum corner), or null when they came from elsewhere, like a blueprint. */
     Point clipboardOrigin;
+    /** An edit worked out but not yet applied, waiting for the player to confirm it. Null when there is none. */
+    Edit pendingEdit;
+    String pendingData="";boolean pendingDirty;
+    /** The clipboard's blocks as a ghost for the placement preview, and whether it needs encoding again. */
+    String clipboardGhost="";boolean clipboardGhostDirty=true;
+    /** Copied from the player's options with each request: whether edits wait for confirmation, and whether this request is exempt. */
+    boolean confirmEdits,bypassConfirm;
     /** The selection as it was before the last selection action, so a mistaken one can be taken back. Null when there is none. */
     List<Point> selectionBefore;
     long requestStroke, lastStroke;

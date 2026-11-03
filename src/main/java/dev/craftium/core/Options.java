@@ -29,6 +29,8 @@ public final class Options {
     public Compare compare=Compare.BLOCK;
     public int selectLimit=100_000,selectRange=1,lassoDepth=64;
     /** How many blocks the Select menu's Expand and Shrink move the selection's surface. */
+    /** Edits that place or remove blocks are shown as a ghost first and only applied when confirmed with Enter. */
+    public boolean confirmEdits=true;
     public int expandAmount=5;
     /** When above zero, how many blocks one expand or shrink request moves the surface, instead of the brush strength. */
     public int selectionResize;

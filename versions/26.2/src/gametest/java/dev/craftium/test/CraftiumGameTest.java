@@ -58,14 +58,15 @@ public final class CraftiumGameTest implements FabricClientGameTest {
     private void request(String action,Point p) {
         // The production server throttles requests by wall-clock time, including in accelerated gametests.
         try{Thread.sleep(80);}catch(InterruptedException e){throw new AssertionError(e);}
-        ctx.runOnClient(mc->CraftiumClient.send(action,p,up));
+        ctx.runOnClient(mc->{ClientState.options.confirmEdits=false;CraftiumClient.send(action,p,up);});
         world.getConnection().waitForServerboundPackets();ctx.waitTicks(4);
         world.getConnection().waitForClientboundPackets();
         ctx.waitFor(mc->!ClientState.status.busy(),400);
         world.getConnection().waitForClientboundPackets();
         require(ctx.computeOnClient(mc->!ClientState.status.error()),"Request "+action+" failed: "+ctx.computeOnClient(mc->ClientState.status.message()));
     }
-    private void options(java.util.function.Consumer<Options> set){ctx.runOnClient(mc->set.accept(ClientState.options));}
+    /** These scenarios check edits as they land, so they opt out of confirming each one with Enter. */
+    private void options(java.util.function.Consumer<Options> set){ctx.runOnClient(mc->{ClientState.options.confirmEdits=false;set.accept(ClientState.options);});}
     private void builderToolsAndLighting(){
         ctx.runOnClient(mc->ClientState.options=new Options());options(o->{o.noUpdates=true;o.position1=new Point(55,25,45);o.position2=new Point(56,25,45);o.builderTool=Options.BuilderTool.MOVE;o.offsetX=3;o.offsetY=0;o.offsetZ=0;});
         world.getServer().runOnServer(server->{var level=server.overworld();level.setBlock(new BlockPos(55,25,45),Blocks.GOLD_BLOCK.defaultBlockState(),18);level.setBlock(new BlockPos(56,25,45),Blocks.DIAMOND_BLOCK.defaultBlockState(),18);});

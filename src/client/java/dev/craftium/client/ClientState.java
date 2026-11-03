@@ -18,6 +18,9 @@ public final class ClientState {
     public static boolean duplicatePending;
     public static Point pendingPlacementOrigin;
     /** Set while a selection action is in flight, so its result can be checked for being suspiciously large. */
+    /** An edit the server has worked out and is holding until it is confirmed with Enter. */
+    public static GhostBlocks pending=GhostBlocks.EMPTY;
+    public static boolean hasPending(){return pending.total()>0;}
     public static boolean selectionPending;
     public static int selectionSizeBefore;
     /** A selection this many blocks bigger than before is confirmed with the player first. */

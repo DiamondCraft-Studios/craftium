@@ -10,12 +10,15 @@ public final class PlacementPreview {
     static int axis;
     private static String data="";
     static OutlineShape shape=OutlineShape.EMPTY;
+    private static GhostBlocks ghost=GhostBlocks.EMPTY;
+    static void updateGhost(String json){ghost=GhostBlocks.parse(json);}
     private PlacementPreview(){}
     static void update(String value){if(Objects.equals(data,value))return;data=value;shape=OutlineShape.of(SelectionCodec.decode(value));}
     /** The pending placement as one outline, moved by the transform in progress; filled while nothing is being dragged. */
     static void draw(){
         if(origin==null)return;
         shape.draw(new Vec3(origin.x(),origin.y(),origin.z()),TransformGizmo::line,0xff8be3b5,0x2247d29b,!TransformGizmo.dragging());
+        if(!TransformGizmo.dragging())ghost.draw(origin,false); // the real blocks, so the preview shows what will be placed
     }
     public static void begin(Point at){
         if(ClientState.status.clipboardSize()==0&&ClientState.status.clipboardEntityCount()==0){ClientState.notify("Copy a selection or load a blueprint first");return;}

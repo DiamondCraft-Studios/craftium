@@ -35,7 +35,7 @@ public final class Overlay {
     private record Point(Vec3 at,int color,float size) implements Prim {}
     private record Label(String text,BlockPos pos,int color,int background,float scale) implements Prim {}
     private record Quad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color) implements Prim {}
-    private record Blocks(List<BlockPos> models,List<BlockPos> places,java.util.Set<BlockPos> placed,int tint) implements Prim {}
+    private record Blocks(List<BlockPos> models,List<BlockPos> places,java.util.Set<BlockPos> placed,List<net.minecraft.world.level.block.state.BlockState> states,int tint) implements Prim {}
 
     private static final List<Prim> building=new ArrayList<>();
     private static List<Prim> shown=List.of();
@@ -70,7 +70,12 @@ public final class Overlay {
      * Like {@link #blocks(List,int)}, but the model of {@code models.get(i)} is drawn at {@code places.get(i)}. This
      * previews blocks that are about to move. Both lists must have the same size and are not copied.
      */
-    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){building.add(new Blocks(models,places,new java.util.HashSet<>(places),tint));}
+    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){building.add(new Blocks(models,places,new java.util.HashSet<>(places),null,tint));}
+    /**
+     * Draws {@code states.get(i)} at {@code places.get(i)}, for blocks that are not in the world yet, such as an edit
+     * waiting to be confirmed. Both lists must have the same size and are not copied.
+     */
+    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){building.add(new Blocks(places,places,new java.util.HashSet<>(places),states,tint));}
     public static void text(String text,BlockPos pos,int color,int background,float scale){building.add(new Label(text,pos,color,background,scale));}
 
     // ---- drawing
@@ -188,7 +193,7 @@ public final class Overlay {
         var random=RandomSource.create();
         for(int i=0;i<ghost.places.size();i++){
             BlockPos pos=ghost.places.get(i);
-            var state=level.getBlockState(ghost.models.get(i));
+            var state=ghost.states!=null?ghost.states.get(i):level.getBlockState(ghost.models.get(i));
             if(state.isAir()||state.getRenderShape()!=RenderShape.MODEL)continue; // fluids and block entities have no plain model
             random.setSeed(state.getSeed(pos));
             var parts=mc.getBlockRenderer().getBlockModel(state).collectParts(random);

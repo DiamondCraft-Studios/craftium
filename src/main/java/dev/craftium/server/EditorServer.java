@@ -71,6 +71,9 @@ public final class EditorServer {
             HistoryStore.attach(player,s);
             if(o.noClip&&!s.noClip&&player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}
             s.infiniteReach=o.infiniteReach;s.noClip=o.noClip;
+            s.confirmEdits=o.confirmEdits;
+            // The builder and the clipboard placement preview have their own confirmation, so they apply straight away.
+            s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm");
             if(r.action().equals("status")) { send(player,s,"Ready",false);return; }
             if(r.action().equals("capabilities")){send(player,s,"Builder capabilities synchronized",false);return;}
             if(r.action().equals("gamemode_editor")){ // sent as the editor opens and closes: no status message, unlike the buttons, and never throttled
@@ -78,6 +81,15 @@ public final class EditorServer {
                 return;
             }
             if(r.action().equals("gamemode_restore")){restoreMode(player,s);return;}
+            if(r.action().equals("pending_confirm")){
+                var edit=s.pendingEdit;
+                if(edit==null){send(player,s,"Nothing to confirm",false);return;}
+                s.pendingEdit=null;s.pendingDirty=true;start(player,s,edit);return;
+            }
+            if(r.action().equals("pending_cancel")){
+                if(s.pendingEdit!=null){s.pendingEdit=null;s.pendingDirty=true;send(player,s,"Edit cancelled",false);}
+                return;
+            }
             long now=System.nanoTime();
             if(now-s.lastRequest<65_000_000L&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             s.lastRequest=now;
@@ -307,12 +319,27 @@ public final class EditorServer {
         send(player,s,rotate?"Clipboard rotated 90°":"Clipboard mirrored on "+"XYZ".charAt(axis),false);
     }
     private static void start(ServerPlayer player,Session s,Session.Edit edit) {
-        if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
         if(edit.changes().isEmpty() && edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()){send(player,s,"No matching blocks changed",false);return;}
         if(edit.estimatedBytes()>32*1024*1024)throw new IllegalArgumentException("Edit exceeds the 32 MiB history budget; use a smaller region");
         EditProtection.check(player,edit);
+        if(s.confirmEdits&&!s.bypassConfirm){stage(player,s,edit);return;}
+        if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
         s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,false,false,new int[]{0},new ArrayList<>(),s.requestStroke);
         send(player,s,"Applying "+edit.name()+"…",false);
+    }
+    /** Holds the edit as a ghost for the player to confirm; edits made while one is waiting are added to it. */
+    private static void stage(ServerPlayer player,Session s,Session.Edit edit){
+        s.pendingEdit=s.pendingEdit==null?edit:merge(s.pendingEdit,edit);s.pendingDirty=true;
+        send(player,s,"Edit ready: "+s.pendingEdit.changes().size()+" blocks · Enter to apply, Esc to cancel",false);
+    }
+    private static Session.Edit merge(Session.Edit a,Session.Edit b){
+        var changes=new LinkedHashMap<Point,Session.Change>();
+        for(var c:a.changes())changes.put(c.pos(),c);
+        for(var c:b.changes()){var earlier=changes.get(c.pos());changes.put(c.pos(),earlier==null?c:new Session.Change(c.pos(),earlier.before(),c.after()));}
+        var biomes=new ArrayList<>(a.biomes());biomes.addAll(b.biomes());
+        var entities=new ArrayList<>(a.entities());entities.addAll(b.entities());
+        var annotations=new ArrayList<>(a.annotations());annotations.addAll(b.annotations());
+        return new Session.Edit(a.name(),new ArrayList<>(changes.values()),biomes,a.flags()|b.flags(),entities,annotations);
     }
     private static void history(ServerPlayer player,Session s,boolean backwards) {
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Wait for the current edit or animated rebuild to finish");
@@ -396,8 +423,10 @@ public final class EditorServer {
         if(!ServerPlatform.canSend(player))return;
         String entityId="",entityNbt="";if(s.selectedEntity!=null){var entity=player.level().getEntity(s.selectedEntity);if(entity!=null){entityId=s.selectedEntity.toString();String nbt=EntityEdits.snapshot(entity,player.level()).toString();if(nbt.length()<12000)entityNbt=nbt;}}
         if(s.selectionRevision!=s.selection.revision()){s.selectionRevision=s.selection.revision();s.selectionData=SelectionCodec.encode(s.selection.points());}
-        if(s.clipboardDirty){s.clipboardData=SelectionCodec.encode(s.clipboard.entrySet().stream().filter(e->!e.getValue().state().isAir()).map(Map.Entry::getKey).toList());s.clipboardDirty=false;}
-        var status=new Packets.Status(message,error,s.busy,s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size());s.library=List.of();
+        if(s.clipboardDirty){s.clipboardGhostDirty=true;s.clipboardData=SelectionCodec.encode(s.clipboard.entrySet().stream().filter(e->!e.getValue().state().isAir()).map(Map.Entry::getKey).toList());s.clipboardDirty=false;}
+        if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
+        if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
+        var status=new Packets.Status(message,error,s.busy,s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost);s.library=List.of();
         ServerPlatform.send(player,new Packets.Update(Packets.JSON.toJson(status)));
     }
 }
