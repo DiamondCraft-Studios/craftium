@@ -14,4 +14,6 @@ public abstract class CraftiumScreen extends Screen {
     protected void drawBackground(Gfx g,int mouseX,int mouseY,float delta){super.renderBackground(g.raw,mouseX,mouseY,delta);}
     protected abstract void draw(Gfx g,int mouseX,int mouseY,float delta);
     protected final void drawWidgets(Gfx g,int mouseX,int mouseY,float delta){super.render(g.raw,mouseX,mouseY,delta);}
+    /** Renders another screen as this one's backdrop, for a pop-up that must not hide it. */
+    protected final void drawUnder(Screen s,Gfx g,int mouseX,int mouseY,float delta){s.render(g.raw,mouseX,mouseY,delta);}
 }

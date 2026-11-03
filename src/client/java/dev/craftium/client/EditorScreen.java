@@ -84,7 +84,7 @@ public final class EditorScreen extends CraftiumScreen {
         lastFlightNanos=0;
         if(!hudHidden){previousHideGui=ClientCompat.hudHidden(minecraft);hudHidden=true;if(!previousHideGui)ClientCompat.toggleHud(minecraft);}
         scale=Math.min(1f,Math.min(width/1000f,height/562f));w=Math.round(width/scale);h=Math.round(height/scale);
-        fields.clear();
+        fields.clear();suspended=false;
         field("block",w-RIGHT+10,244,RIGHT-20,o().block,s->ClientState.pick(s));
         field("mask",w-RIGHT+10,h-95,RIGHT-20,o().mask,s->o().mask=s);
         field("minY",w-RIGHT+10,h-64,80,Integer.toString(o().minY),s->{try{o().minY=Integer.parseInt(s);}catch(NumberFormatException ignored){}});
@@ -125,11 +125,13 @@ public final class EditorScreen extends CraftiumScreen {
         cancelSelectionJobs();
         if(tool.transform()&&tool!=Tool.PIVOT&&ClientState.status.selectionSize()==0)ClientState.notify("Select blocks first, then use "+tool.label);
         toolActive=true;previousTool=o().tool;selectedNode=-1;if(tool!=Tool.BOX_SELECT)ClientState.boxCorners.clear();o().tool=tool;o().gizmoTarget=Options.GizmoTarget.AUTO;builder=false;init();}
+    /** Set while a pop-up such as the block picker draws this screen as its backdrop: no flight or cursor handling then. */
+    boolean suspended;
     @Override public boolean isPauseScreen(){return false;}
     @Override public boolean isInGameUi(){return true;}
     @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta) {
-        fly();syncCursor();
+        if(!suspended){fly();syncCursor();}
         BG=o().uiBackground;PANEL=o().uiPanel;LINE=o().uiBorder;ACCENT=o().uiAccent;TEXT=o().uiText;MUTED=o().uiMuted;
         pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();sliderAreas.clear();
         g.pose().pushMatrix();g.pose().scale(scale,scale);

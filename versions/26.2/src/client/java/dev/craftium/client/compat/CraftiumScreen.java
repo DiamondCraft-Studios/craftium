@@ -20,4 +20,6 @@ public abstract class CraftiumScreen extends Screen {
     protected abstract void draw(Gfx g,int mouseX,int mouseY,float delta);
     /** Renders the screen's registered widgets, as the vanilla render pass does. */
     protected final void drawWidgets(Gfx g,int mouseX,int mouseY,float delta){super.extractRenderState(g.raw,mouseX,mouseY,delta);}
+    /** Renders another screen as this one's backdrop, for a pop-up that must not hide it. */
+    protected final void drawUnder(Screen s,Gfx g,int mouseX,int mouseY,float delta){s.extractRenderState(g.raw,mouseX,mouseY,delta);}
 }
