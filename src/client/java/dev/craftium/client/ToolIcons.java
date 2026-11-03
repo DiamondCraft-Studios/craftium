@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.core.Options;
 import dev.craftium.core.Tool;
 import dev.craftium.client.compat.Gfx;
 
@@ -36,6 +37,17 @@ final class ToolIcons {
             case ROUGHEN,SHATTER -> {for(int i=0;i<8;i++){double a=i*Math.PI/4;line(g,x+12,y+12,x+12+(int)(Math.cos(a)*10),y+12+(int)(Math.sin(a)*10),color);}star(g,x+12,y+12,color);}
             case ERASE -> {line(g,x+3,y+14,x+14,y+3,color);line(g,x+14,y+3,x+22,y+11,color);line(g,x+22,y+11,x+11,y+22,color);line(g,x+11,y+22,x+3,y+14,color);line(g,x+7,y+10,x+15,y+18,color);}
             case TINKER -> {line(g,x+4,y+21,x+17,y+8,color);g.fill(x+14,y+3,x+18,y+9,color);g.fill(x+18,y+7,x+22,y+12,color);}
+        }
+    }
+    /** The Magic Wand's comparison choices, on the same 24 pixel grid as the tool icons. */
+    static void compare(Gfx g,Options.Compare compare,int x,int y,int color) {
+        switch(compare) {
+            case ANY -> {for(int i=0;i<4;i++)g.outline(x+3+(i%2)*10,y+3+(i/2)*10,8,8,color);g.fill(x+5,y+5,x+9,y+9,color);g.fill(x+15,y+15,x+19,y+19,color&0xffffff|0x80000000);}
+            case BLOCK -> {g.outline(x+4,y+4,16,16,color);g.fill(x+8,y+8,x+16,y+16,color);}
+            case STATE -> {g.outline(x+3,y+3,18,18,color);line(g,x+6,y+9,x+17,y+9,color);line(g,x+6,y+16,x+17,y+16,color);g.fill(x+8,y+7,x+11,y+12,color);g.fill(x+13,y+14,x+16,y+19,color);}
+            case TAG -> {line(g,x+3,y+12,x+12,y+3,color);line(g,x+12,y+3,x+21,y+3,color);line(g,x+21,y+3,x+21,y+12,color);line(g,x+21,y+12,x+12,y+21,color);line(g,x+12,y+21,x+3,y+12,color);g.fill(x+16,y+6,x+19,y+9,color);}
+            case NBT -> {line(g,x+9,y+3,x+6,y+6,color);line(g,x+6,y+6,x+6,y+10,color);line(g,x+6,y+10,x+3,y+12,color);line(g,x+3,y+12,x+6,y+14,color);line(g,x+6,y+14,x+6,y+18,color);line(g,x+6,y+18,x+9,y+21,color);
+                line(g,x+15,y+3,x+18,y+6,color);line(g,x+18,y+6,x+18,y+10,color);line(g,x+18,y+10,x+21,y+12,color);line(g,x+21,y+12,x+18,y+14,color);line(g,x+18,y+14,x+18,y+18,color);line(g,x+18,y+18,x+15,y+21,color);}
         }
     }
     static void line(Gfx g,int x1,int y1,int x2,int y2,int c) {

@@ -311,11 +311,11 @@ public final class EditorServer {
                 s.selection.combine(plan.brush(p),o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
             }
             case MAGIC_SELECT -> {
-                var origin=plan.state(p);
+                var origin=plan.state(p);var originData=o.compare==Options.Compare.NBT?AdvancedTools.data(plan,p):null;
                 var found=MagicWand.select(p,new MagicWand.World(){
                     public boolean loaded(Point at){return player.level().hasChunk(at.x()>>4,at.z()>>4);}
                     public boolean air(Point at){return plan.state(at).isAir();}
-                    public boolean matches(Point at){return AdvancedTools.matches(plan,origin,at);}
+                    public boolean matches(Point at){return AdvancedTools.matches(plan,origin,originData,at);}
                     public boolean surface(Point at){return plan.surface(at);}
                 },new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,Selection.LIMIT*4)).found();
                 s.selection.combine(found,o.mode);send(player,s,"Magic Wand: "+s.selection.size()+" blocks (128-block search radius)",false);

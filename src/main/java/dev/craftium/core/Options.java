@@ -1,7 +1,8 @@
 package dev.craftium.core;
 
 public final class Options {
-    public enum Compare { BLOCK, STATE, SOLID, ANY }
+    /** Which blocks the Magic Wand treats as connected: any block, the same block, the same block state, a shared block tag, or the same block entity data. */
+    public enum Compare { ANY, BLOCK, STATE, TAG, NBT }
     public enum Noise { SIMPLEX, PERLIN, VALUE, WORLEY, VORONOI_EDGES, METABALLS, WHITE, SPLATTER }
     public enum PathMode { BRESENHAM, DDA, CATMULL_ROM, BEZIER, CATENARY }
     public enum ModelMode { CONVEX_HULL, TRIANGLE_STRIP, TRIANGLE_FAN, FLAT, CATMULL_ROM, BEZIER, SMART }
@@ -125,6 +126,8 @@ public final class Options {
     public boolean symmetryHalfX,symmetryHalfY,symmetryHalfZ;
     public double rebuildStartDelay=1,rebuildMaxDelay=.25,rebuildAirDelay=.01,rebuildSameDelay=.03,rebuildDifferentDelay=.08,rebuildRandomDelay=.01,rebuildHorizontalMultiplier=1,rebuildVerticalMultiplier=1;
     public double entityX,entityY,entityZ,entityScaleX=1,entityScaleY=1,entityScaleZ=1;
+    /** Names of the properties pinned from the Studio inspector to the editor's Pinned tab. Their order is the inspector's, not this list's. */
+    public java.util.List<String> pinned=new java.util.ArrayList<>();
 
     /** Whether placing a block is to be changed or recorded by the editor, rather than left to the game alone. */
     public boolean placementCapabilities(){return symmetryX||symmetryY||symmetryZ||symmetryRotations>1||replaceMode||forcePlace||noUpdates||fastPlace||infiniteReach||angelPlacement||preventInteractions;}
@@ -139,6 +142,8 @@ public final class Options {
         for(var light:shadeLights)if(!Double.isFinite(light.x())||!Double.isFinite(light.y())||!Double.isFinite(light.z())||!Double.isFinite(light.intensity())||Math.abs(light.x())>30_000_000||Math.abs(light.z())>30_000_000||Math.abs(light.y())>4096||light.intensity()<0||light.intensity()>16)throw new IllegalArgumentException("Invalid light source");
         for(int i=0;i<materialWeights.size();i++)materialWeights.set(i,bounded(materialWeights.get(i),.01,100));
         shadeAzimuth=bounded(shadeAzimuth,-360,360);shadeAltitude=bounded(shadeAltitude,-90,90);shadeAmbientOcclusion=bounded(shadeAmbientOcclusion,0,1);shadeDither=bounded(shadeDither,0,1);shadeExposure=bounded(shadeExposure,.1,4);shadeBounces=Math.clamp(shadeBounces,0,4);shadeSamples=Math.clamp(shadeSamples,1,8);shadeRayLength=Math.clamp(shadeRayLength,4,96);
+        if(pinned==null)pinned=new java.util.ArrayList<>();
+        if(pinned.size()>256||pinned.stream().anyMatch(name->name==null||name.length()>64))throw new IllegalArgumentException("Invalid pinned properties");
         radius = Math.clamp(radius,1,24);
         strength = Double.isFinite(strength) ? Math.clamp(strength,0.1,5) : 1;
         noiseScale = Double.isFinite(noiseScale) ? Math.clamp(noiseScale,1,64) : 8;

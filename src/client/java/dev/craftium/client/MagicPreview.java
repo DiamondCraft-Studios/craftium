@@ -36,12 +36,19 @@ final class MagicPreview {
     private static OutlineShape compute(Minecraft mc,BlockPos at,Options o){
         var level=mc.level;var origin=level.getBlockState(at);
         if(origin.isAir())return OutlineShape.EMPTY;
+        var originData=o.compare==Options.Compare.NBT?data(level,at):null;
         var world=new MagicWand.World(){
             public boolean loaded(Point p){return level.hasChunk(p.x()>>4,p.z()>>4);}
             public boolean air(Point p){return level.getBlockState(pos(p)).isAir();}
             public boolean matches(Point p){
                 var s=level.getBlockState(pos(p));
-                return switch(o.compare){case BLOCK->s.is(origin.getBlock());case STATE->s==origin;case SOLID->solid(p);case ANY->!s.isAir();};
+                return switch(o.compare){
+                    case ANY->!s.isAir();
+                    case BLOCK->s.is(origin.getBlock());
+                    case STATE->s==origin;
+                    case TAG->s.is(origin.getBlock())||origin.getTags().anyMatch(s::is);
+                    case NBT->s.is(origin.getBlock())&&Objects.equals(originData,data(level,pos(p)));
+                };
             }
             public boolean surface(Point p){int count=0;for(int[] d:SIDES)if(solid(p.add(d[0],d[1],d[2])))count++;return count<6;}
             private boolean solid(Point p){var s=level.getBlockState(pos(p));return !s.isAir()&&s.getFluidState().isEmpty();}
@@ -50,5 +57,7 @@ final class MagicPreview {
         if(result.truncated()||result.found().size()>=o.magicPreviewLimit)return OutlineShape.EMPTY; // too similar: probably the terrain
         return OutlineShape.of(result.found());
     }
+    /** The block entity data as the client knows it, which can lack what the server never syncs. */
+    private static net.minecraft.nbt.CompoundTag data(net.minecraft.world.level.Level level,BlockPos at){var entity=level.getBlockEntity(at);return entity==null?null:entity.saveWithFullMetadata(level.registryAccess());}
     private static BlockPos pos(Point p){return new BlockPos(p.x(),p.y(),p.z());}
 }
