@@ -290,8 +290,11 @@ public final class EditorScreen extends CraftiumScreen {
             // The track stops at 64 to stay usable; a bigger radius is typed in. Shapes are limited by their block count and reach, not by this.
             slider(g,10,347,LEFT-20,"Radius",o().radius,1,64,BrushMath.MAX_RADIUS,DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
             o().outlineThickness=Math.clamp(o().outlineThickness,1,o().radius); // a wall is never thicker than the radius
+            // A polygon's sides take the row under the radius, and everything below moves down a row. The track stops at 64; more is typed.
+            if(sidesShown())
+                slider(g,10,375,LEFT-20,"Sides",o().polygonSides,BrushMath.MIN_SIDES,BrushMath.SLIDER_SIDES,BrushMath.MAX_SIDES,BrushMath.DEFAULT_SIDES,v->o().polygonSides=Math.clamp((int)Math.round(v),BrushMath.MIN_SIDES,BrushMath.MAX_SIDES),true);
             if(EnumSet.of(Tool.SCULPT_DRAW,Tool.ROCK,Tool.ELEVATION,Tool.FLATTEN,Tool.SLOPE,Tool.DISTORT,Tool.SHATTER,Tool.EXTRUDE).contains(o().tool))
-                slider(g,10,375,LEFT-20,"Strength",o().strength,.1,5,DEFAULTS.strength,v->o().strength=v,false);
+                slider(g,10,375+sidesRow(),LEFT-20,"Strength",o().strength,.1,5,DEFAULTS.strength,v->o().strength=v,false);
         }
         // Tool-specific controls occupy the same familiar options area.
         switch(o().tool) {
@@ -308,10 +311,11 @@ public final class EditorScreen extends CraftiumScreen {
                 toggle(g,10,489,"Invert / carve",o().invert,()->o().invert=!o().invert);
             }
             default -> {
-                toggle(g,10,403,"Invert / carve",o().invert,()->o().invert=!o().invert);
-                toggle(g,10,425,"Hollow shape",o().hollow,()->o().hollow=!o().hollow);
-                toggle(g,10,447,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
-                int next=472;
+                int row=sidesRow();
+                toggle(g,10,403+row,"Invert / carve",o().invert,()->o().invert=!o().invert);
+                toggle(g,10,425+row,"Hollow shape",o().hollow,()->o().hollow=!o().hollow);
+                toggle(g,10,447+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
+                int next=472+row;
                 if(o().hollow){ // the outline's own settings sit under the others, so they only take room while Hollow shape is on
                     int cap=Math.max(1,o().radius);
                     slider(g,10,next+10,LEFT-20,"Outline thickness",o().outlineThickness,1,Math.max(2,Math.min(cap,64)),cap,DEFAULTS.outlineThickness,v->o().outlineThickness=Math.clamp((int)Math.round(v),1,cap),true);
@@ -722,6 +726,10 @@ public final class EditorScreen extends CraftiumScreen {
     private static final int SHAPE_COLS=4,SHAPE_CELL_W=56,SHAPE_CELL_H=44,SHAPE_HEAD=14,SHAPE_PAD=6,SHAPE_MENU_WIDTH=SHAPE_COLS*SHAPE_CELL_W+2*SHAPE_PAD;
     private boolean shapeMenu;private int shapeX,shapeY;
     private record ShapeCell(BrushMath.Shape shape,int x,int y){}
+    /** How far the controls under the radius move down while the Sides slider is shown. */
+    private int sidesRow(){return sidesShown()?28:0;}
+    /** The tools with their own seed fields and painters have no free row; the + and - keys still change the sides there. */
+    private boolean sidesShown(){return o().shape==BrushMath.Shape.POLYGON&&!EnumSet.of(Tool.ROCK,Tool.DISTORT,Tool.ROUGHEN,Tool.SHATTER,Tool.NOISE_PAINTER,Tool.BIOME_PAINTER,Tool.CLENTAMINATOR).contains(o().tool);}
     /** The button that shows the current shape and opens the picker. */
     private void shapeSelector(Gfx g,int y){
         var shape=o().shape;
@@ -1099,6 +1107,10 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if((o().tool==Tool.PATH||o().tool==Tool.MODELLING)&&EditorBindings.matches(Action.EXTRUDE_POINT,event)&&!o().nodes.isEmpty()){
             if(o().nodes.size()>=64){ClientState.notify("Maximum 64 control points");return true;}o().nodes.add(o().nodes.getLast());selectedNode=o().nodes.size()-1;return true;
+        }
+        if(o().shape==BrushMath.Shape.POLYGON&&o().tool!=Tool.TEXT&&!o().tool.transform()){
+            int step=event.key()==GLFW.GLFW_KEY_EQUAL||event.key()==GLFW.GLFW_KEY_KP_ADD?1:event.key()==GLFW.GLFW_KEY_MINUS||event.key()==GLFW.GLFW_KEY_KP_SUBTRACT?-1:0;
+            if(step!=0){o().polygonSides=Math.clamp(o().polygonSides+step,BrushMath.MIN_SIDES,BrushMath.MAX_SIDES);return true;}
         }
         for(Action binding:Action.values())if(!EditorBindings.get(binding).mouse()&&EditorBindings.matches(binding,event)&&perform(binding))return true;
         if(event.key()==GLFW.GLFW_KEY_BACKSPACE&&(event.modifiers()&7)==0){perform(Action.DELETE);return true;}

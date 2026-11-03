@@ -9,7 +9,10 @@ public final class BrushMath {
      * New shapes go at the end: a saved setting names its shape, and the order here is not the order the picker shows.
      * Pointed shapes stand on their base (the apex is at +radius), flat ones lie in the horizontal plane through the centre.
      */
-    public enum Shape { SPHERE, CUBE, OCTAHEDRON, CYLINDER, PLANE, DISK, PYRAMID, CONE, HEMISPHERE, TORUS, TUBE }
+    public enum Shape { SPHERE, CUBE, OCTAHEDRON, CYLINDER, PLANE, DISK, PYRAMID, CONE, HEMISPHERE, TORUS, TUBE, POLYGON }
+
+    /** The sides a polygon has until told otherwise; the slider runs to {@link #SLIDER_SIDES}, a typed value to {@link #MAX_SIDES}. */
+    public static final int DEFAULT_SIDES = 6, MIN_SIDES = 3, SLIDER_SIDES = 64, MAX_SIDES = 256;
 
     /**
      * The picker's sections in display order, each with its shapes in the order they are shown: the common solids first,
@@ -20,11 +23,26 @@ public final class BrushMath {
         var all = new java.util.LinkedHashMap<String, List<Shape>>();
         all.put("Solids", List.of(Shape.CUBE, Shape.SPHERE, Shape.CYLINDER, Shape.CONE, Shape.PYRAMID, Shape.OCTAHEDRON));
         all.put("Curved", List.of(Shape.HEMISPHERE, Shape.TORUS, Shape.TUBE));
-        all.put("Flat", List.of(Shape.PLANE, Shape.DISK));
+        all.put("Flat", List.of(Shape.PLANE, Shape.DISK, Shape.POLYGON));
         return java.util.Collections.unmodifiableMap(all);
     }
 
     public static boolean contains(Shape shape, int x, int y, int z, int radius) {
+        return contains(shape, x, y, z, radius, DEFAULT_SIDES);
+    }
+
+    /** A regular polygon lying flat, as wide as the disk of the same radius, with an edge facing +x. */
+    private static boolean polygon(int x, int z, double reach, int sides) {
+        // The inscribed circle of a polygon whose corners touch the circle of radius reach.
+        double apothem = reach * Math.cos(Math.PI / sides);
+        for (int i = 0; i < sides; i++) {
+            double a = 2 * Math.PI * i / sides;
+            if (x * Math.cos(a) + z * Math.sin(a) > apothem) return false;
+        }
+        return true;
+    }
+
+    public static boolean contains(Shape shape, int x, int y, int z, int radius, int sides) {
         // Round shapes are measured to radius + 0.5: with the plain radius the block at the end of each axis passes while
         // its neighbours just miss, leaving a one block nub at every pole.
         int radial = x * x + z * z, side = Math.max(Math.abs(x), Math.abs(z)), rise = radius - y;
@@ -36,6 +54,7 @@ public final class BrushMath {
             case CYLINDER -> radial <= reach2 && Math.abs(y) <= radius;
             case PLANE -> y == 0 && side <= radius;
             case DISK -> y == 0 && radial <= reach2;
+            case POLYGON -> y == 0 && radial <= reach2 && polygon(x, z, reach, sides);
             // The width falls evenly from the full radius at the bottom to nothing at the top.
             case PYRAMID -> Math.abs(y) <= radius && 2 * side <= rise;
             case CONE -> Math.abs(y) <= radius && 4.0 * radial * radius * radius <= reach2 * rise * rise;
@@ -66,6 +85,12 @@ public final class BrushMath {
      * A shape of more than {@link Selection#LIMIT} blocks is refused as soon as it passes the limit.
      */
     public static List<Point> brush(Point center, int radius, Shape shape, boolean hollow, int thickness, boolean pixelPerfect, int shift) {
+        return brush(center, radius, shape, hollow, thickness, pixelPerfect, shift, DEFAULT_SIDES);
+    }
+
+    /** As above, with {@code sides} for a {@link Shape#POLYGON}; other shapes ignore it. */
+    public static List<Point> brush(Point center, int radius, Shape shape, boolean hollow, int thickness, boolean pixelPerfect, int shift, int sides) {
+        sides = Math.clamp(sides, MIN_SIDES, MAX_SIDES);
         if (radius < 1 || radius > MAX_RADIUS) throw new IllegalArgumentException("Radius must be 1–" + MAX_RADIUS);
         int wall = Math.clamp(thickness, 1, radius);
         int outer = Math.min(radius + (hollow ? Math.max(0, shift) : 0), MAX_REACH);
@@ -74,7 +99,7 @@ public final class BrushMath {
         boolean cut = hollow && !pixelPerfect && inner >= 0;
         for (int x = -outer; x <= outer; x++) for (int y = -outer; y <= outer; y++)
             for (int z = -outer; z <= outer; z++) {
-                if (!contains(shape, x, y, z, outer) || cut && contains(shape, x, y, z, inner)) continue;
+                if (!contains(shape, x, y, z, outer, sides) || cut && contains(shape, x, y, z, inner, sides)) continue;
                 points.add(center.add(x, y, z));
                 if (points.size() > Selection.LIMIT) throw new IllegalArgumentException("Shape exceeds the " + String.format("%,d", Selection.LIMIT) + " block limit; use a smaller radius, or make it hollow");
             }

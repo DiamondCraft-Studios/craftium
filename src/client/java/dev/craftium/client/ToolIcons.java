@@ -65,6 +65,7 @@ final class ToolIcons {
             case CYLINDER -> {ring(g,x+12,y+6,8,3,color);line(g,x+4,y+6,x+4,y+18,color);line(g,x+20,y+6,x+20,y+18,color);arc(g,x+12,y+18,8,3,0,Math.PI,color);}
             case PLANE -> {line(g,x+2,y+17,x+7,y+8,color);line(g,x+7,y+8,x+22,y+8,color);line(g,x+22,y+8,x+17,y+17,color);line(g,x+17,y+17,x+2,y+17,color);}
             case DISK -> {ring(g,x+12,y+12,10,5,color);g.fill(x+11,y+11,x+14,y+14,color);}
+            case POLYGON -> {line(g,x+12,y+3,x+21,y+9,color);line(g,x+21,y+9,x+18,y+20,color);line(g,x+18,y+20,x+6,y+20,color);line(g,x+6,y+20,x+3,y+9,color);line(g,x+3,y+9,x+12,y+3,color);}
             case PYRAMID -> {line(g,x+12,y+2,x+3,y+17,color);line(g,x+12,y+2,x+13,y+22,color);line(g,x+12,y+2,x+22,y+16,color);line(g,x+3,y+17,x+13,y+22,color);line(g,x+13,y+22,x+22,y+16,color);line(g,x+3,y+17,x+10,y+14,color);line(g,x+10,y+14,x+22,y+16,color);}
             case CONE -> {line(g,x+12,y+2,x+3,y+18,color);line(g,x+12,y+2,x+21,y+18,color);ring(g,x+12,y+18,9,3,color);}
             case HEMISPHERE -> {arc(g,x+12,y+16,10,12,Math.PI,Math.PI*2,color);ring(g,x+12,y+16,10,3,color);}

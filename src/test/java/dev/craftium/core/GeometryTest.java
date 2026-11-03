@@ -54,6 +54,15 @@ class GeometryTest {
         assertEquals(13 * 13, BrushMath.brush(new Point(0,0,0),6,BrushMath.Shape.PLANE,false).size());
         assertTrue(BrushMath.brush(new Point(0,0,0),6,BrushMath.Shape.HEMISPHERE,false).stream().allMatch(p -> p.y() >= 0));
     }
+    @Test void polygonIsFlatAndFollowsItsSides() {
+        var o = new Point(0,0,0);
+        var triangle = BrushMath.brush(o,10,BrushMath.Shape.POLYGON,false,1,false,0,3);
+        var square = BrushMath.brush(o,10,BrushMath.Shape.POLYGON,false,1,false,0,4);
+        var many = BrushMath.brush(o,10,BrushMath.Shape.POLYGON,false,1,false,0,256);
+        assertTrue(triangle.stream().allMatch(p -> p.y() == 0));
+        assertTrue(triangle.size() < square.size() && square.size() < many.size());
+        assertTrue(many.size() <= BrushMath.brush(o,10,BrushMath.Shape.DISK,false).size());
+    }
     @Test void selectionBooleanOperationsAreAtomicAtTheLimit() {
         var s = new Selection();
         var a = new Point(0,0,0); var b = new Point(1,0,0); var c = new Point(2,0,0);

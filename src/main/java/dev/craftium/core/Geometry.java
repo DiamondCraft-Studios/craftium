@@ -29,7 +29,7 @@ public final class Geometry {
     }
     public static List<Point> shape(Point center,Options o) {
         if(o.shapeKind==Options.ShapeKind.BRUSH&&o.yaw==0&&o.pitch==0&&o.roll==0&&o.sizeX==1&&o.sizeY==1&&o.sizeZ==1)
-            return BrushMath.brush(center,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift());
+            return BrushMath.brush(center,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides);
         double scaled=o.yaw==0&&o.pitch==0&&o.roll==0?Math.max(o.sizeX,Math.max(o.sizeY,o.sizeZ)):Math.sqrt(o.sizeX*o.sizeX+o.sizeY*o.sizeY+o.sizeZ*o.sizeZ);
         double outer=o.outerRadius();
         int extent=(int)Math.ceil(outer*scaled);
@@ -63,6 +63,7 @@ public final class Geometry {
                 case CONE->Math.abs(y)<=1&&radial<=reach*(1-y)/2;
                 case TORUS->Math.pow(radial-.75,2)+y*y<=Math.pow(.25+.5/outer,2);
                 case TUBE->radial<=reach&&radial>=.5&&Math.abs(y)<=1;
+                case POLYGON->radial<=reach&&Math.abs(y)<=.5/outer&&polygon(x,z,o.polygonSides,reach);
                 case PLANE->inside(x,y,z,o,Options.ShapeKind.PLANE);case PYRAMID->inside(x,y,z,o,Options.ShapeKind.PYRAMID);
             };
             case SPHERE -> x*x+y*y+z*z<=1;
@@ -82,8 +83,9 @@ public final class Geometry {
             case ICOSAHEDRON -> polyhedron(x,y,z,false);
         };
     }
-    private static boolean polygon(double x,double z,int sides){
-        for(int i=0;i<sides;i++){double a=2*Math.PI*i/sides;if(x*Math.cos(a)+z*Math.sin(a)>Math.cos(Math.PI/sides))return false;}return true;
+    private static boolean polygon(double x,double z,int sides){return polygon(x,z,sides,1);}
+    private static boolean polygon(double x,double z,int sides,double reach){
+        for(int i=0;i<sides;i++){double a=2*Math.PI*i/sides;if(x*Math.cos(a)+z*Math.sin(a)>reach*Math.cos(Math.PI/sides))return false;}return true;
     }
     private static boolean polyhedron(double x,double y,double z,boolean dodeca) {
         double phi=(1+Math.sqrt(5))/2;
