@@ -80,7 +80,9 @@ public final class Overlay {
      * Draws {@code states.get(i)} at {@code places.get(i)}, for blocks that are not in the world yet, such as an edit
      * waiting to be confirmed. Both lists must have the same size and are not copied.
      */
-    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){building.add(new Ghost(places,places,new java.util.HashSet<>(places),states,tint));}
+    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){blockStates(states,places,new java.util.HashSet<>(places),tint);}
+    /** As above, for a caller that keeps {@code placed} (the same positions as a set) between ticks instead of paying to rebuild it each time. */
+    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,java.util.Set<BlockPos> placed,int tint){building.add(new Ghost(places,places,placed,states,tint));}
     public static void point(Vec3 at,int color,float size){Gizmos.point(at,color,size).setAlwaysOnTop();}
     /**
      * A label that always faces the camera, floating over the block at {@code pos}. {@code scale} is world

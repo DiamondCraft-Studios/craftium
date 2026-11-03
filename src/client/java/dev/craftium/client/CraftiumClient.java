@@ -293,7 +293,8 @@ public final class CraftiumClient implements ClientModInitializer {
             boolean brush=!tool.selection()&&!tool.transform()&&tool!=Tool.RULER&&tool!=Tool.ANNOTATION;
             if(screen.toolActive()&&hit!=null && !PlacementPreview.active() && brush) {
                 int r=ClientState.options.radius;var p=hit.getBlockPos();
-                if(ClientState.options.shape==BrushMath.Shape.CUBE)Overlay.box(new AABB(p).inflate(r),0xffd6eaff,1.5f,0);
+                if(tool==Tool.SHAPE&&BrushGhost.draw(mc,p,ClientState.options)){/* drawn as ghost blocks */}
+                else if(ClientState.options.shape==BrushMath.Shape.CUBE)Overlay.box(new AABB(p).inflate(r),0xffd6eaff,1.5f,0);
                 else {
                     Vec3 c=Vec3.atCenterOf(p);double radius=r+.5;
                     for(int axis=0;axis<3;axis++)for(int i=0;i<48;i++) {
