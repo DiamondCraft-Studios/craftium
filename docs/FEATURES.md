@@ -6,7 +6,7 @@ This is a functional development preview. Implemented equivalents do not establi
 
 | Tool | Implemented behavior | Limits / remaining differences |
 | --- | --- | --- |
-| Magic Select | Block/state/solid/any compare; gap range, corners, directions and count limit | 128-block search radius; synchronous search |
+| Magic Wand | Block/state/solid/any compare; gap range, corners, directions and count limit | 128-block search radius; synchronous search |
 | Box Select | Two clicks or coordinates; replace/add/subtract/intersect | No direct box face scale handles |
 | Freehand Select | Boolean brush selection | Samples brush dabs rather than a continuous rasterized stroke |
 | Lasso Select | Screen polygon projected through depth | Adaptive ray sampling; 8192 rays and 32768 selected blocks |

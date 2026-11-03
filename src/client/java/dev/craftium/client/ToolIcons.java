@@ -13,6 +13,10 @@ final class ToolIcons {
             case GRADIENT_PAINTER -> {for(int i=0;i<5;i++)g.fill(x+3+i*4,y+3,x+6+i*4,y+22,(color&0xffffff)|((80+i*40)<<24));}
             case SCRIPT_BRUSH -> {line(g,x+8,y+5,x+2,y+12,color);line(g,x+2,y+12,x+8,y+19,color);line(g,x+17,y+5,x+23,y+12,color);line(g,x+23,y+12,x+17,y+19,color);line(g,x+15,y+3,x+10,y+22,color);}
             case FLOODFILL,FLUID_BALL -> {line(g,x+12,y+2,x+3,y+15,color);line(g,x+12,y+2,x+21,y+15,color);line(g,x+3,y+15,x+8,y+22,color);line(g,x+8,y+22,x+17,y+22,color);line(g,x+17,y+22,x+21,y+15,color);}
+            case MOVE -> {line(g,x+12,y+2,x+12,y+22,color);line(g,x+2,y+12,x+22,y+12,color);line(g,x+12,y+2,x+8,y+7,color);line(g,x+12,y+2,x+16,y+7,color);line(g,x+22,y+12,x+17,y+8,color);line(g,x+22,y+12,x+17,y+16,color);}
+            case ROTATE -> {g.outline(x+4,y+4,16,16,color);line(g,x+14,y+2,x+20,y+4,color);line(g,x+14,y+2,x+16,y+8,color);}
+            case SCALE -> {g.outline(x+3,y+9,11,11,color);g.outline(x+9,y+3,12,12,color);line(g,x+14,y+10,x+21,y+3,color);}
+            case PIVOT -> {g.outline(x+7,y+7,10,10,color);g.fill(x+11,y+11,x+14,y+14,color);line(g,x+12,y+2,x+12,y+7,color);line(g,x+12,y+17,x+12,y+22,color);line(g,x+2,y+12,x+7,y+12,color);line(g,x+17,y+12,x+22,y+12,color);}
             case STAMP,SMEAR,MODIFY,ANNOTATION -> {g.outline(x+3,y+11,19,10,color);g.fill(x+9,y+3,x+16,y+13,color);}
             case MAGIC_SELECT -> {line(g,x+3,y+19,x+17,y+5,color);star(g,x+6,y+5,color);star(g,x+19,y+13,color);}
             case BOX_SELECT -> {dotted(g,x+3,y+3,18,18,color);g.fill(x+6,y+6,x+18,y+18,color&0xffffff|0x50000000);}

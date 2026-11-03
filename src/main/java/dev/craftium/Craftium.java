@@ -28,7 +28,7 @@ public final class Craftium implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(Packets.Edit.TYPE, (payload,context) ->
             context.server().execute(() -> EditorServer.handle(context.player(),payload.json())));
         ServerTickEvents.END_SERVER_TICK.register(EditorServer::tick);
-        ServerPlayConnectionEvents.DISCONNECT.register((handler,server) -> EditorServer.disconnect(handler.player.getUUID()));
+        ServerPlayConnectionEvents.DISCONNECT.register((handler,server) -> EditorServer.disconnect(handler.player));
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> EditorServer.clear());
         ServerLifecycleEvents.SERVER_STOPPING.register(EditorServer::flushHistory);
         LOG.info("Craftium building studio initialized for Minecraft 26.2");

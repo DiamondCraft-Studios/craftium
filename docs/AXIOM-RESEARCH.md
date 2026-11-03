@@ -12,7 +12,7 @@ Researched 20–21 October 2026. Sources below are the official Axiom documentat
 
 | Category | Tools in the official documentation |
 | --- | --- |
-| [Selection](https://axiomdocs.moulberry.com/tools/selection/intro.html) | Magic Select, Box Select, Freehand Select, Lasso Select |
+| [Selection](https://axiomdocs.moulberry.com/tools/selection/intro.html) | Magic Wand, Box Select, Freehand Select, Lasso Select |
 | [Utility](https://axiomdocs.moulberry.com/tools/utility/intro.html) | Ruler, Annotation |
 | [Painting](https://axiomdocs.moulberry.com/tools/painting/intro.html) | Painter, Noise Painter, Biome Painter, Script Brush, Gradient Painter |
 | [Drawing](https://axiomdocs.moulberry.com/tools/drawing/intro.html) | Freehand Draw, Sculpt Draw, Rock, Weld, Melt, Modelling, Stamp, Text, Shape, Path |

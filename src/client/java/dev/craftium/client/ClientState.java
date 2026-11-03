@@ -17,6 +17,22 @@ public final class ClientState {
     public static long strokeId;
     public static boolean duplicatePending;
     public static Point pendingPlacementOrigin;
+    /** Set while a selection action is in flight, so its result can be checked for being suspiciously large. */
+    /** An edit the server has worked out and is holding until it is confirmed with Enter. */
+    public static GhostBlocks pending=GhostBlocks.EMPTY;
+    public static boolean hasPending(){return pending.total()>0;}
+    /** The corners of the box being selected, which stay as handles the player can drag to resize it. At most two. */
+    public static final List<Point> boxCorners=new ArrayList<>();
+    /** When above zero, the editor shows a small popup asking whether this many selected blocks was meant. */
+    public static int largeSelection;
+    /** Whether the selection outline settings (colour and width) are showing. */
+    public static boolean outlineSettings;
+    /** The selection the server just sent while the popup is waiting, kept aside so it is not built or drawn until confirmed. */
+    public static String heldSelection="";
+    public static boolean selectionPending;
+    public static int selectionSizeBefore;
+    /** A selection this many blocks bigger than before is confirmed with the player first. */
+    public static final int LARGE_SELECTION=1024;
     public static Point rulerStart,rulerEnd;
     public static final List<Point> rulerPoints=new ArrayList<>();
     public static List<BlueprintInfo> blueprints=List.of();

@@ -28,6 +28,26 @@ public final class Options {
     public int offsetX, offsetY = 1, offsetZ, copies = 3;
     public Compare compare=Compare.BLOCK;
     public int selectLimit=100_000,selectRange=1,lassoDepth=64;
+    /** How many blocks the Select menu's Expand and Shrink move the selection's surface. */
+    /** Edits that place or remove blocks are shown as a ghost first and only applied when confirmed with Enter. */
+    public boolean confirmEdits=true;
+    /** The point the Rotate and Scale tools work around. When not set it is the centre of the selection. */
+    /** Draw every crease of a selection's outline instead of only its silhouette as seen from the camera. */
+    public boolean selectionAllEdges;
+    /** The colour (ARGB) and width, in pixels from 0.1 to 10, of the selection's outline. */
+    public int selectionColor=0xffffd66d;
+    public double selectionWidth=1;
+    /** The point one transform request works about, which can differ from the player's pivot, as when scaling from the far side. */
+    public boolean aboutSet;
+    public double aboutX,aboutY,aboutZ;
+    public boolean pivotSet;
+    public double pivotX,pivotY,pivotZ;
+    public int expandAmount=5;
+    /** When above zero, how many blocks one expand or shrink request moves the surface, instead of the brush strength. */
+    public int selectionResize;
+    /** Hovering with the Magic Wand outlines what a click would select, unless that is this many blocks or more: likely terrain, not an object. */
+    public boolean magicPreview=true;
+    public int magicPreviewLimit=500;
     public boolean selectUp=true,selectDown=true,selectHorizontal=true,selectCorners,includeNonSolid;
     public Noise noise=Noise.SIMPLEX;
     public int octaves=1;
@@ -136,7 +156,7 @@ public final class Options {
         if(author==null||tags==null||author.length()>80||tags.length()>256)throw new IllegalArgumentException("Blueprint metadata is too long");
         if(entityGroup==null||!entityGroup.matches("[A-Za-z0-9_. -]{0,64}"))throw new IllegalArgumentException("Use a plain entity group name");
         entityX=bounded(entityX,-128,128);entityY=bounded(entityY,-128,128);entityZ=bounded(entityZ,-128,128);entityScaleX=bounded(entityScaleX,.01,16);entityScaleY=bounded(entityScaleY,.01,16);entityScaleZ=bounded(entityScaleZ,.01,16);
-        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
+        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);magicPreviewLimit=Math.clamp(magicPreviewLimit,1,4096);selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
         octaves=Math.clamp(octaves,1,8);lacunarity=bounded(lacunarity,1,4);gain=bounded(gain,.01,1);jitter=bounded(jitter,0,1);
         scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);
         sizeX=bounded(sizeX,.1,8);sizeY=bounded(sizeY,.1,8);sizeZ=bounded(sizeZ,.1,8);

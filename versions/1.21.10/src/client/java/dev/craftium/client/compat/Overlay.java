@@ -9,7 +9,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
@@ -24,12 +29,13 @@ import java.util.List;
  * Lines and points are camera-facing and sized in screen pixels so they keep the same thickness at any distance.
  */
 public final class Overlay {
-    private sealed interface Prim permits Line,Box,Point,Label,Quad {}
+    private sealed interface Prim permits Line,Box,Point,Label,Quad,Blocks {}
     private record Line(Vec3 from,Vec3 to,int color,float width) implements Prim {}
     private record Box(AABB box,int stroke,float width,int fill) implements Prim {}
     private record Point(Vec3 at,int color,float size) implements Prim {}
     private record Label(String text,BlockPos pos,int color,int background,float scale) implements Prim {}
     private record Quad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color) implements Prim {}
+    private record Blocks(List<BlockPos> models,List<BlockPos> places,java.util.Set<BlockPos> placed,List<net.minecraft.world.level.block.state.BlockState> states,int tint) implements Prim {}
 
     private static final List<Prim> building=new ArrayList<>();
     private static List<Prim> shown=List.of();
@@ -54,6 +60,22 @@ public final class Overlay {
     public static void point(Vec3 at,int color,float size){building.add(new Point(at,color,size));}
     /** A filled quad. Corners are in order, counter-clockwise when seen from the side it faces. */
     public static void face(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){building.add(new Quad(a,b,c,d,color));}
+    /**
+     * The real models of the blocks at {@code positions}, drawn translucent and tinted by {@code tint} (ARGB)
+     * over the blocks themselves, so stairs, slabs and fences are highlighted in their true shape. The list is
+     * not copied and must not change after this call.
+     */
+    public static void blocks(List<BlockPos> positions,int tint){blocks(positions,positions,tint);}
+    /**
+     * Like {@link #blocks(List,int)}, but the model of {@code models.get(i)} is drawn at {@code places.get(i)}. This
+     * previews blocks that are about to move. Both lists must have the same size and are not copied.
+     */
+    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){building.add(new Blocks(models,places,new java.util.HashSet<>(places),null,tint));}
+    /**
+     * Draws {@code states.get(i)} at {@code places.get(i)}, for blocks that are not in the world yet, such as an edit
+     * waiting to be confirmed. Both lists must have the same size and are not copied.
+     */
+    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){building.add(new Blocks(places,places,new java.util.HashSet<>(places),states,tint));}
     public static void text(String text,BlockPos pos,int color,int background,float scale){building.add(new Label(text,pos,color,background,scale));}
 
     // ---- drawing
@@ -65,6 +87,8 @@ public final class Overlay {
         var camera=ClientCompat.camera(mc);
         var view=new View(camera.position(),camera.getLeftVector(),camera.getUpVector(),
             2*Math.tan(Math.toRadians(ClientCompat.fov(mc,camera))/2)/Math.max(1,mc.getWindow().getHeight()));
+        // Block ghosts go first, then the lines, boxes and points over them, so handles and outlines are never covered by a ghost.
+        for(var prim:prims)if(prim instanceof Blocks g)blocks(context,mc,view,g);
         var pose=context.matrices().last();
         var quads=context.consumers().getBuffer(RenderType.textBackgroundSeeThrough());
         for(var prim:prims)switch(prim){
@@ -76,6 +100,7 @@ public final class Overlay {
             case Point p->{if(visible(p.color))square(quads,pose,view,p);}
             case Quad q->{if(visible(q.color))quad(quads,pose,view,q.color,q.a,q.b,q.c,q.d);}
             case Label ignored->{}
+            case Blocks ignored->{}
         }
         // Text asks the buffer source for its own buffers, which closes the one held above, so labels go last.
         for(var prim:prims)if(prim instanceof Label t)label(context,mc,camera,view,t);
@@ -139,6 +164,56 @@ public final class Overlay {
 
     private static void quad(VertexConsumer out,PoseStack.Pose pose,View view,int color,Vec3 a,Vec3 b,Vec3 c,Vec3 d){
         vertex(out,pose,view,a,color);vertex(out,pose,view,b,color);vertex(out,pose,view,c,color);vertex(out,pose,view,d,color);
+    }
+
+    /** Each model is scaled this much about its centre so the ghost clears the real block instead of fighting it for depth. */
+    private static final float GHOST_SCALE=1.004f;
+    private static final Direction[] FACES=Direction.values();
+
+    /** True when the neighbouring block's matching side is fully solid, so a face on this side could never be seen. */
+    private static boolean hidden(net.minecraft.world.level.BlockGetter level,BlockPos pos,Direction face){
+        BlockPos next=pos.relative(face);
+        return level.getBlockState(next).isFaceSturdy(level,next,face.getOpposite());
+    }
+
+    /**
+     * True when a quad facing {@code d} can be seen from the camera, whose offset from the block's centre is
+     * ({@code dx},{@code dy},{@code dz}). {@code reach} is how far out the quad sits: 0.5 for the block's own sides,
+     * 0 for quads inside the model. Back faces are skipped, because the pipeline does not cull them and they
+     * would show through the near side as the inside of the selection.
+     */
+    private static boolean facing(Direction d,double dx,double dy,double dz,double reach){
+        return d.getStepX()*dx+d.getStepY()*dy+d.getStepZ()*dz>reach;
+    }
+
+    private static void blocks(WorldRenderContext context,Minecraft mc,View view,Blocks ghost){
+        var level=mc.level;
+        var consumer=context.consumers().getBuffer(RenderType.entityTranslucent(TextureAtlas.LOCATION_BLOCKS));
+        var stack=context.matrices();
+        float a=(ghost.tint>>>24)/255f,r=(ghost.tint>>16&255)/255f,g=(ghost.tint>>8&255)/255f,b=(ghost.tint&255)/255f;
+        var random=RandomSource.create();
+        for(int i=0;i<ghost.places.size();i++){
+            BlockPos pos=ghost.places.get(i);
+            var state=ghost.states!=null?ghost.states.get(i):level.getBlockState(ghost.models.get(i));
+            if(state.isAir()||state.getRenderShape()!=RenderShape.MODEL)continue; // fluids and block entities have no plain model
+            random.setSeed(state.getSeed(pos));
+            var parts=mc.getBlockRenderer().getBlockModel(state).collectParts(random);
+            double dx=view.eye.x-pos.getX()-.5,dy=view.eye.y-pos.getY()-.5,dz=view.eye.z-pos.getZ()-.5;
+            stack.pushPose();
+            stack.translate(pos.getX()+.5-view.eye.x,pos.getY()+.5-view.eye.y,pos.getZ()+.5-view.eye.z);
+            stack.scale(GHOST_SCALE,GHOST_SCALE,GHOST_SCALE);
+            stack.translate(-.5,-.5,-.5);
+            var pose=stack.last();
+            for(var part:parts){
+                for(var quad:part.getQuads(null))if(facing(quad.direction(),dx,dy,dz,0))consumer.putBulkData(pose,quad,r,g,b,a,LightTexture.FULL_BRIGHT,OverlayTexture.NO_OVERLAY);
+                for(Direction face:FACES){
+                    // Only the outer surface: not a side that touches another ghost, is covered as in the world, or faces away.
+                    if(ghost.placed.contains(pos.relative(face))||hidden(level,pos,face)||!facing(face,dx,dy,dz,.5))continue;
+                    for(var quad:part.getQuads(face))consumer.putBulkData(pose,quad,r,g,b,a,LightTexture.FULL_BRIGHT,OverlayTexture.NO_OVERLAY);
+                }
+            }
+            stack.popPose();
+        }
     }
 
     /** A camera-facing label over the block, positioned and scaled as the 26.2 implementation does. */

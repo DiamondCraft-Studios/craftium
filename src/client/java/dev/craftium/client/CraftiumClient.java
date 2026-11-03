@@ -50,7 +50,7 @@ public final class CraftiumClient implements ClientModInitializer {
             receiveStatus(payload.json());
         }));
         ClientPlayConnectionEvents.DISCONNECT.register((handler,client)-> {
-            ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);
+            ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);ClientState.pending=GhostBlocks.EMPTY;ClientState.largeSelection=0;
             ClientState.save();ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
             BuilderMode.reset();
             ClientCommands.reset();
@@ -73,11 +73,7 @@ public final class CraftiumClient implements ClientModInitializer {
             var mc=Minecraft.getInstance();if(mc.player==null || !mc.player.isCreative() || ClientCompat.screen(mc)!=null)return;
             var g=Gfx.of(raw);
             ReferenceImages.draw(g,false,0,0);
-            int h=g.guiHeight();String mode=ClientState.options.replaceMode?"REPLACE":"BUILD";
-            g.fill(5,h-47,155,h-21,0xd9161d28);g.fill(5,h-47,7,h-21,0xff599cda);
-            CraftiumBrand.draw(g,7,h-47,16);
-            g.text(mc.font,"CRAFTIUM  /  "+mode,26,h-42,0xffc6d9ed,false);
-            g.text(mc.font,"RShift Editor   Alt Builder",12,h-31,0xff8b9bb0,false);
+            int h=g.guiHeight();
             if(System.currentTimeMillis()<ClientState.noticeUntil)g.text(mc.font,ClientState.notice,8,8,0xffffd891,false);
             BuilderMode.hud(g);
             if(ClientState.options.showKeyHints){StringBuilder keys=new StringBuilder();for(int key:new int[]{GLFW.GLFW_KEY_W,GLFW.GLFW_KEY_A,GLFW.GLFW_KEY_S,GLFW.GLFW_KEY_D,GLFW.GLFW_KEY_X,GLFW.GLFW_KEY_Y,GLFW.GLFW_KEY_Z})if(GLFW.glfwGetKey(mc.getWindow().handle(),key)==GLFW.GLFW_PRESS)keys.append((char)key).append(' ');if(mc.hasControlDown())keys.append("Ctrl ");if(mc.hasShiftDown())keys.append("Shift ");g.text(mc.font,keys.toString(),g.guiWidth()-mc.font.width(keys.toString())-10,h-48,0xffe6cf8b,false);}
@@ -86,7 +82,29 @@ public final class CraftiumClient implements ClientModInitializer {
     private static final BridgeCodec.Assembler bridge=new BridgeCodec.Assembler();
     private static void receiveStatus(String json){
             var next=Packets.JSON.fromJson(json,Packets.Status.class);
-            if(next!=null){ClientState.status=next;if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());}
+            if(next!=null){ClientState.status=next;checkLargeSelection(next);applyPivot(next.pivotUpdate());if(next.message().startsWith("Undid ")||next.message().startsWith("Redid "))ClientState.boxCorners.clear();if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());}
+    }
+    /** Opens the confirmation when a selection action has just selected a suspiciously large area. */
+    private static void checkLargeSelection(Packets.Status next){
+        if(!ClientState.selectionPending)return;
+        if(next.error()){ClientState.selectionPending=false;return;}
+        String message=next.message();
+        if(!(message.startsWith("Selected ")||message.startsWith("Lasso selected ")||message.startsWith("Magic Wand: ")))return;
+        ClientState.selectionPending=false;
+        if(next.selectionSize()-ClientState.selectionSizeBefore<ClientState.LARGE_SELECTION)return;
+        var mc=Minecraft.getInstance();
+        // Set at once, before this status is drawn, so the popup comes first and the selection is not built until it is confirmed.
+        if(ClientCompat.screen(mc) instanceof EditorScreen)ClientState.largeSelection=next.selectionSize();
+    }
+    /** Undo and redo carry the pivot back along with the selection: "none" for the selection's centre, else "x,y,z". */
+    private static void applyPivot(String update){
+        if(update==null||update.isEmpty())return;
+        var o=ClientState.options;
+        if(update.equals("none")){o.pivotSet=false;return;}
+        try{
+            String[] part=update.split(",");
+            o.pivotX=Double.parseDouble(part[0]);o.pivotY=Double.parseDouble(part[1]);o.pivotZ=Double.parseDouble(part[2]);o.pivotSet=true;
+        }catch(RuntimeException e){/* an unreadable pivot is left as it was */}
     }
     private static void receiveBridge(byte[] frame){
         try{bridge.accept(frame).ifPresent(json->{
@@ -162,6 +180,7 @@ public final class CraftiumClient implements ClientModInitializer {
         if(mc.player==null)return;
         ClientCompat.setScreen(mc,new EditorScreen(builder,heldContext));
         if(builder&&ClientState.options.autoSwapToCreative&&supported()&&!mc.player.isCreative())send("gamemode_creative",null,null);
+        else if(!builder&&supported()&&!mc.player.isSpectator())send("gamemode_editor",null,null);
         if(supported())send("status",null,null);
     }
     public static boolean supported() {return Minecraft.getInstance().getConnection()!=null && (ClientPlayNetworking.canSend(Packets.Edit.TYPE)||ClientPlayNetworking.canSend(Packets.Bridge.TYPE));}
@@ -169,6 +188,7 @@ public final class CraftiumClient implements ClientModInitializer {
         if(!supported()){ClientState.notify("Install Craftium on this server to edit worlds");return;}
         var options=ClientState.options;boolean colours=action.equals("autoshade")&&options.shadeAutomatic||action.equals("use")&&(options.script.contains("getBlockRGB")||options.script.contains("findClosestBlockToRGB"))||options.maskScript.contains("getBlockRGB")||options.maskScript.contains("findClosestBlockToRGB");options.scriptColours=colours?new java.util.ArrayList<>(BlockColours.snapshot()):new java.util.ArrayList<>();
         ClientAssets.expect(action);
+        if(action.equals("select_box")||action.equals("lasso_select")||action.equals("use")&&ClientState.options.tool.selection()){ClientState.selectionPending=true;ClientState.selectionSizeBefore=ClientState.status.selectionSize();}
         try{String request=Packets.JSON.toJson(new Packets.Request(action,target,normal,ClientState.options,action.equals("use")?ClientState.strokeId:0));
             if(ClientPlayNetworking.canSend(Packets.Edit.TYPE))ClientPlayNetworking.send(new Packets.Edit(request));
             else for(byte[] frame:BridgeCodec.encode(Packets.JSON.toJson(new BridgeCodec.Message("edit",request))))ClientPlayNetworking.send(new Packets.Bridge(frame));}finally{options.scriptColours=new java.util.ArrayList<>();}
@@ -190,6 +210,8 @@ public final class CraftiumClient implements ClientModInitializer {
         try(var collector=Overlay.begin(mc)) {
             WorldDiagnostics.draw(mc);
             BuilderMode.draw();
+            MagicPreview.draw(mc,hit);
+            ClientState.pending.draw(new Point(0,0,0),true);
             if(ClientState.options.showMarkerGizmos||ClientState.options.showDisplayGizmos){int count=0;for(var entity:mc.level.entitiesForRendering()){boolean show=entity instanceof net.minecraft.world.entity.Marker&&ClientState.options.showMarkerGizmos||entity instanceof net.minecraft.world.entity.Display&&ClientState.options.showDisplayGizmos;if(!show||entity.distanceToSqr(mc.player)>128*128||++count>256)continue;Vec3 at=entity.position();int color=entity.getUUID().toString().equals(ClientState.options.entityUuid)?0xffffd66d:0xffe6edf7;Overlay.point(at,color,6);Overlay.box(new AABB(at.add(-.08,-.08,-.08),at.add(.08,.08,.08)),color,1,0);}}
             if(ClientState.options.showAnnotations&&ClientState.status.annotations()!=null)for(var note:ClientState.status.annotations()){
                 Point a=note.from(),b=note.to();Vec3 start=new Vec3(a.x()+.5,a.y()+.5,a.z()+.5),end=new Vec3(b.x()+.5,b.y()+.5,b.z()+.5);
@@ -205,7 +227,8 @@ public final class CraftiumClient implements ClientModInitializer {
                 if(ClientState.options.rulerMode==Options.RulerMode.CIRCLE){double radius=Math.sqrt(a.distanceSquared(b));for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(start.add(Math.cos(x)*radius,0,Math.sin(x)*radius),start.add(Math.cos(y)*radius,0,Math.sin(y)*radius),0xffffd66d,1.5f);}}
                 Overlay.text(String.format(java.util.Locale.ROOT,"%.2f blocks",Math.sqrt(a.distanceSquared(b))),new net.minecraft.core.BlockPos((a.x()+b.x())/2,(a.y()+b.y())/2+1,(a.z()+b.z())/2),0xffffe4a2,0xbb151c26,.02f);
             }
-            if(screen==null)return;
+            if(screen!=null&&ClientState.options.tool==Tool.BOX_SELECT)BoxHandles.draw(screen);
+            if(screen==null){var anchor=BuilderMode.gizmoAnchor();if(anchor!=null)TransformGizmo.display(anchor);return;}
             TransformGizmo.draw(screen);
             Point handle=screen.handlePoint();if(handle!=null){Vec3 anchor=new Vec3(handle.x(),handle.y(),handle.z());int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Overlay.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2);}
             var nodes=ClientState.options.nodes;
@@ -219,11 +242,11 @@ public final class CraftiumClient implements ClientModInitializer {
             }
             var s=ClientState.status;
             if(screen.showSelection())SelectionOverlay.draw(TransformGizmo.selectionPreview());
-            if(PlacementPreview.active()) {
-                Point p=PlacementPreview.origin;Vec3 anchor=new Vec3(p.x(),p.y(),p.z());
-                for(AABB box:PlacementPreview.boxes)TransformGizmo.box(box.move(anchor));
-            }
-            if(screen.toolActive()&&hit!=null && !PlacementPreview.active() && !ClientState.options.tool.selection()) {
+            PlacementPreview.draw();
+            // The wireframe of the brush shows only for tools that use one, not the selection, transform, ruler or annotation tools.
+            var tool=ClientState.options.tool;
+            boolean brush=!tool.selection()&&!tool.transform()&&tool!=Tool.RULER&&tool!=Tool.ANNOTATION;
+            if(screen.toolActive()&&hit!=null && !PlacementPreview.active() && brush) {
                 int r=ClientState.options.radius;var p=hit.getBlockPos();
                 if(ClientState.options.shape==BrushMath.Shape.CUBE)Overlay.box(new AABB(p).inflate(r),0xffd6eaff,1.5f,0);
                 else {

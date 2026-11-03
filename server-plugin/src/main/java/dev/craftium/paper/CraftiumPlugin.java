@@ -57,7 +57,7 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
     }
     @EventHandler public void join(PlayerJoinEvent event){getServer().getScheduler().runTaskLater(this,()->hello(event.getPlayer()),10);}
     @EventHandler public void registered(PlayerRegisterChannelEvent event){if(event.getChannel().equals(BridgeCodec.CHANNEL))getServer().getScheduler().runTask(this,()->hello(event.getPlayer()));}
-    @EventHandler public void quit(PlayerQuitEvent event){connections.remove(event.getPlayer().getUniqueId());EditorServer.disconnect(event.getPlayer().getUniqueId());}
+    @EventHandler public void quit(PlayerQuitEvent event){connections.remove(event.getPlayer().getUniqueId());EditorServer.disconnect(((CraftPlayer)event.getPlayer()).getHandle());}
     private void hello(Player player){if(player.isOnline()&&player.getListeningPluginChannels().contains(BridgeCodec.CHANNEL)){connections.computeIfAbsent(player.getUniqueId(),id->new Connection());enqueue(player,"hello","Craftium 0.3 / protocol "+BridgeCodec.VERSION);}}
     private void tick(){
         EditorServer.tick(nativeServer);
