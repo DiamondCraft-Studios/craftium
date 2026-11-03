@@ -68,13 +68,17 @@ public final class EditorServer {
             long now=System.nanoTime();
             if(now-s.lastRequest<65_000_000L&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             s.lastRequest=now;
+            if(r.action().equals("gamemode_editor")){ // sent when the editor opens: no status message, unlike the buttons
+                if(!player.isSpectator())player.setGameMode(GameType.SPECTATOR);
+                return;
+            }
             if(r.action().equals("gamemode")||r.action().startsWith("gamemode_")) {
                 boolean wasSpectator=player.isSpectator();
                 player.setGameMode(r.action().equals("gamemode")?(player.isCreative()?GameType.SPECTATOR:GameType.CREATIVE):GameType.byName(r.action().substring(9)));
                 if(wasSpectator&&player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}
                 send(player,s,"Game mode switched",false);return;
             }
-            if(!player.isCreative())throw new IllegalArgumentException("Switch to Creative mode to edit");
+            if(!player.isCreative()&&!player.isSpectator())throw new IllegalArgumentException("Switch to Creative or Spectator mode to edit");
             if((r.action().equals("undo")||r.action().equals("rebuild_cancel"))&&AnimatedRebuild.owned(player.getUUID())){AnimatedRebuild.cancel(player.getUUID());send(player,s,"Cancelling rebuild and restoring the original structure…",false);return;}
             if(r.action().equals("hotbar_next")||r.action().equals("hotbar_previous")){send(player,s,HotbarLibrary.cycle(player,s,o,r.action().equals("hotbar_next")?1:-1),false);return;}
             if(r.action().equals("hotbar_save")||r.action().equals("hotbar_load")||r.action().equals("hotbar_list")){

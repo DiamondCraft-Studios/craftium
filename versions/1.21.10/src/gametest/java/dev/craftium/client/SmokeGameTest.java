@@ -50,6 +50,7 @@ public final class SmokeGameTest implements FabricClientGameTest {
             ctx.waitTicks(10);
             ctx.takeScreenshot("editor");
             System.out.println("CRAFTIUM_SMOKE editor_open="+ctx.computeOnClient(mc->ClientCompat.screen(mc) instanceof EditorScreen));
+            System.out.println("CRAFTIUM_SMOKE editor_spectator="+ctx.computeOnClient(mc->mc.player.isSpectator()));
             // A real selection draws filled boxes and the transform handles.
             ctx.runOnClient(mc->{
                 BlockPos base=mc.player.blockPosition().offset(0,0,5);

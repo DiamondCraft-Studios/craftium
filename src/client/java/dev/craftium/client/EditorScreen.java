@@ -533,7 +533,7 @@ public final class EditorScreen extends CraftiumScreen {
         double seconds=lastFlightNanos==0?0:Math.min((now-lastFlightNanos)/1e9,.1);
         lastFlightNanos=now;
         var player=minecraft.player;
-        if(heldContext||player==null||help||transform||menu>=0||!player.isCreative())return;
+        if(heldContext||player==null||help||transform||menu>=0||!(player.isCreative()||player.isSpectator()))return;
         for(EditBox field:fields.values())if(field.isFocused())return;
         double[] axes=flightAxes();double forward=axes[0],side=axes[1],up=axes[2];
         if(forward==0&&side==0&&up==0)return;

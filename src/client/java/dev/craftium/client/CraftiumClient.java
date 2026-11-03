@@ -162,6 +162,7 @@ public final class CraftiumClient implements ClientModInitializer {
         if(mc.player==null)return;
         ClientCompat.setScreen(mc,new EditorScreen(builder,heldContext));
         if(builder&&ClientState.options.autoSwapToCreative&&supported()&&!mc.player.isCreative())send("gamemode_creative",null,null);
+        else if(!builder&&supported()&&!mc.player.isSpectator())send("gamemode_editor",null,null);
         if(supported())send("status",null,null);
     }
     public static boolean supported() {return Minecraft.getInstance().getConnection()!=null && (ClientPlayNetworking.canSend(Packets.Edit.TYPE)||ClientPlayNetworking.canSend(Packets.Bridge.TYPE));}
