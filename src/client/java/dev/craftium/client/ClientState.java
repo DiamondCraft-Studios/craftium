@@ -58,6 +58,7 @@ public final class ClientState {
     }
     public static void notify(String message) {notice=message;noticeUntil=System.currentTimeMillis()+4500;}
     public static void pick(String block) {
-        options.block=block;palette.remove(block);palette.addFirst(block);while(palette.size()>18)palette.removeLast();
+        // A block already in the palette keeps its cell; only a new one is added, at the front.
+        options.block=block;if(!palette.contains(block)){palette.addFirst(block);while(palette.size()>18)palette.removeLast();}
     }
 }
