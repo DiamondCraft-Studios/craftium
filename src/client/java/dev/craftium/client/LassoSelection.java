@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.core.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -13,7 +14,7 @@ final class LassoSelection {
         if(polygon.size()<3)return List.of();var mc=Minecraft.getInstance();if(mc.level==null)return List.of();var o=ClientState.options;
         double minX=polygon.stream().mapToDouble(Pixel::x).min().orElse(0),maxX=polygon.stream().mapToDouble(Pixel::x).max().orElse(0),minY=polygon.stream().mapToDouble(Pixel::y).min().orElse(0),maxY=polygon.stream().mapToDouble(Pixel::y).max().orElse(0);
         int step=Math.max(1,(int)Math.ceil(Math.sqrt((maxX-minX)*(maxY-minY)/8192)));
-        var result=new LinkedHashSet<Point>();Vec3 camera=mc.gameRenderer.mainCamera().position();
+        var result=new LinkedHashSet<Point>();Vec3 camera=ClientCompat.camera(mc).position();
         for(double x=minX;x<=maxX;x+=step)for(double y=minY;y<=maxY;y+=step){
             if(!contains(polygon,x,y))continue;var hit=CraftiumClient.raycast(x,y);if(hit==null)continue;
             Vec3 direction=hit.getLocation().subtract(camera).normalize();

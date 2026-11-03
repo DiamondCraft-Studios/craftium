@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import com.google.gson.*;
 import dev.craftium.core.ColourMath;
 import net.minecraft.client.Minecraft;
@@ -28,7 +29,7 @@ final class BlockColours {
                 if(paths.isEmpty())continue;long r=0,g=0,b=0;int n=0;
                 for(String path:paths){int color=average(path);if(color<0)continue;r+=(color>>16)&255;g+=(color>>8)&255;b+=color&255;n++;}if(n==0)continue;
                 int rgb=(int)(r/n)<<16|(int)(g/n)<<8|(int)(b/n);
-                var tintSource=mc.getBlockColors().getTintSource(state,0);int tint=tintSource==null?-1:tintSource.colorInWorld(state,mc.level,mc.player==null?BlockPos.ZERO:mc.player.blockPosition());
+                int tint=ClientCompat.blockTint(mc,state,mc.player==null?BlockPos.ZERO:mc.player.blockPosition());
                 if(tint!=-1)rgb=(((rgb>>16)&255)*((tint>>16)&255)/255)<<16|(((rgb>>8)&255)*((tint>>8)&255)/255)<<8|(rgb&255)*(tint&255)/255;
                 boolean full=state.isCollisionShapeFullBlock(mc.level,BlockPos.ZERO),solid=!state.getCollisionShape(mc.level,BlockPos.ZERO).isEmpty();
                 entries.add(new Entry(id,rgb,ColourMath.lab(rgb),full,solid,state.canOcclude(),paths.size()==1));

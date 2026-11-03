@@ -8,7 +8,7 @@ import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import java.util.*;
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.*;
+import static dev.craftium.client.compat.CommandCompat.*;
 
 /** User-facing commands and a non-interfering visual mirror of WorldEdit position commands. */
 final class ClientCommands {
@@ -25,7 +25,7 @@ final class ClientCommands {
             root.then(literal("docs").executes(c->{c.getSource().sendFeedback(Component.literal("Craftium: README.md and docs/FEATURES.md in your download. Axiom reference: https://axiomdocs.moulberry.com/"));return 1;}));
             root.then(literal("status").executes(c->{c.getSource().sendFeedback(Component.literal(CraftiumClient.supported()?"Craftium connected · "+ClientState.status.message():"Craftium server channel unavailable. Install the same Craftium version and Fabric API on the server."));return 1;}));
             root.then(literal("handshake").executes(c->{CraftiumClient.send("status",null,null);return 1;}));
-            root.then(literal("enablecheats").executes(c->{var server=Minecraft.getInstance().getSingleplayerServer();if(server==null){c.getSource().sendError(Component.literal("This command is available only in your local singleplayer world"));return 0;}server.execute(()->{server.getWorldData().setAllowCommands(true);server.getPlayerList().setAllowCommandsForAllPlayers(true);for(var player:server.getPlayerList().getPlayers())server.getPlayerList().sendPlayerPermissionLevel(player);});c.getSource().sendFeedback(Component.literal("Cheats enabled for this local world"));return 1;}));
+            root.then(literal("enablecheats").executes(c->{var server=Minecraft.getInstance().getSingleplayerServer();if(server==null){c.getSource().sendError(Component.literal("This command is available only in your local singleplayer world"));return 0;}server.execute(()->ClientCompat.enableCheats(server));c.getSource().sendFeedback(Component.literal("Cheats enabled for this local world"));return 1;}));
             root.then(literal("toggle").then(argument("capability",StringArgumentType.word()).suggests((c,b)->{for(String name:CAPABILITIES)b.suggest(name);return b.buildFuture();}).executes(c->{String name=StringArgumentType.getString(c,"capability");if(!CAPABILITIES.contains(name)){c.getSource().sendError(Component.literal("Unknown builder capability"));return 0;}try{var field=Options.class.getField(name);boolean enabled=!field.getBoolean(ClientState.options);field.setBoolean(ClientState.options,enabled);ClientState.save();CraftiumClient.send("capabilities",null,null);c.getSource().sendFeedback(Component.literal(name+": "+enabled));return 1;}catch(Exception e){return 0;}})));
             for(String action:List.of("undo","redo","copy","cut","fill","delete","clear"))root.then(literal(action).executes(c->{CraftiumClient.send(action,null,null);return 1;}));
             for(int corner=1;corner<=2;corner++){int index=corner;root.then(literal("pos"+index).executes(c->{position(index,"");return 1;}).then(argument("coordinates",StringArgumentType.greedyString()).executes(c->{try{position(index,StringArgumentType.getString(c,"coordinates"));return 1;}catch(IllegalArgumentException e){c.getSource().sendError(Component.literal(e.getMessage()));return 0;}})));}

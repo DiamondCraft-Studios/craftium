@@ -17,7 +17,7 @@ final class WorldDiagnostics {
         var center=mc.player.blockPosition();int cx=center.getX()>>2,cy=center.getY()>>2,cz=center.getZ()>>2;
         for(int x=cx-3;x<=cx+3;x++)for(int y=cy-2;y<=cy+2;y++)for(int z=cz-3;z<=cz+3;z++){
             if(y*4<mc.level.getMinY()||y*4>=mc.level.getMaxY()||!mc.level.hasChunk(x>>2,z>>2))continue;
-            String biome=mc.level.getNoiseBiome(x,y,z).unwrapKey().map(k->k.identifier().toString()).orElse("unknown");int rgb=(biome.hashCode()&0x7f7f7f)+0x404040;Gizmos.cuboid(new AABB(x*4,y*4,z*4,x*4+4,y*4+4,z*4+4),GizmoStyle.strokeAndFill(0xff000000|rgb,1,0x16000000|rgb)).setAlwaysOnTop();
+            String biome=mc.level.getNoiseBiome(x,y,z).unwrapKey().map(k->dev.craftium.compat.Compat.keyName(k)).orElse("unknown");int rgb=(biome.hashCode()&0x7f7f7f)+0x404040;Gizmos.cuboid(new AABB(x*4,y*4,z*4,x*4+4,y*4+4,z*4+4),GizmoStyle.strokeAndFill(0xff000000|rgb,1,0x16000000|rgb)).setAlwaysOnTop();
         }
     }
     static void draw(Minecraft mc){

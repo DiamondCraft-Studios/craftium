@@ -7,7 +7,6 @@ import dev.craftium.core.*;
 import dev.craftium.net.Packets;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
@@ -38,13 +37,13 @@ public final class CraftiumClient implements ClientModInitializer {
         ClientCommands.register();
         ClientPlayNetworking.registerGlobalReceiver(Packets.Download.TYPE,(payload,context)->context.client().execute(()->ClientAssets.receive(payload)));
         var category=KeyMapping.Category.register(dev.craftium.compat.Compat.id("craftium","studio"));
-        editorKey=KeyMappingHelper.registerKeyMapping(new KeyMapping("key.craftium.editor",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_RIGHT_SHIFT,category));
-        contextKey=KeyMappingHelper.registerKeyMapping(new KeyMapping("key.craftium.context",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_LEFT_ALT,category));
-        swapKey=KeyMappingHelper.registerKeyMapping(new KeyMapping("key.craftium.hotbar",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_UNKNOWN,category));
-        replaceKey=KeyMappingHelper.registerKeyMapping(new KeyMapping("key.craftium.replace",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_R,category));
+        editorKey=ClientCompat.registerKey(new KeyMapping("key.craftium.editor",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_RIGHT_SHIFT,category));
+        contextKey=ClientCompat.registerKey(new KeyMapping("key.craftium.context",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_LEFT_ALT,category));
+        swapKey=ClientCompat.registerKey(new KeyMapping("key.craftium.hotbar",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_UNKNOWN,category));
+        replaceKey=ClientCompat.registerKey(new KeyMapping("key.craftium.replace",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_R,category));
         for(Tool tool:Tool.values()){
             int key=EditorControls.toolDefault(tool);
-            toolKeys.put(tool,KeyMappingHelper.registerKeyMapping(new KeyMapping("key.craftium.tool."+tool.name().toLowerCase(java.util.Locale.ROOT),InputConstants.Type.KEYSYM,key,category)));
+            toolKeys.put(tool,ClientCompat.registerKey(new KeyMapping("key.craftium.tool."+tool.name().toLowerCase(java.util.Locale.ROOT),InputConstants.Type.KEYSYM,key,category)));
         }
         ClientPlayNetworking.registerGlobalReceiver(Packets.Report.TYPE,(payload,context)->context.client().execute(()->ClientCompat.setScreen(context.client(),new ReportScreen(ClientCompat.screen(context.client()),payload.text()))));
         ClientPlayNetworking.registerGlobalReceiver(Packets.Update.TYPE,(payload,context)->context.client().execute(()->{
@@ -109,7 +108,7 @@ public final class CraftiumClient implements ClientModInitializer {
         ClientCommands.tick();
         if(BuilderMode.active()&&held(contextKey)){if(!toolCursor){mc.mouseHandler.releaseMouse();toolCursor=true;}}
         else if(toolCursor){if(ClientCompat.screen(mc)==null)mc.mouseHandler.grabMouse();toolCursor=false;}
-        if(lastLiquidOpacity!=ClientState.options.liquidOpacity){lastLiquidOpacity=ClientState.options.liquidOpacity;mc.levelRenderer.invalidateCompiledGeometry(mc.level,mc.options,mc.gameRenderer.mainCamera(),mc.getBlockColors());}
+        if(lastLiquidOpacity!=ClientState.options.liquidOpacity){lastLiquidOpacity=ClientState.options.liquidOpacity;ClientCompat.rebuildChunks(mc);}
         if(!hadWorld){hadWorld=true;if(supported())send("status",null,null);}
         while(editorKey.consumeClick()) {
             if(ClientCompat.screen(mc) instanceof EditorScreen)ClientCompat.setScreen(mc,null);
@@ -178,9 +177,9 @@ public final class CraftiumClient implements ClientModInitializer {
     public static Point normal(BlockHitResult hit){var d=hit.getDirection();return new Point(d.getStepX(),d.getStepY(),d.getStepZ());}
     public static BlockHitResult raycast(double guiX,double guiY) {
         Minecraft mc=Minecraft.getInstance();if(mc.player==null||mc.level==null)return null;
-        var camera=mc.gameRenderer.mainCamera();
+        var camera=ClientCompat.camera(mc);
         float nx=(float)(guiX/mc.getWindow().getGuiScaledWidth()*2-1),ny=(float)(1-guiY/mc.getWindow().getGuiScaledHeight()*2);
-        Vec3 direction=camera.getNearPlane(camera.getFov()).getPointOnPlane(nx,ny).normalize();
+        Vec3 direction=ClientCompat.nearPlane(camera).getPointOnPlane(nx,ny).normalize();
         Vec3 start=camera.position();
         var hit=mc.level.clip(new ClipContext(start,start.add(direction.scale(256)),ClipContext.Block.OUTLINE,ClientState.options.solidFluids?ClipContext.Fluid.ANY:ClipContext.Fluid.NONE,mc.player));
         return hit.getType()==HitResult.Type.BLOCK?hit:null;
@@ -215,7 +214,7 @@ public final class CraftiumClient implements ClientModInitializer {
                 if(i>0){Point before=nodes.get(i-1);Gizmos.line(new Vec3(before.x()+.5,before.y()+.5,before.z()+.5),at,0xff8ac9fc,2).setAlwaysOnTop();}
             }
             if(hit!=null&&ClientState.options.visualizeBiome&&(ClientState.options.tool==Tool.BIOME_PAINTER||ClientState.options.tool==Tool.CLENTAMINATOR)){
-                String biome=mc.level.getBiome(hit.getBlockPos()).unwrapKey().map(k->k.identifier().toString()).orElse("Unknown biome");
+                String biome=mc.level.getBiome(hit.getBlockPos()).unwrapKey().map(k->dev.craftium.compat.Compat.keyName(k)).orElse("Unknown biome");
                 Gizmos.billboardTextOverBlock(biome,hit.getBlockPos().above(2),0xffabefb7,0xbb151c26,.025f).setAlwaysOnTop();
             }
             var s=ClientState.status;

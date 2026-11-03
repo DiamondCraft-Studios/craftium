@@ -432,7 +432,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(cameraGesture==CameraGesture.RADIUS)o().radius=Math.clamp(initialRadius+(int)Math.round(((event.x()-gestureX)-(event.y()-gestureY))/8),1,24);
             else if(cameraGesture==CameraGesture.ROTATE)minecraft.player.turn(dx*2,dy*2);
             else if(cameraGesture==CameraGesture.ORBIT){minecraft.player.turn(dx*2,dy*2);Vec3 eye=orbitPivot.subtract(minecraft.player.getLookAngle().scale(orbitDistance));minecraft.player.setPos(eye.x,eye.y-minecraft.player.getEyeHeight(),eye.z);}
-            else{var camera=minecraft.gameRenderer.mainCamera();var near=camera.getNearPlane(camera.getFov());Vec3 center=near.getPointOnPlane(0,0),right=near.getPointOnPlane(1,0).subtract(center).normalize(),up=near.getPointOnPlane(0,1).subtract(center).normalize();double units=2*orbitDistance*Math.tan(Math.toRadians(camera.getFov())/2)/height;minecraft.player.setPos(minecraft.player.position().add(right.scale(-dx*units)).add(up.scale(dy*units)));}
+            else{var camera=ClientCompat.camera(minecraft);var near=ClientCompat.nearPlane(camera);Vec3 center=near.getPointOnPlane(0,0),right=near.getPointOnPlane(1,0).subtract(center).normalize(),up=near.getPointOnPlane(0,1).subtract(center).normalize();double units=2*orbitDistance*Math.tan(Math.toRadians(ClientCompat.fov(minecraft,camera))/2)/height;minecraft.player.setPos(minecraft.player.position().add(right.scale(-dx*units)).add(up.scale(dy*units)));}
             minecraft.player.setDeltaMovement(Vec3.ZERO);return true;
         }
         if(TransformGizmo.drag(event.x(),event.y()))return true;
@@ -524,11 +524,11 @@ public final class EditorScreen extends CraftiumScreen {
     public int handleAxis(){return nodeAxis;}
     public void moveHandle(Point point){if(selectedNode>=0&&selectedNode<handleNodes().size())handleNodes().set(selectedNode,point);}
     private double[] project(Point p){
-        var camera=minecraft.gameRenderer.mainCamera();Vec3 v=new Vec3(p.x(),p.y(),p.z()).subtract(camera.position());
-        var plane=camera.getNearPlane(camera.getFov());Vec3 center=plane.getPointOnPlane(0,0);
+        var camera=ClientCompat.camera(minecraft);Vec3 v=new Vec3(p.x(),p.y(),p.z()).subtract(camera.position());
+        var plane=ClientCompat.nearPlane(camera);Vec3 center=plane.getPointOnPlane(0,0);
         Vec3 right=plane.getPointOnPlane(1,0).subtract(center).normalize(),up=plane.getPointOnPlane(0,1).subtract(center).normalize(),forward=center.normalize();
         double z=v.dot(forward);if(z<=.05)return null;
-        double focal=height/(2*Math.tan(Math.toRadians(camera.getFov())/2));return new double[]{width/2d+v.dot(right)*focal/z,height/2d-v.dot(up)*focal/z};
+        double focal=height/(2*Math.tan(Math.toRadians(ClientCompat.fov(minecraft,camera))/2));return new double[]{width/2d+v.dot(right)*focal/z,height/2d-v.dot(up)*focal/z};
     }
     private boolean pickPlacementAxis(double x,double y){
         Point p=PlacementPreview.origin;var a=project(p);if(a==null)return false;double best=100;

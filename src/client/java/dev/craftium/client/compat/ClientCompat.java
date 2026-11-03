@@ -1,7 +1,13 @@
 package dev.craftium.client.compat;
 
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.minecraft.client.Camera;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.core.BlockPos;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.server.MinecraftServer;
 
 /** Client API differences between Minecraft releases. 26.2 implementation. */
 public final class ClientCompat {
@@ -14,4 +20,26 @@ public final class ClientCompat {
     public static boolean hudHidden(Minecraft mc){return mc.gui.hud.isHidden();}
     /** Flips the HUD between shown and hidden. */
     public static void toggleHud(Minecraft mc){mc.gui.hud.toggle();}
+
+    public static Camera camera(Minecraft mc){return mc.gameRenderer.mainCamera();}
+    /** The camera's near plane, used to turn screen points into world rays. */
+    public static Camera.NearPlane nearPlane(Camera camera){return camera.getNearPlane(camera.getFov());}
+    public static KeyMapping registerKey(KeyMapping key){return KeyMappingHelper.registerKeyMapping(key);}
+
+    /** Lets the local singleplayer owner use commands, then tells connected clients their new permission level. */
+    public static void enableCheats(MinecraftServer server){
+        server.getWorldData().setAllowCommands(true);
+        server.getPlayerList().setAllowCommandsForAllPlayers(true);
+        for(var player:server.getPlayerList().getPlayers())server.getPlayerList().sendPlayerPermissionLevel(player);
+    }
+
+    /** Vertical field of view in degrees. */
+    public static float fov(Minecraft mc,Camera camera){return camera.getFov();}
+    /** Rebuilds every compiled chunk so changed render settings take effect. */
+    public static void rebuildChunks(Minecraft mc){mc.levelRenderer.invalidateCompiledGeometry(mc.level,mc.options,camera(mc),mc.getBlockColors());}
+    /** Biome or block tint of the state's first tint layer at {@code pos}, or -1 when it has none. */
+    public static int blockTint(Minecraft mc,BlockState state,BlockPos pos){
+        var source=mc.getBlockColors().getTintSource(state,0);
+        return source==null?-1:source.colorInWorld(state,mc.level,pos);
+    }
 }
