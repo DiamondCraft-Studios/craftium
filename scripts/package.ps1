@@ -5,10 +5,10 @@ $projectDirectory = Split-Path -Parent $PSScriptRoot
 if ($Version -notmatch '^[A-Za-z0-9_.-]+$') { throw 'Use a plain release version' }
 $distributionDirectory = Join-Path $projectDirectory 'dist'
 $releaseDirectory = Join-Path $distributionDirectory "Craftium-$Version"
-$pluginJar = Join-Path $projectDirectory "server-plugin\build\libs\craftium-server-$Version.jar"
+$pluginJar = Join-Path $projectDirectory "versions\26.2\server-plugin\build\libs\craftium-server-$Version.jar"
 $modJar = Join-Path $projectDirectory "versions\26.2\build\libs\craftium-$Version.jar"
 if (-not (Test-Path -LiteralPath $modJar)) {
-    throw 'Build Craftium first with .\gradlew.bat build :server-plugin:build'
+    throw 'Build Craftium first with .\gradlew.bat build'
 }
 
 if (-not (Test-Path -LiteralPath $pluginJar)) { throw 'Build the Craftium server plugin first' }

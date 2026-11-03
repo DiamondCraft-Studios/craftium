@@ -98,6 +98,6 @@ No Updates suppresses neighbour/shape updates during Craftium placement; it does
 
 ## Build and validation
 
-Requires JDK 25. Run `./gradlew.bat build :server-plugin:build`, or `./gradlew.bat :versions:mc-26.2:runClientGameTest` for the disposable Minecraft integration scenario. The 26.2 client jar goes to `versions/26.2/build/libs/`; server plugin output goes to `server-plugin/build/libs/`. `scripts/package.ps1 -Version 0.3.1-dev` creates the distribution bundle.
+Requires JDK 25. Run `./gradlew.bat build`, or `./gradlew.bat :versions:mc-26.2:runClientGameTest` for the disposable Minecraft integration scenario. The 26.2 client jar goes to `versions/26.2/build/libs/`; server plugin output goes to `versions/26.2/server-plugin/build/libs/`. `scripts/package.ps1 -Version 0.3.1-dev` creates the distribution bundle.
 
 [Validation](docs/VALIDATION.md) records checks and practical limits. Screenshots in the bundle show the actual Minecraft mod. Code is MIT; bundled component notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Craftium is an independent project and contains no Axiom code, textures or icons.

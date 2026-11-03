@@ -1,10 +1,11 @@
-plugins {
-    id 'java'
-    id 'io.papermc.paperweight.userdev' version '2.0.0-beta.24'
-}
+// Shared build logic for the Paper/Purpur companion plugin. A version module sets
+//   ext { paperDevBundle = '<dev bundle>'; minecraftVersion = '<mc version>'; pluginJava = <n> }
+// and its `version`, then applies this file. Shared plugin code lives in server-plugin/src; the module
+// adds its own plugin.yml. The version's compat layer comes from versions/<mc>/src/main/java.
+apply plugin: 'java'
+apply plugin: 'io.papermc.paperweight.userdev'
 
 group = 'dev.craftium'
-version = rootProject.mod_version
 base { archivesName = 'craftium-server' }
 
 repositories { mavenCentral() }
@@ -12,20 +13,29 @@ configurations { embedded }
 configurations.implementation.extendsFrom(configurations.embedded)
 
 dependencies {
-    paperweight.paperDevBundle('26.2.build.134-stable')
+    paperweight.paperDevBundle(paperDevBundle)
     embedded 'org.luaj:luaj-jse:3.0.1'
     testImplementation platform('org.junit:junit-bom:5.13.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-sourceSets.main.java {
-    // The shared sources plus the 26.2 compat layer, which holds the Minecraft calls that differ between versions.
-    setSrcDirs(['../src/main/java', '../versions/26.2/src/main/java', 'src/main/java'])
-    exclude 'dev/craftium/Craftium.java', 'dev/craftium/mixin/**', 'dev/craftium/compat/FabricCompat.java', 'dev/craftium/server/ServerCommands.java'
+def sharedPlugin = rootProject.file('server-plugin/src')
+def own = layout.projectDirectory.dir('src')
+
+sourceSets.main {
+    java {
+        setSrcDirs([sharedPlugin.toPath().resolve('main/java').toFile(), rootProject.file('src/main/java'), rootProject.file("versions/${minecraftVersion}/src/main/java")])
+        // Fabric-only entry points and mixins do not belong in a Paper plugin.
+        exclude 'dev/craftium/Craftium.java', 'dev/craftium/mixin/**', 'dev/craftium/compat/FabricCompat.java', 'dev/craftium/server/ServerCommands.java'
+    }
+    resources.srcDirs = [sharedPlugin.toPath().resolve('main/resources').toFile(), own.dir('main/resources').asFile]
 }
+sourceSets.test.java.srcDirs = [sharedPlugin.toPath().resolve('test/java').toFile()]
 sourceSets {
     liveTest {
+        java.srcDirs = [sharedPlugin.toPath().resolve('liveTest/java').toFile()]
+        resources.srcDirs = [own.dir('liveTest/resources').asFile]
         compileClasspath += sourceSets.main.output + configurations.compileClasspath
         runtimeClasspath += output + compileClasspath
     }
@@ -35,8 +45,8 @@ tasks.register('liveTestPluginJar', Jar) {
     archiveFileName = 'craftium-test-fixture.jar'
     from sourceSets.liveTest.output
 }
-tasks.withType(JavaCompile).configureEach { options.release = 25 }
-java { sourceCompatibility = JavaVersion.VERSION_25; targetCompatibility = JavaVersion.VERSION_25; withSourcesJar() }
+tasks.withType(JavaCompile).configureEach { options.release = pluginJava }
+java { sourceCompatibility = JavaVersion.toVersion(pluginJava); targetCompatibility = JavaVersion.toVersion(pluginJava); withSourcesJar() }
 test { useJUnitPlatform() }
 processResources {
     inputs.property 'version', project.version

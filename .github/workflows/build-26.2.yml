@@ -46,11 +46,11 @@ jobs:
     uses: ./.github/workflows/build-version.yml
     with:
       artifact: craftium-26.2
-      tasks: ':versions:mc-26.2:build :server-plugin:build :versions:mc-26.2:compileGametestJava'
+      tasks: ':versions:mc-26.2:build :paper-26.2:build :versions:mc-26.2:compileGametestJava'
       jars: |
         versions/26.2/build/libs/*.jar
-        server-plugin/build/libs/*.jar
+        versions/26.2/server-plugin/build/libs/*.jar
         !**/*-sources.jar
       reports: |
         versions/26.2/build/reports/tests/test/
-        server-plugin/build/reports/tests/test/
+        versions/26.2/server-plugin/build/reports/tests/test/

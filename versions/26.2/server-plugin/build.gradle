@@ -1,0 +1,9 @@
+plugins { id 'io.papermc.paperweight.userdev' }
+
+version = project.mod_version
+ext {
+    paperDevBundle = '26.2.build.134-stable'
+    minecraftVersion = '26.2'
+    pluginJava = 25
+}
+apply from: rootProject.file('gradle/paper-plugin.gradle')

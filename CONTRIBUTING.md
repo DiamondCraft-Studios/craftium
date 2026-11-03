@@ -7,16 +7,16 @@ Craftium is a vibe-coded, open-source competitor to Axiom. AI assistance is part
 Use Java 25 and the checked-in Gradle wrapper. Craftium builds for Minecraft Java 26.2 and 1.21.10; the Paper/Purpur companion targets 26.2 only.
 
 ```sh
-./gradlew build :server-plugin:build compileGametestJava
+./gradlew build compileGametestJava
 ```
 
-To work on one version, name its module: `:versions:mc-26.2:build` or `:versions:mc-1.21.10:build`.
+`build` covers every Fabric module and every Paper plugin module. To work on one version, name its modules: `:versions:mc-26.2:build` (Fabric mod) or `:paper-26.2:build` (Paper/Purpur plugin), and likewise for 1.21.10.
 
-On Windows, use `gradlew.bat`. Fabric mod JARs are written to `versions/<version>/build/libs/`; Paper/Purpur companion JARs are written to `server-plugin/build/libs/`. Use the same version on the client and server.
+On Windows, use `gradlew.bat`. Fabric mod JARs are written to `versions/<version>/build/libs/`; Paper/Purpur companion JARs are written to `versions/<version>/server-plugin/build/libs/`. Use the same version on the client and server.
 
 ## Layout
 
-Shared code lives in `src/` and must not contain anything that differs between Minecraft versions. Each supported version is a module in `versions/<version>/` that adds the code and metadata specific to it: the `compat` adapter classes, mixins that target changed internals, `fabric.mod.json` and the mixin configs. A file in a module replaces the shared file at the same path.
+Shared code lives in `src/` and must not contain anything that differs between Minecraft versions. The Paper/Purpur companion follows the same rule: its shared code is in `server-plugin/src/`, and `versions/<version>/server-plugin/` holds that version's `plugin.yml` and dev bundle, built with the shared script `gradle/paper-plugin.gradle`. Each supported version is a module in `versions/<version>/` that adds the code and metadata specific to it: the `compat` adapter classes, mixins that target changed internals, `fabric.mod.json` and the mixin configs. A file in a module replaces the shared file at the same path.
 
 When shared code needs a Minecraft API that differs between versions, call it through an adapter (`Compat`, `ClientCompat`, `Gfx`, `Overlay` and similar) and implement that adapter method in every `versions/<version>/` module. A change inside one module affects only that version.
 

@@ -4,7 +4,7 @@ Test environment: 21 October 2026, Minecraft 26.2, Fabric Loader 0.20.1, Fabric 
 
 ## Build and unit tests
 
-`gradlew.bat build :server-plugin:build` compiles both editions and runs **53 JUnit tests** (46 core/client and 7 server), with zero failures or errors in the latest build. Coverage includes geometry, noise, selections, masks, convex hulls, colour conversion, Lua sandboxing, typed variables, weighted palettes, builder transform bijections and rule-tree serialization/cycle prevention. New checks cover bounded bridge fragmentation, corruption and expansion limits, lazy biome protection coverage, event cancellation and interrupted undo/redo recovery.
+`gradlew.bat build` compiles both editions and runs **53 JUnit tests** (46 core/client and 7 server), with zero failures or errors in the latest build. Coverage includes geometry, noise, selections, masks, convex hulls, colour conversion, Lua sandboxing, typed variables, weighted palettes, builder transform bijections and rule-tree serialization/cycle prevention. New checks cover bounded bridge fragmentation, corruption and expansion limits, lazy biome protection coverage, event cancellation and interrupted undo/redo recovery.
 
 ## Fabric Minecraft integration
 
@@ -45,7 +45,7 @@ Default modifier matching is also tested independently, including lock-key flags
 
 The scenario verifies channel negotiation, a fragmented 16,000-position request and selection response, fill/undo/redo, clipboard placement, seven diamonds surviving chest delete/undo, biome replication and undo, blueprint export and actual client file receipt, blueprint reload, bundled Lua brushes, fixed world commands, denied unprivileged edits, explicit non-operator edit grants, separate world permissions, cancellation through the public edit event, and WorldGuard block flags protecting edits and redo. It opens and captures the real editor on each server. Every test server and RCON endpoint binds only to 127.0.0.1; these are disposable fixtures.
 
-The optional test entrypoint uses `CRAFTIUM_TEST_SCOPE=paper` and `CRAFTIUM_TEST_PROTECTION=true` with both prepared loopback fixtures running. `:server-plugin:liveTestPluginJar` builds a fixture plugin used only by this suite; it is excluded from release bundles. The suite ends by disconnecting and returning to the title screen. Server shutdown saves history normally.
+The optional test entrypoint uses `CRAFTIUM_TEST_SCOPE=paper` and `CRAFTIUM_TEST_PROTECTION=true` with both prepared loopback fixtures running. `:paper-26.2:liveTestPluginJar` builds a fixture plugin used only by this suite; it is excluded from release bundles. The suite ends by disconnecting and returning to the title screen. Server shutdown saves history normally.
 
 ## Visual checks
 

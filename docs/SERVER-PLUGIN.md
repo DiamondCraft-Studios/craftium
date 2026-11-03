@@ -54,7 +54,7 @@ Native bulk edits **do not fire Bukkit BlockPlaceEvent or BlockBreakEvent per bl
 
 ## Build and verification
 
-Run `./gradlew build :server-plugin:build` (Windows: `gradlew.bat`). Client output is in `versions/26.2/build/libs/`; plugin output is in `server-plugin/build/libs/`. Paperweight uses the pinned official `26.2.build.134-stable` development bundle. LuaJ is bundled; Fabric classes and Minecraft server classes are not bundled in the plugin.
+Run `./gradlew build` (Windows: `gradlew.bat`). Client output is in `versions/26.2/build/libs/`; plugin output is in `versions/26.2/server-plugin/build/libs/`. Paperweight uses the pinned official `26.2.build.134-stable` development bundle. LuaJ is bundled; Fabric classes and Minecraft server classes are not bundled in the plugin.
 
 See [VALIDATION.md](VALIDATION.md) for actual tested builds and results.
 

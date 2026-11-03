@@ -30,7 +30,7 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
     private MinecraftServer nativeServer;private WorldGuardHook worldGuard;private boolean protectionFailed;
     private Set<String> allowedWorlds=Set.of();private int queueBudget,framesPerTick;
     @Override public void onEnable(){
-        if(!Bukkit.getMinecraftVersion().equals("26.2")){getLogger().severe("Craftium 0.3 requires Minecraft 26.2. Plugin disabled.");getServer().getPluginManager().disablePlugin(this);return;}
+        String target=getPluginMeta().getAPIVersion();if(!Bukkit.getMinecraftVersion().equals(target)){getLogger().severe("This Craftium build requires Minecraft "+target+" but the server runs "+Bukkit.getMinecraftVersion()+". Plugin disabled.");getServer().getPluginManager().disablePlugin(this);return;}
         try{Class.forName("io.papermc.paper.threadedregions.RegionizedServer");getLogger().severe("Craftium requires Paper or Purpur; Folia is not supported.");getServer().getPluginManager().disablePlugin(this);return;}catch(ClassNotFoundException ignored){}
         saveDefaultConfig();loadSettings();nativeServer=((CraftServer)getServer()).getServer();
         ServerPlatform.install(getDataFolder().toPath(),this);
@@ -40,7 +40,7 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
         Objects.requireNonNull(getCommand("craftiumserver")).setExecutor(this);
         getServer().getScheduler().runTaskTimer(this,this::tick,1,1);
         for(Player p:getServer().getOnlinePlayers())hello(p);
-        getLogger().info("Craftium "+getPluginMeta().getVersion()+" ready on "+getServer().getName()+" 26.2. Clients need Craftium 0.3 or newer.");
+        getLogger().info("Craftium "+getPluginMeta().getVersion()+" ready on "+getServer().getName()+" "+Bukkit.getMinecraftVersion()+". Clients need Craftium 0.3 or newer.");
     }
     private void loadSettings(){
         allowedWorlds=Set.copyOf(getConfig().getStringList("allowed-worlds"));
