@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.Overlay;
 import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.Gfx;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -15,8 +16,6 @@ import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.gizmos.Gizmos;
-import net.minecraft.gizmos.GizmoStyle;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.ClipContext;
@@ -32,6 +31,7 @@ public final class CraftiumClient implements ClientModInitializer {
     private boolean hadWorld,toolCursor;
     private double lastLiquidOpacity=1;
     @Override public void onInitializeClient() {
+        Overlay.install();
         ClientState.load();EditorBindings.load();
         ClientPlayNetworking.registerGlobalReceiver(Packets.Bridge.TYPE,(payload,context)->context.client().execute(()->receiveBridge(payload.bytes())));
         ClientCommands.register();
@@ -187,52 +187,52 @@ public final class CraftiumClient implements ClientModInitializer {
     private static void preview(Minecraft mc) {
         var screen=ClientCompat.screen(mc) instanceof EditorScreen editor?editor:ClientCompat.screen(mc) instanceof StudioScreen studio?studio.editor():null;
         var hit=screen==null?null:screen.target();
-        try(var collector=mc.collectPerTickGizmos()) {
+        try(var collector=Overlay.begin(mc)) {
             WorldDiagnostics.draw(mc);
             BuilderMode.draw();
-            if(ClientState.options.showMarkerGizmos||ClientState.options.showDisplayGizmos){int count=0;for(var entity:mc.level.entitiesForRendering()){boolean show=entity instanceof net.minecraft.world.entity.Marker&&ClientState.options.showMarkerGizmos||entity instanceof net.minecraft.world.entity.Display&&ClientState.options.showDisplayGizmos;if(!show||entity.distanceToSqr(mc.player)>128*128||++count>256)continue;Vec3 at=entity.position();int color=entity.getUUID().toString().equals(ClientState.options.entityUuid)?0xffffd66d:0xffe6edf7;Gizmos.point(at,color,6).setAlwaysOnTop();Gizmos.cuboid(new AABB(at.add(-.08,-.08,-.08),at.add(.08,.08,.08)),GizmoStyle.stroke(color,1)).setAlwaysOnTop();}}
+            if(ClientState.options.showMarkerGizmos||ClientState.options.showDisplayGizmos){int count=0;for(var entity:mc.level.entitiesForRendering()){boolean show=entity instanceof net.minecraft.world.entity.Marker&&ClientState.options.showMarkerGizmos||entity instanceof net.minecraft.world.entity.Display&&ClientState.options.showDisplayGizmos;if(!show||entity.distanceToSqr(mc.player)>128*128||++count>256)continue;Vec3 at=entity.position();int color=entity.getUUID().toString().equals(ClientState.options.entityUuid)?0xffffd66d:0xffe6edf7;Overlay.point(at,color,6);Overlay.box(new AABB(at.add(-.08,-.08,-.08),at.add(.08,.08,.08)),color,1,0);}}
             if(ClientState.options.showAnnotations&&ClientState.status.annotations()!=null)for(var note:ClientState.status.annotations()){
                 Point a=note.from(),b=note.to();Vec3 start=new Vec3(a.x()+.5,a.y()+.5,a.z()+.5),end=new Vec3(b.x()+.5,b.y()+.5,b.z()+.5);
                 if(note.mode().equals("IMAGE")){AnnotationImages.draw(note);continue;}
-                if(note.mode().equals("DRAW")&&note.points()!=null&&note.points().size()>1){for(int i=1;i<note.points().size();i++){Point a0=note.points().get(i-1),b0=note.points().get(i);Gizmos.line(new Vec3(a0.x()+.5,a0.y()+.5,a0.z()+.5),new Vec3(b0.x()+.5,b0.y()+.5,b0.z()+.5),note.color(),note.width()).setAlwaysOnTop();}continue;}
-                if(note.mode().equals("TEXT"))Gizmos.billboardTextOverBlock(note.text(),new net.minecraft.core.BlockPos(a.x(),a.y(),a.z()),note.color(),0x88151c26,.025f).setAlwaysOnTop();
-                else if(note.mode().equals("BOX"))Gizmos.cuboid(new AABB(start,end).inflate(.02),GizmoStyle.stroke(note.color(),note.width())).setAlwaysOnTop();
-                else Gizmos.line(start,end,note.color(),note.width()).setAlwaysOnTop();
+                if(note.mode().equals("DRAW")&&note.points()!=null&&note.points().size()>1){for(int i=1;i<note.points().size();i++){Point a0=note.points().get(i-1),b0=note.points().get(i);Overlay.line(new Vec3(a0.x()+.5,a0.y()+.5,a0.z()+.5),new Vec3(b0.x()+.5,b0.y()+.5,b0.z()+.5),note.color(),note.width());}continue;}
+                if(note.mode().equals("TEXT"))Overlay.text(note.text(),new net.minecraft.core.BlockPos(a.x(),a.y(),a.z()),note.color(),0x88151c26,.025f);
+                else if(note.mode().equals("BOX"))Overlay.box(new AABB(start,end).inflate(.02),note.color(),note.width(),0);
+                else Overlay.line(start,end,note.color(),note.width());
             }
             for(int i=1;i<ClientState.rulerPoints.size();i++) {
                 Point a=ClientState.rulerPoints.get(i-1),b=ClientState.rulerPoints.get(i);Vec3 start=new Vec3(a.x()+.5,a.y()+.5,a.z()+.5),end=new Vec3(b.x()+.5,b.y()+.5,b.z()+.5);
-                Gizmos.line(start,end,0xffffd66d,2).setAlwaysOnTop();
-                if(ClientState.options.rulerMode==Options.RulerMode.CIRCLE){double radius=Math.sqrt(a.distanceSquared(b));for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Gizmos.line(start.add(Math.cos(x)*radius,0,Math.sin(x)*radius),start.add(Math.cos(y)*radius,0,Math.sin(y)*radius),0xffffd66d,1.5f).setAlwaysOnTop();}}
-                Gizmos.billboardTextOverBlock(String.format(java.util.Locale.ROOT,"%.2f blocks",Math.sqrt(a.distanceSquared(b))),new net.minecraft.core.BlockPos((a.x()+b.x())/2,(a.y()+b.y())/2+1,(a.z()+b.z())/2),0xffffe4a2,0xbb151c26,.02f).setAlwaysOnTop();
+                Overlay.line(start,end,0xffffd66d,2);
+                if(ClientState.options.rulerMode==Options.RulerMode.CIRCLE){double radius=Math.sqrt(a.distanceSquared(b));for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(start.add(Math.cos(x)*radius,0,Math.sin(x)*radius),start.add(Math.cos(y)*radius,0,Math.sin(y)*radius),0xffffd66d,1.5f);}}
+                Overlay.text(String.format(java.util.Locale.ROOT,"%.2f blocks",Math.sqrt(a.distanceSquared(b))),new net.minecraft.core.BlockPos((a.x()+b.x())/2,(a.y()+b.y())/2+1,(a.z()+b.z())/2),0xffffe4a2,0xbb151c26,.02f);
             }
             if(screen==null)return;
             TransformGizmo.draw(screen);
-            Point handle=screen.handlePoint();if(handle!=null){Vec3 anchor=new Vec3(handle.x(),handle.y(),handle.z());int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Gizmos.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2).setAlwaysOnTop();}
+            Point handle=screen.handlePoint();if(handle!=null){Vec3 anchor=new Vec3(handle.x(),handle.y(),handle.z());int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Overlay.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2);}
             var nodes=ClientState.options.nodes;
             for(int i=0;i<nodes.size();i++){
-                Point n=nodes.get(i);Vec3 at=new Vec3(n.x()+.5,n.y()+.5,n.z()+.5);Gizmos.point(at,0xffe6cf8b,5).setAlwaysOnTop();
-                if(i>0){Point before=nodes.get(i-1);Gizmos.line(new Vec3(before.x()+.5,before.y()+.5,before.z()+.5),at,0xff8ac9fc,2).setAlwaysOnTop();}
+                Point n=nodes.get(i);Vec3 at=new Vec3(n.x()+.5,n.y()+.5,n.z()+.5);Overlay.point(at,0xffe6cf8b,5);
+                if(i>0){Point before=nodes.get(i-1);Overlay.line(new Vec3(before.x()+.5,before.y()+.5,before.z()+.5),at,0xff8ac9fc,2);}
             }
             if(hit!=null&&ClientState.options.visualizeBiome&&(ClientState.options.tool==Tool.BIOME_PAINTER||ClientState.options.tool==Tool.CLENTAMINATOR)){
                 String biome=mc.level.getBiome(hit.getBlockPos()).unwrapKey().map(k->dev.craftium.compat.Compat.keyName(k)).orElse("Unknown biome");
-                Gizmos.billboardTextOverBlock(biome,hit.getBlockPos().above(2),0xffabefb7,0xbb151c26,.025f).setAlwaysOnTop();
+                Overlay.text(biome,hit.getBlockPos().above(2),0xffabefb7,0xbb151c26,.025f);
             }
             var s=ClientState.status;
-            for(AABB box:screen.showSelection()?SelectionOverlay.boxes:List.<AABB>of())if(TransformGizmo.selectionPreview())TransformGizmo.box(box);else Gizmos.cuboid(box,GizmoStyle.strokeAndFill(0xffffd66d,1,0x225d91ff)).setAlwaysOnTop();
+            for(AABB box:screen.showSelection()?SelectionOverlay.boxes:List.<AABB>of())if(TransformGizmo.selectionPreview())TransformGizmo.box(box);else Overlay.box(box,0xffffd66d,1,0x225d91ff);
             if(PlacementPreview.active()) {
                 Point p=PlacementPreview.origin;Vec3 anchor=new Vec3(p.x(),p.y(),p.z());
                 for(AABB box:PlacementPreview.boxes)TransformGizmo.box(box.move(anchor));
             }
             if(screen.toolActive()&&hit!=null && !PlacementPreview.active() && !ClientState.options.tool.selection()) {
                 int r=ClientState.options.radius;var p=hit.getBlockPos();
-                if(ClientState.options.shape==BrushMath.Shape.CUBE)Gizmos.cuboid(new AABB(p).inflate(r),GizmoStyle.stroke(0xffd6eaff,1.5f)).setAlwaysOnTop();
+                if(ClientState.options.shape==BrushMath.Shape.CUBE)Overlay.box(new AABB(p).inflate(r),0xffd6eaff,1.5f,0);
                 else {
                     Vec3 c=Vec3.atCenterOf(p);double radius=r+.5;
                     for(int axis=0;axis<3;axis++)for(int i=0;i<48;i++) {
                         double a=i*Math.PI/24,b=(i+1)*Math.PI/24;
                         Vec3 from=axis==0?c.add(Math.cos(a)*radius,Math.sin(a)*radius,0):axis==1?c.add(Math.cos(a)*radius,0,Math.sin(a)*radius):c.add(0,Math.cos(a)*radius,Math.sin(a)*radius);
                         Vec3 to=axis==0?c.add(Math.cos(b)*radius,Math.sin(b)*radius,0):axis==1?c.add(Math.cos(b)*radius,0,Math.sin(b)*radius):c.add(0,Math.cos(b)*radius,Math.sin(b)*radius);
-                        Gizmos.line(from,to,0xffd6eaff,1.2f).setAlwaysOnTop();
+                        Overlay.line(from,to,0xffd6eaff,1.2f);
                     }
                 }
             }

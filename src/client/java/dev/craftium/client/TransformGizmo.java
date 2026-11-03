@@ -1,10 +1,10 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.Overlay;
 import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.core.*;
 import dev.craftium.net.Packets;
 import net.minecraft.client.Minecraft;
-import net.minecraft.gizmos.*;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.phys.*;
 import java.util.*;
@@ -84,13 +84,13 @@ final class TransformGizmo {
     private static Vec3 rawTransform(Vec3 world){Vec3 p=world.subtract(dragging.anchor);var rotated=Geometry.rotate(new Geometry.Vector(p.x*size.x,p.y*size.y,p.z*size.z),angles.y,angles.x,angles.z);return dragging.anchor.add(rotated.x(),rotated.y(),rotated.z());}
     private static Vec3 transformed(Vec3 world){if(dragging==null)return world;if(normalizationDirty){normalization=Vec3.ZERO;if(dragging.kind==Kind.PLACEMENT||dragging.kind==Kind.SELECTION){AABB bounds;if(dragging.kind==Kind.PLACEMENT){Point p=PlacementPreview.origin;bounds=bounds().move(p.x(),p.y(),p.z());}else{var status=ClientState.status;Point min=status.min(),max=status.max();bounds=new AABB(min.x(),min.y(),min.z(),max.x()+1,max.y()+1,max.z()+1);}double x=Double.POSITIVE_INFINITY,y=x,z=x;for(int i=0;i<8;i++){Vec3 corner=rawTransform(new Vec3((i&1)==0?bounds.minX:bounds.maxX,(i&2)==0?bounds.minY:bounds.maxY,(i&4)==0?bounds.minZ:bounds.maxZ));x=Math.min(x,corner.x);y=Math.min(y,corner.y);z=Math.min(z,corner.z);}normalization=new Vec3(bounds.minX-x,bounds.minY-y,bounds.minZ-z);}normalizationDirty=false;}return rawTransform(world).add(normalization).add(delta);}
     static boolean selectionPreview(){return dragging!=null&&dragging.kind==Kind.SELECTION;}
-    static void box(AABB box){if(dragging==null){Gizmos.cuboid(box,GizmoStyle.strokeAndFill(0xff8be3b5,1,0x2247d29b)).setAlwaysOnTop();return;}Vec3[] points=new Vec3[8];for(int i=0;i<8;i++)points[i]=transformed(new Vec3((i&1)==0?box.minX:box.maxX,(i&2)==0?box.minY:box.maxY,(i&4)==0?box.minZ:box.maxZ));for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)Gizmos.line(points[i],points[i|bit],0xff8be3b5,1.5f).setAlwaysOnTop();}
+    static void box(AABB box){if(dragging==null){Overlay.box(box,0xff8be3b5,1,0x2247d29b);return;}Vec3[] points=new Vec3[8];for(int i=0;i<8;i++)points[i]=transformed(new Vec3((i&1)==0?box.minX:box.maxX,(i&2)==0?box.minY:box.maxY,(i&4)==0?box.minZ:box.maxZ));for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)Overlay.line(points[i],points[i|bit],0xff8be3b5,1.5f);}
     static void draw(EditorScreen screen){
         Target t=dragging==null?target(screen):dragging;if(t==null)return;var o=ClientState.options;var currentMode=t.kind==Kind.NODE?Options.GizmoMode.MOVE:o.gizmoMode;Vec3 anchor=t.anchor.add(delta);Vec3[] directions=axes();
-        for(int i=0;i<3;i++){int color=COLORS[i];if(currentMode==Options.GizmoMode.ROTATE){Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3];for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Gizmos.line(anchor.add(a.scale(Math.cos(x)*3.5)).add(b.scale(Math.sin(x)*3.5)),anchor.add(a.scale(Math.cos(y)*3.5)).add(b.scale(Math.sin(y)*3.5)),color,handle==i?3:1.5f).setAlwaysOnTop();}}
-            else{Vec3 end=anchor.add(directions[i].scale(5));Gizmos.line(anchor,end,color,handle==i?4:2).setAlwaysOnTop();if(currentMode==Options.GizmoMode.SCALE)Gizmos.cuboid(new AABB(end.add(-.14,-.14,-.14),end.add(.14,.14,.14)),GizmoStyle.strokeAndFill(color,1,color&0x44ffffff)).setAlwaysOnTop();else Gizmos.point(end,color,7).setAlwaysOnTop();}
-            if(currentMode==Options.GizmoMode.MOVE){Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3],point=anchor.add(a.scale(1.4)).add(b.scale(1.4));Gizmos.point(point,color,7).setAlwaysOnTop();}
+        for(int i=0;i<3;i++){int color=COLORS[i];if(currentMode==Options.GizmoMode.ROTATE){Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3];for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(anchor.add(a.scale(Math.cos(x)*3.5)).add(b.scale(Math.sin(x)*3.5)),anchor.add(a.scale(Math.cos(y)*3.5)).add(b.scale(Math.sin(y)*3.5)),color,handle==i?3:1.5f);}}
+            else{Vec3 end=anchor.add(directions[i].scale(5));Overlay.line(anchor,end,color,handle==i?4:2);if(currentMode==Options.GizmoMode.SCALE)Overlay.box(new AABB(end.add(-.14,-.14,-.14),end.add(.14,.14,.14)),color,1,color&0x44ffffff);else Overlay.point(end,color,7);}
+            if(currentMode==Options.GizmoMode.MOVE){Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3],point=anchor.add(a.scale(1.4)).add(b.scale(1.4));Overlay.point(point,color,7);}
         }
-        if(currentMode!=Options.GizmoMode.ROTATE)Gizmos.point(anchor,0xffffffff,9).setAlwaysOnTop();
+        if(currentMode!=Options.GizmoMode.ROTATE)Overlay.point(anchor,0xffffffff,9);
     }
 }

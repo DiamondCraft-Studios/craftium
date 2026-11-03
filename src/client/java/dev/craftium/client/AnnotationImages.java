@@ -1,8 +1,8 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.Overlay;
 import dev.craftium.core.Annotation;
 import net.minecraft.client.Minecraft;
-import net.minecraft.gizmos.*;
 import net.minecraft.world.phys.AABB;
 import javax.imageio.ImageIO;
 import java.nio.file.*;
@@ -23,7 +23,7 @@ final class AnnotationImages {
             int color=note.pixels().get(index);if((color>>>24)<8)continue;double u=(index%note.imageWidth())*size,v=(note.imageHeight()-1-index/note.imageWidth())*size;
             double x=at.x()+.5+normal.x()*.501,y=at.y()+.5+normal.y()*.501,z=at.z()+.5+normal.z()*.501;
             AABB box=normal.y()!=0?new AABB(x+u,y,z+v,x+u+size,y+.002,z+v+size):normal.x()!=0?new AABB(x,y+v,z+u,x+.002,y+v+size,z+u+size):new AABB(x+u,y+v,z,x+u+size,y+v+size,z+.002);
-            Gizmos.cuboid(box,GizmoStyle.strokeAndFill(0,0,color)).setAlwaysOnTop();
+            Overlay.box(box,0,0,color);
         }
     }
 }

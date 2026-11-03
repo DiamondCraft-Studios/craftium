@@ -1,11 +1,11 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.Overlay;
 import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.core.*;
 import net.minecraft.client.Minecraft;
 import dev.craftium.client.compat.Gfx;
 import net.minecraft.core.Direction;
-import net.minecraft.gizmos.*;
 import net.minecraft.world.phys.*;
 import org.lwjgl.glfw.GLFW;
 import java.util.*;
@@ -90,10 +90,10 @@ public final class BuilderMode {
     }
     public static void draw(){
         var o=ClientState.options;if(!active())return;
-        if(first!=null){Point min=min(),max=max();Gizmos.cuboid(new AABB(min.x(),min.y(),min.z(),max.x()+1,max.y()+1,max.z()+1),GizmoStyle.stroke(0xffffd66d,2)).setAlwaysOnTop();
+        if(first!=null){Point min=min(),max=max();Overlay.box(new AABB(min.x(),min.y(),min.z(),max.x()+1,max.y()+1,max.z()+1),0xffffd66d,2,0);
             if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?java.util.stream.IntStream.rangeClosed(1,o.copies).mapToObj(i->new Point(offset.x()*i,offset.y()*i,offset.z()*i)).toList():List.of(offset);int drawn=0;
-                outer:for(Point step:steps)for(Point at:cells){if(++drawn>4096)break outer;Point q=BuilderTransform.apply(at.subtract(min),size,o.builderRotation,o.builderFlipAxis).add(min.x()+step.x(),min.y()+step.y(),min.z()+step.z());Gizmos.cuboid(new AABB(q.x(),q.y(),q.z(),q.x()+1,q.y()+1,q.z()+1),GizmoStyle.strokeAndFill(0xff8be3b5,1,0x333dd29b)).setAlwaysOnTop();}
-                if(drawn>4096)Gizmos.cuboid(new AABB(min.x()+offset.x(),min.y()+offset.y(),min.z()+offset.z(),max.x()+offset.x()+1,max.y()+offset.y()+1,max.z()+offset.z()+1),GizmoStyle.stroke(0xff8be3b5,2)).setAlwaysOnTop();
+                outer:for(Point step:steps)for(Point at:cells){if(++drawn>4096)break outer;Point q=BuilderTransform.apply(at.subtract(min),size,o.builderRotation,o.builderFlipAxis).add(min.x()+step.x(),min.y()+step.y(),min.z()+step.z());Overlay.box(new AABB(q.x(),q.y(),q.z(),q.x()+1,q.y()+1,q.z()+1),0xff8be3b5,1,0x333dd29b);}
+                if(drawn>4096)Overlay.box(new AABB(min.x()+offset.x(),min.y()+offset.y(),min.z()+offset.z(),max.x()+offset.x()+1,max.y()+offset.y()+1,max.z()+offset.z()+1),0xff8be3b5,2,0);
             }
         }
     }
