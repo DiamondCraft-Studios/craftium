@@ -85,7 +85,6 @@ public final class EditorScreen extends CraftiumScreen {
         if(!hudHidden){previousHideGui=ClientCompat.hudHidden(minecraft);hudHidden=true;if(!previousHideGui)ClientCompat.toggleHud(minecraft);}
         scale=Math.min(1f,Math.min(width/1000f,height/562f));w=Math.round(width/scale);h=Math.round(height/scale);
         fields.clear();suspended=false;
-        field("mask",w-RIGHT+10,h-95,RIGHT-20,o().mask,s->o().mask=s);
         field("minY",w-RIGHT+10,h-64,80,Integer.toString(o().minY),s->{try{o().minY=Integer.parseInt(s);}catch(NumberFormatException ignored){}});
         field("maxY",w-90,h-64,80,Integer.toString(o().maxY),s->{try{o().maxY=Integer.parseInt(s);}catch(NumberFormatException ignored){}});
         if(!builder) {
@@ -141,6 +140,7 @@ public final class EditorScreen extends CraftiumScreen {
         for(int i=1;i<lasso.size();i++)ToolIcons.line(g,(int)(lasso.get(i-1).x()/scale),(int)(lasso.get(i-1).y()/scale),(int)(lasso.get(i).x()/scale),(int)(lasso.get(i).y()/scale),0xffffd66d);
         statusbar(g);
         if(menu>=0)dropdown(g);
+        if(ctxCell>=0)maskMenu(g);
         if(help)help(g);
         if(transform)transform(g);
         if((panels||transform) && menu<0 && !help)for(var field:fields.entrySet()) {
@@ -419,17 +419,63 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void swapBlocks() {String front=o().block;ClientState.pick(o().secondary);o().secondary=front;ClientState.save();}
     private void history(Gfx g) {
-        int x=w-RIGHT,y=333,height=h-477;
+        int x=w-RIGHT,y=333,height=h-551;
         panel(g,x,y,RIGHT,Math.max(50,height),"History");
         button(g,x+10,y+24,85,19,"Undo "+ClientState.status.undo(),false,()->action("undo"),"Undo · Ctrl+Z");
         button(g,x+104,y+24,86,19,"Redo "+ClientState.status.redo(),false,()->action("redo"),"Redo · Ctrl+Y");
         int row=y+51,index=0;for(String event:ClientState.status.history()){if(row>y+height-12)break;int steps=++index;text(g,shorten(event,RIGHT-20),x+10,row,MUTED);controls.add(new Control(x+7,row-3,RIGHT-14,14,()->{o().historySteps=steps;action("history_undo_many");},"Undo through this edit"));row+=15;}
     }
     private void masks(Gfx g) {
-        int x=w-RIGHT;panel(g,x,h-138,RIGHT,113,"Tool masks");
-        text(g,"Only replace block (optional)",x+10,h-112,MUTED);
+        int x=w-RIGHT,y=h-212;panel(g,x,y,RIGHT,187,"Tool masks");
+        int half=(RIGHT-24)/2;
+        button(g,x+10,y+24,half,19,"Include",!o().maskExclude,()->o().maskExclude=false,"Include: only change the toggled blocks below");
+        button(g,x+14+half,y+24,half,19,"Exclude",o().maskExclude,()->o().maskExclude=true,"Exclude: change everything except the toggled blocks");
+        var cells=o().maskBlocks;int total=cells.size()+1,rows=(total+MASK_COLS-1)/MASK_COLS;maskScroll=Math.clamp(maskScroll,0,Math.max(0,rows-MASK_ROWS));
+        for(int r=0;r<MASK_ROWS;r++)for(int c=0;c<MASK_COLS;c++){
+            int i=(maskScroll+r)*MASK_COLS+c;if(i>=total)break;
+            int bx=x+10+c*MASK_PITCH,by=y+50+r*MASK_PITCH;
+            if(i==0){
+                g.fill(bx,by,bx+22,by+22,0xff243246);g.outline(bx,by,22,22,LINE);g.centeredText(font,"+",bx+11,by+7,TEXT);
+                controls.add(new Control(bx,by,22,22,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,"Add to mask","",this::addMaskBlock)),"Add a block to the mask palette"));
+                continue;
+            }
+            int index=i-1;String block=cells.get(index);boolean on=o().maskActive.contains(block);
+            g.fill(bx,by,bx+22,by+22,on?0xff315b84:0xff1b2838);g.outline(bx,by,22,22,on?ACCENT:LINE);
+            BlockPickerScreen.icon(g,font,block,bx+3,by+3);
+            if(block.contains("["))g.fill(bx+16,by+16,bx+20,by+20,0xffffd66d);
+            controls.add(new Control(bx,by,22,22,()->toggleMaskBlock(block),()->{ctxCell=index;ctxX=Math.min(mx,w-MASK_MENU_WIDTH-4);ctxY=Math.min(my,h-2*MASK_MENU_ROW-4);},
+                block+(on?" · On":" · Off")+" · Click to toggle · Right-click for options"));
+        }
+        if(rows>MASK_ROWS){
+            int track=MASK_ROWS*MASK_PITCH-3,thumb=Math.max(10,track*MASK_ROWS/rows),thumbY=y+50+(track-thumb)*maskScroll/(rows-MASK_ROWS),barX=x+RIGHT-11;
+            g.fill(barX,y+50,barX+5,y+50+track,0xff1b2838);g.fill(barX,thumbY,barX+5,thumbY+thumb,0xff4a6585);
+            controls.add(new Control(barX-2,y+50,9,track,()->{double py=WorkspaceLayout.inverse("masks",mx,my)[1];maskScroll=Math.clamp((int)Math.round((py-y-50-thumb/2.0)/Math.max(1,track-thumb)*(rows-MASK_ROWS)),0,rows-MASK_ROWS);},"Scroll the mask blocks"));
+        }
         text(g,"Min Y",x+10,h-78,MUTED);text(g,"Max Y",w-90,h-78,MUTED);
-        toggle(g,x+10,h-43,"Only in selection",o().inSelection,()->o().inSelection=!o().inSelection);
+        toggle(g,x+10,h-43,"Only in selection",o().inSelection,()->o().inSelection=!o().inSelection,"Only edit blocks inside the current selection. Blocks outside it are left alone, and with nothing selected nothing changes.");
+    }
+    private static final int MASK_COLS=7,MASK_ROWS=3,MASK_PITCH=25,MASK_MENU_WIDTH=110,MASK_MENU_ROW=18;
+    private int maskScroll,ctxCell=-1,ctxX,ctxY;
+    private void toggleMaskBlock(String block){if(!o().maskActive.remove(block))o().maskActive.add(block);ClientState.save();}
+    /** Adds a block to the mask palette, switched on; one already there is just switched on. */
+    private void addMaskBlock(String block){
+        if(!o().maskBlocks.contains(block)){if(o().maskBlocks.size()>=64){ClientState.notify("The mask palette holds up to 64 blocks");return;}o().maskBlocks.add(block);}
+        if(!o().maskActive.contains(block))o().maskActive.add(block);ClientState.save();
+    }
+    private void removeMaskBlock(int index){var block=o().maskBlocks.remove(index);o().maskActive.remove(block);ClientState.save();}
+    private void editMaskState(int index){
+        var old=o().maskBlocks.get(index);
+        ClientCompat.setScreen(minecraft,new BlockStateScreen(this,old,edited->{
+            int at=o().maskBlocks.indexOf(old);if(at<0||edited.equals(old))return;
+            boolean on=o().maskActive.remove(old);
+            if(o().maskBlocks.contains(edited))o().maskBlocks.remove(at);else o().maskBlocks.set(at,edited);
+            if(on&&!o().maskActive.contains(edited))o().maskActive.add(edited);ClientState.save();
+        }));
+    }
+    private void maskMenu(Gfx g){
+        String[] labels={"Remove","Edit block state"};
+        g.fill(ctxX,ctxY,ctxX+MASK_MENU_WIDTH,ctxY+2*MASK_MENU_ROW,0xf5222d3b);g.outline(ctxX,ctxY,MASK_MENU_WIDTH,2*MASK_MENU_ROW,LINE);
+        for(int i=0;i<2;i++){int y=ctxY+i*MASK_MENU_ROW;if(mx>=ctxX&&mx<ctxX+MASK_MENU_WIDTH&&my>=y&&my<y+MASK_MENU_ROW)g.fill(ctxX+1,y,ctxX+MASK_MENU_WIDTH-1,y+MASK_MENU_ROW,0xff34485e);text(g,labels[i],ctxX+8,y+5,TEXT);}
     }
     private void viewport(Gfx g) {
         int l=panels?LEFT+6:6,r=panels?w-RIGHT-6:w-6;
@@ -554,7 +600,7 @@ public final class EditorScreen extends CraftiumScreen {
             case 7 -> {var items=new ArrayList<MenuItem>();for(String id:WorkspaceLayout.windows.keySet())items.add(item("Toggle "+id,"",()->WorkspaceLayout.toggle(id)));items.add(item("Save layout","",WorkspaceLayout::save));items.add(item("Reset layout","",WorkspaceLayout::reset));items.add(item("Copy layout","",()->minecraft.keyboardHandler.setClipboard(WorkspaceLayout.json())));items.add(item("Paste layout","",()->{try{WorkspaceLayout.importJson(minecraft.keyboardHandler.getClipboard());WorkspaceLayout.save();}catch(Exception e){ClientState.notify("Invalid layout JSON");}}));yield items;}
             case 4 -> List.of(item("Shape","",()->select(Tool.SHAPE)),item("Block text","",()->select(Tool.TEXT)),item("Line","",()->select(Tool.LINE)),item("Rock","",()->select(Tool.ROCK)));
             case 5 -> List.of(item("Fill selection","Ctrl+F",()->action("fill")),item("Delete selection","Del",()->action("delete")),item("Move / clone / stack…","",()->{transform=true;init();}),item("Smooth brush","",()->select(Tool.SMOOTH)),item("Flatten brush","",()->select(Tool.FLATTEN)));
-            case 6 -> List.of(item("Restrict to selection","",()->o().inSelection=!o().inSelection),item("Clear block mask","",()->{o().mask="";fields.get("mask").setValue("");}),item("Toggle surface painting","",()->o().surfaceOnly=!o().surfaceOnly));
+            case 6 -> List.of(item("Restrict to selection","",()->o().inSelection=!o().inSelection),item("Clear block mask","",()->{o().mask="";o().maskActive.clear();}),item("Toggle surface painting","",()->o().surfaceOnly=!o().surfaceOnly));
             default -> List.of(item("Editor controls","",()->help=true),item("About Craftium","",()->help=true));
         };
     }
@@ -714,6 +760,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(ReferenceImages.click(event.x(),event.y(),event.button()))return true;
         double x=event.x()/scale,y=event.y()/scale;mx=(int)x;my=(int)y;pointerX=event.x();pointerY=event.y();
         if(typing!=null){finishTyping(true);return true;} // a click anywhere else keeps what was typed
+        if(ctxCell>=0){int cell=ctxCell;ctxCell=-1;if(x>=ctxX&&x<ctxX+MASK_MENU_WIDTH&&y>=ctxY&&y<ctxY+2*MASK_MENU_ROW&&cell<o().maskBlocks.size()){if(y<ctxY+MASK_MENU_ROW)removeMaskBlock(cell);else editMaskState(cell);}return true;}
         if(event.button()==2&&!help&&!transform&&menu<0)for(int i=sliderAreas.size()-1;i>=0;i--){var a=sliderAreas.get(i);if(a.control().contains(x,y)){a.slider().reset();return true;}} // back to the default, at once
         if(event.button()==0) {
             if((panels||transform)&&menu<0&&!help){
@@ -825,6 +872,8 @@ public final class EditorScreen extends CraftiumScreen {
     }
     @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical) {
         if(help||transform||menu>=0)return true;
+        ctxCell=-1;
+        if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("masks")){maskScroll=Math.max(0,maskScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("tools")){toolScroll=Math.clamp(toolScroll+(vertical<0?1:-1),0,maxToolScroll());return true;}
         if(panels&&pinnedTab&&!builder&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("options")){
             if(vertical<0&&pinnedMore)pinnedScroll++;else if(vertical>0&&pinnedScroll>0)pinnedScroll--;
@@ -854,7 +903,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(event.key()==GLFW.GLFW_KEY_ESCAPE){cancelLargeSelection();return true;}
         }
         if(CraftiumClient.editorKey.matches(event)){onClose();return true;}
-        if(event.key()==GLFW.GLFW_KEY_ESCAPE){if(ClientState.hasPending())CraftiumClient.send("pending_cancel",null,null);else if(PlacementPreview.active())PlacementPreview.cancel();else if(help)help=false;else if(transform){transform=false;init();}else if(menu>=0)menu=-1;else onClose();return true;}
+        if(event.key()==GLFW.GLFW_KEY_ESCAPE){if(ClientState.hasPending())CraftiumClient.send("pending_cancel",null,null);else if(PlacementPreview.active())PlacementPreview.cancel();else if(ctxCell>=0)ctxCell=-1;else if(help)help=false;else if(transform){transform=false;init();}else if(menu>=0)menu=-1;else onClose();return true;}
         if(EditorBindings.matches(Action.HELP,event)){perform(Action.HELP);return true;}
         if(help||transform)return true;
         // Shared chords are resolved by the active context, before ordinary tool letters.
