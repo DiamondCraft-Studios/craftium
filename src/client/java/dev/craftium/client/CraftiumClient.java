@@ -139,6 +139,7 @@ public final class CraftiumClient implements ClientModInitializer {
         }
         while(contextKey.consumeClick()){}
         if(ClientCompat.screen(mc)==null&&held(contextKey)&&!BuilderMode.active())open(true,true);
+        if(supported())syncPlacement();
         preview(mc);
         if(ClientCompat.screen(mc)!=null)return;
         for(var entry:toolKeys.entrySet())while(entry.getValue().consumeClick()){}
@@ -199,10 +200,13 @@ public final class CraftiumClient implements ClientModInitializer {
     /** Whether the server runs the mod itself, so it can bend the game's own block placement. A Paper server reached over the bridge cannot. */
     public static boolean vanillaPlacement(){return supported()&&ClientPlayNetworking.canSend(Packets.Edit.TYPE);}
     private static String placementSynced="";
-    /** Tells the server which capabilities bend placement, just before the game sends the placement itself; the packets arrive in order. */
+    /**
+     * Tells the server the capabilities it reads on its own, as soon as one changes, so a toggle takes effect at once
+     * without the editor being closed. Placement then finds them there, and so does breaking.
+     */
     private static void syncPlacement(){
         var o=ClientState.options;
-        String key=o.symmetryX+","+o.symmetryY+","+o.symmetryZ+","+o.symmetryRotations+","+o.symmetryOrigin+","+o.symmetryHalfX+o.symmetryHalfY+o.symmetryHalfZ+","+o.replaceMode+o.forcePlace+o.noUpdates+o.fastPlace+o.infiniteReach+o.angelPlacement+o.preventInteractions;
+        String key=o.symmetryX+","+o.symmetryY+","+o.symmetryZ+","+o.symmetryRotations+","+o.symmetryOrigin+","+o.symmetryHalfX+o.symmetryHalfY+o.symmetryHalfZ+","+o.replaceMode+o.forcePlace+o.noUpdates+o.fastPlace+o.infiniteReach+o.angelPlacement+o.preventInteractions+o.noClip;
         if(key.equals(placementSynced))return;
         placementSynced=key;send("capabilities",null,null);
     }
