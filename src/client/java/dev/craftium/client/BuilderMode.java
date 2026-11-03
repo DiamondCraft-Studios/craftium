@@ -69,7 +69,10 @@ public final class BuilderMode {
         var o=ClientState.options;
         if(o.builderTool==Options.BuilderTool.SYMMETRY){if(hit!=null&&button==1){Vec3 at=hit.getLocation();double x=Math.rint(at.x*2)/2-.5,y=Math.rint(at.y*2)/2-.5,z=Math.rint(at.z*2)/2-.5;o.symmetryOrigin=new Point((int)Math.floor(x),(int)Math.floor(y),(int)Math.floor(z));o.symmetryHalfX=x!=Math.floor(x);o.symmetryHalfY=y!=Math.floor(y);o.symmetryHalfZ=z!=Math.floor(z);ClientState.save();ClientState.notify("Symmetry node set · Ctrl+F mirrors · Ctrl+R rotates");}return true;}
         if(o.builderTool==Options.BuilderTool.EXTRUDE){if(hit!=null&&button!=2){boolean prior=o.invert;o.invert=button==0;CraftiumClient.send("builder_extrude",CraftiumClient.point(hit.getBlockPos()),CraftiumClient.normal(hit));o.invert=prior;}return true;}
-        if(preview&&button==1){confirm();return true;}
+        if(first!=null&&second!=null){ // a selection exists: left cancels it, right places it; the middle button still expands a face
+            if(button==0){clear();ClientState.notify("Selection cancelled");return true;}
+            if(button==1){confirm();return true;}
+        }
         if(hit==null)return true;Point at=CraftiumClient.point(hit.getBlockPos());
         if(o.builderTool==Options.BuilderTool.ERASE&&first==null&&button==1){CraftiumClient.send("builder_erase_connected",at,CraftiumClient.normal(hit));return true;}
         if(button==0&&clonePlaced){clear();return true;}
@@ -84,7 +87,7 @@ public final class BuilderMode {
     private static Point min(){Point b=second==null?first:second;return new Point(Math.min(first.x(),b.x()),Math.min(first.y(),b.y()),Math.min(first.z(),b.z()));}
     private static Point max(){Point b=second==null?first:second;return new Point(Math.max(first.x(),b.x()),Math.max(first.y(),b.y()),Math.max(first.z(),b.z()));}
     public static void corners(Point a,Point b){first=a;second=b;offset=new Point(0,0,0);preview=false;refresh();}
-    private static void refresh(){try{var mc=Minecraft.getInstance();cells=Selection.box(first,second).stream().filter(p->!mc.level.getBlockState(new net.minecraft.core.BlockPos(p.x(),p.y(),p.z())).isAir()).toList();ClientState.notify("Selection ready · scroll to nudge · right-click confirms preview");}catch(Exception e){ClientState.notify(e.getMessage());clear();}}
+    private static void refresh(){try{var mc=Minecraft.getInstance();cells=Selection.box(first,second).stream().filter(p->!mc.level.getBlockState(new net.minecraft.core.BlockPos(p.x(),p.y(),p.z())).isAir()).toList();ClientState.notify("Selection ready · scroll to nudge · right-click places · left-click cancels");}catch(Exception e){ClientState.notify(e.getMessage());clear();}}
     public static void confirm(){
         if(first==null||second==null)return;var o=ClientState.options;Point prior1=o.position1,prior2=o.position2;int x=o.offsetX,y=o.offsetY,z=o.offsetZ;o.position1=first;o.position2=second;o.offsetX=offset.x();o.offsetY=offset.y();o.offsetZ=offset.z();CraftiumClient.send("builder_commit",first,new Point(0,1,0));o.position1=prior1;o.position2=prior2;o.offsetX=x;o.offsetY=y;o.offsetZ=z;if(o.builderTool==Options.BuilderTool.CLONE){preview=true;clonePlaced=true;}else clear();
     }
@@ -94,7 +97,7 @@ public final class BuilderMode {
             if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?java.util.stream.IntStream.rangeClosed(1,o.copies).mapToObj(i->new Point(offset.x()*i,offset.y()*i,offset.z()*i)).toList():List.of(offset);
                 var shown=preview(o,min,size,steps);
                 if(shown==null)Overlay.box(new AABB(min.x()+offset.x(),min.y()+offset.y(),min.z()+offset.z(),max.x()+offset.x()+1,max.y()+offset.y()+1,max.z()+offset.z()+1),0xff8be3b5,2,0);
-                else{shown.shape().draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,0xff8be3b5,1),0xff8be3b5,0x333dd29b,true);if(!shown.places().isEmpty())Overlay.blocks(shown.models(),shown.places(),0x803dd29b);}
+                else{shown.shape().draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,0xff8be3b5,1),0xff8be3b5,0x333dd29b,true);if(!shown.places().isEmpty())Overlay.blocks(shown.models(),shown.places(),OutlineShape.GHOST);}
             }
         }
     }
@@ -124,12 +127,21 @@ public final class BuilderMode {
         cachedFor=key;cachedCells=cells;cachedPreview=built;
         return built;
     }
+    private static final int[] AXIS_COLORS={0xffff7777,0xff8bef9a,0xff78b9ff}; // the same red, green and blue as the transform gizmo's axes
+    /** Draws the size and the offset centred on one line, each number in its axis colour. */
+    private static void axisReadout(Gfx g,net.minecraft.client.gui.Font font,int y,String sizeLabel,String sizeJoin,int sx,int sy,int sz,String offsetLabel,String offsetJoin,int ox,int oy,int oz){
+        String[] text={sizeLabel,String.valueOf(sx),sizeJoin,String.valueOf(sy),sizeJoin,String.valueOf(sz),offsetLabel,String.valueOf(ox),offsetJoin,String.valueOf(oy),offsetJoin,String.valueOf(oz)};
+        int[] colors={0xffc7d6e5,AXIS_COLORS[0],0xffc7d6e5,AXIS_COLORS[1],0xffc7d6e5,AXIS_COLORS[2],0xffc7d6e5,AXIS_COLORS[0],0xffc7d6e5,AXIS_COLORS[1],0xffc7d6e5,AXIS_COLORS[2]};
+        int total=0;for(String part:text)total+=font.width(part);
+        int x=g.guiWidth()/2-total/2;
+        for(int i=0;i<text.length;i++){g.text(font,text[i],x,y,colors[i],false);x+=font.width(text[i]);}
+    }
     public static void hud(Gfx g){
         if(!active())return;var mc=Minecraft.getInstance();int x=g.guiWidth()/2+94,y=g.guiHeight()-23;g.fill(x,y,x+23,y+23,0xff172330);g.outline(x,y,23,23,0xffffd66d);g.text(mc.font,"0",x+9,y+8,0xffffd66d,false);
         if(CraftiumClient.held(CraftiumClient.contextKey)){int left=g.guiWidth()/2+100,top=g.guiHeight()-205;var all=Options.BuilderTool.values();g.fill(left-4,top-20,left+144,top+all.length*22+4,0xf510151c);g.text(mc.font,"Builder tools",left,top-14,0xffdce6ef,false);for(int i=0;i<all.length;i++){g.fill(left,top+i*22,left+140,top+i*22+21,all[i]==ClientState.options.builderTool?0xff315b84:0xff223247);g.text(mc.font,all[i].name().replace('_',' '),left+6,top+i*22+6,0xffdce6ef,false);}}
         String label=name()+"  ·  Hold Alt + wheel: tools";g.text(mc.font,label,g.guiWidth()/2-mc.font.width(label)/2,g.guiHeight()-69,0xffe6cf8b,false);
-        String hint=ClientState.options.builderTool==Options.BuilderTool.EXTRUDE?"LMB Shrink  ·  RMB Extrude":ClientState.options.builderTool==Options.BuilderTool.SYMMETRY?"RMB Set node  ·  Ctrl+F Mirror  ·  Ctrl+R Rotate":first==null?"LMB First corner  ·  RMB Second corner  ·  MMB Face":preview?"RMB Confirm  ·  Wheel Nudge  ·  X/Y/Z Axis  ·  Ctrl+R/F Transform":"RMB Second corner  ·  MMB Expand face  ·  Wheel Preview";
+        String hint=ClientState.options.builderTool==Options.BuilderTool.EXTRUDE?"LMB Shrink  ·  RMB Extrude":ClientState.options.builderTool==Options.BuilderTool.SYMMETRY?"RMB Set node  ·  Ctrl+F Mirror  ·  Ctrl+R Rotate":first==null?"LMB First corner  ·  RMB Second corner  ·  MMB Face":second!=null?"LMB Cancel  ·  RMB Place  ·  MMB Face  ·  Wheel Nudge  ·  XYZ Axis  ·  Ctrl+R/F":"RMB Second corner  ·  MMB Expand face  ·  Wheel Preview";
         g.text(mc.font,hint,g.guiWidth()/2-mc.font.width(hint)/2,g.guiHeight()-57,0xffc7d6e5,false);
-        if(first!=null){Point a=min(),b=max();String info="Size "+(b.x()-a.x()+1)+" × "+(b.y()-a.y()+1)+" × "+(b.z()-a.z()+1)+"   Offset "+offset.coordinates();g.text(mc.font,info,g.guiWidth()/2-mc.font.width(info)/2,g.guiHeight()-81,0xffc7d6e5,false);}
+        if(first!=null){Point a=min(),b=max();axisReadout(g,mc.font,g.guiHeight()-81,"Size "," × ",b.x()-a.x()+1,b.y()-a.y()+1,b.z()-a.z()+1,"   Offset ",", ",offset.x(),offset.y(),offset.z());}
     }
 }
