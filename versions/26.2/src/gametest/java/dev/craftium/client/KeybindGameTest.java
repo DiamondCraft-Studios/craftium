@@ -78,7 +78,7 @@ public final class KeybindGameTest {
         pause();c.runOnClient(mc->{mc.hitResult=new BlockHitResult(new Vec3(14.5,12,14.5),Direction.UP,new BlockPos(14,12,14),false);CraftiumClient.ingameKey(new KeyEvent('V',0,2),GLFW_PRESS);});settle(c,w);
         require(w.getServer().computeOnServer(server->server.overworld().getEntities((net.minecraft.world.entity.Entity)null,new AABB(13,12,13,16,16,16),e->e instanceof net.minecraft.world.entity.Display).size()==1),"Ingame Ctrl+V did not paste entity clipboard");
         pause();c.runOnClient(mc->CraftiumClient.ingameKey(new KeyEvent(GLFW_KEY_DELETE,0,0),GLFW_PRESS));settle(c,w);require(w.getServer().computeOnServer(server->server.overworld().getEntity(java.util.UUID.fromString(entity))==null),"Ingame Delete did not remove selected entity");
-        c.runOnClient(mc->{CraftiumClient.open(false);mc.gui.setScreen(new EditorKeybindScreen(mc.gui.screen()));});c.waitTicks(3);c.takeScreenshot("craftium-keybinds");
+        c.runOnClient(mc->{CraftiumClient.open(false);mc.gui.setScreen(new KeyboardShortcutsScreen(mc.gui.screen()));});c.waitTicks(3);c.takeScreenshot("craftium-keybinds");
         c.runOnClient(mc->mc.gui.setScreen(null));
         System.out.println("CRAFTIUM_KEYBINDS_PASS native_13_tools contextual_E camera_pan_orbit_radius biome_toggle custom_bind_persistence camera_relative_nudges fill copy save_dialog rotate_flip_XYZ duplicate_cut alt_hold tenth_slot block_state_copy entity_copy_paste_delete_undo entity_duplicate_cut entity_only_blueprint");
     }
