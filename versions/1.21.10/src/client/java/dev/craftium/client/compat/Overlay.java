@@ -24,11 +24,12 @@ import java.util.List;
  * Lines and points are camera-facing and sized in screen pixels so they keep the same thickness at any distance.
  */
 public final class Overlay {
-    private sealed interface Prim permits Line,Box,Point,Label {}
+    private sealed interface Prim permits Line,Box,Point,Label,Quad {}
     private record Line(Vec3 from,Vec3 to,int color,float width) implements Prim {}
     private record Box(AABB box,int stroke,float width,int fill) implements Prim {}
     private record Point(Vec3 at,int color,float size) implements Prim {}
     private record Label(String text,BlockPos pos,int color,int background,float scale) implements Prim {}
+    private record Quad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color) implements Prim {}
 
     private static final List<Prim> building=new ArrayList<>();
     private static List<Prim> shown=List.of();
@@ -51,6 +52,8 @@ public final class Overlay {
     public static void line(Vec3 from,Vec3 to,int color,float width){building.add(new Line(from,to,color,width));}
     public static void box(AABB box,int strokeColor,float strokeWidth,int fillColor){building.add(new Box(box,strokeColor,strokeWidth,fillColor));}
     public static void point(Vec3 at,int color,float size){building.add(new Point(at,color,size));}
+    /** A filled quad. Corners are in order, counter-clockwise when seen from the side it faces. */
+    public static void face(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){building.add(new Quad(a,b,c,d,color));}
     public static void text(String text,BlockPos pos,int color,int background,float scale){building.add(new Label(text,pos,color,background,scale));}
 
     // ---- drawing
@@ -71,6 +74,7 @@ public final class Overlay {
             }
             case Line l->{if(visible(l.color))strip(quads,pose,view,l.from,l.to,l.color,l.width);}
             case Point p->{if(visible(p.color))square(quads,pose,view,p);}
+            case Quad q->{if(visible(q.color))quad(quads,pose,view,q.color,q.a,q.b,q.c,q.d);}
             case Label ignored->{}
         }
         // Text asks the buffer source for its own buffers, which closes the one held above, so labels go last.

@@ -218,7 +218,7 @@ public final class CraftiumClient implements ClientModInitializer {
                 Overlay.text(biome,hit.getBlockPos().above(2),0xffabefb7,0xbb151c26,.025f);
             }
             var s=ClientState.status;
-            for(AABB box:screen.showSelection()?SelectionOverlay.boxes:List.<AABB>of())if(TransformGizmo.selectionPreview())TransformGizmo.box(box);else Overlay.box(box,0xffffd66d,1,0x225d91ff);
+            if(screen.showSelection())SelectionOverlay.draw(TransformGizmo.selectionPreview());
             if(PlacementPreview.active()) {
                 Point p=PlacementPreview.origin;Vec3 anchor=new Vec3(p.x(),p.y(),p.z());
                 for(AABB box:PlacementPreview.boxes)TransformGizmo.box(box.move(anchor));

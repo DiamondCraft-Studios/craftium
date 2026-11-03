@@ -1,15 +1,55 @@
 package dev.craftium.client;
 
 import dev.craftium.core.*;
+import dev.craftium.client.compat.Overlay;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
 final class SelectionOverlay {
+    private static final int STROKE=0xffffd66d,FILL=0x225d91ff;
+    /** Beyond these the outline is too detailed to draw every tick, so the selection falls back to its bounding box. */
+    private static final int MAX_EDGES=8192,MAX_FACES=4096;
     private static String encoded="";
-    static List<AABB> boxes=List.of();
+    private static SelectionOutline.Result outline=SelectionOutline.Result.EMPTY;
+    private static AABB bounds;
     private SelectionOverlay(){}
     static void update(String data){
-        if(Objects.equals(encoded,data))return;encoded=data;boxes=merge(SelectionCodec.decode(data));
+        if(Objects.equals(encoded,data))return;encoded=data;
+        var points=SelectionCodec.decode(data);
+        outline=SelectionOutline.of(points);
+        bounds=null;
+        for(Point p:points){var cell=new AABB(p.x(),p.y(),p.z(),p.x()+1,p.y()+1,p.z()+1);bounds=bounds==null?cell:bounds.minmax(cell);}
+    }
+    /**
+     * Draws the selection as one outline around its outer surface, with a fill on each exterior face. While the
+     * transform gizmo is being dragged only the outline is drawn, moved by the transform being applied.
+     */
+    static void draw(boolean transforming){
+        if(bounds==null)return;
+        if(outline.edges().size()>MAX_EDGES){
+            if(transforming)TransformGizmo.box(bounds);else Overlay.box(bounds,STROKE,1,FILL);
+            return;
+        }
+        for(var s:outline.edges()){
+            Vec3 a=new Vec3(s.x0(),s.y0(),s.z0()),b=new Vec3(s.x1(),s.y1(),s.z1());
+            if(transforming)TransformGizmo.line(a,b);else Overlay.line(a,b,STROKE,1);
+        }
+        if(transforming||outline.faces().size()>MAX_FACES)return;
+        for(var f:outline.faces())face(f);
+    }
+    /** Sends one exterior rectangle to the overlay, wound so it faces outward. */
+    private static void face(SelectionOutline.Face f){
+        int[] lo={f.x0(),f.y0(),f.z0()},hi={f.x1(),f.y1(),f.z1()};
+        int axis=f.axis(),u=(axis+1)%3,v=(axis+2)%3;
+        // (axis, u, v) is a right-handed cycle, so this ring runs counter-clockwise seen from the +axis side.
+        int[][] ring={{lo[u],lo[v]},{hi[u],lo[v]},{hi[u],hi[v]},{lo[u],hi[v]}};
+        Vec3[] c=new Vec3[4];
+        for(int i=0;i<4;i++){
+            double[] p=new double[3];p[axis]=lo[axis];p[u]=ring[i][0];p[v]=ring[i][1];
+            c[i]=new Vec3(p[0],p[1],p[2]);
+        }
+        if(f.sign()>0)Overlay.face(c[0],c[1],c[2],c[3],FILL);else Overlay.face(c[3],c[2],c[1],c[0],FILL);
     }
     static List<AABB> merge(Collection<Point> points){
         var remaining=new HashSet<>(points);var ordered=new ArrayList<>(points);
