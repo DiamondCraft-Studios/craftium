@@ -236,7 +236,7 @@ public final class CraftiumClient implements ClientModInitializer {
         Minecraft mc=Minecraft.getInstance();if(mc.player==null||mc.level==null)return null;
         var camera=ClientCompat.camera(mc);
         float nx=(float)(guiX/mc.getWindow().getGuiScaledWidth()*2-1),ny=(float)(1-guiY/mc.getWindow().getGuiScaledHeight()*2);
-        Vec3 direction=ClientCompat.nearPlane(camera).getPointOnPlane(nx,ny).normalize();
+        Vec3 direction=ClientCompat.ray(camera,nx,ny);
         Vec3 start=camera.position();
         var hit=mc.level.clip(new ClipContext(start,start.add(direction.scale(256)),ClipContext.Block.OUTLINE,ClientState.options.solidFluids?ClipContext.Fluid.ANY:ClipContext.Fluid.NONE,mc.player));
         return hit.getType()==HitResult.Type.BLOCK?hit:null;

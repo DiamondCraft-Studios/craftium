@@ -737,7 +737,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(minecraft.player==null||wheel==0||!inViewport(x/scale,y/scale))return;
         var camera=ClientCompat.camera(minecraft);var near=ClientCompat.nearPlane(camera);
         Vec3 eye=camera.position();
-        Vec3 ray=near.getPointOnPlane((float)(x/minecraft.getWindow().getGuiScaledWidth()*2-1),(float)(1-y/minecraft.getWindow().getGuiScaledHeight()*2)).normalize();
+        Vec3 ray=ClientCompat.ray(camera,(float)(x/minecraft.getWindow().getGuiScaledWidth()*2-1),(float)(1-y/minecraft.getWindow().getGuiScaledHeight()*2));
         var hit=CraftiumClient.raycast(x,y);
         double distance=hit==null?12:eye.distanceTo(hit.getLocation());
         double step=Math.clamp(distance*.15,.4,24)*Math.signum(wheel)*Math.min(3,Math.abs(wheel));

@@ -82,7 +82,7 @@ final class TransformGizmo {
         return chosen;
     }
     private static boolean selectEntity(double x,double y){var mc=Minecraft.getInstance();if(mc.level==null)return false;Entity closest=null;double best=100;for(var e:mc.level.entitiesForRendering()){if(!(e instanceof Display)&&!(e instanceof Marker)||e.distanceToSqr(mc.player)>128*128)continue;if(e instanceof Display&&!ClientState.options.showDisplayGizmos||e instanceof Marker&&!ClientState.options.showMarkerGizmos)continue;var pixel=project(e.position());if(pixel==null)continue;double d=Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2);if(d<best){best=d;closest=e;}}if(closest==null)return false;ClientState.options.entityUuid=closest.getUUID().toString();ClientState.options.gizmoTarget=Options.GizmoTarget.ENTITY;CraftiumClient.send("entity_select_uuid",CraftiumClient.point(closest.blockPosition()),null);return true;}
-    private static double angle(double x,double y,Vec3 center,int axis){var mc=Minecraft.getInstance();var camera=ClientCompat.camera(mc);Vec3 ray=ClientCompat.nearPlane(camera).getPointOnPlane((float)(x/mc.getWindow().getGuiScaledWidth()*2-1),(float)(1-y/mc.getWindow().getGuiScaledHeight()*2)).normalize();double divisor=ray.dot(basis[axis]);if(Math.abs(divisor)<1e-5){var pixel=project(center);return pixel==null?0:Math.atan2(y-pixel[1],x-pixel[0]);}double distance=center.subtract(camera.position()).dot(basis[axis])/divisor;Vec3 v=camera.position().add(ray.scale(distance)).subtract(center);return Math.atan2(v.dot(basis[(axis+2)%3]),v.dot(basis[(axis+1)%3]));}
+    private static double angle(double x,double y,Vec3 center,int axis){var mc=Minecraft.getInstance();var camera=ClientCompat.camera(mc);Vec3 ray=ClientCompat.ray(camera,(float)(x/mc.getWindow().getGuiScaledWidth()*2-1),(float)(1-y/mc.getWindow().getGuiScaledHeight()*2));double divisor=ray.dot(basis[axis]);if(Math.abs(divisor)<1e-5){var pixel=project(center);return pixel==null?0:Math.atan2(y-pixel[1],x-pixel[0]);}double distance=center.subtract(camera.position()).dot(basis[axis])/divisor;Vec3 v=camera.position().add(ray.scale(distance)).subtract(center);return Math.atan2(v.dot(basis[(axis+2)%3]),v.dot(basis[(axis+1)%3]));}
     private static double snap(double value,double increment){return Math.rint(value/increment)*increment;}
     static boolean drag(double x,double y){
         if(dragging==null)return false;normalizationDirty=true;var mc=Minecraft.getInstance();boolean entity=dragging.kind==Kind.ENTITY;double increment=entity?(mc.hasShiftDown()?.0001:mc.hasControlDown()?1:1d/16):1;
@@ -315,7 +315,7 @@ final class TransformGizmo {
     private static double[] dragFlips;
     private static Vec3 pointerRay(double x,double y){
         var mc=Minecraft.getInstance();var camera=ClientCompat.camera(mc);
-        return ClientCompat.nearPlane(camera).getPointOnPlane((float)(x/mc.getWindow().getGuiScaledWidth()*2-1),(float)(1-y/mc.getWindow().getGuiScaledHeight()*2)).normalize();
+        return ClientCompat.ray(camera,(float)(x/mc.getWindow().getGuiScaledWidth()*2-1),(float)(1-y/mc.getWindow().getGuiScaledHeight()*2));
     }
     private static void grabFree(Vec3 anchor,double x,double y){
         Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
