@@ -356,7 +356,7 @@ public final class EditorServer {
             }
             case LINE -> {
                 if(s.line==null) {s.line=p;send(player,s,"Line start set · choose the endpoint",false);}
-                else {for(Point point:BrushMath.line(s.line,p))for(Point at:BrushMath.brush(point,Math.min(o.radius,4),o.shape,o.hollow))plan.put(at,plan.material);
+                else {for(Point point:BrushMath.line(s.line,p))for(Point at:BrushMath.brush(point,Math.min(o.radius,4),o.shape,o.hollow,o.outlineThickness,o.pixelPerfect))plan.put(at,plan.material);
                     s.line=null;start(player,s,plan.finish("Draw line"));}
             }
             case SHAPE -> {

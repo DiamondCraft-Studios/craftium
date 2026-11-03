@@ -47,14 +47,24 @@ public final class BrushMath {
     }
 
     public static List<Point> brush(Point center, int radius, Shape shape, boolean hollow) {
+        return brush(center, radius, shape, hollow, 1, false);
+    }
+
+    /**
+     * The blocks of the shape. A hollow one keeps a wall {@code thickness} blocks thick: by cutting off an inner copy of the
+     * shape, or with {@code pixelPerfect} by keeping the blocks nearest the outside along each part of the wall's own direction
+     * (see {@link OutlineMath#thin}), which is even all the way round.
+     */
+    public static List<Point> brush(Point center, int radius, Shape shape, boolean hollow, int thickness, boolean pixelPerfect) {
         if (radius < 1 || radius > 24) throw new IllegalArgumentException("Radius must be 1–24");
         var points = new ArrayList<Point>();
+        int inner = radius - Math.max(1, thickness); // below zero there is nothing to cut out, so the shape stays solid
+        boolean cut = hollow && !pixelPerfect && inner >= 0;
         for (int x = -radius; x <= radius; x++) for (int y = -radius; y <= radius; y++)
             for (int z = -radius; z <= radius; z++) {
-                if (contains(shape, x, y, z, radius) && (!hollow ||
-                    !contains(shape, x, y, z, radius - 1))) points.add(center.add(x, y, z));
+                if (contains(shape, x, y, z, radius) && (!cut || !contains(shape, x, y, z, inner))) points.add(center.add(x, y, z));
             }
-        return points;
+        return hollow && pixelPerfect ? OutlineMath.thin(points, Math.max(1, thickness)) : points;
     }
 
     public static List<Point> line(Point a, Point b) {

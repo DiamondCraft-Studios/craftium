@@ -29,7 +29,7 @@ public final class Geometry {
     }
     public static List<Point> shape(Point center,Options o) {
         if(o.shapeKind==Options.ShapeKind.BRUSH&&o.yaw==0&&o.pitch==0&&o.roll==0&&o.sizeX==1&&o.sizeY==1&&o.sizeZ==1)
-            return BrushMath.brush(center,o.radius,o.shape,o.hollow);
+            return BrushMath.brush(center,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect);
         double scaled=o.yaw==0&&o.pitch==0&&o.roll==0?Math.max(o.sizeX,Math.max(o.sizeY,o.sizeZ)):Math.sqrt(o.sizeX*o.sizeX+o.sizeY*o.sizeY+o.sizeZ*o.sizeZ);
         int extent=(int)Math.ceil(o.radius*scaled);
         if(extent>64)throw new IllegalArgumentException("Scaled shape radius exceeds 64 blocks");var result=new ArrayList<Point>();
@@ -40,14 +40,14 @@ public final class Geometry {
             double px=x*cc-y*sc,py=x*sc+y*cc,pz=z,qy=py*cb-pz*sb;pz=py*sb+pz*cb;py=qy;
             Vector v=new Vector(px*ca-pz*sa,py,px*sa+pz*ca);
             double a=v.x/(o.radius*o.sizeX),b=v.y/(o.radius*o.sizeY),c=v.z/(o.radius*o.sizeZ);
-            if(inside(a,b,c,o) && (!o.hollow||shell(v,o))) {
+            if(inside(a,b,c,o) && (!o.hollow||o.pixelPerfect||shell(v,o))) {
                 result.add(center.add(x,y,z));if(result.size()>Selection.LIMIT)throw new IllegalArgumentException("Shape exceeds block limit");
             }
         }
-        return result;
+        return o.hollow&&o.pixelPerfect?OutlineMath.thin(result,Math.max(1,o.outlineThickness)):result;
     }
     private static boolean shell(Vector v,Options o){
-        double r=Math.max(.25,o.radius-1);
+        double r=Math.max(.25,o.radius-Math.max(1,o.outlineThickness));
         return !inside(v.x/(r*o.sizeX),v.y/(r*o.sizeY),v.z/(r*o.sizeZ),o);
     }
     private static boolean inside(double x,double y,double z,Options o) {return inside(x,y,z,o,o.shapeKind);}

@@ -17,6 +17,9 @@ public final class Options {
     public double density = 0.5;
     public long seed = 42;
     public boolean invert, hollow, surfaceOnly = true, keepExisting, pasteAir;
+    /** For a hollow shape: how many blocks thick the wall is, and whether it is drawn the way a pixel artist would, one block per column with no doubled steps. */
+    public int outlineThickness = 1;
+    public boolean pixelPerfect;
     public boolean noUpdates, forcePlace, replaceMode, enhancedFlight, bulldozer, tinker;
     public boolean inSelection;
     /** Whether undo and redo flash the blocks they change. */
@@ -178,7 +181,7 @@ public final class Options {
         scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);
         sizeX=Math.copySign(bounded(Math.abs(sizeX),.1,8),sizeX);sizeY=Math.copySign(bounded(Math.abs(sizeY),.1,8),sizeY);sizeZ=Math.copySign(bounded(Math.abs(sizeZ),.1,8),sizeZ); // negative flips
         yaw=bounded(yaw,-360,360);pitch=bounded(pitch,-360,360);roll=bounded(roll,-360,360);
-        exponent=bounded(exponent,.25,16);innerRadius=bounded(innerRadius,.05,.95);slack=bounded(slack,-64,64);
+        exponent=bounded(exponent,.25,16);innerRadius=bounded(innerRadius,.05,.95);outlineThickness=Math.clamp(outlineThickness,1,8);slack=bounded(slack,-64,64);
         baseChance=bounded(baseChance,0,1);minSpacing=bounded(minSpacing,.1,8);smoothing=bounded(smoothing,.1,5);threshold=bounded(threshold,0,1);meldStrength=bounded(meldStrength,0,3);
         polygonSides=Math.clamp(polygonSides,3,32);fluidHeight=Math.clamp(fluidHeight,0,100);fontSize=Math.clamp(fontSize,6,96);textThickness=Math.clamp(textThickness,1,8);modelColumns=Math.clamp(modelColumns,2,32);
         if(nodes==null||nodes.size()>64||nodes.contains(null))throw new IllegalArgumentException("Maximum 64 control points");
