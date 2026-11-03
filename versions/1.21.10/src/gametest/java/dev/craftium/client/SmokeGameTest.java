@@ -68,6 +68,12 @@ public final class SmokeGameTest implements FabricClientGameTest {
             // An irregular selection (an L-shaped prism) must be one outline around its silhouette, nothing inside.
             ctx.runOnClient(mc->{
                 BlockPos base=mc.player.blockPosition().offset(-3,0,6);
+                int bx=base.getX(),by=base.getY(),bz=base.getZ();
+                // Real blocks, so the selection has models to draw: a bar with a slab end, and a post topped by a stair.
+                mc.getConnection().sendCommand("fill "+bx+" "+by+" "+bz+" "+(bx+3)+" "+by+" "+(bz+1)+" stone_bricks");
+                mc.getConnection().sendCommand("fill "+(bx+4)+" "+by+" "+bz+" "+(bx+4)+" "+by+" "+(bz+1)+" stone_brick_slab");
+                mc.getConnection().sendCommand("fill "+bx+" "+(by+1)+" "+bz+" "+bx+" "+(by+2)+" "+(bz+1)+" oak_planks");
+                mc.getConnection().sendCommand("fill "+bx+" "+(by+3)+" "+bz+" "+bx+" "+(by+3)+" "+(bz+1)+" oak_stairs[facing=east]");
                 var points=new java.util.ArrayList<dev.craftium.core.Point>();
                 for(int x=0;x<5;x++)for(int z=0;z<2;z++)points.add(new dev.craftium.core.Point(base.getX()+x,base.getY(),base.getZ()+z));
                 for(int y=1;y<4;y++)for(int z=0;z<2;z++)points.add(new dev.craftium.core.Point(base.getX(),base.getY()+y,base.getZ()+z));
