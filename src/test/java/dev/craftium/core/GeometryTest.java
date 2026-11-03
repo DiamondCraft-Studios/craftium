@@ -24,6 +24,21 @@ class GeometryTest {
             assertFalse(sphere.contains(new Point(r + 1,0,0)));
         }
     }
+    @Test void turnedAndScaledShapeMatchesTheCellByCellDefinition() {
+        var o = new Options(); o.shape = BrushMath.Shape.SPHERE; o.radius = 6;
+        o.yaw = 37; o.pitch = -52; o.roll = 11; o.sizeX = 1.5; o.sizeY = .6; o.sizeZ = 1;
+        var made = new HashSet<>(Geometry.shape(new Point(0,0,0), o));
+        double reach = (o.radius + .5) / o.radius;
+        var expected = new HashSet<Point>();
+        int extent = (int) Math.ceil(o.radius * Math.sqrt(o.sizeX*o.sizeX + o.sizeY*o.sizeY + o.sizeZ*o.sizeZ));
+        for (int x = -extent; x <= extent; x++) for (int y = -extent; y <= extent; y++) for (int z = -extent; z <= extent; z++) {
+            var v = Geometry.inverseRotate(new Geometry.Vector(x, y, z), o.yaw, o.pitch, o.roll);
+            double a = v.x() / (o.radius * o.sizeX), b = v.y() / (o.radius * o.sizeY), c = v.z() / (o.radius * o.sizeZ);
+            if (a*a + b*b + c*c <= reach*reach) expected.add(new Point(x, y, z));
+        }
+        assertFalse(made.isEmpty());
+        assertEquals(expected, made);
+    }
     @Test void everyShapeIsInExactlyOnePickerGroup() {
         var listed = new ArrayList<BrushMath.Shape>();
         BrushMath.GROUPS.values().forEach(listed::addAll);

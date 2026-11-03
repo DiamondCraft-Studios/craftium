@@ -33,8 +33,12 @@ public final class Geometry {
         double scaled=o.yaw==0&&o.pitch==0&&o.roll==0?Math.max(o.sizeX,Math.max(o.sizeY,o.sizeZ)):Math.sqrt(o.sizeX*o.sizeX+o.sizeY*o.sizeY+o.sizeZ*o.sizeZ);
         int extent=(int)Math.ceil(o.radius*scaled);
         if(extent>64)throw new IllegalArgumentException("Scaled shape radius exceeds 64 blocks");var result=new ArrayList<Point>();
+        // The turn is the same for every cell, so its sines and cosines are worked out once; this is inverseRotate unrolled.
+        double ra=Math.toRadians(-o.yaw),rb=Math.toRadians(-o.pitch),rc=Math.toRadians(-o.roll);
+        double ca=Math.cos(ra),sa=Math.sin(ra),cb=Math.cos(rb),sb=Math.sin(rb),cc=Math.cos(rc),sc=Math.sin(rc);
         for(int x=-extent;x<=extent;x++)for(int y=-extent;y<=extent;y++)for(int z=-extent;z<=extent;z++){
-            Vector v=inverseRotate(new Vector(x,y,z),o.yaw,o.pitch,o.roll);
+            double px=x*cc-y*sc,py=x*sc+y*cc,pz=z,qy=py*cb-pz*sb;pz=py*sb+pz*cb;py=qy;
+            Vector v=new Vector(px*ca-pz*sa,py,px*sa+pz*ca);
             double a=v.x/(o.radius*o.sizeX),b=v.y/(o.radius*o.sizeY),c=v.z/(o.radius*o.sizeZ);
             if(inside(a,b,c,o) && (!o.hollow||shell(v,o))) {
                 result.add(center.add(x,y,z));if(result.size()>Selection.LIMIT)throw new IllegalArgumentException("Shape exceeds block limit");
