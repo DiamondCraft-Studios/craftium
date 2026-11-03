@@ -27,7 +27,7 @@ final class MagicPreview {
         if(hit==null||mc.level==null||o.tool!=Tool.MAGIC_SELECT||!o.magicPreview||TransformGizmo.dragging()||PlacementPreview.active()){key=null;shape=OutlineShape.EMPTY;return;}
         BlockPos at=hit.getBlockPos();
         // The world can change under a still cursor, so the result is also refreshed about once a second.
-        Object now=java.util.List.of(at,o.compare,o.magicPreviewLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,mc.level.getGameTime()/20);
+        Object now=java.util.List.of(at,o.compare,o.magicPreviewLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,java.util.List.copyOf(o.maskActive),o.maskExclude,mc.level.getGameTime()/20);
         if(!Objects.equals(key,now)){key=now;shape=compute(mc,at,o);}
         if(shape.isEmpty())return;
         shape.draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,STROKE,1),STROKE,FILL,true);
@@ -42,13 +42,14 @@ final class MagicPreview {
     }
     /** What the search needs to know about the world, comparing blocks with the one at {@code at} as the Magic Wand's settings say. */
     static MagicWand.World world(Minecraft mc,BlockPos at,Options o){
-        var level=mc.level;var origin=level.getBlockState(at);var compare=o.compare; // read now: a search may outlast a change of setting
+        var level=mc.level;var origin=level.getBlockState(at);var compare=o.compare;var blockMask=dev.craftium.server.BlockMask.of(o); // read now: a search may outlast a change of setting
         var originData=compare==Options.Compare.NBT?data(level,at):null;
         return new MagicWand.World(){
             public boolean loaded(Point p){return level.hasChunk(p.x()>>4,p.z()>>4);}
             public boolean air(Point p){return level.getBlockState(pos(p)).isAir();}
             public boolean matches(Point p){
                 var s=level.getBlockState(pos(p));
+                if(!blockMask.allows(s))return false;
                 return switch(compare){
                     case ANY->!s.isAir();
                     case BLOCK->s.is(origin.getBlock());
