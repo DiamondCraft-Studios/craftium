@@ -30,6 +30,7 @@ public final class Overlay {
     private record Ghost(List<BlockPos> models,List<BlockPos> places,java.util.Set<BlockPos> placed,List<net.minecraft.world.level.block.state.BlockState> states,int tint){}
     private static final List<Ghost> building=new ArrayList<>();
     private static List<Ghost> shown=List.of();
+    private static Runnable pendingFrame,frame;
     /** Each model is scaled this much about its centre so the ghost clears the real block instead of fighting it for depth. */
     private static final float GHOST_SCALE=1.004f;
     private static final int FULL_BRIGHT=0xF000F0;
@@ -45,14 +46,21 @@ public final class Overlay {
     /** Registers the per-frame submission of block models, and clears them on disconnect. Gizmos need no setup. */
     public static void install(){
         LevelRenderEvents.COLLECT_SUBMITS.register(Overlay::submitBlocks);
-        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{building.clear();shown=List.of();});
+        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{building.clear();shown=List.of();pendingFrame=frame=null;});
     }
 
     public static Scope begin(Minecraft mc){
         var collector=mc.collectPerTickGizmos();
-        building.clear();
-        return ()->{shown=List.copyOf(building);collector.close();};
+        building.clear();pendingFrame=null;
+        return ()->{shown=List.copyOf(building);frame=pendingFrame;collector.close();};
     }
+
+    /**
+     * Draws with {@code draw} on every frame, not just every tick, until the next batch replaces it. For what follows the
+     * camera or the pointer, like a gizmo, which would otherwise step at the tick rate. Only lines, boxes, faces, points
+     * and labels belong in it; block models are queued per tick.
+     */
+    public static void frame(Runnable draw){pendingFrame=draw;}
 
     public static void line(Vec3 from,Vec3 to,int color,float width){Gizmos.line(from,to,color,width).setAlwaysOnTop();}
     public static void box(AABB box,int strokeColor,float strokeWidth,int fillColor){Gizmos.cuboid(box,new GizmoStyle(strokeColor,strokeWidth,fillColor)).setAlwaysOnTop();}
@@ -100,6 +108,8 @@ public final class Overlay {
     private static void submitBlocks(LevelRenderContext context){
         var ghosts=shown;
         var mc=Minecraft.getInstance();
+        var hook=frame;
+        if(hook!=null&&mc.level!=null)try(var collector=mc.levelRenderer.collectPerFrameRenderThreadGizmos()){hook.run();}
         if(ghosts.isEmpty()||mc.level==null)return;
         var eye=ClientCompat.camera(mc).position();
         var stack=context.poseStack();

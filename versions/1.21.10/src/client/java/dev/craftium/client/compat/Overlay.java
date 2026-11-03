@@ -39,6 +39,9 @@ public final class Overlay {
 
     private static final List<Prim> building=new ArrayList<>();
     private static List<Prim> shown=List.of();
+    /** Where the primitives being submitted go: the tick's batch, or the frame's own while a frame hook runs. */
+    private static List<Prim> out=building;
+    private static Runnable pendingFrame,frame;
 
     private Overlay(){}
 
@@ -50,16 +53,22 @@ public final class Overlay {
     /** Registers the frame callback that draws the published batch, and clears it on disconnect. */
     public static void install(){
         WorldRenderEvents.END_MAIN.register(Overlay::draw);
-        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{building.clear();shown=List.of();});
+        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{building.clear();shown=List.of();pendingFrame=frame=null;});
     }
 
-    public static Scope begin(Minecraft mc){building.clear();return ()->shown=List.copyOf(building);}
+    public static Scope begin(Minecraft mc){building.clear();pendingFrame=null;return ()->{shown=List.copyOf(building);frame=pendingFrame;};}
 
-    public static void line(Vec3 from,Vec3 to,int color,float width){building.add(new Line(from,to,color,width));}
-    public static void box(AABB box,int strokeColor,float strokeWidth,int fillColor){building.add(new Box(box,strokeColor,strokeWidth,fillColor));}
-    public static void point(Vec3 at,int color,float size){building.add(new Point(at,color,size));}
+    /**
+     * Draws with {@code draw} on every frame, not just every tick, until the next batch replaces it. For what follows the
+     * camera or the pointer, like a gizmo, which would otherwise step at the tick rate. Block models belong in the tick's batch.
+     */
+    public static void frame(Runnable draw){pendingFrame=draw;}
+
+    public static void line(Vec3 from,Vec3 to,int color,float width){out.add(new Line(from,to,color,width));}
+    public static void box(AABB box,int strokeColor,float strokeWidth,int fillColor){out.add(new Box(box,strokeColor,strokeWidth,fillColor));}
+    public static void point(Vec3 at,int color,float size){out.add(new Point(at,color,size));}
     /** A filled quad. Corners are in order, counter-clockwise when seen from the side it faces. */
-    public static void face(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){building.add(new Quad(a,b,c,d,color));}
+    public static void face(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){out.add(new Quad(a,b,c,d,color));}
     /**
      * The real models of the blocks at {@code positions}, drawn translucent and tinted by {@code tint} (ARGB)
      * over the blocks themselves, so stairs, slabs and fences are highlighted in their true shape. The list is
@@ -70,19 +79,24 @@ public final class Overlay {
      * Like {@link #blocks(List,int)}, but the model of {@code models.get(i)} is drawn at {@code places.get(i)}. This
      * previews blocks that are about to move. Both lists must have the same size and are not copied.
      */
-    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){building.add(new Blocks(models,places,new java.util.HashSet<>(places),null,tint));}
+    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){out.add(new Blocks(models,places,new java.util.HashSet<>(places),null,tint));}
     /**
      * Draws {@code states.get(i)} at {@code places.get(i)}, for blocks that are not in the world yet, such as an edit
      * waiting to be confirmed. Both lists must have the same size and are not copied.
      */
-    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){building.add(new Blocks(places,places,new java.util.HashSet<>(places),states,tint));}
-    public static void text(String text,BlockPos pos,int color,int background,float scale){building.add(new Label(text,pos,color,background,scale));}
+    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){out.add(new Blocks(places,places,new java.util.HashSet<>(places),states,tint));}
+    public static void text(String text,BlockPos pos,int color,int background,float scale){out.add(new Label(text,pos,color,background,scale));}
 
     // ---- drawing
 
     private static void draw(WorldRenderContext context){
         var prims=shown;
         var mc=Minecraft.getInstance();
+        if(frame!=null&&mc.level!=null){
+            var extra=new ArrayList<Prim>(prims);var saved=out;out=extra;
+            try{frame.run();}finally{out=saved;}
+            prims=extra;
+        }
         if(prims.isEmpty()||mc.level==null)return;
         var camera=ClientCompat.camera(mc);
         var view=new View(camera.position(),camera.getLeftVector(),camera.getUpVector(),

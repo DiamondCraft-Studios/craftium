@@ -30,6 +30,10 @@ public final class ClientState {
     /** The selection the server just sent while the popup is waiting, kept aside so it is not built or drawn until confirmed. */
     public static String heldSelection="";
     public static boolean selectionPending;
+    /** When the selection action in flight was sent, or 0. One that is still out after {@link #SELECTING_DELAY} milliseconds is a large one. */
+    public static long selectingSince;
+    public static final long SELECTING_DELAY=250;
+    public static boolean selecting(){long since=selectingSince;return since!=0&&System.currentTimeMillis()-since>SELECTING_DELAY&&System.currentTimeMillis()-since<120_000;}
     public static int selectionSizeBefore;
     /** A selection this many blocks bigger than before is confirmed with the player first. */
     public static final int LARGE_SELECTION=1024;

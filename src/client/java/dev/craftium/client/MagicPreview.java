@@ -34,15 +34,22 @@ final class MagicPreview {
     }
 
     private static OutlineShape compute(Minecraft mc,BlockPos at,Options o){
-        var level=mc.level;var origin=level.getBlockState(at);
-        if(origin.isAir())return OutlineShape.EMPTY;
-        var originData=o.compare==Options.Compare.NBT?data(level,at):null;
-        var world=new MagicWand.World(){
+        if(mc.level.getBlockState(at).isAir())return OutlineShape.EMPTY;
+        var world=world(mc,at,o);
+        var result=MagicWand.select(CraftiumClient.point(at),world,new MagicWand.Params(o.magicPreviewLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,VISIT_CAP));
+        if(result.truncated()||result.found().size()>=o.magicPreviewLimit)return OutlineShape.EMPTY; // too similar: probably the terrain
+        return OutlineShape.of(result.found());
+    }
+    /** What the search needs to know about the world, comparing blocks with the one at {@code at} as the Magic Wand's settings say. */
+    static MagicWand.World world(Minecraft mc,BlockPos at,Options o){
+        var level=mc.level;var origin=level.getBlockState(at);var compare=o.compare; // read now: a search may outlast a change of setting
+        var originData=compare==Options.Compare.NBT?data(level,at):null;
+        return new MagicWand.World(){
             public boolean loaded(Point p){return level.hasChunk(p.x()>>4,p.z()>>4);}
             public boolean air(Point p){return level.getBlockState(pos(p)).isAir();}
             public boolean matches(Point p){
                 var s=level.getBlockState(pos(p));
-                return switch(o.compare){
+                return switch(compare){
                     case ANY->!s.isAir();
                     case BLOCK->s.is(origin.getBlock());
                     case STATE->s==origin;
@@ -53,9 +60,6 @@ final class MagicPreview {
             public boolean surface(Point p){int count=0;for(int[] d:SIDES)if(solid(p.add(d[0],d[1],d[2])))count++;return count<6;}
             private boolean solid(Point p){var s=level.getBlockState(pos(p));return !s.isAir()&&s.getFluidState().isEmpty();}
         };
-        var result=MagicWand.select(CraftiumClient.point(at),world,new MagicWand.Params(o.magicPreviewLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,VISIT_CAP));
-        if(result.truncated()||result.found().size()>=o.magicPreviewLimit)return OutlineShape.EMPTY; // too similar: probably the terrain
-        return OutlineShape.of(result.found());
     }
     /** The block entity data as the client knows it, which can lack what the server never syncs. */
     private static net.minecraft.nbt.CompoundTag data(net.minecraft.world.level.Level level,BlockPos at){var entity=level.getBlockEntity(at);return entity==null?null:entity.saveWithFullMetadata(level.registryAccess());}
