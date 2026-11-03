@@ -126,6 +126,9 @@ public final class Options {
     public double rebuildStartDelay=1,rebuildMaxDelay=.25,rebuildAirDelay=.01,rebuildSameDelay=.03,rebuildDifferentDelay=.08,rebuildRandomDelay=.01,rebuildHorizontalMultiplier=1,rebuildVerticalMultiplier=1;
     public double entityX,entityY,entityZ,entityScaleX=1,entityScaleY=1,entityScaleZ=1;
 
+    /** Whether placing a block is to be changed or recorded by the editor, rather than left to the game alone. */
+    public boolean placementCapabilities(){return symmetryX||symmetryY||symmetryZ||symmetryRotations>1||replaceMode||forcePlace||noUpdates||fastPlace||infiniteReach||angelPlacement||preventInteractions;}
+
     public void validate() {
         if (tool == null || shape == null || mode == null) throw new IllegalArgumentException("Invalid tool options");
         if(gizmoMode==null)gizmoMode=GizmoMode.MOVE;gizmoYaw=bounded(gizmoYaw,-360,360);gizmoPitch=bounded(gizmoPitch,-360,360);gizmoRoll=bounded(gizmoRoll,-360,360);

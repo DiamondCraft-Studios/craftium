@@ -50,6 +50,32 @@ public final class EditorServer {
         while(session.redo.size()>32)session.redo.removeLast();
         session.recalculateBytes();session.historyDirty=true;
     }
+    /** The options of a player who is building: creative, permitted and known to the editor. Null otherwise. */
+    public static Options capabilities(ServerPlayer player){var s=SESSIONS.get(player.getUUID());return s!=null&&s.options!=null&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities")?s.options:null;}
+    /** What is at a position just before vanilla places a block there, kept only when the placement is to be recorded. Null when it is not. */
+    public static Object before(ServerPlayer player,BlockPos at){var o=capabilities(player);return o!=null&&o.placementCapabilities()?BlockSnapshot.capture(player.level(),at):null;}
+    /**
+     * Vanilla has placed a block; the editor adds what it owns on top of that: the symmetric copies, and one undo step for all of them.
+     * The placement itself, with its sound and swing, is left to the game.
+     */
+    public static void placed(ServerPlayer player,BlockPos at,Object snapshot){
+        var s=SESSIONS.get(player.getUUID());var o=capabilities(player);if(s==null||o==null)return;
+        try{
+            var level=player.level();Point p=EditPlanner.point(at);var before=(BlockSnapshot)snapshot;var after=BlockSnapshot.capture(level,at);
+            var plan=new EditPlanner(level,s,o);plan.put(p,after); // the block is already there, so only its mirrors are left to change
+            var mirrors=plan.finish("Builder placement");
+            if(!mirrors.changes().isEmpty())EditProtection.check(player,mirrors);
+            var changes=new ArrayList<Session.Change>();
+            if(!(before.state()==after.state()&&Objects.equals(before.data(),after.data())))changes.add(new Session.Change(p,before,after));
+            for(var c:mirrors.changes()){
+                if(!ServerPlatform.canChange(player.getUUID(),level,c.pos()))continue;
+                c.after().place(level,EditPlanner.pos(c.pos()),mirrors.flags());changes.add(c);
+            }
+            if(changes.isEmpty())return;
+            s.remember(new Session.Edit("Builder placement",changes,List.of(),mirrors.flags()));
+            send(player,s,"Placed "+changes.size()+(changes.size()==1?" block":" blocks"),false);
+        }catch(IllegalArgumentException e){send(player,s,e.getMessage(),true);}
+    }
     public static boolean noClip(ServerPlayer player){var s=SESSIONS.get(player.getUUID());return s!=null&&s.noClip&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities");}
 
     public static void handle(ServerPlayer player,String json) {
@@ -70,7 +96,7 @@ public final class EditorServer {
             s.dimension=player.level().dimension();
             HistoryStore.attach(player,s);
             if(o.noClip&&!s.noClip&&player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}
-            s.infiniteReach=o.infiniteReach;s.noClip=o.noClip;
+            s.infiniteReach=o.infiniteReach;s.noClip=o.noClip;s.options=o;
             s.confirmEdits=o.confirmEdits;
             s.currentAction=r.action();s.recordSelection=changesSelection(r.action(),o);
             // The builder and the clipboard placement preview have their own confirmation, so they apply straight away.

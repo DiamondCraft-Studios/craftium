@@ -52,19 +52,24 @@ public final class CraftiumClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler,client)-> {
             ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);ClientState.pending=GhostBlocks.EMPTY;ClientState.largeSelection=0;
             ClientState.save();ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
-            BuilderMode.reset();
+            BuilderMode.reset();placementSynced="";
             ClientCommands.reset();
             ClientAssets.clear();bridge.clear();
             SelectionOverlay.update("");PlacementPreview.cancel();PlacementPreview.update("");
             ClientState.rulerStart=null;ClientState.rulerEnd=null;
             ClientState.rulerPoints.clear();ClientState.blueprints=List.of();ClientState.libraryVersion++;
         });
+        // What the shared placement mixins ask about the local player; only when the server runs the mod too, as it must agree with the client.
+        dev.craftium.runtime.PlayerCapabilities.client=player->{var mc=Minecraft.getInstance();return player==mc.player&&player.isCreative()&&vanillaPlacement()?ClientState.options:null;};
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
         UseBlockCallback.EVENT.register((player,level,hand,hit)->{
             var o=ClientState.options;
-            boolean place=player.getMainHandItem().getItem() instanceof BlockItem && (ClientState.symmetry()||o.replaceMode||o.forcePlace||o.noUpdates||o.fastPlace||o.infiniteReach||o.angelPlacement||o.preventInteractions);
+            boolean block=player.getMainHandItem().getItem() instanceof BlockItem;
             boolean tinker=player.getMainHandItem().isEmpty()&&o.tinker&&!player.isShiftKeyDown();
-            if(level.isClientSide() && player.isCreative() && supported() && ClientCompat.screen(Minecraft.getInstance())==null && (place||tinker))return InteractionResult.FAIL;
+            if(!level.isClientSide() || !player.isCreative() || !supported() || ClientCompat.screen(Minecraft.getInstance())!=null)return InteractionResult.PASS;
+            if(block&&vanillaPlacement()){syncPlacement();return InteractionResult.PASS;} // the game places the block; the mod bends it from the server and the client alike
+            // Without the mod on the server, nothing there can bend vanilla placement, so the click is sent as an editor request instead.
+            if(block&&o.placementCapabilities()||tinker)return InteractionResult.SUCCESS; // SUCCESS skips the server use, and the client swings the arm for it
             return InteractionResult.PASS;
         });
         AttackBlockCallback.EVENT.register((player,level,hand,pos,face)->
@@ -149,12 +154,20 @@ public final class CraftiumClient implements ClientModInitializer {
         if(!left)breakingSince=0;else if(breakingSince==0)breakingSince=now;
         if(now-lastBuilder>(o.fastPlace?70:125) && !ClientState.status.busy()) {
             BlockHitResult hit=mc.hitResult instanceof BlockHitResult b && b.getType()==HitResult.Type.BLOCK?b:null;
-            if(hit==null&&o.angelPlacement&&right){Vec3 at=mc.player.getEyePosition().add(mc.player.getLookAngle().scale(4));var pos=net.minecraft.core.BlockPos.containing(at).below();hit=new BlockHitResult(at,net.minecraft.core.Direction.UP,pos,false);}
-            boolean canPlace=mc.player.getMainHandItem().getItem() instanceof BlockItem && (ClientState.symmetry()||o.replaceMode||o.forcePlace||o.noUpdates||o.fastPlace||o.infiniteReach||o.angelPlacement||o.preventInteractions);
+            if(hit==null&&o.angelPlacement&&right)hit=angelHit(mc);
+            boolean canPlace=mc.player.getMainHandItem().getItem() instanceof BlockItem && o.placementCapabilities();
             boolean canTinker=o.tinker&&mc.player.getMainHandItem().isEmpty()&&!mc.player.isShiftKeyDown();
-            if(hit!=null && ((left&&(ClientState.symmetry()||o.infiniteReach||o.bulldozer&&now-breakingSince>350))||(right&&(canPlace||canTinker)))) {
+            if(hit!=null && right && canPlace && vanillaPlacement()) {
+                // The game places the block itself. It only needs a nudge where it would not click by itself: faster than its own repeat, or at a point in the air.
+                if(o.fastPlace||mc.hitResult!=hit){
+                    var result=mc.gameMode.useItemOn(mc.player,net.minecraft.world.InteractionHand.MAIN_HAND,hit);
+                    if(result.consumesAction())mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                    lastBuilder=now;
+                }
+            } else if(hit!=null && ((left&&(ClientState.symmetry()||o.infiniteReach||o.bulldozer&&now-breakingSince>350))||(right&&(canPlace||canTinker)))) {
                 if(mc.player.getMainHandItem().getItem() instanceof BlockItem item)ClientState.pick(BuiltInRegistries.BLOCK.getKey(item.getBlock()).toString());
                 send(left?"builder_break":"builder_place",point(hit.getBlockPos()),normal(hit));lastBuilder=now;
+                if(left)mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND); // the attack callback still returns FAIL, which does not swing
             }
         }
     }
@@ -183,6 +196,24 @@ public final class CraftiumClient implements ClientModInitializer {
         else if(!builder&&supported()&&!mc.player.isSpectator())send("gamemode_editor",null,null);
         if(supported())send("status",null,null);
     }
+    /** Whether the server runs the mod itself, so it can bend the game's own block placement. A Paper server reached over the bridge cannot. */
+    public static boolean vanillaPlacement(){return supported()&&ClientPlayNetworking.canSend(Packets.Edit.TYPE);}
+    private static String placementSynced="";
+    /** Tells the server which capabilities bend placement, just before the game sends the placement itself; the packets arrive in order. */
+    private static void syncPlacement(){
+        var o=ClientState.options;
+        String key=o.symmetryX+","+o.symmetryY+","+o.symmetryZ+","+o.symmetryRotations+","+o.symmetryOrigin+","+o.symmetryHalfX+o.symmetryHalfY+o.symmetryHalfZ+","+o.replaceMode+o.forcePlace+o.noUpdates+o.fastPlace+o.infiniteReach+o.angelPlacement+o.preventInteractions;
+        if(key.equals(placementSynced))return;
+        placementSynced=key;send("capabilities",null,null);
+    }
+    /**
+     * A click on the empty block four blocks ahead. The game treats air as replaceable, so it places into the clicked block itself,
+     * which makes that block the place for the ghost and the placement alike.
+     */
+    static BlockHitResult angelHit(Minecraft mc){
+        Vec3 at=mc.player.getEyePosition().add(mc.player.getLookAngle().scale(4));
+        return new BlockHitResult(at,net.minecraft.core.Direction.UP,net.minecraft.core.BlockPos.containing(at),false);
+    }
     public static boolean supported() {return Minecraft.getInstance().getConnection()!=null && (ClientPlayNetworking.canSend(Packets.Edit.TYPE)||ClientPlayNetworking.canSend(Packets.Bridge.TYPE));}
     public static void send(String action,Point target,Point normal) {
         if(!supported()){ClientState.notify("Install Craftium on this server to edit worlds");return;}
@@ -210,6 +241,7 @@ public final class CraftiumClient implements ClientModInitializer {
         try(var collector=Overlay.begin(mc)) {
             WorldDiagnostics.draw(mc);
             BuilderMode.draw();
+            AngelGhost.draw(mc);
             MagicPreview.draw(mc,hit);
             ClientState.pending.draw(new Point(0,0,0),true);
             if(ClientState.options.showMarkerGizmos||ClientState.options.showDisplayGizmos){int count=0;for(var entity:mc.level.entitiesForRendering()){boolean show=entity instanceof net.minecraft.world.entity.Marker&&ClientState.options.showMarkerGizmos||entity instanceof net.minecraft.world.entity.Display&&ClientState.options.showDisplayGizmos;if(!show||entity.distanceToSqr(mc.player)>128*128||++count>256)continue;Vec3 at=entity.position();int color=entity.getUUID().toString().equals(ClientState.options.entityUuid)?0xffffd66d:0xffe6edf7;Overlay.point(at,color,6);Overlay.box(new AABB(at.add(-.08,-.08,-.08),at.add(.08,.08,.08)),color,1,0);}}
