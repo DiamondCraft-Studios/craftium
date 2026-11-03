@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.core.*;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
@@ -29,7 +30,7 @@ public final class MaskScreen extends CraftiumScreen {
         button("Copy string",left,top+376,125,24,()->minecraft.keyboardHandler.setClipboard(root.expression()));
         button("Paste string",left+135,top+376,125,24,()->{var next=MaskTree.parse(minecraft.keyboardHandler.getClipboard());validate(next.expression());root=selected=next;init();});
         button("Clear",left+270,top+376,100,24,()->{root=selected=new MaskTree.Node("all");init();});
-        button("Cancel",left+382,top+376,100,24,()->minecraft.gui.setScreen(parent));
+        button("Cancel",left+382,top+376,100,24,()->ClientCompat.setScreen(minecraft,parent));
         button("Apply mask",left+535,top+376,134,24,this::onClose);
     }
     private void flatten(MaskTree.Node node,int depth){if(rows.size()>=128)throw new IllegalArgumentException("Visual mask limit: 128 rules");rows.add(new Row(node,depth));for(var child:node.children)flatten(child,depth+1);}
@@ -49,5 +50,5 @@ public final class MaskScreen extends CraftiumScreen {
     @Override public boolean mouseReleased(MouseButtonEvent event){if(dragged!=null){var destination=rowAt(event.x()/scale,event.y()/scale);if(destination!=null&&destination!=dragged){message=MaskTree.move(root,dragged,destination)?"Rule moved":"Drop onto an empty NOT / OFFSET or an AND / OR block";init();}dragged=null;return true;}return super.mouseReleased(new MouseButtonEvent(event.x()/scale,event.y()/scale,event.buttonInfo()));}
     @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){scroll=Math.clamp(scroll-(int)Math.signum(vertical),0,Math.max(0,rows.size()-9));return true;}
     @Override public boolean isPauseScreen(){return false;}
-    @Override public void onClose(){try{String expression=root.expression();validate(expression);ClientState.options.maskExpression=expression.equals("true")?"":expression;ClientState.save();minecraft.gui.setScreen(parent);}catch(Exception e){message=e.getMessage();}}
+    @Override public void onClose(){try{String expression=root.expression();validate(expression);ClientState.options.maskExpression=expression.equals("true")?"":expression;ClientState.save();ClientCompat.setScreen(minecraft,parent);}catch(Exception e){message=e.getMessage();}}
 }

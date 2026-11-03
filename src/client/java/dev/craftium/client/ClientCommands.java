@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import dev.craftium.core.*;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -20,7 +21,7 @@ final class ClientCommands {
             var root=literal("craftium").executes(c->{pending=()->CraftiumClient.open(false);return 1;});
             root.then(literal("editor").executes(c->{pending=()->CraftiumClient.open(false);return 1;}));
             root.then(literal("builder").executes(c->{pending=BuilderMode::enable;return 1;}));
-            root.then(literal("intro").executes(c->{pending=()->Minecraft.getInstance().gui.setScreen(new ReportScreen(null,"CRAFTIUM\n\nRight Shift: editor\nHold Left Alt: builder settings\n0: tenth-slot builder tools\nAlt + scroll: change builder tool\nLMB / RMB: first / second corner\nMMB: select or expand a face\nScroll: preview and nudge; X/Y/Z restrict axis\nRMB: confirm preview\nCtrl+Z / Ctrl+Y: undo / redo\n\nInstall Craftium and Fabric API on both client and server. Editing requires Creative mode and operator level 2.\n\nAxiom documentation inspired these independent tools. See docs/PARITY-AUDIT.md for remaining differences."));return 1;}));
+            root.then(literal("intro").executes(c->{pending=()->ClientCompat.setScreen(Minecraft.getInstance(),new ReportScreen(null,"CRAFTIUM\n\nRight Shift: editor\nHold Left Alt: builder settings\n0: tenth-slot builder tools\nAlt + scroll: change builder tool\nLMB / RMB: first / second corner\nMMB: select or expand a face\nScroll: preview and nudge; X/Y/Z restrict axis\nRMB: confirm preview\nCtrl+Z / Ctrl+Y: undo / redo\n\nInstall Craftium and Fabric API on both client and server. Editing requires Creative mode and operator level 2.\n\nAxiom documentation inspired these independent tools. See docs/PARITY-AUDIT.md for remaining differences."));return 1;}));
             root.then(literal("docs").executes(c->{c.getSource().sendFeedback(Component.literal("Craftium: README.md and docs/FEATURES.md in your download. Axiom reference: https://axiomdocs.moulberry.com/"));return 1;}));
             root.then(literal("status").executes(c->{c.getSource().sendFeedback(Component.literal(CraftiumClient.supported()?"Craftium connected · "+ClientState.status.message():"Craftium server channel unavailable. Install the same Craftium version and Fabric API on the server."));return 1;}));
             root.then(literal("handshake").executes(c->{CraftiumClient.send("status",null,null);return 1;}));

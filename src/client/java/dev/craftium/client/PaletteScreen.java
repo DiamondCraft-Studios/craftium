@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.core.*;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
@@ -56,5 +57,5 @@ public final class PaletteScreen extends CraftiumScreen {
     @Override public boolean mouseReleased(MouseButtonEvent event){if(dragBlock!=null){int index=Math.clamp(page*8+(int)((event.y()/scale-top-45)/36),0,blocks.size());boolean inList=event.x()/scale>=left&&event.x()/scale<left+347;if(drag>=0&&dragging&&inList){String block=blocks.remove(drag);double weight=weights.remove(drag);if(index>drag)index--;index=Math.clamp(index,0,blocks.size());blocks.add(index,block);weights.add(index,weight);}else if(drag<0&&(!dragging||inList)&&blocks.size()<256){if(!inList)index=blocks.size();blocks.add(index,dragBlock);weights.add(index,1d);}else if(drag>=0&&!dragging)ClientState.pick(dragBlock);drag=-1;dragBlock=null;dragging=false;init();return true;}return super.mouseReleased(new MouseButtonEvent(event.x()/scale,event.y()/scale,event.buttonInfo()));}
     @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){if(x/scale<left+360){page+=(int)-Math.signum(vertical);init();}else{resultPage+=(int)-Math.signum(vertical);search();}return true;}
     @Override public boolean isPauseScreen(){return false;}
-    @Override public void onClose(){apply();minecraft.gui.setScreen(parent);}
+    @Override public void onClose(){apply();ClientCompat.setScreen(minecraft,parent);}
 }

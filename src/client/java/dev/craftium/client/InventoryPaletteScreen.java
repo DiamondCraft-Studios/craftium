@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
 import net.minecraft.client.gui.screens.Screen;
@@ -19,5 +20,5 @@ final class InventoryPaletteScreen extends CraftiumScreen {
     }
     @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event,boolean twice){for(int i=0;i<36;i++){int row=i<9?3:(i-9)/9,col=i%9,bx=left+col*30,by=top+row*30+(row==3?9:0);if(event.x()>=bx&&event.x()<bx+26&&event.y()>=by&&event.y()<by+26){var item=minecraft.player.getInventory().getItem(i);if(item.getItem() instanceof BlockItem block){ClientState.pick(BuiltInRegistries.BLOCK.getKey(block.getBlock()).toString());onClose();}return true;}}return super.mouseClicked(event,twice);}
     @Override public boolean isPauseScreen(){return false;}
-    @Override public void onClose(){minecraft.gui.setScreen(parent);}
+    @Override public void onClose(){ClientCompat.setScreen(minecraft,parent);}
 }

@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
 import net.minecraft.client.gui.screens.Screen;
@@ -22,5 +23,5 @@ final class HistoryScreen extends CraftiumScreen {
     @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event,boolean twice){int row=((int)event.y()-48)/23,rows=Math.max(1,(height-95)/23),index=row+scroll;if(event.y()>=48&&event.x()>=12&&event.x()<width-12&&row>=0&&row<rows&&index<ClientState.status.history().size()){send("history_undo_many",index+1);return true;}return super.mouseClicked(event,twice);}
     @Override public boolean mouseScrolled(double x,double y,double h,double v){scroll-=(int)Math.signum(v)*3;return true;}
     @Override public boolean isPauseScreen(){return false;}
-    @Override public void onClose(){minecraft.gui.setScreen(parent);}
+    @Override public void onClose(){ClientCompat.setScreen(minecraft,parent);}
 }

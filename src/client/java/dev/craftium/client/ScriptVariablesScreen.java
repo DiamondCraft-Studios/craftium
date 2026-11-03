@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.core.ScriptTemplates;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
@@ -35,5 +36,5 @@ final class ScriptVariablesScreen extends CraftiumScreen {
     @Override public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent e){return super.mouseReleased(new net.minecraft.client.input.MouseButtonEvent(e.x()/scale,e.y()/scale,e.buttonInfo()));}
     @Override public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent e,double x,double y){return super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(e.x()/scale,e.y()/scale,e.buttonInfo()),x/scale,y/scale);}
     @Override public boolean isPauseScreen(){return false;}
-    @Override public void onClose(){minecraft.gui.setScreen(parent);}
+    @Override public void onClose(){ClientCompat.setScreen(minecraft,parent);}
 }

@@ -9,4 +9,9 @@ public final class ClientCompat {
 
     /** The screen currently open, or null while playing. */
     public static Screen screen(Minecraft mc){return mc.gui.screen();}
+    /** Opens a screen, or returns to the game when {@code screen} is null. */
+    public static void setScreen(Minecraft mc,Screen screen){mc.gui.setScreen(screen);}
+    public static boolean hudHidden(Minecraft mc){return mc.gui.hud.isHidden();}
+    /** Flips the HUD between shown and hidden. */
+    public static void toggleHud(Minecraft mc){mc.gui.hud.toggle();}
 }

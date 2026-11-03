@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
 import net.minecraft.client.gui.components.EditBox;
@@ -16,5 +17,5 @@ final class SaveBlueprintScreen extends CraftiumScreen {
     }
     private EditBox field(int x,int y,String label,String value,int limit){var field=new EditBox(font,x,y,320,22,Component.literal(label));field.setMaxLength(limit);field.setValue(value);addRenderableWidget(field);return field;}
     @Override protected void draw(Gfx g,int x,int y,float delta){g.fill(0,0,width,height,0xf510151c);int left=(width-320)/2,top=(height-205)/2;g.text(font,"SAVE BLUEPRINT",left,top,0xffdce6ef,false);g.text(font,"Name",left,top+24,0xff8595a8,false);g.text(font,"Author",left,top+71,0xff8595a8,false);g.text(font,"Tags",left,top+118,0xff8595a8,false);drawWidgets(g,x,y,delta);}
-    @Override public void onClose(){minecraft.gui.setScreen(parent);}
+    @Override public void onClose(){ClientCompat.setScreen(minecraft,parent);}
 }

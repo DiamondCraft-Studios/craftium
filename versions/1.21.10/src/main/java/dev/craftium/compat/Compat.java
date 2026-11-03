@@ -20,6 +20,7 @@ public final class Compat {
     public static ResourceLocation id(String namespace,String path){return ResourceLocation.fromNamespaceAndPath(namespace,path);}
     public static ResourceLocation parse(String id){return ResourceLocation.parse(id);}
     public static ResourceLocation vanilla(String path){return ResourceLocation.withDefaultNamespace(path);}
+    public static ResourceLocation tryParse(String id){return ResourceLocation.tryParse(id);}
     public static String keyName(ResourceKey<?> key){return key.location().toString();}
 
     public static boolean isGamemaster(ServerPlayer player){return player.hasPermissions(2);}

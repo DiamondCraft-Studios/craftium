@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.core.*;
 import dev.craftium.core.EditorControls.Action;
 import dev.craftium.client.compat.CraftiumScreen;
@@ -61,7 +62,7 @@ public final class EditorScreen extends CraftiumScreen {
 
     private Options o(){return ClientState.options;}
     @Override protected void init() {
-        if(!hudHidden){previousHideGui=minecraft.gui.hud.isHidden();hudHidden=true;if(!previousHideGui)minecraft.gui.hud.toggle();}
+        if(!hudHidden){previousHideGui=ClientCompat.hudHidden(minecraft);hudHidden=true;if(!previousHideGui)ClientCompat.toggleHud(minecraft);}
         scale=Math.min(1f,Math.min(width/1000f,height/562f));w=Math.round(width/scale);h=Math.round(height/scale);
         fields.clear();
         field("block",w-RIGHT+10,244,RIGHT-20,o().block,s->ClientState.pick(s));
@@ -163,7 +164,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,93,222,79,19,"Builder",builder,()->{builder=true;init();},"");
         if(builder){builderOptions(g);return;}
         text(g,o().tool.label,10,252,0xffa5cef2);wrap(g,o().tool.description,10,268,LEFT-20,MUTED,3);
-        button(g,131,201,25,15,"…",false,()->minecraft.gui.setScreen(new StudioScreen(this)),"Advanced settings · View → Studio inspector");
+        button(g,131,201,25,15,"…",false,()->ClientCompat.setScreen(minecraft,new StudioScreen(this)),"Advanced settings · View → Studio inspector");
         if(o().tool==Tool.BOX_SELECT||o().tool==Tool.MAGIC_SELECT||o().tool==Tool.RULER) {
             var s=ClientState.status;
             if(o().tool==Tool.RULER) {
@@ -296,9 +297,9 @@ public final class EditorScreen extends CraftiumScreen {
     private List<MenuItem> menuItems(int which) {
         return switch(which) {
             case 0 -> List.of(item("Open reference image…","",ReferenceImages::choose),item("Save tool settings","",()->{ClientState.save();ClientState.notify("Tool settings saved");}),item("Reset tool settings","",()->{ClientState.options=new Options();init();}),item("Exit editor","RShift",this::onClose));
-            case 1 -> List.of(item("History browser…","",()->minecraft.gui.setScreen(new HistoryScreen(this))),item("Undo","Ctrl+Z",()->action("undo")),item("Redo","Ctrl+Y",()->action("redo")),item("Copy","Ctrl+C",()->action("copy")),item("Cut","Ctrl+X",()->action("cut")),item("Paste at cursor","Ctrl+V",()->action("paste")),item("Save blueprint…","Ctrl+P",()->minecraft.gui.setScreen(new SaveBlueprintScreen(this))),item("Rotate clipboard","",()->action("rotate")),item("Mirror clipboard","",()->action("flip")));
+            case 1 -> List.of(item("History browser…","",()->ClientCompat.setScreen(minecraft,new HistoryScreen(this))),item("Undo","Ctrl+Z",()->action("undo")),item("Redo","Ctrl+Y",()->action("redo")),item("Copy","Ctrl+C",()->action("copy")),item("Cut","Ctrl+X",()->action("cut")),item("Paste at cursor","Ctrl+V",()->action("paste")),item("Save blueprint…","Ctrl+P",()->ClientCompat.setScreen(minecraft,new SaveBlueprintScreen(this))),item("Rotate clipboard","",()->action("rotate")),item("Mirror clipboard","",()->action("flip")));
             case 2 -> List.of(item("Box select","B",()->select(Tool.BOX_SELECT)),item("Magic select","M",()->select(Tool.MAGIC_SELECT)),item("Freehand select","N",()->select(Tool.FREEHAND_SELECT)),item("Clear selection","Enter",()->action("clear")));
-            case 3 -> List.of(item("Toggle side panels","",()->panels=!panels),item("Tool options","",()->{builder=false;init();}),item("Builder controls","Alt",()->{builder=true;init();}),item("Studio inspector","",()->minecraft.gui.setScreen(new StudioScreen(this))),item("Colour picker / gradient","",()->minecraft.gui.setScreen(new ColourScreen(this))),item("Keybinds","",()->minecraft.gui.setScreen(new EditorKeybindScreen(this))),item("Show controls","",()->help=true));
+            case 3 -> List.of(item("Toggle side panels","",()->panels=!panels),item("Tool options","",()->{builder=false;init();}),item("Builder controls","Alt",()->{builder=true;init();}),item("Studio inspector","",()->ClientCompat.setScreen(minecraft,new StudioScreen(this))),item("Colour picker / gradient","",()->ClientCompat.setScreen(minecraft,new ColourScreen(this))),item("Keybinds","",()->ClientCompat.setScreen(minecraft,new EditorKeybindScreen(this))),item("Show controls","",()->help=true));
             case 7 -> {var items=new ArrayList<MenuItem>();for(String id:WorkspaceLayout.windows.keySet())items.add(item("Toggle "+id,"",()->WorkspaceLayout.toggle(id)));items.add(item("Save layout","",WorkspaceLayout::save));items.add(item("Reset layout","",WorkspaceLayout::reset));items.add(item("Copy layout","",()->minecraft.keyboardHandler.setClipboard(WorkspaceLayout.json())));items.add(item("Paste layout","",()->{try{WorkspaceLayout.importJson(minecraft.keyboardHandler.getClipboard());WorkspaceLayout.save();}catch(Exception e){ClientState.notify("Invalid layout JSON");}}));yield items;}
             case 4 -> List.of(item("Shape","",()->select(Tool.SHAPE)),item("Block text","",()->select(Tool.TEXT)),item("Line","",()->select(Tool.LINE)),item("Rock","",()->select(Tool.ROCK)));
             case 5 -> List.of(item("Fill selection","Ctrl+F",()->action("fill")),item("Delete selection","Del",()->action("delete")),item("Move / clone / stack…","",()->{transform=true;init();}),item("Smooth brush","",()->select(Tool.SMOOTH)),item("Flatten brush","",()->select(Tool.FLATTEN)));
@@ -493,14 +494,14 @@ public final class EditorScreen extends CraftiumScreen {
             case ROTATE_PLACEMENT -> {if(!PlacementPreview.active())return false;action("rotate");}
             case FLIP_PLACEMENT -> {if(!PlacementPreview.active())return false;action("flip_facing");}
             case EXTRUDE_POINT -> {if((o().tool!=Tool.PATH&&o().tool!=Tool.MODELLING)||o().nodes.isEmpty())return false;if(o().nodes.size()>=64)ClientState.notify("Maximum 64 control points");else{o().nodes.add(o().nodes.getLast());selectedNode=o().nodes.size()-1;}}
-            case SAVE_BLUEPRINT -> {if(ClientState.status.clipboardSize()==0&&ClientState.status.clipboardEntityCount()==0)ClientState.notify("Copy a selection first");else minecraft.gui.setScreen(new SaveBlueprintScreen(this));}
+            case SAVE_BLUEPRINT -> {if(ClientState.status.clipboardSize()==0&&ClientState.status.clipboardEntityCount()==0)ClientState.notify("Copy a selection first");else ClientCompat.setScreen(minecraft,new SaveBlueprintScreen(this));}
             case SHOW_BIOMES -> o().showBiomes=!o().showBiomes;
             case SHOW_SELECTION -> showSelection=!showSelection;case SHOW_ANNOTATIONS -> o().showAnnotations=!o().showAnnotations;
             case SHOW_DISPLAYS -> o().showDisplayGizmos=!o().showDisplayGizmos;case SHOW_MARKERS -> o().showMarkerGizmos=!o().showMarkerGizmos;
             case SHOW_COLLISION -> o().showCollisionMesh=!o().showCollisionMesh;case SHOW_LIGHTS -> o().showLightBlocks=!o().showLightBlocks;case SHOW_VOID -> o().showStructureVoid=!o().showStructureVoid;
             case NUDGE_FORWARD,NUDGE_BACK,NUDGE_LEFT,NUDGE_RIGHT,NUDGE_UP,NUDGE_DOWN -> TransformGizmo.nudge(this,EditorControls.nudge(binding,minecraft.player.getYRot()));
             case PASTE_SELECT -> PlacementPreview.pasteAndSelect();case LAST_TOOL -> select(previousTool);
-            case INSPECTOR -> minecraft.gui.setScreen(new StudioScreen(this));case HELP -> help=!help;case PANELS -> panels=!panels;
+            case INSPECTOR -> ClientCompat.setScreen(minecraft,new StudioScreen(this));case HELP -> help=!help;case PANELS -> panels=!panels;
             case GIZMO_MOVE -> o().gizmoMode=Options.GizmoMode.MOVE;case GIZMO_ROTATE -> o().gizmoMode=Options.GizmoMode.ROTATE;case GIZMO_SCALE -> o().gizmoMode=Options.GizmoMode.SCALE;case LOCAL_AXES -> o().gizmoLocal=!o().gizmoLocal;
             default -> {return false;}
         }
@@ -535,6 +536,6 @@ public final class EditorScreen extends CraftiumScreen {
         return best<100;
     }
     private int key(long handle,int key){return GLFW.glfwGetKey(handle,key)==GLFW.GLFW_PRESS?1:0;}
-    @Override public void removed(){TransformGizmo.cancel();if(hudHidden){if(minecraft.gui.hud.isHidden()!=previousHideGui)minecraft.gui.hud.toggle();hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
-    @Override public void onClose(){minecraft.gui.setScreen(null);}
+    @Override public void removed(){TransformGizmo.cancel();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
+    @Override public void onClose(){ClientCompat.setScreen(minecraft,null);}
 }

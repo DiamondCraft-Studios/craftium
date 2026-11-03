@@ -46,7 +46,7 @@ public final class CraftiumClient implements ClientModInitializer {
             int key=EditorControls.toolDefault(tool);
             toolKeys.put(tool,KeyMappingHelper.registerKeyMapping(new KeyMapping("key.craftium.tool."+tool.name().toLowerCase(java.util.Locale.ROOT),InputConstants.Type.KEYSYM,key,category)));
         }
-        ClientPlayNetworking.registerGlobalReceiver(Packets.Report.TYPE,(payload,context)->context.client().execute(()->context.client().gui.setScreen(new ReportScreen(ClientCompat.screen(context.client()),payload.text()))));
+        ClientPlayNetworking.registerGlobalReceiver(Packets.Report.TYPE,(payload,context)->context.client().execute(()->ClientCompat.setScreen(context.client(),new ReportScreen(ClientCompat.screen(context.client()),payload.text()))));
         ClientPlayNetworking.registerGlobalReceiver(Packets.Update.TYPE,(payload,context)->context.client().execute(()->{
             receiveStatus(payload.json());
         }));
@@ -96,7 +96,7 @@ public final class CraftiumClient implements ClientModInitializer {
             var mc=Minecraft.getInstance();
             switch(message.kind()){
                 case "status" -> receiveStatus(message.data());
-                case "report" -> mc.gui.setScreen(new ReportScreen(ClientCompat.screen(mc),message.data()));
+                case "report" -> ClientCompat.setScreen(mc,new ReportScreen(ClientCompat.screen(mc),message.data()));
                 case "download" -> ClientAssets.receive(Packets.JSON.fromJson(message.data(),Packets.Download.class));
                 case "hello" -> send("status",null,null);
                 default -> throw new IllegalArgumentException("Unknown Craftium server message");
@@ -112,7 +112,7 @@ public final class CraftiumClient implements ClientModInitializer {
         if(lastLiquidOpacity!=ClientState.options.liquidOpacity){lastLiquidOpacity=ClientState.options.liquidOpacity;mc.levelRenderer.invalidateCompiledGeometry(mc.level,mc.options,mc.gameRenderer.mainCamera(),mc.getBlockColors());}
         if(!hadWorld){hadWorld=true;if(supported())send("status",null,null);}
         while(editorKey.consumeClick()) {
-            if(ClientCompat.screen(mc) instanceof EditorScreen)mc.gui.setScreen(null);
+            if(ClientCompat.screen(mc) instanceof EditorScreen)ClientCompat.setScreen(mc,null);
             else if(ClientCompat.screen(mc)==null)open(false);
         }
         while(contextKey.consumeClick()){}
@@ -161,7 +161,7 @@ public final class CraftiumClient implements ClientModInitializer {
     private static void open(boolean builder,boolean heldContext) {
         Minecraft mc=Minecraft.getInstance();
         if(mc.player==null)return;
-        mc.gui.setScreen(new EditorScreen(builder,heldContext));
+        ClientCompat.setScreen(mc,new EditorScreen(builder,heldContext));
         if(builder&&ClientState.options.autoSwapToCreative&&supported()&&!mc.player.isCreative())send("gamemode_creative",null,null);
         if(supported())send("status",null,null);
     }

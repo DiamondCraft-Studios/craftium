@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.core.*;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
@@ -45,7 +46,7 @@ public final class StudioScreen extends CraftiumScreen {
     public StudioScreen(EditorScreen editor){super(Component.literal("Craftium Studio Inspector"));this.editor=editor;}
     public EditorScreen editor(){return editor;}
     @Override protected void init(){
-        if(!initialized){previousHud=minecraft.gui.hud.isHidden();if(!previousHud)minecraft.gui.hud.toggle();initialized=true;}
+        if(!initialized){previousHud=ClientCompat.hudHidden(minecraft);if(!previousHud)ClientCompat.toggleHud(minecraft);initialized=true;}
         uiScale=Math.min(1f,Math.min(width/680f,height/440f));canvasW=Math.round(width/uiScale);canvasH=Math.round(height/uiScale);
         clearWidgets();labels.clear();left=Math.max(12,(canvasW-640)/2);top=30;rows=Math.max(2,(canvasH-(tab.equals("Entities")?250:170))/46);
         int tx=left,ty=top;for(String name:GROUPS.keySet()){int bw=font.width(name)+13;if(tx+bw>canvasW-18){tx=left;ty+=22;}button(name,tx,ty,bw,18,()->{tab=name;page=0;init();});tx+=bw+3;}
@@ -63,7 +64,7 @@ public final class StudioScreen extends CraftiumScreen {
             labels.add(new Label("Lua brush",left,top+60));labels.add(new Label("Lua boolean mask",left+316,top+60));
             var brush=MultiLineEditBox.builder().setX(left).setY(top+77).build(font,300,canvasH-230,Component.literal("Lua brush"));brush.setCharacterLimit(16384);brush.setValue(ClientState.options.script);brush.setValueListener(value->ClientState.options.script=value);addRenderableWidget(brush);
             var mask=MultiLineEditBox.builder().setX(left+316).setY(top+77).build(font,300,canvasH-230,Component.literal("Lua mask"));mask.setCharacterLimit(16384);mask.setValue(ClientState.options.maskScript);mask.setValueListener(value->ClientState.options.maskScript=value);addRenderableWidget(mask);
-            actionRow(new String[]{"Brush variables…","Mask variables…"},new Runnable[]{()->minecraft.gui.setScreen(new ScriptVariablesScreen(this,false)),()->minecraft.gui.setScreen(new ScriptVariablesScreen(this,true))});
+            actionRow(new String[]{"Brush variables…","Mask variables…"},new Runnable[]{()->ClientCompat.setScreen(minecraft,new ScriptVariablesScreen(this,false)),()->ClientCompat.setScreen(minecraft,new ScriptVariablesScreen(this,true))});
         }else if(tab.equals("Selection")){
             actionRow(new String[]{"Select coordinates","Move outline","Expand","Shrink","Invert"},new String[]{"select_box","selection_move","selection_expand","selection_shrink","selection_invert"});
         }else if(tab.equals("Operations")){
@@ -71,7 +72,7 @@ public final class StudioScreen extends CraftiumScreen {
             for(int i=0;i<actions.length;i++){String action=actions[i];button(human(action),left+(i%4)*158,top+40+(i/4)*30,150,24,()->send(action));}
             actionRow(new String[]{"Generate CIELAB field"},new Runnable[]{ColourField::generate});
         }else if(tab.equals("Masks")){
-            actionRow(new String[]{"Visual rules…","Block rule","Surface rule","Wrap NOT","Clear rules"},new Runnable[]{()->minecraft.gui.setScreen(new MaskScreen(this)),()->ClientState.options.maskExpression="block("+ClientState.options.block+")",()->ClientState.options.maskExpression="surface",()->ClientState.options.maskExpression="not("+ClientState.options.maskExpression+")",()->ClientState.options.maskExpression=""});
+            actionRow(new String[]{"Visual rules…","Block rule","Surface rule","Wrap NOT","Clear rules"},new Runnable[]{()->ClientCompat.setScreen(minecraft,new MaskScreen(this)),()->ClientState.options.maskExpression="block("+ClientState.options.block+")",()->ClientState.options.maskExpression="surface",()->ClientState.options.maskExpression="not("+ClientState.options.maskExpression+")",()->ClientState.options.maskExpression=""});
         }else if(tab.equals("Geometry")){
             actionRow(new String[]{"Add cursor node","Remove last","Clear nodes"},new Runnable[]{()->{var hit=editor.target();if(hit!=null&&ClientState.options.nodes.size()<64)ClientState.options.nodes.add(CraftiumClient.point(hit.getBlockPos()));},()->{if(!ClientState.options.nodes.isEmpty())ClientState.options.nodes.removeLast();},()->ClientState.options.nodes.clear()});
         }else if(tab.equals("Library")){
@@ -83,11 +84,11 @@ public final class StudioScreen extends CraftiumScreen {
             button("Load blueprint",left+190,top+223,180,24,()->send("blueprint_load"));
             labels.add(new Label("Presets: "+String.join(", ",ClientLibrary.list("presets")),left,top+270));
             labels.add(new Label("Palettes: "+String.join(", ",ClientLibrary.list("palettes")),left,top+286));
-            actionRow(new String[]{"Browse blueprints"},new Runnable[]{()->minecraft.gui.setScreen(new BlueprintScreen(this))});
+            actionRow(new String[]{"Browse blueprints"},new Runnable[]{()->ClientCompat.setScreen(minecraft,new BlueprintScreen(this))});
         }else if(tab.equals("Assets")){
             actionRow(new String[]{"Import asset…","Import schematic","Export schematic","Structure NBT","Selection CSV"},new Runnable[]{()->AssetPicker.open(this::init),()->send("schematic_import"),()->send("schematic_export"),()->send("structure_export"),()->send("selection_csv")});
         }else if(tab.equals("Paint")){
-            actionRow(new String[]{"Colour studio","Weighted palette"},new Runnable[]{()->minecraft.gui.setScreen(new ColourScreen(this)),()->minecraft.gui.setScreen(new PaletteScreen(this))});
+            actionRow(new String[]{"Colour studio","Weighted palette"},new Runnable[]{()->ClientCompat.setScreen(minecraft,new ColourScreen(this)),()->ClientCompat.setScreen(minecraft,new PaletteScreen(this))});
         }else if(tab.equals("Ruler")){
             actionRow(new String[]{"Split segments","Select center","Clear ruler"},new Runnable[]{()->{
                 var next=new ArrayList<Point>();var points=ClientState.rulerPoints;int parts=ClientState.options.rulerSplit;
@@ -99,10 +100,10 @@ public final class StudioScreen extends CraftiumScreen {
         }else if(tab.equals("Placement")){
             actionRow(new String[]{"Transform clipboard","Snap to ground","Paste copy","Paste & select","Confirm"},new Runnable[]{()->send("clipboard_transform"),PlacementPreview::snapToGround,PlacementPreview::pasteCopy,PlacementPreview::pasteAndSelect,PlacementPreview::confirm});
         }else if(tab.equals("Hotbars")){
-            actionRow(new String[]{"Save named hotbar","Load named hotbar","List hotbars","Inventory"},new Runnable[]{()->send("hotbar_save"),()->send("hotbar_load"),()->send("hotbar_list"),()->minecraft.gui.setScreen(new InventoryPaletteScreen(this))});
+            actionRow(new String[]{"Save named hotbar","Load named hotbar","List hotbars","Inventory"},new Runnable[]{()->send("hotbar_save"),()->send("hotbar_load"),()->send("hotbar_list"),()->ClientCompat.setScreen(minecraft,new InventoryPaletteScreen(this))});
             button("Previous saved slot",left,top+125,200,24,()->send("hotbar_previous"));button("Next saved slot",left+212,top+125,200,24,()->send("hotbar_next"));
         }else if(tab.equals("Lighting")){
-            actionRow(new String[]{"Autoshade","Add light here","Clear lights","List lights","Palette…"},new Runnable[]{()->send("autoshade"),()->{var player=minecraft.player;if(player!=null&&ClientState.options.shadeLights.size()<16)ClientState.options.shadeLights.add(new ShadeLight(player.getX(),player.getEyeY(),player.getZ(),ClientState.options.strength));},()->ClientState.options.shadeLights.clear(),()->minecraft.gui.setScreen(new ReportScreen(this,String.join("\n",ClientState.options.shadeLights.stream().map(Object::toString).toList()))),()->minecraft.gui.setScreen(new PaletteScreen(this))});
+            actionRow(new String[]{"Autoshade","Add light here","Clear lights","List lights","Palette…"},new Runnable[]{()->send("autoshade"),()->{var player=minecraft.player;if(player!=null&&ClientState.options.shadeLights.size()<16)ClientState.options.shadeLights.add(new ShadeLight(player.getX(),player.getEyeY(),player.getZ(),ClientState.options.strength));},()->ClientState.options.shadeLights.clear(),()->ClientCompat.setScreen(minecraft,new ReportScreen(this,String.join("\n",ClientState.options.shadeLights.stream().map(Object::toString).toList()))),()->ClientCompat.setScreen(minecraft,new PaletteScreen(this))});
         }else if(tab.equals("Rebuild")){
             actionRow(new String[]{"Start animated rebuild","Cancel and restore"},new String[]{"animated_rebuild","rebuild_cancel"});
         }else if(tab.equals("Entities")){
@@ -115,7 +116,7 @@ public final class StudioScreen extends CraftiumScreen {
             for(int i=0;i<actions.length;i++){String action=actions[i];button(human(action),left+(i%4)*158,top+170+(i/4)*28,150,22,()->send(action));}
         }else if(tab.equals("Annotations")){
             actionRow(new String[]{"Create","Update","Delete","Clear all","Import image…"},new Runnable[]{()->send("annotation_create"),()->send("annotation_update"),()->send("annotation_delete"),()->send("annotation_clear"),()->AnnotationImages.choose(this::init)});
-            button("Browse annotations",left+316,top+254,300,22,()->{String report=ClientState.status.annotations()==null?"No annotations":String.join("\n",ClientState.status.annotations().stream().map(note->note.id()+"  "+note.mode()+"  "+note.text()).toList());minecraft.gui.setScreen(new ReportScreen(this,report));});
+            button("Browse annotations",left+316,top+254,300,22,()->{String report=ClientState.status.annotations()==null?"No annotations":String.join("\n",ClientState.status.annotations().stream().map(note->note.id()+"  "+note.mode()+"  "+note.text()).toList());ClientCompat.setScreen(minecraft,new ReportScreen(this,report));});
         }
     }
     private void createField(String name,int x,int y,int width){
@@ -151,6 +152,6 @@ public final class StudioScreen extends CraftiumScreen {
     @Override public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event,double x,double y){return super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(event.x()/uiScale,event.y()/uiScale,event.buttonInfo()),x/uiScale,y/uiScale);}
     @Override public boolean isPauseScreen(){return false;}
     @Override public boolean isInGameUi(){return true;}
-    @Override public void onClose(){ClientState.save();CraftiumClient.send("capabilities",null,null);minecraft.gui.setScreen(editor);}
-    @Override public void removed(){if(initialized&&minecraft.gui.hud.isHidden()!=previousHud)minecraft.gui.hud.toggle();initialized=false;}
+    @Override public void onClose(){ClientState.save();CraftiumClient.send("capabilities",null,null);ClientCompat.setScreen(minecraft,editor);}
+    @Override public void removed(){if(initialized&&ClientCompat.hudHidden(minecraft)!=previousHud)ClientCompat.toggleHud(minecraft);initialized=false;}
 }
