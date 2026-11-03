@@ -28,9 +28,20 @@ final class TransformGizmo {
     private static Target dragging;
     private static int handle=-1;
     private static double startX,startY,startAngle;
-    /** Where the Move tool takes the pointer to be: it follows the real one, at half the speed while Ctrl is held, for fine placement. */
+    /** Where the Move tool takes the pointer to be: it follows the real one, except for an entity, where holding Ctrl halves the speed for fine placement. */
     private static double slowX,slowY,lastX,lastY;
     private static Vec3 delta=Vec3.ZERO,angles=Vec3.ZERO,size=new Vec3(1,1,1);
+    /**
+     * Where a Move drag has taken the handle, before it is rounded to the grid. The blocks follow {@code delta}, which is
+     * rounded, but the handle follows this, so it moves with the pointer instead of jumping a block at a time. Holding Ctrl
+     * rounds it too. It equals {@code delta} when nothing is moving.
+     */
+    private static Vec3 smooth=Vec3.ZERO;
+    /** Records a Move drag: the blocks go to {@code snapped}, and the handle to {@code free}, or to {@code snapped} as well with Ctrl held (entities, which have their own fine steps, always follow {@code snapped}). */
+    private static void moveTo(Vec3 free,Vec3 snapped){
+        delta=snapped;
+        smooth=dragging.kind==Kind.ENTITY||Minecraft.getInstance().hasControlDown()?snapped:free;
+    }
     private static Vec3 normalization=Vec3.ZERO;
     private static boolean normalizationDirty=true;
     private static Options.GizmoMode mode;
@@ -69,7 +80,7 @@ final class TransformGizmo {
     static boolean click(EditorScreen screen,double x,double y){
         if(ClientState.status.busy())return false;Target t=target(screen);if(t==null)return selectEntity(x,y);
         int chosen=pick(t,x,y);
-        if(chosen<0)return selectEntity(x,y);dragging=t;handle=chosen;startX=slowX=lastX=x;startY=slowY=lastY=y;if(chosen==3&&mode==Options.GizmoMode.MOVE)grabFree(t.anchor,x,y);dragFlips=t.kind==Kind.NODE?flipsFor(t.anchor):null;delta=angles=Vec3.ZERO;size=new Vec3(1,1,1);startAngle=mode==Options.GizmoMode.ROTATE?(chosen==7?screenAngle(x,y,t.anchor):chosen<3?angle(x,y,t.anchor,handle):0):0;return true;
+        if(chosen<0)return selectEntity(x,y);dragging=t;handle=chosen;startX=slowX=lastX=x;startY=slowY=lastY=y;if(chosen==3&&mode==Options.GizmoMode.MOVE)grabFree(t.anchor,x,y);dragFlips=t.kind==Kind.NODE?flipsFor(t.anchor):null;delta=smooth=angles=Vec3.ZERO;size=new Vec3(1,1,1);startAngle=mode==Options.GizmoMode.ROTATE?(chosen==7?screenAngle(x,y,t.anchor):chosen<3?angle(x,y,t.anchor,handle):0):0;return true;
     }
     /** Which handle of the gizmo is under the pointer, or -1: 0 to 2 are the axes, 3 the centre, 4 to 6 the plane handles. */
     private static int pick(Target t,double x,double y){
@@ -98,8 +109,8 @@ final class TransformGizmo {
     private static double snap(double value,double increment){return Math.rint(value/increment)*increment;}
     static boolean drag(double x,double y){
         if(dragging==null)return false;normalizationDirty=true;var mc=Minecraft.getInstance();boolean entity=dragging.kind==Kind.ENTITY;double increment=entity?(mc.hasShiftDown()?.0001:mc.hasControlDown()?1:1d/16):1;
-        if(mode==Options.GizmoMode.MOVE){ // Ctrl halves the speed of a move; what the pointer travelled while it was held counts half
-            double speed=mc.hasControlDown()?.5:1;slowX+=(x-lastX)*speed;slowY+=(y-lastY)*speed;lastX=x;lastY=y;x=slowX;y=slowY;
+        if(mode==Options.GizmoMode.MOVE){ // for an entity Ctrl halves the speed of a move: what the pointer travelled while it was held counts half
+            double speed=entity&&mc.hasControlDown()?.5:1;slowX+=(x-lastX)*speed;slowY+=(y-lastY)*speed;lastX=x;lastY=y;x=slowX;y=slowY;
         }
         if(mode==Options.GizmoMode.ROTATE&&handle==3){ // trackball: a drag turns the blocks as if they were grabbed
             Vec3[] cam=cameraAxes();
@@ -119,7 +130,7 @@ final class TransformGizmo {
             // The handle stays under the pointer at the depth it was grabbed, so it goes along when the camera does.
             Vec3 point=ClientCompat.camera(mc).position().add(pointerRay(x,y).scale(freeDepth)).add(freeOffset);
             Vec3 move=point.subtract(dragging.anchor);
-            delta=new Vec3(snap(move.x,increment),snap(move.y,increment),snap(move.z,increment));return true;
+            moveTo(move,new Vec3(snap(move.x,increment),snap(move.y,increment),snap(move.z,increment)));return true;
         }
         if(handle>=4&&mode==Options.GizmoMode.SCALE){ // a square in a plane scales the two axes of that plane together
             int a=(handle-4+1)%3,b=(handle-4+2)%3;
@@ -142,7 +153,7 @@ final class TransformGizmo {
             }else size=new Vec3(all,all,all);
             return true;
         }
-        if(handle>=4){int a=(handle-4+1)%3,b=(handle-4+2)%3;double[] pa=project(dragging.anchor.add(basis[a])),pb=project(dragging.anchor.add(basis[b]));if(pa==null||pb==null)return true;double ax=pa[0]-center[0],ay=pa[1]-center[1],bx=pb[0]-center[0],by=pb[1]-center[1],det=ax*by-ay*bx;if(Math.abs(det)<.001)return true;double dx=x-startX,dy=y-startY;delta=basis[a].scale(snap((dx*by-dy*bx)/det,increment)).add(basis[b].scale(snap((dy*ax-dx*ay)/det,increment)));return true;}
+        if(handle>=4){int a=(handle-4+1)%3,b=(handle-4+2)%3;double[] pa=project(dragging.anchor.add(basis[a])),pb=project(dragging.anchor.add(basis[b]));if(pa==null||pb==null)return true;double ax=pa[0]-center[0],ay=pa[1]-center[1],bx=pb[0]-center[0],by=pb[1]-center[1],det=ax*by-ay*bx;if(Math.abs(det)<.001)return true;double dx=x-startX,dy=y-startY;double u=(dx*by-dy*bx)/det,v=(dy*ax-dx*ay)/det;moveTo(basis[a].scale(u).add(basis[b].scale(v)),basis[a].scale(snap(u,increment)).add(basis[b].scale(snap(v,increment))));return true;}
         int axis=handle==3?1:handle;var end=project(dragging.anchor.add(basis[axis]));if(end==null)return true;double dx=end[0]-center[0],dy=end[1]-center[1],length=dx*dx+dy*dy;if(length<.001)return true;double amount=((x-startX)*dx+(y-startY)*dy)/length;
         if(mode==Options.GizmoMode.SCALE&&blocky(dragging.kind)&&pickExtent!=null){
             // The handle sits on a face, so the face follows the pointer: the far side stays put, or with Alt the centre does.
@@ -155,7 +166,7 @@ final class TransformGizmo {
             return true;
         }
         if(mode==Options.GizmoMode.SCALE){double reach=pickReach==null?5*pickScale:Math.max(1,new double[]{pickReach.x,pickReach.y,pickReach.z}[axis]);double factor=Math.clamp(snap(1+amount/reach,mc.hasShiftDown()?.0001:1d/16),.1,8);size=mc.hasControlDown()||handle==3?new Vec3(factor,factor,factor):new Vec3(axis==0?factor:1,axis==1?factor:1,axis==2?factor:1);}
-        else delta=basis[axis].scale(snap(amount,increment));return true;
+        else moveTo(basis[axis].scale(amount),basis[axis].scale(snap(amount,increment)));return true;
     }
     static boolean release(EditorScreen screen){
         if(dragging==null)return false;Target t=dragging;Options original=ClientState.options,request=Packets.JSON.fromJson(Packets.JSON.toJson(original),Options.class);try{
@@ -178,7 +189,7 @@ final class TransformGizmo {
             original.gizmoYaw=(original.gizmoYaw+angles.y)%360;original.gizmoPitch=(original.gizmoPitch+angles.x)%360;original.gizmoRoll=(original.gizmoRoll+angles.z)%360;
         }finally{ClientState.options=original;cancel();}return true;
     }
-    static void cancel(){dragging=null;dragFlips=null;handle=-1;delta=angles=Vec3.ZERO;size=new Vec3(1,1,1);normalization=Vec3.ZERO;normalizationDirty=true;}
+    static void cancel(){dragging=null;dragFlips=null;handle=-1;delta=smooth=angles=Vec3.ZERO;size=new Vec3(1,1,1);normalization=Vec3.ZERO;normalizationDirty=true;}
     private static Vec3 rawTransform(Vec3 world){Vec3 about=aboutPoint();Vec3 p=world.subtract(about);var rotated=Geometry.rotate(new Geometry.Vector(p.x*size.x,p.y*size.y,p.z*size.z),angles.y,angles.x,angles.z);return about.add(rotated.x(),rotated.y(),rotated.z());}
     /**
      * The point the drag works about. The Scale tool scales from the far side of the selection, so a face moves to where it
@@ -239,7 +250,7 @@ final class TransformGizmo {
         if(dragging==null)updateHover(screen);else followCamera(screen);
         localBasis=t.kind==Kind.SHAPE&&effectiveMode(t)==Options.GizmoMode.SCALE;
         faceBase=faceBase(t).add(delta);plainHandles=t.kind==Kind.MODEL||t.kind==Kind.PIVOT||t.kind==Kind.SHAPE&&ClientState.options.tool.transform();
-        render(t.anchor.add(delta),effectiveMode(t),dragging!=null?handle:hovered,extent(t));
+        render(t.anchor.add(dragging!=null&&effectiveMode(t)==Options.GizmoMode.MOVE?smooth:delta),effectiveMode(t),dragging!=null?handle:hovered,extent(t));
         faceBase=null;plainHandles=false;localBasis=false;
         if(t.kind==Kind.PIVOT)Overlay.point(t.anchor.add(delta),0xffffd66d,11); // the pivot
     }
