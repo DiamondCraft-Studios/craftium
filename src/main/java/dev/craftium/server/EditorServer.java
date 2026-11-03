@@ -72,6 +72,7 @@ public final class EditorServer {
             if(o.noClip&&!s.noClip&&player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}
             s.infiniteReach=o.infiniteReach;s.noClip=o.noClip;
             s.confirmEdits=o.confirmEdits;
+            s.currentAction=r.action();s.recordSelection=changesSelection(r.action(),o);
             // The builder and the clipboard placement preview have their own confirmation, so they apply straight away.
             s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm");
             if(r.action().equals("status")) { send(player,s,"Ready",false);return; }
@@ -97,7 +98,9 @@ public final class EditorServer {
             long now=System.nanoTime();
             if(now-s.lastRequest<65_000_000L&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             s.lastRequest=now;
-            if(r.action().equals("selection_restore")){if(s.selectionBefore!=null){s.selection.restore(s.selectionBefore);s.selectionBefore=null;}send(player,s,"Selection cancelled",false);return;}
+            if(r.action().equals("selection_restore")){
+                if(!s.undo.isEmpty()&&s.undo.peekFirst().selection()!=null)s.undo.removeFirst();
+                if(s.selectionBefore!=null){s.selection.restore(s.selectionBefore);s.selectionBefore=null;}send(player,s,"Selection cancelled",false);return;}
             if(r.action().equals("select_box")||r.action().equals("lasso_select")||r.action().equals("use")&&o.tool.selection())s.selectionBefore=new ArrayList<>(s.selection.points());
             if(r.action().equals("gamemode")||r.action().startsWith("gamemode_")) {
                 s.previousMode=null; // choosing a mode by hand replaces whatever the editor would have restored
@@ -362,6 +365,13 @@ public final class EditorServer {
         var from=backwards?s.undo:s.redo;
         if(from.isEmpty()){s.historyRemaining=0;send(player,s,backwards?"Nothing to undo":"Nothing to redo",false);return;}
         var edit=from.peekFirst();
+        if(edit.selection()!=null){ // a selection has no blocks: put it back directly
+            from.removeFirst();
+            s.selection.restore(backwards?edit.selection().before():edit.selection().after());
+            (backwards?s.redo:s.undo).addFirst(edit);
+            s.recalculateBytes();s.historyDirty=true;s.event((backwards?"Undo ":"Redo ")+edit.name());
+            send(player,s,(backwards?"Undid ":"Redid ")+edit.name(),false);return;
+        }
         for(var c:edit.changes())if(!player.level().hasChunk(c.pos().x()>>4,c.pos().z()>>4))throw new IllegalArgumentException("Move closer to the edited chunks before undo/redo");
         for(var c:edit.biomes())if(!player.level().hasChunk(c.cell().x()>>2,c.cell().z()>>2))throw new IllegalArgumentException("Move closer to the biome chunks before undo/redo");
         EditProtection.check(player,edit);
@@ -435,14 +445,46 @@ public final class EditorServer {
         if(!chunks.isEmpty())j.level.getChunkSource().chunkMap.resendBiomesForChunks(chunks);
         return List.copyOf(applied);
     }
+    /** True for the actions that exist to change the selection, which the history records so they can be undone. */
+    private static boolean changesSelection(String action,Options o){
+        return switch(action){
+            case "select_box","select_box_adjust","lasso_select","clear","selection_move","selection_expand","selection_shrink","selection_invert","selection_convex",
+                 "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo"->true;
+            case "use"->o.tool.selection();
+            default->false;
+        };
+    }
+    private static String selectionName(String action,int size){
+        return switch(action){
+            case "clear"->"Deselect";
+            case "selection_expand"->"Expand selection";
+            case "selection_shrink"->"Shrink selection";
+            case "selection_invert"->"Invert selection";
+            case "selection_move"->"Move selection";
+            default->"Select "+size+" blocks";
+        };
+    }
+    /** Adds the selection's latest change to the history, and remembers the selection as it is now. */
+    private static void noteSelection(Session s){
+        if(s.selection.revision()==s.historyRevision)return;
+        var after=new ArrayList<>(s.selection.points());
+        if(s.recordSelection&&!after.equals(s.historySelection)){
+            var before=s.historySelection;
+            // Dragging a box handle redoes the same selection many times: keep one entry, from where it began.
+            if(s.currentAction.equals("select_box_adjust")&&!s.undo.isEmpty()&&s.undo.peekFirst().selection()!=null){before=s.undo.removeFirst().selection().before();}
+            s.remember(Session.Edit.selecting(selectionName(s.currentAction,after.size()),before,after));
+        }
+        s.historySelection=after;s.historyRevision=s.selection.revision();
+    }
     static void send(ServerPlayer player,Session s,String message,boolean error) {
+        noteSelection(s);
         if(!ServerPlatform.canSend(player))return;
         String entityId="",entityNbt="";if(s.selectedEntity!=null){var entity=player.level().getEntity(s.selectedEntity);if(entity!=null){entityId=s.selectedEntity.toString();String nbt=EntityEdits.snapshot(entity,player.level()).toString();if(nbt.length()<12000)entityNbt=nbt;}}
         if(s.selectionRevision!=s.selection.revision()){s.selectionRevision=s.selection.revision();s.selectionData=SelectionCodec.encode(s.selection.points());}
         if(s.clipboardDirty){s.clipboardGhostDirty=true;s.clipboardData=SelectionCodec.encode(s.clipboard.entrySet().stream().filter(e->!e.getValue().state().isAir()).map(Map.Entry::getKey).toList());s.clipboardDirty=false;}
         if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy,s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost);s.library=List.of();
+        var status=new Packets.Status(message,error,s.busy,s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selection()!=null?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost);s.library=List.of();
         ServerPlatform.send(player,new Packets.Update(Packets.JSON.toJson(status)));
     }
 }

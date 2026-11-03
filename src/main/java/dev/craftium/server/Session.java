@@ -30,6 +30,8 @@ final class Session {
     boolean confirmEdits,bypassConfirm;
     /** The selection as it was before the last selection action, so a mistaken one can be taken back. Null when there is none. */
     List<Point> selectionBefore;
+    /** The selection as of the last time it was noted in the history, the revision it had, and whether the current action is a selection action. */
+    List<Point> historySelection=List.of();long historyRevision;boolean recordSelection;String currentAction="";
     /** The selection before a transform that is waiting for confirmation moved it, so cancelling can put it back. */
     List<Point> pendingSelectionBefore;
     long requestStroke, lastStroke;
@@ -49,11 +51,17 @@ final class Session {
     record Change(Point pos, BlockSnapshot before, BlockSnapshot after) {}
     record BiomeChange(Point cell, Holder<Biome> before, Holder<Biome> after) {}
     record EntityChange(UUID id,net.minecraft.nbt.CompoundTag before,net.minecraft.nbt.CompoundTag after,boolean moving){EntityChange(UUID id,net.minecraft.nbt.CompoundTag before,net.minecraft.nbt.CompoundTag after){this(id,before,after,false);}}
-    record Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations) {
+    /** What a selection action changed: the selection before and after, so undo and redo can put either back. */
+    record SelectionChange(List<Point> before,List<Point> after){}
+    record Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations,SelectionChange selection) {
+        Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations){this(name,changes,biomes,flags,entities,annotations,null);}
+        /** An entry in the history for a change to the selection alone, which has no blocks to restore. */
+        static Edit selecting(String name,List<Point> before,List<Point> after){return new Edit(name,List.of(),List.of(),0,List.of(),List.of(),new SelectionChange(before,after));}
         Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags){this(name,changes,biomes,flags,List.of(),List.of());}
         Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags,List<EntityChange> entities){this(name,changes,biomes,flags,entities,List.of());}
         int estimatedBytes() {
             int size = changes.size()*128 + biomes.size()*96;
+            if(selection!=null)size+=(selection.before().size()+selection.after().size())*24;
             for (var c : changes) {
                 if(c.before.data()!=null) size += c.before.data().toString().length()*2;
                 if(c.after.data()!=null) size += c.after.data().toString().length()*2;
