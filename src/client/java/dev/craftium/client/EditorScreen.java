@@ -48,7 +48,11 @@ public final class EditorScreen extends CraftiumScreen {
     private record Slider(int x,int width,double min,double max,DoubleConsumer set) {
         void update(double px){set.accept(min+Math.clamp((px-x)/(width-1),0,1)*(max-min));}
     }
-    private record MenuItem(String label,String shortcut,Runnable action) {}
+    private record MenuItem(String label,String shortcut,Runnable action,List<MenuItem> children) {
+        MenuItem(String label,String shortcut,Runnable action){this(label,shortcut,action,List.of());}
+    }
+    /** The label of the menu entry whose submenu is open, or empty. */
+    private String openSub="";
     private final boolean heldContext;
     private enum CameraGesture { NONE,ROTATE,ORBIT,PAN,RADIUS }
     private CameraGesture cameraGesture=CameraGesture.NONE;
@@ -136,7 +140,7 @@ public final class EditorScreen extends CraftiumScreen {
         String[] names={"File","Edit","Select","View","Create","Operations","Masks","Window","Help"};int x=108;
         for(int i=0;i<names.length;i++) {
             int index=i,bw=font.width(names[i])+16;
-            button(g,x,2,bw,19,names[i],menu==i,()->menu=menu==index?-1:index,"");x+=bw;
+            button(g,x,2,bw,19,names[i],menu==i,()->{menu=menu==index?-1:index;openSub="";},"");x+=bw;
         }
         button(g,w-58,3,52,17,"Exit  ×",false,this::onClose,"Return to building · Right Shift");
     }
@@ -345,6 +349,8 @@ public final class EditorScreen extends CraftiumScreen {
         slider(g,px,py+ColourPicker.height()+18,ColourPicker.WIDTH,"Width",o().selectionWidth,.1,10,v->o().selectionWidth=Math.round(v*100)/100d,false);
         button(g,px,b[1]+b[3]-28,ColourPicker.WIDTH,20,"Reset",false,()->{o().selectionColor=0xffffd66d;o().selectionWidth=1;},"Back to the default colour and width");
     }
+    /** Picks the tool, or puts it away when it is already the one in use, as clicking it in the pinned bar does. */
+    private void toggleTool(Tool tool){if(toolActive&&o().tool==tool)toolActive=false;else select(tool);}
     private static final Tool[] PINNED={Tool.MOVE,Tool.ROTATE,Tool.SCALE,Tool.PIVOT};
     /** The four transform tools stay pinned at the top of the viewport, just above the notice message, which sits below them. */
     private int[] pinnedBounds(){
@@ -378,22 +384,33 @@ public final class EditorScreen extends CraftiumScreen {
         int y=27;
         for(MenuItem item:items){
             if(item.action==null){g.fill(x+8,y+4,x+218,y+5,LINE);y+=9;continue;}
+            if(!item.children.isEmpty()){
+                boolean open=openSub.equals(item.label);
+                button(g,x+3,y,220,24,item.label,open,()->openSub=open?"":item.label,"");
+                text(g,">",x+212,y+8,MUTED);
+                if(open){
+                    int sx=x+226;g.fill(sx,y-3,sx+226,y-3+4+item.children.size()*25,0xff1c2735);g.outline(sx,y-3,226,4+item.children.size()*25,LINE);
+                    int sy=y;
+                    for(MenuItem child:item.children){final var run=child.action;button(g,sx+3,sy,220,24,child.label,false,()->{menu=-1;openSub="";run.run();},"");sy+=25;}
+                }
+                y+=25;continue;
+            }
             final var action=item.action;button(g,x+3,y,220,24,item.label,false,()->{menu=-1;action.run();},"");
             if(!item.shortcut.isEmpty())text(g,item.shortcut,x+212-font.width(item.shortcut),y+8,MUTED);y+=25;
         }
     }
     private List<MenuItem> menuItems(int which) {
         return switch(which) {
-            case 0 -> List.of(item("Open reference image…","",ReferenceImages::choose),item("Save tool settings","",()->{ClientState.save();ClientState.notify("Tool settings saved");}),item("Reset tool settings","",()->{ClientState.options=new Options();init();}),item("Exit editor","RShift",this::onClose));
+            case 0 -> List.of(item("Open reference image…","",ReferenceImages::choose),item("Save tool settings","",()->{ClientState.save();ClientState.notify("Tool settings saved");}),item("Reset tool settings","",()->{ClientState.options=new Options();init();}),submenu("Preferences",item("Keyboard Shortcuts…","",()->ClientCompat.setScreen(minecraft,new KeyboardShortcutsScreen(this)))),item("Exit editor","RShift",this::onClose));
             case 1 -> List.of(item("Undo","Ctrl+Z",()->action("undo")),item("Redo","Ctrl+Y",()->action("redo")),divider(),
                 item("Copy","Ctrl+C",()->action("copy")),item("Cut","Ctrl+X",()->action("cut")),item("Paste","Ctrl+V",()->action("paste")),
                 item("Paste at cursor","",this::pasteAtCursor),item("Paste in place","",()->CraftiumClient.send("paste_in_place",null,null)),divider(),
                 item("Edits history","",()->ClientCompat.setScreen(minecraft,new HistoryScreen(this))));
             case 2 -> List.of(item("Deselect","",()->action("clear")),item("Inverse","",()->action("selection_invert")),
-                item(showSelection?"Hide selection":"Show selection","",()->showSelection=!showSelection),divider(),
+                item(showSelection?"Hide selection":"Show selection","",()->showSelection=!showSelection),item("Clear selection","Del",()->action("delete")),divider(),
                 item("Expand","by "+o().expandAmount,()->resizeSelection("selection_expand",o().expandAmount)),item("Shrink","by "+o().expandAmount,()->resizeSelection("selection_shrink",o().expandAmount)),
                 item("Expand by 1","",()->resizeSelection("selection_expand",1)),item("Shrink by 1","",()->resizeSelection("selection_shrink",1)));
-            case 3 -> List.of(item("Toggle side panels","",()->panels=!panels),item("Tool options","",()->{builder=false;init();}),item("Builder controls","Alt",()->{builder=true;init();}),item("Studio inspector","",()->ClientCompat.setScreen(minecraft,new StudioScreen(this))),item("Colour picker / gradient","",()->ClientCompat.setScreen(minecraft,new ColourScreen(this))),item("Keybinds","",()->ClientCompat.setScreen(minecraft,new EditorKeybindScreen(this))),item(o().selectionAllEdges?"Selection: outline only":"Selection: all edges","",()->o().selectionAllEdges=!o().selectionAllEdges),item("Selection outline…","",()->ClientState.outlineSettings=!ClientState.outlineSettings),item("Show controls","",()->help=true));
+            case 3 -> List.of(item("Toggle side panels","",()->panels=!panels),item("Tool options","",()->{builder=false;init();}),item("Builder controls","Alt",()->{builder=true;init();}),item("Studio inspector","",()->ClientCompat.setScreen(minecraft,new StudioScreen(this))),item("Colour picker / gradient","",()->ClientCompat.setScreen(minecraft,new ColourScreen(this))),item("Keyboard shortcuts","",()->ClientCompat.setScreen(minecraft,new KeyboardShortcutsScreen(this))),item(o().selectionAllEdges?"Selection: outline only":"Selection: all edges","",()->o().selectionAllEdges=!o().selectionAllEdges),item("Selection outline…","",()->ClientState.outlineSettings=!ClientState.outlineSettings),item("Show controls","",()->help=true));
             case 7 -> {var items=new ArrayList<MenuItem>();for(String id:WorkspaceLayout.windows.keySet())items.add(item("Toggle "+id,"",()->WorkspaceLayout.toggle(id)));items.add(item("Save layout","",WorkspaceLayout::save));items.add(item("Reset layout","",WorkspaceLayout::reset));items.add(item("Copy layout","",()->minecraft.keyboardHandler.setClipboard(WorkspaceLayout.json())));items.add(item("Paste layout","",()->{try{WorkspaceLayout.importJson(minecraft.keyboardHandler.getClipboard());WorkspaceLayout.save();}catch(Exception e){ClientState.notify("Invalid layout JSON");}}));yield items;}
             case 4 -> List.of(item("Shape","",()->select(Tool.SHAPE)),item("Block text","",()->select(Tool.TEXT)),item("Line","",()->select(Tool.LINE)),item("Rock","",()->select(Tool.ROCK)));
             case 5 -> List.of(item("Fill selection","Ctrl+F",()->action("fill")),item("Delete selection","Del",()->action("delete")),item("Move / clone / stack…","",()->{transform=true;init();}),item("Smooth brush","",()->select(Tool.SMOOTH)),item("Flatten brush","",()->select(Tool.FLATTEN)));
@@ -411,6 +428,8 @@ public final class EditorScreen extends CraftiumScreen {
         }
     }
     private MenuItem item(String label,String shortcut,Runnable action){return new MenuItem(label,shortcut,action);}
+    /** A menu entry that opens a submenu beside it instead of doing something. */
+    private MenuItem submenu(String label,MenuItem... children){return new MenuItem(label,"",()->{},List.of(children));}
     /** A thin line between groups of menu entries; it has no action. */
     private MenuItem divider(){return new MenuItem("","",null);}
     /** Grows or shrinks the selection by {@code amount} blocks all round, the server repeating one block at a time. */
@@ -668,22 +687,14 @@ public final class EditorScreen extends CraftiumScreen {
         for(Action binding:Action.values())if(!EditorBindings.get(binding).mouse()&&EditorBindings.matches(binding,event)&&perform(binding))return true;
         if(event.key()==GLFW.GLFW_KEY_BACKSPACE&&(event.modifiers()&7)==0){perform(Action.DELETE);return true;}
         if((event.modifiers()&7)==0)for(var entry:CraftiumClient.toolKeys.entrySet())if(entry.getValue().matches(event)){select(entry.getKey());return true;}
-        // A second way to pick the transform tools, in the order they are pinned.
-        if((event.modifiers()&7)==0){
-            int slot=event.key()-GLFW.GLFW_KEY_1;
-            if(slot>=0&&slot<PINNED.length){
-                Tool tool=PINNED[slot];
-                if(toolActive&&o().tool==tool)toolActive=false; // pressing it again puts the tool away, like clicking it
-                else select(tool);
-                return true;
-            }
-        }
         return true;
     }
     private boolean perform(Action binding){
         switch(binding){
             case CONFIRM -> {if(ClientState.hasPending())CraftiumClient.send("pending_confirm",null,null);else if(PlacementPreview.active())PlacementPreview.confirm();else action(o().tool==Tool.PATH||o().tool==Tool.MODELLING||o().tool==Tool.MODIFY?"use":"clear");}
-            case UNDO -> action("undo");case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut");case DUPLICATE -> action("duplicate");case PASTE -> action("paste");
+            case UNDO,UNDO_ALT -> action("undo");
+            case TOGGLE_MOVE -> toggleTool(Tool.MOVE);case TOGGLE_ROTATE -> toggleTool(Tool.ROTATE);case TOGGLE_SCALE -> toggleTool(Tool.SCALE);case TOGGLE_PIVOT -> toggleTool(Tool.PIVOT);
+case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut");case DUPLICATE -> action("duplicate");case PASTE -> action("paste");
             case COPY_AIR -> {boolean old=o().pasteAir;o().pasteAir=true;action("copy");o().pasteAir=old;}
             case DELETE -> {if(PlacementPreview.active())PlacementPreview.cancel();else action("delete");}
             case QUICK_FILL -> action("fill");case QUICK_REPLACE -> action("replace");
