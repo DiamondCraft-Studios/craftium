@@ -307,8 +307,14 @@ public final class EditorScreen extends CraftiumScreen {
             default -> {
                 toggle(g,10,403,"Invert / carve",o().invert,()->o().invert=!o().invert);
                 toggle(g,10,425,"Hollow shape",o().hollow,()->o().hollow=!o().hollow);
-                toggle(g,10,447,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
-                if(o().tool.selection())modeButtons(g,472);
+                int next=447;
+                if(o().hollow){ // the outline's own settings sit under the toggle that turns it on
+                    slider(g,10,next+12,LEFT-20,"Outline thickness",o().outlineThickness,1,8,DEFAULTS.outlineThickness,v->o().outlineThickness=(int)Math.round(v),true);
+                    toggle(g,10,next+36,"Pixel perfect",o().pixelPerfect,()->o().pixelPerfect=!o().pixelPerfect,"One block per step along the outline, with no doubled corners on curves · best at thickness 1");
+                    next+=58;
+                }
+                toggle(g,10,next,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
+                if(o().tool.selection())modeButtons(g,next+25);
             }
         }
         if(o().tool==Tool.TEXT||o().tool==Tool.BIOME_PAINTER||o().tool==Tool.CLENTAMINATOR) {

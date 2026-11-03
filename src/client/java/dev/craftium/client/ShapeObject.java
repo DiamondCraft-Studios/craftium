@@ -124,7 +124,7 @@ final class ShapeObject {
 
     private static Made make(Pose p){
         var o=ClientState.options;
-        var key=List.<Object>of(o.shape,o.radius,o.hollow,Math.round(p.yaw()*1e4),Math.round(p.pitch()*1e4),Math.round(p.roll()*1e4),Math.round(p.sizeX()*1e4),Math.round(p.sizeY()*1e4),Math.round(p.sizeZ()*1e4));
+        var key=List.<Object>of(o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,Math.round(p.yaw()*1e4),Math.round(p.pitch()*1e4),Math.round(p.roll()*1e4),Math.round(p.sizeX()*1e4),Math.round(p.sizeY()*1e4),Math.round(p.sizeZ()*1e4));
         if(made!=null&&made.key().equals(key))return made;
         try{
             var cells=Geometry.shape(new Point(0,0,0),request(p));
