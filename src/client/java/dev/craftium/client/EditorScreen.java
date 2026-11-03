@@ -154,6 +154,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void tools(Gfx g) {
         panel(g,0,27,LEFT,166,"Tools");int i=0;
         for(Tool tool:Tool.values()) {
+            if(tool.transform())continue; // these are pinned above the notice instead
             int x=9+(i%7)*23,y=50+(i/7)*23;i++;
             boolean selected=toolActive&&o().tool==tool;
             g.fill(x,y,x+21,y+21,selected?0xff315b84:0xff223247);
@@ -521,7 +522,12 @@ public final class EditorScreen extends CraftiumScreen {
         if(!toolActive&&EditorBindings.matches(Action.CROSSHAIR,event)){cameraGesture=CameraGesture.ROTATE;cameraButton=event.button();return true;}
         if(EditorBindings.matches(Action.ROTATE_CAMERA,event)){cameraGesture=CameraGesture.ROTATE;cameraButton=event.button();return true;}
         if(toolActive&&EditorBindings.matches(Action.USE_TOOL,event)){if(o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW"))o().annotationPoints.clear();painting=true;ClientState.strokeId=System.nanoTime();if(o().tool==Tool.LASSO_SELECT){lasso.clear();lasso.add(new LassoSelection.Pixel(event.x(),event.y()));}else use();}
-        if(EditorBindings.matches(Action.PICK_BLOCK,event)){var hit=target();if(hit!=null&&minecraft.level!=null){String block=BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(hit.getBlockPos()).getBlock()).toString();ClientState.pick(block);fields.get("block").setValue(block);}}
+        if(EditorBindings.matches(Action.PICK_BLOCK,event)){
+            // Dragging pans the camera; letting go without having dragged picks the block, as a click always did.
+            var hit=target();pickedHit=hit;pendingPick=true;middleDragged=false;
+            cameraGesture=CameraGesture.PAN;cameraButton=event.button();gestureX=event.x();gestureY=event.y();
+            orbitPivot=hit==null?minecraft.player.getEyePosition().add(minecraft.player.getLookAngle().scale(12)):hit.getLocation();orbitDistance=Math.max(1,orbitPivot.distanceTo(minecraft.player.getEyePosition()));
+        }
         return true;
     }
     @Override public boolean mouseReleased(MouseButtonEvent event){if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting&&o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW")&&o().annotationPoints.size()>1)action("annotation_create");painting=false;ClientState.strokeId=0;if(o().tool==Tool.LASSO_SELECT&&!lasso.isEmpty()){o().selectionPoints=new ArrayList<>(LassoSelection.project(lasso));action("lasso_select");o().selectionPoints.clear();lasso.clear();}}return true;}
@@ -529,6 +535,8 @@ public final class EditorScreen extends CraftiumScreen {
         if(ReferenceImages.drag(event.x(),event.y()))return true;
         pointerX=event.x();pointerY=event.y();
         if(cameraGesture!=CameraGesture.NONE){
+            // A few pixels of wobble on a middle click is still a click, not a pan.
+            if(pendingPick&&!middleDragged){if(Math.hypot(event.x()-gestureX,event.y()-gestureY)<=3)return true;middleDragged=true;}
             if(cameraGesture==CameraGesture.RADIUS)o().radius=Math.clamp(initialRadius+(int)Math.round(((event.x()-gestureX)-(event.y()-gestureY))/8),1,24);
             else if(cameraGesture==CameraGesture.ROTATE)minecraft.player.turn(dx*2,dy*2);
             else if(cameraGesture==CameraGesture.ORBIT){minecraft.player.turn(dx*2,dy*2);Vec3 eye=orbitPivot.subtract(minecraft.player.getLookAngle().scale(orbitDistance));minecraft.player.setPos(eye.x,eye.y-minecraft.player.getEyeHeight(),eye.z);}
@@ -558,6 +566,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(builder){action(vertical>0?"hotbar_previous":"hotbar_next");return true;}
         if(EditorBindings.held(Action.ADJUST_SPEED)){o().flySpeed=Math.clamp(o().flySpeed+(float)vertical*.2f,.1f,10f);action("flight");return true;}
         if(EditorBindings.held(Action.ADJUST_RADIUS)){o().radius=Math.clamp(o().radius+(int)Math.signum(vertical),1,24);return true;}
+        if(!toolActive){zoomToCursor(x,y,vertical);return true;} // no tool chosen: the wheel is the camera's
         if(TransformGizmo.available(this)){TransformGizmo.nudge(this,EditorControls.nudge(vertical>0?Action.NUDGE_FORWARD:Action.NUDGE_BACK,minecraft.player.getYRot()));}
         return true;
     }
