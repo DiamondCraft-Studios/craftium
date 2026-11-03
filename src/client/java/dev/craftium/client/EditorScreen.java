@@ -403,8 +403,11 @@ public final class EditorScreen extends CraftiumScreen {
         // Drawn back to front, like a paint tool: the foreground sits on top of the background.
         blockSlot(g,x+30,264,"Background block",o().secondary,id->o().secondary=id);
         blockSlot(g,x+10,248,"Foreground block",o().block,id->ClientState.pick(id));
-        var blocks=ClientState.palette;int i=0;
-        for(String block:blocks.subList(0,Math.min(7,blocks.size()))) {
+        // The first cell is always "+", which adds a block to the palette and makes it the foreground.
+        g.fill(x+10,298,x+33,321,0xff243246);g.outline(x+10,298,23,23,LINE);g.centeredText(font,"+",x+21,306,TEXT);
+        controls.add(new Control(x+10,298,23,23,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,"Add to palette","",id->{ClientState.pick(id);ClientState.save();})),"Add a block to the palette"));
+        var blocks=ClientState.palette;int i=1;
+        for(String block:blocks.subList(0,Math.min(6,blocks.size()))) {
             int bx=x+10+i*26,by=298;i++;
             boolean active=o().block.equals(block);g.fill(bx,by,bx+23,by+23,active?0xff315b84:0xff1b2838);if(active)g.outline(bx,by,23,23,ACCENT);
             BlockPickerScreen.icon(g,font,block,bx+3,by+3);
