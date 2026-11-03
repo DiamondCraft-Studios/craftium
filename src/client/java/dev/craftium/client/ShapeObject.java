@@ -55,6 +55,13 @@ final class ShapeObject {
         pose=new Pose(pose.origin(),multiply(turn,pose.rotation()),pose.sizeX(),pose.sizeY(),pose.sizeZ());
     }
 
+    /** Grows or shrinks the shape's radius by {@code step}; the sizes are kept within reach of the new radius. */
+    static void adjustRadius(int step){
+        var o=ClientState.options;
+        o.radius=Math.clamp(o.radius+step,1,24);
+        if(pose!=null)pose=fit(pose,o.radius);
+    }
+
     /** The middle of the shape, which is where its handles sit and what it turns and scales about. */
     static Vec3 centre(){var at=pose.origin();return new Vec3(at.x()+.5,at.y()+.5,at.z()+.5);}
     /** How many blocks the shape spans along each of its own axes, which is what the scale handles measure. */
