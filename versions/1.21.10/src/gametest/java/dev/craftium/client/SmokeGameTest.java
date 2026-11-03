@@ -64,6 +64,20 @@ public final class SmokeGameTest implements FabricClientGameTest {
             ctx.waitTicks(20);
             ctx.takeScreenshot("selection");
             System.out.println("CRAFTIUM_SMOKE selection_drawn");
+
+            // An irregular selection (an L-shaped prism) must be one outline around its silhouette, nothing inside.
+            ctx.runOnClient(mc->{
+                BlockPos base=mc.player.blockPosition().offset(-3,0,6);
+                var points=new java.util.ArrayList<dev.craftium.core.Point>();
+                for(int x=0;x<5;x++)for(int z=0;z<2;z++)points.add(new dev.craftium.core.Point(base.getX()+x,base.getY(),base.getZ()+z));
+                for(int y=1;y<4;y++)for(int z=0;z<2;z++)points.add(new dev.craftium.core.Point(base.getX(),base.getY()+y,base.getZ()+z));
+                ClientState.options.selectionPoints.clear();ClientState.options.selectionPoints.addAll(points);
+                CraftiumClient.send("lasso_select",null,new dev.craftium.core.Point(0,1,0));
+            });
+            world.getClientWorld().waitForChunksDownload();
+            ctx.waitTicks(30);
+            ctx.takeScreenshot("selection-l-shape");
+            System.out.println("CRAFTIUM_SMOKE l_selection_drawn");
             ctx.runOnClient(mc->ClientCompat.setScreen(mc,null));
         }
         System.out.println("CRAFTIUM_SMOKE done");
