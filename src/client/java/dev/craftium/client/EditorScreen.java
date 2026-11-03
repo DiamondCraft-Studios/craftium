@@ -19,6 +19,7 @@ public final class EditorScreen extends CraftiumScreen {
     private static int BG=0xf510141a,PANEL=0xff10151c,LINE=0xff303b49,ACCENT=0xff5b9fdb,TEXT=0xffdce6ef,MUTED=0xff8595a8;
     private static final int LEFT=182,RIGHT=200;
     private float scale=1;
+    private long lastFlightNanos;
     private int w,h,mx,my;
     private boolean builder,help,transform,panels=true,painting;
     private boolean hudHidden,previousHideGui;
@@ -62,6 +63,7 @@ public final class EditorScreen extends CraftiumScreen {
 
     private Options o(){return ClientState.options;}
     @Override protected void init() {
+        lastFlightNanos=0;
         if(!hudHidden){previousHideGui=ClientCompat.hudHidden(minecraft);hudHidden=true;if(!previousHideGui)ClientCompat.toggleHud(minecraft);}
         scale=Math.min(1f,Math.min(width/1000f,height/562f));w=Math.round(width/scale);h=Math.round(height/scale);
         fields.clear();
@@ -96,6 +98,7 @@ public final class EditorScreen extends CraftiumScreen {
     @Override public boolean isInGameUi(){return true;}
     @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta) {
+        fly();
         BG=o().uiBackground;PANEL=o().uiPanel;LINE=o().uiBorder;ACCENT=o().uiAccent;TEXT=o().uiText;MUTED=o().uiMuted;
         pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();
         g.pose().pushMatrix();g.pose().scale(scale,scale);
@@ -433,7 +436,7 @@ public final class EditorScreen extends CraftiumScreen {
             else if(cameraGesture==CameraGesture.ROTATE)minecraft.player.turn(dx*2,dy*2);
             else if(cameraGesture==CameraGesture.ORBIT){minecraft.player.turn(dx*2,dy*2);Vec3 eye=orbitPivot.subtract(minecraft.player.getLookAngle().scale(orbitDistance));minecraft.player.setPos(eye.x,eye.y-minecraft.player.getEyeHeight(),eye.z);}
             else{var camera=ClientCompat.camera(minecraft);var near=ClientCompat.nearPlane(camera);Vec3 center=near.getPointOnPlane(0,0),right=near.getPointOnPlane(1,0).subtract(center).normalize(),up=near.getPointOnPlane(0,1).subtract(center).normalize();double units=2*orbitDistance*Math.tan(Math.toRadians(ClientCompat.fov(minecraft,camera))/2)/height;minecraft.player.setPos(minecraft.player.position().add(right.scale(-dx*units)).add(up.scale(dy*units)));}
-            minecraft.player.setDeltaMovement(Vec3.ZERO);return true;
+            minecraft.player.setDeltaMovement(Vec3.ZERO);minecraft.player.setOldPosAndRot();return true;
         }
         if(TransformGizmo.drag(event.x(),event.y()))return true;
         if(draggingNode&&selectedNode>=0&&selectedNode<handleNodes().size()){
@@ -507,17 +510,38 @@ public final class EditorScreen extends CraftiumScreen {
         }
         return true;
     }
+    /** Replaces the keyboard as the source of flight input; set only by tests, which cannot fake polled key state. */
+    static java.util.function.Supplier<double[]> flightInput;
+    /** Flight input as {forward, side, up}, each from -1 to 1. */
+    private double[] flightAxes(){
+        if(flightInput!=null)return flightInput.get();
+        return new double[]{
+            (CraftiumClient.held(minecraft.options.keyUp)?1:0)-(CraftiumClient.held(minecraft.options.keyDown)?1:0),
+            (CraftiumClient.held(minecraft.options.keyRight)?1:0)-(CraftiumClient.held(minecraft.options.keyLeft)?1:0),
+            (CraftiumClient.held(minecraft.options.keyJump)?1:0)-(CraftiumClient.held(minecraft.options.keyShift)?1:0)};
+    }
     @Override public void tick() {
         if(heldContext){if(!CraftiumClient.held(CraftiumClient.contextKey))onClose();return;}
-        if(minecraft.player==null||help||transform||menu>=0)return;
+    }
+    /**
+     * Flies the camera for the time since the last frame. Moving on game ticks would update the viewport
+     * only 20 times a second whatever the Max Framerate setting is, so this runs on every rendered frame
+     * at the same 7 blocks per second (0.35 per tick) the tick-based version covered.
+     */
+    private void fly() {
+        long now=System.nanoTime();
+        double seconds=lastFlightNanos==0?0:Math.min((now-lastFlightNanos)/1e9,.1);
+        lastFlightNanos=now;
+        var player=minecraft.player;
+        if(heldContext||player==null||help||transform||menu>=0||!player.isCreative())return;
         for(EditBox field:fields.values())if(field.isFocused())return;
-        long handle=minecraft.getWindow().handle();double forward=(CraftiumClient.held(minecraft.options.keyUp)?1:0)-(CraftiumClient.held(minecraft.options.keyDown)?1:0),side=(CraftiumClient.held(minecraft.options.keyRight)?1:0)-(CraftiumClient.held(minecraft.options.keyLeft)?1:0),up=(CraftiumClient.held(minecraft.options.keyJump)?1:0)-(CraftiumClient.held(minecraft.options.keyShift)?1:0);
-        if(minecraft.player.isCreative()&&(forward!=0||side!=0||up!=0)) {
-            double yaw=Math.toRadians(minecraft.player.getYRot()),speed=.35*o().flySpeed;
-            Vec3 delta=new Vec3(-Math.sin(yaw)*forward-Math.cos(yaw)*side,up,Math.cos(yaw)*forward-Math.sin(yaw)*side).normalize().scale(speed);
-            minecraft.player.getAbilities().flying=true;minecraft.player.onUpdateAbilities();
-            minecraft.player.setDeltaMovement(Vec3.ZERO);minecraft.player.setPos(minecraft.player.position().add(delta));
-        }
+        double[] axes=flightAxes();double forward=axes[0],side=axes[1],up=axes[2];
+        if(forward==0&&side==0&&up==0)return;
+        double yaw=Math.toRadians(player.getYRot());
+        Vec3 delta=new Vec3(-Math.sin(yaw)*forward-Math.cos(yaw)*side,up,Math.cos(yaw)*forward-Math.sin(yaw)*side).normalize().scale(.35*20*o().flySpeed*seconds);
+        if(!player.getAbilities().flying){player.getAbilities().flying=true;player.onUpdateAbilities();}
+        player.setDeltaMovement(Vec3.ZERO);player.setPos(player.position().add(delta));
+        player.setOldPosAndRot(); // the renderer interpolates from the previous position, so make it the current one
     }
     private List<Point> handleNodes(){return o().tool==Tool.RULER?ClientState.rulerPoints:EnumSet.of(Tool.PATH,Tool.MODELLING,Tool.GRADIENT_PAINTER,Tool.SLOPE).contains(o().tool)?o().nodes:new ArrayList<>();}
     public Point handlePoint(){return selectedNode>=0&&selectedNode<handleNodes().size()?handleNodes().get(selectedNode):null;}
