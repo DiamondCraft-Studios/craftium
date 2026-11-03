@@ -8,6 +8,8 @@ pluginManagement {
 rootProject.name = 'Craftium'
 include('paper-26.2')
 project(':paper-26.2').projectDir = file('versions/26.2/server-plugin')
+include('paper-1.21.10')
+project(':paper-1.21.10').projectDir = file('versions/1.21.10/server-plugin')
 include('versions:26.2')
 project(':versions:26.2').name = 'mc-26.2'
 

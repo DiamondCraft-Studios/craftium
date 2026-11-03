@@ -1,0 +1,34 @@
+name: Craftium
+version: '${version}'
+main: dev.craftium.paper.CraftiumPlugin
+api-version: '1.21.10'
+description: Craftium building studio companion for Paper and Purpur
+authors: [Craftium]
+softdepend: [WorldGuard]
+commands:
+  craftiumserver:
+    description: Craftium server status and configuration
+    usage: /craftiumserver [status|reload]
+    permission: craftium.admin
+permissions:
+  craftium.edit:
+    description: Use Craftium editing tools in Creative mode
+    default: op
+  craftium.world:
+    description: Change time, weather and world rules
+    default: op
+  craftium.gamemode:
+    description: Switch your own game mode through Craftium
+    default: op
+  craftium.assets:
+    description: Upload and export Craftium assets
+    default: op
+  craftium.capabilities:
+    description: Extended reach and flight controls
+    default: op
+  craftium.rebuild:
+    description: Run animated rebuilds
+    default: op
+  craftium.admin:
+    description: Inspect and reload Craftium server settings
+    default: op

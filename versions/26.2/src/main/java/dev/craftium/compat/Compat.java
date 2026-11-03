@@ -30,6 +30,8 @@ public final class Compat {
     public static String keyName(ResourceKey<?> key){return key.identifier().toString();}
 
     public static boolean isGamemaster(ServerPlayer player){return player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);}
+    /** The player's command source raised to game-master (operator level 2) permission. */
+    public static CommandSourceStack gamemasterSource(ServerPlayer player){return player.createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.GAMEMASTER);}
     public static boolean isGamemaster(CommandSourceStack source){return source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);}
 
     /** Rebuilds an entity, with passengers, from its saved data. Returns null when the data is invalid. */

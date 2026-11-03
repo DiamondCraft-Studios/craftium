@@ -24,6 +24,7 @@ public final class Compat {
     public static String keyName(ResourceKey<?> key){return key.location().toString();}
 
     public static boolean isGamemaster(ServerPlayer player){return player.hasPermissions(2);}
+    public static CommandSourceStack gamemasterSource(ServerPlayer player){return player.createCommandSourceStack().withPermission(2);}
     public static boolean isGamemaster(CommandSourceStack source){return source.hasPermission(2);}
 
     public static Entity loadEntity(CompoundTag tag,Level level){

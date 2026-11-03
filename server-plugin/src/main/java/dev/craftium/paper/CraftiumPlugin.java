@@ -107,7 +107,7 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
     }
     @Override public net.minecraft.commands.CommandSourceStack commands(ServerPlayer player){
         // Only fixed, validated world/view commands call this after action-specific authorization.
-        return player.createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.GAMEMASTER);
+        return dev.craftium.compat.Compat.gamemasterSource(player);
     }
     private boolean worldAllowed(World world){return allowedWorlds.isEmpty()||allowedWorlds.contains(world.getName());}
     @Override public boolean requiresProtection(){return true;}
