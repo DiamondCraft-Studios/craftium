@@ -16,7 +16,7 @@ public final class EditorControls {
         CROSSHAIR("Crosshair",Binding.mouse(1,0)),ADJUST_SPEED("Adjust flight speed"),
         CONFIRM("Confirm / clear selection",257,0),UNDO("Undo",'Z',CONTROL),REDO("Redo",'Y',CONTROL),COPY("Copy",'C',CONTROL),COPY_AIR("Copy with air"),
         PASTE("Paste",'V',CONTROL),DELETE("Delete",261,0),CUT("Cut",'X',CONTROL),DUPLICATE("Duplicate",'J',CONTROL),
-        EXTRUDE_POINT("Extrude point",'E',0),SAVE_BLUEPRINT("Save blueprint",'P',CONTROL),
+        SWAP_BLOCKS("Swap foreground / background block",'X',0),EXTRUDE_POINT("Extrude point",'E',0),SAVE_BLUEPRINT("Save blueprint",'P',CONTROL),
         SHOW_SELECTION("Show selections"),SHOW_BIOMES("Show biomes",'B',CONTROL),SHOW_ANNOTATIONS("Show annotations"),
         SHOW_DISPLAYS("Show display gizmos"),SHOW_MARKERS("Show marker gizmos"),SHOW_COLLISION("Show collision mesh"),SHOW_LIGHTS("Show light blocks"),SHOW_VOID("Show structure void"),
         QUICK_FILL("Quick fill",'F',CONTROL),QUICK_REPLACE("Quick replace",'R',CONTROL),

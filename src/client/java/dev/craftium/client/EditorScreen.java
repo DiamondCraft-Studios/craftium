@@ -85,7 +85,6 @@ public final class EditorScreen extends CraftiumScreen {
         if(!hudHidden){previousHideGui=ClientCompat.hudHidden(minecraft);hudHidden=true;if(!previousHideGui)ClientCompat.toggleHud(minecraft);}
         scale=Math.min(1f,Math.min(width/1000f,height/562f));w=Math.round(width/scale);h=Math.round(height/scale);
         fields.clear();suspended=false;
-        field("block",w-RIGHT+10,244,RIGHT-20,o().block,s->ClientState.pick(s));
         field("mask",w-RIGHT+10,h-95,RIGHT-20,o().mask,s->o().mask=s);
         field("minY",w-RIGHT+10,h-64,80,Integer.toString(o().minY),s->{try{o().minY=Integer.parseInt(s);}catch(NumberFormatException ignored){}});
         field("maxY",w-90,h-64,80,Integer.toString(o().maxY),s->{try{o().maxY=Integer.parseInt(s);}catch(NumberFormatException ignored){}});
@@ -400,15 +399,25 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,x+106,186,84,20,"Paste in place",false,()->CraftiumClient.send("paste_in_place",null,null),"Paste at the coordinates the blocks were copied from");
     }
     private void palette(Gfx g) {
-        int x=w-RIGHT;panel(g,x,222,RIGHT,105,"Active block / Palette");
+        int x=w-RIGHT;panel(g,x,222,RIGHT,105,"Block palette");
+        // Drawn back to front, like a paint tool: the foreground sits on top of the background.
+        blockSlot(g,x+30,264,"Background block",o().secondary,id->o().secondary=id);
+        blockSlot(g,x+10,248,"Foreground block",o().block,id->ClientState.pick(id));
         var blocks=ClientState.palette;int i=0;
-        for(String block:blocks.subList(0,Math.min(14,blocks.size()))) {
-            int bx=x+10+(i%7)*26,by=270+(i/7)*26;i++;
+        for(String block:blocks.subList(0,Math.min(7,blocks.size()))) {
+            int bx=x+10+i*26,by=298;i++;
             boolean active=o().block.equals(block);g.fill(bx,by,bx+23,by+23,active?0xff315b84:0xff1b2838);if(active)g.outline(bx,by,23,23,ACCENT);
-            var id=dev.craftium.compat.Compat.tryParse(block);if(id!=null)BuiltInRegistries.BLOCK.getOptional(id).ifPresent(b->g.item(b.asItem().getDefaultInstance(),bx+3,by+3));
-            controls.add(new Control(bx,by,23,23,()->{ClientState.pick(block);fields.get("block").setValue(block);},block));
+            BlockPickerScreen.icon(g,font,block,bx+3,by+3);
+            controls.add(new Control(bx,by,23,23,()->ClientState.pick(block),block+" · Recent blocks set the foreground"));
         }
     }
+    /** A 30px swatch for one of the two selected blocks; clicking it opens the block chooser to replace it. */
+    private void blockSlot(Gfx g,int x,int y,String label,String block,java.util.function.Consumer<String> set) {
+        g.fill(x,y,x+30,y+30,0xff1b2838);g.outline(x,y,30,30,label.startsWith("Fore")?ACCENT:LINE);
+        BlockPickerScreen.icon(g,font,block,x+7,y+7);
+        controls.add(new Control(x,y,30,30,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,label,block,id->{set.accept(id);ClientState.save();})),label+" · "+block+" · Click to replace"));
+    }
+    private void swapBlocks() {String front=o().block;ClientState.pick(o().secondary);o().secondary=front;ClientState.save();}
     private void history(Gfx g) {
         int x=w-RIGHT,y=333,height=h-477;
         panel(g,x,y,RIGHT,Math.max(50,height),"History");
@@ -780,7 +789,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void pickBlock(BlockHitResult hit){
         if(hit==null||minecraft.level==null)return;
         String block=BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(hit.getBlockPos()).getBlock()).toString();
-        ClientState.pick(block);fields.get("block").setValue(block);
+        ClientState.pick(block);
     }
     @Override public boolean mouseReleased(MouseButtonEvent event){outlinePicker.release();if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting&&o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW")&&o().annotationPoints.size()>1)action("annotation_create");painting=false;ClientState.strokeId=0;if(o().tool==Tool.LASSO_SELECT&&!lasso.isEmpty()){o().selectionPoints=new ArrayList<>(LassoSelection.project(lasso));action("lasso_select");o().selectionPoints.clear();lasso.clear();}}return true;}
     @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy) {
@@ -869,6 +878,7 @@ public final class EditorScreen extends CraftiumScreen {
 case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut");case DUPLICATE -> action("duplicate");case PASTE -> action("paste");
             case COPY_AIR -> {boolean old=o().pasteAir;o().pasteAir=true;action("copy");o().pasteAir=old;}
             case DELETE -> {if(PlacementPreview.active())PlacementPreview.cancel();else action("delete");}
+            case SWAP_BLOCKS -> swapBlocks();
             case QUICK_FILL -> action("fill");case QUICK_REPLACE -> action("replace");
             case ROTATE_PLACEMENT -> {if(!PlacementPreview.active())return false;action("rotate");}
             case FLIP_PLACEMENT -> {if(!PlacementPreview.active())return false;action("flip_facing");}
