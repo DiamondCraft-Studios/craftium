@@ -1,12 +1,13 @@
 name: Build Craftium 1.21.10
 
-# Runs when shared code or anything 1.21.10 owns changes. Branches: main and the 1.21.10 release branch.
+# Runs when shared code, the shared Paper plugin code or anything 1.21.10 owns changes. Branches: main and the 1.21.10 release branch.
 on:
   push:
     branches: [main, release/1.21.10]
     paths:
       - 'src/**'
       - 'versions/1.21.10/**'
+      - 'server-plugin/**'
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle.properties'
@@ -21,6 +22,7 @@ on:
     paths:
       - 'src/**'
       - 'versions/1.21.10/**'
+      - 'server-plugin/**'
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle.properties'
@@ -44,9 +46,11 @@ jobs:
     uses: ./.github/workflows/build-version.yml
     with:
       artifact: craftium-1.21.10
-      tasks: ':versions:mc-1.21.10:build :versions:mc-1.21.10:compileGametestJava'
+      tasks: ':versions:mc-1.21.10:build :paper-1.21.10:build :versions:mc-1.21.10:compileGametestJava'
       jars: |
         versions/1.21.10/build/libs/*.jar
+        versions/1.21.10/server-plugin/build/libs/*.jar
         !**/*-sources.jar
       reports: |
         versions/1.21.10/build/reports/tests/test/
+        versions/1.21.10/server-plugin/build/reports/tests/test/
