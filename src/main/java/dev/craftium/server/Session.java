@@ -45,6 +45,8 @@ final class Session {
     boolean clipboardDirty=true;
     List<dev.craftium.core.BlueprintInfo> library=List.of();
     boolean infiniteReach,noClip;
+    /** The options of the player's latest request, which vanilla block placement reads for the capabilities it bends. */
+    dev.craftium.core.Options options;
     int currentHotbar=-1;
     java.nio.file.Path historyPath;
     boolean historyDirty;

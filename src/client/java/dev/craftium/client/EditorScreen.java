@@ -282,17 +282,18 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void builderOptions(Gfx g) {
         text(g,"CAPABILITIES",10,254,MUTED);
-        toggle(g,10,273,"Enhanced flight",o().enhancedFlight,()->o().enhancedFlight=!o().enhancedFlight);
-        toggle(g,10,296,"Bulldozer",o().bulldozer,()->o().bulldozer=!o().bulldozer);
-        toggle(g,10,319,"Replace mode",o().replaceMode,()->o().replaceMode=!o().replaceMode);
-        toggle(g,10,342,"Force place",o().forcePlace,()->o().forcePlace=!o().forcePlace);
-        toggle(g,10,365,"No updates",o().noUpdates,()->o().noUpdates=!o().noUpdates);
-        toggle(g,10,388,"Tinker",o().tinker,()->o().tinker=!o().tinker);
-        slider(g,10,428,LEFT-20,"Fly speed",o().flySpeed,.1,10,v->o().flySpeed=(float)v,false);
-        button(g,10,452,LEFT-20,20,"Apply flight speed",false,()->action("flight"),"Apply the selected flight speed");
-        button(g,10,478,78,20,"Hotbar ↔",false,()->action("hotbar"),"Swap the hotbar with inventory row 1 · Z");
-        button(g,94,478,78,20,"Game mode",false,()->action("gamemode"),"Switch between Creative and Spectator");
-        button(g,10,506,LEFT-20,20,"Builder tool: "+o().builderTool.name(),false,()->{o().builderTool=Options.BuilderTool.values()[(o().builderTool.ordinal()+1)%Options.BuilderTool.values().length];},"Press 0 in the world · Alt + wheel changes tools");
+        toggle(g,10,273,"Enhanced flight",o().enhancedFlight,()->o().enhancedFlight=!o().enhancedFlight,"Creative flight at the fly speed below");
+        toggle(g,10,296,"Bulldozer",o().bulldozer,()->o().bulldozer=!o().bulldozer,"Hold left click to break the block you aim at, without breaking one at a time");
+        toggle(g,10,319,"Replace mode",o().replaceMode,()->o().replaceMode=!o().replaceMode,"Placing a block replaces the one you click instead of going beside it · R");
+        toggle(g,10,342,"Force place",o().forcePlace,()->o().forcePlace=!o().forcePlace,"Place blocks where they could not survive, like a torch in the air");
+        toggle(g,10,365,"No updates",o().noUpdates,()->o().noUpdates=!o().noUpdates,"Placed blocks do not update their neighbours, so they stay when what holds them is removed");
+        toggle(g,10,388,"Tinker",o().tinker,()->o().tinker=!o().tinker,"Right click a block with an empty hand to edit its properties");
+        toggle(g,10,411,"Angel placement",o().angelPlacement,()->o().angelPlacement=!o().angelPlacement,"Right click in the air to place the held block four blocks ahead, shown as a ghost");
+        slider(g,10,451,LEFT-20,"Fly speed",o().flySpeed,.1,10,v->o().flySpeed=(float)v,false);
+        button(g,10,475,LEFT-20,20,"Apply flight speed",false,()->action("flight"),"Apply the selected flight speed");
+        button(g,10,501,78,20,"Hotbar ↔",false,()->action("hotbar"),"Swap the hotbar with inventory row 1 · Z");
+        button(g,94,501,78,20,"Game mode",false,()->action("gamemode"),"Switch between Creative and Spectator");
+        button(g,10,529,LEFT-20,20,"Builder tool: "+o().builderTool.name(),false,()->{o().builderTool=Options.BuilderTool.values()[(o().builderTool.ordinal()+1)%Options.BuilderTool.values().length];},()->{o().builderTool=Options.BuilderTool.values()[Math.floorMod(o().builderTool.ordinal()-1,Options.BuilderTool.values().length)];},"Press 0 in the world · Alt + wheel changes tools");
     }
     private void targetInfo(Gfx g) {
         int x=w-RIGHT;panel(g,x,27,RIGHT,82,"Target info");var hit=target();
@@ -511,10 +512,11 @@ public final class EditorScreen extends CraftiumScreen {
         text(g,label,x+6,y+(height-8)/2,active?0xffffffff:TEXT);
         controls.add(new Control(x,y,width,height,action,tip));
     }
-    private void toggle(Gfx g,int x,int y,String label,boolean value,Runnable action) {
+    private void toggle(Gfx g,int x,int y,String label,boolean value,Runnable action) {toggle(g,x,y,label,value,action,"");}
+    private void toggle(Gfx g,int x,int y,String label,boolean value,Runnable action,String tip) {
         g.fill(x,y,x+12,y+12,value?0xff386e9d:0xff233247);g.outline(x,y,12,12,LINE);
         if(value){ToolIcons.line(g,x+2,y+6,x+5,y+9,TEXT);ToolIcons.line(g,x+5,y+9,x+10,y+3,TEXT);}
-        text(g,label,x+19,y+3,TEXT);controls.add(new Control(x,y,Math.min(LEFT-20,font.width(label)+24),15,action,""));
+        text(g,label,x+19,y+3,TEXT);controls.add(new Control(x,y,Math.min(LEFT-20,font.width(label)+24),15,action,tip));
     }
     private void slider(Gfx g,int x,int y,int width,String label,double value,double min,double max,DoubleConsumer set,boolean integer) {
         text(g,label,x,y-10,MUTED);g.fill(x,y,x+width,y+17,0xff1b2b40);

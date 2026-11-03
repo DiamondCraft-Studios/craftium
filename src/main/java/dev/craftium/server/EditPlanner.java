@@ -96,7 +96,7 @@ final class EditPlanner {
         validate(p);
         var planned=changes.get(p);
         if(!accepted(p) || (o.keepExisting && !value.state().isAir() && !state(p).isAir() && (planned==null||!planned.after().state().isAir()))) return;
-        if(!o.forcePlace && !o.noUpdates && !value.state().canSurvive(level,pos(p))) return;
+        if(!o.forcePlace && !value.state().canSurvive(level,pos(p))) return;
         if(value.data()!=null) {
             var tag=value.data().copy();tag.putInt("x",p.x());tag.putInt("y",p.y());tag.putInt("z",p.z());
             value=new BlockSnapshot(value.state(),tag);
