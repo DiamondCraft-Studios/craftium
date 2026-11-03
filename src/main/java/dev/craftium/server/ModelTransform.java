@@ -26,7 +26,7 @@ final class ModelTransform {
         var source=new LinkedHashMap<Point,BlockSnapshot>();
         for(Point at:selection.points()){plan.validate(at);source.put(at,BlockSnapshot.capture(plan.level,EditPlanner.pos(at)));}
         Point min=selection.min(),max=selection.max();
-        var pivot=o.pivotSet?new Geometry.Vector(o.pivotX,o.pivotY,o.pivotZ)
+        var pivot=o.aboutSet?new Geometry.Vector(o.aboutX,o.aboutY,o.aboutZ):o.pivotSet?new Geometry.Vector(o.pivotX,o.pivotY,o.pivotZ)
             :new Geometry.Vector((min.x()+max.x()+1)/2d,(min.y()+max.y()+1)/2d,(min.z()+max.z()+1)/2d);
 
         var landed=place(source,min,max,pivot,sx,sy,sz,o);

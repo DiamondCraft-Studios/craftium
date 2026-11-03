@@ -55,19 +55,28 @@ final class TransformGizmo {
     static boolean click(EditorScreen screen,double x,double y){
         if(ClientState.status.busy())return false;Target t=target(screen);if(t==null)return selectEntity(x,y);
         int chosen=pick(t,x,y);
-        if(chosen<0)return selectEntity(x,y);dragging=t;handle=chosen;startX=x;startY=y;if(chosen==3)grabFree(t.anchor,x,y);dragFlips=t.kind==Kind.NODE?flipsFor(t.anchor):null;delta=angles=Vec3.ZERO;size=new Vec3(1,1,1);startAngle=mode==Options.GizmoMode.ROTATE?angle(x,y,t.anchor,handle):0;return true;
+        if(chosen<0)return selectEntity(x,y);dragging=t;handle=chosen;startX=x;startY=y;if(chosen==3&&mode==Options.GizmoMode.MOVE)grabFree(t.anchor,x,y);dragFlips=t.kind==Kind.NODE?flipsFor(t.anchor):null;delta=angles=Vec3.ZERO;size=new Vec3(1,1,1);startAngle=mode==Options.GizmoMode.ROTATE?(chosen==7?screenAngle(x,y,t.anchor):chosen<3?angle(x,y,t.anchor,handle):0):0;return true;
     }
     /** Which handle of the gizmo is under the pointer, or -1: 0 to 2 are the axes, 3 the centre, 4 to 6 the plane handles. */
     private static int pick(Target t,double x,double y){
         mode=effectiveMode(t);basis=axesAt(t.anchor);pickScale=screenScale(t.anchor);pickExtent=extent(t);pickReach=reach(t,pickExtent);double best=100;int chosen=-1;double[] center=project(t.anchor);
         boolean plain=t.kind==Kind.MODEL||t.kind==Kind.PIVOT; // the transform tools show only their own handles
-        if(!plain&&mode!=Options.GizmoMode.ROTATE&&center!=null&&Math.pow(x-center[0],2)+Math.pow(y-center[1],2)<81)chosen=3;
+        // The centre: free move, even scaling for the Scale tool's circle; Rotate has the trackball instead, below.
+        if((!plain||mode==Options.GizmoMode.SCALE&&t.kind==Kind.MODEL)&&mode!=Options.GizmoMode.ROTATE&&center!=null&&Math.pow(x-center[0],2)+Math.pow(y-center[1],2)<81)chosen=3;
         if(chosen<0)for(int i=0;i<3;i++){
             if(mode==Options.GizmoMode.ROTATE){Vec3 a=basis[(i+1)%3],b=basis[(i+2)%3];for(int j=0;j<96;j++){double v=j*Math.PI/48,w=(j+1)*Math.PI/48;double d=distance(x,y,project(t.anchor.add(a.scale(Math.cos(v)*3.5*pickScale)).add(b.scale(Math.sin(v)*3.5*pickScale))),project(t.anchor.add(a.scale(Math.cos(w)*3.5*pickScale)).add(b.scale(Math.sin(w)*3.5*pickScale))));if(d<best){best=d;chosen=i;}}}
             else if(mode==Options.GizmoMode.SCALE&&pickExtent!=null){var pixel=project(faceCenter(faceBase(t),basis,pickExtent,i));double d=pixel==null?Double.POSITIVE_INFINITY:Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2);if(d<144&&d<best){best=d;chosen=i;}}
             else{double d=distance(x,y,project(t.anchor.add(basis[i].scale((mode==Options.GizmoMode.SCALE?4.7:.5)*pickScale))),project(t.anchor.add(basis[i].scale(5*pickScale))));if(d<best){best=d;chosen=i;}}
         }
-        if(!plain&&mode==Options.GizmoMode.MOVE&&chosen<0)for(int i=0;i<3;i++){Vec3 p=t.anchor.add(basis[(i+1)%3].scale(1.4*pickScale)).add(basis[(i+2)%3].scale(1.4*pickScale));var pixel=project(p);if(pixel!=null&&Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2)<144){chosen=4+i;break;}}
+        if(mode==Options.GizmoMode.ROTATE&&chosen<0&&center!=null){
+            // The ring that faces the camera turns about the view; inside the sphere is a trackball.
+            Vec3[] cam=cameraAxes();
+            var ring=project(t.anchor.add(cam[0].scale(4.4*pickScale)));var disc=project(t.anchor.add(cam[0].scale(3.5*pickScale)));
+            double d=Math.hypot(x-center[0],y-center[1]);
+            if(ring!=null&&Math.abs(d-Math.hypot(ring[0]-center[0],ring[1]-center[1]))<10)chosen=7;
+            else if(disc!=null&&d<Math.hypot(disc[0]-center[0],disc[1]-center[1]))chosen=3;
+        }
+        if((mode==Options.GizmoMode.MOVE||mode==Options.GizmoMode.SCALE)&&chosen<0)for(int i=0;i<3;i++){Vec3 p=t.anchor.add(basis[(i+1)%3].scale(1.4*pickScale)).add(basis[(i+2)%3].scale(1.4*pickScale));var pixel=project(p);if(pixel!=null&&Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2)<144){chosen=4+i;break;}}
         return chosen;
     }
     private static boolean selectEntity(double x,double y){var mc=Minecraft.getInstance();if(mc.level==null)return false;Entity closest=null;double best=100;for(var e:mc.level.entitiesForRendering()){if(!(e instanceof Display)&&!(e instanceof Marker)||e.distanceToSqr(mc.player)>128*128)continue;if(e instanceof Display&&!ClientState.options.showDisplayGizmos||e instanceof Marker&&!ClientState.options.showMarkerGizmos)continue;var pixel=project(e.position());if(pixel==null)continue;double d=Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2);if(d<best){best=d;closest=e;}}if(closest==null)return false;ClientState.options.entityUuid=closest.getUUID().toString();ClientState.options.gizmoTarget=Options.GizmoTarget.ENTITY;CraftiumClient.send("entity_select_uuid",CraftiumClient.point(closest.blockPosition()),null);return true;}
@@ -75,6 +84,18 @@ final class TransformGizmo {
     private static double snap(double value,double increment){return Math.rint(value/increment)*increment;}
     static boolean drag(double x,double y){
         if(dragging==null)return false;normalizationDirty=true;var mc=Minecraft.getInstance();boolean entity=dragging.kind==Kind.ENTITY;double increment=entity?(mc.hasShiftDown()?.0001:mc.hasControlDown()?1:1d/16):1;
+        if(mode==Options.GizmoMode.ROTATE&&handle==3){ // trackball: a drag turns the blocks as if they were grabbed
+            Vec3[] cam=cameraAxes();
+            double sideways=Math.toRadians((x-startX)*.6),vertical=Math.toRadians((y-startY)*.6);
+            setRotation(multiply(axisAngle(cam[1],sideways),axisAngle(cam[0],vertical)));
+            return true;
+        }
+        if(mode==Options.GizmoMode.ROTATE&&handle==7){ // the ring facing the camera: turn about the view
+            double view=Math.IEEEremainder(Math.toDegrees(screenAngle(x,y,dragging.anchor)-startAngle),360);
+            view=snap(view,mc.hasShiftDown()?1:mc.hasControlDown()?5:dragging.kind==Kind.MODEL?15:5);
+            setRotation(axisAngle(cameraAxes()[2],Math.toRadians(view)));
+            return true;
+        }
         if(mode==Options.GizmoMode.ROTATE){double degrees=Math.toDegrees(angle(x,y,dragging.anchor,handle)-startAngle);degrees=Math.IEEEremainder(degrees,360);degrees=snap(degrees,mc.hasShiftDown()?1:mc.hasControlDown()?(dragging.kind==Kind.MODEL?5:15):entity||ClientState.options.unlockRotation?5:dragging.kind==Kind.MODEL?15:90);Vec3 vector=basis[handle].scale(degrees);angles=new Vec3(vector.x,vector.y,vector.z);return true;}
         var center=project(dragging.anchor);if(center==null)return true;
         if(handle==3&&mode==Options.GizmoMode.MOVE){
@@ -83,8 +104,39 @@ final class TransformGizmo {
             Vec3 move=point.subtract(dragging.anchor);
             delta=new Vec3(snap(move.x,increment),snap(move.y,increment),snap(move.z,increment));return true;
         }
+        if(handle>=4&&mode==Options.GizmoMode.SCALE){ // a square in a plane scales the two axes of that plane together
+            int a=(handle-4+1)%3,b=(handle-4+2)%3;
+            double[] pa=project(dragging.anchor.add(basis[a])),pb=project(dragging.anchor.add(basis[b]));if(pa==null||pb==null)return true;
+            double sx=(pa[0]-center[0])+(pb[0]-center[0]),sy=(pa[1]-center[1])+(pb[1]-center[1]),span=sx*sx+sy*sy;if(span<.001)return true;
+            double amount=((x-startX)*sx+(y-startY)*sy)/span; // blocks along each of the two axes
+            double[] factor={1,1,1};
+            if(dragging.kind==Kind.MODEL&&pickExtent!=null){
+                double[] blocks={pickExtent.x,pickExtent.y,pickExtent.z};
+                for(int axis:new int[]{a,b})factor[axis]=gridFactor(blocks[axis],Math.max(1,blocks[axis])+amount*(altDown()?2:1),mc.hasControlDown());
+            }else{double all=Math.clamp(snap(1+amount/(5*pickScale),1d/16),.1,8);factor[a]=factor[b]=all;}
+            size=new Vec3(factor[0],factor[1],factor[2]);
+            return true;
+        }
+        if(mode==Options.GizmoMode.SCALE&&handle==3){ // the circle in the middle scales every axis: drag up to grow
+            double all=Math.clamp(1+(startY-y)/120d,.05,8);
+            if(dragging.kind==Kind.MODEL&&pickExtent!=null){
+                boolean smooth=mc.hasControlDown();
+                size=new Vec3(gridFactor(pickExtent.x,pickExtent.x*all,smooth),gridFactor(pickExtent.y,pickExtent.y*all,smooth),gridFactor(pickExtent.z,pickExtent.z*all,smooth));
+            }else size=new Vec3(all,all,all);
+            return true;
+        }
         if(handle>=4){int a=(handle-4+1)%3,b=(handle-4+2)%3;double[] pa=project(dragging.anchor.add(basis[a])),pb=project(dragging.anchor.add(basis[b]));if(pa==null||pb==null)return true;double ax=pa[0]-center[0],ay=pa[1]-center[1],bx=pb[0]-center[0],by=pb[1]-center[1],det=ax*by-ay*bx;if(Math.abs(det)<.001)return true;double dx=x-startX,dy=y-startY;delta=basis[a].scale(snap((dx*by-dy*bx)/det,increment)).add(basis[b].scale(snap((dy*ax-dx*ay)/det,increment)));return true;}
         int axis=handle==3?1:handle;var end=project(dragging.anchor.add(basis[axis]));if(end==null)return true;double dx=end[0]-center[0],dy=end[1]-center[1],length=dx*dx+dy*dy;if(length<.001)return true;double amount=((x-startX)*dx+(y-startY)*dy)/length;
+        if(mode==Options.GizmoMode.SCALE&&dragging.kind==Kind.MODEL&&pickExtent!=null){
+            // The handle sits on a face, so the face follows the pointer: the far side stays put, or with Alt the centre does.
+            // The size is a whole number of blocks unless Ctrl is held, which allows any size.
+            double n=Math.max(1,new double[]{pickExtent.x,pickExtent.y,pickExtent.z}[axis]);
+            double target=n+amount*(altDown()?2:1);
+            if(!mc.hasControlDown())target=Math.rint(target);
+            double factor=Math.clamp(Math.max(target,mc.hasControlDown()?.1:1)/n,.01,64);
+            size=new Vec3(axis==0?factor:1,axis==1?factor:1,axis==2?factor:1);
+            return true;
+        }
         if(mode==Options.GizmoMode.SCALE){double reach=pickReach==null?5*pickScale:Math.max(1,new double[]{pickReach.x,pickReach.y,pickReach.z}[axis]);double factor=Math.clamp(snap(1+amount/reach,mc.hasShiftDown()?.0001:1d/16),.1,8);size=mc.hasControlDown()||handle==3?new Vec3(factor,factor,factor):new Vec3(axis==0?factor:1,axis==1?factor:1,axis==2?factor:1);}
         else delta=basis[axis].scale(snap(amount,increment));return true;
     }
@@ -97,17 +149,34 @@ final class TransformGizmo {
             else if(t.kind==Kind.ENTITY){request.entityX=delta.x;request.entityY=delta.y;request.entityZ=delta.z;request.entityScaleX=size.x;request.entityScaleY=size.y;request.entityScaleZ=size.z;CraftiumClient.send("entity_gizmo",CraftiumClient.point(t.entity.blockPosition()),null);}
             else if(t.kind==Kind.MODEL){
                 if(request.offsetX==0&&request.offsetY==0&&request.offsetZ==0&&angles.equals(Vec3.ZERO)&&size.equals(new Vec3(1,1,1)))return true; // nothing was changed
-                request.pivotSet=true;request.pivotX=t.anchor.x;request.pivotY=t.anchor.y;request.pivotZ=t.anchor.z;
+                Vec3 about=mode==Options.GizmoMode.SCALE?aboutPoint():t.anchor;
+                request.aboutSet=true;request.aboutX=about.x;request.aboutY=about.y;request.aboutZ=about.z;
                 CraftiumClient.send("selection_transform",null,null);
                 // The pivot goes with the blocks when they are moved.
-                original.pivotSet=true;original.pivotX=t.anchor.x+delta.x;original.pivotY=t.anchor.y+delta.y;original.pivotZ=t.anchor.z+delta.z;
+                // A pivot the player set goes with the blocks when they are moved; the selection's centre follows by itself.
+                if(original.pivotSet){original.pivotX+=delta.x;original.pivotY+=delta.y;original.pivotZ+=delta.z;}
             }
             else CraftiumClient.send("selection_gizmo",null,null);
             original.gizmoYaw=(original.gizmoYaw+angles.y)%360;original.gizmoPitch=(original.gizmoPitch+angles.x)%360;original.gizmoRoll=(original.gizmoRoll+angles.z)%360;
         }finally{ClientState.options=original;cancel();}return true;
     }
     static void cancel(){dragging=null;dragFlips=null;handle=-1;delta=angles=Vec3.ZERO;size=new Vec3(1,1,1);normalization=Vec3.ZERO;normalizationDirty=true;}
-    private static Vec3 rawTransform(Vec3 world){Vec3 p=world.subtract(dragging.anchor);var rotated=Geometry.rotate(new Geometry.Vector(p.x*size.x,p.y*size.y,p.z*size.z),angles.y,angles.x,angles.z);return dragging.anchor.add(rotated.x(),rotated.y(),rotated.z());}
+    private static Vec3 rawTransform(Vec3 world){Vec3 about=aboutPoint();Vec3 p=world.subtract(about);var rotated=Geometry.rotate(new Geometry.Vector(p.x*size.x,p.y*size.y,p.z*size.z),angles.y,angles.x,angles.z);return about.add(rotated.x(),rotated.y(),rotated.z());}
+    /**
+     * The point the drag works about. The Scale tool scales from the far side of the selection, so a face moves to where it
+     * is dragged and the opposite one stays; with Alt it scales from the centre. Everything else works about the target's anchor.
+     */
+    private static Vec3 aboutPoint(){
+        if(dragging.kind==Kind.MODEL&&mode==Options.GizmoMode.SCALE){
+            var s=ClientState.status;Point min=s.min(),max=s.max();
+            return altDown()?new Vec3((min.x()+max.x()+1)/2d,(min.y()+max.y()+1)/2d,(min.z()+max.z()+1)/2d):new Vec3(min.x(),min.y(),min.z());
+        }
+        return dragging.anchor;
+    }
+    private static boolean altDown(){
+        var window=Minecraft.getInstance().getWindow();
+        return com.mojang.blaze3d.platform.InputConstants.isKeyDown(window,org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_ALT)||com.mojang.blaze3d.platform.InputConstants.isKeyDown(window,org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_ALT);
+    }
     private static Vec3 transformed(Vec3 world){if(dragging==null)return world;if(dragging.kind==Kind.MODEL)return rawTransform(world).add(delta);if(normalizationDirty){normalization=Vec3.ZERO;if(dragging.kind==Kind.PLACEMENT||dragging.kind==Kind.SELECTION){AABB bounds;if(dragging.kind==Kind.PLACEMENT){Point p=PlacementPreview.origin;bounds=bounds().move(p.x(),p.y(),p.z());}else{var status=ClientState.status;Point min=status.min(),max=status.max();bounds=new AABB(min.x(),min.y(),min.z(),max.x()+1,max.y()+1,max.z()+1);}double x=Double.POSITIVE_INFINITY,y=x,z=x;for(int i=0;i<8;i++){Vec3 corner=rawTransform(new Vec3((i&1)==0?bounds.minX:bounds.maxX,(i&2)==0?bounds.minY:bounds.maxY,(i&4)==0?bounds.minZ:bounds.maxZ));x=Math.min(x,corner.x);y=Math.min(y,corner.y);z=Math.min(z,corner.z);}normalization=new Vec3(bounds.minX-x,bounds.minY-y,bounds.minZ-z);}normalizationDirty=false;}return rawTransform(world).add(normalization).add(delta);}
     /** One outline segment of a selection being transformed, moved by the transform in progress. */
     static void line(Vec3 from,Vec3 to){Overlay.line(transformed(from),transformed(to),0xff8be3b5,1.5f);}
@@ -134,8 +203,9 @@ final class TransformGizmo {
     private static String handleName(Options.GizmoMode mode,int handle,boolean hasExtent){
         String verb=mode==Options.GizmoMode.ROTATE?"Rotate":mode==Options.GizmoMode.SCALE?"Scale":"Move";
         if(handle<3)return verb+" "+"XYZ".charAt(handle);
-        if(handle==3)return mode==Options.GizmoMode.SCALE?"Scale evenly":"Move freely";
-        return "Move "+PLANES[handle-4];
+        if(handle==3)return mode==Options.GizmoMode.SCALE?"Scale evenly":mode==Options.GizmoMode.ROTATE?"Trackball":"Move freely";
+        if(handle==7)return "Rotate view";
+        return verb+" "+PLANES[handle-4];
     }
     private static int brighten(int argb){
         int r=argb>>16&255,g=argb>>8&255,b=argb&255;
@@ -185,6 +255,50 @@ final class TransformGizmo {
     /** Set while the Move, Rotate, Scale and Pivot tools draw: only their own handles, without the centre square or plane dots. */
     private static boolean plainHandles;
     private static Vec3 pickExtent,pickReach;
+    /** The camera's right, up and forward directions, for the handles that face the screen. */
+    private static Vec3[] cameraAxes(){
+        var near=ClientCompat.nearPlane(ClientCompat.camera(Minecraft.getInstance()));
+        Vec3 center=near.getPointOnPlane(0,0);
+        return new Vec3[]{near.getPointOnPlane(1,0).subtract(center).normalize(),near.getPointOnPlane(0,1).subtract(center).normalize(),center.normalize()};
+    }
+    private static void circle(Vec3 at,Vec3 right,Vec3 up,double radius,int color,float width){
+        for(int j=0;j<48;j++){
+            double a=j*Math.PI/24,b=(j+1)*Math.PI/24;
+            Overlay.line(at.add(right.scale(Math.cos(a)*radius)).add(up.scale(Math.sin(a)*radius)),at.add(right.scale(Math.cos(b)*radius)).add(up.scale(Math.sin(b)*radius)),color,width);
+        }
+    }
+    /** A flat square in the plane of {@code a} and {@code b}, centred on {@code at}, drawn as an outline with a fill. */
+    private static void planeSquare(Vec3 at,Vec3 a,Vec3 b,double half,int color,boolean hot){
+        Vec3 p0=at.subtract(a.scale(half)).subtract(b.scale(half)),p1=at.add(a.scale(half)).subtract(b.scale(half)),p2=at.add(a.scale(half)).add(b.scale(half)),p3=at.subtract(a.scale(half)).add(b.scale(half));
+        float width=hot?3:1.5f;
+        Overlay.line(p0,p1,color,width);Overlay.line(p1,p2,color,width);Overlay.line(p2,p3,color,width);Overlay.line(p3,p0,color,width);
+        int fill=color&0x00ffffff|(hot?0xaa000000:0x66000000);
+        Overlay.face(p0,p1,p2,p3,fill);Overlay.face(p3,p2,p1,p0,fill); // both windings, so culling cannot hide it
+    }
+    private static double screenAngle(double x,double y,Vec3 anchor){var c=project(anchor);return c==null?0:Math.atan2(y-c[1],x-c[0]);}
+    /** The rotation by {@code radians} about {@code axis}, as a matrix. */
+    private static double[][] axisAngle(Vec3 axis,double radians){
+        Vec3 u=axis.normalize();double c=Math.cos(radians),s=Math.sin(radians),t=1-c,x=u.x,y=u.y,z=u.z;
+        return new double[][]{{t*x*x+c,t*x*y-s*z,t*x*z+s*y},{t*x*y+s*z,t*y*y+c,t*y*z-s*x},{t*x*z-s*y,t*y*z+s*x,t*z*z+c}};
+    }
+    private static double[][] multiply(double[][] a,double[][] b){
+        double[][] m=new double[3][3];
+        for(int i=0;i<3;i++)for(int j=0;j<3;j++)for(int k=0;k<3;k++)m[i][j]+=a[i][k]*b[k][j];
+        return m;
+    }
+    /**
+     * Sets the angles so that Geometry.rotate turns by the rotation {@code m}. That function applies yaw, then pitch,
+     * then roll, so its matrix is Rz(roll)·Rx(pitch)·Ry(yaw), which this takes apart.
+     */
+    private static void setRotation(double[][] m){
+        double pitch=Math.asin(Math.clamp(m[2][1],-1,1)),yaw=Math.atan2(m[2][0],m[2][2]),roll=Math.atan2(-m[0][1],m[1][1]);
+        angles=new Vec3(Math.toDegrees(pitch),Math.toDegrees(yaw),Math.toDegrees(roll));
+    }
+    /** The scale along one axis for a wanted size in blocks: a whole number of blocks, or any size with Ctrl held. */
+    private static double gridFactor(double blocks,double wanted,boolean smooth){
+        double n=Math.max(1,blocks),target=smooth?wanted:Math.rint(wanted);
+        return Math.clamp(Math.max(target,smooth?.1:1)/n,.01,64);
+    }
     /** The depth and offset at which the centre handle was grabbed, so a drag keeps following the pointer as the camera moves. */
     private static double freeDepth;
     private static Vec3 freeOffset=Vec3.ZERO;
@@ -200,7 +314,7 @@ final class TransformGizmo {
     }
     /** While the centre handle is held, keeps it with the pointer when only the camera moves (the player flying about). */
     static void followCamera(EditorScreen screen){
-        if(dragging!=null&&handle==3&&mode==Options.GizmoMode.MOVE)drag(screen.pointerX(),screen.pointerY());
+        if(dragging!=null&&(handle==3&&mode==Options.GizmoMode.MOVE||dragging.kind==Kind.MODEL&&mode==Options.GizmoMode.SCALE))drag(screen.pointerX(),screen.pointerY());
     }
     /**
      * For the corner handles of a box selection: which way each arrow points, so that it leads away from the box.
@@ -262,15 +376,28 @@ final class TransformGizmo {
                 for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(anchor.add(a.scale(Math.cos(x)*3.5*k)).add(b.scale(Math.sin(x)*3.5*k)),anchor.add(a.scale(Math.cos(y)*3.5*k)).add(b.scale(Math.sin(y)*3.5*k)),color,active==i?3:1.5f);}}
             else if(currentMode==Options.GizmoMode.SCALE){Vec3 end=extent!=null?faceCenter(faceBase!=null?faceBase:anchor,directions,extent,i):anchor.add(directions[i].scale(5*k));if(extent==null)Overlay.line(anchor,end,color,active==i?4:2);Overlay.box(new AABB(end.add(-.2*k,-.2*k,-.2*k),end.add(.2*k,.2*k,.2*k)),color,active==i?2:1,color&0x99ffffff|0x66000000);}
             else{Vec3 tip=anchor.add(directions[i].scale(5.3*k)),base=anchor.add(directions[i].scale(4.5*k));Overlay.line(anchor,base,color,active==i?4:2);arrowhead(tip,base,color,active==i?3:2,k);}
-            if(currentMode==Options.GizmoMode.MOVE&&!plainHandles){Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3],point=anchor.add(a.scale(1.4*k)).add(b.scale(1.4*k));boolean hot=active==4+i;Overlay.point(point,hot?brighten(COLORS[i]):COLORS[i],hot?11:7);}
+            if(currentMode==Options.GizmoMode.MOVE||currentMode==Options.GizmoMode.SCALE){ // a square in each plane: moves, or scales, the two axes of that plane
+                Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3],at=anchor.add(a.scale(1.4*k)).add(b.scale(1.4*k));boolean hot=active==4+i;
+                planeSquare(at,a,b,.2*k,hot?brighten(COLORS[i]):COLORS[i],hot);
+            }
+        }
+        if(currentMode==Options.GizmoMode.ROTATE){
+            // A ring that faces the camera turns about the view; hovering inside the sphere lights its outline, the trackball.
+            Vec3[] cam=cameraAxes();
+            circle(anchor,cam[0],cam[1],4.4*k,active==7?0xffffffff:0x99c7d6e5,active==7?3:1.5f);
+            if(active==3)circle(anchor,cam[0],cam[1],3.5*k,CENTER_ACTIVE,2f);
         }
         if(dragging==null&&active>=0)label(anchor,directions,k,extent,currentMode,active);
+        if(currentMode==Options.GizmoMode.SCALE&&plainHandles){ // the Scale tool's circle in the middle scales every axis
+            Vec3[] cam=cameraAxes();circle(anchor,cam[0],cam[1],.32*k,active==3?CENTER_ACTIVE:CENTER,active==3?3:2f);
+        }
         if(currentMode!=Options.GizmoMode.ROTATE&&!plainHandles){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
     }
     /** Names the handle under the pointer next to it. */
     private static void label(Vec3 anchor,Vec3[] directions,double k,Vec3 extent,Options.GizmoMode mode,int handle){
         Vec3 spot;
         if(handle==3)spot=anchor;
+        else if(handle==7)spot=anchor.add(cameraAxes()[1].scale(4.4*k));
         else if(handle>=4)spot=anchor.add(directions[(handle-3)%3].scale(1.4*k)).add(directions[(handle-2)%3].scale(1.4*k));
         else if(mode==Options.GizmoMode.SCALE&&extent!=null)spot=faceCenter(faceBase!=null?faceBase:anchor,directions,extent,handle);
         else if(mode==Options.GizmoMode.ROTATE)spot=anchor.add(directions[(handle+1)%3].scale(3.5*k));

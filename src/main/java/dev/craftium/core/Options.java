@@ -37,6 +37,9 @@ public final class Options {
     /** The colour (ARGB) and width, in pixels from 0.1 to 10, of the selection's outline. */
     public int selectionColor=0xffffd66d;
     public double selectionWidth=1;
+    /** The point one transform request works about, which can differ from the player's pivot, as when scaling from the far side. */
+    public boolean aboutSet;
+    public double aboutX,aboutY,aboutZ;
     public boolean pivotSet;
     public double pivotX,pivotY,pivotZ;
     public int expandAmount=5;
