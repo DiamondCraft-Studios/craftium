@@ -23,6 +23,8 @@ public final class ClientState {
     public static boolean hasPending(){return pending.total()>0;}
     /** The corners of the box being selected, which stay as handles the player can drag to resize it. At most two. */
     public static final List<Point> boxCorners=new ArrayList<>();
+    /** Whether the selection outline settings (colour and width) are showing. */
+    public static boolean outlineSettings;
     public static boolean selectionPending;
     public static int selectionSizeBefore;
     /** A selection this many blocks bigger than before is confirmed with the player first. */
