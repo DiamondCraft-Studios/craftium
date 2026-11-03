@@ -19,6 +19,8 @@ public final class Options {
     public boolean invert, hollow, surfaceOnly = true, keepExisting, pasteAir;
     public boolean noUpdates, forcePlace, replaceMode, enhancedFlight, bulldozer, tinker;
     public boolean inSelection;
+    /** Whether undo and redo flash the blocks they change. */
+    public boolean historyPulse = true;
     public String block = "minecraft:stone";
     public String secondary = "minecraft:andesite";
     public String mask = "";

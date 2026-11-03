@@ -66,7 +66,7 @@ public final class EditorScreen extends CraftiumScreen {
         MenuItem(String label,String shortcut,Runnable action){this(label,shortcut,action,List.of());}
     }
     /** The label of the menu entry whose submenu is open, or empty. */
-    private String openSub="";
+    private String openSub="",openSub2="";
     private final boolean heldContext;
     private enum CameraGesture { NONE,ROTATE,ORBIT,PAN,RADIUS }
     private CameraGesture cameraGesture=CameraGesture.NONE;
@@ -167,7 +167,7 @@ public final class EditorScreen extends CraftiumScreen {
         String[] names={"File","Edit","Select","View","Create","Operations","Masks","Window","Help"};int x=108;
         for(int i=0;i<names.length;i++) {
             int index=i,bw=font.width(names[i])+16;
-            button(g,x,2,bw,19,names[i],menu==i,()->{menu=menu==index?-1:index;openSub="";},"");x+=bw;
+            button(g,x,2,bw,19,names[i],menu==i,()->{menu=menu==index?-1:index;openSub="";openSub2="";},"");x+=bw;
         }
         button(g,w-58,3,52,17,"Exit  ×",false,this::onClose,"Return to building · Right Shift");
     }
@@ -454,6 +454,15 @@ public final class EditorScreen extends CraftiumScreen {
     /** A question the player answers before something happens: the text, what Confirm is for, and what Confirm does. */
     private record Confirm(String text,String hint,Runnable action){}
     private Confirm confirm;
+    private static final long HISTORY_CONFIRM_MS=60_000;
+    /** Undo or redo, after a confirmation when the edit it reaches is a minute old or more. */
+    private void historyAction(boolean undo){
+        long age=HistoryPulse.age(undo);Runnable send=()->CraftiumClient.send(undo?"undo":"redo",null,null);
+        if(age<HISTORY_CONFIRM_MS){send.run();return;}
+        var status=ClientState.status;String name=undo?status.undoName():status.redoName();
+        String when=age>=Long.MAX_VALUE/8?"an earlier session":age<3_600_000?age/60_000+" min ago":age/3_600_000+" h ago";
+        confirm=new Confirm((undo?"Undo ":"Redo ")+name+" from "+when+"?",undo?"Undo it":"Redo it",send);
+    }
     private void sendBucket(String block,Point target,Point normal){
         // The server fills with the active block, so the dragged one stands in for it for this one request.
         String prior=o().block;o().block=block;
@@ -627,7 +636,18 @@ public final class EditorScreen extends CraftiumScreen {
                 if(open){
                     int sx=x+226;g.fill(sx,y-3,sx+226,y-3+4+item.children.size()*25,0xff1c2735);g.outline(sx,y-3,226,4+item.children.size()*25,LINE);
                     int sy=y;
-                    for(MenuItem child:item.children){final var run=child.action;button(g,sx+3,sy,220,24,child.label,false,()->{menu=-1;openSub="";run.run();},"");sy+=25;}
+                    for(MenuItem child:item.children){
+                        if(!child.children.isEmpty()){ // a second level, such as Preferences > Options
+                            boolean open2=openSub2.equals(child.label);
+                            button(g,sx+3,sy,220,24,child.label,open2,()->openSub2=open2?"":child.label,"");text(g,">",sx+212,sy+8,MUTED);
+                            if(open2){
+                                int tx=sx+226;g.fill(tx,sy-3,tx+226,sy-3+4+child.children.size()*25,0xff1c2735);g.outline(tx,sy-3,226,4+child.children.size()*25,LINE);
+                                int ty=sy;for(MenuItem leaf:child.children){final var leafRun=leaf.action;button(g,tx+3,ty,220,24,leaf.label,false,()->{menu=-1;openSub="";openSub2="";leafRun.run();},"");ty+=25;}
+                            }
+                            sy+=25;continue;
+                        }
+                        final var run=child.action;button(g,sx+3,sy,220,24,child.label,false,()->{menu=-1;openSub="";openSub2="";run.run();},"");sy+=25;
+                    }
                 }
                 y+=25;continue;
             }
@@ -637,7 +657,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private List<MenuItem> menuItems(int which) {
         return switch(which) {
-            case 0 -> List.of(item("Open reference image…","",ReferenceImages::choose),item("Save tool settings","",()->{ClientState.save();ClientState.notify("Tool settings saved");}),item("Reset tool settings","",()->{ClientState.options=new Options();init();}),submenu("Preferences",item("Keyboard Shortcuts…","",()->ClientCompat.setScreen(minecraft,new KeyboardShortcutsScreen(this)))),item("Exit editor","RShift",this::onClose));
+            case 0 -> List.of(item("Open reference image…","",ReferenceImages::choose),item("Save tool settings","",()->{ClientState.save();ClientState.notify("Tool settings saved");}),item("Reset tool settings","",()->{ClientState.options=new Options();init();}),submenu("Preferences",item("Keyboard Shortcuts…","",()->ClientCompat.setScreen(minecraft,new KeyboardShortcutsScreen(this))),submenu("Options",item("Undo / redo pulse: "+(o().historyPulse?"On":"Off"),"",()->{o().historyPulse=!o().historyPulse;ClientState.save();}))),item("Exit editor","RShift",this::onClose));
             case 1 -> List.of(item("Undo","Ctrl+Z",()->action("undo")),item("Redo","Ctrl+Y",()->action("redo")),divider(),
                 item("Copy","Ctrl+C",()->action("copy")),item("Cut","Ctrl+X",()->action("cut")),item("Paste","Ctrl+V",()->action("paste")),
                 item("Paste at cursor","",this::pasteAtCursor),item("Paste in place","",()->CraftiumClient.send("paste_in_place",null,null)),divider(),
@@ -753,6 +773,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void action(String action){
         if(EntityShortcuts.editor(action,this))return;
+        if(action.equals("undo")||action.equals("redo")){historyAction(action.equals("undo"));return;}
         var hit=target();
         if(action.equals("clear")){ClientState.boxCorners.clear();o().pivotSet=false;}
         if(action.equals("duplicate")||action.equals("cut")){ClientState.duplicatePending=true;CraftiumClient.send(action.equals("cut")?"cut":"copy",null,null);return;}

@@ -254,7 +254,7 @@ public final class EditorServer {
                     }
                     start(player,s,plan.finish(r.action().equals("move")?"Move selection":r.action().equals("clone")?"Clone selection":"Stack selection"));
                 }
-                case "undo", "redo" -> {s.historyRemaining=0;history(player,s,r.action().equals("undo"));}
+                case "undo", "redo" -> {s.historyRemaining=0;if(r.action().equals("undo"))undoAnimated(player,s);else history(player,s,false);}
                 case "fill", "delete" -> {
                     requireSelection(s);var plan=new EditPlanner(player.level(),s,o);
                     for(Point p:s.selection.points())plan.put(p,r.action().equals("delete")?Blocks.AIR.defaultBlockState():plan.material);
@@ -419,6 +419,21 @@ public final class EditorServer {
         var selection=a.selection()!=null&&b.selection()!=null?new Session.SelectionChange(a.selection().before(),b.selection().after(),a.selection().pivotBefore(),b.selection().pivotAfter()):a.selection()!=null?a.selection():b.selection();
         return new Session.Edit(a.name(),new ArrayList<>(changes.values()),biomes,a.flags()|b.flags(),entities,annotations,selection);
     }
+    private static final int PULSE_MS=600,PULSE_POINTS=8192;
+    /** The points a pulse shows: all of them, or an even sample when there are too many to draw. */
+    private static List<Point> pulsePoints(List<Point> all){
+        if(all.size()<=PULSE_POINTS)return all;
+        var sample=new ArrayList<Point>(PULSE_POINTS);double step=all.size()/(double)PULSE_POINTS;
+        for(int i=0;i<PULSE_POINTS;i++)sample.add(all.get((int)(i*step)));
+        return sample;
+    }
+    /** Undo straight away, with the blocks it removes sent along for the client to pulse red; a refused undo takes the pulse back. */
+    private static void undoAnimated(ServerPlayer player,Session s){
+        var edit=s.undo.peekFirst();
+        if(edit!=null&&!edit.selectionOnly()&&!edit.changes().isEmpty()&&s.options!=null&&s.options.historyPulse)
+            s.pulse="undo:"+PULSE_MS+":"+SelectionCodec.encode(pulsePoints(edit.changes().stream().map(Session.Change::pos).toList()));
+        try{history(player,s,true);}catch(IllegalArgumentException e){s.pulse="";throw e;}
+    }
     private static void history(ServerPlayer player,Session s,boolean backwards) {
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Wait for the current edit or animated rebuild to finish");
         var from=backwards?s.undo:s.redo;
@@ -464,7 +479,7 @@ public final class EditorServer {
             var appliedBiomes=applyBiomes(j);
             var appliedEntities=EntityEdits.apply(j.level,j.edit.entities(),j.backwards);
             var appliedAnnotations=AnnotationEdits.apply(j.level,j.edit.annotations(),j.backwards);
-            var actual=new Session.Edit(j.edit.name(),List.copyOf(j.applied),appliedBiomes,j.edit.flags(),appliedEntities,appliedAnnotations,j.edit.selection());
+            var actual=new Session.Edit(j.edit.name(),List.copyOf(j.applied),appliedBiomes,j.edit.flags(),appliedEntities,appliedAnnotations,j.edit.selection(),j.edit.time());
             int skipped=j.edit.changes().size()-j.applied.size()+j.edit.biomes().size()-appliedBiomes.size()+j.edit.entities().size()-appliedEntities.size()+j.edit.annotations().size()-appliedAnnotations.size();
             if(j.history) {
                 // Retain only the cells actually restored; conflicting subsequent edits are left intact.
@@ -480,6 +495,7 @@ public final class EditorServer {
                 j.session.event((j.backwards?"Undo ":"Redo ")+j.edit.name());
             } else j.session.remember(actual,j.strokeId);
             j.session.busy=false;job=null;
+            if(j.history&&!j.backwards&&j.session.historyRemaining==0&&!j.applied.isEmpty()&&j.session.options!=null&&j.session.options.historyPulse)j.session.pulse="redo:700:"+SelectionCodec.encode(pulsePoints(j.applied.stream().map(Session.Change::pos).toList()));
             var player=server.getPlayerList().getPlayer(j.owner);
             if(player!=null)send(player,j.session,(j.backwards?"Undid ":j.history?"Redid ":"Applied ")+j.edit.name()+" · "+(j.applied.size()+appliedBiomes.size()+appliedEntities.size()+appliedAnnotations.size())+" changes"+(skipped>0?" · "+skipped+" changed or unavailable cells skipped":""),false);
             else {HistoryStore.save(j.session);SESSIONS.remove(j.owner);}
@@ -546,6 +562,8 @@ public final class EditorServer {
         }
         s.historySelection=after;s.historyRevision=s.selection.revision();
     }
+    /** How long ago the edit was made, in milliseconds; -1 for none, and a very large age when its time is unknown. */
+    private static long age(Session.Edit edit){return edit==null?-1:edit.time()==0?Long.MAX_VALUE/4:Math.max(0,System.currentTimeMillis()-edit.time());}
     static void send(ServerPlayer player,Session s,String message,boolean error) {
         noteSelection(s);
         if(!ServerPlatform.canSend(player))return;
@@ -554,7 +572,7 @@ public final class EditorServer {
         if(s.clipboardDirty){s.clipboardGhostDirty=true;s.clipboardData=SelectionCodec.encode(s.clipboard.entrySet().stream().filter(e->!e.getValue().state().isAir()).map(Map.Entry::getKey).toList());s.clipboardDirty=false;}
         if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy,s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate);s.library=List.of();s.pivotUpdate="";
+        var status=new Packets.Status(message,error,s.busy,s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse);s.library=List.of();s.pivotUpdate="";s.pulse="";
         ServerPlatform.send(player,new Packets.Update(Packets.JSON.toJson(status)));
     }
 }
