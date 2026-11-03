@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "craftium-test",
+  "version": "1.0.0",
+  "name": "Craftium 1.21.10 smoke test",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": ["dev.craftium.client.SmokeGameTest"]
+  }
+}

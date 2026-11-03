@@ -74,3 +74,14 @@ jar {
     from(rootProject.file('LICENSE')) { rename { 'LICENSE_Craftium' } }
     from(rootProject.file('THIRD-PARTY-NOTICES.md'))
 }
+
+// Smoke test that launches 1.21.10 and renders the editor and overlays: gradlew -PlegacyVersions=true :versions:mc-1.21.10:runClientGameTest
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'craftium-test'
+        enableClientGameTests = true
+        enableGameTests = false
+        eula = false
+    }
+}
