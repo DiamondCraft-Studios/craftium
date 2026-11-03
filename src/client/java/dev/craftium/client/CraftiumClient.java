@@ -82,7 +82,7 @@ public final class CraftiumClient implements ClientModInitializer {
     private static final BridgeCodec.Assembler bridge=new BridgeCodec.Assembler();
     private static void receiveStatus(String json){
             var next=Packets.JSON.fromJson(json,Packets.Status.class);
-            if(next!=null){ClientState.status=next;checkLargeSelection(next);if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());}
+            if(next!=null){ClientState.status=next;checkLargeSelection(next);applyPivot(next.pivotUpdate());if(next.message().startsWith("Undid ")||next.message().startsWith("Redid "))ClientState.boxCorners.clear();if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());}
     }
     /** Opens the confirmation when a selection action has just selected a suspiciously large area. */
     private static void checkLargeSelection(Packets.Status next){
@@ -95,6 +95,16 @@ public final class CraftiumClient implements ClientModInitializer {
         var mc=Minecraft.getInstance();
         // Set at once, before this status is drawn, so the popup comes first and the selection is not built until it is confirmed.
         if(ClientCompat.screen(mc) instanceof EditorScreen)ClientState.largeSelection=next.selectionSize();
+    }
+    /** Undo and redo carry the pivot back along with the selection: "none" for the selection's centre, else "x,y,z". */
+    private static void applyPivot(String update){
+        if(update==null||update.isEmpty())return;
+        var o=ClientState.options;
+        if(update.equals("none")){o.pivotSet=false;return;}
+        try{
+            String[] part=update.split(",");
+            o.pivotX=Double.parseDouble(part[0]);o.pivotY=Double.parseDouble(part[1]);o.pivotZ=Double.parseDouble(part[2]);o.pivotSet=true;
+        }catch(RuntimeException e){/* an unreadable pivot is left as it was */}
     }
     private static void receiveBridge(byte[] frame){
         try{bridge.accept(frame).ifPresent(json->{

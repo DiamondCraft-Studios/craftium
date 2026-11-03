@@ -99,7 +99,7 @@ public final class EditorServer {
             if(now-s.lastRequest<65_000_000L&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             s.lastRequest=now;
             if(r.action().equals("selection_restore")){
-                if(!s.undo.isEmpty()&&s.undo.peekFirst().selection()!=null)s.undo.removeFirst();
+                if(!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly())s.undo.removeFirst();
                 if(s.selectionBefore!=null){s.selection.restore(s.selectionBefore);s.selectionBefore=null;}send(player,s,"Selection cancelled",false);return;}
             if(r.action().equals("select_box")||r.action().equals("lasso_select")||r.action().equals("use")&&o.tool.selection())s.selectionBefore=new ArrayList<>(s.selection.points());
             if(r.action().equals("gamemode")||r.action().startsWith("gamemode_")) {
@@ -160,7 +160,7 @@ public final class EditorServer {
                     // The selection follows its blocks; if the edit is cancelled it goes back.
                     if(s.confirmEdits&&!s.bypassConfirm&&s.pendingSelectionBefore==null)s.pendingSelectionBefore=before;
                     s.selection.combine(moved,Selection.Mode.REPLACE);
-                    try{start(player,s,plan.finish("Transform selection"));}
+                    try{start(player,s,plan.finish("Transform selection").withSelection(new Session.SelectionChange(before,new ArrayList<>(moved),pivotText(o,0,0,0),pivotText(o,o.offsetX,o.offsetY,o.offsetZ))));}
                     catch(RuntimeException e){s.selection.restore(before);s.pendingSelectionBefore=null;throw e;}
                 }
                 case "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo" -> {var plan=new EditPlanner(player.level(),s,o);s.selection.combine(SelectionTransforms.apply(r.action(),plan),Selection.Mode.REPLACE);send(player,s,"Selection updated: "+s.selection.size()+" blocks",false);}
@@ -247,8 +247,13 @@ public final class EditorServer {
                         if(!o.pasteAir && value.state().isAir())continue;
                         Point at=origin.add(relative.x(),relative.y(),relative.z());plan.putClipboard(at,value);placed.add(at);
                     }
-                    if(r.action().equals("paste_select"))s.selection.combine(placed,Selection.Mode.REPLACE);
-                    var edit=plan.finish("Paste clipboard");start(player,s,new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),o.pasteEntities?ClipboardEntities.paste(player,s,origin):List.of()));
+                    Session.SelectionChange selected=null;
+                    if(r.action().equals("paste_select")){ // the pasted blocks become the selection, and undo takes it back
+                        var before=new ArrayList<>(s.selection.points());
+                        s.selection.combine(placed,Selection.Mode.REPLACE);
+                        selected=new Session.SelectionChange(before,new ArrayList<>(placed));
+                    }
+                    var edit=plan.finish("Paste clipboard");start(player,s,new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),o.pasteEntities?ClipboardEntities.paste(player,s,origin):List.of(),List.of(),selected));
                 }
                 case "use", "builder_place", "builder_break" -> {
                     if(target==null)throw new IllegalArgumentException("Point at a block within reach");
@@ -358,14 +363,15 @@ public final class EditorServer {
         var biomes=new ArrayList<>(a.biomes());biomes.addAll(b.biomes());
         var entities=new ArrayList<>(a.entities());entities.addAll(b.entities());
         var annotations=new ArrayList<>(a.annotations());annotations.addAll(b.annotations());
-        return new Session.Edit(a.name(),new ArrayList<>(changes.values()),biomes,a.flags()|b.flags(),entities,annotations);
+        var selection=a.selection()!=null&&b.selection()!=null?new Session.SelectionChange(a.selection().before(),b.selection().after(),a.selection().pivotBefore(),b.selection().pivotAfter()):a.selection()!=null?a.selection():b.selection();
+        return new Session.Edit(a.name(),new ArrayList<>(changes.values()),biomes,a.flags()|b.flags(),entities,annotations,selection);
     }
     private static void history(ServerPlayer player,Session s,boolean backwards) {
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Wait for the current edit or animated rebuild to finish");
         var from=backwards?s.undo:s.redo;
         if(from.isEmpty()){s.historyRemaining=0;send(player,s,backwards?"Nothing to undo":"Nothing to redo",false);return;}
         var edit=from.peekFirst();
-        if(edit.selection()!=null){ // a selection has no blocks: put it back directly
+        if(edit.selectionOnly()){ // a selection has no blocks: put it back directly
             from.removeFirst();
             s.selection.restore(backwards?edit.selection().before():edit.selection().after());
             (backwards?s.redo:s.undo).addFirst(edit);
@@ -404,11 +410,17 @@ public final class EditorServer {
             var appliedBiomes=applyBiomes(j);
             var appliedEntities=EntityEdits.apply(j.level,j.edit.entities(),j.backwards);
             var appliedAnnotations=AnnotationEdits.apply(j.level,j.edit.annotations(),j.backwards);
-            var actual=new Session.Edit(j.edit.name(),List.copyOf(j.applied),appliedBiomes,j.edit.flags(),appliedEntities,appliedAnnotations);
+            var actual=new Session.Edit(j.edit.name(),List.copyOf(j.applied),appliedBiomes,j.edit.flags(),appliedEntities,appliedAnnotations,j.edit.selection());
             int skipped=j.edit.changes().size()-j.applied.size()+j.edit.biomes().size()-appliedBiomes.size()+j.edit.entities().size()-appliedEntities.size()+j.edit.annotations().size()-appliedAnnotations.size();
             if(j.history) {
                 // Retain only the cells actually restored; conflicting subsequent edits are left intact.
                 (j.backwards?j.session.redo:j.session.undo).addFirst(actual);
+                // The selection goes back or forward with the blocks it was moved with.
+                if(j.edit.selection()!=null){
+                    j.session.selection.restore(j.backwards?j.edit.selection().before():j.edit.selection().after());
+                    String pivot=j.backwards?j.edit.selection().pivotBefore():j.edit.selection().pivotAfter();
+                    if(pivot!=null)j.session.pivotUpdate=pivot;
+                }
                 j.session.recalculateBytes();
                 j.session.historyDirty=true;
                 j.session.event((j.backwards?"Undo ":"Redo ")+j.edit.name());
@@ -454,6 +466,10 @@ public final class EditorServer {
             default->false;
         };
     }
+    /** The player's pivot as text, moved by an offset, for the history to hand back on undo: "none" when it is the selection's centre. */
+    private static String pivotText(Options o,int dx,int dy,int dz){
+        return o.pivotSet?String.format(java.util.Locale.ROOT,"%s,%s,%s",o.pivotX+dx,o.pivotY+dy,o.pivotZ+dz):"none";
+    }
     private static String selectionName(String action,int size){
         return switch(action){
             case "clear"->"Deselect";
@@ -471,7 +487,7 @@ public final class EditorServer {
         if(s.recordSelection&&!after.equals(s.historySelection)){
             var before=s.historySelection;
             // Dragging a box handle redoes the same selection many times: keep one entry, from where it began.
-            if(s.currentAction.equals("select_box_adjust")&&!s.undo.isEmpty()&&s.undo.peekFirst().selection()!=null){before=s.undo.removeFirst().selection().before();}
+            if(s.currentAction.equals("select_box_adjust")&&!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly()){before=s.undo.removeFirst().selection().before();}
             s.remember(Session.Edit.selecting(selectionName(s.currentAction,after.size()),before,after));
         }
         s.historySelection=after;s.historyRevision=s.selection.revision();
@@ -484,7 +500,7 @@ public final class EditorServer {
         if(s.clipboardDirty){s.clipboardGhostDirty=true;s.clipboardData=SelectionCodec.encode(s.clipboard.entrySet().stream().filter(e->!e.getValue().state().isAir()).map(Map.Entry::getKey).toList());s.clipboardDirty=false;}
         if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy,s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selection()!=null?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost);s.library=List.of();
+        var status=new Packets.Status(message,error,s.busy,s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate);s.library=List.of();s.pivotUpdate="";
         ServerPlatform.send(player,new Packets.Update(Packets.JSON.toJson(status)));
     }
 }

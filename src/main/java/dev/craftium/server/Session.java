@@ -28,6 +28,8 @@ final class Session {
     String clipboardGhost="";boolean clipboardGhostDirty=true;
     /** Copied from the player's options with each request: whether edits wait for confirmation, and whether this request is exempt. */
     boolean confirmEdits,bypassConfirm;
+    /** A pivot for the client to take up after an undo or redo, as "none" or "x,y,z"; empty when there is nothing to say. */
+    String pivotUpdate="";
     /** The selection as it was before the last selection action, so a mistaken one can be taken back. Null when there is none. */
     List<Point> selectionBefore;
     /** The selection as of the last time it was noted in the history, the revision it had, and whether the current action is a selection action. */
@@ -52,9 +54,15 @@ final class Session {
     record BiomeChange(Point cell, Holder<Biome> before, Holder<Biome> after) {}
     record EntityChange(UUID id,net.minecraft.nbt.CompoundTag before,net.minecraft.nbt.CompoundTag after,boolean moving){EntityChange(UUID id,net.minecraft.nbt.CompoundTag before,net.minecraft.nbt.CompoundTag after){this(id,before,after,false);}}
     /** What a selection action changed: the selection before and after, so undo and redo can put either back. */
-    record SelectionChange(List<Point> before,List<Point> after){}
+    record SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter){
+        SelectionChange(List<Point> before,List<Point> after){this(before,after,null,null);}
+    }
     record Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations,SelectionChange selection) {
         Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations){this(name,changes,biomes,flags,entities,annotations,null);}
+        /** True when this entry only changes the selection, so there are no blocks to put back. */
+        boolean selectionOnly(){return selection!=null&&changes.isEmpty()&&biomes.isEmpty()&&entities.isEmpty()&&annotations.isEmpty();}
+        /** The same edit, also moving the selection from {@code before} to {@code after} when it is undone or redone. */
+        Edit withSelection(SelectionChange change){return new Edit(name,changes,biomes,flags,entities,annotations,change);}
         /** An entry in the history for a change to the selection alone, which has no blocks to restore. */
         static Edit selecting(String name,List<Point> before,List<Point> after){return new Edit(name,List.of(),List.of(),0,List.of(),List.of(),new SelectionChange(before,after));}
         Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags){this(name,changes,biomes,flags,List.of(),List.of());}
