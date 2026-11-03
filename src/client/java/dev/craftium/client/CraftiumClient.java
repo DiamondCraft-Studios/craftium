@@ -219,10 +219,7 @@ public final class CraftiumClient implements ClientModInitializer {
             }
             var s=ClientState.status;
             if(screen.showSelection())SelectionOverlay.draw(TransformGizmo.selectionPreview());
-            if(PlacementPreview.active()) {
-                Point p=PlacementPreview.origin;Vec3 anchor=new Vec3(p.x(),p.y(),p.z());
-                for(AABB box:PlacementPreview.boxes)TransformGizmo.box(box.move(anchor));
-            }
+            PlacementPreview.draw();
             if(screen.toolActive()&&hit!=null && !PlacementPreview.active() && !ClientState.options.tool.selection()) {
                 int r=ClientState.options.radius;var p=hit.getBlockPos();
                 if(ClientState.options.shape==BrushMath.Shape.CUBE)Overlay.box(new AABB(p).inflate(r),0xffd6eaff,1.5f,0);

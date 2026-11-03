@@ -1,7 +1,7 @@
 package dev.craftium.client;
 
 import dev.craftium.core.*;
-import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
 /** A pending placement never changes the world until the user confirms it. */
@@ -9,9 +9,14 @@ public final class PlacementPreview {
     public static Point origin;
     static int axis;
     private static String data="";
-    static List<AABB> boxes=List.of();
+    static OutlineShape shape=OutlineShape.EMPTY;
     private PlacementPreview(){}
-    static void update(String value){if(Objects.equals(data,value))return;data=value;boxes=SelectionOverlay.merge(SelectionCodec.decode(value));}
+    static void update(String value){if(Objects.equals(data,value))return;data=value;shape=OutlineShape.of(SelectionCodec.decode(value));}
+    /** The pending placement as one outline, moved by the transform in progress; filled while nothing is being dragged. */
+    static void draw(){
+        if(origin==null)return;
+        shape.draw(new Vec3(origin.x(),origin.y(),origin.z()),TransformGizmo::line,0xff8be3b5,0x2247d29b,!TransformGizmo.dragging());
+    }
     public static void begin(Point at){
         if(ClientState.status.clipboardSize()==0&&ClientState.status.clipboardEntityCount()==0){ClientState.notify("Copy a selection or load a blueprint first");return;}
         origin=at;axis=0;ClientState.notify("Placement ready · drag an axis · arrows / Page Up / Page Down · Enter to place · Esc to cancel");
