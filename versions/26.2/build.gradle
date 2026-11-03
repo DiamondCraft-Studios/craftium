@@ -1,0 +1,95 @@
+plugins {
+    id 'net.fabricmc.fabric-loom'
+}
+
+version = project.mod_version
+group = rootProject.maven_group
+base { archivesName = rootProject.archives_base_name }
+
+repositories { mavenCentral() }
+
+// Shared sources live in the repository root. A file under this module's own src/ replaces the
+// shared file with the same relative path, so version differences are explicit overrides.
+// The merged tree is assembled into build/merged and compiled from there.
+def merged = layout.buildDirectory.dir('merged')
+
+def mergeTask = { String name, String set ->
+    tasks.register(name, Sync) {
+        into merged.map { it.dir(set) }
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE // later sources win
+        from rootProject.file("src/${set}")
+        from layout.projectDirectory.dir("src/${set}")
+    }
+}
+def mergeMain = mergeTask('mergeMainSources', 'main')
+def mergeClient = mergeTask('mergeClientSources', 'client')
+def mergeTest = mergeTask('mergeTestSources', 'test')
+
+loom {
+    splitEnvironmentSourceSets()
+    mods {
+        craftium {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+}
+
+sourceSets {
+    main {
+        java.srcDirs = [merged.map { it.dir('main/java') }]
+        resources.srcDirs = [merged.map { it.dir('main/resources') }]
+    }
+    client {
+        java.srcDirs = [merged.map { it.dir('client/java') }]
+    }
+    test {
+        java.srcDirs = [merged.map { it.dir('test/java') }]
+    }
+}
+tasks.named('compileJava') { dependsOn mergeMain }
+tasks.named('processResources') { dependsOn mergeMain }
+tasks.named('compileClientJava') { dependsOn mergeClient }
+tasks.named('compileTestJava') { dependsOn mergeTest }
+tasks.matching { it.name == 'sourcesJar' }.configureEach { dependsOn mergeMain, mergeClient }
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    implementation 'org.luaj:luaj-jse:3.0.1'
+    include 'org.luaj:luaj-jse:3.0.1'
+    testImplementation platform('org.junit:junit-bom:5.13.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+processResources {
+    from(rootProject.file('branding/craftium.svg')) { into 'assets/craftium' }
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}
+
+tasks.withType(JavaCompile).configureEach { options.release = 25 }
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+test { useJUnitPlatform() }
+
+jar {
+    from(rootProject.file('LICENSE')) { rename { 'LICENSE_Craftium' } }
+    from(rootProject.file('THIRD-PARTY-NOTICES.md'))
+}
+
+// In-game regression scenario: gradlew :versions:mc-26.2:runClientGameTest
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'craftium-test'
+        enableClientGameTests = true
+        enableGameTests = false
+        eula = false
+    }
+}
