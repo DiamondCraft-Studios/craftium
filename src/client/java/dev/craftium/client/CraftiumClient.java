@@ -206,7 +206,7 @@ public final class CraftiumClient implements ClientModInitializer {
                 if(ClientState.options.rulerMode==Options.RulerMode.CIRCLE){double radius=Math.sqrt(a.distanceSquared(b));for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(start.add(Math.cos(x)*radius,0,Math.sin(x)*radius),start.add(Math.cos(y)*radius,0,Math.sin(y)*radius),0xffffd66d,1.5f);}}
                 Overlay.text(String.format(java.util.Locale.ROOT,"%.2f blocks",Math.sqrt(a.distanceSquared(b))),new net.minecraft.core.BlockPos((a.x()+b.x())/2,(a.y()+b.y())/2+1,(a.z()+b.z())/2),0xffffe4a2,0xbb151c26,.02f);
             }
-            if(screen==null)return;
+            if(screen==null){var anchor=BuilderMode.gizmoAnchor();if(anchor!=null)TransformGizmo.display(anchor);return;}
             TransformGizmo.draw(screen);
             Point handle=screen.handlePoint();if(handle!=null){Vec3 anchor=new Vec3(handle.x(),handle.y(),handle.z());int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Overlay.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2);}
             var nodes=ClientState.options.nodes;

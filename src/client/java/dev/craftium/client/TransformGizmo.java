@@ -48,13 +48,13 @@ final class TransformGizmo {
     private static double distance(double x,double y,double[] a,double[] b){if(a==null||b==null)return Double.POSITIVE_INFINITY;double dx=b[0]-a[0],dy=b[1]-a[1],length=dx*dx+dy*dy,t=length<.001?0:Math.clamp(((x-a[0])*dx+(y-a[1])*dy)/length,0,1);return Math.pow(x-a[0]-dx*t,2)+Math.pow(y-a[1]-dy*t,2);}
     static boolean click(EditorScreen screen,double x,double y){
         if(ClientState.status.busy())return false;Target t=target(screen);if(t==null)return selectEntity(x,y);
-        mode=t.kind==Kind.NODE?Options.GizmoMode.MOVE:ClientState.options.gizmoMode;basis=axes();double best=100;int chosen=-1;double[] center=project(t.anchor);
+        mode=t.kind==Kind.NODE?Options.GizmoMode.MOVE:ClientState.options.gizmoMode;basis=axes();pickScale=screenScale(t.anchor);double best=100;int chosen=-1;double[] center=project(t.anchor);
         if(mode!=Options.GizmoMode.ROTATE&&center!=null&&Math.pow(x-center[0],2)+Math.pow(y-center[1],2)<81)chosen=3;
         if(chosen<0)for(int i=0;i<3;i++){
-            if(mode==Options.GizmoMode.ROTATE){Vec3 a=basis[(i+1)%3],b=basis[(i+2)%3];for(int j=0;j<96;j++){double v=j*Math.PI/48,w=(j+1)*Math.PI/48;double d=distance(x,y,project(t.anchor.add(a.scale(Math.cos(v)*3.5)).add(b.scale(Math.sin(v)*3.5))),project(t.anchor.add(a.scale(Math.cos(w)*3.5)).add(b.scale(Math.sin(w)*3.5))));if(d<best){best=d;chosen=i;}}}
-            else{double d=distance(x,y,project(t.anchor.add(basis[i].scale(mode==Options.GizmoMode.SCALE?4.7:.5))),project(t.anchor.add(basis[i].scale(5))));if(d<best){best=d;chosen=i;}}
+            if(mode==Options.GizmoMode.ROTATE){Vec3 a=basis[(i+1)%3],b=basis[(i+2)%3];for(int j=0;j<96;j++){double v=j*Math.PI/48,w=(j+1)*Math.PI/48;double d=distance(x,y,project(t.anchor.add(a.scale(Math.cos(v)*3.5*pickScale)).add(b.scale(Math.sin(v)*3.5*pickScale))),project(t.anchor.add(a.scale(Math.cos(w)*3.5*pickScale)).add(b.scale(Math.sin(w)*3.5*pickScale))));if(d<best){best=d;chosen=i;}}}
+            else{double d=distance(x,y,project(t.anchor.add(basis[i].scale((mode==Options.GizmoMode.SCALE?4.7:.5)*pickScale))),project(t.anchor.add(basis[i].scale(5*pickScale))));if(d<best){best=d;chosen=i;}}
         }
-        if(mode==Options.GizmoMode.MOVE&&chosen<0)for(int i=0;i<3;i++){Vec3 p=t.anchor.add(basis[(i+1)%3].scale(1.4)).add(basis[(i+2)%3].scale(1.4));var pixel=project(p);if(pixel!=null&&Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2)<144){chosen=4+i;break;}}
+        if(mode==Options.GizmoMode.MOVE&&chosen<0)for(int i=0;i<3;i++){Vec3 p=t.anchor.add(basis[(i+1)%3].scale(1.4*pickScale)).add(basis[(i+2)%3].scale(1.4*pickScale));var pixel=project(p);if(pixel!=null&&Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2)<144){chosen=4+i;break;}}
         if(chosen<0)return selectEntity(x,y);dragging=t;handle=chosen;startX=x;startY=y;delta=angles=Vec3.ZERO;size=new Vec3(1,1,1);startAngle=mode==Options.GizmoMode.ROTATE?angle(x,y,t.anchor,handle):0;return true;
     }
     private static boolean selectEntity(double x,double y){var mc=Minecraft.getInstance();if(mc.level==null)return false;Entity closest=null;double best=100;for(var e:mc.level.entitiesForRendering()){if(!(e instanceof Display)&&!(e instanceof Marker)||e.distanceToSqr(mc.player)>128*128)continue;if(e instanceof Display&&!ClientState.options.showDisplayGizmos||e instanceof Marker&&!ClientState.options.showMarkerGizmos)continue;var pixel=project(e.position());if(pixel==null)continue;double d=Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2);if(d<best){best=d;closest=e;}}if(closest==null)return false;ClientState.options.entityUuid=closest.getUUID().toString();ClientState.options.gizmoTarget=Options.GizmoTarget.ENTITY;CraftiumClient.send("entity_select_uuid",CraftiumClient.point(closest.blockPosition()),null);return true;}
@@ -67,7 +67,7 @@ final class TransformGizmo {
         if(handle==3&&mode==Options.GizmoMode.MOVE){var camera=ClientCompat.camera(mc);var near=ClientCompat.nearPlane(camera);double depth=dragging.anchor.distanceTo(camera.position());Vec3 from=near.getPointOnPlane((float)(startX/mc.getWindow().getGuiScaledWidth()*2-1),(float)(1-startY/mc.getWindow().getGuiScaledHeight()*2)).normalize(),to=near.getPointOnPlane((float)(x/mc.getWindow().getGuiScaledWidth()*2-1),(float)(1-y/mc.getWindow().getGuiScaledHeight()*2)).normalize();Vec3 move=to.subtract(from).scale(depth);delta=new Vec3(snap(move.x,increment),snap(move.y,increment),snap(move.z,increment));return true;}
         if(handle>=4){int a=(handle-4+1)%3,b=(handle-4+2)%3;double[] pa=project(dragging.anchor.add(basis[a])),pb=project(dragging.anchor.add(basis[b]));if(pa==null||pb==null)return true;double ax=pa[0]-center[0],ay=pa[1]-center[1],bx=pb[0]-center[0],by=pb[1]-center[1],det=ax*by-ay*bx;if(Math.abs(det)<.001)return true;double dx=x-startX,dy=y-startY;delta=basis[a].scale(snap((dx*by-dy*bx)/det,increment)).add(basis[b].scale(snap((dy*ax-dx*ay)/det,increment)));return true;}
         int axis=handle==3?1:handle;var end=project(dragging.anchor.add(basis[axis]));if(end==null)return true;double dx=end[0]-center[0],dy=end[1]-center[1],length=dx*dx+dy*dy;if(length<.001)return true;double amount=((x-startX)*dx+(y-startY)*dy)/length;
-        if(mode==Options.GizmoMode.SCALE){double factor=Math.clamp(snap(1+amount/5,mc.hasShiftDown()?.0001:1d/16),.1,8);size=mc.hasControlDown()||handle==3?new Vec3(factor,factor,factor):new Vec3(axis==0?factor:1,axis==1?factor:1,axis==2?factor:1);}
+        if(mode==Options.GizmoMode.SCALE){double factor=Math.clamp(snap(1+amount/(5*pickScale),mc.hasShiftDown()?.0001:1d/16),.1,8);size=mc.hasControlDown()||handle==3?new Vec3(factor,factor,factor):new Vec3(axis==0?factor:1,axis==1?factor:1,axis==2?factor:1);}
         else delta=basis[axis].scale(snap(amount,increment));return true;
     }
     static boolean release(EditorScreen screen){
@@ -89,11 +89,41 @@ final class TransformGizmo {
     static boolean selectionPreview(){return dragging!=null&&dragging.kind==Kind.SELECTION;}
     static void box(AABB box){if(dragging==null){Overlay.box(box,0xff8be3b5,1,0x2247d29b);return;}Vec3[] points=new Vec3[8];for(int i=0;i<8;i++)points[i]=transformed(new Vec3((i&1)==0?box.minX:box.maxX,(i&2)==0?box.minY:box.maxY,(i&4)==0?box.minZ:box.maxZ));for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)Overlay.line(points[i],points[i|bit],0xff8be3b5,1.5f);}
     static void draw(EditorScreen screen){
-        Target t=dragging==null?target(screen):dragging;if(t==null)return;var o=ClientState.options;var currentMode=t.kind==Kind.NODE?Options.GizmoMode.MOVE:o.gizmoMode;Vec3 anchor=t.anchor.add(delta);Vec3[] directions=axes();
-        for(int i=0;i<3;i++){int color=COLORS[i];if(currentMode==Options.GizmoMode.ROTATE){Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3];for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(anchor.add(a.scale(Math.cos(x)*3.5)).add(b.scale(Math.sin(x)*3.5)),anchor.add(a.scale(Math.cos(y)*3.5)).add(b.scale(Math.sin(y)*3.5)),color,handle==i?3:1.5f);}}
-            else{Vec3 end=anchor.add(directions[i].scale(5));Overlay.line(anchor,end,color,handle==i?4:2);if(currentMode==Options.GizmoMode.SCALE)Overlay.box(new AABB(end.add(-.14,-.14,-.14),end.add(.14,.14,.14)),color,1,color&0x44ffffff);else Overlay.point(end,color,7);}
-            if(currentMode==Options.GizmoMode.MOVE){Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3],point=anchor.add(a.scale(1.4)).add(b.scale(1.4));Overlay.point(point,color,7);}
+        Target t=dragging==null?target(screen):dragging;if(t==null)return;
+        render(t.anchor.add(delta),t.kind==Kind.NODE?Options.GizmoMode.MOVE:ClientState.options.gizmoMode,handle);
+    }
+    /** The handles at {@code anchor} for show only, as in builder mode where they can't be dragged. */
+    static void display(Vec3 anchor){render(anchor,ClientState.options.gizmoMode,-1);}
+    private static final int CENTER=0xffffffff,CENTER_ACTIVE=0xffffd66d;
+    /** The gizmo's scale at the last click, kept for the drag that follows so the handles do not shift under the cursor. */
+    private static double pickScale=1;
+    /** The distance, in blocks, at which the handles are drawn at the size they were designed for. */
+    private static final double DESIGN_DISTANCE=8;
+    /** How much to scale the gizmo so it covers the same part of the screen whatever its distance from the camera. */
+    private static double screenScale(Vec3 anchor){
+        double distance=ClientCompat.camera(Minecraft.getInstance()).position().distanceTo(anchor);
+        return Math.clamp(distance/DESIGN_DISTANCE,.05,40);
+    }
+    /** Move handles end in flat triangular arrowheads, rotate handles are rings, scale handles are squares, and the centre is a square of its own. */
+    private static void render(Vec3 anchor,Options.GizmoMode currentMode,int active){
+        Vec3[] directions=axes();double k=screenScale(anchor);
+        for(int i=0;i<3;i++){int color=COLORS[i];
+            if(currentMode==Options.GizmoMode.ROTATE){Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3];for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(anchor.add(a.scale(Math.cos(x)*3.5*k)).add(b.scale(Math.sin(x)*3.5*k)),anchor.add(a.scale(Math.cos(y)*3.5*k)).add(b.scale(Math.sin(y)*3.5*k)),color,active==i?3:1.5f);}}
+            else if(currentMode==Options.GizmoMode.SCALE){Vec3 end=anchor.add(directions[i].scale(5*k));Overlay.line(anchor,end,color,active==i?4:2);Overlay.box(new AABB(end.add(-.2*k,-.2*k,-.2*k),end.add(.2*k,.2*k,.2*k)),color,active==i?2:1,color&0x99ffffff|0x66000000);}
+            else{Vec3 tip=anchor.add(directions[i].scale(5.3*k)),base=anchor.add(directions[i].scale(4.5*k));Overlay.line(anchor,base,color,active==i?4:2);arrowhead(tip,base,color,active==i?3:2,k);}
+            if(currentMode==Options.GizmoMode.MOVE){Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3],point=anchor.add(a.scale(1.4*k)).add(b.scale(1.4*k));Overlay.point(point,color,7);}
         }
-        if(currentMode!=Options.GizmoMode.ROTATE)Overlay.point(anchor,0xffffffff,9);
+        if(currentMode!=Options.GizmoMode.ROTATE){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
+    }
+    /** A flat triangle from {@code base} to {@code tip}, turned to face the camera so it reads the same from any angle. */
+    private static void arrowhead(Vec3 tip,Vec3 base,int color,float width,double k){
+        Vec3 axis=tip.subtract(base),toCamera=ClientCompat.camera(Minecraft.getInstance()).position().subtract(base);
+        Vec3 side=axis.cross(toCamera);
+        if(side.lengthSqr()<1e-9)return; // looking straight down the axis: nothing to show but the tip
+        side=side.normalize().scale(.3*k);
+        Vec3 left=base.add(side),right=base.subtract(side);
+        Overlay.line(tip,left,color,width);Overlay.line(left,right,color,width);Overlay.line(right,tip,color,width);
+        int fill=color&0x00ffffff|0x99000000;
+        Overlay.face(tip,left,right,right,fill);Overlay.face(right,left,tip,tip,fill); // both windings, so culling cannot hide it
     }
 }
