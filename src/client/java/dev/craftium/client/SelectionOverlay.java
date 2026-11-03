@@ -7,7 +7,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
 final class SelectionOverlay {
-    private static final int STROKE=0xffffd66d,FILL=0x225d91ff,GHOST=0x805d91ff;
+    private static final int STROKE=0xffffd66d,FILL=0x225d91ff;
     /** Past this many blocks the real models are not drawn, because a frame would have to draw all of them. */
     private static final int MAX_GHOST_BLOCKS=4096;
     private static String encoded="";
@@ -27,6 +27,6 @@ final class SelectionOverlay {
     static void draw(boolean transforming){
         if(shape.isEmpty())return;
         shape.draw(Vec3.ZERO,transforming?TransformGizmo::line:(a,b)->Overlay.line(a,b,STROKE,1),STROKE,FILL,!transforming);
-        if(!transforming&&!blocks.isEmpty())Overlay.blocks(blocks,GHOST);
+        if(!transforming&&!blocks.isEmpty())Overlay.blocks(blocks,OutlineShape.GHOST);
     }
 }
