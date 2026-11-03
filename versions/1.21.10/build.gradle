@@ -95,3 +95,11 @@ fabricApi {
         eula = false
     }
 }
+
+// The live Paper check connects to an external server, which bypasses the game-test framework's
+// network synchronizer, so it must be switched off for that scope only.
+tasks.matching { it.name == 'runClientGameTest' }.configureEach {
+    if (System.getenv('CRAFTIUM_TEST_SCOPE') == 'paper') {
+        systemProperty 'fabric.client.gametest.disableNetworkSynchronizer', 'true'
+    }
+}
