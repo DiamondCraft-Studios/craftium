@@ -185,7 +185,7 @@ public final class EditorScreen extends CraftiumScreen {
                 text(g,"SELECTION BOUNDS",10,311,MUTED);
                 text(g,"Min  "+s.min().coordinates(),10,333,TEXT);text(g,"Max  "+s.max().coordinates(),10,353,TEXT);
                 text(g,s.selectionSize()+" blocks",10,379,0xffa5cef2);
-                button(g,10,406,LEFT-20,20,"Mode: "+nice(o().mode.name())+"  ▾",false,()->o().mode=Selection.Mode.values()[(o().mode.ordinal()+1)%4],"Replace, add, subtract or intersect the selection");
+                modeButtons(g,394);
                 if(o().tool==Tool.MAGIC_SELECT)toggle(g,10,444,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
                 if(o().tool==Tool.MAGIC_SELECT)toggle(g,10,468,"Hover preview (under "+o().magicPreviewLimit+")",o().magicPreview,()->o().magicPreview=!o().magicPreview);
                 button(g,10,h-52,78,20,"Fill",false,()->action("fill"),"Fill the selection with the active block");button(g,94,h-52,78,20,"Clear",false,()->action("clear"),"Clear the selection");
@@ -216,7 +216,7 @@ public final class EditorScreen extends CraftiumScreen {
                 toggle(g,10,403,"Invert / carve",o().invert,()->o().invert=!o().invert);
                 toggle(g,10,425,"Hollow shape",o().hollow,()->o().hollow=!o().hollow);
                 toggle(g,10,447,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
-                if(o().tool.selection())button(g,10,474,LEFT-20,19,"Mode: "+nice(o().mode.name())+"  ▾",false,()->o().mode=Selection.Mode.values()[(o().mode.ordinal()+1)%4],"Replace, add, subtract or intersect the selection");
+                if(o().tool.selection())modeButtons(g,472);
             }
         }
         if(o().tool==Tool.TEXT||o().tool==Tool.BIOME_PAINTER||o().tool==Tool.CLENTAMINATOR) {
@@ -323,6 +323,15 @@ public final class EditorScreen extends CraftiumScreen {
             case 6 -> List.of(item("Restrict to selection","",()->o().inSelection=!o().inSelection),item("Clear block mask","",()->{o().mask="";fields.get("mask").setValue("");}),item("Toggle surface painting","",()->o().surfaceOnly=!o().surfaceOnly));
             default -> List.of(item("Editor controls","",()->help=true),item("About Craftium","",()->help=true));
         };
+    }
+    /** How a new selection combines with the current one, as four buttons in a grid with the active one lit. */
+    private void modeButtons(Gfx g,int y){
+        int half=(LEFT-24)/2;var modes=Selection.Mode.values();
+        String[] tips={"Replace the selection","Add to the selection","Subtract from the selection","Keep only what overlaps the selection"};
+        for(int i=0;i<modes.length;i++){
+            final var mode=modes[i];
+            button(g,10+(i%2)*(half+4),y+(i/2)*22,half,19,nice(mode.name()),o().mode==mode,()->o().mode=mode,tips[i]);
+        }
     }
     private MenuItem item(String label,String shortcut,Runnable action){return new MenuItem(label,shortcut,action);}
     /** A thin line between groups of menu entries; it has no action. */
