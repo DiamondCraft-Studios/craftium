@@ -286,7 +286,7 @@ public final class EditorScreen extends CraftiumScreen {
         toggle(g,10,296,"Bulldozer",o().bulldozer,()->o().bulldozer=!o().bulldozer,"Hold left click to break the block you aim at, without breaking one at a time");
         toggle(g,10,319,"Replace mode",o().replaceMode,()->o().replaceMode=!o().replaceMode,"Placing a block replaces the one you click instead of going beside it · R");
         toggle(g,10,342,"Force place",o().forcePlace,()->o().forcePlace=!o().forcePlace,"Place blocks where they could not survive, like a torch in the air");
-        toggle(g,10,365,"No updates",o().noUpdates,()->o().noUpdates=!o().noUpdates,"Placed blocks do not update their neighbours. Also lets blocks be placed where they could not survive, like Force place");
+        toggle(g,10,365,"No updates",o().noUpdates,()->o().noUpdates=!o().noUpdates,"Placed blocks do not update their neighbours, so they stay when what holds them is removed");
         toggle(g,10,388,"Tinker",o().tinker,()->o().tinker=!o().tinker,"Right click a block with an empty hand to edit its properties");
         toggle(g,10,411,"Angel placement",o().angelPlacement,()->o().angelPlacement=!o().angelPlacement,"Right click in the air to place the held block four blocks ahead, shown as a ghost");
         slider(g,10,451,LEFT-20,"Fly speed",o().flySpeed,.1,10,v->o().flySpeed=(float)v,false);

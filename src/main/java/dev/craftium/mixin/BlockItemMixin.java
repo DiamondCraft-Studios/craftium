@@ -20,7 +20,7 @@ abstract class BlockItemMixin {
     @Redirect(method="canPlace",at=@At(value="INVOKE",target="Lnet/minecraft/world/level/block/state/BlockState;canSurvive(Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;)Z"))
     private boolean craftium$survive(BlockState state,LevelReader level,BlockPos pos,BlockPlaceContext context,BlockState placing){
         var options=PlayerCapabilities.of(context.getPlayer());
-        return options!=null&&(options.forcePlace||options.noUpdates)||state.canSurvive(level,pos);
+        return options!=null&&options.forcePlace||state.canSurvive(level,pos);
     }
     @ModifyConstant(method="placeBlock",constant=@Constant(intValue=11))
     private int craftium$flags(int flags,BlockPlaceContext context,BlockState state){
