@@ -15,7 +15,12 @@ final class ToolIcons {
             case SCRIPT_BRUSH -> {line(g,x+8,y+5,x+2,y+12,color);line(g,x+2,y+12,x+8,y+19,color);line(g,x+17,y+5,x+23,y+12,color);line(g,x+23,y+12,x+17,y+19,color);line(g,x+15,y+3,x+10,y+22,color);}
             case FLOODFILL,FLUID_BALL -> {line(g,x+12,y+2,x+3,y+15,color);line(g,x+12,y+2,x+21,y+15,color);line(g,x+3,y+15,x+8,y+22,color);line(g,x+8,y+22,x+17,y+22,color);line(g,x+17,y+22,x+21,y+15,color);}
             case MOVE -> {line(g,x+12,y+2,x+12,y+22,color);line(g,x+2,y+12,x+22,y+12,color);line(g,x+12,y+2,x+8,y+7,color);line(g,x+12,y+2,x+16,y+7,color);line(g,x+22,y+12,x+17,y+8,color);line(g,x+22,y+12,x+17,y+16,color);}
-            case ROTATE -> {g.outline(x+4,y+4,16,16,color);line(g,x+14,y+2,x+20,y+4,color);line(g,x+14,y+2,x+16,y+8,color);}
+            case ROTATE -> { // most of a circle, with an arrowhead where it ends
+                for(int i=0;i<20;i++){double a=Math.toRadians(45+i*15),b=Math.toRadians(45+(i+1)*15);line(g,x+12+(int)Math.round(Math.cos(a)*8),y+12+(int)Math.round(Math.sin(a)*8),x+12+(int)Math.round(Math.cos(b)*8),y+12+(int)Math.round(Math.sin(b)*8),color);}
+                double end=Math.toRadians(345),px=x+12+Math.cos(end)*8,py=y+12+Math.sin(end)*8,tx=-Math.sin(end),ty=Math.cos(end),nx=Math.cos(end),ny=Math.sin(end);
+                int tipX=(int)Math.round(px+tx*4),tipY=(int)Math.round(py+ty*4);
+                line(g,tipX,tipY,(int)Math.round(px-tx*2+nx*4),(int)Math.round(py-ty*2+ny*4),color);line(g,tipX,tipY,(int)Math.round(px-tx*2-nx*4),(int)Math.round(py-ty*2-ny*4),color);
+            }
             case SCALE -> {g.outline(x+3,y+9,11,11,color);g.outline(x+9,y+3,12,12,color);line(g,x+14,y+10,x+21,y+3,color);}
             case PIVOT -> {g.outline(x+7,y+7,10,10,color);g.fill(x+11,y+11,x+14,y+14,color);line(g,x+12,y+2,x+12,y+7,color);line(g,x+12,y+17,x+12,y+22,color);line(g,x+2,y+12,x+7,y+12,color);line(g,x+17,y+12,x+22,y+12,color);}
             case STAMP,SMEAR,MODIFY,ANNOTATION -> {g.outline(x+3,y+11,19,10,color);g.fill(x+9,y+3,x+16,y+13,color);}

@@ -24,11 +24,16 @@ final class ScriptVariablesScreen extends CraftiumScreen {
                 double range=variable.max()-variable.min(),initial=Double.parseDouble(variable.value());var slider=new FlatSlider(x,y,300,22,Component.empty(),range==0?0:(initial-variable.min())/range){
                     protected void updateMessage(){double number=variable.min()+value*(variable.max()-variable.min());String text=variable.kind().equals("int")?Long.toString(Math.round(number)):String.format(Locale.ROOT,"%.3f",number);setMessage(Component.literal(text));}
                     protected void applyValue(){double number=variable.min()+value*(variable.max()-variable.min());values().put(variable.title(),variable.kind().equals("int")?Long.toString(Math.round(number)):Double.toString(number));updateMessage();}
-                };slider.setRaw(range==0?0:(initial-variable.min())/range);addRenderableWidget(slider);
+                };slider.setRaw(range==0?0:(initial-variable.min())/range);slider.range(variable.min(),variable.max(),defaultOf(variable));addRenderableWidget(slider);
             }else if(variable.kind().equals("boolean"))addRenderableWidget(new FlatButton(x,y,300,22,variable.value(),()->{values().put(variable.title(),Boolean.toString(!Boolean.parseBoolean(variable.value())));init();}));
             else {var field=new EditBox(font,x,y,300,22,Component.literal(variable.title()));field.setMaxLength(256);field.setValue(variable.value());field.setResponder(value->values().put(variable.title(),value));addRenderableWidget(field);}
         }
         addRenderableWidget(new FlatButton(left,top+300,90,22,"Previous",()->{page--;init();}));addRenderableWidget(new FlatButton(left+100,top+300,90,22,"Next",()->{page++;init();}));addRenderableWidget(new FlatButton(left+210,top+300,140,22,"Reset variables",()->{values().clear();init();}));addRenderableWidget(new FlatButton(left+490,top+300,130,22,"Return",this::onClose));
+    }
+    /** The value the template itself gives a variable, before any change made here. */
+    private double defaultOf(ScriptTemplates.Variable variable){
+        try{for(var v:ScriptTemplates.expand(mask?ClientState.options.maskScript:ClientState.options.script,java.util.Map.of()).variables())if(v.title().equals(variable.title()))return Double.parseDouble(v.value());}catch(RuntimeException ignored){}
+        return variable.min();
     }
     @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
     @Override protected void draw(Gfx g,int x,int y,float delta){g.pose().pushMatrix();g.pose().scale(scale,scale);int w=Math.round(width/scale),h=Math.round(height/scale);g.fill(0,0,w,h,0xef101923);g.fill(left-12,top-20,left+632,top+340,0xff172330);g.text(font,"CRAFTIUM / "+(mask?"MASK":"BRUSH")+" VARIABLES",left,top-10,0xffb5dcfc,false);for(int i=page*10;i<Math.min(variables.size(),page*10+10);i++){int index=i-page*10;g.text(font,font.plainSubstrByWidth(variables.get(i).title(),300),left+(index%2)*320,top+30+(index/2)*47,0xff9db5cb,false);}if(variables.isEmpty())g.text(font,error.isBlank()?"Add $int(Title,5,1,10)$ or another variable to the script first.":error,left,top+40,0xffffdca8,false);drawWidgets(g,(int)(x/scale),(int)(y/scale),delta);g.pose().popMatrix();}

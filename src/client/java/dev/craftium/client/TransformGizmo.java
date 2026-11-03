@@ -82,7 +82,7 @@ final class TransformGizmo {
         return chosen;
     }
     private static boolean selectEntity(double x,double y){var mc=Minecraft.getInstance();if(mc.level==null)return false;Entity closest=null;double best=100;for(var e:mc.level.entitiesForRendering()){if(!(e instanceof Display)&&!(e instanceof Marker)||e.distanceToSqr(mc.player)>128*128)continue;if(e instanceof Display&&!ClientState.options.showDisplayGizmos||e instanceof Marker&&!ClientState.options.showMarkerGizmos)continue;var pixel=project(e.position());if(pixel==null)continue;double d=Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2);if(d<best){best=d;closest=e;}}if(closest==null)return false;ClientState.options.entityUuid=closest.getUUID().toString();ClientState.options.gizmoTarget=Options.GizmoTarget.ENTITY;CraftiumClient.send("entity_select_uuid",CraftiumClient.point(closest.blockPosition()),null);return true;}
-    private static double angle(double x,double y,Vec3 center,int axis){var mc=Minecraft.getInstance();var camera=ClientCompat.camera(mc);Vec3 ray=ClientCompat.nearPlane(camera).getPointOnPlane((float)(x/mc.getWindow().getGuiScaledWidth()*2-1),(float)(1-y/mc.getWindow().getGuiScaledHeight()*2)).normalize();double divisor=ray.dot(basis[axis]);if(Math.abs(divisor)<1e-5){var pixel=project(center);return pixel==null?0:Math.atan2(y-pixel[1],x-pixel[0]);}double distance=center.subtract(camera.position()).dot(basis[axis])/divisor;Vec3 v=camera.position().add(ray.scale(distance)).subtract(center);return Math.atan2(v.dot(basis[(axis+2)%3]),v.dot(basis[(axis+1)%3]));}
+    private static double angle(double x,double y,Vec3 center,int axis){var mc=Minecraft.getInstance();var camera=ClientCompat.camera(mc);Vec3 ray=ClientCompat.ray(camera,(float)(x/mc.getWindow().getGuiScaledWidth()*2-1),(float)(1-y/mc.getWindow().getGuiScaledHeight()*2));double divisor=ray.dot(basis[axis]);if(Math.abs(divisor)<1e-5){var pixel=project(center);return pixel==null?0:Math.atan2(y-pixel[1],x-pixel[0]);}double distance=center.subtract(camera.position()).dot(basis[axis])/divisor;Vec3 v=camera.position().add(ray.scale(distance)).subtract(center);return Math.atan2(v.dot(basis[(axis+2)%3]),v.dot(basis[(axis+1)%3]));}
     private static double snap(double value,double increment){return Math.rint(value/increment)*increment;}
     static boolean drag(double x,double y){
         if(dragging==null)return false;normalizationDirty=true;var mc=Minecraft.getInstance();boolean entity=dragging.kind==Kind.ENTITY;double increment=entity?(mc.hasShiftDown()?.0001:mc.hasControlDown()?1:1d/16):1;
@@ -169,12 +169,13 @@ final class TransformGizmo {
     private static Vec3 rawTransform(Vec3 world){Vec3 about=aboutPoint();Vec3 p=world.subtract(about);var rotated=Geometry.rotate(new Geometry.Vector(p.x*size.x,p.y*size.y,p.z*size.z),angles.y,angles.x,angles.z);return about.add(rotated.x(),rotated.y(),rotated.z());}
     /**
      * The point the drag works about. The Scale tool scales from the far side of the selection, so a face moves to where it
-     * is dragged and the opposite one stays; with Alt it scales from the centre. Everything else works about the target's anchor.
+     * is dragged and the opposite one stays; with Alt, or by the circle in the middle, it scales from the centre of the selection.
+     * Everything else works about the target's anchor.
      */
     private static Vec3 aboutPoint(){
         if(dragging.kind==Kind.MODEL&&mode==Options.GizmoMode.SCALE){
             var s=ClientState.status;Point min=s.min(),max=s.max();
-            return altDown()?new Vec3((min.x()+max.x()+1)/2d,(min.y()+max.y()+1)/2d,(min.z()+max.z()+1)/2d):new Vec3(min.x(),min.y(),min.z());
+            return altDown()||handle==3?new Vec3((min.x()+max.x()+1)/2d,(min.y()+max.y()+1)/2d,(min.z()+max.z()+1)/2d):new Vec3(min.x(),min.y(),min.z());
         }
         return dragging.anchor;
     }
@@ -229,7 +230,11 @@ final class TransformGizmo {
         if(t.kind==Kind.PIVOT)Overlay.point(t.anchor.add(delta),0xffffd66d,11); // the pivot
     }
     /** The handles at {@code anchor} for show only, as in builder mode where they can't be dragged. */
-    static void display(Vec3 anchor){render(anchor,Options.GizmoMode.MOVE,-1,null);}
+    static void display(Vec3 anchor){display(anchor,ALL_AXES);}
+    /** Like {@link #display(Vec3)}, but only the axes whose bit is set in {@code axes} (X is 1, Y is 2, Z is 4): the plane squares need both of theirs. */
+    static void display(Vec3 anchor,int axes){axisMask=axes;try{render(anchor,Options.GizmoMode.MOVE,-1,null);}finally{axisMask=ALL_AXES;}}
+    private static final int ALL_AXES=7;
+    private static int axisMask=ALL_AXES;
     /**
      * The mode the gizmo can really be in for this target. Points, and the corners of a selection box, can only be
      * moved, so they ignore the rotate and scale the editor may be set to.
@@ -310,7 +315,7 @@ final class TransformGizmo {
     private static double[] dragFlips;
     private static Vec3 pointerRay(double x,double y){
         var mc=Minecraft.getInstance();var camera=ClientCompat.camera(mc);
-        return ClientCompat.nearPlane(camera).getPointOnPlane((float)(x/mc.getWindow().getGuiScaledWidth()*2-1),(float)(1-y/mc.getWindow().getGuiScaledHeight()*2)).normalize();
+        return ClientCompat.ray(camera,(float)(x/mc.getWindow().getGuiScaledWidth()*2-1),(float)(1-y/mc.getWindow().getGuiScaledHeight()*2));
     }
     private static void grabFree(Vec3 anchor,double x,double y){
         Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
@@ -373,6 +378,7 @@ final class TransformGizmo {
     private static void render(Vec3 anchor,Options.GizmoMode currentMode,int active,Vec3 extent){
         Vec3[] directions=axesAt(anchor);double k=screenScale(anchor);
         for(int i=0;i<3;i++){int color=active==i?brighten(COLORS[i]):COLORS[i];
+            if((axisMask>>i&1)!=0){
             if(currentMode==Options.GizmoMode.ROTATE){
                 Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3];
                 // Three full rings make a sphere of wire that is hard to look through, so each axis shows a short arc to grab,
@@ -381,7 +387,8 @@ final class TransformGizmo {
                 for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(anchor.add(a.scale(Math.cos(x)*3.5*k)).add(b.scale(Math.sin(x)*3.5*k)),anchor.add(a.scale(Math.cos(y)*3.5*k)).add(b.scale(Math.sin(y)*3.5*k)),color,active==i?3:1.5f);}}
             else if(currentMode==Options.GizmoMode.SCALE){Vec3 end=extent!=null?faceCenter(faceBase!=null?faceBase:anchor,directions,extent,i):anchor.add(directions[i].scale(5*k));if(extent==null)Overlay.line(anchor,end,color,active==i?4:2);Overlay.box(new AABB(end.add(-.2*k,-.2*k,-.2*k),end.add(.2*k,.2*k,.2*k)),color,active==i?2:1,color&0x99ffffff|0x66000000);}
             else{Vec3 tip=anchor.add(directions[i].scale(5.3*k)),base=anchor.add(directions[i].scale(4.5*k));Overlay.line(anchor,base,color,active==i?4:2);arrowhead(tip,base,color,active==i?3:2,k);}
-            if(currentMode==Options.GizmoMode.MOVE||currentMode==Options.GizmoMode.SCALE){ // a square in each plane: moves, or scales, the two axes of that plane
+            }
+            if((currentMode==Options.GizmoMode.MOVE||currentMode==Options.GizmoMode.SCALE)&&(axisMask>>(i+1)%3&1)!=0&&(axisMask>>(i+2)%3&1)!=0){ // a square in each plane: moves, or scales, the two axes of that plane
                 Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3],at=anchor.add(a.scale(1.4*k)).add(b.scale(1.4*k));boolean hot=active==4+i;
                 planeSquare(at,a,b,.2*k,hot?brighten(COLORS[i]):COLORS[i],hot);
             }
@@ -396,7 +403,7 @@ final class TransformGizmo {
         if(currentMode==Options.GizmoMode.SCALE&&plainHandles){ // the Scale tool's circle in the middle scales every axis
             Vec3[] cam=cameraAxes();circle(anchor,cam[0],cam[1],.32*k,active==3?CENTER_ACTIVE:CENTER,active==3?3:2f);
         }
-        if(currentMode!=Options.GizmoMode.ROTATE&&!plainHandles){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
+        if(currentMode!=Options.GizmoMode.ROTATE&&!plainHandles&&axisMask==ALL_AXES){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
     }
     /** Names the handle under the pointer next to it. */
     private static void label(Vec3 anchor,Vec3[] directions,double k,Vec3 extent,Options.GizmoMode mode,int handle){

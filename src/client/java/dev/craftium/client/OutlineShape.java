@@ -15,6 +15,8 @@ import java.util.*;
 final class OutlineShape {
     /** The tint of the block ghost, a light blue like light blue concrete. It multiplies the block's texture, so it is lighter than the concrete itself. */
     static final int GHOST=0x9046B4EE;
+    /** The same tint in red, for blocks that are about to be deleted, such as the ones a move leaves behind. */
+    static final int DELETE=0x90EE4646;
     static final OutlineShape EMPTY=new OutlineShape(SelectionOutline.Result.EMPTY,null);
     /** Beyond these the outline is too detailed to draw every tick, so the shape falls back to its bounding box. */
     private static final int MAX_EDGES=8192,MAX_FACES=4096;

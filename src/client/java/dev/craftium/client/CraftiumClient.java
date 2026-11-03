@@ -92,10 +92,10 @@ public final class CraftiumClient implements ClientModInitializer {
     /** Opens the confirmation when a selection action has just selected a suspiciously large area. */
     private static void checkLargeSelection(Packets.Status next){
         if(!ClientState.selectionPending)return;
-        if(next.error()){ClientState.selectionPending=false;return;}
+        if(next.error()){ClientState.selectionPending=false;ClientState.selectingSince=0;return;}
         String message=next.message();
         if(!(message.startsWith("Selected ")||message.startsWith("Lasso selected ")||message.startsWith("Magic Wand: ")))return;
-        ClientState.selectionPending=false;
+        ClientState.selectionPending=false;ClientState.selectingSince=0;
         if(next.selectionSize()-ClientState.selectionSizeBefore<ClientState.LARGE_SELECTION)return;
         var mc=Minecraft.getInstance();
         // Set at once, before this status is drawn, so the popup comes first and the selection is not built until it is confirmed.
@@ -129,6 +129,8 @@ public final class CraftiumClient implements ClientModInitializer {
         EditorBindings.migrate(mc);
         if(mc.player==null || mc.level==null){hadWorld=false;toolCursor=false;return;}
         ClientCommands.tick();
+        BuilderMode.tick();
+        SelectingIndicator.tick(mc);
         if(BuilderMode.active()&&held(contextKey)){if(!toolCursor){mc.mouseHandler.releaseMouse();toolCursor=true;}}
         else if(toolCursor){if(ClientCompat.screen(mc)==null)mc.mouseHandler.grabMouse();toolCursor=false;}
         if(lastLiquidOpacity!=ClientState.options.liquidOpacity){lastLiquidOpacity=ClientState.options.liquidOpacity;ClientCompat.rebuildChunks(mc);}
@@ -223,7 +225,7 @@ public final class CraftiumClient implements ClientModInitializer {
         if(!supported()){ClientState.notify("Install Craftium on this server to edit worlds");return;}
         var options=ClientState.options;boolean colours=action.equals("autoshade")&&options.shadeAutomatic||action.equals("use")&&(options.script.contains("getBlockRGB")||options.script.contains("findClosestBlockToRGB"))||options.maskScript.contains("getBlockRGB")||options.maskScript.contains("findClosestBlockToRGB");options.scriptColours=colours?new java.util.ArrayList<>(BlockColours.snapshot()):new java.util.ArrayList<>();
         ClientAssets.expect(action);
-        if(action.equals("select_box")||action.equals("lasso_select")||action.equals("use")&&ClientState.options.tool.selection()){ClientState.selectionPending=true;ClientState.selectionSizeBefore=ClientState.status.selectionSize();}
+        if(action.equals("select_box")||action.equals("lasso_select")||action.equals("use")&&ClientState.options.tool.selection()){ClientState.selectionPending=true;ClientState.selectingSince=System.currentTimeMillis();ClientState.selectionSizeBefore=ClientState.status.selectionSize();}
         try{String request=Packets.JSON.toJson(new Packets.Request(action,target,normal,ClientState.options,action.equals("use")?ClientState.strokeId:0));
             if(ClientPlayNetworking.canSend(Packets.Edit.TYPE))ClientPlayNetworking.send(new Packets.Edit(request));
             else for(byte[] frame:BridgeCodec.encode(Packets.JSON.toJson(new BridgeCodec.Message("edit",request))))ClientPlayNetworking.send(new Packets.Bridge(frame));}finally{options.scriptColours=new java.util.ArrayList<>();}
@@ -234,10 +236,17 @@ public final class CraftiumClient implements ClientModInitializer {
         Minecraft mc=Minecraft.getInstance();if(mc.player==null||mc.level==null)return null;
         var camera=ClientCompat.camera(mc);
         float nx=(float)(guiX/mc.getWindow().getGuiScaledWidth()*2-1),ny=(float)(1-guiY/mc.getWindow().getGuiScaledHeight()*2);
-        Vec3 direction=ClientCompat.nearPlane(camera).getPointOnPlane(nx,ny).normalize();
+        Vec3 direction=ClientCompat.ray(camera,nx,ny);
         Vec3 start=camera.position();
         var hit=mc.level.clip(new ClipContext(start,start.add(direction.scale(256)),ClipContext.Block.OUTLINE,ClientState.options.solidFluids?ClipContext.Fluid.ANY:ClipContext.Fluid.NONE,mc.player));
         return hit.getType()==HitResult.Type.BLOCK?hit:null;
+    }
+    /** The transform handles: the builder's, or the editor's with the box corners and the point being dragged. Drawn each frame. */
+    private static void handles(EditorScreen screen) {
+        if(screen==null){var anchor=BuilderMode.gizmoAnchor();if(anchor!=null)TransformGizmo.display(anchor,BuilderMode.gizmoAxes());return;}
+        if(ClientState.options.tool==Tool.BOX_SELECT)BoxHandles.draw(screen);
+        TransformGizmo.draw(screen);
+        Point handle=screen.handlePoint();if(handle!=null){Vec3 anchor=new Vec3(handle.x(),handle.y(),handle.z());int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Overlay.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2);}
     }
     private static void preview(Minecraft mc) {
         var screen=ClientCompat.screen(mc) instanceof EditorScreen editor?editor:ClientCompat.screen(mc) instanceof StudioScreen studio?studio.editor():null;
@@ -263,10 +272,9 @@ public final class CraftiumClient implements ClientModInitializer {
                 if(ClientState.options.rulerMode==Options.RulerMode.CIRCLE){double radius=Math.sqrt(a.distanceSquared(b));for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(start.add(Math.cos(x)*radius,0,Math.sin(x)*radius),start.add(Math.cos(y)*radius,0,Math.sin(y)*radius),0xffffd66d,1.5f);}}
                 Overlay.text(String.format(java.util.Locale.ROOT,"%.2f blocks",Math.sqrt(a.distanceSquared(b))),new net.minecraft.core.BlockPos((a.x()+b.x())/2,(a.y()+b.y())/2+1,(a.z()+b.z())/2),0xffffe4a2,0xbb151c26,.02f);
             }
-            if(screen!=null&&ClientState.options.tool==Tool.BOX_SELECT)BoxHandles.draw(screen);
-            if(screen==null){var anchor=BuilderMode.gizmoAnchor();if(anchor!=null)TransformGizmo.display(anchor);return;}
-            TransformGizmo.draw(screen);
-            Point handle=screen.handlePoint();if(handle!=null){Vec3 anchor=new Vec3(handle.x(),handle.y(),handle.z());int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Overlay.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2);}
+            // The handles follow the camera and the pointer, so they are drawn every frame and not with the tick's batch.
+            Overlay.frame(()->handles(screen));
+            if(screen==null)return;
             var nodes=ClientState.options.nodes;
             for(int i=0;i<nodes.size();i++){
                 Point n=nodes.get(i);Vec3 at=new Vec3(n.x()+.5,n.y()+.5,n.z()+.5);Overlay.point(at,0xffe6cf8b,5);

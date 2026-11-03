@@ -24,6 +24,8 @@ public final class ClientCompat {
     public static Camera camera(Minecraft mc){return mc.gameRenderer.mainCamera();}
     /** The camera's near plane, used to turn screen points into world rays. */
     public static Camera.NearPlane nearPlane(Camera camera){return camera.getNearPlane(camera.getFov());}
+    /** The direction from the camera through a point of the screen, x and y from -1 to 1 across the window. */
+    public static net.minecraft.world.phys.Vec3 ray(Camera camera,float x,float y){return nearPlane(camera).getPointOnPlane(x,y).normalize();}
     public static KeyMapping registerKey(KeyMapping key){return KeyMappingHelper.registerKeyMapping(key);}
 
     /** Lets the local singleplayer owner use commands, then tells connected clients their new permission level. */
