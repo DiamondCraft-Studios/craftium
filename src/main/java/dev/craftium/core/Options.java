@@ -31,6 +31,9 @@ public final class Options {
     /** How many blocks the Select menu's Expand and Shrink move the selection's surface. */
     /** Edits that place or remove blocks are shown as a ghost first and only applied when confirmed with Enter. */
     public boolean confirmEdits=true;
+    /** The point the Rotate and Scale tools work around. When not set it is the centre of the selection. */
+    public boolean pivotSet;
+    public double pivotX,pivotY,pivotZ;
     public int expandAmount=5;
     /** When above zero, how many blocks one expand or shrink request moves the surface, instead of the brush strength. */
     public int selectionResize;

@@ -34,7 +34,7 @@ public final class EditorControls {
     private EditorControls(){}
     public static int toolDefault(Tool tool){return switch(tool){
         case MAGIC_SELECT->'M';case BOX_SELECT->'B';case FREEHAND_SELECT->'N';case LASSO_SELECT->'L';case PAINTER->'P';case NOISE_PAINTER->'O';
-        case FREEHAND_DRAW->'G';case ROCK->'H';case WELD->'J';case MELT->'K';case ELEVATION->'E';case SMOOTH->'U';case EXTRUDE->'Z';default->-1;
+        case FREEHAND_DRAW->'G';case MOVE->'V';case ROTATE->'R';case SCALE->'C';case PIVOT->'I';case ROCK->'H';case WELD->'J';case MELT->'K';case ELEVATION->'E';case SMOOTH->'U';case EXTRUDE->'Z';default->-1;
     };}
     /** Camera-relative horizontal nudges, independent of the gizmo's selected axis. */
     public static Point nudge(Action action,double yaw){

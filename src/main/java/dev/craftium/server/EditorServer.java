@@ -84,10 +84,14 @@ public final class EditorServer {
             if(r.action().equals("pending_confirm")){
                 var edit=s.pendingEdit;
                 if(edit==null){send(player,s,"Nothing to confirm",false);return;}
-                s.pendingEdit=null;s.pendingDirty=true;start(player,s,edit);return;
+                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingDirty=true;start(player,s,edit);return;
             }
             if(r.action().equals("pending_cancel")){
-                if(s.pendingEdit!=null){s.pendingEdit=null;s.pendingDirty=true;send(player,s,"Edit cancelled",false);}
+                if(s.pendingEdit!=null){
+                    s.pendingEdit=null;s.pendingDirty=true;
+                    if(s.pendingSelectionBefore!=null){s.selection.restore(s.pendingSelectionBefore);s.pendingSelectionBefore=null;}
+                    send(player,s,"Edit cancelled",false);
+                }
                 return;
             }
             long now=System.nanoTime();
@@ -146,6 +150,16 @@ public final class EditorServer {
                 case "history_reload" -> {HistoryStore.save(s);HistoryStore.flush();HistoryStore.load(player,s);send(player,s,"Saved history reloaded",false);}
                 case "history_undo_many","history_redo_many" -> {s.historyRemaining=(r.action().equals("history_undo_many")?1:-1)*(o.historySteps-1);history(player,s,r.action().equals("history_undo_many"));}
                 case "analyze" -> {var plan=new EditPlanner(player.level(),s,o);String report=SelectionTransforms.analyze(plan);ServerPlatform.send(player,new Packets.Report(report));send(player,s,"Selection analyzed",false);}
+                case "selection_transform" -> {
+                    var plan=new EditPlanner(player.level(),s,o);
+                    var before=new ArrayList<>(s.selection.points());
+                    var moved=ModelTransform.apply(plan,s,o);
+                    // The selection follows its blocks; if the edit is cancelled it goes back.
+                    if(s.confirmEdits&&!s.bypassConfirm&&s.pendingSelectionBefore==null)s.pendingSelectionBefore=before;
+                    s.selection.combine(moved,Selection.Mode.REPLACE);
+                    try{start(player,s,plan.finish("Transform selection"));}
+                    catch(RuntimeException e){s.selection.restore(before);s.pendingSelectionBefore=null;throw e;}
+                }
                 case "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo" -> {var plan=new EditPlanner(player.level(),s,o);s.selection.combine(SelectionTransforms.apply(r.action(),plan),Selection.Mode.REPLACE);send(player,s,"Selection updated: "+s.selection.size()+" blocks",false);}
                 case "clear" -> {s.selection.clear();s.corner=null;s.line=null;s.ruler=null;send(player,s,"Selection cleared",false);}
                 case "ruler_clear" -> {s.ruler=null;send(player,s,"Measurement cleared",false);}
@@ -166,7 +180,9 @@ public final class EditorServer {
                 case "entity_select_uuid" -> {var entity=player.level().getEntity(UUID.fromString(o.entityUuid));if(entity==null||!EntityEdits.editable(entity)||entity.distanceToSqr(player)>256*256)throw new IllegalArgumentException("Select a nearby display or marker");s.selectedEntity=entity.getUUID();send(player,s,"Entity selected",false);}
                 case "entity_spawn","entity_update","entity_move","entity_duplicate","entity_delete","entity_transform","entity_gizmo","entity_reset","entity_group","entity_ungroup","entity_group_transform" -> {if(target==null)throw new IllegalArgumentException("Point at a block");start(player,s,EntityEdits.plan(r.action(),player,s,o,target));}
                 case "annotation_create","annotation_update","annotation_delete","annotation_clear" -> {if(target==null)target=o.position1;start(player,s,AnnotationEdits.plan(r.action(),player.level(),o,target));}
-                case "select_box" -> {
+                case "select_box","select_box_adjust" -> {
+                    // Adjusting a box starts again from the selection as it was before that box was made.
+                    if(r.action().equals("select_box_adjust")&&s.selectionBefore!=null)s.selection.restore(s.selectionBefore);
                     var plan=new EditPlanner(player.level(),s,o);var points=Selection.box(o.position1,o.position2);
                     for(Point p:points)plan.validate(p);s.selection.combine(points,o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
                 }

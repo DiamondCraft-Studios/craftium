@@ -30,6 +30,8 @@ final class Session {
     boolean confirmEdits,bypassConfirm;
     /** The selection as it was before the last selection action, so a mistaken one can be taken back. Null when there is none. */
     List<Point> selectionBefore;
+    /** The selection before a transform that is waiting for confirmation moved it, so cancelling can put it back. */
+    List<Point> pendingSelectionBefore;
     long requestStroke, lastStroke;
     boolean busy;
     UUID selectedEntity;
