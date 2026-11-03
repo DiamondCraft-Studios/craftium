@@ -24,6 +24,8 @@ final class EditPlanner {
     final java.util.function.Predicate<Point> expression;
     final LuaBrush maskLua;
     final List<BlockState> materials;
+    final List<BlockState> blockMask=new ArrayList<>();
+    final List<Boolean> blockMaskExact=new ArrayList<>();
     final HeightmapImage heightmap;
     static final Point[] NEIGHBOURS = {new Point(1,0,0),new Point(-1,0,0),new Point(0,1,0),new Point(0,-1,0),new Point(0,0,1),new Point(0,0,-1)};
 
@@ -31,6 +33,7 @@ final class EditPlanner {
         this.level=level;this.session=session;this.o=options;
         material=parse(options.block); secondary=parse(options.secondary);
         mask=options.mask.isBlank()?null:parse(options.mask);
+        for(String entry:options.maskActive){blockMask.add(parse(entry));blockMaskExact.add(entry.contains("["));}
         noise=new NoiseField(options);
         materials=new ArrayList<>();for(String block:MaterialList.split(options.materials))materials.add(parse(block));
         if(materials.isEmpty())materials.add(material);
@@ -64,7 +67,14 @@ final class EditPlanner {
     boolean accepted(Point p) {
         if(p.y()<o.minY || p.y()>o.maxY) return false;
         if(o.inSelection && !session.selection.contains(p)) return false;
+        if(!blockMask.isEmpty()&&inBlockMask(p)==o.maskExclude) return false;
         return (mask==null || (o.mask.contains("[")?state(p)==mask:state(p).is(mask.getBlock())))&&expression.test(p)&&(maskLua==null||maskLua.evaluate(p).toboolean());
+    }
+    /** Whether the block at {@code p} is one of the toggled mask blocks: an exact state where the entry names one, else any state of the block. */
+    boolean inBlockMask(Point p) {
+        var s=state(p);
+        for(int i=0;i<blockMask.size();i++)if(blockMaskExact.get(i)?s==blockMask.get(i):s.is(blockMask.get(i).getBlock()))return true;
+        return false;
     }
     boolean solid(Point p) { return !state(p).isAir() && state(p).getFluidState().isEmpty(); }
     int adjacent(Point p) { int count=0;for(Point n:NEIGHBOURS)if(solid(p.add(n.x(),n.y(),n.z())))count++;return count; }

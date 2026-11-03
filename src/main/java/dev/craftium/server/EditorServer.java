@@ -213,11 +213,11 @@ public final class EditorServer {
                     // Adjusting a box starts again from the selection as it was before that box was made.
                     if(r.action().equals("select_box_adjust")&&s.selectionBefore!=null)s.selection.restore(s.selectionBefore);
                     var plan=new EditPlanner(player.level(),s,o);var points=Selection.box(o.position1,o.position2);
-                    for(Point p:points)plan.validate(p);s.selection.combine(points,o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
+                    for(Point p:points)plan.validate(p);s.selection.combine(masked(plan,o,points),o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
                 }
                 case "lasso_select" -> {
                     var plan=new EditPlanner(player.level(),s,o);for(Point p:o.selectionPoints){plan.validate(p);if(p.distanceSquared(new Point((int)player.getX(),(int)player.getY(),(int)player.getZ()))>256*256)throw new IllegalArgumentException("Lasso reaches beyond editor range");}
-                    s.selection.combine(o.selectionPoints,o.mode);send(player,s,"Lasso selected "+s.selection.size()+" blocks",false);
+                    s.selection.combine(masked(plan,o,o.selectionPoints),o.mode);send(player,s,"Lasso selected "+s.selection.size()+" blocks",false);
                 }
                 case "selection_move", "selection_expand", "selection_shrink", "selection_invert", "selection_convex" -> {
                     var next=new LinkedHashSet<Point>(s.selection.points());
@@ -254,7 +254,7 @@ public final class EditorServer {
                     }
                     start(player,s,plan.finish(r.action().equals("move")?"Move selection":r.action().equals("clone")?"Clone selection":"Stack selection"));
                 }
-                case "undo", "redo" -> {s.historyRemaining=0;history(player,s,r.action().equals("undo"));}
+                case "undo", "redo" -> {s.historyRemaining=0;if(r.action().equals("undo"))undoAnimated(player,s);else history(player,s,false);}
                 case "fill", "delete" -> {
                     requireSelection(s);var plan=new EditPlanner(player.level(),s,o);
                     for(Point p:s.selection.points())plan.put(p,r.action().equals("delete")?Blocks.AIR.defaultBlockState():plan.material);
@@ -295,27 +295,54 @@ public final class EditorServer {
                         plan.put(target,Blocks.AIR.defaultBlockState());start(player,s,plan.finish("Bulldozer"));
                     } else use(player,s,o,target,normal,plan);
                 }
+                case "bucket_fill" -> {
+                    // Dragging a block into the world: the Magic Wand, always comparing by block, then a replace with the active block.
+                    if(target==null)throw new IllegalArgumentException("Drop the block onto a block within reach");
+                    var plan=new EditPlanner(player.level(),s,o);var origin=plan.state(target);
+                    if(origin.isAir())throw new IllegalArgumentException("Drop the block onto a block, not empty space");
+                    var found=MagicWand.select(target,new MagicWand.World(){
+                        public boolean loaded(Point at){return player.level().hasChunk(at.x()>>4,at.z()>>4);}
+                        public boolean air(Point at){return plan.state(at).isAir();}
+                        public boolean matches(Point at){return plan.state(at).is(origin.getBlock());}
+                        public boolean surface(Point at){return plan.surface(at);}
+                    },new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,Selection.LIMIT*4)).found();
+                    if(found.isEmpty())throw new IllegalArgumentException("Bucket fill found no connected blocks there; check the Magic Wand range and surface settings");
+                    for(Point at:found)plan.put(at,plan.preserve(plan.state(at),plan.material));
+                    if(plan.changes.isEmpty()){
+                        String why=origin.getBlock()==plan.material.getBlock()?"those blocks are already that block"
+                            :!BlockMask.of(o).allows(origin)||!o.mask.isBlank()?"the block mask excludes them"
+                            :o.inSelection?"Only in selection is on":"the Y range, or the block can't be placed there (enable force place)";
+                        throw new IllegalArgumentException("Bucket fill changed nothing: "+why+" ("+found.size()+" blocks matched)");
+                    }
+                    start(player,s,plan.finish("Bucket fill"));
+                }
                 default -> throw new IllegalArgumentException("Unknown editor action");
             }
         } catch(IllegalArgumentException e) {s.historyRemaining=0;send(player,s,e.getMessage(),true);}
         catch(Exception e) {ServerPlatform.LOG.error("Editor request failed",e);send(player,s,"Operation failed; see the Craftium log",true);}
+    }
+    /** The points a selection tool would add, less any the block mask rules out. */
+    private static List<Point> masked(EditPlanner plan,Options o,Iterable<Point> points){
+        var mask=BlockMask.of(o);var kept=new ArrayList<Point>();
+        for(Point p:points)if(mask.allows(plan.state(p)))kept.add(p);
+        return kept;
     }
     private static void use(ServerPlayer player,Session s,Options o,Point p,Point normal,EditPlanner plan) {
         switch(o.tool) {
             case ANNOTATION -> start(player,s,AnnotationEdits.plan("annotation_create",player.level(),o,p));
             case BOX_SELECT -> {
                 if(s.corner==null) {s.corner=p;send(player,s,"First corner: "+p.coordinates()+" · choose the opposite corner",false);}
-                else {s.selection.combine(Selection.box(s.corner,p),o.mode);s.corner=null;send(player,s,"Selected "+s.selection.size()+" blocks",false);}
+                else {s.selection.combine(masked(plan,o,Selection.box(s.corner,p)),o.mode);s.corner=null;send(player,s,"Selected "+s.selection.size()+" blocks",false);}
             }
             case FREEHAND_SELECT -> {
-                s.selection.combine(plan.brush(p),o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
+                s.selection.combine(masked(plan,o,plan.brush(p)),o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
             }
             case MAGIC_SELECT -> {
-                var origin=plan.state(p);var originData=o.compare==Options.Compare.NBT?AdvancedTools.data(plan,p):null;
+                var origin=plan.state(p);var originData=o.compare==Options.Compare.NBT?AdvancedTools.data(plan,p):null;var blockMask=BlockMask.of(o);
                 var found=MagicWand.select(p,new MagicWand.World(){
                     public boolean loaded(Point at){return player.level().hasChunk(at.x()>>4,at.z()>>4);}
                     public boolean air(Point at){return plan.state(at).isAir();}
-                    public boolean matches(Point at){return AdvancedTools.matches(plan,origin,originData,at);}
+                    public boolean matches(Point at){return blockMask.allows(plan.state(at))&&AdvancedTools.matches(plan,origin,originData,at);}
                     public boolean surface(Point at){return plan.surface(at);}
                 },new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,Selection.LIMIT*4)).found();
                 s.selection.combine(found,o.mode);send(player,s,"Magic Wand: "+s.selection.size()+" blocks (128-block search radius)",false);
@@ -392,6 +419,21 @@ public final class EditorServer {
         var selection=a.selection()!=null&&b.selection()!=null?new Session.SelectionChange(a.selection().before(),b.selection().after(),a.selection().pivotBefore(),b.selection().pivotAfter()):a.selection()!=null?a.selection():b.selection();
         return new Session.Edit(a.name(),new ArrayList<>(changes.values()),biomes,a.flags()|b.flags(),entities,annotations,selection);
     }
+    private static final int PULSE_MS=600,PULSE_POINTS=8192;
+    /** The points a pulse shows: all of them, or an even sample when there are too many to draw. */
+    private static List<Point> pulsePoints(List<Point> all){
+        if(all.size()<=PULSE_POINTS)return all;
+        var sample=new ArrayList<Point>(PULSE_POINTS);double step=all.size()/(double)PULSE_POINTS;
+        for(int i=0;i<PULSE_POINTS;i++)sample.add(all.get((int)(i*step)));
+        return sample;
+    }
+    /** Undo straight away, with the blocks it removes sent along for the client to pulse red; a refused undo takes the pulse back. */
+    private static void undoAnimated(ServerPlayer player,Session s){
+        var edit=s.undo.peekFirst();
+        if(edit!=null&&!edit.selectionOnly()&&!edit.changes().isEmpty()&&s.options!=null&&s.options.historyPulse)
+            s.pulse="undo:"+PULSE_MS+":"+SelectionCodec.encode(pulsePoints(edit.changes().stream().map(Session.Change::pos).toList()));
+        try{history(player,s,true);}catch(IllegalArgumentException e){s.pulse="";throw e;}
+    }
     private static void history(ServerPlayer player,Session s,boolean backwards) {
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Wait for the current edit or animated rebuild to finish");
         var from=backwards?s.undo:s.redo;
@@ -416,7 +458,8 @@ public final class EditorServer {
         if(++historyTicks%100==0)for(var session:SESSIONS.values())HistoryStore.save(session);
         var reachId=dev.craftium.compat.Compat.id("craftium","builder_reach");
         for(var player:server.getPlayerList().getPlayers()){
-            var s=SESSIONS.get(player.getUUID());var range=player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.BLOCK_INTERACTION_RANGE);
+            var s=SESSIONS.get(player.getUUID());
+            var range=player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.BLOCK_INTERACTION_RANGE);
             boolean enabled=s!=null&&s.infiniteReach&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities");
             if(range!=null){if(enabled&&!range.hasModifier(reachId))range.addTransientModifier(new net.minecraft.world.entity.ai.attributes.AttributeModifier(reachId,250,net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE));else if(!enabled&&range.hasModifier(reachId))range.removeModifier(reachId);}
         }
@@ -436,7 +479,7 @@ public final class EditorServer {
             var appliedBiomes=applyBiomes(j);
             var appliedEntities=EntityEdits.apply(j.level,j.edit.entities(),j.backwards);
             var appliedAnnotations=AnnotationEdits.apply(j.level,j.edit.annotations(),j.backwards);
-            var actual=new Session.Edit(j.edit.name(),List.copyOf(j.applied),appliedBiomes,j.edit.flags(),appliedEntities,appliedAnnotations,j.edit.selection());
+            var actual=new Session.Edit(j.edit.name(),List.copyOf(j.applied),appliedBiomes,j.edit.flags(),appliedEntities,appliedAnnotations,j.edit.selection(),j.edit.time());
             int skipped=j.edit.changes().size()-j.applied.size()+j.edit.biomes().size()-appliedBiomes.size()+j.edit.entities().size()-appliedEntities.size()+j.edit.annotations().size()-appliedAnnotations.size();
             if(j.history) {
                 // Retain only the cells actually restored; conflicting subsequent edits are left intact.
@@ -452,6 +495,7 @@ public final class EditorServer {
                 j.session.event((j.backwards?"Undo ":"Redo ")+j.edit.name());
             } else j.session.remember(actual,j.strokeId);
             j.session.busy=false;job=null;
+            if(j.history&&!j.backwards&&j.session.historyRemaining==0&&!j.applied.isEmpty()&&j.session.options!=null&&j.session.options.historyPulse)j.session.pulse="redo:700:"+SelectionCodec.encode(pulsePoints(j.applied.stream().map(Session.Change::pos).toList()));
             var player=server.getPlayerList().getPlayer(j.owner);
             if(player!=null)send(player,j.session,(j.backwards?"Undid ":j.history?"Redid ":"Applied ")+j.edit.name()+" · "+(j.applied.size()+appliedBiomes.size()+appliedEntities.size()+appliedAnnotations.size())+" changes"+(skipped>0?" · "+skipped+" changed or unavailable cells skipped":""),false);
             else {HistoryStore.save(j.session);SESSIONS.remove(j.owner);}
@@ -518,6 +562,8 @@ public final class EditorServer {
         }
         s.historySelection=after;s.historyRevision=s.selection.revision();
     }
+    /** How long ago the edit was made, in milliseconds; -1 for none, and a very large age when its time is unknown. */
+    private static long age(Session.Edit edit){return edit==null?-1:edit.time()==0?Long.MAX_VALUE/4:Math.max(0,System.currentTimeMillis()-edit.time());}
     static void send(ServerPlayer player,Session s,String message,boolean error) {
         noteSelection(s);
         if(!ServerPlatform.canSend(player))return;
@@ -526,7 +572,7 @@ public final class EditorServer {
         if(s.clipboardDirty){s.clipboardGhostDirty=true;s.clipboardData=SelectionCodec.encode(s.clipboard.entrySet().stream().filter(e->!e.getValue().state().isAir()).map(Map.Entry::getKey).toList());s.clipboardDirty=false;}
         if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy,s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate);s.library=List.of();s.pivotUpdate="";
+        var status=new Packets.Status(message,error,s.busy,s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse);s.library=List.of();s.pivotUpdate="";s.pulse="";
         ServerPlatform.send(player,new Packets.Update(Packets.JSON.toJson(status)));
     }
 }

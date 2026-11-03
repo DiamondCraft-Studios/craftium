@@ -38,6 +38,8 @@ final class Session {
     List<Point> pendingSelectionBefore;
     long requestStroke, lastStroke;
     boolean busy;
+    /** A pulse for the client to show with the next status, as "undo|redo:milliseconds:points"; empty when there is none. */
+    String pulse="";
     UUID selectedEntity;
     long selectionRevision=-1;
     String selectionData="";
@@ -59,12 +61,14 @@ final class Session {
     record SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter){
         SelectionChange(List<Point> before,List<Point> after){this(before,after,null,null);}
     }
-    record Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations,SelectionChange selection) {
+    /** {@code time} is when the edit was made, in epoch milliseconds, or 0 when unknown (history from before it was kept). */
+    record Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations,SelectionChange selection,long time) {
+        Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations,SelectionChange selection){this(name,changes,biomes,flags,entities,annotations,selection,System.currentTimeMillis());}
         Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations){this(name,changes,biomes,flags,entities,annotations,null);}
         /** True when this entry only changes the selection, so there are no blocks to put back. */
         boolean selectionOnly(){return selection!=null&&changes.isEmpty()&&biomes.isEmpty()&&entities.isEmpty()&&annotations.isEmpty();}
         /** The same edit, also moving the selection from {@code before} to {@code after} when it is undone or redone. */
-        Edit withSelection(SelectionChange change){return new Edit(name,changes,biomes,flags,entities,annotations,change);}
+        Edit withSelection(SelectionChange change){return new Edit(name,changes,biomes,flags,entities,annotations,change,time);}
         /** An entry in the history for a change to the selection alone, which has no blocks to restore. */
         static Edit selecting(String name,List<Point> before,List<Point> after){return new Edit(name,List.of(),List.of(),0,List.of(),List.of(),new SelectionChange(before,after));}
         Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags){this(name,changes,biomes,flags,List.of(),List.of());}

@@ -19,9 +19,15 @@ public final class Options {
     public boolean invert, hollow, surfaceOnly = true, keepExisting, pasteAir;
     public boolean noUpdates, forcePlace, replaceMode, enhancedFlight, bulldozer, tinker;
     public boolean inSelection;
+    /** Whether undo and redo flash the blocks they change. */
+    public boolean historyPulse = true;
     public String block = "minecraft:stone";
     public String secondary = "minecraft:andesite";
     public String mask = "";
+    /** The blocks shown as cells in the mask palette, and which of them are toggled on. A cell with a state ("[") matches that exact state; without one, any state of the block. */
+    public java.util.List<String> maskBlocks = new java.util.ArrayList<>(), maskActive = new java.util.ArrayList<>();
+    /** False: edit only the toggled blocks. True: edit everything but them. With none toggled the block mask does nothing. */
+    public boolean maskExclude;
     public String biome = "minecraft:plains";
     public String text = "CRAFTIUM";
     public int minY = -64, maxY = 319;
@@ -185,6 +191,8 @@ public final class Options {
         worldTime=Math.clamp(worldTime,0,2_000_000_000);randomTickSpeed=Math.clamp(randomTickSpeed,0,4096);
         exposedFaces=Math.clamp(exposedFaces,1,6);
         if(fluidType==null)throw new IllegalArgumentException("Choose a fluid");floodLimit=Math.clamp(floodLimit,1,Selection.LIMIT);flowLength=Math.clamp(flowLength,1,32);fluidQuality=Math.clamp(fluidQuality,1,4);
+        if (maskBlocks==null || maskActive==null || maskBlocks.size()>64 || maskActive.size()>64) throw new IllegalArgumentException("Block mask limit: 64 blocks");
+        for (var list : java.util.List.of(maskBlocks, maskActive)) for (String entry : list) if (entry==null || entry.length()>256) throw new IllegalArgumentException("Invalid block mask entry");
         if (block == null || secondary == null || mask == null || biome == null || text == null)
             throw new IllegalArgumentException("Missing tool settings");
         if (block.length()>256 || secondary.length()>256 || mask.length()>256 || biome.length()>128 || text.length()>48)
