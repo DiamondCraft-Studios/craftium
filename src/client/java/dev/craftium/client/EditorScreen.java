@@ -155,17 +155,59 @@ public final class EditorScreen extends CraftiumScreen {
         if(!id.isBlank()){text(g,"×",x+width-12,y+5,MUTED);controls.add(new Control(x+width-17,y+2,15,14,()->WorkspaceLayout.toggle(id),"Close panel · reopen from Window"));g.fill(x+width-5,y+height-5,x+width-2,y+height-2,LINE);}
     }
     private void finishPanel(Gfx g){if(!drawingPanel.isBlank()){if(panelScissor){g.disableScissor();panelScissor=false;}g.pose().popMatrix();drawingPanel="";}}
+    /** One row of the Tools panel: up to seven tools, and the label of the section they open when it is the first row of one. */
+    private record ToolRow(String section,List<Tool> tools){int height(){return (section==null?0:TOOL_HEADER)+TOOL_PITCH;}}
+    private static final int TOOL_COLUMNS=7,TOOL_PITCH=23,TOOL_HEADER=12,TOOLS_TOP=46,TOOLS_BOTTOM=27+166-4;
+    private static final List<ToolRow> TOOL_ROWS=toolRows();
+    private int toolScroll;
+    private Tool toolScrolledTo;
+    private static List<ToolRow> toolRows(){
+        var rows=new ArrayList<ToolRow>();
+        Tool.SECTIONS.forEach((section,tools)->{for(int i=0;i<tools.size();i+=TOOL_COLUMNS)rows.add(new ToolRow(i==0?section:null,tools.subList(i,Math.min(tools.size(),i+TOOL_COLUMNS))));});
+        return rows;
+    }
+    /** The first row the panel can scroll to: the lowest one from which every row below it still fits. */
+    private static int maxToolScroll(){
+        int first=TOOL_ROWS.size(),used=0;
+        while(first>0&&used+TOOL_ROWS.get(first-1).height()<=TOOLS_BOTTOM-TOOLS_TOP){first--;used+=TOOL_ROWS.get(first).height();}
+        return first;
+    }
+    /** Brings the row holding the tool into view, so choosing a tool by its key never leaves it hidden. */
+    private void revealTool(Tool tool){
+        int row=0;while(row<TOOL_ROWS.size()&&!TOOL_ROWS.get(row).tools().contains(tool))row++;
+        if(row==TOOL_ROWS.size())return;
+        if(row<toolScroll)toolScroll=row;
+        int used=0;for(int i=toolScroll;i<=row;i++)used+=TOOL_ROWS.get(i).height();
+        while(used>TOOLS_BOTTOM-TOOLS_TOP&&toolScroll<row){used-=TOOL_ROWS.get(toolScroll).height();toolScroll++;}
+    }
     private void tools(Gfx g) {
-        panel(g,0,27,LEFT,166,"Tools");int i=0;
-        for(Tool tool:Tool.values()) {
-            if(tool.transform())continue; // these are pinned above the notice instead
-            int x=9+(i%7)*23,y=50+(i/7)*23;i++;
-            boolean selected=toolActive&&o().tool==tool;
-            g.fill(x,y,x+21,y+21,selected?0xff315b84:0xff223247);
-            if(mx>=x&&mx<x+21&&my>=y&&my<y+21)g.fill(x,y,x+21,y+21,0xff3b5875);
-            if(selected){g.outline(x,y,21,21,0xff8bc7ff);g.fill(x,y+19,x+21,y+21,ACCENT);}
-            g.pose().pushMatrix();g.pose().translate(x,y);g.pose().scale(.82f,.82f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
-            controls.add(new Control(x,y,21,21,()->{if(toolActive&&o().tool==tool)toolActive=false;else select(tool);},tool.label+" · "+tool.description));
+        panel(g,0,27,LEFT,166,"Tools");
+        if(toolScrolledTo!=o().tool){toolScrolledTo=o().tool;revealTool(o().tool);}
+        int max=maxToolScroll();toolScroll=Math.clamp(toolScroll,0,max);
+        int y=TOOLS_TOP;
+        for(int n=toolScroll;n<TOOL_ROWS.size();n++) {
+            var row=TOOL_ROWS.get(n);
+            if(y+row.height()>TOOLS_BOTTOM)break;
+            if(row.section()!=null){ // a divider: the section name, then a rule running out to the edge
+                text(g,row.section().toUpperCase(Locale.ROOT),9,y+3,MUTED);
+                int start=9+font.width(row.section().toUpperCase(Locale.ROOT))+5;g.fill(start,y+7,LEFT-10,y+8,LINE);
+                y+=TOOL_HEADER;
+            }
+            for(int i=0;i<row.tools().size();i++) {
+                Tool tool=row.tools().get(i);int x=9+i*TOOL_PITCH;
+                boolean selected=toolActive&&o().tool==tool;
+                g.fill(x,y,x+21,y+21,selected?0xff315b84:0xff223247);
+                if(mx>=x&&mx<x+21&&my>=y&&my<y+21)g.fill(x,y,x+21,y+21,0xff3b5875);
+                if(selected){g.outline(x,y,21,21,0xff8bc7ff);g.fill(x,y+19,x+21,y+21,ACCENT);}
+                g.pose().pushMatrix();g.pose().translate(x,y);g.pose().scale(.82f,.82f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
+                controls.add(new Control(x,y,21,21,()->{if(toolActive&&o().tool==tool)toolActive=false;else select(tool);},tool.label+" · "+tool.description));
+            }
+            y+=TOOL_PITCH;
+        }
+        if(max>0){ // a thin scrollbar: the wheel scrolls the panel when the sections do not all fit
+            int track=TOOLS_BOTTOM-TOOLS_TOP,thumb=Math.max(12,track*(TOOL_ROWS.size()-max)/TOOL_ROWS.size());
+            g.fill(LEFT-6,TOOLS_TOP,LEFT-3,TOOLS_BOTTOM,0xff1b2838);
+            int at=TOOLS_TOP+(track-thumb)*toolScroll/max;g.fill(LEFT-6,at,LEFT-3,at+thumb,MUTED);
         }
     }
     private void options(Gfx g) {
@@ -668,6 +710,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(event.key()==GLFW.GLFW_KEY_ESCAPE||event.key()==GLFW.GLFW_KEY_ENTER){field.setFocused(false);return true;}
             return field.keyPressed(event);
         }
+        if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("tools")){toolScroll=Math.clamp(toolScroll+(vertical<0?1:-1),0,maxToolScroll());return true;}
         if(ClientState.largeSelection>0){
             if(event.key()==GLFW.GLFW_KEY_ENTER){confirmLargeSelection();return true;}
             if(event.key()==GLFW.GLFW_KEY_ESCAPE){cancelLargeSelection();return true;}
