@@ -19,6 +19,8 @@ final class Session {
     long lastRequest;
     /** The game mode the player had before the editor made them a spectator; null when nothing is waiting to be restored. */
     net.minecraft.world.level.GameType previousMode;
+    /** Where the clipboard's blocks were copied from (its minimum corner), or null when they came from elsewhere, like a blueprint. */
+    Point clipboardOrigin;
     long requestStroke, lastStroke;
     boolean busy;
     UUID selectedEntity;

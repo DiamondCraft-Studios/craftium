@@ -144,7 +144,7 @@ public final class EditorServer {
                     new EditPlanner(player.level(),s,o).validate(EditPlanner.point(entity.blockPosition()));
                     var before=EntityEdits.snapshot(entity,player.level());var saved=before.copy();ClipboardEntities.offset(saved,-entity.getBlockX(),-entity.getBlockY(),-entity.getBlockZ());
                     if(saved.toString().length()>1_000_000)throw new IllegalArgumentException("Entity clipboard exceeds the data limit");
-                    s.selectedEntity=entity.getUUID();s.clipboard.clear();s.clipboardEntities.clear();s.clipboardEntities.add(saved);s.clipboardDirty=true;
+                    s.selectedEntity=entity.getUUID();s.clipboard.clear();s.clipboardOrigin=null;s.clipboardEntities.clear();s.clipboardEntities.add(saved);s.clipboardDirty=true;
                     if(r.action().equals("entity_cut"))start(player,s,new Session.Edit("Cut entity",List.of(),List.of(),2,List.of(new Session.EntityChange(entity.getUUID(),before,null))));
                     else send(player,s,"Copied entity to clipboard",false);
                 }
@@ -201,11 +201,13 @@ public final class EditorServer {
                     for(Point p:s.selection.points())plan.put(p,r.action().equals("delete")?Blocks.AIR.defaultBlockState():plan.material);
                     start(player,s,plan.finish(r.action().equals("delete")?"Delete selection":"Fill selection"));
                 }
-                case "paste", "paste_at", "paste_select" -> {
-                    if(target==null)throw new IllegalArgumentException("Point at a block to place the clipboard");
+                case "paste", "paste_at", "paste_select", "paste_in_place" -> {
+                    boolean inPlace=r.action().equals("paste_in_place");
+                    if(inPlace&&s.clipboardOrigin==null)throw new IllegalArgumentException("These blocks were not copied from the world, so there is no place to paste them back to");
+                    if(target==null&&!inPlace)throw new IllegalArgumentException("Point at a block to place the clipboard");
                     if(s.clipboard.isEmpty()&&s.clipboardEntities.isEmpty())throw new IllegalArgumentException("Copy a selection first");
                     var plan=new EditPlanner(player.level(),s,o);
-                    Point origin=r.action().equals("paste")?target.add(normal.x(),normal.y(),normal.z()):target;
+                    Point origin=inPlace?s.clipboardOrigin:r.action().equals("paste")?target.add(normal.x(),normal.y(),normal.z()):target;
                     var placed=new LinkedHashSet<Point>();
                     for(var entry:s.clipboard.entrySet()) {
                         var relative=entry.getKey();var value=entry.getValue();
@@ -289,6 +291,7 @@ public final class EditorServer {
         var entities=o.copyEntities?ClipboardEntities.capture(player,s):new ClipboardEntities.Capture(List.of(),List.of());
         for(var tag:entities.relative()){bytes+=tag.toString().length()*2;if(bytes>32*1024*1024)throw new IllegalArgumentException("Clipboard exceeds 32 MiB including entities");}
         s.clipboard.clear();s.clipboard.putAll(next);s.clipboardEntities.clear();s.clipboardEntities.addAll(entities.relative());
+        s.clipboardOrigin=min;
         s.clipboardDirty=true;
         if(cut){var plan=new EditPlanner(player.level(),s,o);for(Point p:s.selection.points())plan.put(p,Blocks.AIR.defaultBlockState());var edit=plan.finish("Cut selection");start(player,s,new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),entities.removals()));}
         else send(player,s,"Copied "+next.size()+" blocks",false);

@@ -40,10 +40,10 @@ final class BlueprintLibrary {
                 case "blueprint_load","schematic_import" -> {
                     if(!name.matches(".*\\.(nbt|schem|schematic)$"))name+=".nbt";
                     CompoundTag tag=NbtIo.readCompressed(file("blueprints",name),NbtAccounter.create(32*1024*1024));
-                    var clipboard=read(tag,p);var entities=AssetNbt.entities(tag,p);p.session.clipboard.clear();p.session.clipboard.putAll(clipboard);p.session.clipboardEntities.clear();p.session.clipboardEntities.addAll(entities);p.session.clipboardDirty=true;return "Loaded "+name+" · "+clipboard.size()+" blocks";
+                    var clipboard=read(tag,p);var entities=AssetNbt.entities(tag,p);p.session.clipboard.clear();p.session.clipboardOrigin=null;p.session.clipboard.putAll(clipboard);p.session.clipboardEntities.clear();p.session.clipboardEntities.addAll(entities);p.session.clipboardDirty=true;return "Loaded "+name+" · "+clipboard.size()+" blocks";
                 }
                 case "blueprint_data" -> {
-                    byte[] data=Base64.getDecoder().decode(p.o.assetData);if(data.length>1_048_576)throw new IllegalArgumentException("Local blueprint limit: 1 MiB");var tag=NbtIo.readCompressed(new ByteArrayInputStream(data),NbtAccounter.create(32*1024*1024));var blocks=read(tag,p);var entities=AssetNbt.entities(tag,p);p.session.clipboard.clear();p.session.clipboard.putAll(blocks);p.session.clipboardEntities.clear();p.session.clipboardEntities.addAll(entities);p.session.clipboardDirty=true;return "Loaded local "+name+" · "+blocks.size()+" blocks";
+                    byte[] data=Base64.getDecoder().decode(p.o.assetData);if(data.length>1_048_576)throw new IllegalArgumentException("Local blueprint limit: 1 MiB");var tag=NbtIo.readCompressed(new ByteArrayInputStream(data),NbtAccounter.create(32*1024*1024));var blocks=read(tag,p);var entities=AssetNbt.entities(tag,p);p.session.clipboard.clear();p.session.clipboardOrigin=null;p.session.clipboard.putAll(blocks);p.session.clipboardEntities.clear();p.session.clipboardEntities.addAll(entities);p.session.clipboardDirty=true;return "Loaded local "+name+" · "+blocks.size()+" blocks";
                 }
                 case "selection_csv" -> {
                     Path path=file("exports",name.endsWith(".csv")?name:name+".csv");Files.createDirectories(path.getParent());

@@ -249,8 +249,9 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,x+10,159,56,20,"Copy",false,()->action("copy"),"Copy selection · Ctrl+C");
         button(g,x+72,159,56,20,"Cut",false,()->action("cut"),"Cut selection · Ctrl+X");
         button(g,x+134,159,56,20,"Paste",false,()->action("paste"),"Paste at cursor · Ctrl+V");
-        button(g,x+10,186,85,20,"Rotate 90°",false,()->action("rotate"),"Rotate clipboard · Ctrl+R");
-        button(g,x+104,186,86,20,"Mirror X",false,()->action("flip"),"Mirror clipboard · Ctrl+F");
+        button(g,x+10,186,44,20,"Rotate",false,()->action("rotate"),"Rotate clipboard 90° · Ctrl+R");
+        button(g,x+58,186,44,20,"Mirror",false,()->action("flip"),"Mirror clipboard on X · Ctrl+F");
+        button(g,x+106,186,84,20,"Paste in place",false,()->CraftiumClient.send("paste_in_place",null,null),"Paste at the coordinates the blocks were copied from");
     }
     private void palette(Gfx g) {
         int x=w-RIGHT;panel(g,x,222,RIGHT,105,"Active block / Palette");
