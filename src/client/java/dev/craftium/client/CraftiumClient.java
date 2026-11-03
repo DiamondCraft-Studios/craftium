@@ -243,7 +243,10 @@ public final class CraftiumClient implements ClientModInitializer {
             var s=ClientState.status;
             if(screen.showSelection())SelectionOverlay.draw(TransformGizmo.selectionPreview());
             PlacementPreview.draw();
-            if(screen.toolActive()&&hit!=null && !PlacementPreview.active() && !ClientState.options.tool.selection()) {
+            // The wireframe of the brush shows only for tools that use one, not the selection, transform, ruler or annotation tools.
+            var tool=ClientState.options.tool;
+            boolean brush=!tool.selection()&&!tool.transform()&&tool!=Tool.RULER&&tool!=Tool.ANNOTATION;
+            if(screen.toolActive()&&hit!=null && !PlacementPreview.active() && brush) {
                 int r=ClientState.options.radius;var p=hit.getBlockPos();
                 if(ClientState.options.shape==BrushMath.Shape.CUBE)Overlay.box(new AABB(p).inflate(r),0xffd6eaff,1.5f,0);
                 else {
