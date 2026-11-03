@@ -507,11 +507,21 @@ public final class EditorScreen extends CraftiumScreen {
         }
         return true;
     }
+    /** Replaces the keyboard as the source of flight input; set only by tests, which cannot fake polled key state. */
+    static java.util.function.Supplier<double[]> flightInput;
+    /** Flight input as {forward, side, up}, each from -1 to 1. */
+    private double[] flightAxes(){
+        if(flightInput!=null)return flightInput.get();
+        return new double[]{
+            (CraftiumClient.held(minecraft.options.keyUp)?1:0)-(CraftiumClient.held(minecraft.options.keyDown)?1:0),
+            (CraftiumClient.held(minecraft.options.keyRight)?1:0)-(CraftiumClient.held(minecraft.options.keyLeft)?1:0),
+            (CraftiumClient.held(minecraft.options.keyJump)?1:0)-(CraftiumClient.held(minecraft.options.keyShift)?1:0)};
+    }
     @Override public void tick() {
         if(heldContext){if(!CraftiumClient.held(CraftiumClient.contextKey))onClose();return;}
         if(minecraft.player==null||help||transform||menu>=0)return;
         for(EditBox field:fields.values())if(field.isFocused())return;
-        long handle=minecraft.getWindow().handle();double forward=(CraftiumClient.held(minecraft.options.keyUp)?1:0)-(CraftiumClient.held(minecraft.options.keyDown)?1:0),side=(CraftiumClient.held(minecraft.options.keyRight)?1:0)-(CraftiumClient.held(minecraft.options.keyLeft)?1:0),up=(CraftiumClient.held(minecraft.options.keyJump)?1:0)-(CraftiumClient.held(minecraft.options.keyShift)?1:0);
+        double[] axes=flightAxes();double forward=axes[0],side=axes[1],up=axes[2];
         if(minecraft.player.isCreative()&&(forward!=0||side!=0||up!=0)) {
             double yaw=Math.toRadians(minecraft.player.getYRot()),speed=.35*o().flySpeed;
             Vec3 delta=new Vec3(-Math.sin(yaw)*forward-Math.cos(yaw)*side,up,Math.cos(yaw)*forward-Math.sin(yaw)*side).normalize().scale(speed);
