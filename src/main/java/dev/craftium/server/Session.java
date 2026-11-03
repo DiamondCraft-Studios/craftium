@@ -17,6 +17,8 @@ final class Session {
     ResourceKey<Level> dimension;
     Point corner, ruler, line;
     long lastRequest;
+    /** The game mode the player had before the editor made them a spectator; null when nothing is waiting to be restored. */
+    net.minecraft.world.level.GameType previousMode;
     long requestStroke, lastStroke;
     boolean busy;
     UUID selectedEntity;

@@ -24,6 +24,14 @@ public final class EditorServer {
                        boolean backwards, boolean history, int[] cursor, List<Session.Change> applied, long strokeId) {}
     private EditorServer() {}
     public static void clear() { SESSIONS.clear();job=null;AnnotationEdits.clear();AnimatedRebuild.clear(); }
+    /** Gives the player back the game mode the editor replaced, if it still has one to give back. */
+    private static void restoreMode(ServerPlayer player,Session s){
+        var mode=s.previousMode;s.previousMode=null;
+        if(mode==null||!player.isSpectator())return; // they changed mode themselves in the meantime
+        player.setGameMode(mode);
+        if(player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}
+    }
+    public static void disconnect(ServerPlayer player){var s=SESSIONS.get(player.getUUID());if(s!=null)restoreMode(player,s);disconnect(player.getUUID());}
     public static void disconnect(UUID id) {var session=SESSIONS.get(id);if(session!=null)HistoryStore.save(session);if(AnimatedRebuild.owned(id)){AnimatedRebuild.cancel(id);return;}if(job==null || !job.owner.equals(id))SESSIONS.remove(id);}
     public static void flushHistory(MinecraftServer server){
         AnimatedRebuild.finishOnStop(server);
@@ -65,14 +73,16 @@ public final class EditorServer {
             s.infiniteReach=o.infiniteReach;s.noClip=o.noClip;
             if(r.action().equals("status")) { send(player,s,"Ready",false);return; }
             if(r.action().equals("capabilities")){send(player,s,"Builder capabilities synchronized",false);return;}
+            if(r.action().equals("gamemode_editor")){ // sent as the editor opens and closes: no status message, unlike the buttons, and never throttled
+                if(!player.isSpectator()){s.previousMode=player.gameMode.getGameModeForPlayer();player.setGameMode(GameType.SPECTATOR);}
+                return;
+            }
+            if(r.action().equals("gamemode_restore")){restoreMode(player,s);return;}
             long now=System.nanoTime();
             if(now-s.lastRequest<65_000_000L&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             s.lastRequest=now;
-            if(r.action().equals("gamemode_editor")){ // sent when the editor opens: no status message, unlike the buttons
-                if(!player.isSpectator())player.setGameMode(GameType.SPECTATOR);
-                return;
-            }
             if(r.action().equals("gamemode")||r.action().startsWith("gamemode_")) {
+                s.previousMode=null; // choosing a mode by hand replaces whatever the editor would have restored
                 boolean wasSpectator=player.isSpectator();
                 player.setGameMode(r.action().equals("gamemode")?(player.isCreative()?GameType.SPECTATOR:GameType.CREATIVE):GameType.byName(r.action().substring(9)));
                 if(wasSpectator&&player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}

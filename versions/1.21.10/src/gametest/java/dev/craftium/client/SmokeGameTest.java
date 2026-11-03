@@ -85,7 +85,9 @@ public final class SmokeGameTest implements FabricClientGameTest {
             ctx.waitTicks(30);
             ctx.takeScreenshot("selection-l-shape");
             System.out.println("CRAFTIUM_SMOKE l_selection_drawn");
-            ctx.runOnClient(mc->ClientCompat.setScreen(mc,null));
+            ctx.runOnClient(mc->mc.screen.onClose()); // the editor gives the game mode back as it closes
+            ctx.waitTicks(5);
+            System.out.println("CRAFTIUM_SMOKE mode_restored="+ctx.computeOnClient(mc->mc.player.isCreative()));
 
             // The builder's clone preview is the same single outline, with the real blocks drawn where they would land.
             ctx.runOnClient(mc->{

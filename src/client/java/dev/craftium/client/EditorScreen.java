@@ -561,5 +561,5 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private int key(long handle,int key){return GLFW.glfwGetKey(handle,key)==GLFW.GLFW_PRESS?1:0;}
     @Override public void removed(){TransformGizmo.cancel();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
-    @Override public void onClose(){ClientCompat.setScreen(minecraft,null);}
+    @Override public void onClose(){ClientCompat.setScreen(minecraft,null);if(CraftiumClient.supported()&&minecraft.player!=null&&minecraft.player.isSpectator())CraftiumClient.send("gamemode_restore",null,null);}
 }
