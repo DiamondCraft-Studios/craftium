@@ -213,11 +213,11 @@ public final class EditorServer {
                     // Adjusting a box starts again from the selection as it was before that box was made.
                     if(r.action().equals("select_box_adjust")&&s.selectionBefore!=null)s.selection.restore(s.selectionBefore);
                     var plan=new EditPlanner(player.level(),s,o);var points=Selection.box(o.position1,o.position2);
-                    for(Point p:points)plan.validate(p);s.selection.combine(points,o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
+                    for(Point p:points)plan.validate(p);s.selection.combine(masked(plan,o,points),o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
                 }
                 case "lasso_select" -> {
                     var plan=new EditPlanner(player.level(),s,o);for(Point p:o.selectionPoints){plan.validate(p);if(p.distanceSquared(new Point((int)player.getX(),(int)player.getY(),(int)player.getZ()))>256*256)throw new IllegalArgumentException("Lasso reaches beyond editor range");}
-                    s.selection.combine(o.selectionPoints,o.mode);send(player,s,"Lasso selected "+s.selection.size()+" blocks",false);
+                    s.selection.combine(masked(plan,o,o.selectionPoints),o.mode);send(player,s,"Lasso selected "+s.selection.size()+" blocks",false);
                 }
                 case "selection_move", "selection_expand", "selection_shrink", "selection_invert", "selection_convex" -> {
                     var next=new LinkedHashSet<Point>(s.selection.points());
@@ -300,15 +300,21 @@ public final class EditorServer {
         } catch(IllegalArgumentException e) {s.historyRemaining=0;send(player,s,e.getMessage(),true);}
         catch(Exception e) {ServerPlatform.LOG.error("Editor request failed",e);send(player,s,"Operation failed; see the Craftium log",true);}
     }
+    /** The points a selection tool would add, less any the block mask rules out. */
+    private static List<Point> masked(EditPlanner plan,Options o,Iterable<Point> points){
+        var mask=BlockMask.of(o);var kept=new ArrayList<Point>();
+        for(Point p:points)if(mask.allows(plan.state(p)))kept.add(p);
+        return kept;
+    }
     private static void use(ServerPlayer player,Session s,Options o,Point p,Point normal,EditPlanner plan) {
         switch(o.tool) {
             case ANNOTATION -> start(player,s,AnnotationEdits.plan("annotation_create",player.level(),o,p));
             case BOX_SELECT -> {
                 if(s.corner==null) {s.corner=p;send(player,s,"First corner: "+p.coordinates()+" · choose the opposite corner",false);}
-                else {s.selection.combine(Selection.box(s.corner,p),o.mode);s.corner=null;send(player,s,"Selected "+s.selection.size()+" blocks",false);}
+                else {s.selection.combine(masked(plan,o,Selection.box(s.corner,p)),o.mode);s.corner=null;send(player,s,"Selected "+s.selection.size()+" blocks",false);}
             }
             case FREEHAND_SELECT -> {
-                s.selection.combine(plan.brush(p),o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
+                s.selection.combine(masked(plan,o,plan.brush(p)),o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
             }
             case MAGIC_SELECT -> {
                 var origin=plan.state(p);var originData=o.compare==Options.Compare.NBT?AdvancedTools.data(plan,p):null;var blockMask=BlockMask.of(o);
