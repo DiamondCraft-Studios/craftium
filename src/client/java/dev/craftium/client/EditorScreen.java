@@ -47,7 +47,8 @@ public final class EditorScreen extends CraftiumScreen {
         Control(int x,int y,int width,int height,Runnable action,Runnable back,String tip){this(x,y,width,height,action,back,tip,drawingPanel);}
         boolean contains(double px,double py){if(!WorkspaceLayout.visible(panel))return false;var point=WorkspaceLayout.inverse(panel,px,py);return point[0]>=x&&point[1]>=y&&point[0]<x+width&&point[1]<y+height;}
     }
-    private record Slider(int x,int width,double min,double max,double def,DoubleConsumer set) {
+    /** {@code typedMax} is how far a typed value may go; the track itself stops at {@code max}. */
+    private record Slider(int x,int width,double min,double max,double typedMax,double def,DoubleConsumer set) {
         /** Sets the value for a pointer at {@code px}; Ctrl steps it by 1 and Shift by 0.01. */
         void update(double px,boolean ctrl,boolean shift){
             double v=min+Math.clamp((px-x)/(width-1),0,1)*(max-min);
@@ -286,7 +287,9 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(o().tool!=Tool.TEXT) {
             shapeSelector(g,305);
-            slider(g,10,347,LEFT-20,"Radius",o().radius,1,24,DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
+            // The track stops at 64 to stay usable; a bigger radius is typed in. Shapes are limited by their block count and reach, not by this.
+            slider(g,10,347,LEFT-20,"Radius",o().radius,1,64,BrushMath.MAX_RADIUS,DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
+            o().outlineThickness=Math.clamp(o().outlineThickness,1,o().radius); // a wall is never thicker than the radius
             if(EnumSet.of(Tool.SCULPT_DRAW,Tool.ROCK,Tool.ELEVATION,Tool.FLATTEN,Tool.SLOPE,Tool.DISTORT,Tool.SHATTER,Tool.EXTRUDE).contains(o().tool))
                 slider(g,10,375,LEFT-20,"Strength",o().strength,.1,5,DEFAULTS.strength,v->o().strength=v,false);
         }
@@ -307,14 +310,17 @@ public final class EditorScreen extends CraftiumScreen {
             default -> {
                 toggle(g,10,403,"Invert / carve",o().invert,()->o().invert=!o().invert);
                 toggle(g,10,425,"Hollow shape",o().hollow,()->o().hollow=!o().hollow);
-                int next=447;
-                if(o().hollow){ // the outline's own settings sit under the toggle that turns it on
-                    slider(g,10,next+12,LEFT-20,"Outline thickness",o().outlineThickness,1,8,DEFAULTS.outlineThickness,v->o().outlineThickness=(int)Math.round(v),true);
-                    toggle(g,10,next+36,"Pixel perfect",o().pixelPerfect,()->o().pixelPerfect=!o().pixelPerfect,"One block per step along the outline, with no doubled corners on curves · best at thickness 1");
-                    next+=58;
+                toggle(g,10,447,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
+                int next=472;
+                if(o().hollow){ // the outline's own settings sit under the others, so they only take room while Hollow shape is on
+                    int cap=Math.max(1,o().radius);
+                    slider(g,10,next+10,LEFT-20,"Outline thickness",o().outlineThickness,1,Math.max(2,Math.min(cap,64)),cap,DEFAULTS.outlineThickness,v->o().outlineThickness=Math.clamp((int)Math.round(v),1,cap),true);
+                    text(g,"Align stroke",10,next+34,MUTED);
+                    alignButtons(g,next+44);
+                    toggle(g,10,next+68,"Pixel perfect",o().pixelPerfect,()->o().pixelPerfect=!o().pixelPerfect,"One block per step along the outline, with no doubled corners on curves · best at thickness 1");
+                    next+=92;
                 }
-                toggle(g,10,next,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
-                if(o().tool.selection())modeButtons(g,next+25);
+                if(o().tool.selection())modeButtons(g,next);
             }
         }
         if(o().tool==Tool.TEXT||o().tool==Tool.BIOME_PAINTER||o().tool==Tool.CLENTAMINATOR) {
@@ -703,6 +709,15 @@ public final class EditorScreen extends CraftiumScreen {
             g.pose().pushMatrix();g.pose().translate(x+(width-18)/2f,y+2);g.pose().scale(.75f,.75f);ToolIcons.compare(g,kind,0,0,active?0xffffffff:0xffd0deeb);g.pose().popMatrix();
         }
     }
+    /** Inside, Center and Outside: where a hollow shape's wall sits against the edge the radius gives it. */
+    private void alignButtons(Gfx g,int y){
+        var kinds=Options.StrokeAlign.values();int width=(LEFT-20-4*(kinds.length-1))/kinds.length;
+        String[] tips={"Inside: the wall grows inward from the shape's edge","Center: the wall straddles the shape's edge","Outside: the wall grows outward, so the radius is the size of the hole"};
+        for(int i=0;i<kinds.length;i++){
+            final var kind=kinds[i];
+            button(g,10+i*(width+4),y,width,18,nice(kind.name()),o().strokeAlign==kind,()->o().strokeAlign=kind,tips[i]);
+        }
+    }
     // The shape picker is a popup of icons in groups, because there are too many shapes for the narrow options panel.
     private static final int SHAPE_COLS=4,SHAPE_CELL_W=56,SHAPE_CELL_H=44,SHAPE_HEAD=14,SHAPE_PAD=6,SHAPE_MENU_WIDTH=SHAPE_COLS*SHAPE_CELL_W+2*SHAPE_PAD;
     private boolean shapeMenu;private int shapeX,shapeY;
@@ -827,9 +842,13 @@ public final class EditorScreen extends CraftiumScreen {
         text(g,label,x+19,y+3,TEXT);controls.add(new Control(x,y,Math.min(LEFT-20,font.width(label)+24),15,action,tip));
     }
     private void slider(Gfx g,int x,int y,int width,String label,double value,double min,double max,double def,DoubleConsumer set,boolean integer) {
+        slider(g,x,y,width,label,value,min,max,max,def,set,integer);
+    }
+    /** A slider whose track runs from {@code min} to {@code max} but which takes a value typed with Ctrl-click up to {@code typedMax}. */
+    private void slider(Gfx g,int x,int y,int width,String label,double value,double min,double max,double typedMax,double def,DoubleConsumer set,boolean integer) {
         text(g,label,x,y-10,MUTED);g.fill(x,y,x+width,y+17,0xff1b2b40);
         int fill=(int)((value-min)/(max-min)*(width-4));g.fill(x+2,y+2,x+Math.clamp(fill,3,width-2),y+15,0xff2c5074);
-        var slider=new Slider(x,width,min,max,def,set);String panel=drawingPanel,key=panel+"/"+label;
+        var slider=new Slider(x,width,min,max,typedMax,def,set);String panel=drawingPanel,key=panel+"/"+label;
         boolean editing=typing!=null&&typing.key().equals(key);
         String display=editing?typed+(System.currentTimeMillis()/500%2==0?"_":""):integer?Integer.toString((int)value):String.format(Locale.ROOT,"%.2f",value);
         g.centeredText(font,display,x+width/2,y+5,editing?0xffffffff:TEXT);
@@ -837,14 +856,14 @@ public final class EditorScreen extends CraftiumScreen {
         var control=new Control(x,y,width,17,()->{
             if(minecraft.hasControlDown()){typing=new SliderArea(null,slider,key,integer);typed=integer?Integer.toString((int)value):String.format(Locale.ROOT,"%.2f",value);return;}
             dragging=slider;draggingSliderPanel=panel;slider.update(WorkspaceLayout.inverse(panel,mx,my)[0],false,minecraft.hasShiftDown());
-        },"Drag to change "+label.toLowerCase(Locale.ROOT)+" · Ctrl-click to type · Middle-click to reset");
+        },"Drag to change "+label.toLowerCase(Locale.ROOT)+" · Ctrl-click to type"+(typedMax>max?" (up to "+(int)typedMax+")":"")+" · Middle-click to reset");
         controls.add(control);sliderAreas.add(new SliderArea(control,slider,key,integer));
     }
     /** Applies what was typed into a slider, clamped to its range, and stops typing. Text that is not a number changes nothing. */
     private void finishTyping(boolean apply){
         var area=typing;String text=typed;typing=null;typed="";
         if(!apply||area==null)return;
-        try{double v=Math.clamp(Double.parseDouble(text.trim()),area.slider().min(),area.slider().max());area.slider().set.accept(area.integer()?Math.round(v):v);}catch(NumberFormatException ignored){}
+        try{double v=Math.clamp(Double.parseDouble(text.trim()),area.slider().min(),area.slider().typedMax());area.slider().set.accept(area.integer()?Math.round(v):v);}catch(NumberFormatException ignored){}
     }
     private void text(Gfx g,String text,int x,int y,int color){g.text(font,text,x,y,color,false);}
     private String shorten(String text,int pixels){if(font.width(text)<=pixels)return text;return font.plainSubstrByWidth(text,Math.max(0,pixels-9))+"…";}
@@ -1008,7 +1027,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(cameraGesture!=CameraGesture.NONE){
             // A few pixels of wobble on a middle click is still a click, not a pan.
             if(pendingPick&&!middleDragged){if(Math.hypot(event.x()-gestureX,event.y()-gestureY)<=3)return true;middleDragged=true;}
-            if(cameraGesture==CameraGesture.RADIUS)o().radius=Math.clamp(initialRadius+(int)Math.round(((event.x()-gestureX)-(event.y()-gestureY))/8),1,24);
+            if(cameraGesture==CameraGesture.RADIUS)o().radius=Math.clamp(initialRadius+(int)Math.round(((event.x()-gestureX)-(event.y()-gestureY))/8),1,BrushMath.MAX_RADIUS);
             else if(cameraGesture==CameraGesture.ROTATE)minecraft.player.turn(dx*2,dy*2);
             else if(cameraGesture==CameraGesture.ORBIT){minecraft.player.turn(dx*2,dy*2);Vec3 eye=orbitPivot.subtract(minecraft.player.getLookAngle().scale(orbitDistance));minecraft.player.setPos(eye.x,eye.y-minecraft.player.getEyeHeight(),eye.z);}
             else{var camera=ClientCompat.camera(minecraft);var near=ClientCompat.nearPlane(camera);Vec3 center=near.getPointOnPlane(0,0),right=near.getPointOnPlane(1,0).subtract(center).normalize(),up=near.getPointOnPlane(0,1).subtract(center).normalize();double units=2*orbitDistance*Math.tan(Math.toRadians(ClientCompat.fov(minecraft,camera))/2)/height;minecraft.player.setPos(minecraft.player.position().add(right.scale(-dx*units)).add(up.scale(dy*units)));}
@@ -1043,7 +1062,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(builder){action(vertical>0?"hotbar_previous":"hotbar_next");return true;}
         if(EditorBindings.held(Action.ADJUST_SPEED)){o().flySpeed=Math.clamp(o().flySpeed+(float)vertical*.2f,.1f,10f);action("flight");return true;}
-        if(EditorBindings.held(Action.ADJUST_RADIUS)){o().radius=Math.clamp(o().radius+(int)Math.signum(vertical),1,24);return true;}
+        if(EditorBindings.held(Action.ADJUST_RADIUS)){o().radius=Math.clamp(o().radius+(int)Math.signum(vertical),1,BrushMath.MAX_RADIUS);return true;}
         if(!toolActive){zoomToCursor(x,y,vertical);return true;} // no tool chosen: the wheel is the camera's
         if(ShapeObject.active()&&vertical!=0){ShapeObject.adjustRadius((int)Math.signum(vertical));return true;} // the wheel sizes the shape that is down
         if(TransformGizmo.available(this)){TransformGizmo.nudge(this,EditorControls.nudge(vertical>0?Action.NUDGE_FORWARD:Action.NUDGE_BACK,minecraft.player.getYRot()));}

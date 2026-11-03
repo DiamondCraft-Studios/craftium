@@ -27,7 +27,7 @@ final class ShapeObject {
     private static final int STROKE=0xff8be3b5,FILL=0x2247d29b;
     private static final double[][] IDENTITY={{1,0,0},{0,1,0},{0,0,1}};
     /** Shapes are limited to this reach (see {@link Geometry#shape}), so sizes are limited to keep inside it. */
-    private static final double REACH=64;
+    private static final double REACH=BrushMath.MAX_REACH;
     private static Pose pose;
     private ShapeObject(){}
 
@@ -58,8 +58,9 @@ final class ShapeObject {
     /** Grows or shrinks the shape's radius by {@code step}; the sizes are kept within reach of the new radius. */
     static void adjustRadius(int step){
         var o=ClientState.options;
-        o.radius=Math.clamp(o.radius+step,1,24);
-        if(pose!=null)pose=fit(pose,o.radius);
+        o.radius=Math.clamp(o.radius+step,1,BrushMath.MAX_RADIUS);
+        o.outlineThickness=Math.clamp(o.outlineThickness,1,o.radius);
+        if(pose!=null)pose=fit(pose,o.outerRadius());
     }
 
     /** The middle of the shape, which is where its handles sit and what it turns and scales about. */
@@ -85,7 +86,7 @@ final class ShapeObject {
                 double r=Math.max(1,ClientState.options.radius);
                 // The size that gives the block count the handle asked for: count = 2 * radius * size + 1.
                 double x=resize(base.sizeX(),size.x,r),y=resize(base.sizeY(),size.y,r),z=resize(base.sizeZ(),size.z,r);
-                return fit(new Pose(base.origin(),base.rotation(),x,y,z),r);
+                return fit(new Pose(base.origin(),base.rotation(),x,y,z),ClientState.options.outerRadius());
             }
         }
     }
@@ -124,7 +125,7 @@ final class ShapeObject {
 
     private static Made make(Pose p){
         var o=ClientState.options;
-        var key=List.<Object>of(o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,Math.round(p.yaw()*1e4),Math.round(p.pitch()*1e4),Math.round(p.roll()*1e4),Math.round(p.sizeX()*1e4),Math.round(p.sizeY()*1e4),Math.round(p.sizeZ()*1e4));
+        var key=List.<Object>of(o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,Math.round(p.yaw()*1e4),Math.round(p.pitch()*1e4),Math.round(p.roll()*1e4),Math.round(p.sizeX()*1e4),Math.round(p.sizeY()*1e4),Math.round(p.sizeZ()*1e4));
         if(made!=null&&made.key().equals(key))return made;
         try{
             var cells=Geometry.shape(new Point(0,0,0),request(p));
