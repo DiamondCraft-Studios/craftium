@@ -26,7 +26,9 @@ final class GhostBlocks {
     private List<BlockState> states;
     private List<Point> relative;
     private OutlineShape placedShape,removedShape;
-    private List<BlockPos> cachedPlaces;private Point cachedOrigin;
+    private List<BlockPos> cachedPlaces,removedPlaces=List.of();private Point cachedOrigin;
+    /** The tint of blocks an edit is about to remove, over the original blocks that are still in the world. */
+    private static final int REMOVED_TINT=0x90ff5555;
 
     private GhostBlocks(Data data){this.data=data;}
 
@@ -58,6 +60,7 @@ final class GhostBlocks {
         var gone=new ArrayList<Point>();int[] r=data.removed();
         for(int i=0;i+2<r.length;i+=3)gone.add(new Point(r[i],r[i+1],r[i+2]));
         removedShape=OutlineShape.of(gone);
+        removedPlaces=gone.stream().map(p->new BlockPos(p.x(),p.y(),p.z())).toList();
         return true;
     }
 
@@ -69,6 +72,7 @@ final class GhostBlocks {
             if(!placedShape.isEmpty())placedShape.draw(at,(a,b)->Overlay.line(a,b,STROKE,1),STROKE,FILL,true);
             if(!removedShape.isEmpty())removedShape.draw(at,(a,b)->Overlay.line(a,b,REMOVED,1),REMOVED,0x22ff5555,true);
         }
+        if(!removedPlaces.isEmpty()&&outline)Overlay.blocks(removedPlaces,REMOVED_TINT);
         if(states.isEmpty())return;
         if(cachedPlaces==null||!origin.equals(cachedOrigin)){
             var places=new ArrayList<BlockPos>(relative.size());

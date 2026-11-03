@@ -311,14 +311,14 @@ public final class EditorScreen extends CraftiumScreen {
         int[] b=pinnedBounds();
         g.fill(b[0],b[1],b[0]+b[2],b[1]+b[3],0xdd131d29);g.outline(b[0],b[1],b[2],b[3],LINE);
         for(int i=0;i<PINNED.length;i++){
-            final Tool tool=PINNED[i];int x=b[0]+4+i*30,y=b[1]+4;
+            final Tool tool=PINNED[i];final int slot=i;int x=b[0]+4+i*30,y=b[1]+4;
             boolean selected=toolActive&&o().tool==tool;
             g.fill(x,y,x+26,y+26,selected?0xff315b84:0xff223247);
             if(mx>=x&&mx<x+26&&my>=y&&my<y+26)g.fill(x,y,x+26,y+26,0xff3b5875);
             if(selected){g.outline(x,y,26,26,0xff8bc7ff);g.fill(x,y+24,x+26,y+26,ACCENT);}
             g.pose().pushMatrix();g.pose().translate(x+1,y+1);g.pose().scale(1f,1f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
             int key=EditorControls.toolDefault(tool);
-            controls.add(new Control(x,y,26,26,()->{if(toolActive&&o().tool==tool)toolActive=false;else select(tool);},tool.label+(key>0?" · "+(char)key:"")+" · "+tool.description));
+            controls.add(new Control(x,y,26,26,()->{if(toolActive&&o().tool==tool)toolActive=false;else select(tool);},tool.label+(key>0?" · "+(char)key+" / "+(slot+1):" · "+(slot+1))+" · "+tool.description));
         }
     }
     private void statusbar(Gfx g) {
@@ -505,6 +505,10 @@ public final class EditorScreen extends CraftiumScreen {
             cameraGesture=EditorBindings.matches(Action.ARCBALL,event)?CameraGesture.ORBIT:EditorBindings.matches(Action.PAN_CAMERA,event)?CameraGesture.PAN:CameraGesture.RADIUS;cameraButton=event.button();gestureX=event.x();gestureY=event.y();initialRadius=o().radius;
             var hit=target();orbitPivot=hit==null?minecraft.player.getEyePosition().add(minecraft.player.getLookAngle().scale(12)):hit.getLocation();orbitDistance=Math.max(1,orbitPivot.distanceTo(minecraft.player.getEyePosition()));return true;
         }
+        // Both corners of a box selection show a gizmo; grabbing the one that is not selected selects it and starts the drag.
+        if(event.button()==0&&o().tool==Tool.BOX_SELECT&&ClientState.boxCorners.size()==2){
+            for(int i=0;i<2;i++)if(i!=selectedNode&&TransformGizmo.hitsPointHandles(ClientState.boxCorners.get(i),event.x(),event.y())){selectedNode=i;break;}
+        }
         if(event.button()==0&&TransformGizmo.click(this,event.x(),event.y()))return true;
         if(event.button()==0&&!PlacementPreview.active()){
             var points=handleNodes();double best=144;int index=-1;for(int i=0;i<points.size();i++){var pixel=project(points.get(i));if(pixel==null)continue;double distance=Math.pow(event.x()-pixel[0],2)+Math.pow(event.y()-pixel[1],2);if(distance<best){best=distance;index=i;}}
@@ -578,6 +582,16 @@ public final class EditorScreen extends CraftiumScreen {
         for(Action binding:Action.values())if(!EditorBindings.get(binding).mouse()&&EditorBindings.matches(binding,event)&&perform(binding))return true;
         if(event.key()==GLFW.GLFW_KEY_BACKSPACE&&(event.modifiers()&7)==0){perform(Action.DELETE);return true;}
         if((event.modifiers()&7)==0)for(var entry:CraftiumClient.toolKeys.entrySet())if(entry.getValue().matches(event)){select(entry.getKey());return true;}
+        // A second way to pick the transform tools, in the order they are pinned.
+        if((event.modifiers()&7)==0){
+            int slot=event.key()-GLFW.GLFW_KEY_1;
+            if(slot>=0&&slot<PINNED.length){
+                Tool tool=PINNED[slot];
+                if(toolActive&&o().tool==tool)toolActive=false; // pressing it again puts the tool away, like clicking it
+                else select(tool);
+                return true;
+            }
+        }
         return true;
     }
     private boolean perform(Action binding){

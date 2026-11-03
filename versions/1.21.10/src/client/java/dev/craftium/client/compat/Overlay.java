@@ -87,6 +87,8 @@ public final class Overlay {
         var camera=ClientCompat.camera(mc);
         var view=new View(camera.position(),camera.getLeftVector(),camera.getUpVector(),
             2*Math.tan(Math.toRadians(ClientCompat.fov(mc,camera))/2)/Math.max(1,mc.getWindow().getHeight()));
+        // Block ghosts go first, then the lines, boxes and points over them, so handles and outlines are never covered by a ghost.
+        for(var prim:prims)if(prim instanceof Blocks g)blocks(context,mc,view,g);
         var pose=context.matrices().last();
         var quads=context.consumers().getBuffer(RenderType.textBackgroundSeeThrough());
         for(var prim:prims)switch(prim){
@@ -101,7 +103,6 @@ public final class Overlay {
             case Blocks ignored->{}
         }
         // Text asks the buffer source for its own buffers, which closes the one held above, so labels go last.
-        for(var prim:prims)if(prim instanceof Blocks g)blocks(context,mc,view,g);
         for(var prim:prims)if(prim instanceof Label t)label(context,mc,camera,view,t);
     }
 
