@@ -47,7 +47,7 @@ The 1.21.10 module has a smaller smoke test that launches the client, applies ev
 ./gradlew :versions:mc-1.21.10:runClientGameTest
 ```
 
-Set `CRAFTIUM_TEST_SCOPE` to `keybinds`, `builder`, `gizmos`, `gallery`, `viewport` or `selection` for a focused scenario. `selection` selects an L-shaped volume and captures how the editor outlines it, for visual review. `viewport` checks that the editor camera updates on every rendered frame at an unchanged fly speed, and also runs on 1.21.10. Leave it unset for the full Fabric regression. The Paper/Purpur scenario needs separate local server fixtures; it is not part of the ordinary build. See [validation](docs/VALIDATION.md).
+Set `CRAFTIUM_TEST_SCOPE` to `keybinds`, `builder`, `gizmos`, `gallery`, `viewport` or `selection` for a focused scenario. `selection` builds an L-shaped volume of real blocks (with a slab and a stair), selects it, captures how the editor outlines and tints it for visual review, then selects a 4096-block cube and reports how many frames render with that selection against a small one. The 1.21.10 smoke test takes the same L-shaped screenshot. `viewport` checks that the editor camera updates on every rendered frame at an unchanged fly speed, and also runs on 1.21.10. Leave it unset for the full Fabric regression. The Paper/Purpur scenario needs separate local server fixtures; it is not part of the ordinary build. See [validation](docs/VALIDATION.md).
 
 ## Submit a change
 
