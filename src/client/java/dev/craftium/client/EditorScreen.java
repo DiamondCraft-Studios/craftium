@@ -682,7 +682,7 @@ public final class EditorScreen extends CraftiumScreen {
                 submenu("Flip",item("Flip X","",()->flip(0)),item("Flip Y","",()->flip(1)),item("Flip Z","",()->flip(2))),divider(),
                 item("Paste at cursor","",this::pasteAtCursor),item("Paste in place","",()->CraftiumClient.send("paste_in_place",null,null)),divider(),
                 item("Edits history","",()->ClientCompat.setScreen(minecraft,new HistoryScreen(this))));
-            case 2 -> List.of(item("Deselect","",()->action("clear")),item("Inverse","",()->action("selection_invert")),
+            case 2 -> List.of(item("Deselect","Ctrl+D",()->action("clear")),item("Inverse","",()->action("selection_invert")),
                 item(showSelection?"Hide selection":"Show selection","",()->showSelection=!showSelection),divider(),
                 item("Expand","by "+o().expandAmount,()->resizeSelection("selection_expand",o().expandAmount)),item("Shrink","by "+o().expandAmount,()->resizeSelection("selection_shrink",o().expandAmount)),
                 item("Expand by 1","",()->resizeSelection("selection_expand",1)),item("Shrink by 1","",()->resizeSelection("selection_shrink",1)));
@@ -1130,6 +1130,7 @@ public final class EditorScreen extends CraftiumScreen {
         switch(binding){
             case CONFIRM -> {if(ClientState.hasPending())CraftiumClient.send("pending_confirm",null,null);else if(ShapeObject.active())ShapeObject.confirm();else if(PlacementPreview.active())PlacementPreview.confirm();else action(o().tool==Tool.PATH||o().tool==Tool.MODELLING||o().tool==Tool.MODIFY?"use":"clear");}
             case UNDO,UNDO_ALT -> action("undo");
+            case DESELECT -> action("clear");
             case TOGGLE_MOVE -> toggleTool(Tool.MOVE);case TOGGLE_ROTATE -> toggleTool(Tool.ROTATE);case TOGGLE_SCALE -> toggleTool(Tool.SCALE);case TOGGLE_PIVOT -> toggleTool(Tool.PIVOT);
 case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut");case DUPLICATE -> action("duplicate");case PASTE -> action("paste");
             case COPY_AIR -> {boolean old=o().pasteAir;o().pasteAir=true;action("copy");o().pasteAir=old;}
