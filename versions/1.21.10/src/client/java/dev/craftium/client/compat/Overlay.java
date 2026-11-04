@@ -30,7 +30,7 @@ import java.util.List;
  */
 public final class Overlay {
     private sealed interface Prim permits Line,Box,Point,Label,Quad,Blocks {}
-    private record Line(Vec3 from,Vec3 to,int color,float width) implements Prim {}
+    private record Line(Vec3 from,Vec3 to,int color,float width,boolean scene) implements Prim {}
     private record Box(AABB box,int stroke,float width,int fill) implements Prim {}
     private record Point(Vec3 at,int color,float size) implements Prim {}
     private record Label(String text,BlockPos pos,int color,int background,float scale) implements Prim {}
@@ -64,26 +64,9 @@ public final class Overlay {
      */
     public static void frame(Runnable draw){pendingFrame=draw;}
 
-    public static void line(Vec3 from,Vec3 to,int color,float width){out.add(new Line(from,to,color,width));}
-    /**
-     * A line that belongs to the scene: blocks in front of it hide it, so it passes through them. This release draws
-     * without depth, so the line is cut into block-long pieces and a piece is kept only when nothing solid is between the eye and its middle.
-     */
-    public static void sceneLine(Vec3 from,Vec3 to,int color,float width){
-        var mc=Minecraft.getInstance();
-        if(mc.level==null||mc.player==null){line(from,to,color,width);return;}
-        Vec3 eye=ClientCompat.camera(mc).position();
-        int pieces=Math.max(1,(int)Math.ceil(from.distanceTo(to)));
-        Vec3 runStart=null,runEnd=null;
-        for(int i=0;i<pieces;i++){
-            Vec3 a=from.lerp(to,(double)i/pieces),b=from.lerp(to,(double)(i+1)/pieces),mid=a.lerp(b,.5);
-            var hit=mc.level.clip(new net.minecraft.world.level.ClipContext(eye,mid,net.minecraft.world.level.ClipContext.Block.OUTLINE,net.minecraft.world.level.ClipContext.Fluid.NONE,mc.player));
-            boolean visible=hit.getType()==net.minecraft.world.phys.HitResult.Type.MISS||eye.distanceToSqr(hit.getLocation())>=eye.distanceToSqr(mid)-.0004;
-            if(visible){if(runStart==null)runStart=a;runEnd=b;}
-            else if(runStart!=null){line(runStart,runEnd,color,width);runStart=null;}
-        }
-        if(runStart!=null)line(runStart,runEnd,color,width);
-    }
+    public static void line(Vec3 from,Vec3 to,int color,float width){out.add(new Line(from,to,color,width,false));}
+    /** A line that belongs to the scene: blocks in front of it hide it, so it passes through them. Drawn in a pass that tests depth. */
+    public static void sceneLine(Vec3 from,Vec3 to,int color,float width){out.add(new Line(from,to,color,width,true));}
     public static void box(AABB box,int strokeColor,float strokeWidth,int fillColor){out.add(new Box(box,strokeColor,strokeWidth,fillColor));}
     public static void point(Vec3 at,int color,float size){out.add(new Point(at,color,size));}
     /** A filled quad. Corners are in order, counter-clockwise when seen from the side it faces. */
@@ -131,11 +114,16 @@ public final class Overlay {
                 if(visible(b.fill))faces(quads,pose,view,b.box,b.fill);
                 if(visible(b.stroke)&&b.width>0)edges(quads,pose,view,b);
             }
-            case Line l->{if(visible(l.color))strip(quads,pose,view,l.from,l.to,l.color,l.width);}
+            case Line l->{if(!l.scene&&visible(l.color))strip(quads,pose,view,l.from,l.to,l.color,l.width);}
             case Point p->{if(visible(p.color))square(quads,pose,view,p);}
             case Quad q->{if(visible(q.color))quad(quads,pose,view,q.color,q.a,q.b,q.c,q.d);}
             case Label ignored->{}
             case Blocks ignored->{}
+        }
+        // Scene lines are drawn by the pipeline of the game's ordinary text background, which tests depth, so blocks in front hide them.
+        if(prims.stream().anyMatch(p->p instanceof Line l&&l.scene)){
+            var scene=context.consumers().getBuffer(RenderType.textBackground());
+            for(var prim:prims)if(prim instanceof Line l&&l.scene&&visible(l.color))strip(scene,pose,view,l.from,l.to,l.color,l.width);
         }
         // Text asks the buffer source for its own buffers, which closes the one held above, so labels go last.
         for(var prim:prims)if(prim instanceof Label t)label(context,mc,camera,view,t);
