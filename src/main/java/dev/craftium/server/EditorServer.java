@@ -109,7 +109,7 @@ public final class EditorServer {
             s.dimension=player.level().dimension();
             HistoryStore.attach(player,s);
             if(o.noClip&&!s.noClip&&player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}
-            s.infiniteReach=o.infiniteReach;s.noClip=o.noClip;s.options=o;
+            s.reach=o.reach==null?Options.ReachMode.NORMAL:o.reach;s.noClip=o.noClip;s.options=o;
             s.confirmEdits=o.confirmEdits;
             s.currentAction=r.action();s.recordSelection=changesSelection(r.action(),o);
             // The builder and the clipboard placement preview have their own confirmation, so they apply straight away.
@@ -503,8 +503,14 @@ public final class EditorServer {
         for(var player:server.getPlayerList().getPlayers()){
             var s=SESSIONS.get(player.getUUID());
             var range=player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.BLOCK_INTERACTION_RANGE);
-            boolean enabled=s!=null&&s.infiniteReach&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities");
-            if(range!=null){if(enabled&&!range.hasModifier(reachId))range.addTransientModifier(new net.minecraft.world.entity.ai.attributes.AttributeModifier(reachId,250,net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE));else if(!enabled&&range.hasModifier(reachId))range.removeModifier(reachId);}
+            // Reach is the game's own block interaction range, raised for as long as the capability is on, so every vanilla check agrees with it.
+            var mode=s!=null&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities")?s.reach:Options.ReachMode.NORMAL;
+            if(range!=null){
+                double extra=switch(mode){case NORMAL->0;case FAR->64-range.getBaseValue();case INFINITE->250;};
+                var current=range.getModifier(reachId);
+                if(current!=null&&(extra==0||current.amount()!=extra))range.removeModifier(reachId);
+                if(extra!=0&&range.getModifier(reachId)==null)range.addTransientModifier(new net.minecraft.world.entity.ai.attributes.AttributeModifier(reachId,extra,net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE));
+            }
         }
         if(job==null)return;var j=job;
         try {

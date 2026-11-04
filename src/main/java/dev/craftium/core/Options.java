@@ -102,7 +102,10 @@ public final class Options {
     public boolean randomYaw=true,randomFlip;
     public int polygonSides=6,fluidHeight=100,fontSize=16,textThickness=1,modelColumns=4;
     public String fontName="SansSerif",fontFile="",heightmap="",name="Untitled",entityType="block_display",entityNbt="{}",property="";
-    public boolean useBuiltinFont=true,textShadow,fullBlocks=true,denoise=true,maskY,fastPlace,angelPlacement,infiniteReach,noClip;
+    public boolean useBuiltinFont=true,textShadow,fullBlocks=true,denoise=true,maskY,fastPlace,angelPlacement,noClip;
+    /** How far blocks can be reached: the game's own range, 64 blocks, or as far as can be aimed. */
+    public enum ReachMode { NORMAL("normal"),FAR("far"),INFINITE("infinite");public final String label;ReachMode(String label){this.label=label;} }
+    public ReachMode reach=ReachMode.NORMAL;
     /** Which property Tinker cycles on the block it is used on, picked by sneaking; wraps around the block's properties. */
     public int tinkerIndex;
     public boolean showCollisionMesh,showLightBlocks,showStructureVoid,expandHitboxes,solidFluids,preventInteractions;
@@ -159,7 +162,7 @@ public final class Options {
     public java.util.List<String> pinned=new java.util.ArrayList<>();
 
     /** Whether placing a block is to be changed or recorded by the editor, rather than left to the game alone. */
-    public boolean placementCapabilities(){return symmetryX||symmetryY||symmetryZ||symmetryRotations>1||replaceMode||forcePlace||noUpdates||fastPlace||infiniteReach||angelPlacement||preventInteractions;}
+    public boolean placementCapabilities(){return symmetryX||symmetryY||symmetryZ||symmetryRotations>1||replaceMode||forcePlace||noUpdates||fastPlace||reach==ReachMode.INFINITE||angelPlacement||preventInteractions;}
 
     public void validate() {
         if (tool == null || shape == null || mode == null) throw new IllegalArgumentException("Invalid tool options");

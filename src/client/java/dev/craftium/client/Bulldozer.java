@@ -1,22 +1,33 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
+import dev.craftium.core.Options;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 
 /**
- * Bulldozer works through the game's own creative breaking, which already repeats while the button is held. After a
- * short warm-up it only takes away the wait between two blocks, so sounds, particles, the arm swing, server checks and
- * any other mod's hooks all happen as they do for a normal break.
+ * Bulldozer: after the break button has been held a moment, every new block the crosshair comes to rest on is broken at
+ * once, on every frame, with no wait between blocks. Each one is broken by the game's own creative break, so sounds,
+ * particles, server checks and other mods' hooks all happen as for a normal click. Holding still breaks nothing more.
  */
 public final class Bulldozer {
-    private static final long WARMUP_MS=350,GAP_MS=150;
-    private static long since,last;
+    private static final long WARMUP_MS=350;
+    private static long since;
+    private static BlockPos lastSeen;
     private Bulldozer(){}
-    /** Whether the game should skip its wait before breaking the next block. Asked once per tick of a held break. */
-    public static boolean skipDelay(){
-        var mc=Minecraft.getInstance();long now=System.currentTimeMillis();
-        boolean on=ClientState.options.bulldozer&&mc.player!=null&&mc.player.isCreative()&&CraftiumClient.supported()&&!BuilderMode.active();
-        if(!on||now-last>GAP_MS)since=now; // a new hold, or the first ask after the button was let go
-        last=now;
-        return on&&now-since>WARMUP_MS;
+    /** Called after every pick of the crosshair target. */
+    public static void afterPick(Minecraft mc){
+        if(!mc.options.keyAttack.isDown()){since=0;lastSeen=null;return;}
+        long now=System.currentTimeMillis();if(since==0)since=now;
+        var o=ClientState.options;
+        // Symmetry and infinite reach break through the editor instead, which does its own repeating.
+        if(!o.bulldozer||mc.player==null||mc.level==null||mc.gameMode==null||!mc.player.isCreative()||!CraftiumClient.supported()||ClientCompat.screen(mc)!=null||BuilderMode.active()||ClientState.symmetry()||o.reach==Options.ReachMode.INFINITE)return;
+        if(!(mc.hitResult instanceof BlockHitResult hit)||hit.getType()!=HitResult.Type.BLOCK){lastSeen=null;return;}
+        var pos=hit.getBlockPos();
+        if(now-since>WARMUP_MS&&!pos.equals(lastSeen)&&mc.gameMode.startDestroyBlock(pos,hit.getDirection()))mc.player.swing(InteractionHand.MAIN_HAND);
+        lastSeen=pos;
     }
 }

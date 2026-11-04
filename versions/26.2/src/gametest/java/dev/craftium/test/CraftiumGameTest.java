@@ -304,10 +304,10 @@ public final class CraftiumGameTest implements FabricClientGameTest {
         ctx.runOnClient(mc->PlacementPreview.begin(new Point(28,15,20)));ctx.waitTick();checkBlock(new Point(28,15,20),Blocks.AIR);
         ctx.runOnClient(mc->PlacementPreview.confirm());world.getConnection().waitForServerboundPackets();ctx.waitTicks(5);world.getConnection().waitForClientboundPackets();ctx.waitFor(mc->!ClientState.status.busy(),400);
         checkBlock(new Point(28,15,20),Blocks.STONE);checkBlock(new Point(29,15,20),Blocks.OAK_STAIRS);request("undo",null);checkBlock(new Point(28,15,20),Blocks.AIR);
-        options(o->{o.infiniteReach=true;o.noClip=true;});request("capabilities",null);ctx.waitTicks(2);
+        options(o->{o.reach=dev.craftium.core.Options.ReachMode.INFINITE;o.noClip=true;});request("capabilities",null);ctx.waitTicks(2);
         require(world.getServer().computeOnServer(server->world.getConnection().getServerPlayer().getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.BLOCK_INTERACTION_RANGE).hasModifier(net.minecraft.resources.Identifier.fromNamespaceAndPath("craftium","builder_reach"))),"Reach modifier was not enabled");
         require(world.getServer().computeOnServer(server->dev.craftium.server.EditorServer.noClip(world.getConnection().getServerPlayer())),"No-clip capability was not synchronized");
-        options(o->{o.infiniteReach=false;o.noClip=false;o.worldToggle=true;});request("capabilities",null);request("world_player_invulnerability",null);
+        options(o->{o.reach=dev.craftium.core.Options.ReachMode.NORMAL;o.noClip=false;o.worldToggle=true;});request("capabilities",null);request("world_player_invulnerability",null);
         world.getServer().runOnServer(server->{var player=world.getConnection().getServerPlayer();player.kill(server.overworld());require(player.isAlive(),"Invulnerability did not prevent /kill");player.hurtServer(server.overworld(),player.damageSources().fellOutOfWorld(),1000);require(player.isAlive(),"Invulnerability did not prevent void damage");});
         options(o->o.worldToggle=false);request("world_player_invulnerability",null);request("world_block_gravity",null);request("world_trample_farmland",null);request("world_block_drops",null);
         world.getServer().runOnServer(server->{var level=server.overworld();level.setBlock(new BlockPos(25,12,25),Blocks.SAND.defaultBlockState(),3);});ctx.waitTicks(12);checkBlock(new Point(25,12,25),Blocks.SAND);

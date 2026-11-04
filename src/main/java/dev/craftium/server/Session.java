@@ -52,7 +52,8 @@ final class Session {
     String clipboardData="";
     boolean clipboardDirty=true;
     List<dev.craftium.core.BlueprintInfo> library=List.of();
-    boolean infiniteReach,noClip;
+    boolean noClip;
+    dev.craftium.core.Options.ReachMode reach=dev.craftium.core.Options.ReachMode.NORMAL;
     /** The options of the player's latest request, which vanilla block placement reads for the capabilities it bends. */
     dev.craftium.core.Options options;
     int currentHotbar=-1;

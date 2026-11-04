@@ -76,7 +76,7 @@ public final class CraftiumClient implements ClientModInitializer {
             return InteractionResult.PASS;
         });
         AttackBlockCallback.EVENT.register((player,level,hand,pos,face)->
-            level.isClientSide() && player.isCreative() && supported() && (ClientState.symmetry()||ClientState.options.infiniteReach) ? InteractionResult.FAIL:InteractionResult.PASS);
+            level.isClientSide() && player.isCreative() && supported() && (ClientState.symmetry()||ClientState.options.reach==Options.ReachMode.INFINITE) ? InteractionResult.FAIL:InteractionResult.PASS);
         HudElementRegistry.addLast(dev.craftium.compat.Compat.id("craftium","builder"),(raw,delta)->{
             var mc=Minecraft.getInstance();if(mc.player==null || !mc.player.isCreative() || ClientCompat.screen(mc)!=null)return;
             var g=Gfx.of(raw);
@@ -175,7 +175,7 @@ public final class CraftiumClient implements ClientModInitializer {
                     if(result.consumesAction())mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
                     lastBuilder=now;
                 }
-            } else if(hit!=null && ((left&&(ClientState.symmetry()||o.infiniteReach))||(right&&canPlace))) {
+            } else if(hit!=null && ((left&&(ClientState.symmetry()||o.reach==Options.ReachMode.INFINITE))||(right&&canPlace))) {
                 if(mc.player.getMainHandItem().getItem() instanceof BlockItem item)ClientState.pick(BuiltInRegistries.BLOCK.getKey(item.getBlock()).toString());
                 send(left?"builder_break":"builder_place",point(hit.getBlockPos()),normal(hit));lastBuilder=now;
                 if(left){mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);} // the attack callback still returns FAIL, which does not swing
@@ -231,7 +231,7 @@ public final class CraftiumClient implements ClientModInitializer {
      */
     private static void syncPlacement(){
         var o=ClientState.options;
-        String key=o.symmetryX+","+o.symmetryY+","+o.symmetryZ+","+o.symmetryRotations+","+o.symmetryOrigin+","+o.symmetryHalfX+o.symmetryHalfY+o.symmetryHalfZ+","+o.replaceMode+o.forcePlace+o.noUpdates+o.fastPlace+o.infiniteReach+o.angelPlacement+o.preventInteractions+o.noClip;
+        String key=o.symmetryX+","+o.symmetryY+","+o.symmetryZ+","+o.symmetryRotations+","+o.symmetryOrigin+","+o.symmetryHalfX+o.symmetryHalfY+o.symmetryHalfZ+","+o.replaceMode+o.forcePlace+o.noUpdates+o.fastPlace+o.reach+o.angelPlacement+o.preventInteractions+o.noClip;
         if(key.equals(placementSynced))return;
         placementSynced=key;send("capabilities",null,null);
     }

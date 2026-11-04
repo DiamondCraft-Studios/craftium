@@ -14,7 +14,7 @@ import static dev.craftium.client.compat.CommandCompat.*;
 final class ClientCommands {
     private static Runnable pending;
     private static Point pos1,pos2;
-    private static final List<String> CAPABILITIES=List.of("enhancedFlight","bulldozer","replaceMode","forcePlace","noUpdates","tinker","fastPlace","angelPlacement","infiniteReach","noClip");
+    private static final List<String> CAPABILITIES=List.of("enhancedFlight","bulldozer","replaceMode","forcePlace","noUpdates","tinker","fastPlace","angelPlacement","noClip");
     private ClientCommands(){}
     static void register(){
         ClientCommandRegistrationCallback.EVENT.register((dispatcher,access)->{
