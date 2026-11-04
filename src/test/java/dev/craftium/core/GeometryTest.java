@@ -39,6 +39,28 @@ class GeometryTest {
         assertFalse(made.isEmpty());
         assertEquals(expected, made);
     }
+    @Test void aHollowWallKeepsItsThicknessWhenTheShapeIsScaled() {
+        var o = new Options(); o.shape = BrushMath.Shape.CUBE; o.radius = 6; o.hollow = true; o.outlineThickness = 2; o.sizeX = 3;
+        var made = new HashSet<>(Geometry.shape(new Point(0,0,0), o));
+        // Stretched to 37 blocks along X, the wall at each end is still two blocks, and along the unstretched Z axis it is the same two.
+        assertTrue(made.contains(new Point(18,0,0)) && made.contains(new Point(17,0,0)) && !made.contains(new Point(16,0,0)));
+        assertTrue(made.contains(new Point(0,0,6)) && made.contains(new Point(0,0,5)) && !made.contains(new Point(0,0,4)));
+    }
+    @Test void aTurnedShapeKeepsTheBlocksOfTheUnturnedShape() {
+        var o = new Options(); o.shape = BrushMath.Shape.PLANE; o.radius = 6;
+        var flat = new HashSet<>(Geometry.shape(new Point(0,0,0), o));
+        // A turn about the vertical axis keeps the square's size: no row of its edge is lost and its corners stay.
+        o.yaw = 45; assertTrue(Geometry.shape(new Point(0,0,0), o).size() >= 160);
+        // Quarter turns are exact, whichever axis they go about.
+        for (double[] turn : new double[][]{{90,0,0},{180,0,0},{0,90,0},{0,0,90},{0,270,0}}) {
+            o.yaw = turn[0]; o.pitch = turn[1]; o.roll = turn[2];
+            var made = new HashSet<>(Geometry.shape(new Point(0,0,0), o));
+            assertEquals(flat.size(), made.size(), "quarter turn " + Arrays.toString(turn));
+        }
+        // A cube turned a quarter is the same cube.
+        var cube = new Options(); cube.shape = BrushMath.Shape.CUBE; cube.radius = 5; cube.hollow = true; cube.outlineThickness = 2; cube.yaw = 90;
+        assertEquals(new HashSet<>(BrushMath.brush(new Point(0,0,0),5,BrushMath.Shape.CUBE,true,2,false,cube.outlineShift(),6,false)), new HashSet<>(Geometry.shape(new Point(0,0,0), cube)));
+    }
     @Test void everyShapeIsInExactlyOnePickerGroup() {
         var listed = new ArrayList<BrushMath.Shape>();
         BrushMath.GROUPS.values().forEach(listed::addAll);

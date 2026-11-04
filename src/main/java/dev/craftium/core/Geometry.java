@@ -30,6 +30,7 @@ public final class Geometry {
     public static List<Point> shape(Point center,Options o) {
         if(o.shapeKind==Options.ShapeKind.BRUSH&&o.yaw==0&&o.pitch==0&&o.roll==0&&o.sizeX==1&&o.sizeY==1&&o.sizeZ==1)
             return BrushMath.brush(center,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline);
+        if(o.shapeKind==Options.ShapeKind.BRUSH&&o.sizeX==1&&o.sizeY==1&&o.sizeZ==1)return turned(center,o);
         double scaled=o.yaw==0&&o.pitch==0&&o.roll==0?Math.max(o.sizeX,Math.max(o.sizeY,o.sizeZ)):Math.sqrt(o.sizeX*o.sizeX+o.sizeY*o.sizeY+o.sizeZ*o.sizeZ);
         double outer=o.outerRadius();
         int extent=(int)Math.ceil(outer*scaled);
@@ -41,34 +42,69 @@ public final class Geometry {
             double px=x*cc-y*sc,py=x*sc+y*cc,pz=z,qy=py*cb-pz*sb;pz=py*sb+pz*cb;py=qy;
             Vector v=new Vector(px*ca-pz*sa,py,px*sa+pz*ca);
             double a=v.x/(outer*o.sizeX),b=v.y/(outer*o.sizeY),c=v.z/(outer*o.sizeZ);
-            if(inside(a,b,c,o) && (!o.hollow||o.pixelPerfect||shell(v,o))) {
+            if(inside(a,b,c,o,o.shapeKind,.5/(outer*o.sizeX),.5/(outer*o.sizeY),.5/(outer*o.sizeZ)) && (!o.hollow||o.pixelPerfect||shell(v,o))) {
                 result.add(center.add(x,y,z));if(result.size()>Selection.LIMIT)throw new IllegalArgumentException("Shape exceeds block limit");
             }
         }
         if(o.outline)return BrushMath.edges(result);
         return o.hollow&&o.pixelPerfect?OutlineMath.thin(result,Math.max(1,o.outlineThickness)):result;
     }
-    private static boolean shell(Vector v,Options o){
-        double r=Math.max(.25,o.outerRadius()-Math.clamp(o.outlineThickness,1,Math.max(1,o.radius)));
-        return !inside(v.x/(r*o.sizeX),v.y/(r*o.sizeY),v.z/(r*o.sizeZ),o);
+    /**
+     * A brush shape turned, without being scaled. It is the very shape the brush makes, blocks and all, turned about its centre: every cell
+     * of the result looks back to the nearest cell of the unturned shape. Judging the cells against a formula instead loses the half block
+     * around the edge that the blocks of an unturned shape have (a flat square comes out a whole row smaller and its corners round off),
+     * and cannot know the wall, alignment and pixel perfect settings. This way a quarter turn is exact and no angle changes the shape.
+     */
+    private static List<Point> turned(Point center,Options o){
+        // An outline and a pixel perfect wall are worked out on the turned solid, since a line of single blocks does not survive being turned.
+        boolean afterwards=o.outline||o.hollow&&o.pixelPerfect;
+        var base=BrushMath.brush(new Point(0,0,0),o.radius,o.shape,o.hollow&&!afterwards,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,false);
+        int e=0;double far=0;
+        for(Point p:base){e=Math.max(e,Math.max(Math.abs(p.x()),Math.max(Math.abs(p.y()),Math.abs(p.z()))));far=Math.max(far,(double)p.x()*p.x()+(double)p.y()*p.y()+(double)p.z()*p.z());}
+        int extent=(int)Math.ceil(Math.sqrt(far));
+        if(extent>BrushMath.MAX_REACH)throw new IllegalArgumentException("Turned shape reaches "+extent+" blocks from its centre; the most is "+BrushMath.MAX_REACH);
+        int n=2*e+1;var grid=new boolean[n*n*n];
+        for(Point p:base)grid[((p.x()+e)*n+p.y()+e)*n+p.z()+e]=true;
+        double ra=Math.toRadians(-o.yaw),rb=Math.toRadians(-o.pitch),rc=Math.toRadians(-o.roll);
+        double ca=Math.cos(ra),sa=Math.sin(ra),cb=Math.cos(rb),sb=Math.sin(rb),cc=Math.cos(rc),sc=Math.sin(rc);
+        var result=new ArrayList<Point>();
+        for(int x=-extent;x<=extent;x++)for(int y=-extent;y<=extent;y++)for(int z=-extent;z<=extent;z++){
+            double px=x*cc-y*sc,py=x*sc+y*cc,pz=z,qy=py*cb-pz*sb;pz=py*sb+pz*cb;py=qy;
+            double vx=px*ca-pz*sa,vz=px*sa+pz*ca;
+            int gx=(int)Math.floor(vx+.5+1e-9),gy=(int)Math.floor(py+.5+1e-9),gz=(int)Math.floor(vz+.5+1e-9);
+            if(gx<-e||gx>e||gy<-e||gy>e||gz<-e||gz>e||!grid[((gx+e)*n+gy+e)*n+gz+e])continue;
+            result.add(center.add(x,y,z));if(result.size()>Selection.LIMIT)throw new IllegalArgumentException("Shape exceeds block limit");
+        }
+        if(o.outline)return BrushMath.edges(result);
+        return o.hollow&&o.pixelPerfect?OutlineMath.thin(result,Math.max(1,o.outlineThickness)):result;
     }
-    private static boolean inside(double x,double y,double z,Options o) {return inside(x,y,z,o,o.shapeKind);}
-    private static boolean inside(double x,double y,double z,Options o,Options.ShapeKind kind) {
+    private static boolean shell(Vector v,Options o){
+        // The wall is as many blocks thick as the setting says whatever the size: each axis gives up that many blocks, not that share of its length.
+        double t=Math.clamp(o.outlineThickness,1,Math.max(1,o.radius)),outer=o.outerRadius();
+        double rx=Math.max(.25,outer*o.sizeX-t),ry=Math.max(.25,outer*o.sizeY-t),rz=Math.max(.25,outer*o.sizeZ-t);
+        return !inside(v.x/rx,v.y/ry,v.z/rz,o,o.shapeKind,.5/rx,.5/ry,.5/rz);
+    }
+    /**
+     * Whether a point, in units of the shape's own radius along each axis, is inside it. {@code px}, {@code py} and {@code pz} are half a
+     * block in those units: the flat faces of a box reach that far past the radius, because the blocks along them cover half a block more,
+     * and a scaled or turned shape would otherwise come out a row short around its edge.
+     */
+    private static boolean inside(double x,double y,double z,Options o,Options.ShapeKind kind,double px,double py,double pz) {
         double radial=Math.sqrt(x*x+z*z),max=Math.max(Math.abs(x),Math.max(Math.abs(y),Math.abs(z))),outer=o.outerRadius(),reach=(outer+.5)/outer;
         return switch(kind){
             case BRUSH -> switch(o.shape){
                 // The round shapes reach half a block past the radius, as in BrushMath, so they have no nub at the poles.
-                case SPHERE->x*x+y*y+z*z<=reach*reach;case CUBE->max<=1;case OCTAHEDRON->Math.abs(x)+Math.abs(y)+Math.abs(z)<=1;case CYLINDER->radial<=reach&&Math.abs(y)<=1;
+                case SPHERE->x*x+y*y+z*z<=reach*reach;case CUBE->Math.abs(x)<=1+px&&Math.abs(y)<=1+py&&Math.abs(z)<=1+pz;case OCTAHEDRON->Math.abs(x)+Math.abs(y)+Math.abs(z)<=1;case CYLINDER->radial<=reach&&Math.abs(y)<=1+py;
                 case HEMISPHERE->y>=0&&x*x+y*y+z*z<=reach*reach;
                 case DISK->radial<=reach&&Math.abs(y)<=.5/outer;
                 case CONE->Math.abs(y)<=1&&radial<=reach*(1-y)/2;
                 case TORUS->Math.pow(radial-.75,2)+y*y<=Math.pow(.25+.5/outer,2);
-                case TUBE->radial<=reach&&radial>=.5&&Math.abs(y)<=1;
+                case TUBE->radial<=reach&&radial>=.5&&Math.abs(y)<=1+py;
                 case POLYGON->radial<=reach&&Math.abs(y)<=.5/outer&&polygon(x,z,o.polygonSides,reach);
-                case PLANE->inside(x,y,z,o,Options.ShapeKind.PLANE);case PYRAMID->inside(x,y,z,o,Options.ShapeKind.PYRAMID);
+                case PLANE->inside(x,y,z,o,Options.ShapeKind.PLANE,px,py,pz);case PYRAMID->inside(x,y,z,o,Options.ShapeKind.PYRAMID,px,py,pz);
             };
             case SPHERE -> x*x+y*y+z*z<=1;
-            case CUBOID -> max<=1;
+            case CUBOID -> Math.abs(x)<=1+px&&Math.abs(y)<=1+py&&Math.abs(z)<=1+pz;
             case OCTAHEDRON -> Math.abs(x)+Math.abs(y)+Math.abs(z)<=1;
             case SUPERSPHERE -> Math.pow(Math.abs(x),o.exponent)+Math.pow(Math.abs(y),o.exponent)+Math.pow(Math.abs(z),o.exponent)<=1;
             case CYLINDER -> radial<=1&&Math.abs(y)<=1;
@@ -77,7 +113,7 @@ public final class Geometry {
             case PYRAMID -> Math.abs(y)<=1&&Math.max(Math.abs(x),Math.abs(z))<=(1-y)/2;
             case TORUS -> Math.pow(radial-(1+o.innerRadius)/2,2)+y*y<=Math.pow((1-o.innerRadius)/2,2);
             case DISK -> radial<=1&&Math.abs(y)<=.5/outer;
-            case PLANE -> Math.abs(x)<=1&&Math.abs(z)<=1&&Math.abs(y)<=.5/outer;
+            case PLANE -> Math.abs(x)<=1+px&&Math.abs(z)<=1+pz&&Math.abs(y)<=.5/outer;
             case POLYGON -> polygon(x,z,o.polygonSides)&&Math.abs(y)<=.5/outer;
             case SPIRAL -> {double angle=(Math.atan2(z,x)+Math.PI)/(Math.PI*2);double phase=((radial*3-angle)%1+1)%1;yield radial<=1&&Math.abs(y)<=.5/outer&&(phase<.06||phase>.94);}
             case DODECAHEDRON -> polyhedron(x,y,z,true);
