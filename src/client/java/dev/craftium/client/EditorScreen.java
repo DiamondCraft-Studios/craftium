@@ -24,6 +24,8 @@ public final class EditorScreen extends CraftiumScreen {
     private boolean builder,help,transform,panels=true,painting,pinnedTab;
     private boolean hudHidden,previousHideGui;
     private int menu=-1;
+    /** The top bar menus, in order; {@link #menuItems} is indexed by position in this list. */
+    private static final String[] MENU_NAMES={"File","Edit","Select","View","Create","Structure","Operations","Masks","Window","Help"};
     private long lastUse;
     private double pointerX,pointerY;
     private BlockHitResult lastHit;
@@ -208,7 +210,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void topbar(Gfx g) {
         g.fill(0,0,w,23,0xff1b222c);g.fill(0,22,w,23,LINE);
         CraftiumBrand.draw(g,6,3,18);text(g,"CRAFTIUM",26,8,TEXT);
-        String[] names={"File","Edit","Select","View","Create","Operations","Masks","Window","Help"};int x=108;
+        String[] names=MENU_NAMES;int x=108;
         for(int i=0;i<names.length;i++) {
             int index=i,bw=font.width(names[i])+16;
             button(g,x,2,bw,19,names[i],menu==i,()->{menu=menu==index?-1:index;openSub="";openSub2="";},"");x+=bw;
@@ -869,7 +871,7 @@ public final class EditorScreen extends CraftiumScreen {
     /** Whether {@link #button} left-aligns its label, as the entries of a menu do. */
     private boolean menuAlign;
     private void dropdownItems(Gfx g) {
-        List<MenuItem> items=menuItems(menu);int x=108;String[] names={"File","Edit","Select","View","Create","Operations","Masks","Window","Help"};for(int i=0;i<menu;i++)x+=font.width(names[i])+16;
+        List<MenuItem> items=menuItems(menu);int x=108;String[] names=MENU_NAMES;for(int i=0;i<menu;i++)x+=font.width(names[i])+16;
         int height=4;for(MenuItem item:items)height+=item.action==null?9:25;
         g.fill(x,24,x+226,24+height,0xff1c2735);g.outline(x,24,226,height,LINE);
         int y=27;
@@ -916,10 +918,13 @@ public final class EditorScreen extends CraftiumScreen {
                 item("Expand…","",()->ClientCompat.setScreen(minecraft,new ResizeSelectionScreen(this,true))),item("Shrink…","",()->ClientCompat.setScreen(minecraft,new ResizeSelectionScreen(this,false))),
                 item("Expand by 1","",()->resizeSelection("selection_expand",1)),item("Shrink by 1","",()->resizeSelection("selection_shrink",1)));
             case 3 -> List.of(item("Toggle side panels","",()->panels=!panels),item("Tool options","",()->{builder=false;pinnedTab=false;init();}),item("Builder controls","Alt",()->{builder=true;init();}),item("Studio inspector","",()->ClientCompat.setScreen(minecraft,new StudioScreen(this))),item("Colour picker / gradient","",()->ClientCompat.setScreen(minecraft,new ColourScreen(this))));
-            case 7 -> {var items=new ArrayList<MenuItem>();for(String id:WorkspaceLayout.windows.keySet())items.add(item("Toggle "+id,"",()->WorkspaceLayout.toggle(id)));items.add(item("Save layout","",WorkspaceLayout::save));items.add(item("Reset layout","",WorkspaceLayout::reset));items.add(item("Copy layout","",()->minecraft.keyboardHandler.setClipboard(WorkspaceLayout.json())));items.add(item("Paste layout","",()->{try{WorkspaceLayout.importJson(minecraft.keyboardHandler.getClipboard());WorkspaceLayout.save();}catch(Exception e){ClientState.notify("Invalid layout JSON");}}));yield items;}
+            case 8 -> {var items=new ArrayList<MenuItem>();for(String id:WorkspaceLayout.windows.keySet())items.add(item("Toggle "+id,"",()->WorkspaceLayout.toggle(id)));items.add(item("Save layout","",WorkspaceLayout::save));items.add(item("Reset layout","",WorkspaceLayout::reset));items.add(item("Copy layout","",()->minecraft.keyboardHandler.setClipboard(WorkspaceLayout.json())));items.add(item("Paste layout","",()->{try{WorkspaceLayout.importJson(minecraft.keyboardHandler.getClipboard());WorkspaceLayout.save();}catch(Exception e){ClientState.notify("Invalid layout JSON");}}));yield items;}
+            case 5 -> List.of(item("Import structure…","",ClientStructures::chooseImport),divider(),
+                item("Export selection…","",()->exportStructure(StructureSettings.SELECTION)),item("Export clipboard…","",()->exportStructure(StructureSettings.CLIPBOARD)),divider(),
+                submenu("Export selection as",item("Structure (.nbt)","",()->exportStructure(StructureSettings.SELECTION,StructureSettings.JAVA,StructureSettings.NBT)),item("Schematic (.schem)","",()->exportStructure(StructureSettings.SELECTION,StructureSettings.JAVA,StructureSettings.SCHEM)),item("Bedrock structure (.mcstructure)","",()->exportStructure(StructureSettings.SELECTION,StructureSettings.BEDROCK,StructureSettings.NBT))));
             case 4 -> List.of(item("Shape","",()->select(Tool.SHAPE)),item("Block text","",()->select(Tool.TEXT)),item("Line","",()->select(Tool.LINE)),item("Rock","",()->select(Tool.ROCK)));
-            case 5 -> List.of(item("Fill selection","Ctrl+F",()->action("fill")),item("Delete selection","Del",()->action("delete")),item("Move / clone / stack…","",()->{transform=true;init();}),item("Smooth brush","",()->select(Tool.SMOOTH)),item("Flatten brush","",()->select(Tool.FLATTEN)));
-            case 6 -> List.of(item("Restrict to selection","",()->o().inSelection=!o().inSelection),item("Clear block mask","",()->{o().mask="";o().maskActive.clear();}),item("Toggle surface painting","",()->o().surfaceOnly=!o().surfaceOnly));
+            case 6 -> List.of(item("Fill selection","Ctrl+F",()->action("fill")),item("Delete selection","Del",()->action("delete")),item("Move / clone / stack…","",()->{transform=true;init();}),item("Smooth brush","",()->select(Tool.SMOOTH)),item("Flatten brush","",()->select(Tool.FLATTEN)));
+            case 7 -> List.of(item("Restrict to selection","",()->o().inSelection=!o().inSelection),item("Clear block mask","",()->{o().mask="";o().maskActive.clear();}),item("Toggle surface painting","",()->o().surfaceOnly=!o().surfaceOnly));
             default -> List.of(item("Editor controls","",()->help=true),item("About Craftium","",()->ClientCompat.setScreen(minecraft,new AboutScreen(this))));
         };
     }
@@ -1030,6 +1035,12 @@ public final class EditorScreen extends CraftiumScreen {
         transformSelection(90*quarters,1,1,1);
     }
     /** Mirrors a placement waiting to be put down, or else the selection, across the plane through its centre or pivot normal to axis 0, 1 or 2 (X, Y, Z). */
+    /** Opens the structure export pop-up on the given source, and on a format when one is named. */
+    private void exportStructure(String source){exportStructure(source,null,null);}
+    private void exportStructure(String source,String format,String javaFile){
+        var settings=o().structure;settings.source=source;if(format!=null){settings.format=format;settings.javaFile=javaFile;}
+        ClientCompat.setScreen(minecraft,new StructureExportScreen(this));
+    }
     private void flip(int axis){
         // Every shape is the same mirrored sideways, so flipping X or Z is a half turn about Y and flipping Y a half turn about X.
         if(ShapeObject.active()){ShapeObject.turn(axis==1?0:1,180);return;}
