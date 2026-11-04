@@ -8,7 +8,7 @@ Craftium is a creative building editor for **Minecraft Java 26.2 on Fabric**. Se
 - **Terrain and painting:** Rock, Weld, Melt, Smooth, Elevation, Slope, noise painting and biome editing.
 - **Shapes and geometry:** Primitives, paths, modelling, text, stamps and extrusion.
 - **Materials:** Weighted palettes, colour matching, gradients, visual masks and sandboxed Lua brushes.
-- **Clipboards and libraries:** Schematics, structure NBT, legacy schematic import, PNG heightmaps, custom fonts and named blueprints. Copy and paste display and marker entities, including entity-only blueprints.
+- **Clipboards and libraries:** Schematics, structure NBT, Bedrock `.mcstructure` import and export with a 3D export preview (Structure menu), legacy schematic import, PNG heightmaps, custom fonts and named blueprints. Copy and paste display and marker entities, including entity-only blueprints.
 - **History:** Undo and redo for supported edits, saved per player, world and dimension.
 
 ## Building in game
