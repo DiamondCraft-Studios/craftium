@@ -191,7 +191,8 @@ public final class EditorServer {
             Point target=r.target(),normal=r.normal()==null?new Point(0,1,0):r.normal();
             if(Math.abs(normal.x())+Math.abs(normal.y())+Math.abs(normal.z())!=1)throw new IllegalArgumentException("Invalid surface normal");
             if(target!=null) {
-                if(target.distanceSquared(new Point((int)player.getX(),(int)player.getY(),(int)player.getZ()))>256*256)
+                // The builder has no range limit; it still stops at the world's edge and at chunks that are not loaded.
+                if(!r.action().startsWith("builder_")&&target.distanceSquared(new Point((int)player.getX(),(int)player.getY(),(int)player.getZ()))>256*256)
                     throw new IllegalArgumentException("Move within 256 blocks of the target");
                 new EditPlanner(player.level(),s,o).validate(target);
             }

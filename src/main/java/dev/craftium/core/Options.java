@@ -54,6 +54,8 @@ public final class Options {
     public int offsetX, offsetY = 1, offsetZ, copies = 3;
     /** The Builder's Stack: how many whole copies of the selection to lay along each axis, negative for the other way. Only meaningful while a stack is being sent. */
     public int stackX, stackY, stackZ;
+    /** The Builder's Move, Clone and Smear: how far the selection is taken. Kept apart from the offsets other tools share, which are limited to 128 blocks; this one is not. */
+    public Point builderOffset = new Point(0,0,0);
     public Compare compare=Compare.BLOCK;
     public int selectLimit=100_000,selectRange=1,lassoDepth=64;
     /** How many blocks the Select menu's Expand and Shrink move the selection's surface. */
@@ -254,7 +256,9 @@ public final class Options {
         for(String value:new String[]{materials,maskExpression,maskScript,script,fontName,fontFile,heightmap,name,entityType,entityNbt,property,annotationMode,billboard})
             if(value==null||value.length()>1_000_000)throw new IllegalArgumentException("Invalid advanced text setting");
         if(script.length()>16384||maskScript.length()>16384||maskExpression.length()>4096||name.length()>80)throw new IllegalArgumentException("Advanced setting is too long");
-        if(position1==null||position2==null||symmetryOrigin==null)throw new IllegalArgumentException("Missing position");
+        if(position1==null||position2==null||symmetryOrigin==null||builderOffset==null)throw new IllegalArgumentException("Missing position");
+        builderOffset=new Point(Math.clamp(builderOffset.x(),-WORLD_SPAN,WORLD_SPAN),Math.clamp(builderOffset.y(),-WORLD_SPAN,WORLD_SPAN),Math.clamp(builderOffset.z(),-WORLD_SPAN,WORLD_SPAN));
+        stackX=Math.clamp(stackX,-WORLD_SPAN,WORLD_SPAN);stackY=Math.clamp(stackY,-WORLD_SPAN,WORLD_SPAN);stackZ=Math.clamp(stackZ,-WORLD_SPAN,WORLD_SPAN);
         if(assetData==null||assetData.length()>1_500_000)throw new IllegalArgumentException("Imported asset is too large");
         if(entityUuid==null||entityUuid.length()>64)throw new IllegalArgumentException("Invalid entity identifier");
         if(annotationId==null||annotationId.length()>64)throw new IllegalArgumentException("Invalid annotation identifier");
@@ -268,5 +272,7 @@ public final class Options {
         if (block.length()>256 || secondary.length()>256 || mask.length()>256 || biome.length()>128 || text.length()>48)
             throw new IllegalArgumentException("Tool setting is too long");
     }
+    /** Across the whole world, border to border: as far as anything can be moved, and small enough that sums of it cannot overflow. */
+    private static final int WORLD_SPAN=60_000_000;
     private static double bounded(double value,double min,double max){return Double.isFinite(value)?Math.clamp(value,min,max):min;}
 }

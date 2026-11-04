@@ -51,8 +51,9 @@ public final class BuilderMode {
     }
     public static void nudge(Point axis,int steps){
         if(first==null||second==null)return;preview=true;
-        if(ClientState.options.builderTool==Options.BuilderTool.STACK){stackX=Math.clamp(stackX+axis.x()*steps,-16,16);stackY=Math.clamp(stackY+axis.y()*steps,-16,16);stackZ=Math.clamp(stackZ+axis.z()*steps,-16,16);}
-        else offset=new Point(Math.clamp(offset.x()+axis.x()*steps,-128,128),Math.clamp(offset.y()+axis.y()*steps,-128,128),Math.clamp(offset.z()+axis.z()*steps,-128,128));
+        // No range limit: the server still refuses an edit past the world's edge, into unloaded chunks or over the block limit.
+        if(ClientState.options.builderTool==Options.BuilderTool.STACK){stackX+=axis.x()*steps;stackY+=axis.y()*steps;stackZ+=axis.z()*steps;}
+        else offset=offset.add(axis.x()*steps,axis.y()*steps,axis.z()*steps);
     }
     /** One step of the nudge: along every axis key held, towards where the player looks, or else along the face looked at most squarely. */
     private static Point nudgeDirection(){
@@ -121,7 +122,7 @@ public final class BuilderMode {
     private static void magicSelect(net.minecraft.core.BlockPos at){
         var mc=Minecraft.getInstance();var o=ClientState.options;
         if(mc.level.getBlockState(at).isAir())return;
-        var world=MagicPreview.world(mc,at,o);var params=new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,Selection.LIMIT*4);Point start=CraftiumClient.point(at);
+        var world=MagicPreview.world(mc,at,o);var params=new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,Integer.MAX_VALUE,Selection.LIMIT*4);Point start=CraftiumClient.point(at);
         magicSince=System.currentTimeMillis();
         magic=java.util.concurrent.CompletableFuture.supplyAsync(()->MagicWand.select(start,world,params),search);
     }
@@ -148,7 +149,7 @@ public final class BuilderMode {
     public static void corners(Point a,Point b){first=a;second=b;offset=new Point(0,0,0);preview=false;refresh();}
     private static void refresh(){try{var mc=Minecraft.getInstance();cells=Selection.box(first,second).stream().filter(p->!mc.level.getBlockState(new net.minecraft.core.BlockPos(p.x(),p.y(),p.z())).isAir()).toList();ClientState.notify("Selection ready · scroll to nudge · right-click places · left-click cancels");}catch(Exception e){ClientState.notify(e.getMessage());clear();}}
     public static void confirm(){
-        if(first==null||second==null)return;var o=ClientState.options;Point prior1=o.position1,prior2=o.position2;int x=o.offsetX,y=o.offsetY,z=o.offsetZ;o.position1=first;o.position2=second;o.offsetX=offset.x();o.offsetY=offset.y();o.offsetZ=offset.z();o.stackX=stackX;o.stackY=stackY;o.stackZ=stackZ;CraftiumClient.send("builder_commit",first,new Point(0,1,0));o.position1=prior1;o.position2=prior2;o.offsetX=x;o.offsetY=y;o.offsetZ=z;o.stackX=o.stackY=o.stackZ=0;
+        if(first==null||second==null)return;var o=ClientState.options;Point prior1=o.position1,prior2=o.position2;o.position1=first;o.position2=second;o.builderOffset=offset;o.stackX=stackX;o.stackY=stackY;o.stackZ=stackZ;CraftiumClient.send("builder_commit",first,new Point(0,1,0));o.position1=prior1;o.position2=prior2;o.builderOffset=new Point(0,0,0);o.stackX=o.stackY=o.stackZ=0;
         if(o.builderTool==Options.BuilderTool.CLONE){preview=true;clonePlaced=true;}
         else if(o.builderTool==Options.BuilderTool.MOVE)follow();
         else if(o.builderTool==Options.BuilderTool.STACK&&(stackX!=0||stackY!=0||stackZ!=0))grow();

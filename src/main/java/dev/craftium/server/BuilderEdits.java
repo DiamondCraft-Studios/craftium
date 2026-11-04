@@ -17,9 +17,9 @@ final class BuilderEdits {
             while(!todo.isEmpty()&&count<128){Point at=todo.removeFirst();if(!seen.add(at)||!p.state(at).is(base.getBlock())||base.isAir())continue;p.put(at,Blocks.AIR.defaultBlockState());count++;for(Point n:EditPlanner.NEIGHBOURS)todo.add(at.add(n.x(),n.y(),n.z()));}return p.finish("Erase connected blocks");
         }
         var points=Selection.box(o.position1,o.position2);Point min=new Point(Math.min(o.position1.x(),o.position2.x()),Math.min(o.position1.y(),o.position2.y()),Math.min(o.position1.z(),o.position2.z()));Point size=new Point(Math.abs(o.position2.x()-o.position1.x())+1,Math.abs(o.position2.y()-o.position1.y())+1,Math.abs(o.position2.z()-o.position1.z())+1);
-        var source=new LinkedHashMap<Point,BlockSnapshot>();Point playerAt=EditPlanner.point(player.blockPosition());for(Point at:points){p.validate(at);if(at.distanceSquared(playerAt)>256*256)throw new IllegalArgumentException("Move within 256 blocks of the builder selection");source.put(at,BlockSnapshot.capture(player.level(),EditPlanner.pos(at)));}
+        var source=new LinkedHashMap<Point,BlockSnapshot>();Point shift=o.builderOffset;for(Point at:points){p.validate(at);source.put(at,BlockSnapshot.capture(player.level(),EditPlanner.pos(at)));}
         if(o.builderTool==Options.BuilderTool.ERASE){for(Point at:points)p.put(at,Blocks.AIR.defaultBlockState());return p.finish("Erase builder selection");}
-        if(o.builderTool==Options.BuilderTool.SMEAR){var line=BrushMath.line(new Point(0,0,0),new Point(o.offsetX,o.offsetY,o.offsetZ));for(var e:source.entrySet())if(!e.getValue().state().isAir())for(int i=1;i<line.size();i++){Point delta=line.get(i),at=e.getKey().add(delta.x(),delta.y(),delta.z());if(!source.containsKey(at)&&p.solid(at))break;p.put(at,e.getValue());}return p.finish("Smear builder selection");}
+        if(o.builderTool==Options.BuilderTool.SMEAR){var line=BrushMath.line(new Point(0,0,0),shift);for(var e:source.entrySet())if(!e.getValue().state().isAir())for(int i=1;i<line.size();i++){Point delta=line.get(i),at=e.getKey().add(delta.x(),delta.y(),delta.z());if(!source.containsKey(at)&&p.solid(at))break;p.put(at,e.getValue());}return p.finish("Smear builder selection");}
         if(o.builderTool!=Options.BuilderTool.MOVE&&o.builderTool!=Options.BuilderTool.CLONE&&o.builderTool!=Options.BuilderTool.STACK)throw new IllegalArgumentException("Choose a selection builder tool");
         var entities=new ArrayList<Session.EntityChange>();var captureSession=new Session();captureSession.selection.combine(points,Selection.Mode.REPLACE);
         if(o.copyEntities){var capture=ClipboardEntities.capture(player,captureSession);captureSession.clipboardEntities.addAll(capture.relative());if(o.builderTool==Options.BuilderTool.MOVE)entities.addAll(capture.removals());}
@@ -29,10 +29,11 @@ final class BuilderEdits {
         // A stack is whole copies laid edge to edge along each axis, so there are never gaps; the counts say how many in each direction (negative: the other way).
         var steps=new ArrayList<Point>();
         if(o.builderTool==Options.BuilderTool.STACK){
-            int sx=Math.clamp(o.stackX,-16,16),sy=Math.clamp(o.stackY,-16,16),sz=Math.clamp(o.stackZ,-16,16);
+            int sx=o.stackX,sy=o.stackY,sz=o.stackZ; // no limit on how far, only on how many blocks: counted before any copy is laid out
+            if(((long)Math.abs(sx)+1)*((long)Math.abs(sy)+1)*((long)Math.abs(sz)+1)-1>Selection.LIMIT/Math.max(1,source.size()))throw new IllegalArgumentException("Builder stack exceeds the cell limit");
             for(int i=Math.min(0,sx);i<=Math.max(0,sx);i++)for(int j=Math.min(0,sy);j<=Math.max(0,sy);j++)for(int k=Math.min(0,sz);k<=Math.max(0,sz);k++)if(i!=0||j!=0||k!=0)steps.add(new Point(i*size.x(),j*size.y(),k*size.z()));
             if(steps.isEmpty())throw new IllegalArgumentException("Scroll to choose how many copies to stack");
-        }else steps.add(new Point(o.offsetX,o.offsetY,o.offsetZ));
+        }else steps.add(shift);
         if((long)source.size()*steps.size()>Selection.LIMIT)throw new IllegalArgumentException("Builder stack exceeds the cell limit");
         for(Point step:steps){Point origin=min.add(step.x(),step.y(),step.z());for(var e:captureSession.clipboard.entrySet()){if(!o.pasteAir&&e.getValue().state().isAir())continue;Point q=e.getKey();p.putClipboard(origin.add(q.x(),q.y(),q.z()),e.getValue());}if(o.copyEntities)entities.addAll(ClipboardEntities.paste(player,captureSession,origin));}
         if(entities.size()>128)throw new IllegalArgumentException("Builder entity limit: 128 changes");var edit=p.finish(o.builderTool.name().toLowerCase(Locale.ROOT)+" builder selection");return new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),List.copyOf(entities));
