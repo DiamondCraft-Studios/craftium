@@ -161,7 +161,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
         options(o->{o.tool=Tool.MAGIC_SELECT;o.surfaceOnly=false;});request("use",new Point(0,-1,0));
         require(ctx.computeOnClient(mc->ClientState.status.selectionSize()>0),"Magic selection was empty");
         options(o->o.tool=Tool.RULER);request("use",new Point(0,0,0));request("use",new Point(3,4,0));
-        require(ctx.computeOnClient(mc->ClientState.status.message().contains("5.00")),"Ruler distance was incorrect");
+        require(ctx.computeOnClient(mc->ClientState.status.message().contains("Ruler: 5 blocks")),"Ruler distance was incorrect");
         options(o->{o.tool=Tool.LINE;o.radius=1;});request("use",new Point(0,5,0));request("use",new Point(6,5,0));checkBlock(new Point(3,5,0),Blocks.ANDESITE);
     }
     private void selectionTransforms() {
