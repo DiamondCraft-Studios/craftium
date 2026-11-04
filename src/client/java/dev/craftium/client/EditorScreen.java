@@ -180,7 +180,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         hoverFeedback(g);
         pipettePreview(g);
-        if(!help&&menu<0) {
+        if(!help&&menu<0&&ctxCell<0&&!shapeMenu&&confirm==null) { // an open menu or pop-up is what the pointer is for, so no tooltip over it
             String tooltip="";for(var c:controls)if(c.contains(mx,my)&&!c.tip.isEmpty())tooltip=c.tip;
             if(!tooltip.isEmpty()) {
                 // A new line starts a new paragraph; each is wrapped to the pane, and a pane with a title shows it brighter than what follows.
