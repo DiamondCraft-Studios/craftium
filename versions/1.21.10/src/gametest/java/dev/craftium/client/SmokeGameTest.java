@@ -27,6 +27,8 @@ public final class SmokeGameTest implements FabricClientGameTest {
                 ClientState.rulerPoints.clear();
                 ClientState.rulerPoints.add(new Point(base.getX()-3,base.getY()+1,base.getZ()));
                 ClientState.rulerPoints.add(new Point(base.getX()+3,base.getY()+3,base.getZ()+2));
+                ClientState.rulerPoints.add(new Point(base.getX()-3,base.getY(),base.getZ()-2)); // a second ruler that runs along the X axis
+                ClientState.rulerPoints.add(new Point(base.getX()+3,base.getY(),base.getZ()-2));
                 BuilderMode.select(Options.BuilderTool.CLONE);
                 BuilderMode.corners(new Point(base.getX()-1,base.getY(),base.getZ()+1),new Point(base.getX()+1,base.getY()+2,base.getZ()+3));
             });

@@ -311,14 +311,35 @@ public final class CraftiumClient implements ClientModInitializer {
             }
             if(end!=null){
                 double length=start.distanceTo(end);
-                Overlay.line(start,end,lineColor(o,start,end),2);
-                if(o.rulerMode==Options.RulerMode.CIRCLE){for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(start.add(Math.cos(x)*length,0,Math.sin(x)*length),start.add(Math.cos(y)*length,0,Math.sin(y)*length),o.rulerLineColor,1.5f);}}
+                bar(start,end,RULER_LINE_HALF,lineColor(o,start,end));
+                if(o.rulerMode==Options.RulerMode.CIRCLE){for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;bar(start.add(Math.cos(x)*length,0,Math.sin(x)*length),start.add(Math.cos(y)*length,0,Math.sin(y)*length),RULER_LINE_HALF*.75,o.rulerLineColor);}}
                 // The length sits on the middle of the line, as big as the setting says.
                 Overlay.text(Ruler.show(length),start.add(end).scale(.5),o.rulerTextColor,o.rulerTextBackground,.05f*(float)Math.clamp(o.rulerLabelSize,Options.RULER_LABEL_MIN,Options.RULER_LABEL_MAX));
             }
-            Overlay.point(start,picked==first?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==first?10:8);
-            if(end!=null)Overlay.point(end,picked==second?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==second?10:8);
+            knob(start,picked==first?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==first);
+            if(end!=null)knob(end,picked==second?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==second);
             index+=end==null?1:2;
+        }
+    }
+    /** The ruler is made of real size: its line is this thick and its knobs this big in blocks, so they grow and shrink with distance like the blocks around them. */
+    private static final double RULER_LINE_HALF=.04,RULER_KNOB_HALF=.14,RULER_KNOB_SELECTED_HALF=.18;
+    /** A knob: a small solid cube. */
+    private static void knob(Vec3 at,int color,boolean selected){
+        double h=selected?RULER_KNOB_SELECTED_HALF:RULER_KNOB_HALF;
+        Overlay.box(new AABB(at.x-h,at.y-h,at.z-h,at.x+h,at.y+h,at.z+h),color&0xffffff,1,color); // no outline of its own: an outline is a fixed number of pixels wide
+    }
+    /** A line of real thickness from {@code a} to {@code b}: a square bar, drawn as four faces, each facing both ways. */
+    private static void bar(Vec3 a,Vec3 b,double half,int color){
+        Vec3 along=b.subtract(a);double length=along.length();if(length<1e-6)return;
+        along=along.scale(1/length);
+        Vec3 up=Math.abs(along.y)<.9?new Vec3(0,1,0):new Vec3(1,0,0);
+        Vec3 u=along.cross(up).normalize().scale(half),v=along.cross(u).normalize().scale(half);
+        Vec3[] from={a.add(u).add(v),a.subtract(u).add(v),a.subtract(u).subtract(v),a.add(u).subtract(v)};
+        Vec3[] to={b.add(u).add(v),b.subtract(u).add(v),b.subtract(u).subtract(v),b.add(u).subtract(v)};
+        for(int i=0;i<4;i++){
+            int j=(i+1)%4;
+            Overlay.face(from[i],from[j],to[j],to[i],color);
+            Overlay.face(to[i],to[j],from[j],from[i],color);
         }
     }
     /** A line that runs along one world axis takes that axis's colour; any other line takes the ruler's own. */
