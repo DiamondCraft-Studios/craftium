@@ -16,6 +16,8 @@ public final class ClientCompat {
 
     public static Screen screen(Minecraft mc){return mc.screen;}
     public static void setScreen(Minecraft mc,Screen screen){mc.setScreen(screen);}
+    /** Shows a message above the hotbar, in the place the game puts its own action bar text. */
+    public static void overlayMessage(Minecraft mc,String message){mc.gui.setOverlayMessage(net.minecraft.network.chat.Component.literal(message),false);}
     public static boolean hudHidden(Minecraft mc){return mc.options.hideGui;}
     public static void toggleHud(Minecraft mc){mc.options.hideGui=!mc.options.hideGui;}
 

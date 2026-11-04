@@ -149,7 +149,7 @@ public final class CraftiumClient implements ClientModInitializer {
         if(ClientCompat.screen(mc)!=null)return;
         for(var entry:toolKeys.entrySet())while(entry.getValue().consumeClick()){}
         while(swapKey.consumeClick())if(!mc.hasControlDown())send("hotbar",null,null);
-        while(replaceKey.consumeClick()) {ClientState.options.replaceMode=!ClientState.options.replaceMode;ClientState.notify("Replace mode "+(ClientState.options.replaceMode?"enabled":"disabled"));mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK,1.0F));ClientState.save();}
+        while(replaceKey.consumeClick()) {ClientState.options.replaceMode=!ClientState.options.replaceMode;ClientCompat.overlayMessage(mc,"Replace mode "+(ClientState.options.replaceMode?"enabled":"disabled"));mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK,1.0F));ClientState.save();}
         if(!mc.player.isCreative() || !supported())return;
         if(BuilderMode.active())return;
         var o=ClientState.options;long now=System.currentTimeMillis();
