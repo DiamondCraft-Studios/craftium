@@ -324,7 +324,7 @@ public final class CraftiumClient implements ClientModInitializer {
         }
     }
     /** The ruler is made of real size: its line is this thick and its knobs this big in blocks, so they grow and shrink with distance like the blocks around them. */
-    private static final double RULER_LINE_HALF=.04,RULER_KNOB_HALF=.14,RULER_KNOB_SELECTED_HALF=.18;
+    private static final double RULER_LINE_HALF=.04,RULER_KNOB_HALF=.07,RULER_KNOB_SELECTED_HALF=.09;
     /** A knob: a small solid cube. */
     private static void knob(Vec3 at,int color,boolean selected){
         double h=selected?RULER_KNOB_SELECTED_HALF:RULER_KNOB_HALF;
