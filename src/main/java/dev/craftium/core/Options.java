@@ -154,6 +154,8 @@ public final class Options {
     public int rulerSplit=2;
     public String entityGroup="";
     public String author="",tags="";
+    /** The export pop-up's structure block fields. */
+    public StructureSettings structure=new StructureSettings();
     public java.util.List<Point> annotationPoints=new java.util.ArrayList<>();
     public java.util.List<Integer> annotationPixels=new java.util.ArrayList<>();
     public int annotationImageWidth,annotationImageHeight;
@@ -230,6 +232,7 @@ public final class Options {
         if(annotationPoints==null||annotationPoints.size()>256||annotationPoints.contains(null)||annotationPixels==null||annotationPixels.size()>1024||annotationPixels.contains(null))throw new IllegalArgumentException("Invalid annotation data");
         annotationImageScale=bounded(annotationImageScale,.1,32);annotationImageWidth=Math.clamp(annotationImageWidth,0,32);annotationImageHeight=Math.clamp(annotationImageHeight,0,32);
         if(annotationNormal==null||Math.abs(annotationNormal.x())+Math.abs(annotationNormal.y())+Math.abs(annotationNormal.z())!=1)throw new IllegalArgumentException("Invalid annotation plane");
+        if(structure==null)structure=new StructureSettings();structure.validate();
         if(author==null||tags==null||author.length()>80||tags.length()>256)throw new IllegalArgumentException("Blueprint metadata is too long");
         if(entityGroup==null||!entityGroup.matches("[A-Za-z0-9_. -]{0,64}"))throw new IllegalArgumentException("Use a plain entity group name");
         entityX=bounded(entityX,-128,128);entityY=bounded(entityY,-128,128);entityZ=bounded(entityZ,-128,128);entityScaleX=bounded(entityScaleX,.01,16);entityScaleY=bounded(entityScaleY,.01,16);entityScaleZ=bounded(entityScaleZ,.01,16);
