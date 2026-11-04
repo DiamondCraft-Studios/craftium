@@ -61,6 +61,16 @@ final class ClientStructures {
         return slash<0?base:base.resolve(path.substring(0,slash));
     }
 
+    /** Shows the world's structures folder in the system's file manager, creating it first so there is something to open. */
+    static void openFolder(){
+        try{
+            Path folder=defaultDirectory(ClientState.options.structure);if(folder.getParent()!=null)Files.createDirectories(folder);
+            // The game's own helper lives in a different package on each version, so ask the system directly.
+            String os=System.getProperty("os.name","").toLowerCase(Locale.ROOT);
+            new ProcessBuilder(os.contains("win")?"explorer.exe":os.contains("mac")?"open":"xdg-open",folder.toString()).start();
+        }catch(Exception e){ClientState.notify("Could not open the structures folder: "+e.getMessage());}
+    }
+
     /** The system's save dialog, started in {@link #defaultDirectory} with the structure's file name; {@code then} runs on the game thread. */
     static void chooseExportFile(StructureSettings s,Consumer<Path> then){
         Path directory=defaultDirectory(s);String name=s.fileName(),pattern=s.bedrock()?"*.mcstructure":"*.nbt",description=s.bedrock()?"Bedrock structure (*.mcstructure)":"Java structure (*.nbt)";
