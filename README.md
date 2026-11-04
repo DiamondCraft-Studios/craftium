@@ -6,7 +6,7 @@ Craftium is an AI-assisted, independently implemented Fabric building studio wit
 
 ![Craftium editor with a selected watchtower, clipboard and material palette](docs/gallery/01-editor-overview.png)
 
-[Gallery](docs/GALLERY.md) · [Controls](docs/KEYBINDS.md) · [Server companion](docs/SERVER-PLUGIN.md) · [Contributing](CONTRIBUTING.md) · [MIT license](LICENSE)
+[Gallery](docs/GALLERY.md) · [Controls](docs/KEYBINDS.md) · [Server companion](docs/SERVER-PLUGIN.md) · [AI building](docs/AI.md) · [Contributing](CONTRIBUTING.md) · [MIT license](LICENSE)
 
 **0.3.1-dev is a development preview, not full Axiom parity.** This release aligns controls with Axiom's documented defaults and adds configurable editor chords and mouse gestures. It includes the Paper/Purpur companion and a versioned client connection. The editor expands the original 26 tools to 37, adding tenth-slot building, persistent history, entity clipboards, animated rebuild, lighting, scripting, visual masks, weighted palettes and asset transfer. [Feature coverage](docs/FEATURES.md) and the [95-page documentation audit](docs/PARITY-AUDIT.md) identify remaining differences.
 
