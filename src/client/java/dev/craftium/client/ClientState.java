@@ -21,6 +21,9 @@ public final class ClientState {
     /** An edit the server has worked out and is holding until it is confirmed with Enter. */
     public static GhostBlocks pending=GhostBlocks.EMPTY;
     public static boolean hasPending(){return pending.total()>0;}
+    /** The build an AI app is holding as a preview, kept apart from the player's own: drawn in violet, and applied or discarded from the AI menu. */
+    public static GhostBlocks aiPending=GhostBlocks.EMPTY;
+    public static boolean hasAiPending(){return aiPending.total()>0;}
     /** The corners of the box being selected, which stay as handles the player can drag to resize it. At most two. */
     public static final List<Point> boxCorners=new ArrayList<>();
     /** When above zero, the editor shows a small popup asking whether this many selected blocks was meant. */

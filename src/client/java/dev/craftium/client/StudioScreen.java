@@ -133,9 +133,9 @@ public final class StudioScreen extends CraftiumScreen {
         int y=top+70+62;
         boolean on=AiBridge.running();
         button(on?"Turn off AI building":"Turn on AI building",left,y,200,24,()->{AiBridge.toggle();message=AiBridge.running()?"AI building is on":"AI building is off";init();}).lit(on);
-        button("Apply preview",left+216,y,130,24,()->send("pending_confirm"));
-        button("Discard preview",left+352,y,130,24,()->send("pending_cancel"));
-        button("Undo last edit",left+488,y,128,24,()->send("undo"));
+        button("Apply preview",left+216,y,130,24,()->send("ai_apply"));
+        button("Discard preview",left+352,y,130,24,()->send("ai_cancel"));
+        button("Undo AI build",left+488,y,128,24,()->send("ai_undo"));
         int steps=top+70+128;
         labels.add(new Label("HOW IT WORKS",left,steps));
         labels.add(new Label("1.  Install the Craftium extension (craftium.mcpb) in Claude Desktop, once.",left,steps+15));
@@ -163,7 +163,7 @@ public final class StudioScreen extends CraftiumScreen {
         g.fill(x+12,y+13,x+24,y+25,AiBridge.colour(state));
         g.text(font,headline,x+34,y+12,o.uiText,false);
         g.text(font,font.plainSubstrByWidth(detail,width-46),x+34,y+30,o.uiMuted,false);
-        if(ClientState.hasPending())g.text(font,"Preview waiting: "+ClientState.pending.total()+" blocks. Apply it to build it, or discard it.",x,top+70+96,0xffffdca8,false);
+        if(ClientState.hasAiPending())g.text(font,"Preview waiting: "+ClientState.aiPending.total()+" blocks. Apply it to build it, or discard it.",x,top+70+96,0xffffdca8,false);
     }
     private void createField(String name,int x,int y,int width){
         try{

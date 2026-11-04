@@ -18,6 +18,8 @@ final class AiWorld {
     private AiWorld() {}
 
     static final int MAX_BLOCKS = 32_768, MAX_COLUMNS = 16_384, MAX_NEW_CHUNKS = 16, MAX_REPLY = 900_000;
+    /** A build may make more ground than a read can, since it has to stand on it: 36 chunks, a square 96 blocks across. */
+    static final int MAX_BUILD_CHUNKS = 36;
 
     /** The blocks in a box, as a palette plus run-length runs running x first, then z, then y upward from the minimum corner. */
     static String blocks(ServerPlayer player, Point a, Point b) {
@@ -85,6 +87,23 @@ final class AiWorld {
         out.addProperty("noColumn", "-2147483648 and -1 mark a column past the world border or with no block in it");
         out.addProperty("chunksLoadedForThisRead", fresh);
         return reply(out);
+    }
+
+    /**
+     * Makes sure the chunks a build reaches are loaded, loading (and, for ground nobody has visited, making) the ones that are not.
+     * Planning needs them to read what is there, and an AI build can be far from any player. Refused when it needs more than
+     * {@link #MAX_BUILD_CHUNKS} new chunks; chunks past the world border are left alone, and the plan refuses them itself.
+     */
+    static void load(ServerLevel level, int x0, int z0, int x1, int z1) {
+        var needed = new java.util.ArrayList<int[]>();
+        for (int cx = x0 >> 4; cx <= x1 >> 4; cx++)
+            for (int cz = z0 >> 4; cz <= z1 >> 4; cz++) {
+                if (!level.getWorldBorder().isWithinBounds(new ChunkPos(cx, cz)) || level.getChunkSource().getChunkNow(cx, cz) != null) continue;
+                needed.add(new int[]{cx, cz});
+                if (needed.size() > MAX_BUILD_CHUNKS)
+                    throw new IllegalArgumentException("That build reaches more than " + MAX_BUILD_CHUNKS + " chunks that are not loaded; build closer to loaded ground, or in smaller pieces");
+            }
+        for (int[] at : needed) level.getChunk(at[0], at[1]);
     }
 
     private static String name(ServerLevel level, BlockPos at) {

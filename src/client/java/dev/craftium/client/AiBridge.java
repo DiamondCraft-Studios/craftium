@@ -39,15 +39,6 @@ public final class AiBridge {
     private static volatile long lastCall;
     private static volatile String lastTool = "";
     private static final long ACTIVE_MILLIS = 120_000;
-    /** Whether the preview waiting in the world (if any) was made by an AI app, so it is drawn in the AI colour. */
-    private static volatile boolean aiPreview;
-
-    /** Marks a preview the server has just described as the AI's, or forgets the mark once nothing is waiting. */
-    static void tagPreview(GhostBlocks pending) {
-        if (pending.total() == 0) { aiPreview = false; return; }
-        pending.ai = aiPreview;
-    }
-
     private AiBridge() {}
 
     public enum State { OFF, WAITING, ACTIVE, WORKING }
@@ -85,7 +76,7 @@ public final class AiBridge {
         var state = indicator();
         if (state == State.OFF) return;
         var font = Minecraft.getInstance().font;
-        boolean preview = ClientState.hasPending() && ClientState.pending.ai;
+        boolean preview = ClientState.hasAiPending();
         String text = state == State.WORKING ? "AI working…" : preview ? "AI preview" : "AI";
         int accent = preview && state != State.WORKING ? 0xffc9a0ff : colour(state);
         int width = font.width(text) + 22, x = g.guiWidth() - width - 6, y = g.guiHeight() - 20; // bottom right, below the key hints and clear of the tips and toasts at the top
@@ -284,17 +275,15 @@ public final class AiBridge {
             case "get_palette" -> onClient(AiBridge::palette);
             case "get_screenshot" -> screenshot();
             case "render_view" -> AiView.render(args);
-            case "set_selection" -> { var from = point(args, "from"); var to = point(args, "to"); yield request("select_box", () -> select(from, to)); }
-            case "clear_selection" -> request("clear", () -> CraftiumClient.send("clear", null, null));
             case "preview_build" -> {
                 if (!args.has("spec")) throw new IllegalArgumentException("Missing \"spec\"");
                 var element = args.get("spec");
                 String spec = element.isJsonPrimitive() ? element.getAsString() : GSON.toJson(element);
                 yield request("ai_build_preview", () -> previewBuild(spec));
             }
-            case "apply_preview" -> request("pending_confirm", () -> CraftiumClient.send("pending_confirm", null, null));
-            case "cancel_preview" -> request("pending_cancel", () -> CraftiumClient.send("pending_cancel", null, null));
-            case "undo" -> request("undo", () -> CraftiumClient.send("undo", null, null));
+            case "apply_preview" -> request("ai_apply", () -> CraftiumClient.send("ai_apply", null, null));
+            case "cancel_preview" -> request("ai_cancel", () -> CraftiumClient.send("ai_cancel", null, null));
+            case "undo" -> request("ai_undo", () -> CraftiumClient.send("ai_undo", null, null));
             default -> throw new IllegalArgumentException("Unknown tool \"" + tool + "\"");
         };
     }
@@ -375,24 +364,9 @@ public final class AiBridge {
         if (wait > 0) Thread.sleep(wait / 1_000_000L + 1);
     }
 
-    private static void select(Point from, Point to) {
-        var o = ClientState.options;
-        Point first = o.position1, second = o.position2;
-        var mode = o.mode;
-        o.position1 = from;
-        o.position2 = to;
-        o.mode = Selection.Mode.REPLACE;
-        try { CraftiumClient.send("select_box", from, null); }
-        finally { o.position1 = first; o.position2 = second; o.mode = mode; }
-        // The agent chose this area on purpose, so the "Selected N blocks, confirm?" popup is for the player's own selections only.
-        ClientState.selectionPending = false;
-        ClientState.selectingSince = 0;
-    }
-
     private static void previewBuild(String spec) {
         var o = ClientState.options;
         o.buildSpec = spec;
-        aiPreview = true; // so the ghost this makes is drawn in the AI colour
         // The spec rides along on this one request and is not kept in the saved settings.
         try { CraftiumClient.send("ai_build_preview", null, null); }
         finally { o.buildSpec = ""; }
@@ -420,9 +394,8 @@ public final class AiBridge {
             selection.add("dimensions", array(status.max().x() - status.min().x() + 1, status.max().y() - status.min().y() + 1, status.max().z() - status.min().z() + 1));
         }
         out.add("selection", selection);
-        out.addProperty("previewBlocks", ClientState.pending.total());
-        out.addProperty("undoSteps", status.undo());
-        out.addProperty("redoSteps", status.redo());
+        out.addProperty("previewBlocks", ClientState.aiPending.total());
+        out.addProperty("undoSteps", status.aiUndo());
         out.addProperty("busy", status.busy());
         out.addProperty("lastMessage", status.message());
         return out;

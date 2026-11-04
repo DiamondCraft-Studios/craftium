@@ -15,6 +15,11 @@ final class Session {
     final Deque<Edit> undo = new ArrayDeque<>(), redo = new ArrayDeque<>();
     final List<String> events = new ArrayList<>();
     ResourceKey<Level> dimension;
+    /**
+     * True for the AI's own workspace: the preview it is holding ({@link #pendingEdit}) and the builds it can undo, kept apart from the
+     * player's. It has no selection, is never saved, and its statuses are described through the player's session.
+     */
+    boolean ai;
     Point corner, ruler, line;
     long lastRequest;
     /** The game mode the player had before the editor made them a spectator; null when nothing is waiting to be restored. */

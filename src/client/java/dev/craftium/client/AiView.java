@@ -7,7 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.*;
 
 /**
- * The AI's own camera: a picture of a box of the world, drawn in software from what the server reports, with the player's preview
+ * The AI's own camera: a picture of a box of the world, drawn in software from what the server reports, with the AI's own preview
  * tinted violet. It never touches the player's view or screen, and the box can be anywhere the server can read.
  */
 final class AiView {
@@ -70,7 +70,7 @@ final class AiView {
         int shown = 0;
         if (preview) {
             var ghost = AiBridge.onClient(() -> {
-                var pending = ClientState.pending;
+                var pending = ClientState.aiPending;
                 return pending.total() == 0 ? null : new Ghost(pending.stateNames(), pending.placedCells().clone(), pending.removedCells().clone());
             });
             if (ghost != null) {
