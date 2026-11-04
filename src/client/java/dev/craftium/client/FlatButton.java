@@ -21,9 +21,12 @@ final class FlatButton extends CraftiumButton {
     }
     @Override protected void paint(Gfx g,int x,int y,float delta){face(g,getX(),getY(),getWidth(),getHeight(),getMessage().getString(),lit,active,isHoveredOrFocused());}
     /** How every button in the editor looks, so the workspace and the screens it opens agree. */
-    static void face(Gfx g,int left,int top,int width,int height,String label,boolean lit,boolean enabled,boolean hovered){
+    static void face(Gfx g,int left,int top,int width,int height,String label,boolean lit,boolean enabled,boolean hovered){face(g,left,top,width,height,label,lit,enabled,hovered,false);}
+    /** As above; {@code leftAligned} starts the label at the left edge, as the entries of a menu do, instead of centring it. */
+    static void face(Gfx g,int left,int top,int width,int height,String label,boolean lit,boolean enabled,boolean hovered,boolean leftAligned){
         var o=ClientState.options;
         g.fill(left,top,left+width,top+height,hovered?Hover.fill(lit?0xff315b84:0xff223247):lit?0xff315b84:0xff223247);g.outline(left,top,width,height,hovered||lit?o.uiAccent:o.uiBorder);
-        var font=Minecraft.getInstance().font;g.centeredText(font,font.plainSubstrByWidth(label,width-10),left+width/2,top+(height-8)/2,enabled?o.uiText:o.uiMuted);
+        var font=Minecraft.getInstance().font;String shown=font.plainSubstrByWidth(label,width-10);int textY=top+(height-8)/2,color=enabled?o.uiText:o.uiMuted;
+        if(leftAligned)g.text(font,shown,left+8,textY,color,false);else g.centeredText(font,shown,left+width/2,textY,color);
     }
 }

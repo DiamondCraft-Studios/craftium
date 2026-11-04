@@ -173,7 +173,7 @@ public final class EditorScreen extends CraftiumScreen {
         g.pose().popMatrix();ReferenceImages.draw(g,true,mouseX,mouseY);
     }
     /** Whether the pointer is free to act on the controls, not held by a drag or covered by a pop-up. */
-    private boolean pointerFree(){return menu<0&&ctxCell<0&&!shapeMenu&&dragging==null&&draggedPanel.isBlank()&&cameraGesture==CameraGesture.NONE&&!(dragBlock!=null&&dragMoved);}
+    private boolean pointerFree(){return ctxCell<0&&!shapeMenu&&dragging==null&&draggedPanel.isBlank()&&cameraGesture==CameraGesture.NONE&&!(dragBlock!=null&&dragMoved);}
     /**
      * The hover look for every control in the workspace: the one the pointer is on, the topmost as for a click, is lightened and
      * outlined. Controls only register themselves, so none of them draws its own and a new one cannot forget to.
@@ -746,6 +746,11 @@ public final class EditorScreen extends CraftiumScreen {
         text(g,(ClientState.status.busy()?"APPLYING…":"● READY")+"   "+String.format(Locale.ROOT,"%.1f×",o().flySpeed),w-132,h-13,ClientState.status.busy()?0xffffd783:0xff89c9ac);
     }
     private void dropdown(Gfx g) {
+        menuAlign=true;try{dropdownItems(g);}finally{menuAlign=false;}
+    }
+    /** Whether {@link #button} left-aligns its label, as the entries of a menu do. */
+    private boolean menuAlign;
+    private void dropdownItems(Gfx g) {
         List<MenuItem> items=menuItems(menu);int x=108;String[] names={"File","Edit","Select","View","Create","Operations","Masks","Window","Help"};for(int i=0;i<menu;i++)x+=font.width(names[i])+16;
         int height=4;for(MenuItem item:items)height+=item.action==null?9:25;
         g.fill(x,24,x+226,24+height,0xff1c2735);g.outline(x,24,226,height,LINE);
@@ -790,8 +795,7 @@ public final class EditorScreen extends CraftiumScreen {
                 item("Edits history","",()->ClientCompat.setScreen(minecraft,new HistoryScreen(this))));
             case 2 -> List.of(item("Deselect","Ctrl+D",()->action("clear")),item("Inverse","",()->action("selection_invert")),
                 item(showSelection?"Hide selection":"Show selection","",()->showSelection=!showSelection),divider(),
-                item("Expand","by "+o().expandAmount,()->resizeSelection("selection_expand",o().expandAmount)),item("Shrink","by "+o().expandAmount,()->resizeSelection("selection_shrink",o().expandAmount)),
-                item("Expand by 1","",()->resizeSelection("selection_expand",1)),item("Shrink by 1","",()->resizeSelection("selection_shrink",1)));
+                item("Expand…","",()->ClientCompat.setScreen(minecraft,new ResizeSelectionScreen(this,true))),item("Shrink…","",()->ClientCompat.setScreen(minecraft,new ResizeSelectionScreen(this,false))));
             case 3 -> List.of(item("Toggle side panels","",()->panels=!panels),item("Tool options","",()->{builder=false;pinnedTab=false;init();}),item("Builder controls","Alt",()->{builder=true;init();}),item("Studio inspector","",()->ClientCompat.setScreen(minecraft,new StudioScreen(this))),item("Colour picker / gradient","",()->ClientCompat.setScreen(minecraft,new ColourScreen(this))),item("Keyboard shortcuts","",()->ClientCompat.setScreen(minecraft,new KeyboardShortcutsScreen(this))),item("Selection options…","",()->ClientCompat.setScreen(minecraft,new SelectionOptionsScreen(this))),item("Show controls","",()->help=true));
             case 7 -> {var items=new ArrayList<MenuItem>();for(String id:WorkspaceLayout.windows.keySet())items.add(item("Toggle "+id,"",()->WorkspaceLayout.toggle(id)));items.add(item("Save layout","",WorkspaceLayout::save));items.add(item("Reset layout","",WorkspaceLayout::reset));items.add(item("Copy layout","",()->minecraft.keyboardHandler.setClipboard(WorkspaceLayout.json())));items.add(item("Paste layout","",()->{try{WorkspaceLayout.importJson(minecraft.keyboardHandler.getClipboard());WorkspaceLayout.save();}catch(Exception e){ClientState.notify("Invalid layout JSON");}}));yield items;}
             case 4 -> List.of(item("Shape","",()->select(Tool.SHAPE)),item("Block text","",()->select(Tool.TEXT)),item("Line","",()->select(Tool.LINE)),item("Rock","",()->select(Tool.ROCK)));
@@ -931,7 +935,7 @@ public final class EditorScreen extends CraftiumScreen {
     /** A thin line between groups of menu entries; it has no action. */
     private MenuItem divider(){return new MenuItem("","",null);}
     /** Grows or shrinks the selection by {@code amount} blocks all round, the server repeating one block at a time. */
-    private void resizeSelection(String action,int amount){
+    void resizeSelection(String action,int amount){
         o().selectionResize=amount;
         try{action(action);}finally{o().selectionResize=0;}
     }
@@ -963,7 +967,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void button(Gfx g,int x,int y,int width,int height,String label,boolean active,Runnable action,String tip){button(g,x,y,width,height,label,active,action,null,tip);}
     /** A button that cycles through values: a click goes to the next one and a right click back to the one before. */
     private void button(Gfx g,int x,int y,int width,int height,String label,boolean active,Runnable action,Runnable back,String tip) {
-        FlatButton.face(g,x,y,width,height,label,active,true,false);
+        FlatButton.face(g,x,y,width,height,label,active,true,false,menuAlign);
         controls.add(new Control(x,y,width,height,action,back,back==null||tip.isEmpty()?tip:tip+" · Right-click goes back"));
     }
     private void toggle(Gfx g,int x,int y,String label,boolean value,Runnable action) {toggle(g,x,y,label,value,action,"");}
