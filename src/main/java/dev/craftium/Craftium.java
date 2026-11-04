@@ -28,6 +28,15 @@ public final class Craftium implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(Packets.Edit.TYPE, (payload,context) ->
             context.server().execute(() -> EditorServer.handle(context.player(),payload.json())));
         ServerTickEvents.END_SERVER_TICK.register(EditorServer::tick);
+        // Prevent block interactions: the held item is used on the block as it is when sneaking, so blocks still place but chests, grindstones and the like do not open.
+        net.fabricmc.fabric.api.event.player.UseBlockCallback.EVENT.register((player,level,hand,hit)->{
+            if(!(player instanceof net.minecraft.server.level.ServerPlayer))return net.minecraft.world.InteractionResult.PASS;
+            var options=dev.craftium.runtime.PlayerCapabilities.of(player);
+            if(options==null||!options.preventInteractions)return net.minecraft.world.InteractionResult.PASS;
+            var stack=player.getItemInHand(hand);
+            if(stack.isEmpty())return net.minecraft.world.InteractionResult.FAIL;
+            return stack.useOn(new net.minecraft.world.item.context.UseOnContext(player,hand,hit));
+        });
         ServerPlayConnectionEvents.DISCONNECT.register((handler,server) -> EditorServer.disconnect(handler.player));
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> EditorServer.clear());
         ServerLifecycleEvents.SERVER_STOPPING.register(EditorServer::flushHistory);
