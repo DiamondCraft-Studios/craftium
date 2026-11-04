@@ -24,7 +24,7 @@ final class OptionFields {
         return Kind.TEXT;
     }
     private static Object get(String name){try{return field(name).get(ClientState.options);}catch(IllegalAccessException e){throw new IllegalStateException(e);}}
-    private static void set(String name,Object value){try{field(name).set(ClientState.options,value);}catch(IllegalAccessException e){throw new IllegalStateException(e);}}
+    private static void set(String name,Object value){try{field(name).set(ClientState.options,value);if(name.equals("flightMomentum"))ClientState.options.flightMomentumCustom=true;}catch(IllegalAccessException e){throw new IllegalStateException(e);}}
     static boolean bool(String name){return (Boolean)get(name);}
     static void toggle(String name){set(name,!bool(name));}
     /** The enum's current value as text, as the inspector shows it on its button. */

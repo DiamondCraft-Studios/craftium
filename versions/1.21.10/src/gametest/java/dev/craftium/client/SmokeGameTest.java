@@ -36,6 +36,19 @@ public final class SmokeGameTest implements FabricClientGameTest {
             ctx.takeScreenshot("overlay");
             System.out.println("CRAFTIUM_SMOKE overlay_drawn");
 
+            // Flight momentum set to 0% means no drifting at all, not the game's own flight.
+            ctx.runOnClient(mc->{var o=ClientState.options;o.cameraFlight=false;o.enhancedFlight=false;o.flightMomentum=.5;mc.player.getAbilities().flying=true;});
+            ctx.waitTicks(3);
+            boolean stops=ctx.computeOnClient(mc->{
+                ClientState.options.flightMomentum=0;
+                mc.player.setDeltaMovement(new net.minecraft.world.phys.Vec3(.5,0,0));
+                mc.player.travel(net.minecraft.world.phys.Vec3.ZERO);
+                return mc.player.getDeltaMovement().lengthSqr()==0;
+            });
+            ctx.runOnClient(mc->{mc.player.getAbilities().flying=false;ClientState.options.flightMomentum=0;});
+            System.out.println("CRAFTIUM_SMOKE flight_zero_momentum_stops="+stops);
+            if(!stops)throw new AssertionError("Flight momentum at 0% still drifted");
+
             // Minimum brightness and liquid opacity exercise the lightmap and fluid mixins.
             ctx.runOnClient(mc->{ClientState.options.minimumBrightness=.5;ClientState.options.liquidOpacity=.5;});
             ctx.waitTicks(10);

@@ -238,7 +238,7 @@ public final class BuilderWidget {
     private static final List<Setting> SETTINGS=List.of(
         new Setting("Min brightness","The world is lit at least this much: 100% is full bright",true,o->o.minimumBrightness,(o,v)->o.minimumBrightness=v),
         // Momentum is stored up to 98% (at 100% you could never stop), so the slider runs over that range.
-        new Setting("Flight momentum","How long you keep drifting after letting go of the keys · locked at 0% by Instant flight",true,o->o.flightMomentum/.98,(o,v)->o.flightMomentum=v*.98,o->o.enhancedFlight),
+        new Setting("Flight momentum","How long you keep drifting after letting go of the keys · locked at 0% by Instant flight",true,o->o.flightMomentum/.98,(o,v)->{o.flightMomentum=v*.98;o.flightMomentumCustom=true;},o->o.enhancedFlight),
         new Setting("Expand block hitboxes","Every block is targeted as a full cube for now, so torches and panes are easy to hit",false,o->o.expandHitboxes?1:0,(o,v)->o.expandHitboxes=v>0),
         new Setting("Solid fluid hitboxes","Water and lava can be targeted, so they can be broken by hand",false,o->o.solidFluids?1:0,(o,v)->o.solidFluids=v>0),
         new Setting("Prevent block interactions","Chests, crafting tables and the like do not open when clicked",false,o->o.preventInteractions?1:0,(o,v)->o.preventInteractions=v>0));
