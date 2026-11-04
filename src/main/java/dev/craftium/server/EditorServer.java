@@ -325,9 +325,11 @@ public final class EditorServer {
                     var plan=new EditPlanner(player.level(),s,o);
                     if(r.action().equals("builder_place")) {
                         if(o.tinker && player.getMainHandItem().isEmpty()) {
-                            var old=plan.state(target);var property=dev.craftium.runtime.TinkerProperties.pick(old,o.tinkerIndex);
-                            if(property==null)throw new IllegalArgumentException("This block has no properties to tinker with");
-                            plan.put(target,dev.craftium.runtime.TinkerProperties.cycle(old,property));
+                            var old=plan.state(target);
+                            var aim=dev.craftium.runtime.TinkerRules.Aim.of(normal==null?0:normal.x(),normal==null?1:normal.y(),normal==null?0:normal.z(),o.tinkerX,o.tinkerY,o.tinkerZ);
+                            var result=dev.craftium.runtime.TinkerRules.apply(old,aim,o.tinkerManual?o.tinkerIndex:-1);
+                            if(result==null)throw new IllegalArgumentException("This block has no properties to tinker with");
+                            plan.put(target,result.state());
                         } else {
                             Point at=o.replaceMode?target:target.add(normal.x(),normal.y(),normal.z());
                             plan.put(at,plan.preserve(plan.state(target),plan.material));

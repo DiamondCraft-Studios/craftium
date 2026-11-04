@@ -13,10 +13,13 @@ final class SelectionOverlay {
     private static OutlineShape shape=OutlineShape.EMPTY;
     private static List<BlockPos> blocks=List.of(),moved=List.of();
     private static Point movedBy;
+    private static List<Point> selected=List.of();
+    /** The selected blocks as last received; replaced, never changed, so the same list means the same selection. */
+    static List<Point> points(){return selected;}
     private SelectionOverlay(){}
     static void update(String data){
         if(Objects.equals(encoded,data))return;encoded=data;
-        var points=SelectionCodec.decode(data);
+        var points=SelectionCodec.decode(data);selected=List.copyOf(points);
         shape=OutlineShape.of(points);
         blocks=points.size()>MAX_GHOST_BLOCKS?List.of():points.stream().map(p->new BlockPos(p.x(),p.y(),p.z())).toList();
     }

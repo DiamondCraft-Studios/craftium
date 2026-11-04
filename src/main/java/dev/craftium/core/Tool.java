@@ -28,7 +28,7 @@ public enum Tool {
     SHAPE("Shape", "SP", "Draw", "Right-click to put down a shape of your foreground block, shape it with Move, Rotate and Scale, then press Enter to build it."),
     LINE("Line", "LN", "Draw", "Right-click two endpoints to draw a continuous line."),
     ERASE("Erase", "ER", "Draw", "Remove blocks inside the brush with undo."),
-    TINKER("Tinker", "TK", "Utility", "Cycle block properties. Sneak to cycle the next property."),
+    TINKER("Tinker", "TK", "Utility", "Right click a block to change it the way you aim: full blocks, stairs and slabs turn into each other, walls and fences change the arm you point at. Sneak to pick a property to cycle."),
     LASSO_SELECT("Lasso Select", "LS", "Select", "Draw a screen-space polygon; release to project it into the world."),
     GRADIENT_PAINTER("Gradient Painter", "GP", "Paint", "Shift-right-click gradient anchors, then paint between them."),
     SCRIPT_BRUSH("Script Brush", "LU", "Paint", "Run a bounded Lua script for each block in the brush."),
