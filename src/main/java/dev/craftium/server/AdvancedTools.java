@@ -74,7 +74,7 @@ final class AdvancedTools {
                     }
                 }
             }
-            case MODIFY -> modify(p);
+            case MODIFY -> modify(p,center);
             case TEXT -> {if(o.useBuiltinFont)return false;text(p,center,normal);}
             default -> {return false;}
         }return true;
@@ -113,16 +113,15 @@ final class AdvancedTools {
         };
     }
     static net.minecraft.nbt.CompoundTag data(EditPlanner p,Point at){var entity=p.level.getBlockEntity(EditPlanner.pos(at));return entity==null?null:entity.saveWithFullMetadata(p.level.registryAccess());}
-    static void modify(EditPlanner p){
+    /** Modify: translate copies, revolve, rotate copies or twist the selection. The placement comes from {@link ModifyMath}, which the live preview shares. */
+    static void modify(EditPlanner p,Point cursor){
         var o=p.o;var points=p.session.selection.points();if(points.isEmpty())throw new IllegalArgumentException("Create a selection first");
-        Point pivot=p.session.selection.min();var source=new LinkedHashMap<Point,BlockSnapshot>();for(Point at:points)source.put(at,BlockSnapshot.capture(p.level,EditPlanner.pos(at)));
+        var source=new LinkedHashMap<Point,BlockSnapshot>();for(Point at:points){var snap=BlockSnapshot.capture(p.level,EditPlanner.pos(at));if(o.pasteAir||!snap.state().isAir())source.put(at,snap);}
+        if(source.isEmpty())throw new IllegalArgumentException("The selection holds no blocks");
+        if(ModifyMath.usesCursor(o)&&cursor==null)throw new IllegalArgumentException("Point at a block to turn around");
+        var placed=ModifyMath.plan(o,source.keySet(),p.session.selection.min(),p.session.selection.max(),cursor);
         if(o.modifyMode==Options.ModifyMode.TWIST)for(Point at:points)p.put(at,Blocks.AIR.defaultBlockState());
-        int copies=o.modifyMode==Options.ModifyMode.TWIST?1:o.copies;
-        for(int i=1;i<=copies;i++)for(var entry:source.entrySet()){
-            Point relative=entry.getKey().subtract(pivot);double angle=o.modifyMode==Options.ModifyMode.TWIST?o.yaw*relative.y()/Math.max(1,p.session.selection.max().y()-pivot.y()):o.yaw*i;
-            var v=o.modifyMode==Options.ModifyMode.TRANSLATE_COPIES?Geometry.vector(relative):Geometry.rotate(Geometry.vector(relative),angle,o.pitch*i,o.roll*i);
-            Point at=v.voxel().add(pivot.x()+o.offsetX*i,pivot.y()+o.offsetY*i,pivot.z()+o.offsetZ*i);if(!o.pasteAir&&entry.getValue().state().isAir())continue;p.put(at,entry.getValue());
-        }
+        for(var e:placed.entrySet())p.put(e.getKey(),source.get(e.getValue()));
     }
     private static void text(EditPlanner p,Point c,Point normal){
         var o=p.o;Font font=new Font(o.fontName,Font.PLAIN,o.fontSize);

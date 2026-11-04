@@ -101,6 +101,17 @@ public final class Options {
     public PathMode pathMode=PathMode.DDA;
     public ModelMode modelMode=ModelMode.CONVEX_HULL;
     public ModifyMode modifyMode=ModifyMode.TRANSLATE_COPIES;
+    public enum ModifyAxis { X,Y,Z }
+    public enum RotateType { EQUIDISTANT,CUSTOM_ANGLE }
+    /** Modify: the axis to revolve, rotate or twist about, the angle in degrees, and how Rotate Copies spaces its copies. */
+    public ModifyAxis modifyAxis=ModifyAxis.Y;
+    public RotateType modifyType=RotateType.EQUIDISTANT;
+    public double modifyAngle=360;
+    /** Modify: whether Translate Copies offsets are multiplied by the selection's size (relative) or are plain block offsets (absolute). */
+    public boolean modifyRelative=true;
+    /** Modify: Add Translation, which offsets where a revolve or the last rotated copy ends up. */
+    public boolean modifyTranslate;
+    public double modifyTranslateX,modifyTranslateY,modifyTranslateZ;
     public ShapeKind shapeKind=ShapeKind.BRUSH;
     public java.util.List<Point> nodes=new java.util.ArrayList<>();
     public java.util.List<Point> selectionPoints=new java.util.ArrayList<>();
@@ -207,6 +218,8 @@ public final class Options {
         offsetX=Math.clamp(offsetX,-128,128);offsetY=Math.clamp(offsetY,-128,128);offsetZ=Math.clamp(offsetZ,-128,128);copies=Math.clamp(copies,1,16);
         if(compare==null)compare=Compare.ANY; // Gson reads a constant that no longer exists, the old SOLID, as null
         if(noise==null||pathMode==null||modelMode==null||modifyMode==null||shapeKind==null||rulerMode==null)throw new IllegalArgumentException("Missing advanced options");
+        if(modifyAxis==null||modifyType==null)throw new IllegalArgumentException("Missing advanced options");
+        modifyAngle=bounded(modifyAngle,-3600,3600);modifyTranslateX=bounded(modifyTranslateX,-256,256);modifyTranslateY=bounded(modifyTranslateY,-256,256);modifyTranslateZ=bounded(modifyTranslateZ,-256,256);
         rulerSplit=Math.clamp(rulerSplit,2,16);
         historySteps=Math.clamp(historySteps,1,32);
         if(colourField==null||colourField.size()>4096||colourField.contains(null))throw new IllegalArgumentException("Colour field limit: 4096 blocks");for(var placement:colourField)if(placement.point()==null||placement.block()==null||placement.block().length()>256)throw new IllegalArgumentException("Invalid colour field entry");
