@@ -651,16 +651,6 @@ public final class EditorScreen extends CraftiumScreen {
         if(hit==null){ClientState.notify("Drop the block onto a block in the world");return;}
         if(ClientState.status.busy()){ClientState.notify("Wait for the current edit to finish");return;}
         var at=hit.getBlockPos();Point point=CraftiumClient.point(at),normal=CraftiumClient.normal(hit);
-        // A fill this big is confirmed first, as a large selection is.
-        int count=minecraft.level==null?0:MagicPreview.bucketCount(minecraft,at,o());
-        if(count>=ClientState.LARGE_SELECTION){
-            String size=count>=MagicPreview.BUCKET_LIMIT?count+"+":Integer.toString(count);
-            confirm=new Confirm("Fill "+size+" blocks with "+block.replace("minecraft:","")+"?","Fill these blocks",()->{
-                if(ClientState.status.busy()){ClientState.notify("Wait for the current edit to finish");return;}
-                sendBucket(block,point,normal);
-            });
-            return;
-        }
         sendBucket(block,point,normal);
     }
     /** A question the player answers before something happens: the text, what Confirm is for, and what Confirm does. */
