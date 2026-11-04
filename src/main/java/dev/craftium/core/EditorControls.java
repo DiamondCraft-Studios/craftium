@@ -24,7 +24,7 @@ public final class EditorControls {
         NUDGE_FORWARD("Nudge forwards",265,0),NUDGE_BACK("Nudge backwards",264,0),NUDGE_RIGHT("Nudge right",262,0),NUDGE_LEFT("Nudge left",263,0),NUDGE_UP("Nudge +Y",266,0),NUDGE_DOWN("Nudge -Y",267,0),
         INGAME_COPY("Ingame: copy",'C',CONTROL),INGAME_DELETE("Ingame: delete",261,0),
         INSPECTOR("Craftium: inspector"),HELP("Craftium: controls help"),PANELS("Craftium: side panels"),
-        UNDO_ALT("Undo (second shortcut)",'Z',CONTROL|SHIFT),DESELECT("Deselect",'D',CONTROL),
+        UNDO_ALT("Undo (second shortcut)",'Z',CONTROL|SHIFT),DESELECT("Deselect",'D',ALT),
         TOGGLE_MOVE("Toggle Move tool (second key)",'1',0),TOGGLE_ROTATE("Toggle Rotate tool (second key)",'2',0),TOGGLE_SCALE("Toggle Scale tool (second key)",'3',0),TOGGLE_PIVOT("Toggle Pivot tool (second key)",'4',0),
         GIZMO_MOVE("Craftium: move gizmo"),GIZMO_ROTATE("Craftium: rotate gizmo"),GIZMO_SCALE("Craftium: scale gizmo"),LOCAL_AXES("Craftium: local gizmo axes");
         public boolean mouseOnly(){return switch(this){case ROTATE_CAMERA,PICK_BLOCK,USE_TOOL,ARCBALL,PAN_CAMERA,CROSSHAIR,ADJUST_RADIUS->true;default->false;};}
