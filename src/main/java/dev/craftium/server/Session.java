@@ -41,6 +41,8 @@ final class Session {
     String cornersNow="none",cornersHistory="none";
     /** The pivot the player had as of this request and as of the one before it, as "none" or "x,y,z". */
     String pivotNow="none",pivotBeforeRequest="none";
+    /** The shape the Shape tool was asked to build, as "x,y,z,yaw,pitch,roll,sizeX,sizeY,sizeZ", for undo to put back as waiting to be built; null for any other request. */
+    String shapeAtRequest;
     /** The selection as it was before the last selection action, so a mistaken one can be taken back. Null when there is none. */
     List<Point> selectionBefore;
     /** The selection as of the last time it was noted in the history, the revision it had, and whether the current action is a selection action. */

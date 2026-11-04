@@ -14,6 +14,7 @@ final class ClientRestore {
                     ClientState.boxCorners.clear();
                     if(!value.equals("none"))ClientState.boxCorners.addAll(Restore.parsePoints(value));
                 }
+                case "shape" -> ShapeObject.restore(value);
                 case "entity" -> ClientState.options.entityUuid=value.equals("none")?"":value;
                 default -> {}
             }

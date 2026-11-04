@@ -151,6 +151,8 @@ public final class EditorServer {
                 if(!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly())s.undo.removeFirst();
                 if(s.selectionBefore!=null){s.selection.restore(s.selectionBefore);s.selectionBefore=null;}send(player,s,"Selection cancelled",false);return;}
             if(r.action().equals("select_box")||r.action().equals("lasso_select")||r.action().equals("use")&&o.tool.selection())s.selectionBefore=new ArrayList<>(s.selection.points());
+            s.shapeAtRequest=r.action().equals("use")&&o.tool==Tool.SHAPE&&o.shapeKind==Options.ShapeKind.BRUSH&&r.target()!=null
+                ?String.format(java.util.Locale.ROOT,"%d,%d,%d,%s,%s,%s,%s,%s,%s",r.target().x(),r.target().y(),r.target().z(),o.yaw,o.pitch,o.roll,o.sizeX,o.sizeY,o.sizeZ):null;
             s.pivotBeforeRequest=s.pivotNow;s.pivotNow=pivotText(o,0,0,0);
             if(r.action().equals("select_box")||r.action().equals("select_box_adjust")){if(o.position1!=null&&o.position2!=null)s.cornersNow=dev.craftium.core.Restore.points(o.position1,o.position2);}
             else if(changesSelection(r.action(),o))s.cornersNow="none";
@@ -508,6 +510,10 @@ public final class EditorServer {
         }
     }
     private static void start(ServerPlayer player,Session s,Session.Edit edit) {
+        if(s.shapeAtRequest!=null&&!edit.changes().isEmpty()){ // a shape that was built goes back to waiting to be built when it is undone
+            var change=edit.selection()==null?Session.SelectionChange.restoring(Map.of(),Map.of()):edit.selection();
+            edit=edit.withSelection(change.with(Map.of("shape",s.shapeAtRequest),Map.of("shape","none")));
+        }
         if(edit.changes().isEmpty() && edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()){send(player,s,"No matching blocks changed",false);return;}
         if(edit.estimatedBytes()>32*1024*1024)throw new IllegalArgumentException("Edit exceeds the 32 MiB history budget; use a smaller region");
         EditProtection.check(player,edit);
