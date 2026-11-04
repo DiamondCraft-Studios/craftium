@@ -1203,7 +1203,8 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         double[] axes=flightAxes();double forward=axes[0],side=axes[1],up=axes[2];
         boolean moving=forward!=0||side!=0||up!=0,ctrl=minecraft.hasControlDown();
         // Ctrl only sprints when pressed after the player is already moving; pressed first it starts a chord, so it does not move.
-        if(!ctrl||!moving)sprinting=false;else if(wasMoving)sprinting=true;
+        // Holding a gizmo is no chord, so there Ctrl moves the player whichever was pressed first.
+        if(!ctrl||!moving)sprinting=false;else if(wasMoving||TransformGizmo.dragging())sprinting=true;
         wasMoving=moving&&(!ctrl||sprinting);
         if(!moving||(ctrl&&!sprinting))return;
         double yaw=Math.toRadians(player.getYRot());
