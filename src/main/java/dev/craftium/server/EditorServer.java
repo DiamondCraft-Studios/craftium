@@ -44,10 +44,10 @@ public final class EditorServer {
     }
     private static void rememberInterrupted(Job j){rememberInterrupted(j.session,j.edit,j.applied,j.backwards,j.history);}
     static void rememberInterrupted(Session session,Session.Edit edit,List<Session.Change> applied,boolean backwards,boolean history){
-        var partial=new Session.Edit(edit.name()+" (interrupted)",List.copyOf(applied),List.of(),edit.flags());
+        var partial=new Session.Edit(edit.name()+" (interrupted)",List.copyOf(applied),List.of(),edit.flags()).withBuilder(edit.builder());
         if(!history){if(!applied.isEmpty())session.remember(partial);return;}
         var positions=new HashSet<Point>();for(var c:applied)positions.add(c.pos());
-        var remaining=new Session.Edit(edit.name(),edit.changes().stream().filter(c->!positions.contains(c.pos())).toList(),edit.biomes(),edit.flags(),edit.entities(),edit.annotations());
+        var remaining=new Session.Edit(edit.name(),edit.changes().stream().filter(c->!positions.contains(c.pos())).toList(),edit.biomes(),edit.flags(),edit.entities(),edit.annotations()).withBuilder(edit.builder());
         if(!applied.isEmpty())(backwards?session.redo:session.undo).addFirst(partial);
         if(!remaining.changes().isEmpty()||!remaining.biomes().isEmpty()||!remaining.entities().isEmpty()||!remaining.annotations().isEmpty())(backwards?session.undo:session.redo).addFirst(remaining);
         while(session.undo.size()>32)session.undo.removeLast();
@@ -87,7 +87,7 @@ public final class EditorServer {
                 c.after().place(level,EditPlanner.pos(c.pos()),mirrors.flags());changes.add(c);
             }
             if(changes.isEmpty())return;
-            s.remember(new Session.Edit("Builder placement",changes,List.of(),mirrors.flags()));
+            s.remember(new Session.Edit("Builder placement",changes,List.of(),mirrors.flags()).withBuilder(true));
             send(player,s,"Placed "+changes.size()+(changes.size()==1?" block":" blocks"),false);
         }catch(IllegalArgumentException e){send(player,s,e.getMessage(),true);}
     }
@@ -151,6 +151,7 @@ public final class EditorServer {
                 if(!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly())s.undo.removeFirst();
                 if(s.selectionBefore!=null){s.selection.restore(s.selectionBefore);s.selectionBefore=null;}send(player,s,"Selection cancelled",false);return;}
             if(r.action().equals("select_box")||r.action().equals("lasso_select")||r.action().equals("use")&&o.tool.selection())s.selectionBefore=new ArrayList<>(s.selection.points());
+            s.fromBuilder=r.action().startsWith("builder_");
             s.shapeAtRequest=r.action().equals("use")&&o.tool==Tool.SHAPE&&o.shapeKind==Options.ShapeKind.BRUSH&&r.target()!=null
                 ?String.format(java.util.Locale.ROOT,"%d,%d,%d,%s,%s,%s,%s,%s,%s",r.target().x(),r.target().y(),r.target().z(),o.yaw,o.pitch,o.roll,o.sizeX,o.sizeY,o.sizeZ):null;
             s.pivotBeforeRequest=s.pivotNow;s.pivotNow=pivotText(o,0,0,0);
@@ -306,6 +307,11 @@ public final class EditorServer {
                         plan.put(p.add(o.offsetX*i,o.offsetY*i,o.offsetZ*i),e.getValue());
                     }
                     start(player,s,plan.finish(r.action().equals("move")?"Move selection":r.action().equals("clone")?"Clone selection":"Stack selection"));
+                }
+                case "builder_undo", "builder_redo" -> { // the chords outside the builder reach only what the builder made; the editor's own edits stay with the editor
+                    boolean back=r.action().equals("builder_undo");var top=(back?s.undo:s.redo).peekFirst();
+                    if(top==null||!top.builder()){send(player,s,back?"Nothing to undo in the builder":"Nothing to redo in the builder",false);return;}
+                    s.historyRemaining=0;if(back)undoAnimated(player,s);else history(player,s,false);
                 }
                 case "undo", "redo" -> {s.historyRemaining=0;if(r.action().equals("undo"))undoAnimated(player,s);else history(player,s,false);}
                 case "fill", "delete" -> {
@@ -510,6 +516,7 @@ public final class EditorServer {
         }
     }
     private static void start(ServerPlayer player,Session s,Session.Edit edit) {
+        if(s.fromBuilder)edit=edit.withBuilder(true);
         if(s.shapeAtRequest!=null&&!edit.changes().isEmpty()){ // a shape that was built goes back to waiting to be built when it is undone
             var change=edit.selection()==null?Session.SelectionChange.restoring(Map.of(),Map.of()):edit.selection();
             edit=edit.withSelection(change.with(Map.of("shape",s.shapeAtRequest),Map.of("shape","none")));
@@ -535,7 +542,7 @@ public final class EditorServer {
         var entities=new ArrayList<>(a.entities());entities.addAll(b.entities());
         var annotations=new ArrayList<>(a.annotations());annotations.addAll(b.annotations());
         var selection=a.selection()!=null&&b.selection()!=null?a.selection().then(b.selection()):a.selection()!=null?a.selection():b.selection();
-        return new Session.Edit(a.name(),new ArrayList<>(changes.values()),biomes,a.flags()|b.flags(),entities,annotations,selection);
+        return new Session.Edit(a.name(),new ArrayList<>(changes.values()),biomes,a.flags()|b.flags(),entities,annotations,selection).withBuilder(a.builder()&&b.builder());
     }
     private static final int PULSE_MS=600,PULSE_POINTS=8192;
     /** The points a pulse shows: all of them, or an even sample when there are too many to draw. */
@@ -618,7 +625,7 @@ public final class EditorServer {
             var appliedBiomes=applyBiomes(j);
             var appliedEntities=EntityEdits.apply(j.level,j.edit.entities(),j.backwards);
             var appliedAnnotations=AnnotationEdits.apply(j.level,j.edit.annotations(),j.backwards);
-            var actual=new Session.Edit(j.edit.name(),List.copyOf(j.applied),appliedBiomes,j.edit.flags(),appliedEntities,appliedAnnotations,j.edit.selection(),j.edit.time());
+            var actual=new Session.Edit(j.edit.name(),List.copyOf(j.applied),appliedBiomes,j.edit.flags(),appliedEntities,appliedAnnotations,j.edit.selection(),j.edit.time(),j.edit.builder());
             int skipped=j.edit.changes().size()-j.applied.size()+j.edit.biomes().size()-appliedBiomes.size()+j.edit.entities().size()-appliedEntities.size()+j.edit.annotations().size()-appliedAnnotations.size();
             if(j.history) {
                 // Retain only the cells actually restored; conflicting subsequent edits are left intact.

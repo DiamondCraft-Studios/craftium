@@ -226,6 +226,11 @@ public final class CraftiumClient implements ClientModInitializer {
     public static boolean ingameKey(net.minecraft.client.input.KeyEvent event,int action){
         var mc=Minecraft.getInstance();if(action!=GLFW.GLFW_PRESS||ClientCompat.screen(mc)!=null||mc.player==null||!mc.player.isCreative()||!supported())return false;
         if(EntityShortcuts.ingame(event))return true;
+        // Outside the builder the undo and redo chords still reach what the builder made, and nothing else.
+        if(!BuilderMode.active()){
+            boolean undo=EditorBindings.matches(EditorControls.Action.UNDO,event);
+            if(undo||EditorBindings.matches(EditorControls.Action.REDO,event)){send(undo?"builder_undo":"builder_redo",null,null);return true;}
+        }
         if(EditorBindings.matches(EditorControls.Action.INGAME_COPY,event)){
             var hit=mc.hitResult instanceof BlockHitResult b&&b.getType()==HitResult.Type.BLOCK?b:null;
             if(hit!=null){send("pick_block",point(hit.getBlockPos()),normal(hit));return true;}
