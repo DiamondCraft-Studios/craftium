@@ -525,7 +525,7 @@ public final class EditorServer {
         var biomes=new ArrayList<>(a.biomes());biomes.addAll(b.biomes());
         var entities=new ArrayList<>(a.entities());entities.addAll(b.entities());
         var annotations=new ArrayList<>(a.annotations());annotations.addAll(b.annotations());
-        var selection=a.selection()!=null&&b.selection()!=null?new Session.SelectionChange(a.selection().before(),b.selection().after(),a.selection().pivotBefore(),b.selection().pivotAfter(),a.selection().boxBefore(),b.selection().boxAfter()):a.selection()!=null?a.selection():b.selection();
+        var selection=a.selection()!=null&&b.selection()!=null?a.selection().then(b.selection()):a.selection()!=null?a.selection():b.selection();
         return new Session.Edit(a.name(),new ArrayList<>(changes.values()),biomes,a.flags()|b.flags(),entities,annotations,selection);
     }
     private static final int PULSE_MS=600,PULSE_POINTS=8192;
@@ -543,6 +543,14 @@ public final class EditorServer {
             s.pulse="undo:"+PULSE_MS+":"+SelectionCodec.encode(pulsePoints(edit.changes().stream().map(Session.Change::pos).toList()));
         try{history(player,s,true);}catch(IllegalArgumentException e){s.pulse="";throw e;}
     }
+    /** Undo or redo puts back what the edit changed besides blocks: the player's selection and pivot, and client-side state such as the builder's box. */
+    private static void handBack(Session s,Session.SelectionChange change,boolean backwards){
+        if(change.hasPoints())s.selection.restore(backwards?change.before():change.after());
+        String pivot=backwards?change.pivotBefore():change.pivotAfter();
+        if(pivot!=null)s.pivotUpdate=pivot;
+        var values=backwards?change.restoreBefore():change.restoreAfter();
+        if(!values.isEmpty())s.restoreUpdate=dev.craftium.core.Restore.encode(values);
+    }
     private static void history(ServerPlayer player,Session s,boolean backwards) {
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Wait for the current edit or animated rebuild to finish");
         var from=backwards?s.undo:s.redo;
@@ -550,7 +558,7 @@ public final class EditorServer {
         var edit=from.peekFirst();
         if(edit.selectionOnly()){ // a selection has no blocks: put it back directly
             from.removeFirst();
-            s.selection.restore(backwards?edit.selection().before():edit.selection().after());
+            handBack(s,edit.selection(),backwards);
             (backwards?s.redo:s.undo).addFirst(edit);
             s.recalculateBytes();s.historyDirty=true;s.event((backwards?"Undo ":"Redo ")+edit.name());
             send(player,s,(backwards?"Undid ":"Redid ")+edit.name(),false);return;
@@ -604,12 +612,7 @@ public final class EditorServer {
                 (j.backwards?j.session.redo:j.session.undo).addFirst(actual);
                 // The selection goes back or forward with the blocks it was moved with.
                 if(j.edit.selection()!=null){
-                    var change=j.edit.selection();
-                    if(change.hasPoints())j.session.selection.restore(j.backwards?change.before():change.after());
-                    String pivot=j.backwards?change.pivotBefore():change.pivotAfter();
-                    if(pivot!=null)j.session.pivotUpdate=pivot;
-                    String box=j.backwards?change.boxBefore():change.boxAfter();
-                    if(box!=null)j.session.builderUpdate=box;
+                    handBack(j.session,j.edit.selection(),j.backwards);
                 }
                 j.session.recalculateBytes();
                 j.session.historyDirty=true;
@@ -684,7 +687,7 @@ public final class EditorServer {
             var before=s.historySelection;
             // Dragging a box handle redoes the same selection many times: keep one entry, from where it began.
             if(s.currentAction.equals("select_box_adjust")&&!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly()){before=s.undo.removeFirst().selection().before();}
-            s.remember(Session.Edit.selecting(selectionName(s.currentAction,after.size()),before,after));
+            s.remember(Session.Edit.selecting(selectionName(s.currentAction,after.size()),new Session.SelectionChange(before,after)));
         }
         s.historySelection=after;s.historyRevision=s.selection.revision();
     }
@@ -703,7 +706,7 @@ public final class EditorServer {
         if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
         if(ai!=null&&ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit);ai.pendingDirty=false;}
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.builderUpdate);s.library=List.of();s.pivotUpdate="";s.builderUpdate="";s.pulse="";
+        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate);s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
         ServerPlatform.send(player,new Packets.Update(Packets.JSON.toJson(status)));
     }
 }

@@ -47,7 +47,7 @@ final class BuilderEdits {
             after=box(new Point(min.x()+Math.min(0,sx)*size.x(),min.y()+Math.min(0,sy)*size.y(),min.z()+Math.min(0,sz)*size.z()),new Point(max.x()+Math.max(0,sx)*size.x(),max.y()+Math.max(0,sy)*size.y(),max.z()+Math.max(0,sz)*size.z()));
         }
         var result=new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),List.copyOf(entities),List.of());
-        return after==null?result:result.withSelection(Session.SelectionChange.box(before,after));
+        return after==null?result:result.withSelection(Session.SelectionChange.restoring(Map.of("box",before),Map.of("box",after)));
     }
     private static String box(Point a,Point b){return a.x()+","+a.y()+","+a.z()+","+b.x()+","+b.y()+","+b.z();}
     static BlockState verticalMirror(BlockState state){
