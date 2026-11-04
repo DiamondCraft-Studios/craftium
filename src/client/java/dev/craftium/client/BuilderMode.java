@@ -145,6 +145,7 @@ public final class BuilderMode {
     public static void confirm(){
         if(first==null||second==null)return;var o=ClientState.options;Point prior1=o.position1,prior2=o.position2;int x=o.offsetX,y=o.offsetY,z=o.offsetZ;o.position1=first;o.position2=second;o.offsetX=offset.x();o.offsetY=offset.y();o.offsetZ=offset.z();o.stackX=stackX;o.stackY=stackY;o.stackZ=stackZ;CraftiumClient.send("builder_commit",first,new Point(0,1,0));o.position1=prior1;o.position2=prior2;o.offsetX=x;o.offsetY=y;o.offsetZ=z;o.stackX=o.stackY=o.stackZ=0;
         if(o.builderTool==Options.BuilderTool.CLONE){preview=true;clonePlaced=true;}
+        else if(o.builderTool==Options.BuilderTool.MOVE)follow();
         else if(o.builderTool==Options.BuilderTool.STACK&&(stackX!=0||stackY!=0||stackZ!=0))grow();
         else clear();
     }
@@ -153,6 +154,16 @@ public final class BuilderMode {
         var steps=new ArrayList<Point>();
         for(int i=Math.min(0,stackX);i<=Math.max(0,stackX);i++)for(int j=Math.min(0,stackY);j<=Math.max(0,stackY);j++)for(int k=Math.min(0,stackZ);k<=Math.max(0,stackZ);k++)if(i!=0||j!=0||k!=0)steps.add(new Point(i*size.x(),j*size.y(),k*size.z()));
         return steps;
+    }
+    /** After a move the selection stays, where the blocks now are (turned or flipped as they were). */
+    private static void follow(){
+        var o=ClientState.options;Point min=min(),max=max();Point size=max.add(1-min.x(),1-min.y(),1-min.z());Point shift=min.add(offset.x(),offset.y(),offset.z());
+        Point a=BuilderTransform.apply(new Point(0,0,0),size,o.builderRotation,o.builderFlipAxis),b=BuilderTransform.apply(new Point(size.x()-1,size.y()-1,size.z()-1),size,o.builderRotation,o.builderFlipAxis);
+        var moved=new ArrayList<Point>(cells.size());
+        for(Point at:cells)moved.add(BuilderTransform.apply(at.subtract(min),size,o.builderRotation,o.builderFlipAxis).add(shift.x(),shift.y(),shift.z()));
+        first=new Point(Math.min(a.x(),b.x())+shift.x(),Math.min(a.y(),b.y())+shift.y(),Math.min(a.z(),b.z())+shift.z());
+        second=new Point(Math.max(a.x(),b.x())+shift.x(),Math.max(a.y(),b.y())+shift.y(),Math.max(a.z(),b.z())+shift.z());
+        cells=moved;cellBlocksFor=null;retool();
     }
     /** The selection with the whole stack in it. */
     private static Point[] stackBounds(){
