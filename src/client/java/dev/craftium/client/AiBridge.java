@@ -34,8 +34,56 @@ public final class AiBridge {
     private static volatile String token = "";
     /** Completed by the next status the server sends after a request, which is how a tool learns what its request did. */
     private static volatile CompletableFuture<Packets.Status> awaiting;
+    /** What the AI app is doing, for the indicator: requests being answered now, and when and with what the last one came. */
+    private static final java.util.concurrent.atomic.AtomicInteger working = new java.util.concurrent.atomic.AtomicInteger();
+    private static volatile long lastCall;
+    private static volatile String lastTool = "";
+    private static final long ACTIVE_MILLIS = 120_000;
 
     private AiBridge() {}
+
+    public enum State { OFF, WAITING, ACTIVE, WORKING }
+
+    /** Off; on and waiting for an AI app to call; on with an AI app seen in the last two minutes; or answering a call right now. */
+    public static State indicator() {
+        if (!running()) return State.OFF;
+        if (working.get() > 0) return State.WORKING;
+        return lastCall != 0 && System.currentTimeMillis() - lastCall < ACTIVE_MILLIS ? State.ACTIVE : State.WAITING;
+    }
+
+    /** The colour of the indicator for a state. */
+    public static int colour(State state) {
+        return switch (state) { case OFF -> 0xff7a8794; case WAITING -> 0xffffc857; case ACTIVE -> 0xff6fe08f; case WORKING -> 0xff6cb6ff; };
+    }
+
+    /** What the AI app last asked for and how long ago, or an empty text when it has not asked yet. */
+    public static String lastActivity() {
+        if (lastCall == 0) return "";
+        long seconds = Math.max(0, (System.currentTimeMillis() - lastCall) / 1000);
+        String ago = seconds < 60 ? seconds + "s" : seconds < 3600 ? seconds / 60 + " min" : seconds / 3600 + " h";
+        return lastTool + " · " + ago + " ago";
+    }
+
+    /** Turns the bridge on or off from the editor, remembering the choice. */
+    public static void toggle() {
+        boolean on = !ClientState.options.aiBridge;
+        ClientState.options.aiBridge = on;
+        if (on) start(); else stop();
+        ClientState.save();
+    }
+
+    /** A small marker in the corner of the screen while the bridge is on, so it is never on without the player seeing it. */
+    static void hud(dev.craftium.client.compat.Gfx g) {
+        var state = indicator();
+        if (state == State.OFF) return;
+        var font = Minecraft.getInstance().font;
+        String text = state == State.WORKING ? "AI working…" : "AI";
+        int width = font.width(text) + 22, x = g.guiWidth() - width - 6, y = 6;
+        g.fill(x, y, x + width, y + 14, 0xb0101923);
+        g.outline(x, y, width, 14, colour(state));
+        g.fill(x + 5, y + 4, x + 11, y + 10, colour(state));
+        g.text(font, text, x + 16, y + 3, 0xffe8f1fa, false);
+    }
 
     public static void install() {
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
@@ -92,6 +140,9 @@ public final class AiBridge {
             if (worker != null) worker.shutdownNow();
             worker = null;
             token = "";
+            lastCall = 0;
+            lastTool = "";
+            working.set(0);
             try { Files.deleteIfExists(FILE); } catch (IOException ignored) {}
         }
     }
@@ -146,10 +197,13 @@ public final class AiBridge {
             } catch (JsonParseException e) { reply(client, 400, error("Body is not valid JSON")); return; }
             String tool = request[1].startsWith("/") ? request[1].substring(1) : request[1];
             JsonObject result;
+            working.incrementAndGet();
+            lastTool = tool.length() > 24 ? tool.substring(0, 24) : tool;
             try { result = call(tool, args); }
             catch (IllegalArgumentException | IllegalStateException e) { result = error(e.getMessage()); }
             catch (TimeoutException e) { result = error("Minecraft did not answer in time; is the game paused or loading?"); }
             catch (Exception e) { Craftium.LOG.warn("AI bridge tool {} failed", tool, e); result = error("Internal error: " + e.getClass().getSimpleName()); }
+            finally { lastCall = System.currentTimeMillis(); working.decrementAndGet(); }
             reply(client, 200, result);
         } catch (IOException ignored) {
             // A dropped or slow connection is not worth reporting.

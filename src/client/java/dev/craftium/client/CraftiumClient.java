@@ -81,7 +81,7 @@ public final class CraftiumClient implements ClientModInitializer {
             ReferenceImages.draw(g,false,0,0);
             int h=g.guiHeight();
             if(System.currentTimeMillis()<ClientState.noticeUntil)g.text(mc.font,ClientState.notice,8,8,0xffffd891,false);
-            BuilderMode.hud(g);BuilderWidget.draw(g);
+            BuilderMode.hud(g);BuilderWidget.draw(g);AiBridge.hud(g);
             if(ClientState.options.showKeyHints){StringBuilder keys=new StringBuilder();for(int key:new int[]{GLFW.GLFW_KEY_W,GLFW.GLFW_KEY_A,GLFW.GLFW_KEY_S,GLFW.GLFW_KEY_D,GLFW.GLFW_KEY_X,GLFW.GLFW_KEY_Y,GLFW.GLFW_KEY_Z})if(GLFW.glfwGetKey(mc.getWindow().handle(),key)==GLFW.GLFW_PRESS)keys.append((char)key).append(' ');if(mc.hasControlDown())keys.append("Ctrl ");if(mc.hasShiftDown())keys.append("Shift ");g.text(mc.font,keys.toString(),g.guiWidth()-mc.font.width(keys.toString())-10,h-48,0xffe6cf8b,false);}
         });
     }
