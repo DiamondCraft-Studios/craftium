@@ -19,3 +19,14 @@ node test/e2e-client.mjs <path to config/craftium/bridge.json>   # builds a pyra
 ```
 
 The server finds the bridge's port and token in `config/craftium/bridge.json` of the default Minecraft folder. Set `CRAFTIUM_MINECRAFT_DIR` to a profile's game folder, or `CRAFTIUM_BRIDGE_FILE` to the file itself, for launchers with their own folders.
+
+## As a Claude Code plugin
+
+`mcp/` is also a Claude Code plugin (`.claude-plugin/plugin.json` and `.mcp.json`), listed by the repo's `.claude-plugin/marketplace.json`:
+
+```
+/plugin marketplace add <this repo>
+/plugin install craftium@craftium
+```
+
+For a launcher with its own game folder, set `CRAFTIUM_MINECRAFT_DIR` in the environment Claude Code runs in.
