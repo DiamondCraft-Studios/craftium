@@ -40,10 +40,24 @@ final class ShapeObject {
         return tool==Tool.SHAPE||tool.transform()&&tool!=Tool.PIVOT;
     }
 
+    /** How the shape is turned while it is only a hover preview, so the turn chosen before putting it down is the turn it is put down with. */
+    private static double[][] hover=IDENTITY;
+
     /** Puts the shape down at {@code at}; if it is already down, moves it there and keeps its turn and size. */
     static void place(Point at){
-        if(pose==null){pose=new Pose(at,IDENTITY,1,1,1);ClientState.notify("Shape ready · Move, Rotate and Scale change it · Enter to build · Esc to cancel");}
+        if(pose==null){pose=new Pose(at,hover,1,1,1);ClientState.notify("Shape ready · Move, Rotate and Scale change it · Enter to build · Esc to cancel");}
         else pose=pose.withOrigin(at);
+    }
+    /** The hover preview's pose when it is turned, or null when it is not and the plain brush shape is the preview. */
+    static Pose hoverPose(){return hover==IDENTITY?null:new Pose(new Point(0,0,0),hover,1,1,1);}
+    /** Turns the shape, or the hover preview before it is down, by {@code degrees} about a world axis (right-handed). */
+    static void turnAbout(Vec3 axis,double degrees){
+        double length=axis.length();if(length==0)return;
+        double x=axis.x/length,y=axis.y/length,z=axis.z/length,c=Math.cos(Math.toRadians(degrees)),s=Math.sin(Math.toRadians(degrees)),t=1-c;
+        double[][] turn={{t*x*x+c,t*x*y-s*z,t*x*z+s*y},{t*x*y+s*z,t*y*y+c,t*y*z-s*x},{t*x*z-s*y,t*y*z+s*x,t*z*z+c}};
+        for(var row:turn)for(int j=0;j<3;j++)row[j]=Math.abs(row[j])<1e-9?0:Math.rint(row[j]*1e9)/1e9; // quarter turns stay exact
+        if(pose!=null)pose=new Pose(pose.origin(),multiply(turn,pose.rotation()),pose.sizeX(),pose.sizeY(),pose.sizeZ());
+        else hover=multiply(turn,hover);
     }
     static void cancel(){pose=null;}
     static void set(Pose next){pose=next;}
@@ -102,7 +116,7 @@ final class ShapeObject {
     // ---- building
 
     /** The options the server builds the shape with: the ones in use, with this pose. */
-    private static Options request(Pose p){
+    static Options request(Pose p){
         Options original=ClientState.options,request=Packets.JSON.fromJson(Packets.JSON.toJson(original),Options.class);
         request.tool=Tool.SHAPE;request.shapeKind=Options.ShapeKind.BRUSH;
         request.yaw=p.yaw();request.pitch=p.pitch();request.roll=p.roll();request.sizeX=p.sizeX();request.sizeY=p.sizeY();request.sizeZ=p.sizeZ();
@@ -162,6 +176,9 @@ final class ShapeObject {
     /** The yaw, pitch and roll, in degrees, that {@link #matrix} turns back into {@code m}. */
     static double[] euler(double[][] m){
         double pitch=Math.asin(Math.clamp(m[2][1],-1,1)),yaw=Math.atan2(m[2][0],m[2][2]),roll=Math.atan2(-m[0][1],m[1][1]);
+        // Pointing straight up or down (a quarter tilt) the yaw and roll turn about the same line, so the two formulas above find nothing to
+        // read; the whole turn is then taken as roll, which is read from the first column.
+        if(Math.abs(m[2][1])>1-1e-9){yaw=0;roll=Math.atan2(m[1][0],m[0][0]);}
         return new double[]{Math.toDegrees(yaw),Math.toDegrees(pitch),Math.toDegrees(roll)};
     }
     static double[][] multiply(double[][] a,double[][] b){

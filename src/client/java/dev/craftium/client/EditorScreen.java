@@ -1117,6 +1117,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(EditorBindings.matches(Action.HELP,event)){perform(Action.HELP);return true;}
         if(help||transform)return true;
         // Shared chords are resolved by the active context, before ordinary tool letters.
+        if((o().tool==Tool.SHAPE||ShapeObject.active())&&!PlacementPreview.active()&&turnShape(event))return true;
         if(PlacementPreview.active()){
             if(EditorBindings.matches(Action.ROTATE_PLACEMENT,event)){action("rotate");return true;}
             if(EditorBindings.matches(Action.FLIP_PLACEMENT,event)){action("flip_facing");return true;}
@@ -1131,6 +1132,19 @@ public final class EditorScreen extends CraftiumScreen {
         for(Action binding:Action.values())if(!EditorBindings.get(binding).mouse()&&EditorBindings.matches(binding,event)&&perform(binding))return true;
         if(event.key()==GLFW.GLFW_KEY_BACKSPACE&&(event.modifiers()&7)==0){perform(Action.DELETE);return true;}
         if((event.modifiers()&7)==0)for(var entry:CraftiumClient.toolKeys.entrySet())if(entry.getValue().matches(event)){select(entry.getKey());return true;}
+        return true;
+    }
+    /**
+     * Ctrl+R turns the shape a quarter about the vertical axis, Ctrl+T tilts it a quarter away from the camera and Ctrl+F flips it over
+     * a half turn about the camera's line of sight. The camera's direction is snapped to the nearest world axis, so the shape stays on
+     * the grid. This works on the shape once it is down and on the hover preview before that.
+     */
+    private boolean turnShape(KeyEvent event){
+        boolean rotate=EditorBindings.matches(Action.ROTATE_PLACEMENT,event),tilt=EditorBindings.matches(Action.TILT_PLACEMENT,event),flip=EditorBindings.matches(Action.FLIP_PLACEMENT,event);
+        if(!rotate&&!tilt&&!flip||minecraft.player==null)return false;
+        double yaw=Math.toRadians(minecraft.player.getYRot()),x=-Math.sin(yaw),z=Math.cos(yaw);
+        Vec3 forward=Math.abs(x)>Math.abs(z)?new Vec3(Math.signum(x),0,0):new Vec3(0,0,Math.signum(z)),up=new Vec3(0,1,0);
+        if(rotate)ShapeObject.turnAbout(up,90);else if(tilt)ShapeObject.turnAbout(up.cross(forward),90);else ShapeObject.turnAbout(forward,180);
         return true;
     }
     private boolean perform(Action binding){

@@ -1,6 +1,7 @@
 package dev.craftium.client;
 
 import dev.craftium.core.BrushMath;
+import dev.craftium.core.Geometry;
 import dev.craftium.core.Options;
 import dev.craftium.core.Point;
 import dev.craftium.core.Tool;
@@ -21,11 +22,12 @@ final class BrushGhost {
     /** Draws the preview at {@code at} and returns true, or returns false when it is too large to ghost. */
     static boolean draw(Minecraft mc,BlockPos at,Options o){
         if(mc.level==null)return false;
-        var now=List.<Object>of(o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.outline);
+        var turn=ShapeObject.hoverPose(); // the turn chosen with Ctrl+R, Ctrl+T and Ctrl+F before the shape is put down
+        var now=List.<Object>of(o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.outline,turn==null?"":java.util.Arrays.deepToString(turn.rotation()));
         if(!now.equals(key)){
             key=now;
             // A shape over the block limit, or one the server would refuse, is not ghosted: the wireframe shows its size instead.
-            try{ghost=ShellGhost.of(BrushMath.brush(new Point(0,0,0),o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline));}
+            try{ghost=ShellGhost.of(turn!=null?Geometry.shape(new Point(0,0,0),ShapeObject.request(turn)):BrushMath.brush(new Point(0,0,0),o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline));}
             catch(IllegalArgumentException e){ghost=null;}
         }
         if(ghost==null||ghost.tooLarge())return false;

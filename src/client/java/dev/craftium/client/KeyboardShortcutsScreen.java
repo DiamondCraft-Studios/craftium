@@ -63,6 +63,7 @@ final class KeyboardShortcutsScreen extends CraftiumScreen {
         {"Builder: choose the axis for the wheel","Hold X, Y or Z"},
         {"Builder: undo, redo","Ctrl+Z, Ctrl+Y"},
         {"Builder: rotate, flip the preview","Ctrl+R, Ctrl+F"},
+        {"Shape: rotate, tilt, flip (relative to the camera)","Ctrl+R, Ctrl+T, Ctrl+F"},
     };
 
     private List<Row> rows(){

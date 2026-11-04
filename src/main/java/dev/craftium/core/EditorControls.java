@@ -20,7 +20,7 @@ public final class EditorControls {
         SHOW_SELECTION("Show selections"),SHOW_BIOMES("Show biomes",'B',CONTROL),SHOW_ANNOTATIONS("Show annotations"),
         SHOW_DISPLAYS("Show display gizmos"),SHOW_MARKERS("Show marker gizmos"),SHOW_COLLISION("Show collision mesh"),SHOW_LIGHTS("Show light blocks"),SHOW_VOID("Show structure void"),
         QUICK_FILL("Quick fill",'F',CONTROL),QUICK_REPLACE("Quick replace",'R',CONTROL),
-        ROTATE_PLACEMENT("Rotate placement",'R',CONTROL),FLIP_PLACEMENT("Flip placement",'F',CONTROL),PASTE_SELECT("Paste and select"),LAST_TOOL("Swap to last tool"),
+        ROTATE_PLACEMENT("Rotate placement",'R',CONTROL),FLIP_PLACEMENT("Flip placement",'F',CONTROL),TILT_PLACEMENT("Tilt placement",'T',CONTROL),PASTE_SELECT("Paste and select"),LAST_TOOL("Swap to last tool"),
         NUDGE_FORWARD("Nudge forwards",265,0),NUDGE_BACK("Nudge backwards",264,0),NUDGE_RIGHT("Nudge right",262,0),NUDGE_LEFT("Nudge left",263,0),NUDGE_UP("Nudge +Y",266,0),NUDGE_DOWN("Nudge -Y",267,0),
         INGAME_COPY("Ingame: copy",'C',CONTROL),INGAME_DELETE("Ingame: delete",261,0),
         INSPECTOR("Craftium: inspector"),HELP("Craftium: controls help"),PANELS("Craftium: side panels"),
