@@ -53,20 +53,31 @@ public final class EditorServer {
     /** The options of a player who is building: creative, permitted and known to the editor. Null otherwise. */
     public static Options capabilities(ServerPlayer player){var s=SESSIONS.get(player.getUUID());return s!=null&&s.options!=null&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities")?s.options:null;}
     /** What is at a position just before vanilla places a block there, kept only when the placement is to be recorded. Null when it is not. */
-    public static Object before(ServerPlayer player,BlockPos at){var o=capabilities(player);return o!=null&&o.placementCapabilities()?BlockSnapshot.capture(player.level(),at):null;}
+    public static Object before(ServerPlayer player,BlockPos at){
+        var o=capabilities(player);if(o==null||!o.placementCapabilities())return null;
+        // The neighbours too: placing a door adds its other half, and a chest or bed changes its partner.
+        var near=new LinkedHashMap<BlockPos,BlockSnapshot>();near.put(at.immutable(),BlockSnapshot.capture(player.level(),at));
+        for(var d:net.minecraft.core.Direction.values()){var n=at.relative(d);near.put(n,BlockSnapshot.capture(player.level(),n));}
+        return near;
+    }
     /**
      * Vanilla has placed a block; the editor adds what it owns on top of that: the symmetric copies, and one undo step for all of them.
      * The placement itself, with its sound and swing, is left to the game.
      */
+    @SuppressWarnings("unchecked")
     public static void placed(ServerPlayer player,BlockPos at,Object snapshot){
         var s=SESSIONS.get(player.getUUID());var o=capabilities(player);if(s==null||o==null)return;
         try{
-            var level=player.level();Point p=EditPlanner.point(at);var before=(BlockSnapshot)snapshot;var after=BlockSnapshot.capture(level,at);
+            var level=player.level();Point p=EditPlanner.point(at);var near=(Map<BlockPos,BlockSnapshot>)snapshot;var before=near.get(at);var after=BlockSnapshot.capture(level,at);
             var plan=new EditPlanner(level,s,o);plan.put(p,after); // the block is already there, so only its mirrors are left to change
             var mirrors=plan.finish("Builder placement");
             if(!mirrors.changes().isEmpty())EditProtection.check(player,mirrors);
             var changes=new ArrayList<Session.Change>();
             if(!(before.state()==after.state()&&Objects.equals(before.data(),after.data())))changes.add(new Session.Change(p,before,after));
+            for(var e:near.entrySet()){ // what vanilla changed beside the block: a door's other half, a chest's partner
+                if(e.getKey().equals(at))continue;var now=BlockSnapshot.capture(level,e.getKey());
+                if(!(e.getValue().state()==now.state()&&Objects.equals(e.getValue().data(),now.data())))changes.add(new Session.Change(EditPlanner.point(e.getKey()),e.getValue(),now));
+            }
             for(var c:mirrors.changes()){
                 if(!ServerPlatform.canChange(player.getUUID(),level,c.pos()))continue;
                 c.after().place(level,EditPlanner.pos(c.pos()),mirrors.flags());changes.add(c);
