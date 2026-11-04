@@ -36,7 +36,7 @@ This is a functional development preview. Implemented equivalents do not establi
 | Roughen | Seeded exposed-face changes with exposed-face threshold | Craftium-specific surface noise |
 | Shatter | Cellular fracture seams, air or selected material | Approximate fracture model |
 | Extrude | Connected planar-face search and outward/inward extrusion | Count limit; discrete clicked face |
-| Modify | Translated/rotated copies, revolve-style copies and height-dependent twist | Nearest sampling; no full live transform interaction |
+| Modify | Translate Copies (relative/absolute offsets), Revolve around the cursor on X/Y/Z with angle and Add Translation, Rotate Copies (Equidistant/Custom Angle), Twist about an axis | Settings are in the Studio inspector; no in-world inner/outer revolve guide lines or live preview yet; block states are not turned |
 | Annotation | Saved text, line, box, polyline and image notes with undo | 128 notes/dimension, eight images, image resolution at most 32×32 |
 | Smear | Stretch selection/clipboard along offset, stopping at solid obstructions | Integer offset, bounded line length |
 | Line / Erase / Tinker | Straight thick lines, brush deletion and named block-state property cycling | Line radius ≤4; incomplete Axiom Tinker variant behavior |
