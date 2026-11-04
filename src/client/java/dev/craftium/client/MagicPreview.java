@@ -10,12 +10,12 @@ import java.util.Objects;
 
 /**
  * Outlines what a Magic Wand click on the hovered block would select, as the cursor moves. It runs the same search the
- * server runs, but stops as soon as the result reaches {@code magicPreviewLimit} blocks: a big match is most likely
+ * server runs, but stops as soon as the result reaches {@code hoverPreviewLimit} blocks: a big match is most likely
  * terrain, and giving up early keeps the cost of hovering small no matter how large the area under the cursor is.
  */
 final class MagicPreview {
-    /** The search gives up after visiting this many cells per block of the limit, which bounds the work when a block has few surface neighbours. */
-    private static final int VISITS_PER_BLOCK=4;
+    /** The search gives up after visiting this many cells, which bounds the work when a block has few surface neighbours. */
+    private static final int VISIT_CAP=6000;
     private static final int[][] SIDES={{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
     private static Object key;
     private static OutlineShape shape=OutlineShape.EMPTY;
@@ -31,7 +31,7 @@ final class MagicPreview {
         if(hit==null||mc.level==null||o.tool!=Tool.MAGIC_SELECT||!o.magicPreview||TransformGizmo.dragging()||PlacementPreview.active()){key=null;shape=OutlineShape.EMPTY;return;}
         BlockPos at=hit.getBlockPos();
         // The world can change under a still cursor, so the result is also refreshed about once a second.
-        Object now=java.util.List.of(at,o.compare,o.magicPreviewLimit(),o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,java.util.List.copyOf(o.maskActive),o.maskExclude,mc.level.getGameTime()/20);
+        Object now=java.util.List.of(at,o.compare,o.hoverPreviewLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,java.util.List.copyOf(o.maskActive),o.maskExclude,mc.level.getGameTime()/20);
         if(!Objects.equals(key,now)){key=now;shape=compute(mc,at,o);}
         if(shape.isEmpty())return;
         shape.draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,ClientState.options.hoverColor,1),ClientState.options.hoverColor,ClientState.options.hoverFill,true);
@@ -63,8 +63,8 @@ final class MagicPreview {
 
     private static OutlineShape compute(Minecraft mc,BlockPos at,Options o){
         if(mc.level.getBlockState(at).isAir())return OutlineShape.EMPTY;
-        var world=world(mc,at,o);int limit=o.magicPreviewLimit();
-        var result=MagicWand.select(CraftiumClient.point(at),world,new MagicWand.Params(limit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,limit*VISITS_PER_BLOCK));
+        var world=world(mc,at,o);int limit=o.hoverPreviewLimit;
+        var result=MagicWand.select(CraftiumClient.point(at),world,new MagicWand.Params(limit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,VISIT_CAP));
         if(result.truncated()||result.found().size()>=limit)return OutlineShape.EMPTY; // too similar: probably the terrain
         return OutlineShape.of(result.found());
     }

@@ -274,7 +274,7 @@ public final class EditorScreen extends CraftiumScreen {
                 if(o().tool==Tool.MAGIC_SELECT){
                     compareButtons(g,444);
                     toggle(g,10,474,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
-                    toggle(g,10,492,"Hover preview (under "+o().magicPreviewLimit()+")",o().magicPreview,()->o().magicPreview=!o().magicPreview);
+                    toggle(g,10,492,"Hover preview (under "+o().hoverPreviewLimit+")",o().magicPreview,()->o().magicPreview=!o().magicPreview);
                 }
                 button(g,10,h-52,78,20,"Fill",false,()->action("fill"),"Fill the selection with the active block");button(g,94,h-52,78,20,"Clear",false,()->action("clear"),"Clear the selection");
             }
@@ -728,9 +728,14 @@ public final class EditorScreen extends CraftiumScreen {
             if(!item.shortcut.isEmpty())text(g,item.shortcut,x+212-font.width(item.shortcut),y+8,MUTED);y+=25;
         }
     }
+    /** The Magic Wand hover preview limits the Preferences menu cycles through; a custom value moves on to the next larger preset. */
+    private static int nextPreviewLimit(int current){
+        for(int preset:new int[]{1000,2500,5000,10_000,20_000})if(preset>current)return preset;
+        return 1000;
+    }
     private List<MenuItem> menuItems(int which) {
         return switch(which) {
-            case 0 -> List.of(item("Open reference image…","",ReferenceImages::choose),item("Save tool settings","",()->{ClientState.save();ClientState.notify("Tool settings saved");}),item("Reset tool settings","",()->{ClientState.options=new Options();init();}),submenu("Preferences",item("Keyboard Shortcuts…","",()->ClientCompat.setScreen(minecraft,new KeyboardShortcutsScreen(this))),submenu("Options",item("Undo / redo pulse: "+(o().historyPulse?"On":"Off"),"",()->{o().historyPulse=!o().historyPulse;ClientState.save();}))),item("Exit editor","RShift",this::onClose));
+            case 0 -> List.of(item("Open reference image…","",ReferenceImages::choose),item("Save tool settings","",()->{ClientState.save();ClientState.notify("Tool settings saved");}),item("Reset tool settings","",()->{ClientState.options=new Options();init();}),submenu("Preferences",item("Keyboard Shortcuts…","",()->ClientCompat.setScreen(minecraft,new KeyboardShortcutsScreen(this))),submenu("Options",item("Undo / redo pulse: "+(o().historyPulse?"On":"Off"),"",()->{o().historyPulse=!o().historyPulse;ClientState.save();}),item("Hover preview limit: "+o().hoverPreviewLimit,"",()->{o().hoverPreviewLimit=nextPreviewLimit(o().hoverPreviewLimit);ClientState.save();}))),item("Exit editor","RShift",this::onClose));
             case 1 -> List.of(item("Undo","Ctrl+Z",()->action("undo")),item("Redo","Ctrl+Y",()->action("redo")),divider(),
                 item("Copy","Ctrl+C",()->action("copy")),item("Cut","Ctrl+X",()->action("cut")),item("Paste","Ctrl+V",()->action("paste")),
                 item("Delete","Del",()->perform(Action.DELETE)),divider(),
