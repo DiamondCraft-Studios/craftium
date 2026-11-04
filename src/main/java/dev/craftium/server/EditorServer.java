@@ -91,7 +91,7 @@ public final class EditorServer {
             send(player,s,"Placed "+changes.size()+(changes.size()==1?" block":" blocks"),false);
         }catch(IllegalArgumentException e){send(player,s,e.getMessage(),true);}
     }
-    public static boolean noClip(ServerPlayer player){var s=SESSIONS.get(player.getUUID());return s!=null&&s.noClip&&player.isCreative()&&player.getAbilities().flying&&ServerPlatform.permitted(player,"capabilities"); // only while flying}
+    public static boolean noClip(ServerPlayer player){var s=SESSIONS.get(player.getUUID());return s!=null&&s.noClip&&player.isCreative()&&player.getAbilities().flying&&ServerPlatform.permitted(player,"capabilities");} // only while flying
 
     public static void handle(ServerPlayer player,String json) {
         var s=SESSIONS.computeIfAbsent(player.getUUID(),id->new Session());
