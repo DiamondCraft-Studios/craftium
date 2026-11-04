@@ -32,7 +32,7 @@ Then ask Claude for a build while the game is open. Claude can select an area in
   npm ci
   npm run pack
   ```
-  This writes `mcp/craftium.mcpb`. If `npx` stops with "Yallist is not a constructor", your npm is too old for your Node version (npm 10.8 with Node 25, for example): update npm with `npm install -g npm@latest`, or use Node 22 or 24.
+  This writes `mcp/craftium.mcpb`. The `mcp` folder pins Node 24 in `.nvmrc` (run `nvm use` or `fnm use` there if your tool does not switch on its own). If `npx` stops with "Yallist is not a constructor", your npm is too old for your Node version (npm 10.8 with Node 25, for example): use Node 24, or update npm with `npm install -g npm@latest`.
 
 ## What Claude can do
 
