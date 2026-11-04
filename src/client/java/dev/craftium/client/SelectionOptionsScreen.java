@@ -62,7 +62,7 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
         entry("Ruler","Knob (selected)",o->o.rulerKnobSelectedColor,(o,c)->o.rulerKnobSelectedColor=c),
         entry("Length label","Text",o->o.rulerTextColor,(o,c)->o.rulerTextColor=c),
         entry("Length label","Background",o->o.rulerTextBackground,(o,c)->o.rulerTextBackground=c));
-    private static final List<Width> RULER_WIDTHS=List.of(new Width("Length label size",o->o.rulerTextSize,(o,v)->o.rulerTextSize=v,Options.RULER_TEXT_MIN*100,Options.RULER_TEXT_MAX*100,true));
+    private static final List<Width> RULER_WIDTHS=List.of(new Width("Length label size",o->o.rulerLabelSize,(o,v)->o.rulerLabelSize=v,Options.RULER_LABEL_MIN*100,Options.RULER_LABEL_MAX*100,true));
 
     private static Entry entry(String group,String name,ToIntFunction<Options> get,ObjIntConsumer<Options> set){
         return new Entry(group,name,()->get.applyAsInt(ClientState.options),c->set.accept(ClientState.options,c),()->get.applyAsInt(DEFAULTS));

@@ -315,7 +315,7 @@ public final class CraftiumClient implements ClientModInitializer {
                 double length=start.distanceTo(end);
                 if(o.rulerMode==Options.RulerMode.CIRCLE){for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(start.add(Math.cos(x)*length,0,Math.sin(x)*length),start.add(Math.cos(y)*length,0,Math.sin(y)*length),o.rulerLineColor,1.5f);}}
                 // The length sits on the middle of the line, as big as the setting says.
-                Overlay.text(Ruler.show(length),start.add(end).scale(.5),o.rulerTextColor,o.rulerTextBackground,.02f*(float)Math.clamp(o.rulerTextSize,Options.RULER_TEXT_MIN,Options.RULER_TEXT_MAX));
+                Overlay.text(Ruler.show(length),start.add(end).scale(.5),o.rulerTextColor,o.rulerTextBackground,.05f*(float)Math.clamp(o.rulerLabelSize,Options.RULER_LABEL_MIN,Options.RULER_LABEL_MAX));
             }
             Overlay.point(start,picked==first?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==first?10:8);
             if(end!=null)Overlay.point(end,picked==second?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==second?10:8);
