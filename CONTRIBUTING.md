@@ -1,6 +1,6 @@
 # Contributing to Craftium
 
-Craftium is a vibe-coded, open-source competitor to Axiom. AI assistance is part of its development history. Contributions should be readable, independently implemented and checked against the actual Minecraft build.
+Craftium is a vibe-coded, open-source building studio inspired by Axiom. AI assistance is part of its development history. Contributions should be readable, independently implemented and checked against the actual Minecraft build.
 
 ## Build
 

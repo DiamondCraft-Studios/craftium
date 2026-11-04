@@ -1,14 +1,14 @@
 # Craftium
 
-**A vibe-coded, open-source competitor to Axiom.**
+**A vibe-coded, open-source building studio for Minecraft. It's an early development preview, so expect rough edges, missing features and the occasional bug.**
 
-Craftium is an AI-assisted, independently implemented Fabric building studio with a Paper/Purpur server companion for **Minecraft Java 26.2** and **1.21.10**. It follows familiar Axiom building workflows and documented default keybinds, with original code and icons under the GNU GPL v3 license.
+Craftium is an AI-assisted, independently implemented Fabric building studio with a Paper/Purpur server companion for **Minecraft Java 26.2** and **1.21.10**. Inspired by Axiom's building workflows, it adopts its documented default keybinds, with original code and icons under the GNU GPL v3 license.
 
 ![Craftium editor with a selected watchtower, clipboard and material palette](docs/gallery/01-editor-overview.png)
 
 [Gallery](docs/GALLERY.md) · [Controls](docs/KEYBINDS.md) · [Server companion](docs/SERVER-PLUGIN.md) · [AI building](docs/AI.md) · [Contributing](CONTRIBUTING.md) · [GPL-3.0 license](LICENSE)
 
-**0.3.1-dev is a development preview, not full Axiom parity.** This release aligns controls with Axiom's documented defaults and adds configurable editor chords and mouse gestures. It includes the Paper/Purpur companion and a versioned client connection. The editor expands the original 26 tools to 37, adding tenth-slot building, persistent history, entity clipboards, animated rebuild, lighting, scripting, visual masks, weighted palettes and asset transfer. [Feature coverage](docs/FEATURES.md) and the [95-page documentation audit](docs/PARITY-AUDIT.md) identify remaining differences.
+**0.3.1-dev is a development preview and doesn't yet cover everything Axiom offers.** This release aligns controls with Axiom's documented defaults and adds configurable editor chords and mouse gestures. It includes the Paper/Purpur companion and a versioned client connection. The editor expands the original 26 tools to 37, adding tenth-slot building, persistent history, entity clipboards, animated rebuild, lighting, scripting, visual masks, weighted palettes and asset transfer. [Feature coverage](docs/FEATURES.md) and the [95-page documentation audit](docs/PARITY-AUDIT.md) identify remaining differences.
 
 ## Install
 
@@ -100,4 +100,4 @@ No Updates suppresses neighbour/shape updates during Craftium placement; it does
 
 Requires JDK 25. Run `./gradlew.bat build`, or `./gradlew.bat :versions:mc-26.2:runClientGameTest` for the disposable Minecraft integration scenario. The 26.2 client jar goes to `versions/26.2/build/libs/`; server plugin output goes to `versions/26.2/server-plugin/build/libs/`. `scripts/package.ps1 -Version 0.3.1-dev` creates the distribution bundle.
 
-[Validation](docs/VALIDATION.md) records checks and practical limits. Screenshots in the bundle show the actual Minecraft mod. Craftium is licensed under the [GNU GPL v3](LICENSE) (GPL-3.0-only); bundled component notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Craftium is an independent project and contains no Axiom code, textures or icons.
+[Validation](docs/VALIDATION.md) records checks and practical limits. Screenshots in the bundle show the actual Minecraft mod. Craftium is licensed under the [GNU GPL v3](LICENSE) (GPL-3.0-only); bundled component notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Craftium is an independent project, unaffiliated with Axiom and its authors, and contains no Axiom code, textures or icons. If you can, support the original at [Axiom's site](https://axiomdocs.moulberry.com).
