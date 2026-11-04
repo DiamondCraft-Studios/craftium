@@ -114,6 +114,7 @@ Under `--permission` the process can read only those two folders and cannot star
 ## Troubleshooting
 
 - **"Craftium is not reachable"**: open a world, turn on AI building (AI menu in the editor), and check the Minecraft folder setting in the extension if you use a launcher profile.
+- **Running the game from source (`gradlew runClient`) or from a launcher profile**: the game does not use your default `.minecraft` folder, so the extension cannot find it on its own. Open **AI menu → AI status and setup…**, press **Copy game folder**, and paste it into the extension's **Minecraft folder** setting. (For a source run that is `versions/<version>/run` in the checkout you launched from, so make sure you launched from the checkout that has the AI feature.)
 - **"Craftium refused the connection"**: Minecraft restarted and the token changed. Try again, or run `/craftium ai off` then `/craftium ai on`.
 - **"Craftium on the server"**: the world needs Craftium on the server too, as for the editor. In singleplayer this is automatic.
 - **Errors like `ops[2] (cylinder): missing number "radius"`** are the spec's fault, not yours. Claude gets the message and retries.

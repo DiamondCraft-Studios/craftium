@@ -144,6 +144,10 @@ public final class StudioScreen extends CraftiumScreen {
         labels.add(new Label("4.  Look at the ghost in your world. Ask for changes, then say \"apply it\", or press Apply preview.",left,steps+57));
         labels.add(new Label("Nothing is built until it is applied, and Undo takes a build back. Using a launcher profile?",left,steps+78));
         labels.add(new Label("Choose the profile's game folder in the extension's settings. Details: docs/AI.md",left,steps+92));
+        // The folder this game keeps its settings in, which is what the extension's Minecraft folder has to be when it is not the default .minecraft.
+        String folder=AiBridge.gameFolder();
+        labels.add(new Label("This game's folder: "+(font.width(folder)>420?"…"+font.plainSubstrByWidth(folder,420,true):folder),left,steps+114));
+        button("Copy game folder",left,steps+128,150,20,()->{minecraft.keyboardHandler.setClipboard(folder);message="Game folder copied";});
     }
     /** The live part of the AI tab: a status card for the bridge and a line about a preview that is waiting. */
     private void drawAi(Gfx g){

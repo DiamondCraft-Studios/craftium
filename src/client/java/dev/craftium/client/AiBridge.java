@@ -106,6 +106,15 @@ public final class AiBridge {
 
     public static boolean running() { synchronized (LOCK) { return socket != null; } }
 
+    /**
+     * The game folder the AI extension has to be pointed at when this is not the default .minecraft (a launcher profile, or a game
+     * started from source): the one that holds config/craftium/bridge.json.
+     */
+    public static String gameFolder() {
+        Path folder = FILE.toAbsolutePath().normalize().getParent().getParent().getParent();
+        return folder.toString();
+    }
+
     public static int port() { synchronized (LOCK) { return socket == null ? 0 : socket.getLocalPort(); } }
 
     /** Called with every status the server sends, after the client has taken it in. */

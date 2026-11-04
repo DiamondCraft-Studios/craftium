@@ -39,7 +39,7 @@ final class ClientCommands {
         });
         ClientSendMessageEvents.COMMAND.register(command->{String[] pieces=command.strip().split("\\s+",2);if(pieces[0].equals("/pos1")||pieces[0].equals("/pos2"))try{position(pieces[0].equals("/pos1")?1:2,pieces.length==2?pieces[1]:"");}catch(IllegalArgumentException e){ClientState.notify(e.getMessage());}});
     }
-    private static String aiStatus(){return AiBridge.running()?"Craftium AI bridge is on (127.0.0.1:"+AiBridge.port()+"). Connect Claude Desktop with the craftium-mcp extension. /craftium ai off turns it off.":"Craftium AI bridge is off. /craftium ai on lets an AI app on this computer build in your selection; builds are shown as a preview until applied.";}
+    private static String aiStatus(){return AiBridge.running()?"Craftium AI bridge is on (127.0.0.1:"+AiBridge.port()+"). Connect Claude Desktop with the craftium-mcp extension; if this game does not use the default .minecraft folder, set the extension's Minecraft folder to "+AiBridge.gameFolder()+" . /craftium ai off turns it off.":"Craftium AI bridge is off. /craftium ai on lets an AI app on this computer build in your selection; builds are shown as a preview until applied.";}
     static void tick(){Runnable action=pending;pending=null;if(action!=null)action.run();}
     static void reset(){pos1=pos2=null;pending=null;}
     private static void position(int corner,String coordinates){
