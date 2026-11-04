@@ -295,7 +295,7 @@ public final class CraftiumClient implements ClientModInitializer {
     /** Every ruler: its line (or circle), its length, and a knob at each end. The end being dragged shows where it will land, and the length with it. */
     private static void drawRulers(EditorScreen screen){
         var o=ClientState.options;
-        boolean editing=screen!=null&&o.tool==Tool.RULER;
+        boolean editing=screen!=null&&!screen.toolActive(); // the rulers can be picked up when no tool is chosen
         int picked=editing?screen.handleIndex():-1;Vec3 live=editing?TransformGizmo.liveNode():null;
         int index=0;
         for(var ruler:ClientState.rulers){
@@ -309,8 +309,9 @@ public final class CraftiumClient implements ClientModInitializer {
             }
             if(end!=null){
                 double length=start.distanceTo(end);
-                bar(start,end,RULER_LINE_HALF,lineColor(o,start,end));
-                if(o.rulerMode==Options.RulerMode.CIRCLE){for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;bar(start.add(Math.cos(x)*length,0,Math.sin(x)*length),start.add(Math.cos(y)*length,0,Math.sin(y)*length),RULER_LINE_HALF*.75,o.rulerLineColor);}}
+                double thickness=ruler==ClientState.selectedRuler()?RULER_LINE_HALF*1.6:RULER_LINE_HALF;
+                bar(start,end,thickness,lineColor(o,start,end));
+                if(ruler.mode==Options.RulerMode.CIRCLE){for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;bar(start.add(Math.cos(x)*length,0,Math.sin(x)*length),start.add(Math.cos(y)*length,0,Math.sin(y)*length),RULER_LINE_HALF*.75,o.rulerLineColor);}}
                 // The length sits on the middle of the line, as big as the setting says. The game hangs text below the point it is given, so the point
                 // is raised by half the height of a line of text (nine pixels) to leave the text itself centred on the line.
                 float scale=.05f*(float)Math.clamp(o.rulerLabelSize,Options.RULER_LABEL_MIN,Options.RULER_LABEL_MAX);

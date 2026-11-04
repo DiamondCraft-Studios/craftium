@@ -18,7 +18,7 @@ import java.util.*;
 final class RulerStore {
     private static final Path FILE=FabricLoader.getInstance().getConfigDir().resolve("craftium-rulers.json");
     /** One ruler as saved: the blocks at its ends, the second being null while it is only started. */
-    private record Saved(int[] a,int[] b){}
+    private record Saved(int[] a,int[] b,String mode){}
     private static String current;
     /** What was last written or read for {@link #current}, to tell when the rulers have changed. */
     private static List<Saved> known=List.of();
@@ -49,19 +49,20 @@ final class RulerStore {
 
     private static List<Saved> snapshot(){
         var out=new ArrayList<Saved>();
-        for(var r:ClientState.rulers)out.add(new Saved(array(r.a),r.b==null?null:array(r.b)));
+        for(var r:ClientState.rulers)out.add(new Saved(array(r.a),r.b==null?null:array(r.b),r.mode.name()));
         return out;
     }
     private static int[] array(Point p){return new int[]{p.x(),p.y(),p.z()};}
     private static Ruler ruler(Saved s){
         var r=new Ruler(new Point(s.a()[0],s.a()[1],s.a()[2]));
         if(s.b()!=null)r.b=new Point(s.b()[0],s.b()[1],s.b()[2]);
+        try{if(s.mode()!=null)r.mode=dev.craftium.core.Options.RulerMode.valueOf(s.mode());}catch(IllegalArgumentException ignored){}
         return r;
     }
     /** Two snapshots are the same when every ruler has the same ends. */
     private static boolean same(List<Saved> a,List<Saved> b){
         if(a.size()!=b.size())return false;
-        for(int i=0;i<a.size();i++)if(!Arrays.equals(a.get(i).a(),b.get(i).a())||!Arrays.equals(a.get(i).b(),b.get(i).b()))return false;
+        for(int i=0;i<a.size();i++)if(!Arrays.equals(a.get(i).a(),b.get(i).a())||!Arrays.equals(a.get(i).b(),b.get(i).b())||!Objects.equals(a.get(i).mode(),b.get(i).mode()))return false;
         return true;
     }
 

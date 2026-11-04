@@ -9,6 +9,8 @@ import dev.craftium.core.Point;
  */
 public final class Ruler {
     public Point a,b;
+    /** Whether this ruler is just a line or also draws a circle round its first end. */
+    public dev.craftium.core.Options.RulerMode mode=dev.craftium.core.Options.RulerMode.LINE;
     public Ruler(Point a){this.a=a;}
     /** True once both ends are placed, which is when there is something to measure. */
     public boolean complete(){return b!=null;}

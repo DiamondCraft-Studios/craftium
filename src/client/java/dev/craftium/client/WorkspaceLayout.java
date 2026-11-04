@@ -12,7 +12,7 @@ final class WorkspaceLayout {
     private static final Path FILE=FabricLoader.getInstance().getConfigDir().resolve("craftium/layout.json");
     private static boolean loaded;
     private WorkspaceLayout(){}
-    static String key(String title){return switch(title){case "Tools"->"tools";case "Tool options","Builder controls"->"options";case "Target info"->"target";case "Clipboard"->"clipboard";case "Block palette"->"palette";case "History"->"history";case "Tool masks"->"masks";default->"";};}
+    static String key(String title){return switch(title){case "Tools"->"tools";case "Tool options","Builder controls"->"options";case "Target info"->"target";case "Clipboard"->"clipboard";case "Block palette"->"palette";case "History"->"history";case "Tool masks"->"masks";case "Rulers"->"rulers";default->"";};}
     static void prepare(String id,int x,int y,int w,int h){if(id.isBlank())return;if(!loaded){loaded=true;try{if(Files.exists(FILE))importJson(Files.readString(FILE));}catch(Exception e){ClientState.notify("Could not load workspace layout");}}var previous=base.get(id);var window=windows.get(id);if(previous!=null&&window!=null&&previous.x==window.x&&previous.y==window.y&&previous.w==window.w&&previous.h==window.h){window.x=x;window.y=y;window.w=w;window.h=h;}base.put(id,new Rect(x,y,w,h));windows.computeIfAbsent(id,key->new Rect(x,y,w,h));}
     static void snap(String id,int width,int height){var window=windows.get(id);if(window==null)return;if(window.x<12)window.x=0;if(window.y<37)window.y=27;if(Math.abs(window.x+window.w-width)<12)window.x=width-window.w;if(Math.abs(window.y+window.h-height+25)<12)window.y=height-25-window.h;for(var e:windows.entrySet())if(!e.getKey().equals(id)&&e.getValue().visible){var other=e.getValue();if(Math.abs(window.x-other.x-other.w)<10)window.x=other.x+other.w+6;if(Math.abs(window.y-other.y-other.h)<10)window.y=other.y+other.h+6;}window.x=Math.clamp(window.x,0,Math.max(0,width-50));window.y=Math.clamp(window.y,27,Math.max(27,height-40));}
     static boolean visible(String id){var r=windows.get(id);return r==null||r.visible;}
@@ -28,7 +28,7 @@ final class WorkspaceLayout {
     static void save(){try{Files.createDirectories(FILE.getParent());Files.writeString(FILE,json());}catch(Exception e){ClientState.notify("Could not save workspace layout");}}
     static String json(){return Packets.JSON.toJson(windows);}
     static void importJson(String json){var data=Packets.JSON.fromJson(json,com.google.gson.JsonObject.class);var next=new LinkedHashMap<String,Rect>();for(var e:data.entrySet()){
-        if(!Set.of("tools","options","target","clipboard","palette","history","masks").contains(e.getKey()))continue;
+        if(!Set.of("tools","options","target","clipboard","palette","history","masks","rulers").contains(e.getKey()))continue;
         var r=Packets.JSON.fromJson(e.getValue(),Rect.class);r.x=Math.clamp(r.x,0,4000);r.y=Math.clamp(r.y,24,3000);r.w=Math.clamp(r.w,110,1600);r.h=Math.clamp(r.h,60,1600);next.put(e.getKey(),r);
     }windows.clear();windows.putAll(next);}
     static String fieldPanel(String field){return switch(field){case "block"->"palette";case "mask","minY","maxY"->"masks";case "offsetX","offsetY","offsetZ","copies"->"";default->"options";};}
