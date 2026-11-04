@@ -313,10 +313,10 @@ public final class EditorScreen extends CraftiumScreen {
             default -> {
                 int row=sidesRow();
                 toggle(g,10,403+row,"Invert / carve",o().invert,()->o().invert=!o().invert);
-                toggle(g,10,425+row,"Hollow shape",o().hollow,()->o().hollow=!o().hollow);
+                fillButtons(g,424+row);
                 toggle(g,10,447+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
                 int next=472+row;
-                if(o().hollow){ // the outline's own settings sit under the others, so they only take room while Hollow shape is on
+                if(o().hollow){ // the outline's own settings sit under the others, so they only take room while Hollow is chosen
                     int cap=Math.max(1,o().radius);
                     slider(g,10,next+10,LEFT-20,"Outline thickness",o().outlineThickness,1,Math.max(2,Math.min(cap,64)),cap,DEFAULTS.outlineThickness,v->o().outlineThickness=Math.clamp((int)Math.round(v),1,cap),true);
                     text(g,"Align stroke",10,next+34,MUTED);
@@ -714,6 +714,15 @@ public final class EditorScreen extends CraftiumScreen {
         }
     }
     /** Inside, Center and Outside: where a hollow shape's wall sits against the edge the radius gives it. */
+    /** Solid, Hollow and Outline on one line: exactly one is chosen, and Hollow and Outline never apply together. */
+    private void fillButtons(Gfx g,int y){
+        int width=(LEFT-20-8)/3;
+        String[] labels={"Solid","Hollow","Outline"};
+        String[] tips={"A solid shape","A shell with a wall, most visible on 3D shapes","Only the edges of the shape, for 2D and 3D shapes"};
+        boolean[] active={!o().hollow&&!o().outline,o().hollow,o().outline};
+        Runnable[] pick={()->{o().hollow=false;o().outline=false;},()->{o().hollow=true;o().outline=false;},()->{o().hollow=false;o().outline=true;}};
+        for(int i=0;i<3;i++)button(g,10+i*(width+4),y,width,18,labels[i],active[i],pick[i],tips[i]);
+    }
     private void alignButtons(Gfx g,int y){
         var kinds=Options.StrokeAlign.values();int width=(LEFT-20-4*(kinds.length-1))/kinds.length;
         String[] tips={"Inside: the wall grows inward from the shape's edge","Center: the wall straddles the shape's edge","Outside: the wall grows outward, so the radius is the size of the hole"};

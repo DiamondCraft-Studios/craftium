@@ -21,11 +21,11 @@ final class BrushGhost {
     /** Draws the preview at {@code at} and returns true, or returns false when it is too large to ghost. */
     static boolean draw(Minecraft mc,BlockPos at,Options o){
         if(mc.level==null)return false;
-        var now=List.<Object>of(o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides);
+        var now=List.<Object>of(o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.outline);
         if(!now.equals(key)){
             key=now;
             // A shape over the block limit, or one the server would refuse, is not ghosted: the wireframe shows its size instead.
-            try{ghost=ShellGhost.of(BrushMath.brush(new Point(0,0,0),o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides));}
+            try{ghost=ShellGhost.of(BrushMath.brush(new Point(0,0,0),o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline));}
             catch(IllegalArgumentException e){ghost=null;}
         }
         if(ghost==null||ghost.tooLarge())return false;

@@ -90,16 +90,36 @@ public final class BrushMath {
 
     /** As above, with {@code sides} for a {@link Shape#POLYGON}; other shapes ignore it. */
     public static List<Point> brush(Point center, int radius, Shape shape, boolean hollow, int thickness, boolean pixelPerfect, int shift, int sides) {
-        sides = Math.clamp(sides, MIN_SIDES, MAX_SIDES);
+        return brush(center, radius, shape, hollow, thickness, pixelPerfect, shift, sides, false);
+    }
+
+    /** What an outline of {@code solid} keeps: the blocks on the rim of the shape in all three axis planes, which is its edges. A flat shape's is its ring. */
+    public interface Solid { boolean at(int x, int y, int z); }
+    public static boolean edge(Solid solid, int x, int y, int z) {
+        if (!solid.at(x, y, z)) return false;
+        boolean openX = !solid.at(x + 1, y, z) || !solid.at(x - 1, y, z), openY = !solid.at(x, y + 1, z) || !solid.at(x, y - 1, z), openZ = !solid.at(x, y, z + 1) || !solid.at(x, y, z - 1);
+        return (openY || openZ) && (openX || openZ) && (openX || openY);
+    }
+    public static List<Point> edges(java.util.Collection<Point> solid) {
+        var set = new java.util.HashSet<>(solid);
+        Solid inside = (x, y, z) -> set.contains(new Point(x, y, z));
+        return solid.stream().filter(p -> edge(inside, p.x(), p.y(), p.z())).toList();
+    }
+
+    /** As above; with {@code outline} only the shape's edges are kept, and the wall settings are ignored. */
+    public static List<Point> brush(Point center, int radius, Shape shape, boolean hollow, int thickness, boolean pixelPerfect, int shift, int sides, boolean outline) {
+        if (outline) hollow = false;
+        final int corners = Math.clamp(sides, MIN_SIDES, MAX_SIDES);
         if (radius < 1 || radius > MAX_RADIUS) throw new IllegalArgumentException("Radius must be 1–" + MAX_RADIUS);
         int wall = Math.clamp(thickness, 1, radius);
-        int outer = Math.min(radius + (hollow ? Math.max(0, shift) : 0), MAX_REACH);
+        final int outer = Math.min(radius + (hollow ? Math.max(0, shift) : 0), MAX_REACH);
         var points = new ArrayList<Point>();
         int inner = outer - wall; // the edge of the cut; below zero there is nothing to cut out, so the shape stays solid
         boolean cut = hollow && !pixelPerfect && inner >= 0;
+        Solid solid = (x, y, z) -> contains(shape, x, y, z, outer, corners);
         for (int x = -outer; x <= outer; x++) for (int y = -outer; y <= outer; y++)
             for (int z = -outer; z <= outer; z++) {
-                if (!contains(shape, x, y, z, outer, sides) || cut && contains(shape, x, y, z, inner, sides)) continue;
+                if (outline ? !edge(solid, x, y, z) : !solid.at(x, y, z) || cut && contains(shape, x, y, z, inner, corners)) continue;
                 points.add(center.add(x, y, z));
                 if (points.size() > Selection.LIMIT) throw new IllegalArgumentException("Shape exceeds the " + String.format("%,d", Selection.LIMIT) + " block limit; use a smaller radius, or make it hollow");
             }

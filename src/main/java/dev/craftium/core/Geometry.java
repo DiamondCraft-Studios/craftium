@@ -29,7 +29,7 @@ public final class Geometry {
     }
     public static List<Point> shape(Point center,Options o) {
         if(o.shapeKind==Options.ShapeKind.BRUSH&&o.yaw==0&&o.pitch==0&&o.roll==0&&o.sizeX==1&&o.sizeY==1&&o.sizeZ==1)
-            return BrushMath.brush(center,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides);
+            return BrushMath.brush(center,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline);
         double scaled=o.yaw==0&&o.pitch==0&&o.roll==0?Math.max(o.sizeX,Math.max(o.sizeY,o.sizeZ)):Math.sqrt(o.sizeX*o.sizeX+o.sizeY*o.sizeY+o.sizeZ*o.sizeZ);
         double outer=o.outerRadius();
         int extent=(int)Math.ceil(outer*scaled);
@@ -45,6 +45,7 @@ public final class Geometry {
                 result.add(center.add(x,y,z));if(result.size()>Selection.LIMIT)throw new IllegalArgumentException("Shape exceeds block limit");
             }
         }
+        if(o.outline)return BrushMath.edges(result);
         return o.hollow&&o.pixelPerfect?OutlineMath.thin(result,Math.max(1,o.outlineThickness)):result;
     }
     private static boolean shell(Vector v,Options o){

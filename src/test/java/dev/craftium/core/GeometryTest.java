@@ -63,6 +63,14 @@ class GeometryTest {
         assertTrue(triangle.size() < square.size() && square.size() < many.size());
         assertTrue(many.size() <= BrushMath.brush(o,10,BrushMath.Shape.DISK,false).size());
     }
+    @Test void outlineKeepsOnlyTheEdges() {
+        var o = new Point(0,0,0);
+        var cube = BrushMath.brush(o,3,BrushMath.Shape.CUBE,false,1,false,0,6,true);
+        assertEquals(12 * 5 + 8, cube.size()); // twelve edges of five blocks between eight corners
+        var ring = new HashSet<>(BrushMath.brush(o,8,BrushMath.Shape.DISK,false,1,false,0,6,true));
+        assertTrue(ring.size() < BrushMath.brush(o,8,BrushMath.Shape.DISK,false).size() && !ring.contains(o));
+        assertEquals(new HashSet<>(BrushMath.edges(BrushMath.brush(o,3,BrushMath.Shape.CUBE,false))), new HashSet<>(cube));
+    }
     @Test void selectionBooleanOperationsAreAtomicAtTheLimit() {
         var s = new Selection();
         var a = new Point(0,0,0); var b = new Point(1,0,0); var c = new Point(2,0,0);

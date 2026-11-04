@@ -16,7 +16,8 @@ public final class Options {
     public double noiseScale = 8;
     public double density = 0.5;
     public long seed = 42;
-    public boolean invert, hollow, surfaceOnly = true, keepExisting, pasteAir;
+    /** {@code outline} keeps only the shape's edges, in 2D and 3D; it takes the place of {@code hollow}, never alongside it. */
+    public boolean invert, hollow, outline, surfaceOnly = true, keepExisting, pasteAir;
     /**
      * For a hollow shape: how many blocks thick the wall is (at most the radius), whether it is drawn the way a pixel artist would, one
      * block per column with no doubled steps, and where the wall sits against the edge the radius gives the shape.
