@@ -69,7 +69,7 @@ public final class Options {
         removedColor=0xffff7777,removedFill=0x22ff5555,removedTint=0x90EE4646,
         hoverColor=0xff7fd8ff,hoverFill=0x2240c0ff;
     /** The colour (ARGB) and width, in pixels from 0.1 to 10, of the selection's outline. */
-    public int selectionColor=0xffffd66d;
+    public int selectionColor=0xff2389c6;
     public double selectionWidth=1;
     /** The point one transform request works about, which can differ from the player's pivot, as when scaling from the far side. */
     public boolean aboutSet;
