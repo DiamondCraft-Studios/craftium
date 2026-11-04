@@ -63,6 +63,10 @@ public final class CraftiumClient implements ClientModInitializer {
         // What the shared placement mixins ask about the local player; only when the server runs the mod too, as it must agree with the client.
         dev.craftium.runtime.PlayerCapabilities.client=player->{var mc=Minecraft.getInstance();return player==mc.player&&player.isCreative()&&vanillaPlacement()?ClientState.options:null;};
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
+        if(Boolean.getBoolean("craftium.maximize")){ // set by the development run configuration, so the test client opens maximized
+            var once=new boolean[1];
+            ClientTickEvents.END_CLIENT_TICK.register(mc->{if(!once[0]){once[0]=true;GLFW.glfwMaximizeWindow(mc.getWindow().handle());}});
+        }
         UseBlockCallback.EVENT.register((player,level,hand,hit)->{
             var o=ClientState.options;
             boolean block=player.getMainHandItem().getItem() instanceof BlockItem;
@@ -189,19 +193,29 @@ public final class CraftiumClient implements ClientModInitializer {
             }
         }
     }
-    /** Tinker on the block aimed at: a click cycles the chosen property, and a sneaking click chooses the next property. */
+    /**
+     * Tinker on the block aimed at: a click makes the change that block most likely needs, chosen from where on it you aim.
+     * A sneaking click instead picks a specific property, which the following clicks on that block cycle; aiming at another block goes back to the smart choice.
+     */
     private void tinker(Minecraft mc,Options o,BlockHitResult hit){
         var state=mc.level.getBlockState(hit.getBlockPos());
-        if(state.getBlock()!=tinkerBlock){tinkerBlock=state.getBlock();o.tinkerIndex=0;}
-        var property=dev.craftium.runtime.TinkerProperties.pick(state,o.tinkerIndex);
-        if(property==null){ClientState.notify("Tinker: this block has no properties");return;}
-        mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        if(state.getBlock()!=tinkerBlock){tinkerBlock=state.getBlock();o.tinkerIndex=0;o.tinkerManual=false;}
+        var properties=dev.craftium.runtime.TinkerProperties.of(state);
+        var location=hit.getLocation();var pos=hit.getBlockPos();
+        o.tinkerX=location.x-pos.getX();o.tinkerY=location.y-pos.getY();o.tinkerZ=location.z-pos.getZ();
+        var d=hit.getDirection();
+        var aim=dev.craftium.runtime.TinkerRules.Aim.of(d.getStepX(),d.getStepY(),d.getStepZ(),o.tinkerX,o.tinkerY,o.tinkerZ);
         if(mc.player.isShiftKeyDown()){
-            o.tinkerIndex=Math.floorMod(o.tinkerIndex+1,dev.craftium.runtime.TinkerProperties.of(state).size());
-            ClientState.notify("Tinker: "+dev.craftium.runtime.TinkerProperties.describe(state,dev.craftium.runtime.TinkerProperties.pick(state,o.tinkerIndex)));
+            if(properties.isEmpty()){ClientState.notify("Tinker: this block has no properties");return;}
+            mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            o.tinkerIndex=o.tinkerManual?Math.floorMod(o.tinkerIndex+1,properties.size()):0;o.tinkerManual=true;
+            ClientState.notify("Tinker: picked "+dev.craftium.runtime.TinkerProperties.describe(state,dev.craftium.runtime.TinkerProperties.pick(state,o.tinkerIndex))+" · click to change it");
             return;
         }
-        ClientState.notify("Tinker: "+dev.craftium.runtime.TinkerProperties.describe(dev.craftium.runtime.TinkerProperties.cycle(state,property),property));
+        var result=dev.craftium.runtime.TinkerRules.apply(state,aim,o.tinkerManual?o.tinkerIndex:-1);
+        if(result==null){ClientState.notify("Tinker: this block has no properties");return;}
+        mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        ClientState.notify("Tinker: "+result.message());
         send("builder_place",point(hit.getBlockPos()),normal(hit));
     }
     public static boolean held(KeyMapping mapping){
