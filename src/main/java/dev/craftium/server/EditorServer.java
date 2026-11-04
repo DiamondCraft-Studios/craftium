@@ -414,7 +414,7 @@ public final class EditorServer {
             case RULER -> {
                 if(s.ruler==null) {s.ruler=p;send(player,s,"Ruler start: "+p.coordinates(),false);}
                 else {Point a=s.ruler;double distance=Math.sqrt(a.distanceSquared(p));int manhattan=Math.abs(a.x()-p.x())+Math.abs(a.y()-p.y())+Math.abs(a.z()-p.z());
-                    String message=String.format(Locale.ROOT,"Ruler: %.2f blocks · Manhattan %d · Δ %s",distance,manhattan,p.subtract(a).coordinates());
+                    String message=String.format(Locale.ROOT,"Ruler: %s blocks · Manhattan %d · Δ %s",dev.craftium.core.Numbers.trim(distance),manhattan,p.subtract(a).coordinates());
                     s.event(message);s.ruler=null;send(player,s,message,false);}
             }
             case LINE -> {
