@@ -25,7 +25,7 @@ Orientation-sensitive blocks (stairs, doors, logs) take properties like "minecra
 export const INSTRUCTIONS = `You can build in the player's Minecraft world through the Craftium mod. Builds are shown as a ghost preview in the game and only change the world when applied.
 
 Workflow:
-1. Call get_state. It reports the player's position and facing and the current selection. If the game is not reachable, tell the player to open a world and type /craftium ai on in the game chat.
+1. Call get_state. It reports the player's position and facing and the current selection. If the game is not reachable, tell the player to open a world and turn on AI building (in the editor: View, then AI building; or type /craftium ai on).
 2. Builds go inside the selection. If there is none (or it is the wrong size), choose an area in front of the player sized for the build and call set_selection. Mention the area you chose.
 3. Call preview_build with a build spec. If it returns an error, fix the spec and try again; the error names the operation at fault. A new preview replaces the previous one.
 4. Tell the player to look at the ghost in the game. Adjust with another preview_build if they want changes.

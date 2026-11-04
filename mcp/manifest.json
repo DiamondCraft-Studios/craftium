@@ -4,7 +4,7 @@
   "display_name": "Craftium",
   "version": "0.1.0",
   "description": "Build in Minecraft by chatting: Claude previews builds as a ghost in your game and applies them when you say so.",
-  "long_description": "Connects Claude Desktop to the Craftium Minecraft mod running on this computer. Ask for a build (for example an Egyptian pillar) and Claude selects an area, describes the build as shapes, and shows it as a ghost preview in your game. Nothing changes in your world until you approve it, and every build can be undone.\n\nIn Minecraft, type /craftium ai on once to let this extension connect. It only talks to your own computer.",
+  "long_description": "Connects Claude Desktop to the Craftium Minecraft mod running on this computer. Ask for a build (for example an Egyptian pillar) and Claude selects an area, describes the build as shapes, and shows it as a ghost preview in your game. Nothing changes in your world until you approve it, and every build can be undone.\n\nIn Minecraft, open the editor and choose View, then AI building, and turn it on once (or type /craftium ai on) to let this extension connect. It only talks to your own computer.",
   "author": { "name": "Craftium contributors" },
   "license": "MIT",
   "keywords": ["minecraft", "craftium", "building"],

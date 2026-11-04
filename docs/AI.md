@@ -12,8 +12,10 @@ Claude Desktop ──stdio──▶ craftium-mcp (Node) ──127.0.0.1──▶
 
 1. Install the Craftium mod for your Minecraft version as usual. For multiplayer, Craftium must also be on the server (Fabric, or the Paper/Purpur companion).
 2. Install the **craftium.mcpb** extension in Claude Desktop: open the file with Claude Desktop (double-click it), or drag it into Settings → Extensions. It needs Node.js 18 or newer, which Claude Desktop supplies for extensions of this kind.
-3. In Minecraft, open a world and type `/craftium ai on` once. The setting is remembered. `/craftium ai off` turns it off, and `/craftium ai` shows the state.
+3. In Minecraft, open a world and the editor (Right Shift), choose **View → AI building…**, and press **Turn on AI building**. The setting is remembered. (The commands `/craftium ai on`, `/craftium ai off` and `/craftium ai` do the same.)
 4. If your game does not use the default `.minecraft` folder (a Prism, Modrinth App or CurseForge profile, for example), open the extension's settings in Claude Desktop and choose the profile's game folder, the one that contains `config` and `mods`.
+
+While AI building is on, a small **AI** marker shows in the top right corner of the game: amber while it waits for the AI app, green once the app has connected, and blue while a request is being answered. The **AI** tab of the studio inspector shows the same status, the last request, and buttons to **Apply** or **Discard** a waiting preview and to **Undo** the last edit, so you can approve a build without going back to the chat.
 
 Then ask Claude for a build while the game is open. Claude can select an area in front of you, or you can select one yourself first. Look at the ghost in the game, ask for changes, and say when to apply it.
 
@@ -59,7 +61,7 @@ A build ignores your brush settings (mask, symmetry, height range) and places ex
 
 ## Troubleshooting
 
-- **"Craftium is not reachable"**: open a world, run `/craftium ai on`, and check the Minecraft folder setting in the extension if you use a launcher profile.
+- **"Craftium is not reachable"**: open a world, turn on AI building (View → AI building…), and check the Minecraft folder setting in the extension if you use a launcher profile.
 - **"Craftium refused the connection"**: Minecraft restarted and the token changed. Try again, or run `/craftium ai off` then `/craftium ai on`.
 - **"Craftium on the server"**: the world needs Craftium on the server too, as for the editor. In singleplayer this is automatic.
 - **Errors like `ops[2] (cylinder): missing number "radius"`** are the spec's fault, not yours. Claude gets the message and retries.
