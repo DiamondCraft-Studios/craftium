@@ -193,6 +193,8 @@ public final class Options {
     public enum BuilderTool { MOVE,CLONE,STACK,SMEAR,EXTRUDE,ERASE,SYMMETRY }
     public BuilderTool builderTool=BuilderTool.MOVE;
     public int builderRotation,builderFlipAxis=-1;
+    /** The exact blocks of a builder selection that is not a box (a magic select), as {@link SelectionCodec} text; empty when the box is the selection. */
+    public String builderCells="";
     public int symmetryRotations=1;
     public boolean symmetryHalfX,symmetryHalfY,symmetryHalfZ;
     public double rebuildStartDelay=1,rebuildMaxDelay=.25,rebuildAirDelay=.01,rebuildSameDelay=.03,rebuildDifferentDelay=.08,rebuildRandomDelay=.01,rebuildHorizontalMultiplier=1,rebuildVerticalMultiplier=1;
@@ -208,7 +210,7 @@ public final class Options {
         if(gizmoMode==null)gizmoMode=GizmoMode.MOVE;gizmoYaw=bounded(gizmoYaw,-360,360);gizmoPitch=bounded(gizmoPitch,-360,360);gizmoRoll=bounded(gizmoRoll,-360,360);
         if(gizmoTarget==null)gizmoTarget=GizmoTarget.AUTO;
         flightMomentum=bounded(flightMomentum,0,.98);flightMomentumKept=bounded(flightMomentumKept,0,.98);liquidOpacity=bounded(liquidOpacity,0,1);minimumBrightness=bounded(minimumBrightness,0,1);
-        if(builderTool==null)throw new IllegalArgumentException("Choose a builder tool");builderRotation=Math.floorMod(builderRotation,4);builderFlipAxis=Math.clamp(builderFlipAxis,-1,2);symmetryRotations=symmetryRotations>=4?4:symmetryRotations>=2?2:1;
+        if(builderTool==null)throw new IllegalArgumentException("Choose a builder tool");if(builderCells==null)builderCells="";if(builderCells.length()>1_500_000)throw new IllegalArgumentException("Builder selection is too large");builderRotation=Math.floorMod(builderRotation,4);builderFlipAxis=Math.clamp(builderFlipAxis,-1,2);symmetryRotations=symmetryRotations>=4?4:symmetryRotations>=2?2:1;
         if(shadeFrom==null||shadeLights==null||shadeLights.size()>16||shadeLights.contains(null)||materialWeights==null||materialWeights.size()>256||materialWeights.contains(null))throw new IllegalArgumentException("Invalid lighting or palette options");
         for(var light:shadeLights)if(!Double.isFinite(light.x())||!Double.isFinite(light.y())||!Double.isFinite(light.z())||!Double.isFinite(light.intensity())||Math.abs(light.x())>30_000_000||Math.abs(light.z())>30_000_000||Math.abs(light.y())>4096||light.intensity()<0||light.intensity()>16)throw new IllegalArgumentException("Invalid light source");
         for(int i=0;i<materialWeights.size();i++)materialWeights.set(i,bounded(materialWeights.get(i),.01,100));
