@@ -258,18 +258,18 @@ final class TransformGizmo {
     private static final double RULER_REACH=64;
     private static final int[] RULER_COLORS={0xaaff7777,0xaa8bef9a,0xaa78b9ff};
     /**
-     * While a handle is held: a thin line through the gizmo along each global axis, with a tick at every block and a longer one every
+     * While a handle is held: a thin line through the gizmo along each global axis, hidden where blocks are in front of it, with a tick at every block and a longer one every
      * five, so the distance moved can be read off the world's own grid whichever way the gizmo itself is turned.
      */
     private static void ruler(Vec3 at){
         for(int axis=0;axis<3;axis++){
             double[] c={at.x,at.y,at.z};int across=(axis+1)%3;
             double[] from=c.clone(),to=c.clone();from[axis]-=RULER_REACH;to[axis]+=RULER_REACH;
-            Overlay.line(new Vec3(from[0],from[1],from[2]),new Vec3(to[0],to[1],to[2]),RULER_COLORS[axis],1);
+            Overlay.sceneLine(new Vec3(from[0],from[1],from[2]),new Vec3(to[0],to[1],to[2]),RULER_COLORS[axis],1);
             int first=(int)Math.ceil(c[axis]-RULER_REACH),last=(int)Math.floor(c[axis]+RULER_REACH);
             for(int n=first;n<=last;n++){
                 double half=n%5==0?.25:.1;double[] a=c.clone(),b=c.clone();a[axis]=b[axis]=n;a[across]-=half;b[across]+=half;
-                Overlay.line(new Vec3(a[0],a[1],a[2]),new Vec3(b[0],b[1],b[2]),RULER_COLORS[axis],1);
+                Overlay.sceneLine(new Vec3(a[0],a[1],a[2]),new Vec3(b[0],b[1],b[2]),RULER_COLORS[axis],1);
             }
         }
     }

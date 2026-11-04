@@ -65,6 +65,25 @@ public final class Overlay {
     public static void frame(Runnable draw){pendingFrame=draw;}
 
     public static void line(Vec3 from,Vec3 to,int color,float width){out.add(new Line(from,to,color,width));}
+    /**
+     * A line that belongs to the scene: blocks in front of it hide it, so it passes through them. This release draws
+     * without depth, so the line is cut into block-long pieces and a piece is kept only when nothing solid is between the eye and its middle.
+     */
+    public static void sceneLine(Vec3 from,Vec3 to,int color,float width){
+        var mc=Minecraft.getInstance();
+        if(mc.level==null||mc.player==null){line(from,to,color,width);return;}
+        Vec3 eye=ClientCompat.camera(mc).position();
+        int pieces=Math.max(1,(int)Math.ceil(from.distanceTo(to)));
+        Vec3 runStart=null,runEnd=null;
+        for(int i=0;i<pieces;i++){
+            Vec3 a=from.lerp(to,(double)i/pieces),b=from.lerp(to,(double)(i+1)/pieces),mid=a.lerp(b,.5);
+            var hit=mc.level.clip(new net.minecraft.world.level.ClipContext(eye,mid,net.minecraft.world.level.ClipContext.Block.OUTLINE,net.minecraft.world.level.ClipContext.Fluid.NONE,mc.player));
+            boolean visible=hit.getType()==net.minecraft.world.phys.HitResult.Type.MISS||eye.distanceToSqr(hit.getLocation())>=eye.distanceToSqr(mid)-.0004;
+            if(visible){if(runStart==null)runStart=a;runEnd=b;}
+            else if(runStart!=null){line(runStart,runEnd,color,width);runStart=null;}
+        }
+        if(runStart!=null)line(runStart,runEnd,color,width);
+    }
     public static void box(AABB box,int strokeColor,float strokeWidth,int fillColor){out.add(new Box(box,strokeColor,strokeWidth,fillColor));}
     public static void point(Vec3 at,int color,float size){out.add(new Point(at,color,size));}
     /** A filled quad. Corners are in order, counter-clockwise when seen from the side it faces. */
