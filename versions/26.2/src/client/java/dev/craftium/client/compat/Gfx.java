@@ -6,6 +6,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix3x2fStack;
@@ -46,6 +47,9 @@ public final class Gfx {
     public void blit(Tex texture,int x,int y,float u,float v,int width,int height,int regionWidth,int regionHeight,int textureWidth,int textureHeight,int color){
         raw.blit(RenderPipelines.GUI_TEXTURED,texture.id(),x,y,u,v,width,height,regionWidth,regionHeight,textureWidth,textureHeight,color);
     }
+
+    /** The vanilla crosshair sprite, plain white, with its 15x15 box centred on the given point. */
+    public void crosshair(int centerX,int centerY){raw.blitSprite(RenderPipelines.GUI_TEXTURED,Identifier.withDefaultNamespace("hud/crosshair"),centerX-7,centerY-7,15,15);}
 
     /** Renders a vanilla widget (text box, button) onto this surface. */
     public void widget(AbstractWidget widget,int mouseX,int mouseY,float delta){widget.extractRenderState(raw,mouseX,mouseY,delta);}
