@@ -274,7 +274,7 @@ public final class EditorScreen extends CraftiumScreen {
                 if(o().tool==Tool.MAGIC_SELECT){
                     compareButtons(g,444);
                     toggle(g,10,474,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
-                    toggle(g,10,492,"Hover preview (under "+o().magicPreviewLimit+")",o().magicPreview,()->o().magicPreview=!o().magicPreview);
+                    toggle(g,10,492,"Hover preview (under "+o().magicPreviewLimit()+")",o().magicPreview,()->o().magicPreview=!o().magicPreview);
                 }
                 button(g,10,h-52,78,20,"Fill",false,()->action("fill"),"Fill the selection with the active block");button(g,94,h-52,78,20,"Clear",false,()->action("clear"),"Clear the selection");
             }
