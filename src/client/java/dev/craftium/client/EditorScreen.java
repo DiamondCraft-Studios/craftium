@@ -123,6 +123,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void select(Tool tool){
         cancelSelectionJobs();
         if(tool.transform()&&tool!=Tool.PIVOT&&ClientState.status.selectionSize()==0&&!ShapeObject.active())ClientState.notify("Select blocks first, then use "+tool.label);
+        if(tool!=Tool.MODIFY)ModifyPreview.edit();
         toolActive=true;previousTool=o().tool;selectedNode=-1;if(tool!=Tool.BOX_SELECT)ClientState.boxCorners.clear();o().tool=tool;o().gizmoTarget=Options.GizmoTarget.AUTO;builder=false;init();}
     /** Set while a pop-up such as the block picker draws this screen as its backdrop: no flight or cursor handling then. */
     boolean suspended;
@@ -286,6 +287,7 @@ public final class EditorScreen extends CraftiumScreen {
             wrap(g,"Drag a handle, then press Enter to apply. Esc cancels.",10,382,LEFT-20,MUTED,3);
             return;
         }
+        if(o().tool==Tool.MODIFY){modifyOptions(g);return;}
         if(o().tool!=Tool.TEXT) {
             shapeSelector(g,305);
             // The track stops at 64 to stay usable; a bigger radius is typed in. Shapes are limited by their block count and reach, not by this.
@@ -332,6 +334,79 @@ public final class EditorScreen extends CraftiumScreen {
             toggle(g,10,416,"Keep existing",o().keepExisting,()->o().keepExisting=!o().keepExisting);
         }
         if(o().tool.selection()){button(g,10,h-52,78,20,"Fill",false,()->action("fill"),"Fill the selection with the active block");button(g,94,h-52,78,20,"Clear",false,()->action("clear"),"Clear the selection");}
+    }
+    /** One scrollable row of the Modify panel; {@code paint} gets the row's top. */
+    private record ModifyRow(int height,java.util.function.BiConsumer<Gfx,Integer> paint){}
+    private int modifyScroll;
+    private static final int MODIFY_TOP=352;
+    /** The Modify tool's own options: its mode, then only the controls that mode reads, in rows that scroll. Revolve and Rotate Copies turn around the anchored block. */
+    private void modifyOptions(Gfx g){
+        var o=o();int half=(LEFT-24)/2,w=LEFT-32;
+        String[] names={"Translate Copies","Revolve","Rotate Copies","Twist"};
+        Options.ModifyMode[] order={Options.ModifyMode.TRANSLATE_COPIES,Options.ModifyMode.REVOLVE,Options.ModifyMode.ROTATE_COPIES,Options.ModifyMode.TWIST};
+        for(int i=0;i<4;i++){var mode=order[i];button(g,10+(i%2)*(half+4),300+(i/2)*24,half,20,names[i],o.modifyMode==mode,()->o.modifyMode=mode,"");}
+        var rows=new ArrayList<ModifyRow>();
+        switch(o.modifyMode){
+            case TRANSLATE_COPIES -> {
+                rows.add(sliderRow(w,"Copies",o.copies,1,16,16,DEFAULTS.copies,v->o.copies=(int)Math.round(v),true));
+                rows.add(sliderRow(w,"Offset X",o.offsetX,-16,16,128,0,v->o.offsetX=(int)Math.round(v),true));
+                rows.add(sliderRow(w,"Offset Y",o.offsetY,-16,16,128,DEFAULTS.offsetY,v->o.offsetY=(int)Math.round(v),true));
+                rows.add(sliderRow(w,"Offset Z",o.offsetZ,-16,16,128,0,v->o.offsetZ=(int)Math.round(v),true));
+                rows.add(new ModifyRow(22,(gg,y)->toggle(gg,10,y+2,o.modifyRelative?"Relative (x selection size)":"Absolute (blocks)",o.modifyRelative,()->o.modifyRelative=!o.modifyRelative,"Relative offsets are multiplied by the size of the selection; absolute offsets are not")));
+            }
+            case REVOLVE -> {
+                rows.add(axisRow());
+                rows.add(sliderRow(w,"Angle",o.modifyAngle,-360,360,3600,DEFAULTS.modifyAngle,v->o.modifyAngle=Math.round(v*10)/10d,false));
+                translationRows(rows,w);
+            }
+            case ROTATE_COPIES -> {
+                boolean custom=o.modifyType==Options.RotateType.CUSTOM_ANGLE;
+                Runnable flip=()->o.modifyType=custom?Options.RotateType.EQUIDISTANT:Options.RotateType.CUSTOM_ANGLE;
+                rows.add(new ModifyRow(26,(gg,y)->button(gg,10,y,LEFT-32,20,"Type: "+(custom?"Custom Angle":"Equidistant"),false,flip,flip,"Equidistant spreads copies around the anchor; Custom Angle turns each copy by the angle")));
+                rows.add(axisRow());
+                rows.add(sliderRow(w,"Copies",o.copies,1,16,16,DEFAULTS.copies,v->o.copies=(int)Math.round(v),true));
+                if(custom)rows.add(sliderRow(w,"Angle",o.modifyAngle,-360,360,3600,DEFAULTS.modifyAngle,v->o.modifyAngle=Math.round(v*10)/10d,false));
+                translationRows(rows,w);
+            }
+            case TWIST -> {
+                rows.add(axisRow());
+                rows.add(sliderRow(w,"Angle",o.modifyAngle,-360,360,3600,DEFAULTS.modifyAngle,v->o.modifyAngle=Math.round(v*10)/10d,false));
+            }
+        }
+        int bottom=h-112,avail=bottom-MODIFY_TOP,max=0,used=0;
+        for(int i=rows.size()-1;i>=0;i--){if(used+rows.get(i).height()>avail){max=i+1;break;}used+=rows.get(i).height();}
+        modifyScroll=Math.clamp(modifyScroll,0,max);
+        int y=MODIFY_TOP,shown=0;
+        for(int i=modifyScroll;i<rows.size();i++){var row=rows.get(i);if(y+row.height()>bottom)break;row.paint().accept(g,y);y+=row.height();shown++;}
+        if(max>0){ // a thin scrollbar: the wheel, or a click on the track, moves through the rows
+            int track=bottom-MODIFY_TOP,thumb=Math.max(14,track*shown/rows.size()),at=MODIFY_TOP+(track-thumb)*modifyScroll/max;
+            g.fill(LEFT-8,MODIFY_TOP,LEFT-4,bottom,0xff1b2b40);g.fill(LEFT-8,at,LEFT-4,at+thumb,MUTED);
+            int top=MODIFY_TOP,span=Math.max(1,track-thumb),limit=max;
+            controls.add(new Control(LEFT-11,top,10,track,()->{double py=WorkspaceLayout.inverse("options",mx,my)[1];modifyScroll=Math.clamp((int)Math.round((py-top-thumb/2.0)/span*limit),0,limit);},"Scroll the properties · mouse wheel"));
+        }
+        boolean cursorBound=ModifyMath.usesCursor(o);
+        String where=ModifyPreview.anchored()?(cursorBound&&ModifyPreview.anchor()!=null?"Anchored at "+ModifyPreview.anchor().coordinates():"Anchored"):cursorBound?"Following the cursor · click to anchor":"Click to anchor the preview";
+        text(g,where,10,h-100,ModifyPreview.anchored()?0xffffd66d:MUTED);
+        button(g,10,h-78,LEFT-20,20,"Edit anchor",!ModifyPreview.anchored(),ModifyPreview::edit,"Let the guides and preview follow the cursor again; click to anchor them somewhere else");
+        button(g,10,h-52,LEFT-20,20,"Apply (Enter)",false,()->action("use"),"Build the previewed result");
+    }
+    private ModifyRow sliderRow(int w,String label,double value,double min,double max,double typedMax,double def,java.util.function.DoubleConsumer set,boolean integer){
+        return new ModifyRow(28,(g,y)->slider(g,10,y+10,w,label,value,min,max,typedMax,def,set,integer));
+    }
+    private ModifyRow axisRow(){
+        return new ModifyRow(32,(g,y)->{
+            text(g,"Axis",10,y,MUTED);int bw=(LEFT-36)/3;
+            for(var axis:Options.ModifyAxis.values())button(g,10+axis.ordinal()*(bw+4),y+10,bw,20,axis.name(),o().modifyAxis==axis,()->o().modifyAxis=axis,"");
+        });
+    }
+    /** The Add Translation toggle and, while it is on, the offset it adds: where a revolve ends or the last rotated copy lands. */
+    private void translationRows(List<ModifyRow> rows,int w){
+        var o=o();
+        rows.add(new ModifyRow(22,(g,y)->toggle(g,10,y+2,"Add Translation",o.modifyTranslate,()->o.modifyTranslate=!o.modifyTranslate,"Offsets the end position, e.g. 1 on Y makes a spiral")));
+        if(!o.modifyTranslate)return;
+        rows.add(sliderRow(w,"Translate X",o.modifyTranslateX,-16,16,256,0,v->o.modifyTranslateX=Math.round(v*100)/100d,false));
+        rows.add(sliderRow(w,"Translate Y",o.modifyTranslateY,-16,16,256,0,v->o.modifyTranslateY=Math.round(v*100)/100d,false));
+        rows.add(sliderRow(w,"Translate Z",o.modifyTranslateZ,-16,16,256,0,v->o.modifyTranslateZ=Math.round(v*100)/100d,false));
     }
     private record PinnedRow(String name,OptionFields.Kind kind,int y){}
     private final List<PinnedRow> pinnedRows=new ArrayList<>();
@@ -883,6 +958,12 @@ public final class EditorScreen extends CraftiumScreen {
             else ClientState.notify("Point at a block to position the clipboard");
             return;
         }
+        if(action.equals("use")&&o().tool==Tool.MODIFY){
+            if(ClientState.hasPending()){CraftiumClient.send("pending_confirm",null,null);return;}
+            Point at=ModifyPreview.anchored()&&ModifyPreview.anchor()!=null?ModifyPreview.anchor():hit==null?null:CraftiumClient.point(hit.getBlockPos());
+            CraftiumClient.send(action,at,hit==null?new Point(0,1,0):CraftiumClient.normal(hit));
+            ModifyPreview.edit();return;
+        }
         CraftiumClient.send(action,hit==null?null:CraftiumClient.point(hit.getBlockPos()),hit==null?null:CraftiumClient.normal(hit));
     }
     private boolean inViewport(double x,double y){
@@ -909,6 +990,10 @@ public final class EditorScreen extends CraftiumScreen {
             return;
         }
         if(o().tool.transform())return; // these work through their handles, not by clicking
+        if(o().tool==Tool.MODIFY){ // the first click anchors the preview where the cursor is; it is built with Apply or Enter
+            var hit=target();if(hit!=null)ModifyPreview.place(CraftiumClient.point(hit.getBlockPos()));
+            return;
+        }
         if(o().tool==Tool.SHAPE){ // the shape is put down, not built: dragging with the button held carries it along
             var hit=target();
             if(hit!=null)ShapeObject.place(CraftiumClient.point(hit.getBlockPos()));
@@ -1057,6 +1142,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("masks")){maskScroll=Math.max(0,maskScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("tools")){toolScroll=Math.clamp(toolScroll+(vertical<0?1:-1),0,maxToolScroll());return true;}
+        if(panels&&!pinnedTab&&!builder&&o().tool==Tool.MODIFY&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("options")){modifyScroll=Math.max(0,modifyScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&pinnedTab&&!builder&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("options")){
             if(vertical<0&&pinnedMore)pinnedScroll++;else if(vertical>0&&pinnedScroll>0)pinnedScroll--;
             init();return true;
