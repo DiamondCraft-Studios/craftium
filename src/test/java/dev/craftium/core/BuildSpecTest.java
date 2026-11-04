@@ -90,6 +90,14 @@ class BuildSpecTest {
         assertEquals("minecraft:stone", cell.only());
     }
 
+    @Test void aReplaceActsOnWhatTheSpecPlacedEarlier() {
+        var result = build("{\"ops\":[{\"op\":\"box\",\"from\":[0,0,0],\"to\":[1,0,0],\"block\":\"stone\"},{\"op\":\"set\",\"at\":[1,0,0],\"block\":\"dirt\"},"
+                + "{\"op\":\"replace\",\"from\":[0,0,0],\"to\":[1,0,0],\"find\":\"stone\",\"block\":\"gold_block\"}]}");
+        assertEquals("minecraft:gold_block", result.cells().get(new Point(0, 0, 0)).block());
+        assertNull(result.cells().get(new Point(0, 0, 0)).only());
+        assertEquals("minecraft:dirt", result.cells().get(new Point(1, 0, 0)).block());
+    }
+
     @Test void malformedSpecsFailWithAMessageNamingTheOperation() {
         assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse(""));
         assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("[]"));

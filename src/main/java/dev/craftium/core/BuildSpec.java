@@ -105,9 +105,15 @@ public final class BuildSpec {
                 var shape = shape(kind, op, i, bounds, step[0] * n, step[1] * n, step[2] * n, budget);
                 String block = resolve(op, "block", i);
                 String only = kind.equals("replace") ? resolve(op, "find", i) : null;
-                var cell = new Cell(block, only);
                 for (var p : shape) {
+                    var cell = new Cell(block, only);
                     if (!bounds.contains(p.x(), p.y(), p.z())) { clipped++; continue; }
+                    var earlier = cells.get(p);
+                    if (cell.only() != null && earlier != null) {
+                        // A replace acts on what the spec has placed so far, then stands as a plain block; where that is something else it leaves it be.
+                        if (!matches(earlier.block(), cell.only())) continue;
+                        cell = new Cell(cell.block(), earlier.only());
+                    }
                     cells.remove(p); // a later operation goes last, as well as on top
                     cells.put(p, cell);
                     if (cells.size() > MAX_BLOCKS) throw new IllegalArgumentException("Build places more than " + MAX_BLOCKS + " blocks");
@@ -260,6 +266,11 @@ public final class BuildSpec {
                     }
         }
         return new ArrayList<>(out);
+    }
+
+    /** Whether a placed block is the one a replace is looking for: its exact state where the search names one, else any state of the block. */
+    public static boolean matches(String block, String find) {
+        return find.contains("[") ? block.equals(find) : block.split("\\[", 2)[0].equals(find);
     }
 
     private static void spend(long[] budget) {
