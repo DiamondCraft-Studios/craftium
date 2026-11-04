@@ -39,7 +39,8 @@ Then ask Claude for a build while the game is open. Claude can select an area in
 | Tool | Does |
 | --- | --- |
 | `get_state` | Your position and facing, the selection, and whether a preview is waiting |
-| `get_blocks` | Reads the blocks in a box (up to 32,768 at a time) |
+| `get_blocks` | Reads the blocks in a box (up to 32,768 at a time), anywhere in the world: the server reads them, so ground your game has not loaded is real blocks and not air |
+| `get_surface` | The top block of every column in an area (up to 128 by 128), to find ground level |
 | `get_palette` | Your current block and recently used blocks |
 | `get_screenshot` | A picture of what you see in the game, including the preview, so Claude can check its own work |
 | `look_at` | Turns your view (not your position) toward a block so the picture shows the build, and turns it back afterwards |
@@ -49,6 +50,12 @@ Then ask Claude for a build while the game is open. Claude can select an area in
 | `cancel_preview`, `undo` | Discards the preview, or undoes your last edit |
 
 Claude cannot do anything the editor cannot. Every request goes through the same checks as your own edits: server permissions, protected areas, WorldGuard, the world border and size limits.
+
+## Reading the world
+
+`get_blocks` and `get_surface` are answered by the **server's** world, not by what your game has loaded, so Claude can look at ground that is far from you. A position above or below the world's height limits, or past the world border, reads as `craftium:outside_world` rather than air. Reading ground nobody has visited makes it (as flying there would), so **one call may touch at most 16 chunks that are not already loaded**. A read that needs more is refused with a message saying so, and Claude is told to read a smaller area or read it in pieces. Chunks that are already loaded do not count towards the 16, and chunks past the world border are never read. The other limits are 32,768 blocks for `get_blocks`, 128 by 128 columns for `get_surface`, and about 900 kB for a reply (also refused with a message).
+
+The reads are plain reads: they change nothing, and they need the same permission as editing (`craftium.edit` on Paper/Purpur, operator level on Fabric). They only read the **dimension you are in**; another dimension is not reachable from here.
 
 ## Build specs
 
@@ -124,5 +131,6 @@ Under `--permission` the process can read only those two folders and cannot star
 
 - Bridge: [AiBridge.java](../src/client/java/dev/craftium/client/AiBridge.java). A small loopback HTTP server (no JDK HTTP module, since Minecraft's bundled runtime may omit it) answering `POST /<tool>` with a JSON body and `Authorization: Bearer <token>`. Requests are spaced 120 ms apart because the server silently drops requests that follow another within 65 ms.
 - Build specs: [BuildSpec.java](../src/main/java/dev/craftium/core/BuildSpec.java) (pure, unit tested) and [BuildPlanner.java](../src/main/java/dev/craftium/server/BuildPlanner.java), reached by the `ai_build_preview` request. Apply and cancel reuse `pending_confirm` and `pending_cancel`.
+- Server reads: [AiWorld.java](../src/main/java/dev/craftium/server/AiWorld.java) answers the `ai_blocks`, `ai_surface` and `ai_surface_floor` requests with a `Packets.AiReply` (the `ai_reply` message on Paper). Their limits are the constants at the top of that file (`MAX_BLOCKS`, `MAX_COLUMNS`, `MAX_NEW_CHUNKS`, `MAX_REPLY`); change them there and in the tool descriptions in [mcp/src/tools.js](../mcp/src/tools.js), and update this page. These requests carry their two corners in `target` and `normal`, so `EditorServer` handles them before it checks `normal` as a direction.
 - MCP server: [mcp/](../mcp), with no run-time dependencies. `npm test` starts the real server and talks to it with the official MCP client (a test-only dependency) against a fake bridge, and also checks the limits in `contract.test.js`. `npm run pack` builds the `.mcpb`.
 - Game test: `CRAFTIUM_TEST_SCOPE=ai gradlew :versions:mc-1.21.10:runClientGameTest` enables the bridge in a real world, drives it over HTTP, then runs the real MCP server over stdio to build a pyramid.

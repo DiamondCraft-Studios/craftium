@@ -104,7 +104,28 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
 
             var read = call("get_blocks", "{\"from\":[" + x + "," + y + "," + z + "],\"to\":[" + (x + 4) + "," + (y + 1) + "," + (z + 4) + "]}");
             require(read.get("ok").getAsBoolean() && read.getAsJsonArray("palette").toString().contains("cut_sandstone"), "get_blocks: " + read);
+            require("server".equals(read.get("source").getAsString()), "get_blocks should be read by the server: " + read);
             System.out.println("CRAFTIUM_AI read_back_ok");
+
+            // The ground of the pillar's footprint: the cap is the top of the middle column.
+            var ground = call("get_surface", "{\"from\":[" + x + "," + y + "," + z + "],\"to\":[" + (x + 4) + "," + y + "," + (z + 4) + "]}");
+            require(ground.get("ok").getAsBoolean() && ground.getAsJsonArray("heights").size() == 25, "get_surface: " + ground);
+            require(ground.getAsJsonArray("heights").get(12).getAsInt() == y + 9, "the middle column should top out at the cap: " + ground);
+            require(ground.getAsJsonArray("palette").get(ground.getAsJsonArray("blocks").get(12).getAsInt()).getAsString().contains("smooth_sandstone"), "the top block should be the cap: " + ground);
+            var wrongKind = call("get_surface", "{\"from\":[0,0,0],\"to\":[1,0,1],\"kind\":\"water\"}");
+            require(!wrongKind.get("ok").getAsBoolean(), "an unknown kind should be refused: " + wrongKind);
+            System.out.println("CRAFTIUM_AI surface_ok");
+
+            // Far from the player: chunks this client never loaded are still read, from the server, as real ground and not as air.
+            int farX = block.get(0).getAsInt() + 1000, farZ = block.get(2).getAsInt() + 1000;
+            require(!ctx.computeOnClient(mc -> mc.level.getChunkSource().hasChunk(farX >> 4, farZ >> 4)), "the far area should not be loaded on the client");
+            var far = call("get_blocks", "{\"from\":[" + farX + ",-64," + farZ + "],\"to\":[" + (farX + 3) + ",-60," + (farZ + 3) + "]}");
+            require(far.get("ok").getAsBoolean() && far.get("chunksLoadedForThisRead").getAsInt() >= 1, "a far read should load its chunk on the server: " + far);
+            String farPalette = far.getAsJsonArray("palette").toString();
+            require(farPalette.contains("deepslate") || farPalette.contains("bedrock"), "far ground should be real blocks: " + farPalette);
+            var tooMany = call("get_blocks", "{\"from\":[" + (farX + 2000) + ",0," + farZ + "],\"to\":[" + (farX + 2000 + 127) + ",0," + (farZ + 127) + "]}");
+            require(!tooMany.get("ok").getAsBoolean() && tooMany.get("error").getAsString().contains("chunks"), "a read that needs too many new chunks should be refused: " + tooMany);
+            System.out.println("CRAFTIUM_AI far_read_ok");
 
             var undone = call("undo", "{}");
             require(undone.get("ok").getAsBoolean(), "undo: " + undone);

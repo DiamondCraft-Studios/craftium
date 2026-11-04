@@ -54,7 +54,7 @@ test("lists every tool with its hints, and the server's instructions", async () 
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "clear_selection", "get_blocks", "get_palette", "get_screenshot", "get_state", "look_at", "preview_build", "set_selection", "undo"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "clear_selection", "get_blocks", "get_palette", "get_screenshot", "get_state", "get_surface", "look_at", "preview_build", "set_selection", "undo"]);
   assert.equal(tools.find((t) => t.name === "get_state").annotations.readOnlyHint, true);
   assert.equal(tools.find((t) => t.name === "apply_preview").annotations.destructiveHint, true);
   assert.match(tools.find((t) => t.name === "preview_build").description, /cylinder/);
@@ -119,10 +119,19 @@ test("an ok:false reply becomes an error the model can read", async () => {
   await bridge.close();
 });
 
+test("get_surface passes its corners and kind to the bridge and nothing else", async () => {
+  const bridge = await fakeBridge({ get_surface: { ok: true, heights: [64], blocks: [0] } });
+  const client = await connect(bridge.file);
+  const result = await client.callTool({ name: "get_surface", arguments: { from: [0, 0, 0], to: [3, 9, 3], kind: "floor", sneaky: 1 } });
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(bridge.seen[0].body, { from: [0, 0, 0], to: [3, 9, 3], kind: "floor" });
+  await bridge.close();
+});
+
 test("bad arguments are rejected before they reach the game", async () => {
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
-  for (const [name, args] of [["set_selection", { from: [0, 0], to: [1, 1, 1] }], ["get_blocks", { from: [0, 0, 0] }], ["set_selection", { from: [0.5, 0, 0], to: [1, 1, 1] }], ["preview_build", { spec: { ops: [] } }], ["preview_build", { spec: "not an object" }]]) {
+  for (const [name, args] of [["set_selection", { from: [0, 0], to: [1, 1, 1] }], ["get_blocks", { from: [0, 0, 0] }], ["get_surface", { from: [0, 0, 0], to: [1, 1, 1], kind: "water" }], ["set_selection", { from: [0.5, 0, 0], to: [1, 1, 1] }], ["preview_build", { spec: { ops: [] } }], ["preview_build", { spec: "not an object" }]]) {
     const result = await client.callTool({ name, arguments: args });
     assert.equal(result.isError, true, `${name} ${JSON.stringify(args)}`);
   }

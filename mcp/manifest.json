@@ -23,6 +23,7 @@
   "tools": [
     { "name": "get_state", "description": "Player position, selection and preview status" },
     { "name": "get_blocks", "description": "Read the blocks in a box of the world" },
+    { "name": "get_surface", "description": "Read the ground height of an area" },
     { "name": "get_palette", "description": "The player's block palette" },
     { "name": "get_screenshot", "description": "See what the player sees, including the preview" },
     { "name": "look_at", "description": "Turn the player's view toward a block" },

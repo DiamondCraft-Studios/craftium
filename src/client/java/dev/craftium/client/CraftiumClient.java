@@ -49,6 +49,7 @@ public final class CraftiumClient implements ClientModInitializer {
             toolKeys.put(tool,ClientCompat.registerKey(new KeyMapping("key.craftium.tool."+tool.name().toLowerCase(java.util.Locale.ROOT),InputConstants.Type.KEYSYM,key,category)));
         }
         ClientPlayNetworking.registerGlobalReceiver(Packets.Report.TYPE,(payload,context)->context.client().execute(()->ClientCompat.setScreen(context.client(),new ReportScreen(ClientCompat.screen(context.client()),payload.text()))));
+        ClientPlayNetworking.registerGlobalReceiver(Packets.AiReply.TYPE,(payload,context)->AiBridge.dataReceived(payload.json()));
         ClientPlayNetworking.registerGlobalReceiver(Packets.Update.TYPE,(payload,context)->context.client().execute(()->{
             receiveStatus(payload.json());
         }));
@@ -134,6 +135,7 @@ public final class CraftiumClient implements ClientModInitializer {
             switch(message.kind()){
                 case "status" -> receiveStatus(message.data());
                 case "report" -> ClientCompat.setScreen(mc,new ReportScreen(ClientCompat.screen(mc),message.data()));
+                case "ai_reply" -> AiBridge.dataReceived(message.data());
                 case "download" -> ClientAssets.receive(Packets.JSON.fromJson(message.data(),Packets.Download.class));
                 case "hello" -> send("status",null,null);
                 default -> throw new IllegalArgumentException("Unknown Craftium server message");

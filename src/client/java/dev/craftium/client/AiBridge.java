@@ -121,6 +121,18 @@ public final class AiBridge {
     static void statusReceived(Packets.Status status) {
         var waiting = awaiting;
         if (waiting != null) waiting.complete(status);
+        // A read the server refused answers with an error status instead of data.
+        var reading = awaitingData;
+        if (reading != null && status.error()) reading.completeExceptionally(new IllegalArgumentException(status.message()));
+    }
+
+    /** Completed by the data the server sends for a read, which is how get_blocks and get_surface get their answer. */
+    private static volatile CompletableFuture<String> awaitingData;
+
+    /** Called with what the server read for the AI. */
+    static void dataReceived(String json) {
+        var reading = awaitingData;
+        if (reading != null) reading.complete(json);
     }
 
     public static void start() {
@@ -262,7 +274,13 @@ public final class AiBridge {
     private static JsonObject call(String tool, JsonObject args) throws Exception {
         return switch (tool) {
             case "get_state" -> onClient(AiBridge::state);
-            case "get_blocks" -> { var from = point(args, "from"); var to = point(args, "to"); yield onClient(() -> blocks(from, to)); }
+            case "get_blocks" -> { var from = point(args, "from"); var to = point(args, "to"); yield serverSupported() ? read("ai_blocks", from, to) : onClient(() -> blocks(from, to)); }
+            case "get_surface" -> {
+                var from = point(args, "from"); var to = point(args, "to");
+                String kind = args.has("kind") ? args.get("kind").getAsString() : "top";
+                if (!kind.equals("top") && !kind.equals("floor")) throw new IllegalArgumentException("\"kind\" must be \"top\" or \"floor\"");
+                yield read(kind.equals("floor") ? "ai_surface_floor" : "ai_surface", from, to);
+            }
             case "get_palette" -> onClient(AiBridge::palette);
             case "get_screenshot" -> screenshot();
             case "look_at" -> {
@@ -293,6 +311,34 @@ public final class AiBridge {
         });
         try { return future.get(WAIT_SECONDS, TimeUnit.SECONDS); }
         catch (ExecutionException e) { if (e.getCause() instanceof Exception cause) throw cause; throw e; }
+    }
+
+    private static boolean serverSupported() {
+        var mc = Minecraft.getInstance();
+        return mc.player != null && mc.level != null && CraftiumClient.supported();
+    }
+
+    /** Asks the server to read part of its world and waits for the data, which comes back as a packet of its own rather than as a status. */
+    private static JsonObject read(String action, Point from, Point to) throws Exception {
+        var data = new CompletableFuture<String>();
+        pace();
+        onClient(() -> {
+            var mc = Minecraft.getInstance();
+            if (mc.player == null || mc.level == null) throw new IllegalStateException("Not in a world");
+            if (!CraftiumClient.supported()) throw new IllegalStateException("This world has no Craftium on the server; install it there to read it");
+            awaitingData = data;
+            CraftiumClient.send(action, from, to);
+            return null;
+        });
+        lastSent = System.nanoTime();
+        try {
+            var out = JsonParser.parseString(data.get(WAIT_SECONDS, TimeUnit.SECONDS)).getAsJsonObject();
+            return out;
+        } catch (ExecutionException e) {
+            throw e.getCause() instanceof RuntimeException cause ? cause : new IllegalStateException(String.valueOf(e.getCause()));
+        } finally {
+            if (awaitingData == data) awaitingData = null;
+        }
     }
 
     /** Sends one editor request from the game thread and waits for the server's reply to it. */
@@ -510,6 +556,7 @@ public final class AiBridge {
         if (count > 0) runs.add(array(last, count));
         var out = new JsonObject();
         out.addProperty("ok", true);
+        out.addProperty("source", "client: only chunks this game has loaded are read here, and anything else reads as air");
         out.add("min", array(x0, y0, z0));
         out.add("size", array(x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1));
         var names = new JsonArray();

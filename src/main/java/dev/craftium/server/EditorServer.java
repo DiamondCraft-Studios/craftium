@@ -176,6 +176,13 @@ public final class EditorServer {
                 for(int i=0;i<Math.min(9,blocks.size());i++)player.getInventory().setItem(i,new net.minecraft.world.item.ItemStack(plan.parse(blocks.get(i)).getBlock()));
                 player.inventoryMenu.broadcastChanges();send(player,s,"Gradient copied to hotbar",false);return;
             }
+            // Reads for an AI client: the server's own view of the world, answered with a packet only the AI bridge looks at.
+            // "target" and "normal" carry the two corners here, so this comes before "normal" is checked as a direction.
+            switch(r.action()){
+                case "ai_blocks" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.blocks(player,r.target(),r.normal())));return;}
+                case "ai_surface","ai_surface_floor" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.surface(player,r.target(),r.normal(),r.action().equals("ai_surface_floor"))));return;}
+                default -> {}
+            }
             Point target=r.target(),normal=r.normal()==null?new Point(0,1,0):r.normal();
             if(Math.abs(normal.x())+Math.abs(normal.y())+Math.abs(normal.z())!=1)throw new IllegalArgumentException("Invalid surface normal");
             if(target!=null) {

@@ -42,6 +42,12 @@ public final class Packets {
         public static final StreamCodec<RegistryFriendlyByteBuf,Report> CODEC=StreamCodec.of((buf,p)->buf.writeUtf(p.text,100_000),buf->new Report(buf.readUtf(100_000)));
         @Override public Type<Report> type(){return TYPE;}
     }
+    /** What the server read for an AI client: a JSON object, never shown to the player. */
+    public record AiReply(String json) implements CustomPacketPayload {
+        public static final Type<AiReply> TYPE=new Type<>(dev.craftium.compat.Compat.id("craftium","ai_reply"));
+        public static final StreamCodec<RegistryFriendlyByteBuf,AiReply> CODEC=StreamCodec.of((buf,p)->buf.writeUtf(p.json,1_000_000),buf->new AiReply(buf.readUtf(1_000_000)));
+        @Override public Type<AiReply> type(){return TYPE;}
+    }
     public record Download(String folder,String name,String data,String metadata) implements CustomPacketPayload {
         public static final Type<Download> TYPE=new Type<>(dev.craftium.compat.Compat.id("craftium","download"));
         public static final StreamCodec<RegistryFriendlyByteBuf,Download> CODEC=StreamCodec.of((buf,p)->{buf.writeUtf(p.folder,16);buf.writeUtf(p.name,160);buf.writeUtf(p.data,1_400_000);buf.writeUtf(p.metadata,16384);},buf->new Download(buf.readUtf(16),buf.readUtf(160),buf.readUtf(1_400_000),buf.readUtf(16384)));
