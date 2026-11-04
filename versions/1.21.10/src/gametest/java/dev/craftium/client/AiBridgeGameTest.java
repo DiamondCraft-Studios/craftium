@@ -75,6 +75,19 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(ghost > 100, "preview should hold blocks as a ghost, had " + ghost);
             ctx.waitTicks(5);
             ctx.takeScreenshot("ai-preview");
+            require(ctx.computeOnClient(mc -> ClientState.pending.ai), "an AI preview should be marked as the AI's");
+
+            // Claude's own view: face the preview, take the picture an AI app would get, and turn back.
+            var turned = call("look_at", "{\"target\":[" + (x + 2) + "," + (y + 4) + "," + (z + 2) + "]}");
+            require(turned.get("ok").getAsBoolean(), "look_at: " + turned);
+            var shot = call("get_screenshot", "{}");
+            require(shot.get("ok").getAsBoolean() && shot.get("mime").getAsString().equals("image/jpeg") && shot.get("width").getAsInt() <= 1024, "get_screenshot: " + shot.keySet());
+            byte[] jpeg = java.util.Base64.getDecoder().decode(shot.get("image").getAsString());
+            require(jpeg.length > 5_000 && (jpeg[0] & 0xff) == 0xff && (jpeg[1] & 0xff) == 0xd8, "the screenshot should be a real JPEG, was " + jpeg.length + " bytes");
+            try { Files.write(java.nio.file.Path.of("screenshots", "ai-tool-screenshot.jpg"), jpeg); } catch (java.io.IOException e) { throw new AssertionError(e); }
+            var back = call("look_at", "{\"view\":" + turned.get("previousView") + "}");
+            require(back.get("ok").getAsBoolean(), "look_at with a view: " + back);
+            System.out.println("CRAFTIUM_AI screenshot_ok bytes=" + jpeg.length + " " + shot.get("width") + "x" + shot.get("height"));
             require(ctx.computeOnClient(mc -> mc.level.getBlockState(new BlockPos(x + 2, y + 3, z + 2)).isAir()), "a preview must not touch the world");
             System.out.println("CRAFTIUM_AI preview_ok blocks=" + ghost);
 
