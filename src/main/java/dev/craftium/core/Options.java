@@ -106,6 +106,8 @@ public final class Options {
     /** How far blocks can be reached: the game's own range, 64 blocks, or as far as can be aimed. */
     public enum ReachMode { NORMAL("normal"),FAR("far"),INFINITE("infinite");public final String label;ReachMode(String label){this.label=label;} }
     public ReachMode reach=ReachMode.NORMAL;
+    /** How many blocks the far reach extends to. */
+    public int farReach=32;
     /** Which property Tinker cycles on the block it is used on, picked by sneaking; wraps around the block's properties. */
     public int tinkerIndex;
     public boolean showCollisionMesh,showLightBlocks,showStructureVoid,expandHitboxes,solidFluids,preventInteractions;
@@ -180,6 +182,7 @@ public final class Options {
         strength = Double.isFinite(strength) ? Math.clamp(strength,0.1,5) : 1;
         noiseScale = Double.isFinite(noiseScale) ? Math.clamp(noiseScale,1,64) : 8;
         density = Double.isFinite(density) ? Math.clamp(density,0,1) : 0.5;
+        farReach = Math.clamp(farReach,6,64);
         flySpeed = Float.isFinite(flySpeed) ? Math.clamp(flySpeed,0.1f,10f) : 1;
         offsetX=Math.clamp(offsetX,-128,128);offsetY=Math.clamp(offsetY,-128,128);offsetZ=Math.clamp(offsetZ,-128,128);copies=Math.clamp(copies,1,16);
         if(compare==null)compare=Compare.ANY; // Gson reads a constant that no longer exists, the old SOLID, as null

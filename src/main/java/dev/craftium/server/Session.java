@@ -54,6 +54,7 @@ final class Session {
     List<dev.craftium.core.BlueprintInfo> library=List.of();
     boolean noClip;
     dev.craftium.core.Options.ReachMode reach=dev.craftium.core.Options.ReachMode.NORMAL;
+    int farReach=32;
     /** The options of the player's latest request, which vanilla block placement reads for the capabilities it bends. */
     dev.craftium.core.Options options;
     int currentHotbar=-1;
