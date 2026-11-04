@@ -11,15 +11,28 @@ Claude Desktop ──stdio──▶ craftium-mcp (Node) ──127.0.0.1──▶
 ## Set up
 
 1. Install the Craftium mod for your Minecraft version as usual. For multiplayer, Craftium must also be on the server (Fabric, or the Paper/Purpur companion).
-2. Install the **craftium.mcpb** extension in Claude Desktop: open the file with Claude Desktop (double-click it), or drag it into Settings → Extensions. It needs Node.js 18 or newer, which Claude Desktop supplies for extensions of this kind.
-3. In Minecraft, open a world and the editor (Right Shift), choose **View → AI building…**, and press **Turn on AI building**. The setting is remembered. (The commands `/craftium ai on`, `/craftium ai off` and `/craftium ai` do the same.)
+2. Get **craftium.mcpb** (see [Getting the extension](#getting-the-extension)) and install it in Claude Desktop: open the file with Claude Desktop (double-click it), or drag it into Settings → Extensions. It needs Node.js 18 or newer, which Claude Desktop supplies for extensions of this kind.
+3. In Minecraft, open a world and the editor (Right Shift), open the **AI** menu in the top bar and choose **Turn on AI building**. The setting is remembered, and a coloured square appears beside the menu while it is on. (The commands `/craftium ai on`, `/craftium ai off` and `/craftium ai` do the same.)
 4. If your game does not use the default `.minecraft` folder (a Prism, Modrinth App or CurseForge profile, for example), open the extension's settings in Claude Desktop and choose the profile's game folder, the one that contains `config` and `mods`.
 
 A preview made by an AI app is drawn in **violet**, so it is never mistaken for your own blue edit previews, and the marker reads **AI preview** while one is waiting.
 
-While AI building is on, a small **AI** marker shows in the top right corner of the game: amber while it waits for the AI app, green once the app has connected, and blue while a request is being answered. The **AI** tab of the studio inspector shows the same status, the last request, and buttons to **Apply** or **Discard** a waiting preview and to **Undo** the last edit, so you can approve a build without going back to the chat.
+While AI building is on, a small **AI** marker shows in the top right corner of the game: amber while it waits for the AI app, green once the app has connected, and blue while a request is being answered. The **AI** menu also has **Apply AI preview**, **Discard AI preview** and **Undo last edit**, so you can approve a build without going back to the chat, and **AI status and setup…**, a page with the same status, the last request and the steps above.
 
 Then ask Claude for a build while the game is open. Claude can select an area in front of you, or you can select one yourself first. Look at the ghost in the game, ask for changes, and say when to apply it.
+
+## Getting the extension
+
+`craftium.mcpb` is built from the [mcp](../mcp) folder. Until it is attached to a release, you can get it two ways:
+
+- **From CI:** the *Build craftium-mcp* workflow on GitHub packs it on every change to `mcp/`. Open a run and download the `craftium-mcpb` artifact.
+- **Build it yourself** (needs Node.js 18 or newer and a network connection once, to fetch the packer):
+  ```sh
+  cd mcp
+  npm ci
+  npm run pack
+  ```
+  This writes `mcp/craftium.mcpb`. If `npx` stops with "Yallist is not a constructor", your npm is too old for your Node version (npm 10.8 with Node 25, for example): update npm with `npm install -g npm@latest`, or use Node 22 or 24.
 
 ## What Claude can do
 
@@ -66,7 +79,7 @@ A build ignores your brush settings (mask, symmetry, height range) and places ex
 
 ## Troubleshooting
 
-- **"Craftium is not reachable"**: open a world, turn on AI building (View → AI building…), and check the Minecraft folder setting in the extension if you use a launcher profile.
+- **"Craftium is not reachable"**: open a world, turn on AI building (AI menu in the editor), and check the Minecraft folder setting in the extension if you use a launcher profile.
 - **"Craftium refused the connection"**: Minecraft restarted and the token changed. Try again, or run `/craftium ai off` then `/craftium ai on`.
 - **"Craftium on the server"**: the world needs Craftium on the server too, as for the editor. In singleplayer this is automatic.
 - **Errors like `ops[2] (cylinder): missing number "radius"`** are the spec's fault, not yours. Claude gets the message and retries.

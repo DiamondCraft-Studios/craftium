@@ -24,7 +24,7 @@ export function candidateFiles(env = process.env, platform = process.platform, h
 }
 
 export const NOT_RUNNING =
-  "Craftium is not reachable. Start Minecraft with the Craftium mod, open a world, and turn on AI building (in the editor: View, then AI building; or type /craftium ai on). " +
+  "Craftium is not reachable. Start Minecraft with the Craftium mod, open a world, and turn on AI building (in the editor: AI menu, then Turn on AI building; or type /craftium ai on). " +
   "If Minecraft uses a separate profile folder, set the Minecraft folder in this extension's settings.";
 
 export class Bridge {
