@@ -30,6 +30,8 @@ public final class BuilderMode {
     private static void restartSearch(){var old=search;search=newSearch();old.shutdownNow();magic=null;}
     private BuilderMode(){}
     public static boolean active(){var mc=Minecraft.getInstance();return enabled&&available()&&ClientCompat.screen(mc)==null;}
+    /** Whether the builder can be used at all here: a creative player in a world with the mod on the server. */
+    static boolean usable(){return available();}
     private static boolean available(){var mc=Minecraft.getInstance();return mc.player!=null&&mc.player.isCreative()&&mc.level!=null&&CraftiumClient.supported();}
     public static void reset(){enabled=false;clear();restartSearch();wheel=0;}
     private static void clear(){first=null;second=null;preview=false;clonePlaced=false;offset=new Point(0,0,0);cells=List.of();stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;magic=null;heldFirst=heldSecond=null;}
@@ -39,6 +41,7 @@ public final class BuilderMode {
     public static void select(Options.BuilderTool tool){enable();ClientState.options.builderTool=tool;retool();ClientState.save();} // saved, so the tool is still chosen after a reload
     private static String name(){return ClientState.options.builderTool.name().replace('_',' ');}
     public static boolean scroll(double delta){
+        if(BuilderWidget.scroll(delta))return true;
         if(!available()||ClientCompat.screen(Minecraft.getInstance())!=null)return false;
         var mc=Minecraft.getInstance();wheel+=delta;int steps=(int)wheel;if(steps==0)return enabled;wheel-=steps;
         if(!enabled){int slot=mc.player.getInventory().getSelectedSlot();if(slot==8&&steps<0||slot==0&&steps>0){enable();return true;}return false;}
@@ -65,6 +68,7 @@ public final class BuilderMode {
     }
     private static boolean down(int key){return com.mojang.blaze3d.platform.InputConstants.isKeyDown(Minecraft.getInstance().getWindow(),key);}
     public static boolean key(int key,int action,boolean control){
+        if(BuilderWidget.key(key,action))return true;
         if(!available()||ClientCompat.screen(Minecraft.getInstance())!=null)return false;
         if(key==GLFW.GLFW_KEY_0){if(action==GLFW.GLFW_PRESS)enable();return true;}
         if(!enabled)return false;
@@ -83,6 +87,7 @@ public final class BuilderMode {
         if(key==GLFW.GLFW_KEY_ENTER){confirm();return true;}return key==GLFW.GLFW_KEY_X||key==GLFW.GLFW_KEY_Y||key==GLFW.GLFW_KEY_Z;
     }
     public static boolean mouse(int button,int action){
+        if(BuilderWidget.mouse(button,action))return true;
         if(!active()||button>2)return false;if(action!=GLFW.GLFW_PRESS)return true;var mc=Minecraft.getInstance();
         if(CraftiumClient.held(CraftiumClient.contextKey)){
             if(button==0){double x=mc.mouseHandler.xpos()*mc.getWindow().getGuiScaledWidth()/mc.getWindow().getScreenWidth(),y=mc.mouseHandler.ypos()*mc.getWindow().getGuiScaledHeight()/mc.getWindow().getScreenHeight();int left=mc.getWindow().getGuiScaledWidth()/2+95,top=mc.getWindow().getGuiScaledHeight()-26-Options.BuilderTool.values().length*22;int row=(int)((y-top)/22);if(x>=left&&x<left+140&&y>=top&&row>=0&&row<Options.BuilderTool.values().length)select(Options.BuilderTool.values()[row]);}return true;

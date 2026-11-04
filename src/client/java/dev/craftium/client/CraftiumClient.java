@@ -81,7 +81,7 @@ public final class CraftiumClient implements ClientModInitializer {
             ReferenceImages.draw(g,false,0,0);
             int h=g.guiHeight();
             if(System.currentTimeMillis()<ClientState.noticeUntil)g.text(mc.font,ClientState.notice,8,8,0xffffd891,false);
-            BuilderMode.hud(g);
+            BuilderMode.hud(g);BuilderWidget.draw(g);
             if(ClientState.options.showKeyHints){StringBuilder keys=new StringBuilder();for(int key:new int[]{GLFW.GLFW_KEY_W,GLFW.GLFW_KEY_A,GLFW.GLFW_KEY_S,GLFW.GLFW_KEY_D,GLFW.GLFW_KEY_X,GLFW.GLFW_KEY_Y,GLFW.GLFW_KEY_Z})if(GLFW.glfwGetKey(mc.getWindow().handle(),key)==GLFW.GLFW_PRESS)keys.append((char)key).append(' ');if(mc.hasControlDown())keys.append("Ctrl ");if(mc.hasShiftDown())keys.append("Shift ");g.text(mc.font,keys.toString(),g.guiWidth()-mc.font.width(keys.toString())-10,h-48,0xffe6cf8b,false);}
         });
     }
@@ -140,9 +140,9 @@ public final class CraftiumClient implements ClientModInitializer {
         EditorBindings.migrate(mc);
         if(mc.player==null || mc.level==null){hadWorld=false;toolCursor=false;return;}
         ClientCommands.tick();
-        BuilderMode.tick();
+        BuilderMode.tick();BuilderWidget.tick();
         SelectingIndicator.tick(mc);
-        if(BuilderMode.active()&&held(contextKey)){if(!toolCursor){mc.mouseHandler.releaseMouse();toolCursor=true;}}
+        if(BuilderMode.active()&&held(contextKey)||BuilderWidget.active()){if(!toolCursor){mc.mouseHandler.releaseMouse();toolCursor=true;}}
         else if(toolCursor){if(ClientCompat.screen(mc)==null)mc.mouseHandler.grabMouse();toolCursor=false;}
         if(lastLiquidOpacity!=ClientState.options.liquidOpacity){lastLiquidOpacity=ClientState.options.liquidOpacity;ClientCompat.rebuildChunks(mc);}
         if(!hadWorld){hadWorld=true;if(supported())send("status",null,null);}
@@ -151,7 +151,6 @@ public final class CraftiumClient implements ClientModInitializer {
             else if(ClientCompat.screen(mc)==null)open(false);
         }
         while(contextKey.consumeClick()){}
-        if(ClientCompat.screen(mc)==null&&held(contextKey)&&!BuilderMode.active())open(true,true);
         if(supported())syncPlacement();
         preview(mc);
         if(ClientCompat.screen(mc)!=null)return;
