@@ -985,11 +985,29 @@ public final class EditorScreen extends CraftiumScreen {
         if(popup!=null&&x>=popup[0]&&x<popup[0]+popup[2]&&y>=popup[1]&&y<popup[1]+popup[3])return false;
         return !ReferenceImages.hit(x*scale,y*scale)&&y>27&&y<(height/scale)-23&&(!panels||WorkspaceLayout.hit(x,y,false).isBlank());
     }
-    /** How often a held click may add to the selection: about 30 a second, since each one is a round trip to the server. Other tools stay at 140 ms. */
-    private static final long SELECT_INTERVAL_MS=33;
+    /**
+     * Dragging with a selection tool: each new block under the cursor is sent as soon as the server has answered the last one,
+     * instead of on a timer. A block reached while the server is still busy is sent the moment its answer arrives.
+     */
+    private net.minecraft.core.BlockPos lastDragged;
+    private boolean useQueued,awaitingReply,repliedSince;
+    private long lastUseSent;
+    private void dragUse(){
+        if(!o().tool.selection()){use();return;}
+        var hit=target();if(hit==null||hit.getBlockPos().equals(lastDragged))return;
+        long now=System.currentTimeMillis();
+        // A reply that never comes must not stall the drag for good, so a request is given up on after a quarter of a second.
+        if(ClientState.status.busy()||(awaitingReply&&!repliedSince&&now-lastUseSent<250)){useQueued=true;return;}
+        useQueued=false;lastDragged=hit.getBlockPos();lastUseSent=now;use();
+    }
+    /** Called when the server's status arrives: sends the block the cursor has moved to meanwhile, if there is one. */
+    void statusReceived(){
+        repliedSince=true;
+        if(useQueued&&painting&&!ClientState.status.busy())dragUse();
+    }
     private void use(){
         if(o().tool==Tool.ANNOTATION){var hit=target();if(hit!=null){o().annotationNormal=CraftiumClient.normal(hit);if(o().annotationMode.equals("DRAW")){Point p=CraftiumClient.point(hit.getBlockPos());if(o().annotationPoints.size()<256&&(o().annotationPoints.isEmpty()||!o().annotationPoints.getLast().equals(p)))o().annotationPoints.add(p);return;}}}
-        long now=System.currentTimeMillis();if(now-lastUse<(o().tool.selection()?SELECT_INTERVAL_MS:140)||ClientState.status.busy())return;lastUse=now;
+        long now=System.currentTimeMillis();if((!o().tool.selection()&&now-lastUse<140)||ClientState.status.busy())return;lastUse=now;awaitingReply=true;repliedSince=false;
         if(o().tool==Tool.PATH||o().tool==Tool.MODELLING||(o().tool==Tool.GRADIENT_PAINTER&&minecraft.hasShiftDown())){var hit=target();if(hit!=null&&o().nodes.size()<64){o().nodes.add(CraftiumClient.point(hit.getBlockPos()));ClientState.notify("Added point "+o().nodes.size()+" · Enter to build · View → Studio inspector for settings");}return;}
         if(o().tool==Tool.SLOPE){var hit=target();if(hit!=null){Point p=CraftiumClient.point(hit.getBlockPos());if(o().nodes.isEmpty()){o().nodes.add(p);ClientState.notify("Slope anchor set · drag from the second point");return;}if(o().nodes.size()==1)o().nodes.add(p);else o().nodes.set(1,p);}}
         if(o().tool==Tool.RULER) {
@@ -1080,7 +1098,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(!toolActive&&EditorBindings.matches(Action.CROSSHAIR,event)){cameraGesture=CameraGesture.ROTATE;cameraButton=event.button();return true;}
         if(EditorBindings.matches(Action.ROTATE_CAMERA,event)){cameraGesture=CameraGesture.ROTATE;cameraButton=event.button();return true;}
-        if(toolActive&&EditorBindings.matches(Action.USE_TOOL,event)){if(o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW"))o().annotationPoints.clear();painting=true;ClientState.strokeId=System.nanoTime();if(o().tool==Tool.LASSO_SELECT){lasso.clear();lasso.add(new LassoSelection.Pixel(event.x(),event.y()));}else use();}
+        if(toolActive&&EditorBindings.matches(Action.USE_TOOL,event)){if(o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW"))o().annotationPoints.clear();painting=true;ClientState.strokeId=System.nanoTime();lastDragged=null;useQueued=false;if(o().tool==Tool.LASSO_SELECT){lasso.clear();lasso.add(new LassoSelection.Pixel(event.x(),event.y()));}else use();}
         if(EditorBindings.matches(Action.PICK_BLOCK,event)){
             // Dragging pans the camera; letting go without having dragged picks the block, as a click always did.
             var hit=target();pickedHit=hit;pendingPick=true;middleDragged=false;
@@ -1141,7 +1159,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(help||transform||menu>=0)return true;
         if(inViewport(event.x()/scale,event.y()/scale)) {
             if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&o().tool==Tool.LASSO_SELECT){if(lasso.size()<1024)lasso.add(new LassoSelection.Pixel(event.x(),event.y()));return true;}
-            if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&painting && o().tool!=Tool.BOX_SELECT&&o().tool!=Tool.RULER&&o().tool!=Tool.LINE&&o().tool!=Tool.PATH&&o().tool!=Tool.MODELLING)use();
+            if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&painting && o().tool!=Tool.BOX_SELECT&&o().tool!=Tool.RULER&&o().tool!=Tool.LINE&&o().tool!=Tool.PATH&&o().tool!=Tool.MODELLING)dragUse();
         }
         return true;
     }
