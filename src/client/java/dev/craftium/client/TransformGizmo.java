@@ -62,7 +62,7 @@ final class TransformGizmo {
     }
     private static Target target(EditorScreen screen){
         if(PlacementPreview.active()){AABB bounds=bounds();Point p=PlacementPreview.origin;return new Target(Kind.PLACEMENT,new Vec3(p.x(),p.y(),p.z()).add(bounds.getCenter()),null);}
-        Point node=screen.handlePoint();if(node!=null)return new Target(Kind.NODE,new Vec3(node.x(),node.y(),node.z()),null);
+        Point node=screen.handlePoint();double shift=nodeOffset();if(node!=null)return new Target(Kind.NODE,new Vec3(node.x()+shift,node.y()+shift,node.z()+shift),null);
         if(ShapeObject.gizmoOn())return new Target(Kind.SHAPE,ShapeObject.centre(),null);
         var status=ClientState.status;var o=ClientState.options;
         if(o.tool.transform()){
@@ -170,7 +170,7 @@ final class TransformGizmo {
     }
     static boolean release(EditorScreen screen){
         if(dragging==null)return false;Target t=dragging;Options original=ClientState.options,request=Packets.JSON.fromJson(Packets.JSON.toJson(original),Options.class);try{
-            if(t.kind==Kind.NODE){Point p=new Point((int)Math.round(t.anchor.x+delta.x),(int)Math.round(t.anchor.y+delta.y),(int)Math.round(t.anchor.z+delta.z));screen.moveHandle(p);screen.handlesMoved();return true;}
+            if(t.kind==Kind.NODE){double shift=nodeOffset();Point p=new Point((int)Math.round(t.anchor.x+delta.x-shift),(int)Math.round(t.anchor.y+delta.y-shift),(int)Math.round(t.anchor.z+delta.z-shift));screen.moveHandle(p);screen.handlesMoved();return true;}
             if(t.kind==Kind.SHAPE){ShapeObject.set(ShapeObject.apply(ShapeObject.pose(),mode,delta,angles,size));return true;} // the shape is made again from its new pose
             if(t.kind==Kind.PIVOT){original.pivotSet=true;original.pivotX=t.anchor.x+delta.x;original.pivotY=t.anchor.y+delta.y;original.pivotZ=t.anchor.z+delta.z;return true;}
             request.yaw=angles.y;request.pitch=angles.x;request.roll=angles.z;request.sizeX=size.x;request.sizeY=size.y;request.sizeZ=size.z;request.offsetX=(int)Math.round(delta.x);request.offsetY=(int)Math.round(delta.y);request.offsetZ=(int)Math.round(delta.z);ClientState.options=request;
@@ -241,6 +241,8 @@ final class TransformGizmo {
         int r=argb>>16&255,g=argb>>8&255,b=argb&255;
         return 0xff000000|Math.min(255,r+70)<<16|Math.min(255,g+70)<<8|Math.min(255,b+70);
     }
+    /** How far a handle point sits from its block's corner: a ruler's ends are drawn at the middle of their blocks, so the gizmo is too. */
+    static double nodeOffset(){return ClientState.options.tool==Tool.RULER?.5:0;}
     /** Where the handle being dragged is right now, or null when no handle point is being dragged. */
     static Vec3 liveNode(){return dragging!=null&&dragging.kind==Kind.NODE?dragging.anchor.add(delta):null;}
     static boolean selectionPreview(){return dragging!=null&&(dragging.kind==Kind.SELECTION||dragging.kind==Kind.MODEL);}

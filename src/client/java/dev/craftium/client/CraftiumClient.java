@@ -98,7 +98,7 @@ public final class CraftiumClient implements ClientModInitializer {
     public static void resetEditor(){
         ClientState.selectionPending=false;ClientState.selectingSince=0;ClientState.selectionSizeBefore=0;ClientState.largeSelection=0;ClientState.heldSelection="";
         ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.aiPending=GhostBlocks.EMPTY;ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
-        ClientState.rulerStart=null;ClientState.rulerEnd=null;ClientState.rulerPoints.clear();
+        ClientState.rulers.clear();
         ShapeObject.cancel();TransformGizmo.cancel();PlacementPreview.cancel();BuilderMode.reset();SelectionOverlay.update("");
     }
     private static void receiveStatus(String json){
@@ -295,11 +295,36 @@ public final class CraftiumClient implements ClientModInitializer {
         return hit.getType()==HitResult.Type.BLOCK?hit:null;
     }
     /** The transform handles: the builder's, or the editor's with the box corners and the point being dragged. Drawn each frame. */
+    /** Every ruler: its line (or circle), its length, and a knob at each end. The end being dragged shows where it will land, and the length with it. */
+    private static void drawRulers(EditorScreen screen){
+        var o=ClientState.options;
+        boolean editing=screen!=null&&o.tool==Tool.RULER;
+        int picked=editing?screen.handleIndex():-1;Vec3 live=editing?TransformGizmo.liveNode():null;
+        int index=0;
+        for(var ruler:ClientState.rulers){
+            Vec3 start=centre(ruler.a),end=ruler.b==null?null:centre(ruler.b);
+            int first=index,second=index+1;
+            if(live!=null){ // the knob under the gizmo follows the drag, settled onto the block it will land on
+                Vec3 landing=new Vec3(Math.round(live.x-.5)+.5,Math.round(live.y-.5)+.5,Math.round(live.z-.5)+.5);
+                if(picked==first)start=landing;else if(end!=null&&picked==second)end=landing;
+            }
+            if(end!=null){
+                Overlay.line(start,end,0xffffd66d,2);
+                double length=start.distanceTo(end);
+                if(o.rulerMode==Options.RulerMode.CIRCLE){for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(start.add(Math.cos(x)*length,0,Math.sin(x)*length),start.add(Math.cos(y)*length,0,Math.sin(y)*length),0xffffd66d,1.5f);}}
+                Overlay.text(Ruler.show(length)+" blocks",net.minecraft.core.BlockPos.containing(start.add(end).scale(.5)).above(),0xffffe4a2,0xbb151c26,.02f);
+            }
+            Overlay.point(start,picked==first?0xffffffff:0xffffd66d,picked==first?10:8);
+            if(end!=null)Overlay.point(end,picked==second?0xffffffff:0xffffd66d,picked==second?10:8);
+            index+=end==null?1:2;
+        }
+    }
+    private static Vec3 centre(Point p){return new Vec3(p.x()+.5,p.y()+.5,p.z()+.5);}
     private static void handles(EditorScreen screen) {
         if(screen==null){var anchor=BuilderMode.gizmoAnchor();if(anchor!=null)TransformGizmo.display(anchor,BuilderMode.gizmoAxes());return;}
         if(ClientState.options.tool==Tool.BOX_SELECT)BoxHandles.draw(screen);
         TransformGizmo.draw(screen);
-        Point handle=screen.handlePoint();if(handle!=null){Vec3 anchor=new Vec3(handle.x(),handle.y(),handle.z());int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Overlay.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2);}
+        Point handle=screen.handlePoint();if(handle!=null){double shift=TransformGizmo.nodeOffset();Vec3 anchor=new Vec3(handle.x()+shift,handle.y()+shift,handle.z()+shift);int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Overlay.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2);}
     }
     private static void preview(Minecraft mc) {
         var screen=ClientCompat.screen(mc) instanceof EditorScreen editor?editor:ClientCompat.screen(mc) instanceof StudioScreen studio?studio.editor():null;
@@ -322,12 +347,7 @@ public final class CraftiumClient implements ClientModInitializer {
                 else if(note.mode().equals("BOX"))Overlay.box(new AABB(start,end).inflate(.02),note.color(),note.width(),0);
                 else Overlay.line(start,end,note.color(),note.width());
             }
-            for(int i=1;i<ClientState.rulerPoints.size();i++) {
-                Point a=ClientState.rulerPoints.get(i-1),b=ClientState.rulerPoints.get(i);Vec3 start=new Vec3(a.x()+.5,a.y()+.5,a.z()+.5),end=new Vec3(b.x()+.5,b.y()+.5,b.z()+.5);
-                Overlay.line(start,end,0xffffd66d,2);
-                if(ClientState.options.rulerMode==Options.RulerMode.CIRCLE){double radius=Math.sqrt(a.distanceSquared(b));for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(start.add(Math.cos(x)*radius,0,Math.sin(x)*radius),start.add(Math.cos(y)*radius,0,Math.sin(y)*radius),0xffffd66d,1.5f);}}
-                Overlay.text(String.format(java.util.Locale.ROOT,"%.2f blocks",Math.sqrt(a.distanceSquared(b))),new net.minecraft.core.BlockPos((a.x()+b.x())/2,(a.y()+b.y())/2+1,(a.z()+b.z())/2),0xffffe4a2,0xbb151c26,.02f);
-            }
+            drawRulers(screen);
             // The handles follow the camera and the pointer, so they are drawn every frame and not with the tick's batch.
             Overlay.frame(()->handles(screen));
             if(screen==null)return;

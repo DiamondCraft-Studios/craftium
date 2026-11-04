@@ -38,8 +38,41 @@ public final class ClientState {
     public static int selectionSizeBefore;
     /** A selection this many blocks bigger than before is confirmed with the player first. */
     public static final int LARGE_SELECTION=1024;
-    public static Point rulerStart,rulerEnd;
-    public static final List<Point> rulerPoints=new ArrayList<>();
+    /** The measurements the Ruler tool has made, each with a knob at both ends. */
+    public static final List<Ruler> rulers=new ArrayList<>();
+    /** The ends of every ruler, one after the other, as one list: the tool's handles work on it, and adding a point places the next end. */
+    public static final List<Point> rulerPoints=new java.util.AbstractList<>(){
+        @Override public int size(){int count=0;for(var r:rulers)count+=r.complete()?2:1;return count;}
+        @Override public Point get(int index){
+            for(var r:rulers){if(index==0)return r.a;index--;if(r.complete()){if(index==0)return r.b;index--;}}
+            throw new IndexOutOfBoundsException(index);
+        }
+        @Override public Point set(int index,Point point){
+            for(var r:rulers){
+                if(index==0){var old=r.a;r.a=point;return old;}index--;
+                if(r.complete()){if(index==0){var old=r.b;r.b=point;return old;}index--;}
+            }
+            throw new IndexOutOfBoundsException(index);
+        }
+        /** Only the end of the list: the second end of the ruler waiting for one, or the first end of a new ruler. */
+        @Override public void add(int index,Point point){
+            if(index!=size())throw new UnsupportedOperationException("Ruler ends are added at the end");
+            if(!rulers.isEmpty()&&!rulers.getLast().complete())rulers.getLast().b=point;
+            else if(rulers.size()<256)rulers.add(new Ruler(point));
+            else throw new IllegalArgumentException("Ruler limit: 256 rulers");
+        }
+        /** Taking an end away takes its whole ruler. */
+        @Override public Point remove(int index){
+            int at=index;
+            for(var r:rulers){
+                int ends=r.complete()?2:1;
+                if(at<ends){var old=get(index);rulers.remove(r);return old;}
+                at-=ends;
+            }
+            throw new IndexOutOfBoundsException(index);
+        }
+        @Override public void clear(){rulers.clear();}
+    };
     public static List<BlueprintInfo> blueprints=List.of();
     public static int libraryVersion;
     public static final List<String> palette=new ArrayList<>(List.of("minecraft:stone","minecraft:andesite","minecraft:deepslate","minecraft:grass_block","minecraft:dirt","minecraft:sand","minecraft:oak_planks","minecraft:glass","minecraft:air"));
