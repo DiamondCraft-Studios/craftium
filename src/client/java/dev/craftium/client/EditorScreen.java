@@ -1509,7 +1509,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
      * comes back where it was when the handle was grabbed.
      */
     private void syncCursor(){
-        boolean grab=TransformGizmo.dragging()||draggingNode||draggingPlacement||dragging!=null||cameraGesture==CameraGesture.ROTATE; // holding the rotate button is a first-person look
+        boolean grab=TransformGizmo.dragging()||draggingNode||draggingPlacement||dragging!=null||cameraGesture==CameraGesture.ROTATE||cameraGesture==CameraGesture.ORBIT; // holding the rotate button is a first-person look, and the arcball turns the view round a point
         if(grab==cursorHidden)return;
         cursorHidden=grab;
         GLFW.glfwSetInputMode(minecraft.getWindow().handle(),GLFW.GLFW_CURSOR,grab?GLFW.GLFW_CURSOR_DISABLED:GLFW.GLFW_CURSOR_NORMAL);
