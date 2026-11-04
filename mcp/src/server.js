@@ -28,14 +28,16 @@ Workflow:
 1. Call get_state. It reports the player's position and facing and the current selection. If the game is not reachable, tell the player to open a world and turn on AI building (in the editor: View, then AI building; or type /craftium ai on).
 2. Builds go inside the selection. If there is none (or it is the wrong size), choose an area in front of the player sized for the build and call set_selection. Mention the area you chose.
 3. Call preview_build with a build spec. If it returns an error, fix the spec and try again; the error names the operation at fault. A new preview replaces the previous one.
-4. Tell the player to look at the ghost in the game. Adjust with another preview_build if they want changes.
+4. Tell the player to look at the ghost in the game (it is violet). You can look too: call look_at on the middle of the selection and then get_screenshot, and judge proportions, gaps and style yourself before showing the player. Only turn the player's view when it helps, and turn it back afterwards. Adjust with another preview_build if the result or the player wants changes.
 5. Call apply_preview only once the player is happy (or if they asked you to just build it). undo reverses the last applied build. cancel_preview discards a preview.
 Use get_blocks to look at what is already in an area before building around or replacing it. Prefer a few well-chosen operations over many small ones; Minecraft builds read best with layered shapes, varied blocks and details like slabs, stairs and walls.`;
 
 /** Wraps a bridge reply as an MCP tool result: ok replies as JSON text, ok:false as an error the model can act on. */
 function result(reply) {
   if (reply && reply.ok === false) return { isError: true, content: [{ type: "text", text: String(reply.error ?? "Failed") }] };
-  const { ok, ...rest } = reply ?? {};
+  const { ok, image, mime, ...rest } = reply ?? {};
+  // A screenshot travels as an image the model can look at, with the rest of the reply as text beside it.
+  if (typeof image === "string") return { content: [{ type: "image", data: image, mimeType: mime ?? "image/jpeg" }, { type: "text", text: JSON.stringify(rest) }] };
   return { content: [{ type: "text", text: JSON.stringify(rest) }] };
 }
 
@@ -87,6 +89,39 @@ export function createServer(bridge, version = "0.1.0") {
       annotations: read,
     },
     guarded(bridge, "get_palette"),
+  );
+
+  server.registerTool(
+    "get_screenshot",
+    {
+      title: "See the game",
+      description:
+        "A screenshot of what the player currently sees in Minecraft, including a ghost preview (shown in violet) and the game's interface. " +
+        "Use it to check your own work after preview_build or apply_preview. If the build is out of frame, use look_at to face it, and if it is still too close or too big, ask the player to step back or fly up. " +
+        "The reply says if a menu is open (screenOpen), in which case the picture shows the menu and not the world.",
+      inputSchema: {},
+      annotations: read,
+    },
+    guarded(bridge, "get_screenshot"),
+  );
+
+  server.registerTool(
+    "look_at",
+    {
+      title: "Turn the player's view",
+      description:
+        "Turns the player's view (not their position) toward a block so get_screenshot can capture it, for example the middle of the selection. " +
+        "The reply gives the previous view as [yaw, pitch]; pass it back as view to turn the player back when you are done.",
+      inputSchema: {
+        target: coordinate.optional().describe("The block to face"),
+        view: z.array(z.number()).length(2).optional().describe("Or an exact [yaw, pitch] in degrees, such as a previousView to restore"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    guarded(bridge, "look_at", (args) => {
+      if (!args.target && !args.view) throw new BridgeError("Give a target block or a view.");
+      return args;
+    }),
   );
 
   server.registerTool(

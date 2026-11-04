@@ -50,7 +50,7 @@ test("lists every tool with a read-only hint where it applies", async () => {
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "clear_selection", "get_blocks", "get_palette", "get_state", "preview_build", "set_selection", "undo"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "clear_selection", "get_blocks", "get_palette", "get_screenshot", "get_state", "look_at", "preview_build", "set_selection", "undo"]);
   assert.equal(tools.find((t) => t.name === "get_state").annotations.readOnlyHint, true);
   assert.equal(tools.find((t) => t.name === "apply_preview").annotations.destructiveHint, true);
   assert.match(tools.find((t) => t.name === "preview_build").description, /cylinder/);
@@ -69,6 +69,28 @@ test("a tool call reaches the bridge with the token and its arguments", async ()
   assert.match(request.host, /^127\.0\.0\.1:\d+$/);
   assert.equal(request.origin, undefined);
   assert.deepEqual(request.body, { from: [0, 0, 0], to: [1, 1, 1] });
+  await bridge.close();
+});
+
+test("a screenshot reaches the model as an image with the details beside it", async () => {
+  const bridge = await fakeBridge({ get_screenshot: { ok: true, image: "QUJD", mime: "image/jpeg", width: 1024, height: 576, screenOpen: false } });
+  const client = await connect(bridge.file);
+  const result = await client.callTool({ name: "get_screenshot", arguments: {} });
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(result.content[0], { type: "image", data: "QUJD", mimeType: "image/jpeg" });
+  assert.deepEqual(JSON.parse(result.content[1].text), { width: 1024, height: 576, screenOpen: false });
+  await bridge.close();
+});
+
+test("look_at needs a target or a view and passes either through", async () => {
+  const bridge = await fakeBridge({ look_at: { ok: true, previousView: [0, 0], view: [90, 10] } });
+  const client = await connect(bridge.file);
+  const none = await client.callTool({ name: "look_at", arguments: {} });
+  assert.equal(none.isError, true);
+  assert.equal(bridge.seen.length, 0);
+  await client.callTool({ name: "look_at", arguments: { target: [1, 2, 3] } });
+  await client.callTool({ name: "look_at", arguments: { view: [45, 5] } });
+  assert.deepEqual(bridge.seen.map((r) => r.body), [{ target: [1, 2, 3] }, { view: [45, 5] }]);
   await bridge.close();
 });
 
