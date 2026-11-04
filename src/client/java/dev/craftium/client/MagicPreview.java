@@ -14,7 +14,6 @@ import java.util.Objects;
  * terrain, and giving up early keeps the cost of hovering small no matter how large the area under the cursor is.
  */
 final class MagicPreview {
-    private static final int STROKE=0xff7fd8ff,FILL=0x2240c0ff;
     /** The search gives up after visiting this many cells, which bounds the work when a block has few surface neighbours. */
     private static final int VISIT_CAP=6000;
     private static final int[][] SIDES={{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
@@ -35,7 +34,7 @@ final class MagicPreview {
         Object now=java.util.List.of(at,o.compare,o.magicPreviewLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,java.util.List.copyOf(o.maskActive),o.maskExclude,mc.level.getGameTime()/20);
         if(!Objects.equals(key,now)){key=now;shape=compute(mc,at,o);}
         if(shape.isEmpty())return;
-        shape.draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,STROKE,1),STROKE,FILL,true);
+        shape.draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,ClientState.options.hoverColor,1),ClientState.options.hoverColor,ClientState.options.hoverFill,true);
     }
 
     /**
@@ -53,7 +52,7 @@ final class MagicPreview {
                 bucketShape=OutlineShape.of(bucketSearch(mc,at,o).found());
             }
         }
-        if(!bucketShape.isEmpty())bucketShape.draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,STROKE,1),STROKE,FILL,true);
+        if(!bucketShape.isEmpty())bucketShape.draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,ClientState.options.hoverColor,1),ClientState.options.hoverColor,ClientState.options.hoverFill,true);
     }
 
     private static MagicWand.Result bucketSearch(Minecraft mc,BlockPos at,Options o){

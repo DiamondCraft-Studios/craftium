@@ -189,16 +189,15 @@ public final class BuilderMode {
             boolean leaving=preview&&o.builderTool==Options.BuilderTool.MOVE;
             boolean stacking=preview&&second!=null&&o.builderTool==Options.BuilderTool.STACK;
             Point from=min,to=max;if(stacking){var b=stackBounds();from=b[0];to=b[1];} // the selection grows with the stack
-            Overlay.box(new AABB(from.x(),from.y(),from.z(),to.x()+1,to.y()+1,to.z()+1),0xffffd66d,2,second!=null&&!leaving?SELECTED_FILL:0);
+            Overlay.box(new AABB(from.x(),from.y(),from.z(),to.x()+1,to.y()+1,to.z()+1),o.selectionColor,(float)o.selectionWidth,second!=null&&!leaving?(o.selectionColor&0xffffff|0x30000000):0);
             if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?stackSteps(size):List.of(offset);
                 var shown=preview(o,min,size,steps);
-                if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),OutlineShape.DELETE); // the blocks that are moving, where they are now
-                if(shown==null&&!stacking)Overlay.box(new AABB(min.x()+offset.x(),min.y()+offset.y(),min.z()+offset.z(),max.x()+offset.x()+1,max.y()+offset.y()+1,max.z()+offset.z()+1),0xff8be3b5,2,0);
-                else{shown.shape().draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,0xff8be3b5,1),0xff8be3b5,0x333dd29b,true);if(!shown.places().isEmpty())Overlay.blocks(shown.models(),shown.places(),OutlineShape.GHOST);}
+                if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),ClientState.options.removedTint); // the blocks that are moving, where they are now
+                if(shown==null&&!stacking)Overlay.box(new AABB(min.x()+offset.x(),min.y()+offset.y(),min.z()+offset.z(),max.x()+offset.x()+1,max.y()+offset.y()+1,max.z()+offset.z()+1),ClientState.options.previewColor,2,0);
+                else{shown.shape().draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,ClientState.options.previewColor,1),ClientState.options.previewColor,ClientState.options.previewFill,true);if(!shown.places().isEmpty())Overlay.blocks(shown.models(),shown.places(),ClientState.options.previewTint);}
             }
         }
     }
-    private static final int SELECTED_FILL=0x30ffd66d;
     private static List<net.minecraft.core.BlockPos> cellBlocks;
     private static List<Point> cellBlocksFor;
     private static List<net.minecraft.core.BlockPos> cellBlocks(){

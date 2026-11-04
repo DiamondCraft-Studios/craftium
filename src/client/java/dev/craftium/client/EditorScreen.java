@@ -564,7 +564,6 @@ public final class EditorScreen extends CraftiumScreen {
         if(tw>40){g.fill(l+8,noticeY,l+8+tw,noticeY+23,ClientState.status.error()?0xe14b252a:0xd916202d);text(g,shorten(notice,tw-16),l+16,noticeY+8,ClientState.status.error()?0xffffb6ae:0xffbfd4e8);}
         pinnedTools(g);
         largeSelectionPopup(g);
-        outlineSettingsPopup(g);
         if(minecraft.level==null){g.fill(l,80,r,h-28,0xff14202e);text(g,"Open a Creative world to start building",l+30,105,TEXT);}
     }
     /** Where the large-selection popup is, or null when it is not showing. It sits in the middle of the viewport. */
@@ -592,28 +591,6 @@ public final class EditorScreen extends CraftiumScreen {
     private void cancelLargeSelection(){
         ClientState.largeSelection=0;ClientState.boxCorners.clear();
         CraftiumClient.send("selection_restore",null,null);
-    }
-    private final ColourPicker outlinePicker=new ColourPicker(colour->ClientState.options.selectionColor=colour);
-    /** Where the selection outline settings are, or null when they are not showing: the top right of the viewport. */
-    private int[] outlineBounds(){
-        if(!ClientState.outlineSettings)return null;
-        int right=panels?w-RIGHT-6:w-6;
-        return new int[]{right-172,49,172,ColourPicker.height()+100};
-    }
-    /** The colour and width of the selection outline: a picker for the colour and a slider for the width. */
-    private void outlineSettingsPopup(Gfx g){
-        int[] b=outlineBounds();
-        if(b==null)return;
-        g.fill(b[0],b[1],b[0]+b[2],b[1]+b[3],0xf0141d29);g.outline(b[0],b[1],b[2],b[3],ACCENT);
-        text(g,"Selection outline",b[0]+10,b[1]+8,TEXT);
-        button(g,b[0]+b[2]-24,b[1]+4,18,16,"x",false,()->ClientState.outlineSettings=false,"Close");
-        if(!outlinePicker.active())outlinePicker.set(o().selectionColor);
-        int px=b[0]+16,py=b[1]+26;
-        outlinePicker.draw(g,font,px,py);
-        controls.add(new Control(px,outlinePicker.squareY(),ColourPicker.WIDTH,ColourPicker.SQUARE_HEIGHT,()->outlinePicker.pressSquare(mx,my),"Saturation and brightness"));
-        controls.add(new Control(px,outlinePicker.barY(),ColourPicker.WIDTH,ColourPicker.BAR_HEIGHT,()->outlinePicker.pressHue(mx,my),"Hue"));
-        slider(g,px,py+ColourPicker.height()+18,ColourPicker.WIDTH,"Width",o().selectionWidth,.1,10,DEFAULTS.selectionWidth,v->o().selectionWidth=Math.round(v*100)/100d,false);
-        button(g,px,b[1]+b[3]-28,ColourPicker.WIDTH,20,"Reset",false,()->{o().selectionColor=0xffffd66d;o().selectionWidth=1;},"Back to the default colour and width");
     }
     /** Picks the tool, or puts it away when it is already the one in use, as clicking it in the pinned bar does. */
     private void toggleTool(Tool tool){if(toolActive&&o().tool==tool)deselectTool();else select(tool);}
@@ -690,7 +667,7 @@ public final class EditorScreen extends CraftiumScreen {
                 item(showSelection?"Hide selection":"Show selection","",()->showSelection=!showSelection),divider(),
                 item("Expand","by "+o().expandAmount,()->resizeSelection("selection_expand",o().expandAmount)),item("Shrink","by "+o().expandAmount,()->resizeSelection("selection_shrink",o().expandAmount)),
                 item("Expand by 1","",()->resizeSelection("selection_expand",1)),item("Shrink by 1","",()->resizeSelection("selection_shrink",1)));
-            case 3 -> List.of(item("Toggle side panels","",()->panels=!panels),item("Tool options","",()->{builder=false;pinnedTab=false;init();}),item("Builder controls","Alt",()->{builder=true;init();}),item("Studio inspector","",()->ClientCompat.setScreen(minecraft,new StudioScreen(this))),item("Colour picker / gradient","",()->ClientCompat.setScreen(minecraft,new ColourScreen(this))),item("Keyboard shortcuts","",()->ClientCompat.setScreen(minecraft,new KeyboardShortcutsScreen(this))),item(o().selectionAllEdges?"Selection: outline only":"Selection: all edges","",()->o().selectionAllEdges=!o().selectionAllEdges),item("Selection outline…","",()->ClientState.outlineSettings=!ClientState.outlineSettings),item("Show controls","",()->help=true));
+            case 3 -> List.of(item("Toggle side panels","",()->panels=!panels),item("Tool options","",()->{builder=false;pinnedTab=false;init();}),item("Builder controls","Alt",()->{builder=true;init();}),item("Studio inspector","",()->ClientCompat.setScreen(minecraft,new StudioScreen(this))),item("Colour picker / gradient","",()->ClientCompat.setScreen(minecraft,new ColourScreen(this))),item("Keyboard shortcuts","",()->ClientCompat.setScreen(minecraft,new KeyboardShortcutsScreen(this))),item("Selection options…","",()->ClientCompat.setScreen(minecraft,new SelectionOptionsScreen(this))),item("Show controls","",()->help=true));
             case 7 -> {var items=new ArrayList<MenuItem>();for(String id:WorkspaceLayout.windows.keySet())items.add(item("Toggle "+id,"",()->WorkspaceLayout.toggle(id)));items.add(item("Save layout","",WorkspaceLayout::save));items.add(item("Reset layout","",WorkspaceLayout::reset));items.add(item("Copy layout","",()->minecraft.keyboardHandler.setClipboard(WorkspaceLayout.json())));items.add(item("Paste layout","",()->{try{WorkspaceLayout.importJson(minecraft.keyboardHandler.getClipboard());WorkspaceLayout.save();}catch(Exception e){ClientState.notify("Invalid layout JSON");}}));yield items;}
             case 4 -> List.of(item("Shape","",()->select(Tool.SHAPE)),item("Block text","",()->select(Tool.TEXT)),item("Line","",()->select(Tool.LINE)),item("Rock","",()->select(Tool.ROCK)));
             case 5 -> List.of(item("Fill selection","Ctrl+F",()->action("fill")),item("Delete selection","Del",()->action("delete")),item("Move / clone / stack…","",()->{transform=true;init();}),item("Smooth brush","",()->select(Tool.SMOOTH)),item("Flatten brush","",()->select(Tool.FLATTEN)));
@@ -913,8 +890,6 @@ public final class EditorScreen extends CraftiumScreen {
         if(x>=pin[0]&&x<pin[0]+pin[2]&&y>=pin[1]&&y<pin[1]+pin[3])return false; // the pinned tools are not the world
         int[] popup=popupBounds();
         if(popup!=null&&x>=popup[0]&&x<popup[0]+popup[2]&&y>=popup[1]&&y<popup[1]+popup[3])return false;
-        int[] outline=outlineBounds();
-        if(outline!=null&&x>=outline[0]&&x<outline[0]+outline[2]&&y>=outline[1]&&y<outline[1]+outline[3])return false;
         return !ReferenceImages.hit(x*scale,y*scale)&&y>27&&y<(height/scale)-23&&(!panels||WorkspaceLayout.hit(x,y,false).isBlank());
     }
     private void use(){
@@ -1039,10 +1014,9 @@ public final class EditorScreen extends CraftiumScreen {
         String block=BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(hit.getBlockPos()).getBlock()).toString();
         ClientState.pick(block);
     }
-    @Override public boolean mouseReleased(MouseButtonEvent event){if(dragBlock!=null&&event.button()==0){finishBlockDrag(event);return true;}outlinePicker.release();if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting&&o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW")&&o().annotationPoints.size()>1)action("annotation_create");painting=false;ClientState.strokeId=0;if(o().tool==Tool.LASSO_SELECT&&!lasso.isEmpty()){o().selectionPoints=new ArrayList<>(LassoSelection.project(lasso));action("lasso_select");o().selectionPoints.clear();lasso.clear();}}return true;}
+    @Override public boolean mouseReleased(MouseButtonEvent event){if(dragBlock!=null&&event.button()==0){finishBlockDrag(event);return true;}if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting&&o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW")&&o().annotationPoints.size()>1)action("annotation_create");painting=false;ClientState.strokeId=0;if(o().tool==Tool.LASSO_SELECT&&!lasso.isEmpty()){o().selectionPoints=new ArrayList<>(LassoSelection.project(lasso));action("lasso_select");o().selectionPoints.clear();lasso.clear();}}return true;}
     @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy) {
         if(dragBlock!=null){if(!dragMoved&&Math.hypot(event.x()-dragStartX,event.y()-dragStartY)>5)dragMoved=true;return true;}
-        if(outlinePicker.active()){outlinePicker.drag(event.x()/scale,event.y()/scale);return true;}
         if(ReferenceImages.drag(event.x(),event.y()))return true;
         pointerX=event.x();pointerY=event.y();
         if(cameraGesture!=CameraGesture.NONE){

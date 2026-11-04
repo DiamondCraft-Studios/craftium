@@ -18,7 +18,6 @@ import java.util.*;
  */
 final class GhostBlocks {
     static final GhostBlocks EMPTY=new GhostBlocks(null);
-    private static final int STROKE=0xff7fd8ff,FILL=0x2240c0ff,REMOVED=0xffff7777;
     /** The shape of what the server sends; see the server's GhostCodec. */
     private record Data(List<String> states,int[] blocks,int[] removed,int total){}
 
@@ -28,7 +27,6 @@ final class GhostBlocks {
     private OutlineShape placedShape,removedShape;
     private List<BlockPos> cachedPlaces,removedPlaces=List.of();private Point cachedOrigin;
     /** The tint of blocks an edit is about to remove, over the original blocks that are still in the world. */
-    private static final int REMOVED_TINT=0x90ff5555;
 
     private GhostBlocks(Data data){this.data=data;}
 
@@ -69,16 +67,16 @@ final class GhostBlocks {
         if(data==null||!resolve())return;
         Vec3 at=new Vec3(origin.x(),origin.y(),origin.z());
         if(outline){
-            if(!placedShape.isEmpty())placedShape.draw(at,(a,b)->Overlay.line(a,b,STROKE,1),STROKE,FILL,true);
-            if(!removedShape.isEmpty())removedShape.draw(at,(a,b)->Overlay.line(a,b,REMOVED,1),REMOVED,0x22ff5555,true);
+            if(!placedShape.isEmpty())placedShape.draw(at,(a,b)->Overlay.line(a,b,ClientState.options.hoverColor,1),ClientState.options.hoverColor,ClientState.options.hoverFill,true);
+            if(!removedShape.isEmpty())removedShape.draw(at,(a,b)->Overlay.line(a,b,ClientState.options.removedColor,1),ClientState.options.removedColor,ClientState.options.removedFill,true);
         }
-        if(!removedPlaces.isEmpty()&&outline)Overlay.blocks(removedPlaces,REMOVED_TINT);
+        if(!removedPlaces.isEmpty()&&outline)Overlay.blocks(removedPlaces,ClientState.options.removedTint);
         if(states.isEmpty())return;
         if(cachedPlaces==null||!origin.equals(cachedOrigin)){
             var places=new ArrayList<BlockPos>(relative.size());
             for(Point p:relative)places.add(new BlockPos(p.x()+origin.x(),p.y()+origin.y(),p.z()+origin.z()));
             cachedPlaces=places;cachedOrigin=origin;
         }
-        Overlay.blockStates(states,cachedPlaces,OutlineShape.GHOST);
+        Overlay.blockStates(states,cachedPlaces,ClientState.options.previewTint);
     }
 }

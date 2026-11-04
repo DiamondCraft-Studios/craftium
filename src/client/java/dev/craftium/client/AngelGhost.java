@@ -14,6 +14,6 @@ final class AngelGhost {
         if(!o.angelPlacement||mc.player==null||mc.level==null||!mc.player.isCreative()||!CraftiumClient.supported()||ClientCompat.screen(mc)!=null)return;
         if(!(mc.player.getMainHandItem().getItem() instanceof BlockItem item))return;
         if(mc.hitResult instanceof BlockHitResult block&&block.getType()==HitResult.Type.BLOCK)return;
-        HeldGhost.draw(mc,item,CraftiumClient.angelHit(mc),OutlineShape.GHOST);
+        HeldGhost.draw(mc,item,CraftiumClient.angelHit(mc),ClientState.options.previewTint);
     }
 }

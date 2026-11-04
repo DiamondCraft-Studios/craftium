@@ -209,7 +209,7 @@ final class TransformGizmo {
     }
     private static Vec3 transformed(Vec3 world){if(dragging==null)return world;if(dragging.kind==Kind.MODEL)return rawTransform(world).add(delta);if(normalizationDirty){normalization=Vec3.ZERO;if(dragging.kind==Kind.PLACEMENT||dragging.kind==Kind.SELECTION){AABB bounds;if(dragging.kind==Kind.PLACEMENT){Point p=PlacementPreview.origin;bounds=bounds().move(p.x(),p.y(),p.z());}else{var status=ClientState.status;Point min=status.min(),max=status.max();bounds=new AABB(min.x(),min.y(),min.z(),max.x()+1,max.y()+1,max.z()+1);}double x=Double.POSITIVE_INFINITY,y=x,z=x;for(int i=0;i<8;i++){Vec3 corner=rawTransform(new Vec3((i&1)==0?bounds.minX:bounds.maxX,(i&2)==0?bounds.minY:bounds.maxY,(i&4)==0?bounds.minZ:bounds.maxZ));x=Math.min(x,corner.x);y=Math.min(y,corner.y);z=Math.min(z,corner.z);}normalization=new Vec3(bounds.minX-x,bounds.minY-y,bounds.minZ-z);}normalizationDirty=false;}return rawTransform(world).add(normalization).add(delta);}
     /** One outline segment of a selection being transformed, moved by the transform in progress. */
-    static void line(Vec3 from,Vec3 to){Overlay.line(transformed(from),transformed(to),0xff8be3b5,1.5f);}
+    static void line(Vec3 from,Vec3 to){Overlay.line(transformed(from),transformed(to),ClientState.options.previewColor,1.5f);}
     static boolean dragging(){return dragging!=null;}
     /** How far the selected blocks are being dragged by the Move tool, in whole blocks; null when no such drag is under way. */
     static Point moveDelta(){
@@ -244,7 +244,7 @@ final class TransformGizmo {
     /** Where the handle being dragged is right now, or null when no handle point is being dragged. */
     static Vec3 liveNode(){return dragging!=null&&dragging.kind==Kind.NODE?dragging.anchor.add(delta):null;}
     static boolean selectionPreview(){return dragging!=null&&(dragging.kind==Kind.SELECTION||dragging.kind==Kind.MODEL);}
-    static void box(AABB box){if(dragging==null){Overlay.box(box,0xff8be3b5,1,0x2247d29b);return;}Vec3[] points=new Vec3[8];for(int i=0;i<8;i++)points[i]=transformed(new Vec3((i&1)==0?box.minX:box.maxX,(i&2)==0?box.minY:box.maxY,(i&4)==0?box.minZ:box.maxZ));for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)Overlay.line(points[i],points[i|bit],0xff8be3b5,1.5f);}
+    static void box(AABB box){if(dragging==null){Overlay.box(box,ClientState.options.previewColor,1,ClientState.options.previewFill);return;}Vec3[] points=new Vec3[8];for(int i=0;i<8;i++)points[i]=transformed(new Vec3((i&1)==0?box.minX:box.maxX,(i&2)==0?box.minY:box.maxY,(i&4)==0?box.minZ:box.maxZ));for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)Overlay.line(points[i],points[i|bit],ClientState.options.previewColor,1.5f);}
     static void draw(EditorScreen screen){
         Target t=dragging==null?target(screen):dragging;if(t==null)return;
         if(dragging==null)updateHover(screen);else followCamera(screen);

@@ -13,10 +13,6 @@ import java.util.*;
  * each exterior face. Every preview that outlines blocks draws through this, so they all look like the selection.
  */
 final class OutlineShape {
-    /** The tint of the block ghost, a light blue like light blue concrete. It multiplies the block's texture, so it is lighter than the concrete itself. */
-    static final int GHOST=0x9046B4EE;
-    /** The same tint in red, for blocks that are about to be deleted, such as the ones a move leaves behind. */
-    static final int DELETE=0x90EE4646;
     static final OutlineShape EMPTY=new OutlineShape(SelectionOutline.Result.EMPTY,null);
     /** Beyond these the outline is too detailed to draw every tick, so the shape falls back to its bounding box. */
     private static final int MAX_EDGES=8192,MAX_FACES=4096;
@@ -53,9 +49,27 @@ final class OutlineShape {
             return;
         }
         // Only the outline as the camera sees it, unless every edge was asked for or the camera is inside the shape.
-        if(ClientState.options.selectionAllEdges||!silhouette(lines,at))
+        var style=ClientState.options.selectionStyle;
+        if(style==Options.SelectionStyle.ALL_EDGES||!(style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at))&&!silhouette(lines,at))
             for(var s:outline.edges())lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
         if(withFill&&outline.faces().size()<=MAX_FACES)for(var f:outline.faces())face(f,at,fill);
+    }
+
+    private Vec3 contourEye,contourAt;
+    private List<ScreenSilhouette.Line> contourLines;
+    /**
+     * Draws only the contour of the shape on the screen. Worked out again only when the camera or the shape moves.
+     * Returns false when there is none to draw, so the caller falls back to the creases.
+     */
+    private boolean contour(Lines lines,Vec3 at){
+        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
+        if(contourEye==null||contourEye.distanceToSqr(eye)>1e-8||!at.equals(contourAt)){
+            contourEye=eye;contourAt=at;
+            contourLines=ScreenSilhouette.of(outline,eye.x-at.x,eye.y-at.y,eye.z-at.z);
+        }
+        if(contourLines==null||contourLines.isEmpty())return false;
+        for(var l:contourLines)lines.line(new Vec3(l.x0(),l.y0(),l.z0()).add(at),new Vec3(l.x1(),l.y1(),l.z1()).add(at));
+        return true;
     }
 
     /**

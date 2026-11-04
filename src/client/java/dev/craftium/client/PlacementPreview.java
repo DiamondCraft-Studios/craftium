@@ -17,7 +17,7 @@ public final class PlacementPreview {
     /** The pending placement as one outline, moved by the transform in progress; filled while nothing is being dragged. */
     static void draw(){
         if(origin==null)return;
-        shape.draw(new Vec3(origin.x(),origin.y(),origin.z()),TransformGizmo::line,0xff8be3b5,0x2247d29b,!TransformGizmo.dragging());
+        shape.draw(new Vec3(origin.x(),origin.y(),origin.z()),TransformGizmo::line,ClientState.options.previewColor,ClientState.options.previewFill,!TransformGizmo.dragging());
         if(!TransformGizmo.dragging())ghost.draw(origin,false); // the real blocks, so the preview shows what will be placed
     }
     public static void begin(Point at){

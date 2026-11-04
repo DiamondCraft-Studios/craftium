@@ -7,7 +7,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
 final class SelectionOverlay {
-    private static final int FILL=0x225d91ff;
     /** Past this many blocks the real models are not drawn, because a frame would have to draw all of them. */
     private static final int MAX_GHOST_BLOCKS=4096;
     private static String encoded="";
@@ -28,13 +27,13 @@ final class SelectionOverlay {
     static void draw(boolean transforming){
         if(shape.isEmpty())return;
         int colour=ClientState.options.selectionColor;float width=(float)ClientState.options.selectionWidth;
-        shape.draw(Vec3.ZERO,transforming?TransformGizmo::line:(a,b)->Overlay.line(a,b,colour,width),colour,FILL,!transforming);
+        shape.draw(Vec3.ZERO,transforming?TransformGizmo::line:(a,b)->Overlay.line(a,b,colour,width),colour,ClientState.options.selectionFill,!transforming);
         if(blocks.isEmpty())return;
         Point moving=TransformGizmo.moveDelta();
         if(moving!=null){ // the blocks being dragged, shown where they would land
             if(!moving.equals(movedBy)){movedBy=moving;moved=blocks.stream().map(b->b.offset(moving.x(),moving.y(),moving.z())).toList();}
-            Overlay.blocks(blocks,moved,OutlineShape.GHOST);
+            Overlay.blocks(blocks,moved,ClientState.options.previewTint);
         }else if(!transforming&&!ClientState.hasPending()) // a waiting edit shows its own blocks
-            Overlay.blocks(blocks,OutlineShape.GHOST);
+            Overlay.blocks(blocks,ClientState.options.selectionTint);
     }
 }

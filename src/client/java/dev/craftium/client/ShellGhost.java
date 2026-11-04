@@ -35,8 +35,8 @@ final class ShellGhost {
             for(int i=0;i<shell.length;i+=3)list.add(new BlockPos(shell[i]+origin.x(),shell[i+1]+origin.y(),shell[i+2]+origin.z()));
             at=origin;places=list;placed=voxels.at(origin);
         }
-        if(state==null)Overlay.blocks(places,OutlineShape.DELETE);
-        else Overlay.blockStates(Collections.nCopies(places.size(),state),places,placed,OutlineShape.GHOST);
+        if(state==null)Overlay.blocks(places,ClientState.options.removedTint);
+        else Overlay.blockStates(Collections.nCopies(places.size(),state),places,placed,ClientState.options.previewTint);
     }
 
     private static String blockName;private static BlockState block;

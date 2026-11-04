@@ -92,7 +92,7 @@ public final class CraftiumClient implements ClientModInitializer {
      */
     public static void resetEditor(){
         ClientState.selectionPending=false;ClientState.selectingSince=0;ClientState.selectionSizeBefore=0;ClientState.largeSelection=0;ClientState.heldSelection="";
-        ClientState.boxCorners.clear();ClientState.outlineSettings=false;ClientState.pending=GhostBlocks.EMPTY;ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
+        ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
         ClientState.rulerStart=null;ClientState.rulerEnd=null;ClientState.rulerPoints.clear();
         ShapeObject.cancel();TransformGizmo.cancel();PlacementPreview.cancel();BuilderMode.reset();SelectionOverlay.update("");
     }

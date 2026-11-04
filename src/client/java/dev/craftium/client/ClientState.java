@@ -25,8 +25,6 @@ public final class ClientState {
     public static final List<Point> boxCorners=new ArrayList<>();
     /** When above zero, the editor shows a small popup asking whether this many selected blocks was meant. */
     public static int largeSelection;
-    /** Whether the selection outline settings (colour and width) are showing. */
-    public static boolean outlineSettings;
     /** The selection the server just sent while the popup is waiting, kept aside so it is not built or drawn until confirmed. */
     public static String heldSelection="";
     public static boolean selectionPending;

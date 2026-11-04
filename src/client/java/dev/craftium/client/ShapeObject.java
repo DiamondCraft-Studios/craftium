@@ -24,7 +24,6 @@ final class ShapeObject {
         double roll(){return euler(rotation)[2];}
     }
 
-    private static final int STROKE=0xff8be3b5,FILL=0x2247d29b;
     private static final double[][] IDENTITY={{1,0,0},{0,1,0},{0,0,1}};
     /** Shapes are limited to this reach (see {@link Geometry#shape}), so sizes are limited to keep inside it. */
     private static final double REACH=BrushMath.MAX_REACH;
@@ -157,7 +156,7 @@ final class ShapeObject {
         Pose shown=TransformGizmo.shapeDuringDrag(pose);
         var made=make(shown);
         Point at=shown.origin();
-        made.outline().draw(new Vec3(at.x(),at.y(),at.z()),(a,b)->Overlay.line(a,b,STROKE,1),STROKE,FILL,true);
+        made.outline().draw(new Vec3(at.x(),at.y(),at.z()),(a,b)->Overlay.line(a,b,ClientState.options.previewColor,1),ClientState.options.previewColor,ClientState.options.previewFill,true);
         // The foreground block, so swapping it with the background block changes the shape at once; a carve shows what it would remove.
         made.ghost().draw(at,o.invert?null:ShellGhost.state(mc,o.block));
     }
