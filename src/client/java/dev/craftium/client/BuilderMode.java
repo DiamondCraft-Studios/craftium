@@ -30,7 +30,7 @@ public final class BuilderMode {
      * button then keeps magic selecting, whatever the tool, and {@link #cells} are the selection. And whether the search under
      * way adds what it finds to the selection instead of starting a new one.
      */
-    private static boolean magicStarted,magicGrow;
+    private static boolean magicStarted,magicGrow,magicSubtract;
     private static java.util.concurrent.ExecutorService search=newSearch();
     private static final long SEARCH_TIMEOUT=30_000;
     private static java.util.concurrent.ExecutorService newSearch(){return java.util.concurrent.Executors.newSingleThreadExecutor(r->{var t=new Thread(r,"Craftium magic select");t.setDaemon(true);return t;});}
@@ -141,17 +141,17 @@ public final class BuilderMode {
         else if(first!=null&&second==null){second=at;refresh();} // middle click with only a first point: extend the selection to this block
         else if(preview&&o.builderTool==Options.BuilderTool.STACK){} // a stack only grows from the selection's own faces: nudge it
         else if(preview){Point min=min();Point normal=CraftiumClient.normal(hit);offset=at.add(normal.x()-min.x(),normal.y()-min.y(),normal.z()-min.z());}
-        else if(first==null)magicSelect(hit.getBlockPos(),false);
-        else if(magicStarted)magicSelect(hit.getBlockPos(),true); // begun with magic select: the middle button goes on adding what it finds
+        else if(first==null)magicSelect(hit.getBlockPos(),false,false);
+        else if(magicStarted)magicSelect(hit.getBlockPos(),true,mc.hasControlDown()); // begun with magic select: the middle button goes on adding what it finds, and with Ctrl takes it away
         else{Point low=min(),high=max();first=new Point(Math.min(low.x(),at.x()),Math.min(low.y(),at.y()),Math.min(low.z(),at.z()));second=new Point(Math.max(high.x(),at.x()),Math.max(high.y(),at.y()),Math.max(high.z(),at.z()));offset=new Point(0,0,0);refresh();} // both corners set: the box grows to take in the block clicked
         return true;
     }
     /** The Magic Wand's search, with the editor's settings, from the block clicked: its bounding box becomes the selection, or with {@code grow} is added to it. */
-    private static void magicSelect(net.minecraft.core.BlockPos at,boolean grow){
+    private static void magicSelect(net.minecraft.core.BlockPos at,boolean grow,boolean subtract){
         var mc=Minecraft.getInstance();var o=ClientState.options;
         if(mc.level.getBlockState(at).isAir())return;
         var world=MagicPreview.world(mc,at,o);var params=new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,Integer.MAX_VALUE,Selection.LIMIT*4);Point start=CraftiumClient.point(at);
-        magicSince=System.currentTimeMillis();magicGrow=grow;
+        magicSince=System.currentTimeMillis();magicGrow=grow;magicSubtract=subtract;
         magic=java.util.concurrent.CompletableFuture.supplyAsync(()->MagicWand.select(start,world,params),search);
     }
     /** True once the search has been running long enough that the player should be told: a large area. */
@@ -175,6 +175,7 @@ public final class BuilderMode {
         magic=null;
         MagicWand.Result result;try{result=running.join();}catch(RuntimeException e){ClientState.notify("Magic select failed");return;}
         var found=result.found();if(found.isEmpty()||!active())return;
+        if(magicSubtract){subtractBlocks(found);return;} // taking blocks away never needs the large-selection question
         int x0=Integer.MAX_VALUE,y0=x0,z0=x0,x1=Integer.MIN_VALUE,y1=x1,z1=x1;
         for(Point p:found){x0=Math.min(x0,p.x());y0=Math.min(y0,p.y());z0=Math.min(z0,p.z());x1=Math.max(x1,p.x());y1=Math.max(y1,p.y());z1=Math.max(z1,p.z());}
         Point low=new Point(x0,y0,z0),high=new Point(x1,y1,z1);
@@ -193,6 +194,15 @@ public final class BuilderMode {
         for(Point p:all){x0=Math.min(x0,p.x());y0=Math.min(y0,p.y());z0=Math.min(z0,p.z());x1=Math.max(x1,p.x());y1=Math.max(y1,p.y());z1=Math.max(z1,p.z());}
         magicStarted=true;first=new Point(x0,y0,z0);second=new Point(x1,y1,z1);cells=List.copyOf(all);cellBlocksFor=null;offset=new Point(0,0,0);preview=false;
         ClientState.notify("Selected "+cells.size()+" blocks · scroll to nudge · right-click places · Esc cancels");
+    }
+    /** Takes the blocks a magic select found out of the selection, which is left as the box round what remains. */
+    private static void subtractBlocks(Collection<Point> found){
+        var remaining=new LinkedHashSet<Point>(cells);int before=remaining.size();
+        remaining.removeAll(found);
+        if(remaining.size()==before){ClientState.notify("None of those blocks are selected");return;}
+        if(remaining.isEmpty()){clear();ClientState.notify("Selection cleared");return;}
+        selectBlocks(remaining,false);
+        ClientState.notify("Removed "+(before-remaining.size())+" blocks · "+remaining.size()+" selected");
     }
     private static void acceptHeld(){var blocks=heldCells;boolean grow=heldGrow;heldFirst=heldSecond=null;heldCells=null;selectBlocks(blocks,grow);}
     private static void discardHeld(){heldFirst=heldSecond=null;ClientState.notify("Selection cancelled");}
@@ -361,7 +371,7 @@ Point m=min();return new Vec3(m.x()+offset.x(),m.y()+offset.y(),m.z()+offset.z()
         if(CraftiumClient.held(CraftiumClient.contextKey)){int left=g.guiWidth()/2+95,top=g.guiHeight()-26-Options.BuilderTool.values().length*22;var all=Options.BuilderTool.values();g.fill(left-4,top-20,left+144,top+all.length*22+4,0xf510151c);g.text(mc.font,"Builder tools",left,top-14,0xffdce6ef,false);for(int i=0;i<all.length;i++){g.fill(left,top+i*22,left+140,top+i*22+21,all[i]==ClientState.options.builderTool?0xff315b84:0xff223247);g.text(mc.font,all[i].name().replace('_',' '),left+6,top+i*22+6,0xffdce6ef,false);}drawFlags(g,mc);}
         String label=name()+"  ·  Hold Alt + wheel: tools";g.text(mc.font,label,g.guiWidth()/2-mc.font.width(label)/2,g.guiHeight()-69,0xffe6cf8b,false);
         if(heldFirst!=null){String ask="Selected "+heldCount+" blocks, confirm?  ·  RMB or Enter Confirm  ·  LMB or Esc Cancel";g.fill(g.guiWidth()/2-mc.font.width(ask)/2-8,g.guiHeight()/2+22,g.guiWidth()/2+mc.font.width(ask)/2+8,g.guiHeight()/2+42,0xf0141d29);g.text(mc.font,ask,g.guiWidth()/2-mc.font.width(ask)/2,g.guiHeight()/2+28,0xffffd66d,false);}
-        String hint=ClientState.options.builderTool==Options.BuilderTool.EXTRUDE?"LMB Shrink  ·  RMB Extrude":ClientState.options.builderTool==Options.BuilderTool.SYMMETRY?"RMB Set node  ·  Ctrl+F Mirror  ·  Ctrl+R Rotate":first==null?"LMB First corner  ·  RMB Second corner  ·  MMB Magic select":second!=null&&!preview?(ClientState.options.builderTool==Options.BuilderTool.ERASE?"Enter Erase  ·  ":"")+"LMB Move 1st  ·  RMB Move 2nd  ·  "+(magicStarted?"MMB Magic add":"MMB Extend")+"  ·  Wheel Nudge  ·  XYZ Axis  ·  Ctrl+R/F":second!=null?"LMB Move 1st  ·  RMB Place  ·  MMB "+(ClientState.options.builderTool==Options.BuilderTool.STACK?"Stack to block":"Face")+"  ·  Wheel Nudge  ·  XYZ Axis  ·  Ctrl+R/F":"LMB Restart  ·  RMB or MMB Second corner";
+        String hint=ClientState.options.builderTool==Options.BuilderTool.EXTRUDE?"LMB Shrink  ·  RMB Extrude":ClientState.options.builderTool==Options.BuilderTool.SYMMETRY?"RMB Set node  ·  Ctrl+F Mirror  ·  Ctrl+R Rotate":first==null?"LMB First corner  ·  RMB Second corner  ·  MMB Magic select":second!=null&&!preview?(ClientState.options.builderTool==Options.BuilderTool.ERASE?"Enter Erase  ·  ":"")+"LMB Move 1st  ·  RMB Move 2nd  ·  "+(magicStarted?"MMB Magic add  ·  Ctrl+MMB Magic subtract":"MMB Extend")+"  ·  Wheel Nudge  ·  XYZ Axis  ·  Ctrl+R/F":second!=null?"LMB Move 1st  ·  RMB Place  ·  MMB "+(ClientState.options.builderTool==Options.BuilderTool.STACK?"Stack to block":"Face")+"  ·  Wheel Nudge  ·  XYZ Axis  ·  Ctrl+R/F":"LMB Restart  ·  RMB or MMB Second corner";
         g.text(mc.font,hint,g.guiWidth()/2-mc.font.width(hint)/2,g.guiHeight()-57,0xffc7d6e5,false);
         if(first!=null){Point a=min(),b=max();axisReadout(g,mc.font,g.guiHeight()-81,"Size "," × ",b.x()-a.x()+1,b.y()-a.y()+1,b.z()-a.z()+1,"   Offset ",", ",offset.x(),offset.y(),offset.z());}
     }
