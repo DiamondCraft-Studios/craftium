@@ -23,11 +23,15 @@ public final class BuilderMode {
     /** A large magic selection waiting to be confirmed: its box, and how many blocks it found. */
     private static Point heldFirst,heldSecond;
     private static int heldCount;
-    private static final java.util.concurrent.ExecutorService SEARCH=java.util.concurrent.Executors.newSingleThreadExecutor(r->{var t=new Thread(r,"Craftium magic select");t.setDaemon(true);return t;});
+    private static java.util.concurrent.ExecutorService search=newSearch();
+    private static final long SEARCH_TIMEOUT=30_000;
+    private static java.util.concurrent.ExecutorService newSearch(){return java.util.concurrent.Executors.newSingleThreadExecutor(r->{var t=new Thread(r,"Craftium magic select");t.setDaemon(true);return t;});}
+    /** Drops a search that is stuck and starts over on a fresh thread, as the one thread is shared by every search after it. */
+    private static void restartSearch(){var old=search;search=newSearch();old.shutdownNow();magic=null;}
     private BuilderMode(){}
     public static boolean active(){var mc=Minecraft.getInstance();return enabled&&available()&&ClientCompat.screen(mc)==null;}
     private static boolean available(){var mc=Minecraft.getInstance();return mc.player!=null&&mc.player.isCreative()&&mc.level!=null&&CraftiumClient.supported();}
-    public static void reset(){enabled=false;clear();}
+    public static void reset(){enabled=false;clear();restartSearch();wheel=0;}
     private static void clear(){first=null;second=null;preview=false;clonePlaced=false;offset=new Point(0,0,0);cells=List.of();stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;magic=null;heldFirst=heldSecond=null;}
     /** Another tool keeps the selection, but not what was being done to it. */
     private static void retool(){preview=false;clonePlaced=false;offset=new Point(0,0,0);stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;}
@@ -113,14 +117,16 @@ public final class BuilderMode {
         if(mc.level.getBlockState(at).isAir())return;
         var world=MagicPreview.world(mc,at,o);var params=new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,Selection.LIMIT*4);Point start=CraftiumClient.point(at);
         magicSince=System.currentTimeMillis();
-        magic=java.util.concurrent.CompletableFuture.supplyAsync(()->MagicWand.select(start,world,params),SEARCH);
+        magic=java.util.concurrent.CompletableFuture.supplyAsync(()->MagicWand.select(start,world,params),search);
     }
     /** True once the search has been running long enough that the player should be told: a large area. */
     public static boolean selecting(){return magic!=null&&System.currentTimeMillis()-magicSince>ClientState.SELECTING_DELAY;}
     /** Takes the result of the search when it is done. */
     public static void tick(){
-        var search=magic;if(search==null||!search.isDone())return;magic=null;
-        MagicWand.Result result;try{result=search.join();}catch(RuntimeException e){ClientState.notify("Magic select failed");return;}
+        var running=magic;if(running==null)return;
+        if(!running.isDone()){if(System.currentTimeMillis()-magicSince>SEARCH_TIMEOUT){restartSearch();ClientState.notify("Magic select took too long and was stopped");}return;}
+        magic=null;
+        MagicWand.Result result;try{result=running.join();}catch(RuntimeException e){ClientState.notify("Magic select failed");return;}
         var found=result.found();if(found.isEmpty()||!active())return;
         int x0=Integer.MAX_VALUE,y0=x0,z0=x0,x1=Integer.MIN_VALUE,y1=x1,z1=x1;
         for(Point p:found){x0=Math.min(x0,p.x());y0=Math.min(y0,p.y());z0=Math.min(z0,p.z());x1=Math.max(x1,p.x());y1=Math.max(y1,p.y());z1=Math.max(z1,p.z());}

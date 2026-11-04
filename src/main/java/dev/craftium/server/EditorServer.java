@@ -134,6 +134,12 @@ public final class EditorServer {
                 }
                 return;
             }
+            if(r.action().equals("editor_reset")){ // the way out of a stuck editor: forgets whatever is half done, but never an edit being applied
+                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingChain=null;s.pendingChainBase=s.pendingChainEdit=null;s.pendingDirty=true;s.selectionBefore=null;
+                s.selection.clear();s.corner=s.ruler=s.line=null;s.selectedEntity=null;s.historyRemaining=0;s.pulse="";
+                if((job==null||!job.owner.equals(player.getUUID()))&&!AnimatedRebuild.owned(player.getUUID()))s.busy=false;
+                send(player,s,"Editor reset",false);return;
+            }
             long now=System.nanoTime();
             if(now-s.lastRequest<65_000_000L&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             s.lastRequest=now;

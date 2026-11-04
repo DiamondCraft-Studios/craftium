@@ -53,14 +53,12 @@ public final class CraftiumClient implements ClientModInitializer {
             receiveStatus(payload.json());
         }));
         ClientPlayConnectionEvents.DISCONNECT.register((handler,client)-> {
-            ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);ClientState.pending=GhostBlocks.EMPTY;ClientState.largeSelection=0;ShapeObject.cancel();
-            ClientState.save();ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
-            BuilderMode.reset();placementSynced="";
+            ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);
+            ClientState.save();resetEditor();placementSynced="";
             ClientCommands.reset();
             ClientAssets.clear();bridge.clear();
-            SelectionOverlay.update("");PlacementPreview.cancel();PlacementPreview.update("");
-            ClientState.rulerStart=null;ClientState.rulerEnd=null;
-            ClientState.rulerPoints.clear();ClientState.blueprints=List.of();ClientState.libraryVersion++;
+            PlacementPreview.update("");
+            ClientState.blueprints=List.of();ClientState.libraryVersion++;
         });
         // What the shared placement mixins ask about the local player; only when the server runs the mod too, as it must agree with the client.
         dev.craftium.runtime.PlayerCapabilities.client=player->{var mc=Minecraft.getInstance();return player==mc.player&&player.isCreative()&&vanillaPlacement()?ClientState.options:null;};
@@ -88,6 +86,16 @@ public final class CraftiumClient implements ClientModInitializer {
         });
     }
     private static final BridgeCodec.Assembler bridge=new BridgeCodec.Assembler();
+    /**
+     * Forgets everything the editor is in the middle of: selection jobs and popups, held gizmo drags, previews, the builder and its
+     * search thread. Nothing built is touched. Used when leaving a world, and by {@code /craftium reset} when something has got stuck.
+     */
+    public static void resetEditor(){
+        ClientState.selectionPending=false;ClientState.selectingSince=0;ClientState.selectionSizeBefore=0;ClientState.largeSelection=0;ClientState.heldSelection="";
+        ClientState.boxCorners.clear();ClientState.outlineSettings=false;ClientState.pending=GhostBlocks.EMPTY;ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
+        ClientState.rulerStart=null;ClientState.rulerEnd=null;ClientState.rulerPoints.clear();
+        ShapeObject.cancel();TransformGizmo.cancel();PlacementPreview.cancel();BuilderMode.reset();SelectionOverlay.update("");
+    }
     private static void receiveStatus(String json){
             var next=Packets.JSON.fromJson(json,Packets.Status.class);
             if(next!=null){ClientState.status=next;HistoryPulse.receive(next);checkLargeSelection(next);applyPivot(next.pivotUpdate());if(next.message().startsWith("Undid ")||next.message().startsWith("Redid "))ClientState.boxCorners.clear();if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());}
