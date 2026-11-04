@@ -333,6 +333,8 @@ public final class DedicatedServerGameTest implements FabricClientGameTest {
         request("fill", null);
         checkBlock(4, Y, 4, Blocks.LAPIS_BLOCK);
         request("history_save", null);
+        ctx.runOnClient(mc -> {ClientState.rulers.clear(); var ruler = new Ruler(new Point(1, Y, 2)); ruler.b = new Point(4, Y + 1, 6); ClientState.rulers.add(ruler);});
+        ctx.waitTicks(10); // the rulers are kept for this world as soon as they change
         connection.close();
         for (int i = 0; i < 100 && server.computeOnServer(s -> s.getPlayerCount() != 0); i++) ctx.waitTick();
         require(server.computeOnServer(s -> s.getPlayerCount() == 0), "The player is still counted after disconnecting");
@@ -342,6 +344,9 @@ public final class DedicatedServerGameTest implements FabricClientGameTest {
             until(mc -> CraftiumClient.supported(), "channel negotiation after reconnect");
             request("history_reload", null);
             require(ctx.computeOnClient(mc -> ClientState.status.undo()) >= 1, "Saved history was not restored after reconnecting");
+            ctx.waitTicks(10);
+            require(ctx.computeOnClient(mc -> ClientState.rulers.size() == 1 && ClientState.rulers.getFirst().a.equals(new Point(1, Y, 2)) && new Point(4, Y + 1, 6).equals(ClientState.rulers.getFirst().b)), "Rulers were not restored after reconnecting");
+            System.out.println(TAG + "rulers restored after reconnect");
             request("undo", null);
             checkBlock(4, Y, 4, Blocks.AIR);
             System.out.println(TAG + "persistence disconnect reconnect history_reload undo");

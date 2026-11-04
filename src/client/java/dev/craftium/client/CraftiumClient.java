@@ -98,7 +98,6 @@ public final class CraftiumClient implements ClientModInitializer {
     public static void resetEditor(){
         ClientState.selectionPending=false;ClientState.selectingSince=0;ClientState.selectionSizeBefore=0;ClientState.largeSelection=0;ClientState.heldSelection="";
         ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.aiPending=GhostBlocks.EMPTY;ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
-        ClientState.rulers.clear();
         ShapeObject.cancel();TransformGizmo.cancel();PlacementPreview.cancel();BuilderMode.reset();SelectionOverlay.update("");
     }
     private static void receiveStatus(String json){
@@ -146,7 +145,7 @@ public final class CraftiumClient implements ClientModInitializer {
         EditorBindings.migrate(mc);
         if(mc.player==null || mc.level==null){hadWorld=false;toolCursor=false;return;}
         ClientCommands.tick();
-        BuilderMode.tick();BuilderWidget.tick();
+        BuilderMode.tick();BuilderWidget.tick();RulerStore.tick(mc);
         SelectingIndicator.tick(mc);
         if(BuilderMode.active()&&held(contextKey)||BuilderWidget.active()){if(!toolCursor){mc.mouseHandler.releaseMouse();toolCursor=true;}}
         else if(toolCursor){if(ClientCompat.screen(mc)==null)mc.mouseHandler.grabMouse();toolCursor=false;}
