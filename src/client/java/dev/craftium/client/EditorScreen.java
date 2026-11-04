@@ -1191,6 +1191,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
      * only 20 times a second whatever the Max Framerate setting is, so this runs on every rendered frame
      * at the same 7 blocks per second (0.35 per tick) the tick-based version covered.
      */
+    private boolean sprinting,wasMoving;
     private void fly() {
         long now=System.nanoTime();
         double seconds=lastFlightNanos==0?0:Math.min((now-lastFlightNanos)/1e9,.1);
@@ -1200,10 +1201,14 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         if(typing!=null)return;
         for(EditBox field:fields.values())if(field.isFocused())return;
         double[] axes=flightAxes();double forward=axes[0],side=axes[1],up=axes[2];
-        if(forward==0&&side==0&&up==0)return;
+        boolean moving=forward!=0||side!=0||up!=0,ctrl=minecraft.hasControlDown();
+        // Ctrl only sprints when pressed after the player is already moving; pressed first it starts a chord, so it does not move.
+        if(!ctrl||!moving)sprinting=false;else if(wasMoving)sprinting=true;
+        wasMoving=moving&&(!ctrl||sprinting);
+        if(!moving||(ctrl&&!sprinting))return;
         double yaw=Math.toRadians(player.getYRot());
         // Alt slows the camera like sneaking and Ctrl speeds it up like sprinting, both relative to the Fly speed setting.
-        double modifier=minecraft.hasAltDown()?.3:minecraft.hasControlDown()?2.5:1;
+        double modifier=minecraft.hasAltDown()?.3:sprinting?2.5:1;
         Vec3 direction=new Vec3(-Math.sin(yaw)*forward-Math.cos(yaw)*side,up,Math.cos(yaw)*forward-Math.sin(yaw)*side);
         // Only with the right button held, forward follows where the camera looks, pitch included, like a first-person fly camera.
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT)
