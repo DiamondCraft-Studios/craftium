@@ -183,9 +183,16 @@ public final class EditorScreen extends CraftiumScreen {
         if(!help&&menu<0) {
             String tooltip="";for(var c:controls)if(c.contains(mx,my)&&!c.tip.isEmpty())tooltip=c.tip;
             if(!tooltip.isEmpty()) {
-                int tw=Math.min(320,font.width(tooltip)+14),tx=Math.min(mx+14,w-tw-4),ty=Math.min(my+18,h-34);
-                g.fill(tx,ty,tx+tw,ty+22,0xf5222d3b);g.outline(tx,ty,tw,22,LINE);
-                g.text(font,shorten(tooltip,tw-12),tx+6,ty+7,TEXT,false);
+                // A new line starts a new paragraph; each is wrapped to the pane, and a pane with a title shows it brighter than what follows.
+                String[] paragraphs=tooltip.split("\n");var rows=new ArrayList<net.minecraft.util.FormattedCharSequence>();var firstRows=0;int widest=0;
+                for(int i=0;i<paragraphs.length;i++){
+                    var split=font.split(Component.literal(paragraphs[i]),306);
+                    if(i==0)firstRows=split.size();
+                    for(var row:split){rows.add(row);widest=Math.max(widest,font.width(row));}
+                }
+                int tw=Math.min(320,widest+14),th=rows.size()*10+12,tx=Math.min(mx+14,w-tw-4),ty=Math.min(my+18,h-th-12);
+                g.fill(tx,ty,tx+tw,ty+th,0xf5222d3b);g.outline(tx,ty,tw,th,LINE);
+                for(int i=0;i<rows.size();i++)g.text(font,rows.get(i),tx+6,ty+6+i*10,paragraphs.length>1&&i>=firstRows?MUTED:TEXT,false);
             }
         }
         if(dragBlock!=null&&dragMoved){g.fill(mx-13,my-13,mx+13,my+13,0xdd1b2838);g.outline(mx-13,my-13,26,26,ACCENT);BlockPickerScreen.icon(g,font,dragBlock,mx-8,my-8);}
@@ -292,7 +299,7 @@ public final class EditorScreen extends CraftiumScreen {
                 g.fill(x,y,x+21,y+21,selected?0xff315b84:0xff223247);
                 if(selected){g.outline(x,y,21,21,0xff8bc7ff);g.fill(x,y+19,x+21,y+21,ACCENT);}
                 g.pose().pushMatrix();g.pose().translate(x,y);g.pose().scale(.82f,.82f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
-                controls.add(new Control(x,y,21,21,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},tool.description));
+                controls.add(new Control(x,y,21,21,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},toolTip(tool,0)));
             }
             y+=TOOL_PITCH;
         }
@@ -863,7 +870,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(selected){g.outline(x,y,26,26,0xff8bc7ff);g.fill(x,y+24,x+26,y+26,ACCENT);}
             g.pose().pushMatrix();g.pose().translate(x+1,y+1);g.pose().scale(1f,1f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
             int key=EditorControls.toolDefault(tool);
-            controls.add(new Control(x,y,26,26,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},tool.description+(key>0?" · "+(char)key+" / "+(slot+1):" · "+(slot+1))));
+            controls.add(new Control(x,y,26,26,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},toolTip(tool,slot+1)));
         }
     }
     private void statusbar(Gfx g) {
@@ -1139,6 +1146,13 @@ public final class EditorScreen extends CraftiumScreen {
         try{double v=Math.clamp(Double.parseDouble(text.trim()),area.slider().min(),area.slider().typedMax());area.slider().set.accept(area.integer()?Math.round(v):v);}catch(NumberFormatException ignored){}
     }
     private void text(Gfx g,String text,int x,int y,int color){if(scrollActive)scrollContent=Math.max(scrollContent,y+9);g.text(font,text,x,y,color,false);}
+    /** A tool's tooltip: its name and the key it is on (and the hotbar slot, when it has one) on the first line, its description below. */
+    private static String toolTip(Tool tool,int slot){
+        var mapping=CraftiumClient.toolKeys.get(tool);
+        String key=mapping==null||mapping.isUnbound()?"":mapping.getTranslatedKeyMessage().getString();
+        String shortcut=key.isEmpty()?slot>0?String.valueOf(slot):"":slot>0?key+" / "+slot:key;
+        return tool.label+(shortcut.isEmpty()?"":" ["+shortcut+"]")+"\n"+tool.description;
+    }
     private String shorten(String text,int pixels){if(font.width(text)<=pixels)return text;return font.plainSubstrByWidth(text,Math.max(0,pixels-9))+"…";}
     private void wrap(Gfx g,String text,int x,int y,int width,int color,int maxLines){int line=0;for(var row:font.split(Component.literal(text),width)){if(line>=maxLines)break;g.text(font,row,x,y+line*11,color,false);line++;}if(scrollActive)scrollContent=Math.max(scrollContent,y+line*11);}
     private String nice(String name){String s=name.toLowerCase(Locale.ROOT).replace('_',' ');return Character.toUpperCase(s.charAt(0))+s.substring(1);}
