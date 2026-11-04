@@ -89,11 +89,40 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             call("preview_build", "{\"spec\":" + spec + "}");
             var cancelled = call("cancel_preview", "{}");
             require(cancelled.getAsJsonObject("state").get("previewBlocks").getAsInt() == 0, "cancel_preview should clear the ghost: " + cancelled);
+
+            // The real craftium-mcp shim, started as Claude Desktop would, builds a pyramid through the same bridge.
+            var mcp = findMcpDirectory();
+            if (mcp != null) {
+                int px = block.get(0).getAsInt() + 8, pz = block.get(2).getAsInt() + 8;
+                ctx.runOnClient(mc -> mc.getConnection().sendCommand("fill " + px + " " + y + " " + pz + " " + (px + 8) + " " + (y + 5) + " " + (pz + 8) + " air"));
+                ctx.waitTicks(10);
+                try {
+                    var process = new ProcessBuilder("node", "test/e2e-client.mjs", AiBridge.FILE.toString()).directory(mcp.toFile()).redirectErrorStream(true).start();
+                    var output = new StringBuilder();
+                    var reader = CompletableFuture.runAsync(() -> { try { output.append(new String(process.getInputStream().readAllBytes())); } catch (Exception ignored) {} });
+                    for (int i = 0; i < 1200 && process.isAlive(); i++) ctx.waitTick();
+                    require(!process.isAlive() && process.exitValue() == 0, "the MCP shim run failed:\n" + output);
+                    reader.join();
+                    require(output.toString().contains("E2E_DONE"), "the MCP shim did not finish:\n" + output);
+                    for (int i = 0; i < 200 && !ctx.computeOnClient(mc -> mc.level.getBlockState(new BlockPos(px + 4, y + 5, pz + 4)).is(Blocks.GOLD_BLOCK)); i++) ctx.waitTick();
+                    require(ctx.computeOnClient(mc -> mc.level.getBlockState(new BlockPos(px + 4, y + 5, pz + 4)).is(Blocks.GOLD_BLOCK)), "the shim's pyramid has no gold tip:\n" + output);
+                    require(ctx.computeOnClient(mc -> mc.level.getBlockState(new BlockPos(px, y, pz)).is(Blocks.SANDSTONE)), "the shim's pyramid has no sandstone base");
+                    System.out.println("CRAFTIUM_AI shim_ok\n" + output);
+                } catch (java.io.IOException e) { throw new AssertionError("node is needed for the shim check", e); }
+            } else System.out.println("CRAFTIUM_AI shim_skipped (no mcp directory found)");
+
             ctx.runOnClient(mc -> ClientState.options.aiBridge = false);
             for (int i = 0; i < 100 && ctx.computeOnClient(mc -> AiBridge.running()); i++) ctx.waitTick();
             require(!ctx.computeOnClient(mc -> AiBridge.running()) && !Files.exists(AiBridge.FILE), "turning the bridge off should close it and remove its file");
         }
         System.out.println("CRAFTIUM_AI done");
+    }
+
+    /** The repository's mcp folder, found by walking up from the test's run directory; null when it is not there. */
+    private static java.nio.file.Path findMcpDirectory() {
+        for (var dir = java.nio.file.Path.of("").toAbsolutePath(); dir != null; dir = dir.getParent())
+            if (Files.exists(dir.resolve("mcp").resolve("package.json")) && Files.exists(dir.resolve("mcp").resolve("node_modules"))) return dir.resolve("mcp");
+        return null;
     }
 
     /** Calls a tool from another thread while the game keeps ticking, since the bridge answers from the game thread. */
