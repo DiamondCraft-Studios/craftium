@@ -69,9 +69,9 @@ public final class ColourScreen extends CraftiumScreen {
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){
         int mx=(int)(mouseX/scale),my=(int)(mouseY/scale);g.pose().pushMatrix();g.pose().scale(scale,scale);g.fill(0,0,canvasW,canvasH,0xef101923);g.fill(left-12,top-25,left+672,top+414,0xff172330);
         g.text(font,"CRAFTIUM  /  COLOUR STUDIO",left,top-17,0xffb5dcfc,false);g.text(font,"SIMILAR BLOCKS · "+BlockColours.size()+" texture averages",left+8,top+4,0xff9db5cb,false);
-        for(int i=0;i<matches.size();i++){var e=matches.get(i);int x=left+8+(i%8)*53,y=top+25+(i/8)*43;g.fill(x,y,x+48,y+38,0xff223247);g.fill(x+3,y+32,x+45,y+35,0xff000000|e.rgb());item(g,e.id(),x+16,y+6);if(mx>=x&&mx<x+48&&my>=y&&my<y+38)g.text(font,e.id(),left+8,top+199,0xffffdca8,false);}
+        for(int i=0;i<matches.size();i++){var e=matches.get(i);int x=left+8+(i%8)*53,y=top+25+(i/8)*43;boolean over=mx>=x&&mx<x+48&&my>=y&&my<y+38;g.fill(x,y,x+48,y+38,over?Hover.fill(0xff223247):0xff223247);if(over)g.outline(x,y,48,38,ClientState.options.uiAccent);g.fill(x+3,y+32,x+45,y+35,0xff000000|e.rgb());item(g,e.id(),x+16,y+6);if(mx>=x&&mx<x+48&&my>=y&&my<y+38)g.text(font,e.id(),left+8,top+199,0xffffdca8,false);}
         g.fill(left+581,top+5,left+645,top+24,0xff000000|color);g.text(font,"GRADIENT · OKLab",left+8,top+245,0xffb5dcfc,false);
-        for(int i=0;i<9;i++){int x=left+10+i*72,y=top+299;g.fill(x,y,x+56,y+35,0xff25364a);item(g,gradient[i],x+20,y+7);if(mx>=x&&mx<x+56&&my>=y&&my<y+35)g.text(font,gradient[i],left+8,top+402,0xffffdca8,false);}
+        for(int i=0;i<9;i++){int x=left+10+i*72,y=top+299;boolean over=mx>=x&&mx<x+56&&my>=y&&my<y+35;g.fill(x,y,x+56,y+35,over?Hover.fill(0xff25364a):0xff25364a);if(over)g.outline(x,y,56,35,ClientState.options.uiAccent);item(g,gradient[i],x+20,y+7);if(mx>=x&&mx<x+56&&my>=y&&my<y+35)g.text(font,gradient[i],left+8,top+402,0xffffdca8,false);}
         String filters="Filters: "+(full?"F ":"")+(solid?"S ":"")+(opaque?"O ":"")+(uniform?"T":"");g.text(font,filters,left+8,top+234,0xff9db5cb,false);
         drawWidgets(g,mx,my,delta);if(!message.isBlank())g.text(font,message,left+8,top+402,0xffffdca8,false);g.pose().popMatrix();
     }

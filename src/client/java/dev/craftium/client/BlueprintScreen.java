@@ -31,7 +31,7 @@ public final class BlueprintScreen extends CraftiumScreen {
     @Override protected void draw(Gfx g,int x,int y,float delta){
         g.pose().pushMatrix();g.pose().scale(scale,scale);g.fill(0,0,canvasW,canvasH,0xef101923);g.fill(left-12,top-25,left+672,top+414,0xff172330);g.text(font,"CRAFTIUM  /  BLUEPRINTS",left,top-17,0xffb5dcfc,false);
         for(int i=page*6;i<Math.min(matches.size(),page*6+6);i++){
-            int index=i-page*6,bx=left+8+(index%2)*327,by=top+40+(index/2)*106;var entry=matches.get(i);g.fill(bx,by,bx+315,by+98,0xff223247);
+            int index=i-page*6,bx=left+8+(index%2)*327,by=top+40+(index/2)*106;var entry=matches.get(i);boolean over=x/scale>=bx&&x/scale<bx+315&&y/scale>=by&&y/scale<by+98;g.fill(bx,by,bx+315,by+98,over?Hover.fill(0xff223247):0xff223247);if(over)g.outline(bx,by,315,98,ClientState.options.uiAccent);
             if(entry.thumbnail()!=null&&entry.thumbnail().size()==256)for(int pixel=0;pixel<256;pixel++){int c=entry.thumbnail().get(pixel);if(c!=0)g.fill(bx+9+(pixel%16)*3,by+9+(pixel/16)*3,bx+12+(pixel%16)*3,by+12+(pixel/16)*3,c);}
             g.text(font,font.plainSubstrByWidth(entry.name(),242),bx+64,by+10,0xffdce6ef,false);g.text(font,font.plainSubstrByWidth(entry.author().isBlank()?"Unspecified author":entry.author(),242),bx+64,by+27,0xff9db5cb,false);
             g.text(font,(entry.blocks()<0?"Imported schematic":entry.blocks()+" blocks · "+entry.size().coordinates()),bx+64,by+44,0xff9db5cb,false);g.text(font,font.plainSubstrByWidth(entry.tags(),298),bx+8,by+65,0xffa9c9e3,false);g.text(font,font.plainSubstrByWidth(entry.file(),298),bx+8,by+82,0xff829ab0,false);
