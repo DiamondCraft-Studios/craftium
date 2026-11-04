@@ -1,0 +1,38 @@
+// Keeps Minecraft's options.txt the same in every development client. Each Minecraft version and each checkout (worktrees included)
+// runs in its own run/ folder, so left alone every one of them would start with default options. Before the client starts, the
+// global file is copied into its run/ folder; after it closes (even if it crashed), the file it saved is copied back out.
+// The first client to run with no global file yet seeds it.
+// Location: ~/.craftium/options.txt, or the path in the CRAFTIUM_OPTIONS environment variable.
+// The game test runs are left alone, because they need options they can rely on.
+def globalOptions = providers.environmentVariable('CRAFTIUM_OPTIONS').map { file(it) }
+        .orElse(providers.systemProperty('user.home').map { file("$it/.craftium/options.txt") })
+
+// The folder the development client runs in, as Loom set it (run/ by default).
+def runDir = { file(loom.runs.getByName('client').runDir) }
+
+def pull = tasks.register('pullGlobalOptions') {
+    doLast {
+        def global = globalOptions.get()
+        def local = new File(runDir(), 'options.txt')
+        if (global.exists()) {
+            local.parentFile.mkdirs()
+            local.bytes = global.bytes
+        }
+    }
+}
+
+def push = tasks.register('pushGlobalOptions') {
+    doLast {
+        def global = globalOptions.get()
+        def local = new File(runDir(), 'options.txt')
+        if (local.exists()) {
+            global.parentFile.mkdirs()
+            global.bytes = local.bytes
+        }
+    }
+}
+
+tasks.named('runClient') {
+    dependsOn pull
+    finalizedBy push
+}
