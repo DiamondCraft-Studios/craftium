@@ -63,6 +63,10 @@ public final class CraftiumClient implements ClientModInitializer {
         // What the shared placement mixins ask about the local player; only when the server runs the mod too, as it must agree with the client.
         dev.craftium.runtime.PlayerCapabilities.client=player->{var mc=Minecraft.getInstance();return player==mc.player&&player.isCreative()&&vanillaPlacement()?ClientState.options:null;};
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
+        if(Boolean.getBoolean("craftium.maximize")){ // set by the development run configuration, so the test client opens maximized
+            var once=new boolean[1];
+            ClientTickEvents.END_CLIENT_TICK.register(mc->{if(!once[0]){once[0]=true;GLFW.glfwMaximizeWindow(mc.getWindow().handle());}});
+        }
         UseBlockCallback.EVENT.register((player,level,hand,hit)->{
             var o=ClientState.options;
             boolean block=player.getMainHandItem().getItem() instanceof BlockItem;
