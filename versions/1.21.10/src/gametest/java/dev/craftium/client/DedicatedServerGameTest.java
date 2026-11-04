@@ -58,6 +58,7 @@ public final class DedicatedServerGameTest implements FabricClientGameTest {
                 largeSelection();
                 builder();
                 bucketFill();
+                blockStep();
                 entities();
                 worldRules();
                 libraries();
@@ -199,6 +200,20 @@ public final class DedicatedServerGameTest implements FabricClientGameTest {
         ctx.runOnClient(mc -> ClientState.options.selectionPoints.clear());
         System.out.println(TAG + "fragmented_selection 16000");
     }
+
+    /** Block step raises the player's step height to a whole block on the server, and takes it away again. */
+    private void blockStep() {
+        options(o -> o.blockStep = true);
+        request("status", null);
+        ctx.waitTicks(5);
+        require(stepHeight() >= 1.0, "Block step did not raise the step height: " + stepHeight());
+        options(o -> o.blockStep = false);
+        request("status", null);
+        ctx.waitTicks(5);
+        require(stepHeight() < 1.0, "Block step did not give the step height back: " + stepHeight());
+        System.out.println(TAG + "block step on off");
+    }
+    private double stepHeight() {return server.computeOnServer(s -> s.getPlayerList().getPlayers().get(0).getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.STEP_HEIGHT));}
 
     private void bucketFill() {
         server.runCommand("fill 0 " + Y + " 6 2 " + Y + " 6 stone");

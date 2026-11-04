@@ -111,7 +111,7 @@ public final class EditorServer {
             s.dimension=player.level().dimension();
             HistoryStore.attach(player,s);
             if(o.noClip&&!s.noClip&&player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}
-            s.reach=o.reach==null?Options.ReachMode.NORMAL:o.reach;s.farReach=Math.clamp(o.farReach,6,64);s.noClip=o.noClip;s.options=o;
+            s.reach=o.reach==null?Options.ReachMode.NORMAL:o.reach;s.farReach=Math.clamp(o.farReach,6,64);s.noClip=o.noClip;s.blockStep=o.blockStep;s.options=o;
             s.confirmEdits=o.confirmEdits;
             s.currentAction=r.action();s.recordSelection=changesSelection(r.action(),o);
             // The builder and the clipboard placement preview have their own confirmation, and dropping a block in the world is one, so they apply straight away.
@@ -598,11 +598,20 @@ public final class EditorServer {
         AnimatedRebuild.tick(server);
         if(++historyTicks%100==0)for(var session:SESSIONS.values())HistoryStore.save(session);
         var reachId=dev.craftium.compat.Compat.id("craftium","builder_reach");
+        var stepId=dev.craftium.compat.Compat.id("craftium","block_step");
         for(var player:server.getPlayerList().getPlayers()){
             var s=SESSIONS.get(player.getUUID());
             var range=player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.BLOCK_INTERACTION_RANGE);
             // Reach is the game's own block interaction range, raised for as long as the capability is on, so every vanilla check agrees with it.
             var mode=s!=null&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities")?s.reach:Options.ReachMode.NORMAL;
+            // Block step is the game's own step height, raised to a whole block for as long as the capability is on, so walking up a block works like a slab.
+            var step=player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.STEP_HEIGHT);
+            if(step!=null){
+                double lift=s!=null&&s.blockStep&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities")?Math.max(0,1-step.getBaseValue()):0;
+                var held=step.getModifier(stepId);
+                if(held!=null&&(lift==0||held.amount()!=lift))step.removeModifier(stepId);
+                if(lift!=0&&step.getModifier(stepId)==null)step.addTransientModifier(new net.minecraft.world.entity.ai.attributes.AttributeModifier(stepId,lift,net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE));
+            }
             if(range!=null){
                 double extra=switch(mode){case NORMAL->0;case FAR->s.farReach-range.getBaseValue();case INFINITE->250;};
                 var current=range.getModifier(reachId);
