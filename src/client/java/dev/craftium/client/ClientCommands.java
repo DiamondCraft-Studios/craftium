@@ -24,6 +24,9 @@ final class ClientCommands {
             root.then(literal("intro").executes(c->{pending=()->ClientCompat.setScreen(Minecraft.getInstance(),new ReportScreen(null,"CRAFTIUM\n\nRight Shift: editor\nHold Left Alt: builder settings\n0: tenth-slot builder tools\nAlt + scroll: change builder tool\nLMB / RMB: first / second corner\nMMB: select or expand a face\nScroll: preview and nudge; X/Y/Z restrict axis\nRMB: confirm preview\nCtrl+Z / Ctrl+Y: undo / redo\n\nInstall Craftium and Fabric API on both client and server. Editing requires Creative mode and operator level 2.\n\nAxiom documentation inspired these independent tools. See docs/PARITY-AUDIT.md for remaining differences."));return 1;}));
             root.then(literal("docs").executes(c->{c.getSource().sendFeedback(Component.literal("Craftium: README.md and docs/FEATURES.md in your download. Axiom reference: https://axiomdocs.moulberry.com/"));return 1;}));
             root.then(literal("status").executes(c->{c.getSource().sendFeedback(Component.literal(CraftiumClient.supported()?"Craftium connected · "+ClientState.status.message():"Craftium server channel unavailable. Install the same Craftium version and Fabric API on the server."));return 1;}));
+            root.then(literal("ai").executes(c->{c.getSource().sendFeedback(Component.literal(aiStatus()));return 1;})
+                .then(literal("on").executes(c->{ClientState.options.aiBridge=true;AiBridge.start();ClientState.save();c.getSource().sendFeedback(Component.literal(aiStatus()));return 1;}))
+                .then(literal("off").executes(c->{ClientState.options.aiBridge=false;AiBridge.stop();ClientState.save();c.getSource().sendFeedback(Component.literal(aiStatus()));return 1;})));
             root.then(literal("reset").executes(c->{pending=()->{CraftiumClient.resetEditor();if(CraftiumClient.supported())CraftiumClient.send("editor_reset",null,null);ClientState.notify("Editor reset");};return 1;}));
             root.then(literal("handshake").executes(c->{CraftiumClient.send("status",null,null);return 1;}));
             root.then(literal("enablecheats").executes(c->{var server=Minecraft.getInstance().getSingleplayerServer();if(server==null){c.getSource().sendError(Component.literal("This command is available only in your local singleplayer world"));return 0;}server.execute(()->ClientCompat.enableCheats(server));c.getSource().sendFeedback(Component.literal("Cheats enabled for this local world"));return 1;}));
@@ -36,6 +39,7 @@ final class ClientCommands {
         });
         ClientSendMessageEvents.COMMAND.register(command->{String[] pieces=command.strip().split("\\s+",2);if(pieces[0].equals("/pos1")||pieces[0].equals("/pos2"))try{position(pieces[0].equals("/pos1")?1:2,pieces.length==2?pieces[1]:"");}catch(IllegalArgumentException e){ClientState.notify(e.getMessage());}});
     }
+    private static String aiStatus(){return AiBridge.running()?"Craftium AI bridge is on (127.0.0.1:"+AiBridge.port()+"). Connect Claude Desktop with the craftium-mcp extension. /craftium ai off turns it off.":"Craftium AI bridge is off. /craftium ai on lets an AI app on this computer build in your selection; builds are shown as a preview until applied.";}
     static void tick(){Runnable action=pending;pending=null;if(action!=null)action.run();}
     static void reset(){pos1=pos2=null;pending=null;}
     private static void position(int corner,String coordinates){

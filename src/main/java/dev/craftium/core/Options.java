@@ -111,6 +111,8 @@ public final class Options {
     public int polygonSides=6,fluidHeight=100,fontSize=16,textThickness=1,modelColumns=4;
     /** The build an AI client described, as a {@link BuildSpec}; read only by the ai_build_preview action. */
     public String buildSpec="";
+    /** Whether the client listens on this computer for an AI client (the craftium-mcp shim) to drive the editor. Off until the player turns it on. */
+    public boolean aiBridge;
     public String fontName="SansSerif",fontFile="",heightmap="",name="Untitled",entityType="block_display",entityNbt="{}",property="";
     public boolean useBuiltinFont=true,textShadow,fullBlocks=true,denoise=true,maskY,fastPlace,angelPlacement,noClip;
     /** How far blocks can be reached: the game's own range, 64 blocks, or as far as can be aimed. */
