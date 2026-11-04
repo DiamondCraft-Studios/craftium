@@ -151,6 +151,8 @@ public final class EditorServer {
                 if(!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly())s.undo.removeFirst();
                 if(s.selectionBefore!=null){s.selection.restore(s.selectionBefore);s.selectionBefore=null;}send(player,s,"Selection cancelled",false);return;}
             if(r.action().equals("select_box")||r.action().equals("lasso_select")||r.action().equals("use")&&o.tool.selection())s.selectionBefore=new ArrayList<>(s.selection.points());
+            if(r.action().equals("select_box")||r.action().equals("select_box_adjust")){if(o.position1!=null&&o.position2!=null)s.cornersNow=dev.craftium.core.Restore.points(o.position1,o.position2);}
+            else if(changesSelection(r.action(),o))s.cornersNow="none";
             if(r.action().equals("gamemode")||r.action().startsWith("gamemode_")) {
                 s.previousMode=null; // choosing a mode by hand replaces whatever the editor would have restored
                 boolean wasSpectator=player.isSpectator();
@@ -689,11 +691,15 @@ public final class EditorServer {
         var after=new ArrayList<>(s.selection.points());
         if(s.recordSelection&&!after.equals(s.historySelection)){
             var before=s.historySelection;
+            Map<String,String> handlesBefore=Map.of(),handlesAfter=Map.of();
+            if(!s.cornersNow.equals(s.cornersHistory)){handlesBefore=Map.of("corners",s.cornersHistory);handlesAfter=Map.of("corners",s.cornersNow);}
             // Dragging a box handle redoes the same selection many times: keep one entry, from where it began.
-            if(s.currentAction.equals("select_box_adjust")&&!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly()){before=s.undo.removeFirst().selection().before();}
-            s.remember(Session.Edit.selecting(selectionName(s.currentAction,after.size()),new Session.SelectionChange(before,after)));
+            if(s.currentAction.equals("select_box_adjust")&&!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly()){
+                var began=s.undo.removeFirst().selection();before=began.before();handlesBefore=began.restoreBefore();
+            }
+            s.remember(Session.Edit.selecting(selectionName(s.currentAction,after.size()),new Session.SelectionChange(before,after,null,null,handlesBefore,handlesAfter)));
         }
-        s.historySelection=after;s.historyRevision=s.selection.revision();
+        s.historySelection=after;s.historyRevision=s.selection.revision();s.cornersHistory=s.cornersNow;
     }
     /** How long ago the edit was made, in milliseconds; -1 for none, and a very large age when its time is unknown. */
     private static long age(Session.Edit edit){return edit==null?-1:edit.time()==0?Long.MAX_VALUE/4:Math.max(0,System.currentTimeMillis()-edit.time());}
