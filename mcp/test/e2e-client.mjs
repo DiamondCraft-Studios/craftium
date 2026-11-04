@@ -28,13 +28,12 @@ console.log(`E2E tools ${tools.length}`);
 const state = await call("get_state");
 const [px, py, pz] = state.player.block;
 const x = px + 8, y = py, z = pz + 8;
-await call("set_selection", { from: [x, y, z], to: [x + 8, y + 5, z + 8] });
 await call("preview_build", {
   spec: {
     palette: { sand: "minecraft:sandstone", gold: "minecraft:gold_block" },
     ops: [
-      { op: "pyramid", base: [4, 0, 4], radius: 4, height: 5, block: "sand" },
-      { op: "set", at: [4, 5, 4], block: "gold" },
+      { op: "pyramid", base: [x + 4, y, z + 4], radius: 4, height: 5, block: "sand" },
+      { op: "set", at: [x + 4, y + 5, z + 4], block: "gold" },
     ],
   },
 });

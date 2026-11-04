@@ -54,7 +54,7 @@ test("lists every tool with its hints, and the server's instructions", async () 
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "clear_selection", "get_blocks", "get_palette", "get_screenshot", "get_state", "get_surface", "preview_build", "render_view", "set_selection", "undo"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "get_blocks", "get_palette", "get_screenshot", "get_state", "get_surface", "preview_build", "render_view", "undo"]);
   assert.equal(tools.find((t) => t.name === "get_state").annotations.readOnlyHint, true);
   assert.equal(tools.find((t) => t.name === "apply_preview").annotations.destructiveHint, true);
   assert.match(tools.find((t) => t.name === "preview_build").description, /cylinder/);
@@ -128,10 +128,23 @@ test("get_surface passes its corners and kind to the bridge and nothing else", a
   await bridge.close();
 });
 
+test("preview_build passes the spec with its origin, and there are no selection tools", async () => {
+  const bridge = await fakeBridge({ preview_build: { ok: true, message: "AI preview ready: 4 blocks" } });
+  const client = await connect(bridge.file);
+  const spec = { origin: [100, 64, -20], palette: { s: "stone" }, ops: [{ op: "set", at: [0, 0, 0], block: "s" }] };
+  const result = await client.callTool({ name: "preview_build", arguments: { spec: { ...spec, sneaky: 1 } } });
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(bridge.seen[0].body, { spec });
+  const { tools } = await client.listTools();
+  assert.equal(tools.some((t) => /selection/.test(t.name)), false);
+  assert.match(tools.find((t) => t.name === "preview_build").description, /WORLD/);
+  await bridge.close();
+});
+
 test("bad arguments are rejected before they reach the game", async () => {
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
-  for (const [name, args] of [["set_selection", { from: [0, 0], to: [1, 1, 1] }], ["get_blocks", { from: [0, 0, 0] }], ["get_surface", { from: [0, 0, 0], to: [1, 1, 1], kind: "water" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], angle: "above" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], preview: "yes" }], ["set_selection", { from: [0.5, 0, 0], to: [1, 1, 1] }], ["preview_build", { spec: { ops: [] } }], ["preview_build", { spec: "not an object" }]]) {
+  for (const [name, args] of [["get_blocks", { from: [0, 0, 0] }], ["get_blocks", { from: [0, 0], to: [1, 1, 1] }], ["get_surface", { from: [0, 0, 0], to: [1, 1, 1], kind: "water" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], angle: "above" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], preview: "yes" }], ["get_blocks", { from: [0.5, 0, 0], to: [1, 1, 1] }], ["preview_build", { spec: { ops: [] } }], ["preview_build", { spec: { ops: [{ op: "set" }], origin: [0, 0] } }], ["preview_build", { spec: "not an object" }]]) {
     const result = await client.callTool({ name, arguments: args });
     assert.equal(result.isError, true, `${name} ${JSON.stringify(args)}`);
   }

@@ -62,14 +62,21 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             ctx.runOnClient(mc -> mc.getConnection().sendCommand("fill " + x + " " + y + " " + z + " " + (x + 6) + " " + (y + 12) + " " + (z + 6) + " air"));
             ctx.waitTicks(10);
 
-            var selected = call("set_selection", "{\"from\":[" + x + "," + y + "," + z + "],\"to\":[" + (x + 4) + "," + (y + 9) + "," + (z + 4) + "]}");
-            require(selected.get("ok").getAsBoolean(), "set_selection: " + selected);
-            require(selected.getAsJsonObject("state").getAsJsonObject("selection").get("size").getAsInt() == 250, "selection size: " + selected);
-            System.out.println("CRAFTIUM_AI selected " + selected.get("message").getAsString());
+            // The player's own selection, made the way the editor makes it. The AI never changes it.
+            ctx.runOnClient(mc -> {
+                var o = ClientState.options;
+                o.position1 = new dev.craftium.core.Point(x + 20, y, z + 20);
+                o.position2 = new dev.craftium.core.Point(x + 21, y + 1, z + 21);
+                o.mode = dev.craftium.core.Selection.Mode.REPLACE;
+                CraftiumClient.send("select_box", o.position1, null);
+            });
+            ctx.waitTicks(10);
+            var mine = call("get_state", "{}").getAsJsonObject("selection");
+            require(mine.get("size").getAsInt() == 8, "the player's own selection should be 8 blocks: " + mine);
 
             String spec = "{\"palette\":{\"sand\":\"minecraft:cut_sandstone\",\"cap\":\"minecraft:smooth_sandstone\"},\"ops\":["
-                    + "{\"op\":\"cylinder\",\"base\":[2,0,2],\"radius\":2,\"height\":8,\"block\":\"sand\"},"
-                    + "{\"op\":\"box\",\"from\":[0,8,0],\"to\":[4,9,4],\"block\":\"cap\"}]}";
+                    + "{\"op\":\"cylinder\",\"base\":[" + (x + 2) + "," + y + "," + (z + 2) + "],\"radius\":2,\"height\":8,\"block\":\"sand\"},"
+                    + "{\"op\":\"box\",\"from\":[" + x + "," + (y + 8) + "," + z + "],\"to\":[" + (x + 4) + "," + (y + 9) + "," + (z + 4) + "],\"block\":\"cap\"}]}";
             var bad = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"cylinder\",\"base\":[0,0,0],\"block\":\"stone\"}]}}");
             require(!bad.get("ok").getAsBoolean() && bad.get("error").getAsString().contains("ops[0]"), "a bad spec should explain itself: " + bad);
             var preview = call("preview_build", "{\"spec\":" + spec + "}");
@@ -78,7 +85,8 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(ghost > 100, "preview should hold blocks as a ghost, had " + ghost);
             ctx.waitTicks(5);
             ctx.takeScreenshot("ai-preview");
-            require(ctx.computeOnClient(mc -> ClientState.pending.ai), "an AI preview should be marked as the AI's");
+            require(ctx.computeOnClient(mc -> ClientState.hasAiPending() && ClientState.aiPending.ai), "the AI's preview should be held as the AI's own");
+            require(ctx.computeOnClient(mc -> !ClientState.hasPending()), "the AI's preview must not become the player's own pending edit");
 
             // What the player sees, as a screenshot: it is not turned or moved for it.
             float yawBefore = ctx.computeOnClient(mc -> mc.player.getYRot());
@@ -149,6 +157,35 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             for (int i = 0; i < 200 && !ctx.computeOnClient(mc -> mc.level.getBlockState(new BlockPos(x + 2, y + 3, z + 2)).isAir()); i++) ctx.waitTick();
             require(ctx.computeOnClient(mc -> mc.level.getBlockState(new BlockPos(x + 2, y + 3, z + 2)).isAir()), "undo did not remove the pillar");
             System.out.println("CRAFTIUM_AI undo_ok");
+            var after = call("get_state", "{}");
+            require(after.getAsJsonObject("selection").get("size").getAsInt() == 8 && after.get("undoSteps").getAsInt() == 0,
+                    "the AI must leave the player's selection alone, and its undo list is empty again: " + after);
+            System.out.println("CRAFTIUM_AI selection_untouched");
+
+            // A build far from the player, in ground nobody has loaded: previewed, applied and undone without anyone going there.
+            int fx = block.get(0).getAsInt() + 3000, fz = block.get(2).getAsInt() + 3000;
+            require(!ctx.computeOnClient(mc -> mc.level.getChunkSource().hasChunk(fx >> 4, fz >> 4)), "the far build site should not be loaded on the client");
+            String farSpec = "{\"ops\":[{\"op\":\"pyramid\",\"base\":[" + fx + ",150," + fz + "],\"radius\":4,\"height\":5,\"block\":\"minecraft:sandstone\"}]}";
+            var farPreview = call("preview_build", "{\"spec\":" + farSpec + "}");
+            require(farPreview.get("ok").getAsBoolean() && farPreview.getAsJsonObject("state").get("previewBlocks").getAsInt() > 20, "a far preview: " + farPreview);
+            var farApplied = call("apply_preview", "{}");
+            require(farApplied.get("ok").getAsBoolean(), "a far apply: " + farApplied);
+            JsonObject farRead = null;
+            for (int i = 0; i < 100; i++) {
+                ctx.waitTick();
+                farRead = call("get_blocks", "{\"from\":[" + fx + ",150," + fz + "],\"to\":[" + fx + ",150," + fz + "]}");
+                if (farRead.get("ok").getAsBoolean() && farRead.getAsJsonArray("palette").toString().contains("minecraft:sandstone")) break;
+            }
+            require(farRead != null && farRead.getAsJsonArray("palette").toString().contains("minecraft:sandstone"), "the far pyramid was not built: " + farRead);
+            var farUndone = call("undo", "{}");
+            require(farUndone.get("ok").getAsBoolean(), "a far undo: " + farUndone);
+            for (int i = 0; i < 100; i++) {
+                ctx.waitTick();
+                farRead = call("get_blocks", "{\"from\":[" + fx + ",150," + fz + "],\"to\":[" + fx + ",150," + fz + "]}");
+                if (farRead.get("ok").getAsBoolean() && !farRead.getAsJsonArray("palette").toString().contains("minecraft:sandstone")) break;
+            }
+            require(!farRead.getAsJsonArray("palette").toString().contains("minecraft:sandstone"), "the far undo did not remove the pyramid: " + farRead);
+            System.out.println("CRAFTIUM_AI far_build_ok");
 
             // Cancelling drops the preview without touching the world.
             call("preview_build", "{\"spec\":" + spec + "}");

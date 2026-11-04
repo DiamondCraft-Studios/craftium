@@ -4,7 +4,7 @@
   "display_name": "Craftium",
   "version": "0.1.0",
   "description": "Build in Minecraft by chatting: Claude previews builds as a ghost in your game and applies them when you say so.",
-  "long_description": "Connects Claude Desktop to the Craftium Minecraft mod running on this computer. Ask for a build (for example an Egyptian pillar) and Claude selects an area, describes the build as shapes, and shows it as a ghost preview in your game. Nothing changes in your world until you approve it, and every build can be undone.\n\nIn Minecraft, open the editor, choose the AI menu and Turn on AI building once (or type /craftium ai on) to let this extension connect. It only talks to your own computer.",
+  "long_description": "Connects Claude Desktop to the Craftium Minecraft mod running on this computer. Ask for a build (for example an Egyptian pillar) and Claude looks at the world, describes the build as shapes, and shows it as a ghost preview in your game. Nothing changes in your world until you approve it, and every build can be undone.\n\nIn Minecraft, open the editor, choose the AI menu and Turn on AI building once (or type /craftium ai on) to let this extension connect. It only talks to your own computer.",
   "author": { "name": "Craftium contributors" },
   "license": "MIT",
   "keywords": ["minecraft", "craftium", "building"],
@@ -21,18 +21,16 @@
     }
   },
   "tools": [
-    { "name": "get_state", "description": "Player position, selection and preview status" },
+    { "name": "get_state", "description": "Player position, their selection and your preview status" },
     { "name": "get_blocks", "description": "Read the blocks in a box of the world" },
     { "name": "get_surface", "description": "Read the ground height of an area" },
     { "name": "get_palette", "description": "The player's block palette" },
     { "name": "get_screenshot", "description": "See what the player sees, including the preview" },
     { "name": "render_view", "description": "Draw a picture of a box of the world from any angle" },
-    { "name": "set_selection", "description": "Select the area to build in" },
-    { "name": "clear_selection", "description": "Deselect everything" },
     { "name": "preview_build", "description": "Show a build as a ghost preview" },
     { "name": "apply_preview", "description": "Build the previewed blocks" },
     { "name": "cancel_preview", "description": "Discard the preview" },
-    { "name": "undo", "description": "Undo the last edit" }
+    { "name": "undo", "description": "Undo the last build you applied" }
   ],
   "user_config": {
     "minecraft_dir": {

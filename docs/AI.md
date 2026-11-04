@@ -1,6 +1,6 @@
 # AI building with Claude Desktop
 
-Craftium can be driven from an AI app such as Claude Desktop. You chat in the AI app ("build me an Egyptian pillar here"), Claude picks an area and describes the build as a handful of shapes, and Craftium shows it as a **ghost preview** in your game. Nothing changes in the world until the build is applied, and every applied build is one undo step.
+Craftium can be driven from an AI app such as Claude Desktop. You chat in the AI app ("build me an Egyptian pillar here"), Claude looks at the world and describes the build as a handful of shapes, and Craftium shows it as a **ghost preview** in your game. Nothing changes in the world until the build is applied, and every applied build is one undo step.
 
 It runs on your own Claude subscription through the AI app. Craftium never sees your account and needs no API key.
 
@@ -17,9 +17,9 @@ Claude Desktop ──stdio──▶ craftium-mcp (Node) ──127.0.0.1──▶
 
 A preview made by an AI app is drawn in **violet**, so it is never mistaken for your own blue edit previews, and the marker reads **AI preview** while one is waiting.
 
-While AI building is on, a small **AI** marker shows in the bottom right corner of the game: amber while it waits for the AI app, green once the app has connected, and blue while a request is being answered. The **AI** menu also has **Apply AI preview**, **Discard AI preview** and **Undo last edit**, so you can approve a build without going back to the chat, and **AI status and setup…**, a page with the same status, the last request and the steps above.
+While AI building is on, a small **AI** marker shows in the bottom right corner of the game: amber while it waits for the AI app, green once the app has connected, and blue while a request is being answered. The **AI** menu also has **Apply AI preview**, **Discard AI preview** and **Undo last AI build**, so you can approve a build without going back to the chat, and **AI status and setup…**, a page with the same status, the last request and the steps above.
 
-Then ask Claude for a build while the game is open. Claude can select an area in front of you, or you can select one yourself first. Look at the ghost in the game, ask for changes, and say when to apply it.
+Then ask Claude for a build while the game is open. Claude works on the world itself: it does not need you to select anything, never moves or turns you, and can build anywhere in the world (see [Claude's workspace](#claudes-workspace)). If you have selected an area it takes that as a hint of where you want the build. Look at the ghost in the game, ask for changes, and say when to apply it.
 
 ## Getting the extension
 
@@ -38,18 +38,26 @@ Then ask Claude for a build while the game is open. Claude can select an area in
 
 | Tool | Does |
 | --- | --- |
-| `get_state` | Your position and facing, the selection, and whether a preview is waiting |
+| `get_state` | Your position and facing, the area you have selected (yours, and never changed by Claude), and whether Claude's preview is waiting |
 | `get_blocks` | Reads the blocks in a box (up to 32,768 at a time), anywhere in the world: the server reads them, so ground your game has not loaded is real blocks and not air |
 | `get_surface` | The top block of every column in an area (up to 128 by 128), to find ground level |
 | `get_palette` | Your current block and recently used blocks |
 | `get_screenshot` | A picture of what you see in the game, including the preview |
 | `render_view` | Claude's own camera: a picture of any box of the world from an angle it picks (see [Claude's own view](#claudes-own-view)), so it can check its work without touching your view |
-| `set_selection`, `clear_selection` | Chooses the area builds go in |
 | `preview_build` | Shows a build as a ghost, replacing any earlier preview |
-| `apply_preview` | Builds the preview, as one undoable step |
-| `cancel_preview`, `undo` | Discards the preview, or undoes your last edit |
+| `apply_preview` | Builds the preview, as one undoable step, loading the ground first if nobody is near it |
+| `cancel_preview`, `undo` | Discards the preview, or undoes the last build Claude applied (never your own edits) |
 
 Claude cannot do anything the editor cannot. Every request goes through the same checks as your own edits: server permissions, protected areas, WorldGuard, the world border and size limits.
+
+## Claude's workspace
+
+Claude has a workspace of its own, apart from yours. It never uses or changes your selection, your preview or your undo history, and it never moves or turns you.
+
+- **Its preview** is held separately and drawn in violet. You apply or discard it from the **AI** menu (Enter and Esc still belong to your own edits).
+- **Its undo** only covers builds Claude applied. **Undo last AI build** and the `undo` tool undo those, and nothing else; your own Ctrl+Z is unchanged. This list is not saved: it is dropped when you leave the world, reconnect or change dimension.
+- **Building far away works.** A build is planned and applied by the server, so it can be anywhere in the dimension you are in, with nobody nearby. The ground it reaches is loaded for it, and ground nobody has visited is made (as flying there would). One build may reach at most **36 chunks that are not already loaded** (a square 96 blocks across); a larger one is refused with a message, so Claude builds closer to loaded ground or in pieces. Undoing a far build loads the ground again in the same way.
+- **You still decide.** A build is always shown as a preview first and applied as a separate step. It goes through the same checks as your own edits: permissions, protected areas, WorldGuard and the world border.
 
 ## Claude's own view
 
@@ -65,19 +73,19 @@ The reads are plain reads: they change nothing, and they need the same permissio
 
 ## Build specs
 
-Claude describes a build as JSON primitives with positions relative to the selection's lowest corner: `box`, `sphere` (or ellipsoid), `cylinder`, `cone`, `pyramid`, `line`, `set` and `replace`. Any operation can be `hollow` (shapes) or `repeat` with a step (a row of columns). A later operation overwrites an earlier one, and `minecraft:air` carves. A palette maps short names to block ids, including states such as `minecraft:sandstone_stairs[facing=north]`.
+Claude describes a build as JSON primitives with positions in **world coordinates**, the same numbers `get_blocks` and `get_surface` report, so it builds at the heights it found. An optional `origin` is added to every coordinate, for a build written near zero and placed anywhere. Nothing is selected first: the area a build covers is worked out from its operations. The primitives are: `box`, `sphere` (or ellipsoid), `cylinder`, `cone`, `pyramid`, `line`, `set` and `replace`. Any operation can be `hollow` (shapes) or `repeat` with a step (a row of columns). A later operation overwrites an earlier one, and `minecraft:air` carves. A palette maps short names to block ids, including states such as `minecraft:sandstone_stairs[facing=north]`.
 
 ```json
 {
   "palette": { "sand": "minecraft:cut_sandstone", "cap": "minecraft:smooth_sandstone" },
   "ops": [
-    { "op": "cylinder", "base": [2, 0, 2], "radius": 2, "height": 8, "block": "sand" },
-    { "op": "box", "from": [0, 8, 0], "to": [4, 9, 4], "block": "cap" }
+    { "op": "cylinder", "base": [102, 64, -38], "radius": 2, "height": 8, "block": "sand" },
+    { "op": "box", "from": [100, 72, -40], "to": [104, 73, -36], "block": "cap" }
   ]
 }
 ```
 
-Limits: 256 operations, 64 repeats, radius 128, at most 256 blocks along each side of the selection and 131,072 blocks in total. Blocks that fall outside the selection are dropped. The server rejects unknown block ids, with a message naming the operation at fault, so Claude can correct itself.
+Limits: 256 operations, 64 repeats, radius 128, a build that spans at most 256 blocks along each side, and 131,072 blocks in total; a spec that reaches further is refused with a message saying which side. The ground a build reaches is loaded for it (see [Claude's workspace](#claudes-workspace)). The server rejects unknown block ids, with a message naming the operation at fault, so Claude can correct itself.
 
 A build ignores your brush settings (mask, symmetry, height range) and places exactly what the spec says. It does not check that blocks such as torches have support. Primitives suit pillars, walls, towers, domes and similar shapes; organic shapes such as trees or terrain are better done with the brush tools.
 
@@ -86,7 +94,7 @@ A build ignores your brush settings (mask, symmetry, height range) and places ex
 - The bridge is **off until you turn it on**, and it listens on `127.0.0.1` only.
 - Each launch writes a new random token to `config/craftium/bridge.json`. Requests without it are refused, as are requests that come from a web page (they carry an `Origin`) or name another host.
 - `get_screenshot` sends a picture of your game window (at most 1024 pixels wide) to the AI app, so close anything private on screen first. It is only taken when the AI app asks, and the corner marker shows **AI working…** while it does. `render_view` does not use your screen at all: it draws from block data, so it shows nothing but blocks.
-- Builds are always staged as a ghost first, even if you have turned confirmation off for your own edits. Applying is a separate step.
+- Builds are always staged as a ghost first, even if you have turned confirmation off for your own edits. Applying is a separate step. The ghost is Claude's own, so it cannot be applied by accident with your own Enter key.
 - The file is deleted when the bridge stops. If Minecraft crashes and leaves it behind, the extension reports that the game is not running.
 - Anyone who can read your Minecraft folder or run programs as you can read the token, as with any local app. Turn the bridge off when you are not using it.
 
@@ -131,12 +139,13 @@ Under `--permission` the process can read only those two folders and cannot star
 - **"Craftium refused the connection"**: Minecraft restarted and the token changed. Try again, or run `/craftium ai off` then `/craftium ai on`.
 - **"Craftium on the server"**: the world needs Craftium on the server too, as for the editor. In singleplayer this is automatic.
 - **Errors like `ops[2] (cylinder): missing number "radius"`** are the spec's fault, not yours. Claude gets the message and retries.
+- **"That build reaches more than 36 chunks that are not loaded"**: the build is too large for ground nobody has visited. Claude builds closer to loaded ground, or in smaller pieces.
 - Nothing builds on a server: you need the `craftium.edit` permission and Creative mode, as for normal editing.
 
 ## For developers
 
 - Bridge: [AiBridge.java](../src/client/java/dev/craftium/client/AiBridge.java). A small loopback HTTP server (no JDK HTTP module, since Minecraft's bundled runtime may omit it) answering `POST /<tool>` with a JSON body and `Authorization: Bearer <token>`. Requests are spaced 120 ms apart because the server silently drops requests that follow another within 65 ms.
-- Build specs: [BuildSpec.java](../src/main/java/dev/craftium/core/BuildSpec.java) (pure, unit tested) and [BuildPlanner.java](../src/main/java/dev/craftium/server/BuildPlanner.java), reached by the `ai_build_preview` request. Apply and cancel reuse `pending_confirm` and `pending_cancel`.
+- Build specs: [BuildSpec.java](../src/main/java/dev/craftium/core/BuildSpec.java) (pure, unit tested) and [BuildPlanner.java](../src/main/java/dev/craftium/server/BuildPlanner.java), reached by the `ai_build_preview` request. `BuildSpec.place()` works out the area from the operations, so no selection is needed. The AI's workspace is a second `Session` per player in `EditorServer` (`AI_SESSIONS`), used through `ai_build_preview`, `ai_apply`, `ai_cancel` and `ai_undo`. Its statuses are described through the player's own session, with the AI's preview and undo count in the status fields `aiPendingData`, `aiUndo` and `aiUndoName`. Jobs for it load chunks as they go (`Job.load`), and `AiWorld.MAX_BUILD_CHUNKS` caps how many a build may make.
 - Pictures: [VoxelView.java](../src/main/java/dev/craftium/core/VoxelView.java) is the pure renderer (unit tested, no game needed) and [AiView.java](../src/client/java/dev/craftium/client/AiView.java) gathers the blocks, block colours and preview for it. `render_view` reuses `ai_blocks` for the data, in 32-block tiles.
 - Server reads: [AiWorld.java](../src/main/java/dev/craftium/server/AiWorld.java) answers the `ai_blocks`, `ai_surface` and `ai_surface_floor` requests with a `Packets.AiReply` (the `ai_reply` message on Paper). Their limits are the constants at the top of that file (`MAX_BLOCKS`, `MAX_COLUMNS`, `MAX_NEW_CHUNKS`, `MAX_REPLY`); change them there and in the tool descriptions in [mcp/src/tools.js](../mcp/src/tools.js), and update this page. These requests carry their two corners in `target` and `normal`, so `EditorServer` handles them before it checks `normal` as a direction.
 - MCP server: [mcp/](../mcp), with no run-time dependencies. `npm test` starts the real server and talks to it with the official MCP client (a test-only dependency) against a fake bridge, and also checks the limits in `contract.test.js`. `npm run pack` builds the `.mcpb`.

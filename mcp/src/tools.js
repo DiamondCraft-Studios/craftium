@@ -3,10 +3,11 @@
 
 export class ArgumentError extends Error {}
 
-const relative = "Coordinates are [x, y, z] whole numbers RELATIVE to the minimum corner of the selection (so [0,0,0] is its lowest corner and y is up).";
+const coordinates = "Coordinates are [x, y, z] whole numbers in the WORLD (y is up), the same numbers get_blocks and get_surface use, so read the ground first and build at the heights you found. Nothing has to be selected: the area a build covers is worked out from its operations.";
 
-export const BUILD_SPEC_GUIDE = `A build spec is JSON: {"palette": {...}, "ops": [...]}.
-${relative}
+export const BUILD_SPEC_GUIDE = `A build spec is JSON: {"palette": {...}, "ops": [...], "origin": [x,y,z]}.
+${coordinates}
+origin (optional): added to every coordinate, so a build can be written near [0,0,0] and placed anywhere.
 palette (optional): maps short names to block ids, e.g. {"sand": "minecraft:cut_sandstone", "slab": "minecraft:smooth_sandstone_slab[type=top]"}. Any block field may use a palette name or a block id with optional [state=value] properties. A bare id like "stone" means "minecraft:stone".
 ops run in order; a later op overwrites earlier ones. Use "minecraft:air" to carve.
   box:      {"op":"box","from":[x,y,z],"to":[x,y,z],"block":B,"hollow":false}
@@ -19,18 +20,18 @@ ops run in order; a later op overwrites earlier ones. Use "minecraft:air" to car
   replace:  {"op":"replace","from":[x,y,z],"to":[x,y,z],"find":B,"block":B}   (only changes blocks that are "find")
 Any op may add "repeat": {"count": N, "step": [dx,dy,dz]} to place N copies, e.g. a row of columns.
 "hollow": true keeps only the outer shell (all shapes except line/set/replace).
-Limits: at most 256 ops, 64 repeats, radius 128, 256 blocks along each side of the selection, ~131k blocks in total. Cells outside the selection are dropped.
+Limits: at most 256 ops, 64 repeats, radius 128, a build that spans at most 256 blocks along each side, ~131k blocks in total. The ground a build reaches is loaded for it (at most 36 chunks that were not loaded already), so it can be far from the player.
 Orientation-sensitive blocks (stairs, doors, logs) take properties like "minecraft:sandstone_stairs[facing=north,half=bottom]".`;
 
-export const INSTRUCTIONS = `You can build in the player's Minecraft world through the Craftium mod. Builds are shown as a ghost preview in the game and only change the world when applied.
+export const INSTRUCTIONS = `You can build in the player's Minecraft world through the Craftium mod. Builds are shown as a ghost preview in the game and only change the world when applied. You work on the world itself, in world coordinates: you never move, turn or select anything for the player.
 
 Workflow:
-1. Call get_state. It reports the player's position and facing and the current selection. If the game is not reachable, tell the player to open a world and turn on AI building (in the editor: AI menu, then Turn on AI building; or type /craftium ai on).
-2. Builds go inside the selection. If there is none (or it is the wrong size), choose an area in front of the player sized for the build and call set_selection. Mention the area you chose.
-3. Call preview_build with a build spec. If it returns an error, fix the spec and try again; the error names the operation at fault. A new preview replaces the previous one.
-4. Tell the player to look at the ghost in the game (it is violet). You can look too, without touching the player's view: call render_view on the selection (or any box) from a couple of angles, for example se for a three-quarter view and top for the plan, and judge proportions, gaps and style yourself before showing the player. The player's waiting preview is drawn tinted violet. Adjust with another preview_build if the result or the player wants changes.
-5. Call apply_preview only once the player is happy (or if they asked you to just build it). undo reverses the last applied build. cancel_preview discards a preview.
-Use get_blocks to look at what is already in an area before building around or replacing it, and get_surface to find the ground height; both read the server's world, so they work away from the player too. Reading ground nobody has visited generates it, so a single read may touch at most 16 chunks that are not already loaded: if one is refused for that reason, read a smaller area, or read it in pieces. Reads stay in the dimension the player is in. Prefer a few well-chosen operations over many small ones; Minecraft builds read best with layered shapes, varied blocks and details like slabs, stairs and walls.`;
+1. Call get_state. It reports the player's position and facing, the area they have selected (if any: a hint of where they want a build, which you never change), and whether you have a preview waiting. If the game is not reachable, tell the player to open a world and turn on AI building (in the editor: AI menu, then Turn on AI building; or type /craftium ai on).
+2. Decide where to build: in the player's selection if they made one, otherwise near the player or where they asked. Look before you build: get_surface gives the ground height of an area and get_blocks reads blocks; both work anywhere in the world, not just near the player. Say where you chose to build.
+3. Call preview_build with a build spec in world coordinates. If it returns an error, fix the spec and try again; the error names the operation at fault. A new preview replaces the previous one.
+4. Tell the player to look at the ghost in the game (it is violet). You can look too, without touching the player's view: call render_view on the build's area from a couple of angles, for example se for a three-quarter view and top for the plan, and judge proportions, gaps and style yourself before showing the player. Your waiting preview is drawn tinted violet. Adjust with another preview_build if the result or the player wants changes.
+5. Call apply_preview only once the player is happy (or if they asked you to just build it). undo reverses the last build you applied, never the player's own edits. cancel_preview discards a preview.
+Reading ground nobody has visited generates it, so a single read may touch at most 16 chunks that are not already loaded: if one is refused for that reason, read a smaller area, or read it in pieces. A build may reach 36 such chunks. Reads and builds stay in the dimension the player is in. Prefer a few well-chosen operations over many small ones; Minecraft builds read best with layered shapes, varied blocks and details like slabs, stairs and walls.`;
 
 // ---- argument checks ------------------------------------------------------------------------------------------------
 
@@ -49,6 +50,7 @@ function spec(value) {
   if (value.palette !== undefined && (!plain(value.palette) || !Object.values(value.palette).every((v) => typeof v === "string"))) throw new ArgumentError('"spec.palette" must map names to block ids');
   const out = { ops: value.ops };
   if (value.palette !== undefined) out.palette = value.palette;
+  if (value.origin !== undefined) out.origin = whole(value.origin, "spec.origin");
   return out;
 }
 
@@ -64,7 +66,7 @@ export const TOOLS = [
   {
     name: "get_state",
     title: "Get Craftium state",
-    description: "Where the player is and which way they face, the current selection (corners and dimensions), how many blocks the current preview holds, and undo/redo availability. Call this first.",
+    description: "Where the player is and which way they face, the area they have selected (corners and dimensions; theirs, and never changed by you), how many blocks your waiting preview holds, and how many of your builds can be undone. Call this first.",
     inputSchema: nothing,
     annotations: READ,
     args: () => ({}),
@@ -140,26 +142,10 @@ export const TOOLS = [
     },
   },
   {
-    name: "set_selection",
-    title: "Select an area",
-    description: "Selects the box between two corners (world coordinates, inclusive), replacing the current selection. Builds are placed inside the selection, at most 256 blocks along each side.",
-    inputSchema: box,
-    annotations: CHANGE,
-    args: (a) => ({ from: whole(a.from, "from"), to: whole(a.to, "to") }),
-  },
-  {
-    name: "clear_selection",
-    title: "Clear the selection",
-    description: "Deselects everything.",
-    inputSchema: nothing,
-    annotations: CHANGE,
-    args: () => ({}),
-  },
-  {
     name: "preview_build",
     title: "Preview a build",
     description:
-      "Shows a build as a ghost preview inside the current selection without changing the world, replacing any earlier preview. Describe the build as a spec of primitives.\n\n" + BUILD_SPEC_GUIDE,
+      "Shows a build as a ghost preview at the world coordinates its spec names, without changing the world, replacing any earlier preview. Nothing needs to be selected, and the build can be anywhere in the world the player's dimension reaches. Describe the build as a spec of primitives.\n\n" + BUILD_SPEC_GUIDE,
     inputSchema: {
       type: "object",
       properties: {
@@ -168,7 +154,8 @@ export const TOOLS = [
           description: "The build spec",
           properties: {
             palette: { type: "object", additionalProperties: { type: "string" }, description: "Short names for block ids" },
-            ops: { type: "array", minItems: 1, items: { type: "object" }, description: "Operations, run in order" },
+            origin: coordinate("Added to every coordinate in the spec, [x, y, z]; optional"),
+            ops: { type: "array", minItems: 1, items: { type: "object" }, description: "Operations, run in order, in world coordinates" },
           },
           required: ["ops"],
         },
@@ -181,7 +168,7 @@ export const TOOLS = [
   {
     name: "apply_preview",
     title: "Apply the preview",
-    description: "Builds the previewed blocks in the world as one undoable step. Do this only once the player has seen the preview and is happy with it.",
+    description: "Builds your previewed blocks in the world as one undoable step, loading the ground if no one is near it. Do this only once the player has seen the preview and is happy with it.",
     inputSchema: nothing,
     annotations: DESTRUCTIVE,
     args: () => ({}),
@@ -196,8 +183,8 @@ export const TOOLS = [
   },
   {
     name: "undo",
-    title: "Undo the last edit",
-    description: "Undoes the player's most recent edit in Craftium, such as the last applied build.",
+    title: "Undo your last build",
+    description: "Undoes the last build you applied. Only your own builds are on this list: the player's edits are never undone by it.",
     inputSchema: nothing,
     annotations: DESTRUCTIVE,
     args: () => ({}),
