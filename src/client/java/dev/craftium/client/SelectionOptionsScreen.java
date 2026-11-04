@@ -22,8 +22,14 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
 
     /** One colour setting: what it is called, where it is kept and what it starts as. */
     private record Entry(String group,String name,IntSupplier get,IntConsumer set,IntSupplier fallback){}
-    /** One line width, from 0.1 to 10 pixels. */
-    private record Width(String label,ToDoubleFunction<Options> get,ObjDoubleConsumer<Options> set){}
+    /** One slider for a number: a line width from 0.1 to 10 pixels, or (with {@code percent}) a size shown as a percentage between {@code min} and {@code max} times what it is at 100%. */
+    private record Width(String label,ToDoubleFunction<Options> get,ObjDoubleConsumer<Options> set,double min,double max,boolean percent){
+        Width(String label,ToDoubleFunction<Options> get,ObjDoubleConsumer<Options> set){this(label,get,set,.1,10,false);}
+        /** The slider's own units: pixels, or percent. */
+        double units(double value){return percent?value*100:value;}
+        double fromUnits(double units){return percent?Math.round(units)/100d:Math.round(units*100)/100d;}
+        String show(double units){return percent?Math.round(units)+"%":Double.toString(Math.round(units*100)/100d);}
+    }
 
     private static final List<Entry> ENTRIES=List.of(
         entry("Selection","Outline",o->o.selectionColor,(o,c)->o.selectionColor=c),
@@ -53,9 +59,10 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     private static final List<Entry> RULER_ENTRIES=List.of(
         entry("Ruler","Line",o->o.rulerLineColor,(o,c)->o.rulerLineColor=c),
         entry("Ruler","Knobs",o->o.rulerKnobColor,(o,c)->o.rulerKnobColor=c),
-        entry("Ruler","Knob with the gizmo",o->o.rulerKnobSelectedColor,(o,c)->o.rulerKnobSelectedColor=c),
+        entry("Ruler","Knob (selected)",o->o.rulerKnobSelectedColor,(o,c)->o.rulerKnobSelectedColor=c),
         entry("Length label","Text",o->o.rulerTextColor,(o,c)->o.rulerTextColor=c),
         entry("Length label","Background",o->o.rulerTextBackground,(o,c)->o.rulerTextBackground=c));
+    private static final List<Width> RULER_WIDTHS=List.of(new Width("Length label size",o->o.rulerTextSize,(o,v)->o.rulerTextSize=v,Options.RULER_TEXT_MIN*100,Options.RULER_TEXT_MAX*100,true));
 
     private static Entry entry(String group,String name,ToIntFunction<Options> get,ObjIntConsumer<Options> set){
         return new Entry(group,name,()->get.applyAsInt(ClientState.options),c->set.accept(ClientState.options,c),()->get.applyAsInt(DEFAULTS));
@@ -82,7 +89,7 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     static SelectionOptionsScreen builder(Screen parent){return new SelectionOptionsScreen(parent,"Builder selection options",BUILDER_ENTRIES,BUILDER_WIDTHS,false);}
 
     /** The Ruler tool's colours: its line, its knobs and its length label. */
-    static SelectionOptionsScreen ruler(Screen parent){return new SelectionOptionsScreen(parent,"Ruler options",RULER_ENTRIES,List.of(),false);}
+    static SelectionOptionsScreen ruler(Screen parent){return new SelectionOptionsScreen(parent,"Ruler options",RULER_ENTRIES,RULER_WIDTHS,false);}
 
     @Override protected void init(){
         left=(width-W)/2;top=(height-H)/2;
@@ -96,11 +103,12 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
             sy+=26;
         }
         for(var w:widths){
-            var widthSlider=new FlatSlider(left+14,sy,300,19,Component.empty(),(w.get().applyAsDouble(o)-.1)/9.9){
-                protected void updateMessage(){setMessage(Component.literal(w.label()+": "+Math.round((.1+value*9.9)*100)/100d));}
-                protected void applyValue(){w.set().accept(o,Math.round((.1+value*9.9)*100)/100d);}
+            double low=w.min(),span=w.max()-w.min();
+            var widthSlider=new FlatSlider(left+14,sy,300,19,Component.empty(),(w.units(w.get().applyAsDouble(o))-low)/span){
+                protected void updateMessage(){setMessage(Component.literal(w.label()+": "+w.show(low+value*span)));}
+                protected void applyValue(){w.set().accept(o,w.fromUnits(low+value*span));}
             };
-            widthSlider.range(.1,10,w.get().applyAsDouble(DEFAULTS));widthSlider.setRaw((w.get().applyAsDouble(o)-.1)/9.9);addRenderableWidget(widthSlider);
+            widthSlider.range(low,w.max(),w.units(w.get().applyAsDouble(DEFAULTS)));widthSlider.setRaw((w.units(w.get().applyAsDouble(o))-low)/span);addRenderableWidget(widthSlider);
             sy+=24;
         }
         addRenderableWidget(new FlatButton(left+14,top+H-34,146,22,"Reset all",()->{for(var e:entries)e.set().accept(e.fallback().getAsInt());for(var w:widths)w.set().accept(o,w.get().applyAsDouble(DEFAULTS));if(styled)o.selectionStyle=DEFAULTS.selectionStyle;init();}));

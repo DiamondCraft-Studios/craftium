@@ -165,7 +165,10 @@ public final class Options {
     public RulerMode rulerMode=RulerMode.LINE;
     public int rulerSplit=2;
     /** How the Ruler tool is drawn: its line, the knob at each end, the knob that has the gizmo, and its length label with the box behind it. */
-    public int rulerLineColor=0xffffd66d,rulerKnobColor=0xffffd66d,rulerKnobSelectedColor=0xffffffff,rulerTextColor=0xffffe4a2,rulerTextBackground=0xbb151c26;
+    public int rulerLineColor=0xffffffff,rulerKnobColor=0xff5b9fdb,rulerKnobSelectedColor=0xffffff00,rulerTextColor=0xffffffff,rulerTextBackground=0x80000000;
+    /** How big the length label is, as a multiple of the size it was first made at: 2.5 is 250%. Kept between {@link #RULER_TEXT_MIN} and {@link #RULER_TEXT_MAX}. */
+    public double rulerTextSize=2.5;
+    public static final double RULER_TEXT_MIN=.5,RULER_TEXT_MAX=6;
     public String entityGroup="";
     public String author="",tags="";
     /** The export pop-up's structure block fields. */
@@ -238,6 +241,11 @@ public final class Options {
         if(modifyAxis==null||modifyType==null)throw new IllegalArgumentException("Missing advanced options");
         modifyAngle=bounded(modifyAngle,-3600,3600);modifyTranslateX=bounded(modifyTranslateX,-256,256);modifyTranslateY=bounded(modifyTranslateY,-256,256);modifyTranslateZ=bounded(modifyTranslateZ,-256,256);
         rulerSplit=Math.clamp(rulerSplit,2,16);
+        rulerTextSize=bounded(rulerTextSize,RULER_TEXT_MIN,RULER_TEXT_MAX);
+        // The colours the ruler first had, kept in saved settings, give way to the ones it has now; any colour that was changed is left alone.
+        if(rulerLineColor==0xffffd66d&&rulerKnobColor==0xffffd66d&&rulerKnobSelectedColor==0xffffffff&&rulerTextColor==0xffffe4a2&&rulerTextBackground==0xbb151c26){
+            rulerLineColor=0xffffffff;rulerKnobColor=0xff5b9fdb;rulerKnobSelectedColor=0xffffff00;rulerTextColor=0xffffffff;rulerTextBackground=0x80000000;
+        }
         historySteps=Math.clamp(historySteps,1,32);
         if(colourField==null||colourField.size()>4096||colourField.contains(null))throw new IllegalArgumentException("Colour field limit: 4096 blocks");for(var placement:colourField)if(placement.point()==null||placement.block()==null||placement.block().length()>256)throw new IllegalArgumentException("Invalid colour field entry");
         if(scriptVariables==null||scriptVariables.size()>64||maskVariables==null||maskVariables.size()>64||scriptColours==null||scriptColours.size()>4096||scriptColours.contains(null))throw new IllegalArgumentException("Too much script configuration");
