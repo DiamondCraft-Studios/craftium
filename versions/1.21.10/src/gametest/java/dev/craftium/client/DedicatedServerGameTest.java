@@ -202,7 +202,7 @@ public final class DedicatedServerGameTest implements FabricClientGameTest {
     private void builder() {
         server.runCommand("setblock 0 " + Y + " 6 gold_block");
         server.runCommand("setblock 1 " + Y + " 6 diamond_block");
-        options(o -> {o.noUpdates = true; o.builderTool = Options.BuilderTool.MOVE; o.offsetX = 3; o.offsetY = 0; o.offsetZ = 0;});
+        options(o -> {o.noUpdates = true; o.builderTool = Options.BuilderTool.MOVE; o.builderOffset = new Point(3, 0, 0);});
         pos(0, Y, 6, 1, Y, 6);
         request("builder_commit", new Point(0, Y, 6));
         checkBlock(0, Y, 6, Blocks.AIR);
