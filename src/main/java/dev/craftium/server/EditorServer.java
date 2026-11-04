@@ -18,12 +18,14 @@ import java.util.*;
 
 public final class EditorServer {
     private static final Map<UUID,Session> SESSIONS=new HashMap<>();
+    /** The AI's workspace of each player: the preview it is holding and the builds it can undo. Never saved, and dropped when the player leaves. */
+    private static final Map<UUID,Session> AI_SESSIONS=new HashMap<>();
     private static Job job;
     private static int historyTicks;
     private record Job(UUID owner, ServerLevel level, Session session, Session.Edit edit,
-                       boolean backwards, boolean history, int[] cursor, List<Session.Change> applied, long strokeId) {}
+                       boolean backwards, boolean history, int[] cursor, List<Session.Change> applied, long strokeId, boolean load) {}
     private EditorServer() {}
-    public static void clear() { SESSIONS.clear();job=null;AnnotationEdits.clear();AnimatedRebuild.clear(); }
+    public static void clear() { SESSIONS.clear();AI_SESSIONS.clear();job=null;AnnotationEdits.clear();AnimatedRebuild.clear(); }
     /** Gives the player back the game mode the editor replaced, if it still has one to give back. */
     private static void restoreMode(ServerPlayer player,Session s){
         var mode=s.previousMode;s.previousMode=null;
@@ -32,7 +34,7 @@ public final class EditorServer {
         if(player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}
     }
     public static void disconnect(ServerPlayer player){var s=SESSIONS.get(player.getUUID());if(s!=null)restoreMode(player,s);disconnect(player.getUUID());}
-    public static void disconnect(UUID id) {var session=SESSIONS.get(id);if(session!=null)HistoryStore.save(session);if(AnimatedRebuild.owned(id)){AnimatedRebuild.cancel(id);return;}if(job==null || !job.owner.equals(id))SESSIONS.remove(id);}
+    public static void disconnect(UUID id) {var session=SESSIONS.get(id);if(session!=null)HistoryStore.save(session);if(AnimatedRebuild.owned(id)){AnimatedRebuild.cancel(id);return;}if(job==null || !job.owner.equals(id)){SESSIONS.remove(id);AI_SESSIONS.remove(id);}}
     public static void flushHistory(MinecraftServer server){
         AnimatedRebuild.finishOnStop(server);
         // Players are saved as the server stops, before they are disconnected, so a player still in the editor would be saved as a spectator.
@@ -175,6 +177,14 @@ public final class EditorServer {
                 var plan=new EditPlanner(player.level(),s,o);var blocks=MaterialList.split(o.materials);
                 for(int i=0;i<Math.min(9,blocks.size());i++)player.getInventory().setItem(i,new net.minecraft.world.item.ItemStack(plan.parse(blocks.get(i)).getBlock()));
                 player.inventoryMenu.broadcastChanges();send(player,s,"Gradient copied to hotbar",false);return;
+            }
+            // Reads for an AI client: the server's own view of the world, answered with a packet only the AI bridge looks at.
+            // "target" and "normal" carry the two corners here, so this comes before "normal" is checked as a direction.
+            switch(r.action()){
+                case "ai_blocks" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.blocks(player,r.target(),r.normal())));return;}
+                case "ai_surface","ai_surface_floor" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.surface(player,r.target(),r.normal(),r.action().equals("ai_surface_floor"))));return;}
+                case "ai_build_preview","ai_apply","ai_cancel","ai_undo" -> {aiAction(player,r.action(),o);return;}
+                default -> {}
             }
             Point target=r.target(),normal=r.normal()==null?new Point(0,1,0):r.normal();
             if(Math.abs(normal.x())+Math.abs(normal.y())+Math.abs(normal.z())!=1)throw new IllegalArgumentException("Invalid surface normal");
@@ -446,13 +456,56 @@ public final class EditorServer {
         s.clipboardDirty=true;
         send(player,s,rotate?"Clipboard rotated 90°":"Clipboard mirrored on "+"XYZ".charAt(axis),false);
     }
+    /** The AI's workspace for this player, made when it is first needed, and started afresh when the player has changed dimension. */
+    private static Session aiSession(ServerPlayer player){
+        var ai=AI_SESSIONS.get(player.getUUID());
+        if(ai!=null&&ai.dimension!=null&&!ai.dimension.equals(player.level().dimension())){
+            if(ai.busy)throw new IllegalArgumentException("Wait for the current AI build to finish");
+            ai=null;
+        }
+        if(ai==null){ai=new Session();ai.ai=true;ai.dimension=player.level().dimension();AI_SESSIONS.put(player.getUUID(),ai);}
+        return ai;
+    }
+    /**
+     * What an AI client can do with its workspace: hold a build as a preview, apply it, discard it or undo the last build it applied. None of
+     * it touches the player's selection, preview or undo history, and none of it needs the player nearby.
+     */
+    private static void aiAction(ServerPlayer player,String action,Options o){
+        var ai=aiSession(player);
+        switch(action){
+            case "ai_build_preview" -> {
+                if(ai.busy)throw new IllegalArgumentException("Wait for the current AI build to finish");
+                ai.pendingEdit=null;ai.pendingDirty=true; // a new preview replaces the last, and stays gone if this one is refused
+                var edit=BuildPlanner.plan(player,ai,o);
+                if(edit.changes().isEmpty()){send(player,ai,"No matching blocks changed",false);return;}
+                if(edit.estimatedBytes()>32*1024*1024)throw new IllegalArgumentException("Edit exceeds the 32 MiB history budget; use a smaller build");
+                EditProtection.check(player,edit);
+                ai.pendingEdit=edit;
+                send(player,ai,"AI preview ready: "+edit.changes().size()+" blocks",false);
+            }
+            case "ai_apply" -> {
+                var edit=ai.pendingEdit;
+                if(edit==null){send(player,ai,"No AI preview to apply",false);return;}
+                if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
+                EditProtection.check(player,edit);
+                ai.pendingEdit=null;ai.pendingDirty=true;
+                ai.busy=true;job=new Job(player.getUUID(),player.level(),ai,edit,false,false,new int[]{0},new ArrayList<>(),0,true);
+                send(player,ai,"Applying "+edit.name()+"…",false);
+            }
+            case "ai_cancel" -> {
+                if(ai.pendingEdit!=null){ai.pendingEdit=null;ai.pendingDirty=true;send(player,ai,"AI preview discarded",false);}
+                else send(player,ai,"No AI preview to discard",false);
+            }
+            default -> {ai.historyRemaining=0;history(player,ai,true);} // ai_undo
+        }
+    }
     private static void start(ServerPlayer player,Session s,Session.Edit edit) {
         if(edit.changes().isEmpty() && edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()){send(player,s,"No matching blocks changed",false);return;}
         if(edit.estimatedBytes()>32*1024*1024)throw new IllegalArgumentException("Edit exceeds the 32 MiB history budget; use a smaller region");
         EditProtection.check(player,edit);
         if(s.confirmEdits&&!s.bypassConfirm){stage(player,s,edit);return;}
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
-        s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,false,false,new int[]{0},new ArrayList<>(),s.requestStroke);
+        s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,false,false,new int[]{0},new ArrayList<>(),s.requestStroke,false);
         send(player,s,"Applying "+edit.name()+"…",false);
     }
     /** Holds the edit as a ghost for the player to confirm; edits made while one is waiting are added to it. */
@@ -497,10 +550,13 @@ public final class EditorServer {
             s.recalculateBytes();s.historyDirty=true;s.event((backwards?"Undo ":"Redo ")+edit.name());
             send(player,s,(backwards?"Undid ":"Redid ")+edit.name(),false);return;
         }
-        for(var c:edit.changes())if(!player.level().hasChunk(c.pos().x()>>4,c.pos().z()>>4))throw new IllegalArgumentException("Move closer to the edited chunks before undo/redo");
-        for(var c:edit.biomes())if(!player.level().hasChunk(c.cell().x()>>2,c.cell().z()>>2))throw new IllegalArgumentException("Move closer to the biome chunks before undo/redo");
+        // The AI's builds can be far from the player, so its undo loads the chunks it needs as it goes instead of asking the player to move.
+        if(!s.ai){
+            for(var c:edit.changes())if(!player.level().hasChunk(c.pos().x()>>4,c.pos().z()>>4))throw new IllegalArgumentException("Move closer to the edited chunks before undo/redo");
+            for(var c:edit.biomes())if(!player.level().hasChunk(c.cell().x()>>2,c.cell().z()>>2))throw new IllegalArgumentException("Move closer to the biome chunks before undo/redo");
+        }
         EditProtection.check(player,edit);
-        from.removeFirst();s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,backwards,true,new int[]{0},new ArrayList<>(),0);
+        from.removeFirst();s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,backwards,true,new int[]{0},new ArrayList<>(),0,s.ai);
         s.lastStroke=0;
         send(player,s,backwards?"Undoing…":"Redoing…",false);
     }
@@ -526,7 +582,7 @@ public final class EditorServer {
             while(j.cursor[0]<list.size() && count++<2048 && System.nanoTime()<deadline) {
                 var c=list.get(j.cursor[0]++);BlockPos at=EditPlanner.pos(c.pos());
                 var expected=j.backwards?c.after():c.before();var desired=j.backwards?c.before():c.after();
-                if(j.level.hasChunk(at.getX()>>4,at.getZ()>>4) && expected.matches(j.level,at)) {
+                if((j.load||j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) && expected.matches(j.level,at)) {
                     if(!ServerPlatform.canChange(j.owner,j.level,c.pos()))throw new IllegalArgumentException("Edit permission or region access changed");
                     desired.place(j.level,at,j.edit.flags());j.applied.add(c);
                 }
@@ -555,7 +611,7 @@ public final class EditorServer {
             if(j.history&&!j.backwards&&j.session.historyRemaining==0&&!j.applied.isEmpty()&&j.session.options!=null&&j.session.options.historyPulse)j.session.pulse="redo:700:"+SelectionCodec.encode(pulsePoints(j.applied.stream().map(Session.Change::pos).toList()));
             var player=server.getPlayerList().getPlayer(j.owner);
             if(player!=null)send(player,j.session,(j.backwards?"Undid ":j.history?"Redid ":"Applied ")+j.edit.name()+" · "+(j.applied.size()+appliedBiomes.size()+appliedEntities.size()+appliedAnnotations.size())+" changes"+(skipped>0?" · "+skipped+" changed or unavailable cells skipped":""),false);
-            else {HistoryStore.save(j.session);SESSIONS.remove(j.owner);}
+            else release(j);
             if(!appliedAnnotations.isEmpty())for(var other:server.getPlayerList().getPlayers())if(!other.getUUID().equals(j.owner)&&other.level()==j.level){var session=SESSIONS.get(other.getUUID());if(session!=null)send(other,session,"Annotations updated",false);}
             if(player!=null&&j.history&&j.session.historyRemaining!=0){boolean backwards=j.session.historyRemaining>0;j.session.historyRemaining+=backwards?-1:1;try{history(player,j.session,backwards);}catch(IllegalArgumentException e){j.session.historyRemaining=0;send(player,j.session,e.getMessage(),true);}}
         } catch(Exception e) {
@@ -563,8 +619,13 @@ public final class EditorServer {
             rememberInterrupted(j);
             j.session.busy=false;job=null;var player=server.getPlayerList().getPlayer(j.owner);
             if(player!=null)send(player,j.session,"Edit interrupted. Applied changes remain in history.",true);
-            else {HistoryStore.save(j.session);SESSIONS.remove(j.owner);}
+            else release(j);
         }
+    }
+    /** Lets go of a finished job's session when its player has left: the player's is saved and dropped, the AI's is just dropped. */
+    private static void release(Job j){
+        if(j.session.ai){AI_SESSIONS.remove(j.owner);return;}
+        HistoryStore.save(j.session);SESSIONS.remove(j.owner);
     }
     private static List<Session.BiomeChange> applyBiomes(Job j) {
         var applied=new ArrayList<Session.BiomeChange>();var groups=new LinkedHashMap<Long,Map<Point,Holder<Biome>>>();
@@ -622,14 +683,19 @@ public final class EditorServer {
     /** How long ago the edit was made, in milliseconds; -1 for none, and a very large age when its time is unknown. */
     private static long age(Session.Edit edit){return edit==null?-1:edit.time()==0?Long.MAX_VALUE/4:Math.max(0,System.currentTimeMillis()-edit.time());}
     static void send(ServerPlayer player,Session s,String message,boolean error) {
+        // A status always describes the player's own session, so an AI action never changes what the player sees of their selection or edits;
+        // the AI's preview and undo count ride along in fields of their own.
+        var ai=s.ai?s:AI_SESSIONS.get(player.getUUID());
+        if(s.ai)s=SESSIONS.computeIfAbsent(player.getUUID(),id->new Session());
         noteSelection(s);
         if(!ServerPlatform.canSend(player))return;
         String entityId="",entityNbt="";if(s.selectedEntity!=null){var entity=player.level().getEntity(s.selectedEntity);if(entity!=null){entityId=s.selectedEntity.toString();String nbt=EntityEdits.snapshot(entity,player.level()).toString();if(nbt.length()<12000)entityNbt=nbt;}}
         if(s.selectionRevision!=s.selection.revision()){s.selectionRevision=s.selection.revision();s.selectionData=SelectionCodec.encode(s.selection.points());}
         if(s.clipboardDirty){s.clipboardGhostDirty=true;s.clipboardData=SelectionCodec.encode(s.clipboard.entrySet().stream().filter(e->!e.getValue().state().isAir()).map(Map.Entry::getKey).toList());s.clipboardDirty=false;}
         if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
+        if(ai!=null&&ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit);ai.pendingDirty=false;}
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy,s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse);s.library=List.of();s.pivotUpdate="";s.pulse="";
+        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name());s.library=List.of();s.pivotUpdate="";s.pulse="";
         ServerPlatform.send(player,new Packets.Update(Packets.JSON.toJson(status)));
     }
 }

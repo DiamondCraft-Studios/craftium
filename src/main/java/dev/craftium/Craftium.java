@@ -24,6 +24,7 @@ public final class Craftium implements ModInitializer {
         dev.craftium.compat.FabricCompat.serverboundPlay().registerLarge(Packets.Edit.TYPE,Packets.Edit.CODEC,6_000_000);
         dev.craftium.compat.FabricCompat.clientboundPlay().registerLarge(Packets.Update.TYPE,Packets.Update.CODEC,6_000_000);
         dev.craftium.compat.FabricCompat.clientboundPlay().registerLarge(Packets.Report.TYPE,Packets.Report.CODEC,400_000);
+        dev.craftium.compat.FabricCompat.clientboundPlay().registerLarge(Packets.AiReply.TYPE,Packets.AiReply.CODEC,1_100_000);
         dev.craftium.compat.FabricCompat.clientboundPlay().registerLarge(Packets.Download.TYPE,Packets.Download.CODEC,4_500_000);
         ServerPlayNetworking.registerGlobalReceiver(Packets.Edit.TYPE, (payload,context) ->
             context.server().execute(() -> EditorServer.handle(context.player(),payload.json())));

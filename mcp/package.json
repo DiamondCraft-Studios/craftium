@@ -1,0 +1,22 @@
+{
+  "name": "craftium-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that lets Claude Desktop (or any MCP client) build in Minecraft through the Craftium mod's local AI bridge.",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "craftium-mcp": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "pack": "npx --yes @anthropic-ai/mcpb@2.1.2 pack . craftium.mcpb"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2"
+  }
+}

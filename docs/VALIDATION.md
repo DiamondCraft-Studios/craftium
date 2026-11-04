@@ -49,6 +49,12 @@ The scenario verifies channel negotiation, a fragmented 16,000-position request 
 
 The optional test entrypoint uses `CRAFTIUM_TEST_SCOPE=paper` and `CRAFTIUM_TEST_PROTECTION=true` with both prepared loopback fixtures running. `:paper-26.2:liveTestPluginJar` builds a fixture plugin used only by this suite; it is excluded from release bundles. The suite ends by disconnecting and returning to the title screen. Server shutdown saves history normally.
 
+## AI building on Paper
+
+**The AI bridge passed against Paper 1.21.10 build 130** with the 1.21.10 companion and a 1.21.10 Fabric client over loopback, in a flat world, with `CRAFTIUM_TEST_SCOPE=paper-ai` (the server setup is the same as for the scenario above: offline mode, RCON on port 25675 with the fixed local test password). It drives the bridge over HTTP, as the MCP extension does, and checks what only a dedicated server shows: reads and builds answered over the plugin's bridge frames (`ai_reply`), the world's layers and surface read from the server, a pyramid previewed, applied and undone 2000 blocks from the player in ground nobody had loaded, the player's own selection left alone by all of it, a build that needs too much new ground refused with a message, and reads and builds refused once operator status is removed. The server logged no errors and no lag warnings.
+
+The first run, which generated new ground, took about 12 seconds for the far preview and render; a rerun over the same ground took about a second. Minecraft 26.2 and Purpur have not been run for the AI scenario.
+
 ## Visual checks
 
 The shared Craftium mark was added to the mod icon, editor header and builder HUD. Both JARs were checked for identical PNG/SVG assets. A focused Minecraft UI run passed in 51 seconds, including editor, builder, inspector, palette, masks, blueprint browser, reference images and HUD restoration. The new editor capture was visually inspected at 1440 × 900.

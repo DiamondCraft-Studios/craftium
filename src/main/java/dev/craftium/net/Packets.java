@@ -15,9 +15,11 @@ public final class Packets {
     public record Request(String action, Point target, Point normal, Options options, long strokeId) {}
     public record Status(String message, boolean error, boolean busy, int selectionSize,
                          Point min, Point max, int clipboardSize, List<String> history, int undo, int redo,String entityUuid,String entityNbt,List<dev.craftium.core.Annotation> annotations,String selectionData,String clipboardData,List<dev.craftium.core.BlueprintInfo> blueprints,int clipboardEntityCount,String pendingData,String clipboardGhost,String pivotUpdate,
-                         long undoAge,long redoAge,String undoName,String redoName,String pulse) {
+                         long undoAge,long redoAge,String undoName,String redoName,String pulse,
+                         /** The AI's own workspace: its waiting preview (as ghost data), and how many builds it can undo, and the name of the last. */
+                         String aiPendingData,int aiUndo,String aiUndoName) {
         /** {@code undoAge} and {@code redoAge} are how many milliseconds ago the next edit to undo or redo was made, or -1 when there is none. */
-        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","");}
+        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"");}
     }
 
     public record Bridge(byte[] bytes) implements CustomPacketPayload {
@@ -41,6 +43,12 @@ public final class Packets {
         public static final Type<Report> TYPE=new Type<>(dev.craftium.compat.Compat.id("craftium","report"));
         public static final StreamCodec<RegistryFriendlyByteBuf,Report> CODEC=StreamCodec.of((buf,p)->buf.writeUtf(p.text,100_000),buf->new Report(buf.readUtf(100_000)));
         @Override public Type<Report> type(){return TYPE;}
+    }
+    /** What the server read for an AI client: a JSON object, never shown to the player. */
+    public record AiReply(String json) implements CustomPacketPayload {
+        public static final Type<AiReply> TYPE=new Type<>(dev.craftium.compat.Compat.id("craftium","ai_reply"));
+        public static final StreamCodec<RegistryFriendlyByteBuf,AiReply> CODEC=StreamCodec.of((buf,p)->buf.writeUtf(p.json,1_000_000),buf->new AiReply(buf.readUtf(1_000_000)));
+        @Override public Type<AiReply> type(){return TYPE;}
     }
     public record Download(String folder,String name,String data,String metadata) implements CustomPacketPayload {
         public static final Type<Download> TYPE=new Type<>(dev.craftium.compat.Compat.id("craftium","download"));

@@ -35,7 +35,7 @@ public final class CraftiumClient implements ClientModInitializer {
     private double lastLiquidOpacity=1;
     @Override public void onInitializeClient() {
         Overlay.install();
-        ClientState.load();EditorBindings.load();
+        ClientState.load();EditorBindings.load();AiBridge.install();
         ClientPlayNetworking.registerGlobalReceiver(Packets.Bridge.TYPE,(payload,context)->context.client().execute(()->receiveBridge(payload.bytes())));
         ClientCommands.register();
         ClientPlayNetworking.registerGlobalReceiver(Packets.Download.TYPE,(payload,context)->context.client().execute(()->ClientAssets.receive(payload)));
@@ -49,6 +49,7 @@ public final class CraftiumClient implements ClientModInitializer {
             toolKeys.put(tool,ClientCompat.registerKey(new KeyMapping("key.craftium.tool."+tool.name().toLowerCase(java.util.Locale.ROOT),InputConstants.Type.KEYSYM,key,category)));
         }
         ClientPlayNetworking.registerGlobalReceiver(Packets.Report.TYPE,(payload,context)->context.client().execute(()->ClientCompat.setScreen(context.client(),new ReportScreen(ClientCompat.screen(context.client()),payload.text()))));
+        ClientPlayNetworking.registerGlobalReceiver(Packets.AiReply.TYPE,(payload,context)->AiBridge.dataReceived(payload.json()));
         ClientPlayNetworking.registerGlobalReceiver(Packets.Update.TYPE,(payload,context)->context.client().execute(()->{
             receiveStatus(payload.json());
         }));
@@ -85,7 +86,7 @@ public final class CraftiumClient implements ClientModInitializer {
             ReferenceImages.draw(g,false,0,0);
             int h=g.guiHeight();
             if(System.currentTimeMillis()<ClientState.noticeUntil)g.text(mc.font,ClientState.notice,8,8,0xffffd891,false);
-            BuilderMode.hud(g);BuilderWidget.draw(g);
+            BuilderMode.hud(g);BuilderWidget.draw(g);AiBridge.hud(g);
             if(ClientState.options.showKeyHints){StringBuilder keys=new StringBuilder();for(int key:new int[]{GLFW.GLFW_KEY_W,GLFW.GLFW_KEY_A,GLFW.GLFW_KEY_S,GLFW.GLFW_KEY_D,GLFW.GLFW_KEY_X,GLFW.GLFW_KEY_Y,GLFW.GLFW_KEY_Z})if(GLFW.glfwGetKey(mc.getWindow().handle(),key)==GLFW.GLFW_PRESS)keys.append((char)key).append(' ');if(mc.hasControlDown())keys.append("Ctrl ");if(mc.hasShiftDown())keys.append("Shift ");g.text(mc.font,keys.toString(),g.guiWidth()-mc.font.width(keys.toString())-10,h-48,0xffe6cf8b,false);}
         });
     }
@@ -96,13 +97,13 @@ public final class CraftiumClient implements ClientModInitializer {
      */
     public static void resetEditor(){
         ClientState.selectionPending=false;ClientState.selectingSince=0;ClientState.selectionSizeBefore=0;ClientState.largeSelection=0;ClientState.heldSelection="";
-        ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
+        ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.aiPending=GhostBlocks.EMPTY;ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
         ClientState.rulerStart=null;ClientState.rulerEnd=null;ClientState.rulerPoints.clear();
         ShapeObject.cancel();TransformGizmo.cancel();PlacementPreview.cancel();BuilderMode.reset();SelectionOverlay.update("");
     }
     private static void receiveStatus(String json){
             var next=Packets.JSON.fromJson(json,Packets.Status.class);
-            if(next!=null){ClientState.status=next;HistoryPulse.receive(next);checkLargeSelection(next);applyPivot(next.pivotUpdate());if(next.message().startsWith("Undid ")||next.message().startsWith("Redid "))ClientState.boxCorners.clear();if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());var mc=Minecraft.getInstance();if(ClientCompat.screen(mc) instanceof EditorScreen editor)editor.statusReceived();}
+            if(next!=null){ClientState.status=next;HistoryPulse.receive(next);checkLargeSelection(next);applyPivot(next.pivotUpdate());if(next.message().startsWith("Undid ")||next.message().startsWith("Redid "))ClientState.boxCorners.clear();if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());ClientState.aiPending=GhostBlocks.parse(next.aiPendingData());if(ClientState.aiPending.total()>0)ClientState.aiPending.ai=true;if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());var mc=Minecraft.getInstance();if(ClientCompat.screen(mc) instanceof EditorScreen editor)editor.statusReceived();AiBridge.statusReceived(next);}
     }
     /** Opens the confirmation when a selection action has just selected a suspiciously large area. */
     private static void checkLargeSelection(Packets.Status next){
@@ -134,6 +135,7 @@ public final class CraftiumClient implements ClientModInitializer {
             switch(message.kind()){
                 case "status" -> receiveStatus(message.data());
                 case "report" -> ClientCompat.setScreen(mc,new ReportScreen(ClientCompat.screen(mc),message.data()));
+                case "ai_reply" -> AiBridge.dataReceived(message.data());
                 case "download" -> ClientAssets.receive(Packets.JSON.fromJson(message.data(),Packets.Download.class));
                 case "hello" -> send("status",null,null);
                 default -> throw new IllegalArgumentException("Unknown Craftium server message");
@@ -305,6 +307,7 @@ public final class CraftiumClient implements ClientModInitializer {
             HistoryPulse.draw();
             if(screen!=null&&screen.bucketDragging())MagicPreview.drawBucket(mc,screen.bucketTarget());else MagicPreview.draw(mc,hit);
             ClientState.pending.draw(new Point(0,0,0),true);
+            ClientState.aiPending.draw(new Point(0,0,0),true);
             if(ClientState.options.showMarkerGizmos||ClientState.options.showDisplayGizmos){int count=0;for(var entity:mc.level.entitiesForRendering()){boolean show=entity instanceof net.minecraft.world.entity.Marker&&ClientState.options.showMarkerGizmos||entity instanceof net.minecraft.world.entity.Display&&ClientState.options.showDisplayGizmos;if(!show||entity.distanceToSqr(mc.player)>128*128||++count>256)continue;Vec3 at=entity.position();int color=entity.getUUID().toString().equals(ClientState.options.entityUuid)?0xffffd66d:0xffe6edf7;Overlay.point(at,color,6);Overlay.box(new AABB(at.add(-.08,-.08,-.08),at.add(.08,.08,.08)),color,1,0);}}
             if(ClientState.options.showAnnotations&&ClientState.status.annotations()!=null)for(var note:ClientState.status.annotations()){
                 Point a=note.from(),b=note.to();Vec3 start=new Vec3(a.x()+.5,a.y()+.5,a.z()+.5),end=new Vec3(b.x()+.5,b.y()+.5,b.z()+.5);

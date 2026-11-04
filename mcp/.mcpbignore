@@ -1,0 +1,8 @@
+test/
+*.mcpb
+.gitignore
+node_modules/
+package-lock.json
+.nvmrc
+.claude-plugin/
+.mcp.json

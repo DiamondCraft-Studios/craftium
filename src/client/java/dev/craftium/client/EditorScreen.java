@@ -24,6 +24,10 @@ public final class EditorScreen extends CraftiumScreen {
     private boolean builder,help,transform,panels=true,painting,pinnedTab;
     private boolean hudHidden,previousHideGui;
     private int menu=-1;
+    /** The menu bar in order; {@link #menuItems} numbers its cases the same way. */
+    private static final String[] MENUS={"File","Edit","Select","View","Create","Operations","Masks","AI","Window","Help"};
+    /** A menu's width in the bar: its name with padding, and room for the status square beside AI while its bridge is on. */
+    private int menuWidth(int index){return font.width(MENUS[index])+16+(MENUS[index].equals("AI")&&AiBridge.running()?12:0);}
     private long lastUse;
     private double pointerX,pointerY;
     private BlockHitResult lastHit;
@@ -208,10 +212,12 @@ public final class EditorScreen extends CraftiumScreen {
     private void topbar(Gfx g) {
         g.fill(0,0,w,23,0xff1b222c);g.fill(0,22,w,23,LINE);
         CraftiumBrand.draw(g,6,3,18);text(g,"CRAFTIUM",26,8,TEXT);
-        String[] names={"File","Edit","Select","View","Create","Operations","Masks","Window","Help"};int x=108;
-        for(int i=0;i<names.length;i++) {
-            int index=i,bw=font.width(names[i])+16;
-            button(g,x,2,bw,19,names[i],menu==i,()->{menu=menu==index?-1:index;openSub="";openSub2="";},"");x+=bw;
+        int x=108;
+        for(int i=0;i<MENUS.length;i++) {
+            int index=i,bw=menuWidth(i);
+            button(g,x,2,bw,19,MENUS[i],menu==i,()->{menu=menu==index?-1:index;openSub="";openSub2="";},"");
+            if(MENUS[i].equals("AI")&&AiBridge.running())g.fill(x+bw-12,8,x+bw-6,14,AiBridge.colour(AiBridge.indicator())); // the AI bridge is on: the same colours as the corner marker
+            x+=bw;
         }
         button(g,w-58,3,52,17,"Exit  ×",false,this::onClose,"");
     }
@@ -869,7 +875,7 @@ public final class EditorScreen extends CraftiumScreen {
     /** Whether {@link #button} left-aligns its label, as the entries of a menu do. */
     private boolean menuAlign;
     private void dropdownItems(Gfx g) {
-        List<MenuItem> items=menuItems(menu);int x=108;String[] names={"File","Edit","Select","View","Create","Operations","Masks","Window","Help"};for(int i=0;i<menu;i++)x+=font.width(names[i])+16;
+        List<MenuItem> items=menuItems(menu);int x=108;for(int i=0;i<menu;i++)x+=menuWidth(i);
         int height=4;for(MenuItem item:items)height+=item.action==null?9:25;
         g.fill(x,24,x+226,24+height,0xff1c2735);g.outline(x,24,226,height,LINE);
         int y=27;
@@ -916,7 +922,11 @@ public final class EditorScreen extends CraftiumScreen {
                 item("Expand…","",()->ClientCompat.setScreen(minecraft,new ResizeSelectionScreen(this,true))),item("Shrink…","",()->ClientCompat.setScreen(minecraft,new ResizeSelectionScreen(this,false))),
                 item("Expand by 1","",()->resizeSelection("selection_expand",1)),item("Shrink by 1","",()->resizeSelection("selection_shrink",1)));
             case 3 -> List.of(item("Toggle side panels","",()->panels=!panels),item("Tool options","",()->{builder=false;pinnedTab=false;init();}),item("Builder controls","Alt",()->{builder=true;init();}),item("Studio inspector","",()->ClientCompat.setScreen(minecraft,new StudioScreen(this))),item("Colour picker / gradient","",()->ClientCompat.setScreen(minecraft,new ColourScreen(this))));
-            case 7 -> {var items=new ArrayList<MenuItem>();for(String id:WorkspaceLayout.windows.keySet())items.add(item("Toggle "+id,"",()->WorkspaceLayout.toggle(id)));items.add(item("Save layout","",WorkspaceLayout::save));items.add(item("Reset layout","",WorkspaceLayout::reset));items.add(item("Copy layout","",()->minecraft.keyboardHandler.setClipboard(WorkspaceLayout.json())));items.add(item("Paste layout","",()->{try{WorkspaceLayout.importJson(minecraft.keyboardHandler.getClipboard());WorkspaceLayout.save();}catch(Exception e){ClientState.notify("Invalid layout JSON");}}));yield items;}
+            case 7 -> List.of(
+                item(AiBridge.running()?"Turn off AI building":"Turn on AI building","",()->{AiBridge.toggle();ClientState.notify(AiBridge.running()?"AI building is on":"AI building is off");}),divider(),
+                item("Apply AI preview","",()->CraftiumClient.send("ai_apply",null,null)),item("Discard AI preview","",()->CraftiumClient.send("ai_cancel",null,null)),item("Undo last AI build","",()->CraftiumClient.send("ai_undo",null,null)),divider(),
+                item("AI status and setup…","",()->{var studio=new StudioScreen(this);studio.selectTab("AI");ClientCompat.setScreen(minecraft,studio);}));
+            case 8 -> {var items=new ArrayList<MenuItem>();for(String id:WorkspaceLayout.windows.keySet())items.add(item("Toggle "+id,"",()->WorkspaceLayout.toggle(id)));items.add(item("Save layout","",WorkspaceLayout::save));items.add(item("Reset layout","",WorkspaceLayout::reset));items.add(item("Copy layout","",()->minecraft.keyboardHandler.setClipboard(WorkspaceLayout.json())));items.add(item("Paste layout","",()->{try{WorkspaceLayout.importJson(minecraft.keyboardHandler.getClipboard());WorkspaceLayout.save();}catch(Exception e){ClientState.notify("Invalid layout JSON");}}));yield items;}
             case 4 -> List.of(item("Shape","",()->select(Tool.SHAPE)),item("Block text","",()->select(Tool.TEXT)),item("Line","",()->select(Tool.LINE)),item("Rock","",()->select(Tool.ROCK)));
             case 5 -> List.of(item("Fill selection","Ctrl+F",()->action("fill")),item("Delete selection","Del",()->action("delete")),item("Move / clone / stack…","",()->{transform=true;init();}),item("Smooth brush","",()->select(Tool.SMOOTH)),item("Flatten brush","",()->select(Tool.FLATTEN)));
             case 6 -> List.of(item("Restrict to selection","",()->o().inSelection=!o().inSelection),item("Clear block mask","",()->{o().mask="";o().maskActive.clear();}),item("Toggle surface painting","",()->o().surfaceOnly=!o().surfaceOnly));
@@ -1124,6 +1134,8 @@ public final class EditorScreen extends CraftiumScreen {
         if(inViewport(pointerX/scale,pointerY/scale))lastHit=CraftiumClient.raycast(pointerX,pointerY);
         return lastHit;
     }
+    /** Opens the named menu of the bar; the game tests use it to capture a dropdown. */
+    void showMenu(String name){for(int i=0;i<MENUS.length;i++)if(MENUS[i].equals(name)){menu=i;openSub="";openSub2="";}}
     private void action(String action){
         if(EntityShortcuts.editor(action,this))return;
         if(action.equals("undo")||action.equals("redo")){historyAction(action.equals("undo"));return;}
