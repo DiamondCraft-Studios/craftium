@@ -37,15 +37,13 @@ public final class ModifyMath {
             case TRANSLATE_COPIES -> {
                 // Relative offsets are multiplied by the size of the selection; absolute offsets are plain block offsets.
                 int sx=o.modifyRelative?max.x()-min.x()+1:1,sy=o.modifyRelative?max.y()-min.y()+1:1,sz=o.modifyRelative?max.z()-min.z()+1:1;
-                if((long)o.copies*sources.size()>Selection.LIMIT*4L)throw new IllegalArgumentException("Too many copies");
                 for(int i=1;i<=o.copies;i++)for(Point at:sources)out.put(at.add(o.offsetX*sx*i,o.offsetY*sy*i,o.offsetZ*sz*i),at);
             }
             case REVOLVE -> {
                 if(cursor==null)return out;
                 var centre=Geometry.vector(cursor);double reach=1;
                 for(Point at:sources)reach=Math.max(reach,away(Geometry.vector(at).subtract(centre),axis)+1);
-                int steps=(int)Math.clamp(Math.ceil(Math.toRadians(Math.abs(o.modifyAngle))*reach*3),1,8192);
-                if((long)steps*sources.size()>Selection.LIMIT*4L)throw new IllegalArgumentException("Revolve is too large");
+                int steps=(int)Math.max(1,Math.min(Integer.MAX_VALUE,Math.ceil(Math.toRadians(Math.abs(o.modifyAngle))*reach*3)));
                 for(int k=0;k<=steps;k++){
                     double t=(double)k/steps;
                     for(Point at:sources){
@@ -62,7 +60,7 @@ public final class ModifyMath {
                 double step=equidistant?360d/(o.copies+1):o.modifyAngle;
                 var lookup=new HashSet<>(sources);
                 double reach=1;for(Point at:sources)reach=Math.max(reach,Geometry.vector(at).subtract(centre).length()+1);
-                int r=(int)Math.ceil(reach);if((long)(2*r+1)*(2*r+1)*(2*r+1)*o.copies>Selection.LIMIT*8L)throw new IllegalArgumentException("Rotate copies is too large");
+                int r=(int)Math.ceil(reach);
                 for(int i=1;i<=o.copies;i++){
                     var shift=o.modifyTranslate?translation.scale((double)i/o.copies):new Geometry.Vector(0,0,0);
                     var base=centre.add(shift);int cx=(int)Math.round(base.x()),cy=(int)Math.round(base.y()),cz=(int)Math.round(base.z());

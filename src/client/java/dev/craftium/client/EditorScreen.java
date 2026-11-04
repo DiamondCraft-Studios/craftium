@@ -419,15 +419,15 @@ public final class EditorScreen extends CraftiumScreen {
         var rows=new ArrayList<ModifyRow>();
         switch(o.modifyMode){
             case TRANSLATE_COPIES -> {
-                rows.add(sliderRow(w,"Copies",o.copies,1,16,16,DEFAULTS.copies,v->o.copies=(int)Math.round(v),true));
-                rows.add(sliderRow(w,"Offset X",o.offsetX,-16,16,128,0,v->o.offsetX=(int)Math.round(v),true));
-                rows.add(sliderRow(w,"Offset Y",o.offsetY,-16,16,128,DEFAULTS.offsetY,v->o.offsetY=(int)Math.round(v),true));
-                rows.add(sliderRow(w,"Offset Z",o.offsetZ,-16,16,128,0,v->o.offsetZ=(int)Math.round(v),true));
+                rows.add(sliderRow(w,"Copies",o.copies,1,16,Double.POSITIVE_INFINITY,DEFAULTS.copies,v->o.copies=(int)Math.max(1,Math.round(v)),true));
+                rows.add(sliderRow(w,"Offset X",o.offsetX,-16,16,Double.POSITIVE_INFINITY,0,v->o.offsetX=(int)Math.round(v),true));
+                rows.add(sliderRow(w,"Offset Y",o.offsetY,-16,16,Double.POSITIVE_INFINITY,DEFAULTS.offsetY,v->o.offsetY=(int)Math.round(v),true));
+                rows.add(sliderRow(w,"Offset Z",o.offsetZ,-16,16,Double.POSITIVE_INFINITY,0,v->o.offsetZ=(int)Math.round(v),true));
                 rows.add(new ModifyRow(22,(gg,y)->toggle(gg,10,y+2,o.modifyRelative?"Relative (x selection size)":"Absolute (blocks)",o.modifyRelative,()->o.modifyRelative=!o.modifyRelative,"Relative offsets are multiplied by the size of the selection; absolute offsets are not")));
             }
             case REVOLVE -> {
                 rows.add(axisRow());
-                rows.add(sliderRow(w,"Angle",o.modifyAngle,-360,360,3600,DEFAULTS.modifyAngle,v->o.modifyAngle=Math.round(v*10)/10d,false));
+                rows.add(sliderRow(w,"Angle",o.modifyAngle,-360,360,Double.POSITIVE_INFINITY,DEFAULTS.modifyAngle,v->o.modifyAngle=Math.round(v*10)/10d,false));
                 translationRows(rows,w);
             }
             case ROTATE_COPIES -> {
@@ -435,13 +435,13 @@ public final class EditorScreen extends CraftiumScreen {
                 Runnable flip=()->o.modifyType=custom?Options.RotateType.EQUIDISTANT:Options.RotateType.CUSTOM_ANGLE;
                 rows.add(new ModifyRow(26,(gg,y)->button(gg,10,y,pw-32,20,"Type: "+(custom?"Custom Angle":"Equidistant"),false,flip,flip,"Equidistant spreads copies around the anchor; Custom Angle turns each copy by the angle")));
                 rows.add(axisRow());
-                rows.add(sliderRow(w,"Copies",o.copies,1,16,16,DEFAULTS.copies,v->o.copies=(int)Math.round(v),true));
-                if(custom)rows.add(sliderRow(w,"Angle",o.modifyAngle,-360,360,3600,DEFAULTS.modifyAngle,v->o.modifyAngle=Math.round(v*10)/10d,false));
+                rows.add(sliderRow(w,"Copies",o.copies,1,16,Double.POSITIVE_INFINITY,DEFAULTS.copies,v->o.copies=(int)Math.max(1,Math.round(v)),true));
+                if(custom)rows.add(sliderRow(w,"Angle",o.modifyAngle,-360,360,Double.POSITIVE_INFINITY,DEFAULTS.modifyAngle,v->o.modifyAngle=Math.round(v*10)/10d,false));
                 translationRows(rows,w);
             }
             case TWIST -> {
                 rows.add(axisRow());
-                rows.add(sliderRow(w,"Angle",o.modifyAngle,-360,360,3600,DEFAULTS.modifyAngle,v->o.modifyAngle=Math.round(v*10)/10d,false));
+                rows.add(sliderRow(w,"Angle",o.modifyAngle,-360,360,Double.POSITIVE_INFINITY,DEFAULTS.modifyAngle,v->o.modifyAngle=Math.round(v*10)/10d,false));
             }
         }
         int bottom=pb-87,avail=bottom-MODIFY_TOP,max=0,used=0;
@@ -475,9 +475,9 @@ public final class EditorScreen extends CraftiumScreen {
         var o=o();
         rows.add(new ModifyRow(22,(g,y)->toggle(g,10,y+2,"Add Translation",o.modifyTranslate,()->o.modifyTranslate=!o.modifyTranslate,"Offsets the end position, e.g. 1 on Y makes a spiral")));
         if(!o.modifyTranslate)return;
-        rows.add(sliderRow(w,"Translate X",o.modifyTranslateX,-16,16,256,0,v->o.modifyTranslateX=Math.round(v*100)/100d,false));
-        rows.add(sliderRow(w,"Translate Y",o.modifyTranslateY,-16,16,256,0,v->o.modifyTranslateY=Math.round(v*100)/100d,false));
-        rows.add(sliderRow(w,"Translate Z",o.modifyTranslateZ,-16,16,256,0,v->o.modifyTranslateZ=Math.round(v*100)/100d,false));
+        rows.add(sliderRow(w,"Translate X",o.modifyTranslateX,-16,16,Double.POSITIVE_INFINITY,0,v->o.modifyTranslateX=Math.round(v*100)/100d,false));
+        rows.add(sliderRow(w,"Translate Y",o.modifyTranslateY,-16,16,Double.POSITIVE_INFINITY,0,v->o.modifyTranslateY=Math.round(v*100)/100d,false));
+        rows.add(sliderRow(w,"Translate Z",o.modifyTranslateZ,-16,16,Double.POSITIVE_INFINITY,0,v->o.modifyTranslateZ=Math.round(v*100)/100d,false));
     }
     private record PinnedRow(String name,OptionFields.Kind kind,int y){}
     private final List<PinnedRow> pinnedRows=new ArrayList<>();
@@ -1129,14 +1129,14 @@ public final class EditorScreen extends CraftiumScreen {
         var control=new Control(x,y,width,17,()->{
             if(minecraft.hasControlDown()){typing=new SliderArea(null,slider,key,integer);typed=integer?Integer.toString((int)value):String.format(Locale.ROOT,"%.2f",value);return;}
             dragging=slider;draggingSliderPanel=panel;slider.update(WorkspaceLayout.inverse(panel,mx,my)[0],false,minecraft.hasShiftDown());
-        },"Drag to change "+label.toLowerCase(Locale.ROOT)+" · Ctrl-click to type"+(typedMax>max?" (up to "+(int)typedMax+")":"")+" · Middle-click to reset");
+        },"Drag to change "+label.toLowerCase(Locale.ROOT)+" · Ctrl-click to type"+(typedMax==Double.POSITIVE_INFINITY?" (no limit)":typedMax>max?" (up to "+(int)typedMax+")":"")+" · Middle-click to reset");
         controls.add(control);sliderAreas.add(new SliderArea(control,slider,key,integer));
     }
     /** Applies what was typed into a slider, clamped to its range, and stops typing. Text that is not a number changes nothing. */
     private void finishTyping(boolean apply){
         var area=typing;String text=typed;typing=null;typed="";
         if(!apply||area==null)return;
-        try{double v=Math.clamp(Double.parseDouble(text.trim()),area.slider().min(),area.slider().typedMax());area.slider().set.accept(area.integer()?Math.round(v):v);}catch(NumberFormatException ignored){}
+        try{double v=Double.parseDouble(text.trim());if(!Double.isFinite(v))return;if(area.slider().typedMax()!=Double.POSITIVE_INFINITY)v=Math.clamp(v,area.slider().min(),area.slider().typedMax());area.slider().set.accept(area.integer()?Math.round(v):v);}catch(NumberFormatException ignored){}
     }
     private void text(Gfx g,String text,int x,int y,int color){if(scrollActive)scrollContent=Math.max(scrollContent,y+9);g.text(font,text,x,y,color,false);}
     private String shorten(String text,int pixels){if(font.width(text)<=pixels)return text;return font.plainSubstrByWidth(text,Math.max(0,pixels-9))+"…";}
