@@ -32,8 +32,14 @@ abstract class BlockItemMixin {
         craftium$placing.remove();
         if(context.getPlayer() instanceof ServerPlayer player){var before=EditorServer.before(player,context.getClickedPos());if(before!=null)craftium$placing.set(new Object[]{player,context.getClickedPos(),before});}
     }
+    @Inject(method="place",at=@At("HEAD"))
+    private void craftium$forceBegin(BlockPlaceContext context,CallbackInfoReturnable<InteractionResult> cir){
+        var options=PlayerCapabilities.of(context.getPlayer());
+        dev.craftium.runtime.ForcePlacement.set(options!=null&&options.forcePlace);
+    }
     @Inject(method="place",at=@At("RETURN"))
     private void craftium$after(BlockPlaceContext context,CallbackInfoReturnable<InteractionResult> cir){
+        dev.craftium.runtime.ForcePlacement.set(false);
         var placing=craftium$placing.get();craftium$placing.remove();
         if(placing!=null&&cir.getReturnValue().consumesAction())EditorServer.placed((ServerPlayer)placing[0],(BlockPos)placing[1],placing[2]);
     }
