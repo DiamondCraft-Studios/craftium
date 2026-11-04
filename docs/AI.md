@@ -77,6 +77,40 @@ A build ignores your brush settings (mask, symmetry, height range) and places ex
 - The file is deleted when the bridge stops. If Minecraft crashes and leaves it behind, the extension reports that the game is not running.
 - Anyone who can read your Minecraft folder or run programs as you can read the token, as with any local app. Turn the bridge off when you are not using it.
 
+## What the extension can do on your computer
+
+Claude Desktop warns that installing an extension "will grant this extension access to everything on your computer". That is true of every extension: it runs as an ordinary program with your permissions, and Claude Desktop does not sandbox it. The warning is generic, so here is what this one actually does, and how that is enforced.
+
+- **It is tiny and has no dependencies.** The packed extension is 8 files and about 11 kB: four short scripts (`mcp/src`, around 375 lines), a manifest, an icon and a readme. It uses no npm packages at run time, so there is no supply chain behind it to audit. It speaks the small part of the MCP protocol it needs itself.
+- **It reads one file:** `config/craftium/bridge.json`, in the default Minecraft folder or the folder you choose in its settings. That file holds the port and token the game wrote for this launch.
+- **It talks to one place:** `127.0.0.1`, the game's bridge on your own computer. It has no code that contacts the internet, starts programs, evaluates text as code, opens listening sockets or writes files.
+- **It forwards only what each tool names.** A tool call is checked, and only the keys that tool defines are sent to the game, so extra data a model adds goes nowhere.
+- **It does not enlarge what the game allows.** The game applies its own checks to everything it receives (see Safety).
+
+These limits are written as tests in [mcp/test/contract.test.js](../mcp/test/contract.test.js): the build fails if the code gains a dependency, imports another Node module, reads another file or environment variable, makes any network call other than the one loopback `fetch`, or can run a program. A change that widens the extension's reach has to change that file as well, where a reviewer will see it.
+
+You do not have to trust the packed file either: it is built from the source in [mcp](../mcp), and you can read it in a few minutes and build it yourself (see Getting the extension). The extension is not signed or verified by Anthropic, which is what the "developer information has not been verified" line in the install dialog means.
+
+**Fence it in further (optional).** Node can restrict a program to the folders you name. If you set the server up by hand instead of installing the `.mcpb`, use Node 22.13 or newer and list only the extension folder and your Minecraft `config` folder, in `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "craftium": {
+      "command": "node",
+      "args": [
+        "--permission",
+        "--allow-fs-read=C:\\path\\to\\craftium\\mcp\\src",
+        "--allow-fs-read=C:\\Users\\you\\AppData\\Roaming\\.minecraft\\config\\craftium",
+        "C:\\path\\to\\craftium\\mcp\\src\\index.js"
+      ]
+    }
+  }
+}
+```
+
+Under `--permission` the process can read only those two folders and cannot start programs or load native add-ons. (Node 24 does not restrict network access, so the loopback-only guarantee still comes from the code and its tests.) Use absolute paths, and if you use a launcher profile, point the second folder at that profile's `config\craftium`. The packed extension does not use this mode, because it cannot know which Node version Claude Desktop runs it with.
+
 ## Troubleshooting
 
 - **"Craftium is not reachable"**: open a world, turn on AI building (AI menu in the editor), and check the Minecraft folder setting in the extension if you use a launcher profile.
@@ -89,5 +123,5 @@ A build ignores your brush settings (mask, symmetry, height range) and places ex
 
 - Bridge: [AiBridge.java](../src/client/java/dev/craftium/client/AiBridge.java). A small loopback HTTP server (no JDK HTTP module, since Minecraft's bundled runtime may omit it) answering `POST /<tool>` with a JSON body and `Authorization: Bearer <token>`. Requests are spaced 120 ms apart because the server silently drops requests that follow another within 65 ms.
 - Build specs: [BuildSpec.java](../src/main/java/dev/craftium/core/BuildSpec.java) (pure, unit tested) and [BuildPlanner.java](../src/main/java/dev/craftium/server/BuildPlanner.java), reached by the `ai_build_preview` request. Apply and cancel reuse `pending_confirm` and `pending_cancel`.
-- MCP server: [mcp/](../mcp). `npm test` runs it against a fake bridge. `npm run pack` builds the `.mcpb`.
+- MCP server: [mcp/](../mcp), with no run-time dependencies. `npm test` starts the real server and talks to it with the official MCP client (a test-only dependency) against a fake bridge, and also checks the limits in `contract.test.js`. `npm run pack` builds the `.mcpb`.
 - Game test: `CRAFTIUM_TEST_SCOPE=ai gradlew :versions:mc-1.21.10:runClientGameTest` enables the bridge in a real world, drives it over HTTP, then runs the real MCP server over stdio to build a pyramid.
