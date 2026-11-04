@@ -108,6 +108,7 @@ public final class BuilderMode {
             if(button==1){confirm();return true;}
         }
         if(hit==null)return true;Point at=CraftiumClient.point(hit.getBlockPos());
+        if(button==2&&o.builderTool==Options.BuilderTool.STACK&&first!=null&&second!=null){stackTo(at);return true;} // middle click: as many copies as it takes to reach the block
         if(first!=null&&second!=null&&button!=2){ // nothing is being done to it yet: left and right move the first and second point
             if(button==0)first=at;else second=at;offset=new Point(0,0,0);refresh();return true;
         }
@@ -151,6 +152,13 @@ public final class BuilderMode {
     private static void select(Point low,Point high){magicStarted=true;first=low;second=high;offset=new Point(0,0,0);preview=false;refresh();}
     private static void acceptHeld(){Point low=heldFirst,high=heldSecond;heldFirst=heldSecond=null;select(low,high);}
     private static void discardHeld(){heldFirst=heldSecond=null;ClientState.notify("Selection cancelled");}
+    /** Sets the stack to run along each axis as many whole copies as reach the block, the block's own copy included; zero where it is already inside the selection. */
+    private static void stackTo(Point at){
+        Point a=min(),b=max();
+        stackX=Math.floorDiv(at.x()-a.x(),b.x()-a.x()+1);stackY=Math.floorDiv(at.y()-a.y(),b.y()-a.y()+1);stackZ=Math.floorDiv(at.z()-a.z(),b.z()-a.z()+1);
+        preview=true;clonePlaced=false;
+        ClientState.notify("Stack "+stackX+" × "+stackY+" × "+stackZ+" · right-click places · left-click cancels");
+    }
     private static Point min(){Point b=second==null?first:second;return new Point(Math.min(first.x(),b.x()),Math.min(first.y(),b.y()),Math.min(first.z(),b.z()));}
     private static Point max(){Point b=second==null?first:second;return new Point(Math.max(first.x(),b.x()),Math.max(first.y(),b.y()),Math.max(first.z(),b.z()));}
     public static void corners(Point a,Point b){first=a;second=b;offset=new Point(0,0,0);preview=false;refresh();}
@@ -199,13 +207,39 @@ public final class BuilderMode {
             Point from=min,to=max;if(stacking){var b=stackBounds();from=b[0];to=b[1];} // the selection grows with the stack
             Overlay.box(new AABB(from.x(),from.y(),from.z(),to.x()+1,to.y()+1,to.z()+1),o.builderSelectionColor,(float)o.builderSelectionWidth,second!=null&&!leaving?o.builderSelectionFill:0);
             if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?stackSteps(size):List.of(offset);
+                if(stacking){drawStack(o,min,size);return;}
                 var shown=preview(o,min,size,steps);
                 if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),o.builderMovingTint); // the blocks that are moving, where they are now
-                if(shown==null&&!stacking)Overlay.box(new AABB(min.x()+offset.x(),min.y()+offset.y(),min.z()+offset.z(),max.x()+offset.x()+1,max.y()+offset.y()+1,max.z()+offset.z()+1),o.builderPreviewColor,(float)o.builderPreviewWidth,0);
+                if(shown==null)Overlay.box(new AABB(min.x()+offset.x(),min.y()+offset.y(),min.z()+offset.z(),max.x()+offset.x()+1,max.y()+offset.y()+1,max.z()+offset.z()+1),o.builderPreviewColor,(float)o.builderPreviewWidth,0);
                 else{shown.shape().draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,o.builderPreviewColor,(float)o.builderPreviewWidth),o.builderPreviewColor,o.builderPreviewFill,true);if(!shown.places().isEmpty())Overlay.blocks(shown.models(),shown.places(),o.builderPreviewTint);}
             }
         }
     }
+    /** Past this many copies the stack is shown as the one box around all of it. */
+    private static final int STACK_BOX_LIMIT=512;
+    /**
+     * The stack's preview: a box for each copy, and the blocks' models where they land. The cost of an outline round every copy
+     * made scrolling the wheel stutter, so none is made; the models are kept until the stack, the selection or the turn changes.
+     */
+    private static void drawStack(Options o,Point min,Point size){
+        long copies=((long)Math.abs(stackX)+1)*(Math.abs(stackY)+1)*(Math.abs(stackZ)+1)-1;
+        if(copies<=STACK_BOX_LIMIT)for(Point step:stackSteps(size))
+            Overlay.box(new AABB(min.x()+step.x(),min.y()+step.y(),min.z()+step.z(),min.x()+step.x()+size.x(),min.y()+step.y()+size.y(),min.z()+step.z()+size.z()),o.builderPreviewColor,(float)o.builderPreviewWidth,o.builderPreviewFill);
+        if(cells.size()*copies>PREVIEW_LIMIT)return;
+        Object[] key={min,size,o.builderRotation,o.builderFlipAxis,stackX,stackY,stackZ};
+        if(stackFor==null||cells!=stackCells||!Arrays.equals(key,stackFor)){
+            var models=new ArrayList<net.minecraft.core.BlockPos>();var places=new ArrayList<net.minecraft.core.BlockPos>();var seen=new HashSet<Point>();
+            for(Point step:stackSteps(size))for(Point at:cells){
+                Point q=BuilderTransform.apply(at.subtract(min),size,o.builderRotation,o.builderFlipAxis).add(min.x()+step.x(),min.y()+step.y(),min.z()+step.z());
+                if(seen.add(q)){places.add(new net.minecraft.core.BlockPos(q.x(),q.y(),q.z()));models.add(new net.minecraft.core.BlockPos(at.x(),at.y(),at.z()));}
+            }
+            stackFor=key;stackCells=cells;stackModels=models;stackPlaces=places;
+        }
+        if(!stackPlaces.isEmpty())Overlay.blocks(stackModels,stackPlaces,o.builderPreviewTint);
+    }
+    private static Object[] stackFor;
+    private static List<Point> stackCells;
+    private static List<net.minecraft.core.BlockPos> stackModels=List.of(),stackPlaces=List.of();
     private static List<net.minecraft.core.BlockPos> cellBlocks;
     private static List<Point> cellBlocksFor;
     private static List<net.minecraft.core.BlockPos> cellBlocks(){
@@ -263,7 +297,7 @@ Point m=min();return new Vec3(m.x()+offset.x(),m.y()+offset.y(),m.z()+offset.z()
         if(CraftiumClient.held(CraftiumClient.contextKey)){int left=g.guiWidth()/2+95,top=g.guiHeight()-26-Options.BuilderTool.values().length*22;var all=Options.BuilderTool.values();g.fill(left-4,top-20,left+144,top+all.length*22+4,0xf510151c);g.text(mc.font,"Builder tools",left,top-14,0xffdce6ef,false);for(int i=0;i<all.length;i++){g.fill(left,top+i*22,left+140,top+i*22+21,all[i]==ClientState.options.builderTool?0xff315b84:0xff223247);g.text(mc.font,all[i].name().replace('_',' '),left+6,top+i*22+6,0xffdce6ef,false);}}
         String label=name()+"  ·  Hold Alt + wheel: tools";g.text(mc.font,label,g.guiWidth()/2-mc.font.width(label)/2,g.guiHeight()-69,0xffe6cf8b,false);
         if(heldFirst!=null){String ask="Selected "+heldCount+" blocks, confirm?  ·  RMB or Enter Confirm  ·  LMB or Esc Cancel";g.fill(g.guiWidth()/2-mc.font.width(ask)/2-8,g.guiHeight()/2+22,g.guiWidth()/2+mc.font.width(ask)/2+8,g.guiHeight()/2+42,0xf0141d29);g.text(mc.font,ask,g.guiWidth()/2-mc.font.width(ask)/2,g.guiHeight()/2+28,0xffffd66d,false);}
-        String hint=ClientState.options.builderTool==Options.BuilderTool.EXTRUDE?"LMB Shrink  ·  RMB Extrude":ClientState.options.builderTool==Options.BuilderTool.SYMMETRY?"RMB Set node  ·  Ctrl+F Mirror  ·  Ctrl+R Rotate":first==null?"LMB First corner  ·  RMB Second corner  ·  MMB Magic select":second!=null&&!preview?(ClientState.options.builderTool==Options.BuilderTool.ERASE?"Enter Erase  ·  ":"")+"LMB Move 1st  ·  RMB Move 2nd  ·  "+(magicStarted?"MMB Magic add":"MMB Extend")+"  ·  Wheel Nudge  ·  XYZ Axis  ·  Ctrl+R/F":second!=null?"LMB Cancel  ·  RMB Place  ·  MMB Face  ·  Wheel Nudge  ·  XYZ Axis  ·  Ctrl+R/F":"LMB Restart  ·  RMB or MMB Second corner";
+        String hint=ClientState.options.builderTool==Options.BuilderTool.EXTRUDE?"LMB Shrink  ·  RMB Extrude":ClientState.options.builderTool==Options.BuilderTool.SYMMETRY?"RMB Set node  ·  Ctrl+F Mirror  ·  Ctrl+R Rotate":first==null?"LMB First corner  ·  RMB Second corner  ·  MMB Magic select":second!=null&&!preview?(ClientState.options.builderTool==Options.BuilderTool.ERASE?"Enter Erase  ·  ":"")+"LMB Move 1st  ·  RMB Move 2nd  ·  "+(magicStarted?"MMB Magic add":"MMB Extend")+"  ·  Wheel Nudge  ·  XYZ Axis  ·  Ctrl+R/F":second!=null?"LMB Cancel  ·  RMB Place  ·  MMB "+(ClientState.options.builderTool==Options.BuilderTool.STACK?"Stack to block":"Face")+"  ·  Wheel Nudge  ·  XYZ Axis  ·  Ctrl+R/F":"LMB Restart  ·  RMB or MMB Second corner";
         g.text(mc.font,hint,g.guiWidth()/2-mc.font.width(hint)/2,g.guiHeight()-57,0xffc7d6e5,false);
         if(first!=null){Point a=min(),b=max();axisReadout(g,mc.font,g.guiHeight()-81,"Size "," × ",b.x()-a.x()+1,b.y()-a.y()+1,b.z()-a.z()+1,"   Offset ",", ",offset.x(),offset.y(),offset.z());}
     }
