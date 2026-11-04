@@ -219,6 +219,7 @@ public final class AiBridge {
     /** Sends one editor request from the game thread and waits for the server's reply to it. */
     private static JsonObject request(String name, Runnable send) throws Exception {
         var reply = new CompletableFuture<Packets.Status>();
+        pace();
         onClient(() -> {
             var mc = Minecraft.getInstance();
             if (mc.player == null || mc.level == null) throw new IllegalStateException("Not in a world");
@@ -227,6 +228,7 @@ public final class AiBridge {
             send.run();
             return null;
         });
+        lastSent = System.nanoTime();
         try {
             var status = reply.get(WAIT_SECONDS, TimeUnit.SECONDS);
             return onClient(() -> {
@@ -241,6 +243,15 @@ public final class AiBridge {
         } finally {
             if (awaiting == reply) awaiting = null;
         }
+    }
+
+    /** When the last request went to the server. The server silently drops a request that follows another within 65 ms, so they are kept further apart than that. */
+    private static long lastSent;
+    private static final long REQUEST_GAP_NANOS = 120_000_000L;
+
+    private static void pace() throws InterruptedException {
+        long wait = lastSent + REQUEST_GAP_NANOS - System.nanoTime();
+        if (wait > 0) Thread.sleep(wait / 1_000_000L + 1);
     }
 
     private static void select(Point from, Point to) {
