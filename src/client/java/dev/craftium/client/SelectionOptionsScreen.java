@@ -122,14 +122,14 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
         for(int i=0;i<4;i++){
             int channel=i,shift=CHANNEL_SHIFT[i];
             var slider=new FlatSlider(ex,top+108+i*24,270,19,Component.empty(),(entry.get().getAsInt()>>shift&255)/255d){
-                protected void updateMessage(){setMessage(Component.literal(CHANNEL_NAMES[channel]+": "+Math.round(value*255)));}
+                protected void updateMessage(){setMessage(Component.literal(CHANNEL_NAMES[channel]+": "+(channel==3?Math.round(value*100)+"%":String.valueOf(Math.round(value*255)))));}
                 protected void applyValue(){
                     int colour=entry.get().getAsInt();
                     entry.set().accept(colour&~(255<<shift)|(int)Math.round(value*255)<<shift);
                     if(hex!=null&&!hex.isFocused()){updatingHex=true;hex.setValue(hexOf(entry.get().getAsInt()));updatingHex=false;}
                 }
             };
-            slider.range(0,255,entry.fallback().getAsInt()>>shift&255);slider.setRaw((entry.get().getAsInt()>>shift&255)/255d);
+            slider.range(0,channel==3?100:255,channel==3?Math.round((entry.fallback().getAsInt()>>shift&255)*100/255f):entry.fallback().getAsInt()>>shift&255);slider.setRaw((entry.get().getAsInt()>>shift&255)/255d);
             channels[i]=slider;addRenderableWidget(slider);
         }
         addRenderableWidget(new FlatButton(ex,top+212,132,20,"Reset this colour",()->{entry.set().accept(entry.fallback().getAsInt());init();}));
