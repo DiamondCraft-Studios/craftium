@@ -17,8 +17,24 @@ final class ModelTransform {
 
     private ModelTransform(){}
 
-    /** Queues the changes in {@code plan} and returns the cells the blocks end up in. */
-    static LinkedHashSet<Point> apply(EditPlanner plan,Session session,Options o){
+    /** One transform: its options, the pivot it works about, and its sizes with the flips kept as signs. */
+    record Step(Options o,Geometry.Vector pivot,double sx,double sy,double sz){
+        Step withPivot(Geometry.Vector next){return new Step(o,next,sx,sy,sz);}
+    }
+    /**
+     * The blocks as they were before a run of transforms that are waiting for confirmation, and the transforms so far. A further transform
+     * is worked out from these original blocks through all of the steps in one go, so the blocks are sampled once and turning
+     * or scaling again and again never builds on a shape that has already been resampled.
+     */
+    record Chain(Map<Point,BlockSnapshot> source,Point min,Point max,List<Step> steps){}
+    record Result(LinkedHashSet<Point> moved,Chain chain){}
+
+    /**
+     * Queues the changes in {@code plan} and returns the cells the blocks end up in, with the chain that made them. With a {@code prior}
+     * chain the blocks come from its original source, and {@code plan} is expected to hold only what was staged before that chain.
+     * Blocks staged but not yet built count as the blocks that are there.
+     */
+    static Result apply(EditPlanner plan,Session session,Options o,Chain prior){
         var selection=session.selection;
         plan.exact=true;
         if(selection.size()==0)throw new IllegalArgumentException("Create a selection first");
@@ -27,27 +43,33 @@ final class ModelTransform {
         // A negative size flips the blocks along that axis.
         double sx=scale(o.sizeX),sy=scale(o.sizeY),sz=scale(o.sizeZ);
 
-        var source=new LinkedHashMap<Point,BlockSnapshot>();
-        for(Point at:selection.points()){plan.validate(at);source.put(at,BlockSnapshot.capture(plan.level,EditPlanner.pos(at)));}
-        Point min=selection.min(),max=selection.max();
+        Map<Point,BlockSnapshot> source;Point min,max;var steps=new ArrayList<Step>();
+        Point now=selection.min(),end=selection.max(); // the selection as it stands, which is where the pivot is taken from
+        if(prior==null){
+            source=new LinkedHashMap<>();
+            for(Point at:selection.points()){plan.validate(at);var staged=plan.changes.get(at);source.put(at,staged!=null?staged.after():BlockSnapshot.capture(plan.level,EditPlanner.pos(at)));}
+            min=now;max=end;
+        }else{source=prior.source();min=prior.min();max=prior.max();steps.addAll(prior.steps());}
         var pivot=o.aboutSet?new Geometry.Vector(o.aboutX,o.aboutY,o.aboutZ):o.pivotSet?new Geometry.Vector(o.pivotX,o.pivotY,o.pivotZ)
-            :new Geometry.Vector((min.x()+max.x()+1)/2d,(min.y()+max.y()+1)/2d,(min.z()+max.z()+1)/2d);
+            :new Geometry.Vector((now.x()+end.x()+1)/2d,(now.y()+end.y()+1)/2d,(now.z()+end.z()+1)/2d);
+        steps.add(new Step(o,pivot,sx,sy,sz));
 
-        var landed=place(source,min,max,pivot,sx,sy,sz,o);
+        var landed=place(source,min,max,steps);
         // A quarter turn about a point that is not on the right half-block loses cells: their centres fall on the
         // edges between blocks. Try pivots half a block away, nearest first, and keep the first that loses none.
-        if(landed.size()<source.size()&&quarterTurns(o)&&sx==1&&sy==1&&sz==1){
+        if(landed.size()<source.size()&&steps.stream().allMatch(ModelTransform::quarterTurn)){
             for(var shift:SHIFTS){
-                var nudged=new Geometry.Vector(pivot.x()+shift[0],pivot.y()+shift[1],pivot.z()+shift[2]);
-                var trial=place(source,min,max,nudged,sx,sy,sz,o);
-                if(trial.size()>=source.size()){landed=trial;break;}
+                var trialSteps=new ArrayList<>(steps);
+                trialSteps.set(trialSteps.size()-1,steps.getLast().withPivot(new Geometry.Vector(pivot.x()+shift[0],pivot.y()+shift[1],pivot.z()+shift[2])));
+                var trial=place(source,min,max,trialSteps);
+                if(trial.size()>=source.size()){landed=trial;steps=new ArrayList<>(trialSteps);break;}
             }
         }
         if(landed.size()>Selection.LIMIT)throw new IllegalArgumentException("Selection exceeds limit");
 
         for(Point at:source.keySet())if(!landed.containsKey(at))plan.put(at,Blocks.AIR.defaultBlockState());
         for(var entry:landed.entrySet()){plan.validate(entry.getKey());plan.put(entry.getKey(),entry.getValue());}
-        return new LinkedHashSet<>(landed.keySet());
+        return new Result(new LinkedHashSet<>(landed.keySet()),new Chain(source,min,max,List.copyOf(steps)));
     }
 
     /** Pivot shifts to try, smallest first. */
@@ -71,17 +93,19 @@ final class ModelTransform {
         return new BlockSnapshot(state,block.data());
     }
 
-    private static boolean quarterTurns(Options o){
+    private static boolean quarterTurn(Step step){
+        var o=step.o();
         for(double a:new double[]{o.yaw,o.pitch,o.roll})if(Math.abs(a/90-Math.rint(a/90))>1e-9)return false;
-        return true;
+        return step.sx()==1&&step.sy()==1&&step.sz()==1;
     }
 
     /** Every cell the transformed shape covers, each with the block that lands there. */
-    private static LinkedHashMap<Point,BlockSnapshot> place(Map<Point,BlockSnapshot> source,Point min,Point max,Geometry.Vector pivot,double sx,double sy,double sz,Options o){
-        // Where the corners of the selection's box go, to know which cells to look at.
+    private static LinkedHashMap<Point,BlockSnapshot> place(Map<Point,BlockSnapshot> source,Point min,Point max,List<Step> steps){
+        // Where the corners of the original box go, to know which cells to look at.
         double lx=Double.POSITIVE_INFINITY,ly=lx,lz=lx,hx=-lx,hy=-lx,hz=-lx;
         for(double x:new double[]{min.x(),max.x()+1})for(double y:new double[]{min.y(),max.y()+1})for(double z:new double[]{min.z(),max.z()+1}){
-            var v=forward(new Geometry.Vector(x,y,z),pivot,sx,sy,sz,o);
+            var v=new Geometry.Vector(x,y,z);
+            for(var step:steps)v=forward(v,step);
             lx=Math.min(lx,v.x());ly=Math.min(ly,v.y());lz=Math.min(lz,v.z());hx=Math.max(hx,v.x());hy=Math.max(hy,v.y());hz=Math.max(hz,v.z());
         }
         int x0=(int)Math.floor(lx+1e-9),y0=(int)Math.floor(ly+1e-9),z0=(int)Math.floor(lz+1e-9);
@@ -89,22 +113,26 @@ final class ModelTransform {
         if((long)(x1-x0)*(y1-y0)*(z1-z0)>CELL_LIMIT)throw new IllegalArgumentException("That transform covers too large a volume");
         var landed=new LinkedHashMap<Point,BlockSnapshot>();
         for(int x=x0;x<x1;x++)for(int y=y0;y<y1;y++)for(int z=z0;z<z1;z++){
-            var from=backward(new Geometry.Vector(x+.5,y+.5,z+.5),pivot,sx,sy,sz,o);
+            // Back through every step without rounding in between, so the original blocks are sampled once.
+            var from=new Geometry.Vector(x+.5,y+.5,z+.5);
+            for(int i=steps.size()-1;i>=0;i--)from=backward(from,steps.get(i));
             var block=source.get(new Point((int)Math.floor(from.x()+1e-9),(int)Math.floor(from.y()+1e-9),(int)Math.floor(from.z()+1e-9)));
-            if(block!=null)landed.put(new Point(x,y,z),o.turnBlocks?turned(block,o):block);
+            if(block!=null){for(var step:steps)if(step.o().turnBlocks)block=turned(block,step.o());landed.put(new Point(x,y,z),block);}
         }
         return landed;
     }
 
     /** Where a point goes: scaled, then rotated, about the pivot, then moved. */
-    private static Geometry.Vector forward(Geometry.Vector p,Geometry.Vector pivot,double sx,double sy,double sz,Options o){
-        var r=Geometry.rotate(new Geometry.Vector((p.x()-pivot.x())*sx,(p.y()-pivot.y())*sy,(p.z()-pivot.z())*sz),o.yaw,o.pitch,o.roll);
+    private static Geometry.Vector forward(Geometry.Vector p,Step step){
+        var o=step.o();var pivot=step.pivot();
+        var r=Geometry.rotate(new Geometry.Vector((p.x()-pivot.x())*step.sx(),(p.y()-pivot.y())*step.sy(),(p.z()-pivot.z())*step.sz()),o.yaw,o.pitch,o.roll);
         return new Geometry.Vector(pivot.x()+r.x()+o.offsetX,pivot.y()+r.y()+o.offsetY,pivot.z()+r.z()+o.offsetZ);
     }
 
     /** Where a point came from; the reverse of {@link #forward}. */
-    private static Geometry.Vector backward(Geometry.Vector p,Geometry.Vector pivot,double sx,double sy,double sz,Options o){
+    private static Geometry.Vector backward(Geometry.Vector p,Step step){
+        var o=step.o();var pivot=step.pivot();
         var r=Geometry.inverseRotate(new Geometry.Vector(p.x()-o.offsetX-pivot.x(),p.y()-o.offsetY-pivot.y(),p.z()-o.offsetZ-pivot.z()),o.yaw,o.pitch,o.roll);
-        return new Geometry.Vector(pivot.x()+r.x()/sx,pivot.y()+r.y()/sy,pivot.z()+r.z()/sz);
+        return new Geometry.Vector(pivot.x()+r.x()/step.sx(),pivot.y()+r.y()/step.sy(),pivot.z()+r.z()/step.sz());
     }
 }

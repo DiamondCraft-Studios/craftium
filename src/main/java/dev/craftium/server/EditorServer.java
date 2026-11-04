@@ -193,12 +193,25 @@ public final class EditorServer {
                 case "selection_transform" -> {
                     var plan=new EditPlanner(player.level(),s,o);
                     var before=new ArrayList<>(s.selection.points());
-                    var moved=ModelTransform.apply(plan,s,o);
+                    // While transforms wait for confirmation, a new one works from the original blocks, not from the preview of the last.
+                    var staged=s.pendingEdit;boolean confirming=s.confirmEdits&&!s.bypassConfirm;
+                    var chain=confirming&&staged!=null&&staged==s.pendingChainEdit?s.pendingChain:null;
+                    var base=chain!=null?s.pendingChainBase:confirming?staged:null; // what was staged before the run of transforms began
+                    if(base!=null)for(var c:base.changes())plan.changes.put(c.pos(),c);
+                    var result=ModelTransform.apply(plan,s,o,chain);var moved=result.moved();
                     // The selection follows its blocks; if the edit is cancelled it goes back.
-                    if(s.confirmEdits&&!s.bypassConfirm&&s.pendingSelectionBefore==null)s.pendingSelectionBefore=before;
+                    var priorBefore=s.pendingSelectionBefore;
+                    var original=confirming&&priorBefore!=null?priorBefore:before; // undo puts back the selection from before the whole run
+                    if(confirming&&priorBefore==null)s.pendingSelectionBefore=before;
                     s.selection.combine(moved,Selection.Mode.REPLACE);
-                    try{start(player,s,plan.finish("Transform selection").withSelection(new Session.SelectionChange(before,new ArrayList<>(moved),pivotText(o,0,0,0),pivotText(o,o.offsetX,o.offsetY,o.offsetZ))));}
-                    catch(RuntimeException e){s.selection.restore(before);s.pendingSelectionBefore=null;throw e;}
+                    try{
+                        var edit=plan.finish("Transform selection").withSelection(new Session.SelectionChange(original,new ArrayList<>(moved),pivotText(o,0,0,0),pivotText(o,o.offsetX,o.offsetY,o.offsetZ)));
+                        if(base!=null)edit=new Session.Edit(edit.name(),edit.changes(),base.biomes(),edit.flags(),base.entities(),base.annotations(),edit.selection());
+                        if(confirming)s.pendingEdit=null; // the new edit already holds what was staged, so it replaces it
+                        start(player,s,edit);
+                        if(confirming&&s.pendingEdit!=null){s.pendingChain=result.chain();s.pendingChainBase=base;s.pendingChainEdit=s.pendingEdit;}
+                    }
+                    catch(RuntimeException e){s.selection.restore(before);s.pendingSelectionBefore=priorBefore;if(confirming)s.pendingEdit=staged;throw e;}
                 }
                 case "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo" -> {var plan=new EditPlanner(player.level(),s,o);s.selection.combine(SelectionTransforms.apply(r.action(),plan),Selection.Mode.REPLACE);send(player,s,"Selection updated: "+s.selection.size()+" blocks",false);}
                 case "clear" -> {s.selection.clear();s.corner=null;s.line=null;s.ruler=null;send(player,s,"Selection cleared",false);}
