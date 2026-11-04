@@ -164,6 +164,8 @@ public final class Options {
     public enum RulerMode { LINE,CIRCLE }
     public RulerMode rulerMode=RulerMode.LINE;
     public int rulerSplit=2;
+    /** How the Ruler tool is drawn: its line, the knob at each end, the knob that has the gizmo, and its length label with the box behind it. */
+    public int rulerLineColor=0xffffd66d,rulerKnobColor=0xffffd66d,rulerKnobSelectedColor=0xffffffff,rulerTextColor=0xffffe4a2,rulerTextBackground=0xbb151c26;
     public String entityGroup="";
     public String author="",tags="";
     /** The export pop-up's structure block fields. */

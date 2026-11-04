@@ -50,6 +50,13 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
         new Width("Selection line width",o->o.builderSelectionWidth,(o,v)->o.builderSelectionWidth=v),
         new Width("Landing line width",o->o.builderPreviewWidth,(o,v)->o.builderPreviewWidth=v));
 
+    private static final List<Entry> RULER_ENTRIES=List.of(
+        entry("Ruler","Line",o->o.rulerLineColor,(o,c)->o.rulerLineColor=c),
+        entry("Ruler","Knobs",o->o.rulerKnobColor,(o,c)->o.rulerKnobColor=c),
+        entry("Ruler","Knob with the gizmo",o->o.rulerKnobSelectedColor,(o,c)->o.rulerKnobSelectedColor=c),
+        entry("Length label","Text",o->o.rulerTextColor,(o,c)->o.rulerTextColor=c),
+        entry("Length label","Background",o->o.rulerTextBackground,(o,c)->o.rulerTextBackground=c));
+
     private static Entry entry(String group,String name,ToIntFunction<Options> get,ObjIntConsumer<Options> set){
         return new Entry(group,name,()->get.applyAsInt(ClientState.options),c->set.accept(ClientState.options,c),()->get.applyAsInt(DEFAULTS));
     }
@@ -73,6 +80,9 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     }
     /** The builder tools' selection: its colours, the colours of where it would land, and both line widths. */
     static SelectionOptionsScreen builder(Screen parent){return new SelectionOptionsScreen(parent,"Builder selection options",BUILDER_ENTRIES,BUILDER_WIDTHS,false);}
+
+    /** The Ruler tool's colours: its line, its knobs and its length label. */
+    static SelectionOptionsScreen ruler(Screen parent){return new SelectionOptionsScreen(parent,"Ruler options",RULER_ENTRIES,List.of(),false);}
 
     @Override protected void init(){
         left=(width-W)/2;top=(height-H)/2;

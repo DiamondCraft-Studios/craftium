@@ -296,6 +296,7 @@ public final class CraftiumClient implements ClientModInitializer {
     }
     /** The transform handles: the builder's, or the editor's with the box corners and the point being dragged. Drawn each frame. */
     /** Every ruler: its line (or circle), its length, and a knob at each end. The end being dragged shows where it will land, and the length with it. */
+    private static final float RULER_TEXT_SCALE=.02f*2.5f;
     private static void drawRulers(EditorScreen screen){
         var o=ClientState.options;
         boolean editing=screen!=null&&o.tool==Tool.RULER;
@@ -309,13 +310,14 @@ public final class CraftiumClient implements ClientModInitializer {
                 if(picked==first)start=landing;else if(end!=null&&picked==second)end=landing;
             }
             if(end!=null){
-                Overlay.line(start,end,0xffffd66d,2);
+                Overlay.line(start,end,o.rulerLineColor,2);
                 double length=start.distanceTo(end);
-                if(o.rulerMode==Options.RulerMode.CIRCLE){for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(start.add(Math.cos(x)*length,0,Math.sin(x)*length),start.add(Math.cos(y)*length,0,Math.sin(y)*length),0xffffd66d,1.5f);}}
-                Overlay.text(Ruler.show(length)+" blocks",net.minecraft.core.BlockPos.containing(start.add(end).scale(.5)).above(),0xffffe4a2,0xbb151c26,.02f);
+                if(o.rulerMode==Options.RulerMode.CIRCLE){for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(start.add(Math.cos(x)*length,0,Math.sin(x)*length),start.add(Math.cos(y)*length,0,Math.sin(y)*length),o.rulerLineColor,1.5f);}}
+                // The length sits on the middle of the line, at two and a half times the size it had above it.
+                Overlay.text(Ruler.show(length)+" blocks",start.add(end).scale(.5),o.rulerTextColor,o.rulerTextBackground,RULER_TEXT_SCALE);
             }
-            Overlay.point(start,picked==first?0xffffffff:0xffffd66d,picked==first?10:8);
-            if(end!=null)Overlay.point(end,picked==second?0xffffffff:0xffffd66d,picked==second?10:8);
+            Overlay.point(start,picked==first?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==first?10:8);
+            if(end!=null)Overlay.point(end,picked==second?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==second?10:8);
             index+=end==null?1:2;
         }
     }
