@@ -109,6 +109,11 @@ public final class Overlay {
         return d.getStepX()*dx+d.getStepY()*dy+d.getStepZ()*dz>reach;
     }
 
+    /** The ghost's colour with a block tint multiplied in, as the game multiplies a tint into a texture; the ghost's alpha is kept. */
+    private static int tinted(int ghost,int tint){
+        int r=(ghost>>16&255)*(tint>>16&255)/255,g=(ghost>>8&255)*(tint>>8&255)/255,b=(ghost&255)*(tint&255)/255;
+        return ghost&0xFF000000|r<<16|g<<8|b;
+    }
     private static void submitBlocks(LevelRenderContext context){
         var ghosts=shown;
         var mc=Minecraft.getInstance();
@@ -128,6 +133,12 @@ public final class Overlay {
                 BlockPos pos=ghost.places().get(i);
                 var state=ghost.states()!=null?ghost.states().get(i):mc.level.getBlockState(ghost.models().get(i));
                 if(state.isAir()||state.getRenderShape()!=RenderShape.MODEL)continue; // fluids and block entities have no plain model
+                final var tints=new int[]{-2,-2,-2,-2};
+                final var tintOf=(java.util.function.IntUnaryOperator)index->{ // biome tints such as grass and leaves, looked up once per block
+                    if(index<0||index>=tints.length)return 0xFFFFFF;
+                    if(tints[index]==-2){int t=ClientCompat.blockTint(mc,state,pos,index);tints[index]=t==-1?0xFFFFFF:t&0xFFFFFF;}
+                    return tints[index];
+                };
                 random.setSeed(state.getSeed(pos));
                 var parts=new ArrayList<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart>();
                 mc.getModelManager().getBlockStateModelSet().get(state).collectParts(random,parts);
@@ -138,11 +149,11 @@ public final class Overlay {
                 stack.translate(-.5,-.5,-.5);
                 context.submitNodeCollector().submitCustomGeometry(stack,type,(pose,consumer)->{
                     for(var part:parts){
-                        for(var q:part.getQuads(null))if(facing(q.direction(),dx,dy,dz,0))consumer.putBakedQuad(pose,q,quad);
+                        for(var q:part.getQuads(null))if(facing(q.direction(),dx,dy,dz,0)){quad.setColor(tinted(ghost.tint(),tintOf.applyAsInt(q.materialInfo().tintIndex())));consumer.putBakedQuad(pose,q,quad);}
                         for(Direction face:FACES){
                             // Only the outer surface: not a side that touches another ghost, is covered as in the world, or faces away.
                             if(ghost.placed().contains(pos.relative(face))||hidden(mc.level,pos,face)||!facing(face,dx,dy,dz,.5))continue;
-                            for(var q:part.getQuads(face))consumer.putBakedQuad(pose,q,quad);
+                            for(var q:part.getQuads(face)){quad.setColor(tinted(ghost.tint(),tintOf.applyAsInt(q.materialInfo().tintIndex())));consumer.putBakedQuad(pose,q,quad);}
                         }
                     }
                 });

@@ -50,5 +50,7 @@ public final class ClientCompat {
         return center.add(plane.getPointOnPlane(x,y).subtract(center).scale(ratio)).normalize();
     }
     public static void rebuildChunks(Minecraft mc){mc.levelRenderer.allChanged();}
-    public static int blockTint(Minecraft mc,BlockState state,BlockPos pos){return mc.getBlockColors().getColor(state,mc.level,pos,0);}
+    public static int blockTint(Minecraft mc,BlockState state,BlockPos pos){return blockTint(mc,state,pos,0);}
+    /** Biome or block tint of the state's tint layer {@code index} at {@code pos}, or -1 when it has none. */
+    public static int blockTint(Minecraft mc,BlockState state,BlockPos pos,int index){return mc.getBlockColors().getColor(state,mc.level,pos,index);}
 }

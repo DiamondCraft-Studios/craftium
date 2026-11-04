@@ -42,8 +42,10 @@ public final class ClientCompat {
     /** Rebuilds every compiled chunk so changed render settings take effect. */
     public static void rebuildChunks(Minecraft mc){mc.levelRenderer.invalidateCompiledGeometry(mc.level,mc.options,camera(mc),mc.getBlockColors());}
     /** Biome or block tint of the state's first tint layer at {@code pos}, or -1 when it has none. */
-    public static int blockTint(Minecraft mc,BlockState state,BlockPos pos){
-        var source=mc.getBlockColors().getTintSource(state,0);
+    public static int blockTint(Minecraft mc,BlockState state,BlockPos pos){return blockTint(mc,state,pos,0);}
+    /** Biome or block tint of the state's tint layer {@code index} at {@code pos}, or -1 when it has none. */
+    public static int blockTint(Minecraft mc,BlockState state,BlockPos pos,int index){
+        var source=mc.getBlockColors().getTintSource(state,index);
         return source==null?-1:source.colorInWorld(state,mc.level,pos);
     }
 }

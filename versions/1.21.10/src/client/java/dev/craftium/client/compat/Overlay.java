@@ -219,6 +219,12 @@ public final class Overlay {
             BlockPos pos=ghost.places.get(i);
             var state=ghost.states!=null?ghost.states.get(i):level.getBlockState(ghost.models.get(i));
             if(state.isAir()||state.getRenderShape()!=RenderShape.MODEL)continue; // fluids and block entities have no plain model
+            final var tints=new int[]{-2,-2,-2,-2};
+            final var tintOf=(java.util.function.IntUnaryOperator)index->{ // biome tints such as grass and leaves, looked up once per block
+                if(index<0||index>=tints.length)return 0xFFFFFF;
+                if(tints[index]==-2){int t=ClientCompat.blockTint(mc,state,pos,index);tints[index]=t==-1?0xFFFFFF:t&0xFFFFFF;}
+                return tints[index];
+            };
             random.setSeed(state.getSeed(pos));
             var parts=mc.getBlockRenderer().getBlockModel(state).collectParts(random);
             double dx=view.eye.x-pos.getX()-.5,dy=view.eye.y-pos.getY()-.5,dz=view.eye.z-pos.getZ()-.5;
@@ -228,11 +234,11 @@ public final class Overlay {
             stack.translate(-.5,-.5,-.5);
             var pose=stack.last();
             for(var part:parts){
-                for(var quad:part.getQuads(null))if(facing(quad.direction(),dx,dy,dz,0))consumer.putBulkData(pose,quad,r,g,b,a,LightTexture.FULL_BRIGHT,OverlayTexture.NO_OVERLAY);
+                for(var quad:part.getQuads(null))if(facing(quad.direction(),dx,dy,dz,0)){int t=tintOf.applyAsInt(quad.tintIndex());consumer.putBulkData(pose,quad,r*(t>>16&255)/255f,g*(t>>8&255)/255f,b*(t&255)/255f,a,LightTexture.FULL_BRIGHT,OverlayTexture.NO_OVERLAY);}
                 for(Direction face:FACES){
                     // Only the outer surface: not a side that touches another ghost, is covered as in the world, or faces away.
                     if(ghost.placed.contains(pos.relative(face))||hidden(level,pos,face)||!facing(face,dx,dy,dz,.5))continue;
-                    for(var quad:part.getQuads(face))consumer.putBulkData(pose,quad,r,g,b,a,LightTexture.FULL_BRIGHT,OverlayTexture.NO_OVERLAY);
+                    for(var quad:part.getQuads(face)){int t=tintOf.applyAsInt(quad.tintIndex());consumer.putBulkData(pose,quad,r*(t>>16&255)/255f,g*(t>>8&255)/255f,b*(t&255)/255f,a,LightTexture.FULL_BRIGHT,OverlayTexture.NO_OVERLAY);}
                 }
             }
             stack.popPose();
