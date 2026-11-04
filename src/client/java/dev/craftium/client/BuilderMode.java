@@ -128,7 +128,19 @@ public final class BuilderMode {
     /** True once the search has been running long enough that the player should be told: a large area. */
     public static boolean selecting(){return magic!=null&&System.currentTimeMillis()-magicSince>ClientState.SELECTING_DELAY;}
     /** Takes the result of the search when it is done. */
+    /** Frames to wait after undo or redo before the box reads the world again, so the blocks it covers have arrived. */
+    private static int refreshIn;
+    /** Undo and redo put the builder's box back where it was: "x1,y1,z1,x2,y2,z2", or nothing to leave it. */
+    public static void restoreBox(String box){
+        if(box==null||box.isEmpty()||!enabled)return;
+        try{
+            String[] v=box.split(",");if(v.length!=6)return;
+            first=new Point(Integer.parseInt(v[0]),Integer.parseInt(v[1]),Integer.parseInt(v[2]));second=new Point(Integer.parseInt(v[3]),Integer.parseInt(v[4]),Integer.parseInt(v[5]));
+            retool();offset=new Point(0,0,0);cells=List.of();cellBlocksFor=null;refreshIn=3;
+        }catch(NumberFormatException ignored){}
+    }
     public static void tick(){
+        if(refreshIn>0&&--refreshIn==0&&first!=null&&second!=null)refresh();
         var running=magic;if(running==null)return;
         if(!running.isDone()){if(System.currentTimeMillis()-magicSince>SEARCH_TIMEOUT){restartSearch();ClientState.notify("Magic select took too long and was stopped");}return;}
         magic=null;

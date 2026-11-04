@@ -525,7 +525,7 @@ public final class EditorServer {
         var biomes=new ArrayList<>(a.biomes());biomes.addAll(b.biomes());
         var entities=new ArrayList<>(a.entities());entities.addAll(b.entities());
         var annotations=new ArrayList<>(a.annotations());annotations.addAll(b.annotations());
-        var selection=a.selection()!=null&&b.selection()!=null?new Session.SelectionChange(a.selection().before(),b.selection().after(),a.selection().pivotBefore(),b.selection().pivotAfter()):a.selection()!=null?a.selection():b.selection();
+        var selection=a.selection()!=null&&b.selection()!=null?new Session.SelectionChange(a.selection().before(),b.selection().after(),a.selection().pivotBefore(),b.selection().pivotAfter(),a.selection().boxBefore(),b.selection().boxAfter()):a.selection()!=null?a.selection():b.selection();
         return new Session.Edit(a.name(),new ArrayList<>(changes.values()),biomes,a.flags()|b.flags(),entities,annotations,selection);
     }
     private static final int PULSE_MS=600,PULSE_POINTS=8192;
@@ -604,9 +604,12 @@ public final class EditorServer {
                 (j.backwards?j.session.redo:j.session.undo).addFirst(actual);
                 // The selection goes back or forward with the blocks it was moved with.
                 if(j.edit.selection()!=null){
-                    j.session.selection.restore(j.backwards?j.edit.selection().before():j.edit.selection().after());
-                    String pivot=j.backwards?j.edit.selection().pivotBefore():j.edit.selection().pivotAfter();
+                    var change=j.edit.selection();
+                    if(change.hasPoints())j.session.selection.restore(j.backwards?change.before():change.after());
+                    String pivot=j.backwards?change.pivotBefore():change.pivotAfter();
                     if(pivot!=null)j.session.pivotUpdate=pivot;
+                    String box=j.backwards?change.boxBefore():change.boxAfter();
+                    if(box!=null)j.session.builderUpdate=box;
                 }
                 j.session.recalculateBytes();
                 j.session.historyDirty=true;
@@ -700,7 +703,7 @@ public final class EditorServer {
         if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
         if(ai!=null&&ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit);ai.pendingDirty=false;}
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name());s.library=List.of();s.pivotUpdate="";s.pulse="";
+        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.builderUpdate);s.library=List.of();s.pivotUpdate="";s.builderUpdate="";s.pulse="";
         ServerPlatform.send(player,new Packets.Update(Packets.JSON.toJson(status)));
     }
 }

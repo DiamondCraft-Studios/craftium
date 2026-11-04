@@ -35,8 +35,21 @@ final class BuilderEdits {
         }else steps.add(new Point(o.offsetX,o.offsetY,o.offsetZ));
         if((long)source.size()*steps.size()>Selection.LIMIT)throw new IllegalArgumentException("Builder stack exceeds the cell limit");
         for(Point step:steps){Point origin=min.add(step.x(),step.y(),step.z());for(var e:captureSession.clipboard.entrySet()){if(!o.pasteAir&&e.getValue().state().isAir())continue;Point q=e.getKey();p.putClipboard(origin.add(q.x(),q.y(),q.z()),e.getValue());}if(o.copyEntities)entities.addAll(ClipboardEntities.paste(player,captureSession,origin));}
-        if(entities.size()>128)throw new IllegalArgumentException("Builder entity limit: 128 changes");var edit=p.finish(o.builderTool.name().toLowerCase(Locale.ROOT)+" builder selection");return new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),List.copyOf(entities));
+        if(entities.size()>128)throw new IllegalArgumentException("Builder entity limit: 128 changes");var edit=p.finish(o.builderTool.name().toLowerCase(Locale.ROOT)+" builder selection");
+        // The builder's box lives on the client, so undo and redo hand it back there: a move takes it along with the blocks, a stack grows it.
+        Point max=new Point(min.x()+size.x()-1,min.y()+size.y()-1,min.z()+size.z()-1);String before=box(min,max),after=null;
+        if(o.builderTool==Options.BuilderTool.MOVE){
+            Point a=BuilderTransform.apply(new Point(0,0,0),size,o.builderRotation,o.builderFlipAxis),b=BuilderTransform.apply(new Point(size.x()-1,size.y()-1,size.z()-1),size,o.builderRotation,o.builderFlipAxis);
+            Point shift=min.add(o.offsetX,o.offsetY,o.offsetZ);
+            after=box(new Point(Math.min(a.x(),b.x())+shift.x(),Math.min(a.y(),b.y())+shift.y(),Math.min(a.z(),b.z())+shift.z()),new Point(Math.max(a.x(),b.x())+shift.x(),Math.max(a.y(),b.y())+shift.y(),Math.max(a.z(),b.z())+shift.z()));
+        }else if(o.builderTool==Options.BuilderTool.STACK){
+            int sx=Math.clamp(o.stackX,-16,16),sy=Math.clamp(o.stackY,-16,16),sz=Math.clamp(o.stackZ,-16,16);
+            after=box(new Point(min.x()+Math.min(0,sx)*size.x(),min.y()+Math.min(0,sy)*size.y(),min.z()+Math.min(0,sz)*size.z()),new Point(max.x()+Math.max(0,sx)*size.x(),max.y()+Math.max(0,sy)*size.y(),max.z()+Math.max(0,sz)*size.z()));
+        }
+        var result=new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),List.copyOf(entities),List.of());
+        return after==null?result:result.withSelection(Session.SelectionChange.box(before,after));
     }
+    private static String box(Point a,Point b){return a.x()+","+a.y()+","+a.z()+","+b.x()+","+b.y()+","+b.z();}
     static BlockState verticalMirror(BlockState state){
         state=StateTransforms.flipHalf(state);
         if(state.hasProperty(BlockStateProperties.FACING)&&state.getValue(BlockStateProperties.FACING).getAxis()==net.minecraft.core.Direction.Axis.Y)state=state.setValue(BlockStateProperties.FACING,state.getValue(BlockStateProperties.FACING).getOpposite());return state;
