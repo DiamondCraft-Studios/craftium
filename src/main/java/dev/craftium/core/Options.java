@@ -118,6 +118,10 @@ public final class Options {
     public int farReach=32;
     /** Which property Tinker cycles on the block it is used on, picked by sneaking; wraps around the block's properties. */
     public int tinkerIndex;
+    /** Set by sneaking: Tinker cycles the picked property instead of choosing a change from the block and the aim. */
+    public boolean tinkerManual;
+    /** Where on the block the player aims, as fractions of the block; sent with each Tinker click so the server makes the same choice as the preview. */
+    public double tinkerX=.5,tinkerY=.5,tinkerZ=.5;
     public boolean showCollisionMesh,showLightBlocks,showStructureVoid,expandHitboxes,solidFluids,preventInteractions;
     public double smoothing=2,threshold=.5,meldStrength=1;
     public int annotationColor=0xffa5d6ff,annotationWidth=2;

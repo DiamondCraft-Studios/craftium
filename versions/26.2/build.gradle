@@ -27,6 +27,12 @@ def mergeTest = mergeTask('mergeTestSources', 'test')
 
 loom {
     splitEnvironmentSourceSets()
+    runs {
+        client {
+            // The development client opens maximized; CraftiumClient reads this.
+            vmArg '-Dcraftium.maximize=true'
+        }
+    }
     mods {
         craftium {
             sourceSet sourceSets.main
