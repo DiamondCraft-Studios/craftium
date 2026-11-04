@@ -32,7 +32,11 @@ A dedicated server refuses to start without an accepted Minecraft EULA. The buil
 | Client | Editor opens (screenshot `dedicated-editor`) and restores the game mode; client commands select |
 | Persistence | History saved, client disconnects, reconnects, saved history reloads and undoes |
 
-Not yet covered here (covered on 26.2 or Paper only): brushes and Lua, biomes, gizmos, Autoshade, animated rebuild, symmetry, structure import/export files, and the AI bridge on a Fabric server. The run logs "Can't keep up" about two seconds behind three times during the large-edit stages. The cause (the harness's accelerated tick clock or a real stall in large edits) has not been established.
+Not yet covered here (covered on 26.2 or Paper only): brushes and Lua, biomes, gizmos, Autoshade, animated rebuild, symmetry, structure import/export files, and the AI bridge on a Fabric server.
+
+## Known log noise
+
+The server logs "Can't keep up! ... 2 s behind" about three times per run, around the 16,000-position lasso stage and the stages after it. The test advances the server only through explicit `waitTicks` calls between wall-clock pauses, so held ticks alone may explain it. That has not been measured: the other candidate is reassembly of the fragmented lasso request. Timing the server's tick duration with the pauses removed would settle it. Until then, treat it as unexplained rather than as a known server stall.
 
 ## Needs a human
 
