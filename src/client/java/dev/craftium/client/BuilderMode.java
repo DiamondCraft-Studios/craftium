@@ -34,6 +34,24 @@ public final class BuilderMode {
     /** Drops a search that is stuck and starts over on a fresh thread, as the one thread is shared by every search after it. */
     private static void restartSearch(){var old=search;search=newSearch();old.shutdownNow();magic=null;}
     private BuilderMode(){}
+    /** One of the builder's flags, a switch in the menu held open with Alt: its label, what it reads, what it flips, and what it does. */
+    private record Flag(String label,java.util.function.Predicate<Options> get,java.util.function.Consumer<Options> flip,String hint){}
+    private static final List<Flag> FLAGS=List.of(
+        new Flag("Keep existing",o->o.keepExisting,o->o.keepExisting=!o.keepExisting,"Blocks already where the selection lands are not overwritten"),
+        new Flag("Copy entities",o->o.copyEntities,o->o.copyEntities=!o.copyEntities,"Entities in the selection are moved or copied with it"),
+        new Flag("Copy air",o->o.pasteAir,o->o.pasteAir=!o.pasteAir,"Air in the selection clears the blocks where it lands"));
+    private static final int FLAG_W=112,FLAG_ROW=16,FLAG_STRIDE=17;
+    // On the left of the hotbar, where the builder widget is on the other slots, mirroring the tool list on the right.
+    private static int flagLeft(int guiWidth){return guiWidth/2-96-FLAG_W;}
+    private static int flagTop(int guiHeight){return guiHeight-28-FLAGS.size()*FLAG_STRIDE;}
+    private static int guiX(Minecraft mc){return (int)(mc.mouseHandler.xpos()*mc.getWindow().getGuiScaledWidth()/mc.getWindow().getScreenWidth());}
+    private static int guiY(Minecraft mc){return (int)(mc.mouseHandler.ypos()*mc.getWindow().getGuiScaledHeight()/mc.getWindow().getScreenHeight());}
+    /** The flag under the cursor, or -1. */
+    private static int flagAt(Minecraft mc){
+        int w=mc.getWindow().getGuiScaledWidth(),h=mc.getWindow().getGuiScaledHeight(),x=guiX(mc),y=guiY(mc),left=flagLeft(w),top=flagTop(h);
+        if(x<left||x>=left+FLAG_W||y<top)return -1;
+        int row=(y-top)/FLAG_STRIDE;return row<FLAGS.size()&&(y-top)%FLAG_STRIDE<FLAG_ROW?row:-1;
+    }
     public static boolean active(){var mc=Minecraft.getInstance();return enabled&&available()&&ClientCompat.screen(mc)==null;}
     /** Whether the builder can be used at all here: a creative player in a world with the mod on the server. */
     static boolean usable(){return available();}
@@ -96,6 +114,7 @@ public final class BuilderMode {
         if(BuilderWidget.mouse(button,action))return true;
         if(!active()||button>2)return false;if(action!=GLFW.GLFW_PRESS)return true;var mc=Minecraft.getInstance();
         if(CraftiumClient.held(CraftiumClient.contextKey)){
+            if(button==0){int flag=flagAt(mc);if(flag>=0){var f=FLAGS.get(flag);f.flip().accept(ClientState.options);ClientState.save();ClientState.notify(f.label()+(f.get().test(ClientState.options)?": on":": off"));return true;}}
             if(button==0){double x=mc.mouseHandler.xpos()*mc.getWindow().getGuiScaledWidth()/mc.getWindow().getScreenWidth(),y=mc.mouseHandler.ypos()*mc.getWindow().getGuiScaledHeight()/mc.getWindow().getScreenHeight();int left=mc.getWindow().getGuiScaledWidth()/2+95,top=mc.getWindow().getGuiScaledHeight()-26-Options.BuilderTool.values().length*22;int row=(int)((y-top)/22);if(x>=left&&x<left+140&&y>=top&&row>=0&&row<Options.BuilderTool.values().length)select(Options.BuilderTool.values()[row]);}return true;
         }BlockHitResult hit=mc.hitResult instanceof BlockHitResult b&&b.getType()==HitResult.Type.BLOCK?b:null;
         if(heldFirst!=null){if(button==1)acceptHeld();else if(button==0)discardHeld();return true;}
@@ -287,6 +306,17 @@ public final class BuilderMode {
         // Only the tools that move blocks have anything to drag: erase, extrude and symmetry do not, and nor does a lone first point.
         if(!active()||first==null||second==null||tool!=Options.BuilderTool.MOVE&&tool!=Options.BuilderTool.CLONE&&tool!=Options.BuilderTool.STACK&&tool!=Options.BuilderTool.SMEAR)return null;
 Point m=min();return new Vec3(m.x()+offset.x(),m.y()+offset.y(),m.z()+offset.z());}
+    private static void drawFlags(Gfx g,Minecraft mc){
+        int x=flagLeft(g.guiWidth()),top=flagTop(g.guiHeight()),over=flagAt(mc);var o=ClientState.options;
+        g.fill(x-4,top-20,x+FLAG_W+4,g.guiHeight()-24,0xf510151c);g.text(mc.font,"Builder flags",x,top-14,0xffdce6ef,false);
+        for(int i=0;i<FLAGS.size();i++){
+            var f=FLAGS.get(i);int y=top+i*FLAG_STRIDE;boolean on=f.get().test(o),hover=i==over;
+            g.fill(x,y,x+FLAG_W,y+FLAG_ROW,on?(hover?0xff3f7a63:0xff2f6350):(hover?0xff2f4260:0xff223247));
+            g.text(mc.font,f.label(),x+6,y+4,on?0xffe9fff4:0xffdce6ef,false);
+            g.fill(x+FLAG_W-12,y+5,x+FLAG_W-6,y+11,on?0xff8be3b5:0xff52667a);
+        }
+        if(over>=0){String hint=FLAGS.get(over).hint();g.text(mc.font,hint,Math.max(4,g.guiWidth()/2-mc.font.width(hint)/2),top-34,0xffe6cf8b,false);}
+    }
     public static void hud(Gfx g){
         if(!available())return;var mc=Minecraft.getInstance();int x=g.guiWidth()/2+94,y=g.guiHeight()-23;
         // The builder slot beside the hotbar is always there; it is dim until the builder is on.
@@ -294,7 +324,7 @@ Point m=min();return new Vec3(m.x()+offset.x(),m.y()+offset.y(),m.z()+offset.z()
         g.fill(x,y,x+23,y+23,0xff172330);g.outline(x,y,23,23,tone);g.text(mc.font,"0",x+9,y+8,tone,false);
         if(!on)return;
         if(selecting())g.text(mc.font,SelectingIndicator.spinner(),g.guiWidth()/2+8,g.guiHeight()/2+8,0xff6dc8ff,false);
-        if(CraftiumClient.held(CraftiumClient.contextKey)){int left=g.guiWidth()/2+95,top=g.guiHeight()-26-Options.BuilderTool.values().length*22;var all=Options.BuilderTool.values();g.fill(left-4,top-20,left+144,top+all.length*22+4,0xf510151c);g.text(mc.font,"Builder tools",left,top-14,0xffdce6ef,false);for(int i=0;i<all.length;i++){g.fill(left,top+i*22,left+140,top+i*22+21,all[i]==ClientState.options.builderTool?0xff315b84:0xff223247);g.text(mc.font,all[i].name().replace('_',' '),left+6,top+i*22+6,0xffdce6ef,false);}}
+        if(CraftiumClient.held(CraftiumClient.contextKey)){int left=g.guiWidth()/2+95,top=g.guiHeight()-26-Options.BuilderTool.values().length*22;var all=Options.BuilderTool.values();g.fill(left-4,top-20,left+144,top+all.length*22+4,0xf510151c);g.text(mc.font,"Builder tools",left,top-14,0xffdce6ef,false);for(int i=0;i<all.length;i++){g.fill(left,top+i*22,left+140,top+i*22+21,all[i]==ClientState.options.builderTool?0xff315b84:0xff223247);g.text(mc.font,all[i].name().replace('_',' '),left+6,top+i*22+6,0xffdce6ef,false);}drawFlags(g,mc);}
         String label=name()+"  ·  Hold Alt + wheel: tools";g.text(mc.font,label,g.guiWidth()/2-mc.font.width(label)/2,g.guiHeight()-69,0xffe6cf8b,false);
         if(heldFirst!=null){String ask="Selected "+heldCount+" blocks, confirm?  ·  RMB or Enter Confirm  ·  LMB or Esc Cancel";g.fill(g.guiWidth()/2-mc.font.width(ask)/2-8,g.guiHeight()/2+22,g.guiWidth()/2+mc.font.width(ask)/2+8,g.guiHeight()/2+42,0xf0141d29);g.text(mc.font,ask,g.guiWidth()/2-mc.font.width(ask)/2,g.guiHeight()/2+28,0xffffd66d,false);}
         String hint=ClientState.options.builderTool==Options.BuilderTool.EXTRUDE?"LMB Shrink  ·  RMB Extrude":ClientState.options.builderTool==Options.BuilderTool.SYMMETRY?"RMB Set node  ·  Ctrl+F Mirror  ·  Ctrl+R Rotate":first==null?"LMB First corner  ·  RMB Second corner  ·  MMB Magic select":second!=null&&!preview?(ClientState.options.builderTool==Options.BuilderTool.ERASE?"Enter Erase  ·  ":"")+"LMB Move 1st  ·  RMB Move 2nd  ·  "+(magicStarted?"MMB Magic add":"MMB Extend")+"  ·  Wheel Nudge  ·  XYZ Axis  ·  Ctrl+R/F":second!=null?"LMB Move 1st  ·  RMB Place  ·  MMB "+(ClientState.options.builderTool==Options.BuilderTool.STACK?"Stack to block":"Face")+"  ·  Wheel Nudge  ·  XYZ Axis  ·  Ctrl+R/F":"LMB Restart  ·  RMB or MMB Second corner";
