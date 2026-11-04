@@ -326,14 +326,16 @@ public final class EditorScreen extends CraftiumScreen {
             var s=ClientState.status;
             if(o().tool==Tool.RULER) {
                 text(g,"MEASUREMENT",10,311,MUTED);
-                var points=ClientState.rulerPoints;
-                if(!points.isEmpty())text(g,"Start: "+points.getFirst().coordinates(),10,332,TEXT);
-                if(points.size()>1) {
-                    text(g,"End: "+points.getLast().coordinates(),10,353,TEXT);double length=0;int manhattan=0;
-                    for(int i=1;i<points.size();i++){Point a=points.get(i-1),b=points.get(i);length+=Math.sqrt(a.distanceSquared(b));manhattan+=Math.abs(a.x()-b.x())+Math.abs(a.y()-b.y())+Math.abs(a.z()-b.z());}
-                    text(g,String.format(Locale.ROOT,"Length: %.2f",length),10,377,0xffffd783);text(g,"Manhattan: "+manhattan,10,395,MUTED);
+                var ruler=currentRuler();
+                text(g,ClientState.rulers.size()+(ClientState.rulers.size()==1?" ruler":" rulers")+" · click an end to move it",10,332,MUTED);
+                if(ruler!=null){
+                    text(g,"Start: "+ruler.a.coordinates(),10,353,TEXT);
+                    if(ruler.complete()){
+                        text(g,"End: "+ruler.b.coordinates(),10,371,TEXT);
+                        text(g,"Length: "+Ruler.show(ruler.length()),10,392,0xffffd783);text(g,"Manhattan: "+ruler.manhattan(),10,410,MUTED);
+                    }
                 }
-                button(g,10,423,pw-20,20,"Clear measurement",false,()->{ClientState.rulerPoints.clear();ClientState.rulerStart=null;ClientState.rulerEnd=null;action("ruler_clear");},"");
+                button(g,10,423,pw-20,20,"Clear measurement",false,()->{ClientState.rulers.clear();selectedNode=-1;action("ruler_clear");},"");
                 button(g,10,449,pw-20,20,"Mode: "+o().rulerMode,false,()->o().rulerMode=Options.RulerMode.values()[(o().rulerMode.ordinal()+1)%2],()->o().rulerMode=Options.RulerMode.values()[(o().rulerMode.ordinal()+1)%2],"Inspector → Ruler to split segments and select center");
             } else {
                 text(g,"SELECTION BOUNDS",10,311,MUTED);
@@ -1200,7 +1202,8 @@ public final class EditorScreen extends CraftiumScreen {
         if(o().tool==Tool.SLOPE){var hit=target();if(hit!=null){Point p=CraftiumClient.point(hit.getBlockPos());if(o().nodes.isEmpty()){o().nodes.add(p);ClientState.notify("Slope anchor set · drag from the second point");return;}if(o().nodes.size()==1)o().nodes.add(p);else o().nodes.set(1,p);}}
         if(o().tool==Tool.RULER) {
             var hit=target();if(hit!=null) {
-                Point p=CraftiumClient.point(hit.getBlockPos());if(ClientState.rulerPoints.size()<256)ClientState.rulerPoints.add(p);ClientState.rulerStart=ClientState.rulerPoints.getFirst();ClientState.rulerEnd=p;
+                Point p=CraftiumClient.point(hit.getBlockPos());
+                try{ClientState.rulerPoints.add(p);}catch(IllegalArgumentException e){ClientState.notify(e.getMessage());} // the second click finishes a ruler, the next one starts another
             }
             return;
         }
@@ -1285,7 +1288,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(event.button()==0&&TransformGizmo.click(this,event.x(),event.y()))return true;
         if(event.button()==0&&!PlacementPreview.active()){
-            var points=handleNodes();double best=144;int index=-1;for(int i=0;i<points.size();i++){var pixel=project(points.get(i));if(pixel==null)continue;double distance=Math.pow(event.x()-pixel[0],2)+Math.pow(event.y()-pixel[1],2);if(distance<best){best=distance;index=i;}}
+            var points=handleNodes();double best=144;int index=-1;for(int i=0;i<points.size();i++){var pixel=project(points.get(i),TransformGizmo.nodeOffset());if(pixel==null)continue;double distance=Math.pow(event.x()-pixel[0],2)+Math.pow(event.y()-pixel[1],2);if(distance<best){best=distance;index=i;}}
             if(index>=0){selectedNode=index;draggingNode=true;placementDragOrigin=points.get(index);placementDragX=event.x();placementDragY=event.y();return true;}
         }
         if(PlacementPreview.active()){
@@ -1454,7 +1457,7 @@ public final class EditorScreen extends CraftiumScreen {
             case TOGGLE_MOVE -> toggleTool(Tool.MOVE);case TOGGLE_ROTATE -> toggleTool(Tool.ROTATE);case TOGGLE_SCALE -> toggleTool(Tool.SCALE);case TOGGLE_PIVOT -> toggleTool(Tool.PIVOT);
 case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut");case DUPLICATE -> action("duplicate");case PASTE -> action("paste");
             case COPY_AIR -> {boolean old=o().pasteAir;o().pasteAir=true;action("copy");o().pasteAir=old;}
-            case DELETE -> {if(ShapeObject.active())ShapeObject.cancel();else if(PlacementPreview.active())PlacementPreview.cancel();else action("delete");}
+            case DELETE -> {if(deleteRuler()){}else if(ShapeObject.active())ShapeObject.cancel();else if(PlacementPreview.active())PlacementPreview.cancel();else action("delete");}
             case SWAP_BLOCKS -> swapBlocks();
             case QUICK_FILL -> action("fill");case QUICK_REPLACE -> action("replace");
             case ROTATE_PLACEMENT -> {if(!PlacementPreview.active())return false;action("rotate");}
@@ -1538,9 +1541,24 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     boolean pointerInViewport(){return inViewport(pointerX/scale,pointerY/scale);}
     public Point handlePoint(){return selectedNode>=0&&selectedNode<handleNodes().size()?handleNodes().get(selectedNode):null;}
     public int handleAxis(){return nodeAxis;}
+    /** Which handle point has the gizmo, as its place in the list of handle points, or -1 for none. */
+    public int handleIndex(){return selectedNode>=0&&selectedNode<handleNodes().size()?selectedNode:-1;}
+    /** The ruler the panel shows: the one whose end has the gizmo, or else the latest. */
+    Ruler currentRuler(){
+        var rulers=ClientState.rulers;if(rulers.isEmpty())return null;
+        int at=handleIndex();
+        for(var r:rulers){int ends=r.complete()?2:1;if(at>=0&&at<ends)return r;at-=ends;}
+        return rulers.getLast();
+    }
+    /** Takes away the ruler that has the gizmo. */
+    private boolean deleteRuler(){
+        if(o().tool!=Tool.RULER||handleIndex()<0)return false;
+        ClientState.rulerPoints.remove(handleIndex());selectedNode=-1;TransformGizmo.cancel();return true;
+    }
     public void moveHandle(Point point){if(selectedNode>=0&&selectedNode<handleNodes().size())handleNodes().set(selectedNode,point);}
-    private double[] project(Point p){
-        var camera=ClientCompat.camera(minecraft);Vec3 v=new Vec3(p.x(),p.y(),p.z()).subtract(camera.position());
+    private double[] project(Point p){return project(p,0);}
+    private double[] project(Point p,double shift){
+        var camera=ClientCompat.camera(minecraft);Vec3 v=new Vec3(p.x()+shift,p.y()+shift,p.z()+shift).subtract(camera.position());
         var plane=ClientCompat.nearPlane(camera);Vec3 center=plane.getPointOnPlane(0,0);
         Vec3 right=plane.getPointOnPlane(1,0).subtract(center).normalize(),up=plane.getPointOnPlane(0,1).subtract(center).normalize(),forward=center.normalize();
         double z=v.dot(forward);if(z<=.05)return null;

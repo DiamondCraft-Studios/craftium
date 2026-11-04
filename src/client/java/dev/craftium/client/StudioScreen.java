@@ -95,12 +95,16 @@ public final class StudioScreen extends CraftiumScreen {
             actionRow(new String[]{"Colour studio","Weighted palette"},new Runnable[]{()->ClientCompat.setScreen(minecraft,new ColourScreen(this)),()->ClientCompat.setScreen(minecraft,new PaletteScreen(this))});
         }else if(tab.equals("Ruler")){
             actionRow(new String[]{"Split segments","Select center","Clear ruler"},new Runnable[]{()->{
-                var next=new ArrayList<Point>();var points=ClientState.rulerPoints;int parts=ClientState.options.rulerSplit;
-                for(int i=1;i<points.size();i++){Point a=points.get(i-1),b=points.get(i);for(int j=0;j<parts;j++)next.add(new Point((int)Math.round(a.x()+(b.x()-a.x())*j/(double)parts),(int)Math.round(a.y()+(b.y()-a.y())*j/(double)parts),(int)Math.round(a.z()+(b.z()-a.z())*j/(double)parts)));}
-                if(!points.isEmpty())next.add(points.getLast());if(next.size()>256)throw new IllegalArgumentException("Ruler limit: 256 points");points.clear();points.addAll(next);
+                var rulers=ClientState.rulers;int parts=ClientState.options.rulerSplit;var next=new ArrayList<Ruler>();
+                for(var r:rulers){
+                    if(!r.complete()){next.add(r);continue;}
+                    Point previous=r.a;
+                    for(int j=1;j<=parts;j++){var at=j==parts?r.b:new Point((int)Math.round(r.a.x()+(r.b.x()-r.a.x())*j/(double)parts),(int)Math.round(r.a.y()+(r.b.y()-r.a.y())*j/(double)parts),(int)Math.round(r.a.z()+(r.b.z()-r.a.z())*j/(double)parts));var piece=new Ruler(previous);piece.b=at;next.add(piece);previous=at;}
+                }
+                if(next.size()>256)throw new IllegalArgumentException("Ruler limit: 256 rulers");rulers.clear();rulers.addAll(next);
             },()->{
-                var points=ClientState.rulerPoints;if(points.size()<2)throw new IllegalArgumentException("Set at least two ruler points");Point a=points.getFirst(),b=points.getLast();Point center=new Point((a.x()+b.x())/2,(a.y()+b.y())/2,(a.z()+b.z())/2);ClientState.options.position1=center;ClientState.options.position2=center;send("select_box");
-            },()->{ClientState.rulerPoints.clear();ClientState.rulerStart=null;ClientState.rulerEnd=null;}});
+                var ruler=editor.currentRuler();if(ruler==null||!ruler.complete())throw new IllegalArgumentException("Set both ends of a ruler");Point a=ruler.a,b=ruler.b;Point center=new Point((a.x()+b.x())/2,(a.y()+b.y())/2,(a.z()+b.z())/2);ClientState.options.position1=center;ClientState.options.position2=center;send("select_box");
+            },()->ClientState.rulers.clear()});
         }else if(tab.equals("Placement")){
             actionRow(new String[]{"Transform clipboard","Snap to ground","Paste copy","Paste & select","Confirm"},new Runnable[]{()->send("clipboard_transform"),PlacementPreview::snapToGround,PlacementPreview::pasteCopy,PlacementPreview::pasteAndSelect,PlacementPreview::confirm});
         }else if(tab.equals("Hotbars")){

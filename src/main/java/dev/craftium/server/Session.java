@@ -35,6 +35,16 @@ final class Session {
     boolean confirmEdits,bypassConfirm;
     /** A pivot for the client to take up after an undo or redo, as "none" or "x,y,z"; empty when there is nothing to say. */
     String pivotUpdate="";
+    /** Client-side state for the client to take up after an undo or redo, as {@link dev.craftium.core.Restore} text; empty when there is nothing to say. */
+    String restoreUpdate="";
+    /** The corners of the Box Select tool's box as of this request, and as of the last time a selection was noted in the history: "none" or points. */
+    String cornersNow="none",cornersHistory="none";
+    /** The pivot the player had as of this request and as of the one before it, as "none" or "x,y,z". */
+    String pivotNow="none",pivotBeforeRequest="none";
+    /** The shape the Shape tool was asked to build, as "x,y,z,yaw,pitch,roll,sizeX,sizeY,sizeZ", for undo to put back as waiting to be built; null for any other request. */
+    String shapeAtRequest;
+    /** True while handling a request made with the builder tool, so the edit it makes is marked as the builder's. */
+    boolean fromBuilder;
     /** The selection as it was before the last selection action, so a mistaken one can be taken back. Null when there is none. */
     List<Point> selectionBefore;
     /** The selection as of the last time it was noted in the history, the revision it had, and whether the current action is a selection action. */
@@ -71,24 +81,42 @@ final class Session {
     record BiomeChange(Point cell, Holder<Biome> before, Holder<Biome> after) {}
     record EntityChange(UUID id,net.minecraft.nbt.CompoundTag before,net.minecraft.nbt.CompoundTag after,boolean moving){EntityChange(UUID id,net.minecraft.nbt.CompoundTag before,net.minecraft.nbt.CompoundTag after){this(id,before,after,false);}}
     /** What a selection action changed: the selection before and after, so undo and redo can put either back. */
-    record SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter){
+    record SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter,Map<String,String> restoreBefore,Map<String,String> restoreAfter){
+        SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter){this(before,after,pivotBefore,pivotAfter,Map.of(),Map.of());}
         SelectionChange(List<Point> before,List<Point> after){this(before,after,null,null);}
+        /** A change to client-side state alone (see {@link dev.craftium.core.Restore}): the player's own selection is left as it is. */
+        static SelectionChange restoring(Map<String,String> before,Map<String,String> after){return new SelectionChange(null,null,null,null,before,after);}
+        /** True when undo and redo have a selection of the player's to put back, as opposed to only client-side state. */
+        boolean hasPoints(){return before!=null&&after!=null;}
+        /** The same change, also handing back these values of client-side state. */
+        SelectionChange with(Map<String,String> before,Map<String,String> after){
+            var b=new LinkedHashMap<>(restoreBefore);b.putAll(before);var a=new LinkedHashMap<>(restoreAfter);a.putAll(after);
+            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,b,a);
+        }
+        /** This change followed by a later one, as one: it starts where this began and ends where the later one did. */
+        SelectionChange then(SelectionChange later){
+            var b=new LinkedHashMap<>(later.restoreBefore);b.putAll(restoreBefore);var a=new LinkedHashMap<>(restoreAfter);a.putAll(later.restoreAfter);
+            return new SelectionChange(before!=null?before:later.before,later.after!=null?later.after:after,pivotBefore,later.pivotAfter,b,a);
+        }
     }
     /** {@code time} is when the edit was made, in epoch milliseconds, or 0 when unknown (history from before it was kept). */
-    record Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations,SelectionChange selection,long time) {
+    record Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations,SelectionChange selection,long time,boolean builder) {
+        Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations,SelectionChange selection,long time){this(name,changes,biomes,flags,entities,annotations,selection,time,false);}
         Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations,SelectionChange selection){this(name,changes,biomes,flags,entities,annotations,selection,System.currentTimeMillis());}
+        /** The same edit, marked as made with the builder tool (or not), which is what the builder's own undo and redo reach. */
+        Edit withBuilder(boolean made){return new Edit(name,changes,biomes,flags,entities,annotations,selection,time,made);}
         Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations){this(name,changes,biomes,flags,entities,annotations,null);}
         /** True when this entry only changes the selection, so there are no blocks to put back. */
-        boolean selectionOnly(){return selection!=null&&changes.isEmpty()&&biomes.isEmpty()&&entities.isEmpty()&&annotations.isEmpty();}
+        boolean selectionOnly(){return selection!=null&&selection.hasPoints()&&changes.isEmpty()&&biomes.isEmpty()&&entities.isEmpty()&&annotations.isEmpty();}
         /** The same edit, also moving the selection from {@code before} to {@code after} when it is undone or redone. */
-        Edit withSelection(SelectionChange change){return new Edit(name,changes,biomes,flags,entities,annotations,change,time);}
+        Edit withSelection(SelectionChange change){return new Edit(name,changes,biomes,flags,entities,annotations,change,time,builder);}
         /** An entry in the history for a change to the selection alone, which has no blocks to restore. */
-        static Edit selecting(String name,List<Point> before,List<Point> after){return new Edit(name,List.of(),List.of(),0,List.of(),List.of(),new SelectionChange(before,after));}
+        static Edit selecting(String name,SelectionChange change){return new Edit(name,List.of(),List.of(),0,List.of(),List.of(),change);}
         Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags){this(name,changes,biomes,flags,List.of(),List.of());}
         Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags,List<EntityChange> entities){this(name,changes,biomes,flags,entities,List.of());}
         int estimatedBytes() {
             int size = changes.size()*128 + biomes.size()*96;
-            if(selection!=null)size+=(selection.before().size()+selection.after().size())*24;
+            if(selection!=null&&selection.hasPoints())size+=(selection.before().size()+selection.after().size())*24;
             for (var c : changes) {
                 if(c.before.data()!=null) size += c.before.data().toString().length()*2;
                 if(c.after.data()!=null) size += c.after.data().toString().length()*2;
@@ -122,7 +150,7 @@ final class Session {
                 var old=biomeMap.get(c.cell());
                 biomeMap.put(c.cell(),old==null?c:new BiomeChange(c.cell(),old.before(),c.after()));
             }
-            var merged=new Edit(previous.name(),List.copyOf(combined.values()),List.copyOf(biomeMap.values()),edit.flags());
+            var merged=new Edit(previous.name(),List.copyOf(combined.values()),List.copyOf(biomeMap.values()),edit.flags()).withBuilder(previous.builder());
             if(merged.estimatedBytes()<=32*1024*1024 && merged.changes().size()+merged.biomes().size()<=Selection.LIMIT)edit=merged;
             else undo.addFirst(previous);
         }

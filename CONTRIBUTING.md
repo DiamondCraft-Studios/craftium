@@ -1,6 +1,6 @@
 # Contributing to Craftium
 
-Craftium is a vibe-coded, open-source competitor to Axiom. AI assistance is part of its development history. Contributions should be readable, independently implemented and checked against the actual Minecraft build.
+Craftium is a vibe-coded, open-source building studio inspired by Axiom. AI assistance is part of its development history. Contributions should be readable, independently implemented and checked against the actual Minecraft build.
 
 ## Build
 
@@ -24,7 +24,7 @@ When shared code needs a Minecraft API that differs between versions, call it th
 
 - `main` is the trunk: shared code and every version module. Open pull requests against it.
 - `release/<version>` (for example `release/26.2`) is cut from `main` to ship that version and take hotfixes. Cherry-pick fixes into it; do not develop on it.
-- Tag releases `v<mod version>-mc<version>`, for example `v0.3.1-mc26.2`.
+- Tag releases `v<mod version>-mc<version>`, for example `v0.4.0-beta.1-mc26.2`.
 - CI builds only the versions a change touches. Shared code, the root build files and the workflows build all of them.
 
 ## Commit messages
@@ -47,7 +47,7 @@ The 1.21.10 module has a smaller smoke test that launches the client, applies ev
 ./gradlew :versions:mc-1.21.10:runClientGameTest
 ```
 
-Set `CRAFTIUM_TEST_SCOPE` to `keybinds`, `builder`, `gizmos`, `gallery`, `viewport`, `selection` or `structures` for a focused scenario. `structures` builds a small structure, captures the export pop-up on both tabs, exports Java NBT, a schematic and Bedrock files, reads them back and imports the Bedrock file; it also runs on 1.21.10. `selection` builds an L-shaped volume of real blocks (with a slab and a stair), selects it, captures how the editor outlines and tints it for visual review, then selects a 4096-block cube and reports how many frames render with that selection against a small one. The 1.21.10 smoke test takes the same L-shaped screenshot. `viewport` checks that the editor camera updates on every rendered frame at an unchanged fly speed, and also runs on 1.21.10. Leave it unset for the full Fabric regression. The Paper/Purpur scenario needs separate local server fixtures; it is not part of the ordinary build. See [validation](docs/VALIDATION.md).
+Set `CRAFTIUM_TEST_SCOPE` to `keybinds`, `builder`, `gizmos`, `gallery`, `viewport`, `selection` or `structures` for a focused scenario. `structures` builds a small structure, captures the export pop-up on both tabs, exports Java NBT, a schematic and Bedrock files, reads them back and imports the Bedrock file; it also runs on 1.21.10. `selection` builds an L-shaped volume of real blocks (with a slab and a stair), selects it, captures how the editor outlines and tints it for visual review, then selects a 4096-block cube and reports how many frames render with that selection against a small one. The 1.21.10 smoke test takes the same L-shaped screenshot. `viewport` checks that the editor camera updates on every rendered frame at an unchanged fly speed, and also runs on 1.21.10. `dedicated` (1.21.10) runs the mod on a real dedicated server with a connected client; it needs `-Pcraftium.acceptEula=true` and is described in [server tests](docs/SERVER-TESTS.md). Leave it unset for the full Fabric regression. The Paper/Purpur scenario needs separate local server fixtures; it is not part of the ordinary build. See [validation](docs/VALIDATION.md).
 
 ## Submit a change
 
@@ -55,5 +55,7 @@ Set `CRAFTIUM_TEST_SCOPE` to `keybinds`, `builder`, `gizmos`, `gallery`, `viewpo
 - Include relevant validation and actual screenshots for UI changes.
 - Update the feature coverage and control guide when behavior changes.
 - Cite official documentation when comparing Axiom behavior. Use original code and assets, and preserve third-party license notices.
+
+By submitting a contribution you agree that it is licensed under the project's [GPL-3.0 license](LICENSE).
 
 AI-generated contributions are welcome when the contributor reviews and verifies them. Describe remaining limitations candidly; matching a workflow does not establish complete Axiom parity.

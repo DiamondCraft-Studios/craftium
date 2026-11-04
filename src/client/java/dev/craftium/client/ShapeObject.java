@@ -59,6 +59,14 @@ final class ShapeObject {
         else hover=multiply(turn,hover);
     }
     static void cancel(){pose=null;}
+    /** Undo and redo put the shape back as it was waiting to be built ("x,y,z,yaw,pitch,roll,sizeX,sizeY,sizeZ"), or take it away again ("none"). */
+    static void restore(String text){
+        if(text.equals("none")){pose=null;return;}
+        try{
+            String[] v=text.split(",");if(v.length!=9)return;
+            pose=new Pose(new Point(Integer.parseInt(v[0]),Integer.parseInt(v[1]),Integer.parseInt(v[2])),matrix(Double.parseDouble(v[3]),Double.parseDouble(v[4]),Double.parseDouble(v[5])),Double.parseDouble(v[6]),Double.parseDouble(v[7]),Double.parseDouble(v[8]));
+        }catch(NumberFormatException ignored){}
+    }
     static void set(Pose next){pose=next;}
     static void move(Point step){if(pose!=null)pose=pose.withOrigin(pose.origin().add(step.x(),step.y(),step.z()));}
     /** Turns the shape by {@code degrees} about the world axis (0 X, 1 Y, 2 Z), for the Edit menu. */

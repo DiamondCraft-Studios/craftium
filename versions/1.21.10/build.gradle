@@ -98,7 +98,9 @@ fabricApi {
         modId = 'craftium-test'
         enableClientGameTests = true
         enableGameTests = false
-        eula = false
+        // A dedicated server needs an accepted Minecraft EULA. Only the person running the tests can accept it:
+        // pass -Pcraftium.acceptEula=true to state that you have read https://aka.ms/MinecraftEULA.
+        eula = project.findProperty('craftium.acceptEula') == 'true'
     }
 }
 
