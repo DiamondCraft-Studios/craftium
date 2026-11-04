@@ -15,3 +15,10 @@ local.properties
 !.env.example
 
 server-plugin/build/
+
+# Git worktrees for feature branches
+.worktrees/
+
+# Node tooling (MCP server)
+node_modules/
+*.mcpb
