@@ -91,14 +91,26 @@ public final class BlockPickerScreen extends CraftiumScreen {
         if(maxRow()>0){g.fill(trackX(),trackTop(),trackX()+6,trackTop()+trackHeight(),0xff1b2838);g.fill(trackX(),thumbY(),trackX()+6,thumbY()+thumbHeight(),scrolling?0xff7cc4ff:0xff4a6585);}
         drawWidgets(g,mx,my,delta);
         g.text(font,hover.isEmpty()?shown.size()+" blocks":font.plainSubstrByWidth(name(hover)+"  ·  "+hover,COLS*CELL-90),left,top+ROWS*CELL+42,hover.isEmpty()?0xff9db5cb:0xffdce6ef,false);
+        if(parent instanceof EditorScreen)g.text(font,"Alt + click a block in the world to take that exact block",left,top+ROWS*CELL+54,0xff6f8499,false);
         g.pose().popMatrix();
     }
     @Override public boolean mouseClicked(MouseButtonEvent event,boolean twice){
         double x=event.x()/scale,y=event.y()/scale;int i=cellAt(x,y);
+        // Alt + click on the world outside this window takes that exact block, state and all, instead of one from the list.
+        boolean outside=!(x>=left-12&&x<left+COLS*CELL+12&&y>=top-26&&y<top+ROWS*CELL+68);
+        if(event.button()==0&&outside&&altDown()&&parent instanceof EditorScreen editor){
+            var hit=editor.pipetteTarget(event.x(),event.y());
+            if(hit!=null&&minecraft.level!=null){chosen.accept(BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos())));ClientCompat.setScreen(minecraft,parent);}
+            return true;
+        }
         if(event.button()==0&&maxRow()>0&&x>=trackX()-3&&x<trackX()+9&&y>=trackTop()&&y<trackTop()+trackHeight()){scrolling=true;scrollTo(y);return true;}
         if(event.button()==0&&x>=left-12&&x<left+COLS*CELL+12&&y>=top-26&&y<top+2){dragging=true;return true;}
         if(i>=0&&event.button()==0){chosen.accept(shown.get(i));ClientCompat.setScreen(minecraft,parent);return true;}
         return super.mouseClicked(new MouseButtonEvent(x,y,event.buttonInfo()),twice);
+    }
+    private boolean altDown(){
+        long window=minecraft.getWindow().handle();
+        return org.lwjgl.glfw.GLFW.glfwGetKey(window,org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_ALT)==org.lwjgl.glfw.GLFW.GLFW_PRESS||org.lwjgl.glfw.GLFW.glfwGetKey(window,org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_ALT)==org.lwjgl.glfw.GLFW.GLFW_PRESS;
     }
     @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy){
         if(scrolling){scrollTo(event.y()/scale);return true;}

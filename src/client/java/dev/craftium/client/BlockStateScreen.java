@@ -43,7 +43,12 @@ public final class BlockStateScreen extends CraftiumScreen {
     private static <T extends Comparable<T>> BlockState step(BlockState state,Property<T> property){var values=List.copyOf(property.getPossibleValues());return state.setValue(property,values.get((values.indexOf(state.getValue(property))+1)%values.size()));}
     private static <T extends Comparable<T>> String value(BlockState state,Property<T> property){return property.getName(state.getValue(property));}
     /** "id[a=b,c=d]" naming every property, so the result matches exactly this state. */
-    private String result(){
+    private String result(){return describe(id,properties,state);}
+    /** The exact state of a block in the world, as {@code id[property=value,…]}. */
+    static String describe(BlockState state){
+        return describe(BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString(),List.copyOf(state.getBlock().defaultBlockState().getProperties()),state);
+    }
+    private static String describe(String id,List<Property<?>> properties,BlockState state){
         if(properties.isEmpty())return id;
         var parts=new ArrayList<String>();for(var property:properties)parts.add(property.getName()+"="+value(state,property));
         return id+"["+String.join(",",parts)+"]";

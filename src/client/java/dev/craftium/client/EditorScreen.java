@@ -601,15 +601,30 @@ public final class EditorScreen extends CraftiumScreen {
         // Drawn back to front, like a paint tool: the foreground sits on top of the background.
         blockSlot(g,x+30,264,"Background block",o().secondary,id->o().secondary=id);
         blockSlot(g,x+10,248,"Foreground block",o().block,id->ClientState.pick(id));
-        // The first cell is always "+", which adds a block to the palette and makes it the foreground.
-        g.fill(x+10,298,x+33,321,0xff243246);g.outline(x+10,298,23,23,LINE);g.centeredText(font,"+",x+21,306,TEXT);
-        controls.add(new Control(x+10,298,23,23,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,"Add to palette","",id->{ClientState.pick(id);ClientState.save();})),"Add block"));
-        var blocks=ClientState.palette;int i=1;
-        for(String block:blocks.subList(0,Math.min(Math.max(0,(pw-20)/26-1),blocks.size()))) {
-            int bx=x+10+i*26,by=298;i++;
+        // The cells flow across the panel and down as far as it reaches; the first is always "+", which adds a block to the palette
+        // and makes it the foreground. What does not fit scrolls.
+        var blocks=ClientState.palette;int total=blocks.size()+1,top=298,pitch=26,visibleRows=Math.max(1,(pb-6-top+3)/pitch);
+        int columns=Math.max(1,(pw-17)/pitch);
+        boolean bar=(total+columns-1)/columns>visibleRows;
+        if(bar)columns=Math.max(1,(pw-25)/pitch);
+        int rows=(total+columns-1)/columns,limit=Math.max(0,rows-visibleRows);paletteScroll=Math.clamp(paletteScroll,0,limit);
+        for(int r=0;r<visibleRows;r++)for(int c=0;c<columns;c++){
+            int i=(paletteScroll+r)*columns+c;if(i>=total)break;
+            int bx=x+10+c*pitch,by=top+r*pitch;
+            if(i==0){
+                g.fill(bx,by,bx+23,by+23,0xff243246);g.outline(bx,by,23,23,LINE);g.centeredText(font,"+",bx+11,by+8,TEXT);
+                controls.add(new Control(bx,by,23,23,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,"Add to palette","",id->{ClientState.pick(id);ClientState.save();})),"Add block"));
+                continue;
+            }
+            int index=i-1;String block=blocks.get(index);
             boolean active=o().block.equals(block);g.fill(bx,by,bx+23,by+23,active?0xff315b84:0xff1b2838);if(active)g.outline(bx,by,23,23,ACCENT);
             BlockPickerScreen.icon(g,font,block,bx+3,by+3);
-            dragSource(new Control(bx,by,23,23,()->ClientState.pick(block),block+" · Click to set the foreground · Drag into the world to bucket fill"),block);
+            dragSource(new Control(bx,by,23,23,()->ClientState.pick(block),()->openBlockMenu(BlockList.PALETTE,index),block+" · Click to set the foreground · Drag into the world to bucket fill · Right-click for options"),block);
+        }
+        if(bar){
+            int track=visibleRows*pitch-3,thumb=Math.max(10,track*visibleRows/rows),thumbY=top+(track-thumb)*paletteScroll/Math.max(1,limit),barX=x+pw-11,max=limit;
+            g.fill(barX,top,barX+5,top+track,0xff1b2838);g.fill(barX,thumbY,barX+5,thumbY+thumb,0xff4a6585);
+            controls.add(new Control(barX-2,top,9,track,()->{double py=WorkspaceLayout.inverse("palette",mx,my)[1];paletteScroll=Math.clamp((int)Math.round((py-top-thumb/2.0)/Math.max(1,track-thumb)*max),0,max);},""));
         }
     }
     /** A 30px swatch for one of the two selected blocks; clicking it opens the block chooser to replace it. */
@@ -695,7 +710,7 @@ public final class EditorScreen extends CraftiumScreen {
             g.fill(bx,by,bx+22,by+22,on?0xff315b84:0xff1b2838);g.outline(bx,by,22,22,on?ACCENT:LINE);
             BlockPickerScreen.icon(g,font,block,bx+3,by+3);
             if(block.contains("["))g.fill(bx+16,by+16,bx+20,by+20,0xffffd66d);
-            controls.add(new Control(bx,by,22,22,()->toggleMaskBlock(block),()->{ctxCell=index;ctxX=Math.min(mx,w-MASK_MENU_WIDTH-4);ctxY=Math.min(my,h-2*MASK_MENU_ROW-4);},
+            controls.add(new Control(bx,by,22,22,()->toggleMaskBlock(block),()->openBlockMenu(BlockList.MASK,index),
                 block+(on?" · On":" · Off")+" · Click to toggle · Right-click for options"));
         }
         if(rows>maskRows){
@@ -708,27 +723,51 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private int maskCols=7,maskRows=3;
     private static final int MASK_PITCH=25,MASK_MENU_WIDTH=110,MASK_MENU_ROW=18;
-    private int maskScroll,ctxCell=-1,ctxX,ctxY;
+    private int maskScroll,paletteScroll,ctxCell=-1,ctxX,ctxY;
+    /** The two lists of blocks that share the Change / Edit block state / Remove menu. */
+    private enum BlockList { MASK,PALETTE }
+    private BlockList ctxList=BlockList.MASK;
+    private List<String> blocksOf(BlockList list){return list==BlockList.MASK?o().maskBlocks:ClientState.palette;}
+    private void openBlockMenu(BlockList list,int index){ctxList=list;ctxCell=index;ctxX=Math.min(mx,w-MASK_MENU_WIDTH-4);ctxY=Math.min(my,h-BLOCK_MENU_LABELS.length*MASK_MENU_ROW-4);}
+    private static final String[] BLOCK_MENU_LABELS={"Change","Edit block state","Remove"};
     private void toggleMaskBlock(String block){if(!o().maskActive.remove(block))o().maskActive.add(block);ClientState.save();}
     /** Adds a block to the mask palette, switched on; one already there is just switched on. */
     private void addMaskBlock(String block){
         if(!o().maskBlocks.contains(block)){if(o().maskBlocks.size()>=64){ClientState.notify("The mask palette holds up to 64 blocks");return;}o().maskBlocks.add(block);}
         if(!o().maskActive.contains(block))o().maskActive.add(block);ClientState.save();
     }
-    private void removeMaskBlock(int index){var block=o().maskBlocks.remove(index);o().maskActive.remove(block);ClientState.save();}
-    private void editMaskState(int index){
-        var old=o().maskBlocks.get(index);
-        ClientCompat.setScreen(minecraft,new BlockStateScreen(this,old,edited->{
-            int at=o().maskBlocks.indexOf(old);if(at<0||edited.equals(old))return;
-            boolean on=o().maskActive.remove(old);
-            if(o().maskBlocks.contains(edited))o().maskBlocks.remove(at);else o().maskBlocks.set(at,edited);
-            if(on&&!o().maskActive.contains(edited))o().maskActive.add(edited);ClientState.save();
-        }));
+    private void removeBlock(BlockList list,int index){
+        var block=blocksOf(list).remove(index);
+        if(list==BlockList.MASK)o().maskActive.remove(block);
+        ClientState.save();
+    }
+    /** Swaps a block in its list for another, which takes over its place, whether it is switched on (masks) or the foreground (palette). */
+    private void replaceBlock(BlockList list,String old,String edited){
+        var blocks=blocksOf(list);int at=blocks.indexOf(old);if(at<0||edited.equals(old))return;
+        boolean on=list==BlockList.MASK&&o().maskActive.remove(old);
+        if(blocks.contains(edited))blocks.remove(at);else blocks.set(at,edited);
+        if(on&&!o().maskActive.contains(edited))o().maskActive.add(edited);
+        if(list==BlockList.PALETTE&&o().block.equals(old))o().block=edited;
+        ClientState.save();
+    }
+    /** Change: choose another block for the cell in the block chooser. */
+    private void changeBlock(BlockList list,int index){
+        var old=blocksOf(list).get(index);
+        ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,"Change block",old,id->replaceBlock(list,old,id)));
+    }
+    private void editBlockState(BlockList list,int index){
+        var old=blocksOf(list).get(index);
+        ClientCompat.setScreen(minecraft,new BlockStateScreen(this,old,edited->replaceBlock(list,old,edited)));
+    }
+    /** The block the pointer is on when it is over the world rather than a panel, for taking that exact block from the chooser. */
+    BlockHitResult pipetteTarget(double guiX,double guiY){
+        if(!inViewport(guiX/scale,guiY/scale))return null;
+        return CraftiumClient.raycast(guiX,guiY);
     }
     private void maskMenu(Gfx g){
-        String[] labels={"Remove","Edit block state"};
-        g.fill(ctxX,ctxY,ctxX+MASK_MENU_WIDTH,ctxY+2*MASK_MENU_ROW,0xf5222d3b);g.outline(ctxX,ctxY,MASK_MENU_WIDTH,2*MASK_MENU_ROW,LINE);
-        for(int i=0;i<2;i++){int y=ctxY+i*MASK_MENU_ROW;if(mx>=ctxX&&mx<ctxX+MASK_MENU_WIDTH&&my>=y&&my<y+MASK_MENU_ROW)g.fill(ctxX+1,y,ctxX+MASK_MENU_WIDTH-1,y+MASK_MENU_ROW,0xff34485e);text(g,labels[i],ctxX+8,y+5,TEXT);}
+        String[] labels=BLOCK_MENU_LABELS;int rows=labels.length;
+        g.fill(ctxX,ctxY,ctxX+MASK_MENU_WIDTH,ctxY+rows*MASK_MENU_ROW,0xf5222d3b);g.outline(ctxX,ctxY,MASK_MENU_WIDTH,rows*MASK_MENU_ROW,LINE);
+        for(int i=0;i<rows;i++){int y=ctxY+i*MASK_MENU_ROW;if(mx>=ctxX&&mx<ctxX+MASK_MENU_WIDTH&&my>=y&&my<y+MASK_MENU_ROW)g.fill(ctxX+1,y,ctxX+MASK_MENU_WIDTH-1,y+MASK_MENU_ROW,0xff34485e);text(g,labels[i],ctxX+8,y+5,TEXT);}
     }
     private void viewport(Gfx g) {
         int l=panels?LEFT+6:6,r=panels?w-RIGHT-6:w-6;
@@ -1153,7 +1192,7 @@ public final class EditorScreen extends CraftiumScreen {
         double x=event.x()/scale,y=event.y()/scale;mx=(int)x;my=(int)y;pointerX=event.x();pointerY=event.y();
         if(typing!=null){finishTyping(true);return true;} // a click anywhere else keeps what was typed
         if(shapeMenu){shapeMenu=false;var picked=event.button()==0?shapeAt(x,y):null;if(picked!=null)o().shape=picked;return true;} // any click closes the picker
-        if(ctxCell>=0){int cell=ctxCell;ctxCell=-1;if(x>=ctxX&&x<ctxX+MASK_MENU_WIDTH&&y>=ctxY&&y<ctxY+2*MASK_MENU_ROW&&cell<o().maskBlocks.size()){if(y<ctxY+MASK_MENU_ROW)removeMaskBlock(cell);else editMaskState(cell);}return true;}
+        if(ctxCell>=0){int cell=ctxCell;ctxCell=-1;if(x>=ctxX&&x<ctxX+MASK_MENU_WIDTH&&y>=ctxY&&y<ctxY+BLOCK_MENU_LABELS.length*MASK_MENU_ROW&&cell<blocksOf(ctxList).size()){switch((int)((y-ctxY)/MASK_MENU_ROW)){case 0->changeBlock(ctxList,cell);case 1->editBlockState(ctxList,cell);default->removeBlock(ctxList,cell);}}return true;}
         if(event.button()==2&&!help&&!transform&&menu<0)for(int i=sliderAreas.size()-1;i>=0;i--){var a=sliderAreas.get(i);if(a.control().contains(x,y)){a.slider().reset();return true;}} // back to the default, at once
         if(event.button()==0) {
             if((panels||transform)&&menu<0&&!help){
@@ -1273,6 +1312,7 @@ public final class EditorScreen extends CraftiumScreen {
             minecraft.player.setPos(eye.x,eye.y-minecraft.player.getEyeHeight(),eye.z);minecraft.player.setDeltaMovement(Vec3.ZERO);minecraft.player.setOldPosAndRot();
             return true;
         }
+        if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("palette")){paletteScroll=Math.max(0,paletteScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("masks")){maskScroll=Math.max(0,maskScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("tools")){toolScroll=Math.clamp(toolScroll+(vertical<0?1:-1),0,maxToolScroll());return true;}
         if(panels&&!pinnedTab&&o().tool!=Tool.MODIFY&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("options")){optionsScroll=Math.clamp(optionsScroll+(vertical<0?24:-24),0,scrollLimit);return true;}
