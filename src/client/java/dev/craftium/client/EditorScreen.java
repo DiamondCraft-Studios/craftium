@@ -42,11 +42,16 @@ public final class EditorScreen extends CraftiumScreen {
     private Slider dragging;
     private String draggingSliderPanel="";
     /** A clickable area. {@code back} is what a right click does, for a control that cycles through values; null for the others. */
-    private record Control(int x,int y,int width,int height,Runnable action,Runnable back,String tip,String panel) {
-        Control(int x,int y,int width,int height,Runnable action,String tip){this(x,y,width,height,action,null,tip,drawingPanel);}
-        Control(int x,int y,int width,int height,Runnable action,Runnable back,String tip){this(x,y,width,height,action,back,tip,drawingPanel);}
-        boolean contains(double px,double py){if(!WorkspaceLayout.visible(panel))return false;var point=WorkspaceLayout.inverse(panel,px,py);return point[0]>=x&&point[1]>=y&&point[0]<x+width&&point[1]<y+height;}
+    private record Control(int x,int y,int width,int height,Runnable action,Runnable back,String tip,String panel,int clipTop,int clipBottom) {
+        Control(int x,int y,int width,int height,Runnable action,String tip){this(x,placed(y,height),width,height,action,null,tip,drawingPanel,scrollClipTop,scrollClipBottom);}
+        Control(int x,int y,int width,int height,Runnable action,Runnable back,String tip){this(x,placed(y,height),width,height,action,back,tip,drawingPanel,scrollClipTop,scrollClipBottom);}
+        boolean contains(double px,double py){if(!WorkspaceLayout.visible(panel))return false;var point=WorkspaceLayout.inverse(panel,px,py);return point[0]>=x&&point[1]>=y&&point[0]<x+width&&point[1]<y+height&&point[1]>=clipTop&&point[1]<clipBottom;}
     }
+    // While a panel's contents scroll, controls are made where they are drawn (shifted) and only answer inside the visible part.
+    private static boolean scrollActive;
+    private static int scrollShift,scrollContent,scrollClipTop=Integer.MIN_VALUE,scrollClipBottom=Integer.MAX_VALUE;
+    /** Where a control drawn at {@code y} really is, noting how far down the scrolling contents reach. */
+    private static int placed(int y,int height){if(scrollActive)scrollContent=Math.max(scrollContent,y+height);return y+scrollShift;}
     /** {@code typedMax} is how far a typed value may go; the track itself stops at {@code max}. */
     private record Slider(int x,int width,double min,double max,double typedMax,double def,DoubleConsumer set) {
         /** Sets the value for a pointer at {@code px}; Ctrl steps it by 1 and Shift by 0.01. */
@@ -112,8 +117,15 @@ public final class EditorScreen extends CraftiumScreen {
     private int optionsBottom(){return 199+WorkspaceLayout.height("options",h-224);}
     private int layoutKey(){return java.util.Objects.hash(optionsWidth(),optionsBottom(),WorkspaceLayout.width("masks",RIGHT),WorkspaceLayout.height("masks",187));}
     private int layoutKey;
+    private final Map<String,Integer> fieldBaseY=new HashMap<>();
+    /** Whether a text input of the scrolling options is in the visible part, moving it to where the scrolling contents put it. */
+    private boolean fieldShown(String id,EditBox box){
+        if(!"options".equals(WorkspaceLayout.fieldPanel(id))||id.startsWith("pin:")||builder||pinnedTab||o().tool==Tool.MODIFY)return true;
+        box.setY(fieldBaseY.getOrDefault(id,box.getY())+fieldShift);
+        return box.getY()-4>=viewTop&&box.getY()+14<=viewBottom;
+    }
     private void field(String id,int x,int y,int width,String value,Consumer<String> set) {
-        var box=new EditBox(font,x,y,width,18,Component.literal(id));box.setMaxLength(id.equals("text")?48:256);box.setValue(value);
+        fieldBaseY.put(id,y);var box=new EditBox(font,x,y,width,18,Component.literal(id));box.setMaxLength(id.equals("text")?48:256);box.setValue(value);
         box.setResponder(set);box.setBordered(false);box.setTextColor(TEXT);fields.put(id,box);
     }
     /**
@@ -156,7 +168,8 @@ public final class EditorScreen extends CraftiumScreen {
         if((panels||transform) && menu<0 && !help)for(var field:fields.entrySet()) {
             if(transform != (field.getKey().startsWith("offset")||field.getKey().equals("copies")))continue;
             String panel=WorkspaceLayout.fieldPanel(field.getKey());if(!WorkspaceLayout.visible(panel))continue;g.pose().pushMatrix();WorkspaceLayout.apply(g,panel);var point=WorkspaceLayout.inverse(panel,mx,my);
-            var f=field.getValue();g.fill(f.getX()-3,f.getY()-4,f.getX()+f.getWidth()+3,f.getY()+14,0xff1b2838);
+            var f=field.getValue();if(!fieldShown(field.getKey(),f)){g.pose().popMatrix();continue;}
+            g.fill(f.getX()-3,f.getY()-4,f.getX()+f.getWidth()+3,f.getY()+14,0xff1b2838);
             if(f.isFocused())g.outline(f.getX()-4,f.getY()-5,f.getWidth()+8,20,ACCENT);
             g.widget(f,(int)point[0],(int)point[1],delta);g.pose().popMatrix();
         }
@@ -184,7 +197,9 @@ public final class EditorScreen extends CraftiumScreen {
             var c=controls.get(i);
             if(!c.contains(mx,my))continue;
             g.pose().pushMatrix();WorkspaceLayout.apply(g,c.panel());
+            boolean clipped=c.clipTop()!=Integer.MIN_VALUE;if(clipped)g.enableScissor(0,c.clipTop(),w,c.clipBottom()); // a control half scrolled out of view stays inside its area
             g.fill(c.x(),c.y(),c.x()+c.width(),c.y()+c.height(),Hover.OVERLAY);g.outline(c.x(),c.y(),c.width(),c.height(),ACCENT);
+            if(clipped)g.disableScissor();
             g.pose().popMatrix();return;
         }
     }
@@ -285,14 +300,20 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,10,222,tab[0],19,"Tool",!builder&&!pinnedTab,()->{builder=false;pinnedTab=false;init();},"Options of the active tool");
         button(g,14+tab[0],222,tab[1],19,"Builder",builder,()->{builder=true;init();},"");
         button(g,18+tab[0]+tab[1],222,tab[2],19,"Pinned",!builder&&pinnedTab,()->{builder=false;pinnedTab=true;init();},"Properties pinned from the full settings");
-        if(builder){builderOptions(g);return;}
+        if(builder){scrolled(g,246,6,0,()->builderOptions(g));return;}
         if(pinnedTab){
             button(g,pw-51,201,25,15,"…",false,()->ClientCompat.setScreen(minecraft,new StudioScreen(this)),"Advanced settings · View → Studio inspector");
             pinnedOptions(g);return;
         }
         text(g,o().tool.label,10,252,0xffa5cef2);
-        if(o().tool==Tool.MAGIC_SELECT)searchButtons(g,266);
         button(g,pw-51,201,25,15,"…",false,()->ClientCompat.setScreen(minecraft,new StudioScreen(this)),"Advanced settings · View → Studio inspector");
+        if(o().tool==Tool.MODIFY){modifyOptions(g);return;}
+        // The Magic Wand's search buttons fill the room under the name; every other tool starts right under it.
+        scrolled(g,262,o().tool.selection()?33:6,o().tool==Tool.MAGIC_SELECT?0:TOOL_NAME_GAP,()->toolBody(g));
+    }
+    private static final int TOOL_NAME_GAP=36;
+    private void toolBody(Gfx g) {
+        if(o().tool==Tool.MAGIC_SELECT)searchButtons(g,266);
         if(o().tool==Tool.BOX_SELECT||o().tool==Tool.MAGIC_SELECT||o().tool==Tool.RULER) {
             var s=ClientState.status;
             if(o().tool==Tool.RULER) {
@@ -316,7 +337,7 @@ public final class EditorScreen extends CraftiumScreen {
                     toggle(g,10,474,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
                     toggle(g,10,492,"Hover preview (under "+o().hoverPreviewLimit+")",o().magicPreview,()->o().magicPreview=!o().magicPreview);
                 }
-                fillClear(g);
+                fixed(g,()->fillClear(g));
             }
             return;
         }
@@ -373,18 +394,18 @@ public final class EditorScreen extends CraftiumScreen {
         if(o().tool==Tool.TEXT||o().tool==Tool.BIOME_PAINTER||o().tool==Tool.CLENTAMINATOR) {
             toggle(g,10,416,"Keep existing",o().keepExisting,()->o().keepExisting=!o().keepExisting);
         }
-        if(o().tool.selection()){fillClear(g);}
+        if(o().tool.selection()){fixed(g,()->fillClear(g));}
     }
     /** One scrollable row of the Modify panel; {@code paint} gets the row's top. */
     private record ModifyRow(int height,java.util.function.BiConsumer<Gfx,Integer> paint){}
     private int modifyScroll;
-    private static final int MODIFY_TOP=352;
+    private static final int MODIFY_TOP=316;
     /** The Modify tool's own options: its mode, then only the controls that mode reads, in rows that scroll. Revolve and Rotate Copies turn around the anchored block. */
     private void modifyOptions(Gfx g){
         var o=o();int half=(pw-24)/2,w=pw-32;
         String[] names={"Translate Copies","Revolve","Rotate Copies","Twist"};
         Options.ModifyMode[] order={Options.ModifyMode.TRANSLATE_COPIES,Options.ModifyMode.REVOLVE,Options.ModifyMode.ROTATE_COPIES,Options.ModifyMode.TWIST};
-        for(int i=0;i<4;i++){var mode=order[i];button(g,10+(i%2)*(half+4),300+(i/2)*24,half,20,names[i],o.modifyMode==mode,()->o.modifyMode=mode,"");}
+        for(int i=0;i<4;i++){var mode=order[i];button(g,10+(i%2)*(half+4),264+(i/2)*24,half,20,names[i],o.modifyMode==mode,()->o.modifyMode=mode,"");}
         var rows=new ArrayList<ModifyRow>();
         switch(o.modifyMode){
             case TRANSLATE_COPIES -> {
@@ -506,6 +527,38 @@ public final class EditorScreen extends CraftiumScreen {
         int[] cell=flex(pw-20,6,1,1);
         button(g,10,pb-27,cell[0],20,"Fill",false,()->action("fill"),"Fill the selection with the active block");
         button(g,16+cell[0],pb-27,cell[1],20,"Clear",false,()->action("clear"),"Clear the selection");
+    }
+    private int optionsScroll,scrollLimit,fieldShift,viewTop,viewBottom;
+    /**
+     * Draws the options panel's contents in the room between {@code top} and the panel's bottom less {@code reserve}, moved up by
+     * {@code gap}. Whatever reaches below that room scrolls: the wheel moves it and a bar on the right shows where it is.
+     */
+    private void scrolled(Gfx g,int top,int reserve,int gap,Runnable content) {
+        int bottom=pb-reserve;optionsScroll=Math.clamp(optionsScroll,0,scrollLimit);
+        viewTop=top;viewBottom=bottom;fieldShift=-gap-optionsScroll;
+        g.enableScissor(0,top,pw,bottom);g.pose().pushMatrix();g.pose().translate(0,fieldShift);
+        scrollActive=true;scrollShift=fieldShift;scrollContent=0;scrollClipTop=top;scrollClipBottom=bottom;
+        try{content.run();}finally{
+            scrollActive=false;scrollShift=0;scrollClipTop=Integer.MIN_VALUE;scrollClipBottom=Integer.MAX_VALUE;
+            g.pose().popMatrix();g.disableScissor();
+        }
+        scrollLimit=Math.max(0,scrollContent-gap-bottom+6);
+        if(scrollLimit>0){
+            int track=bottom-top,thumb=Math.max(14,track*track/(track+scrollLimit)),at=top+(track-thumb)*optionsScroll/scrollLimit,span=Math.max(1,track-thumb),limit=scrollLimit;
+            g.fill(pw-7,top,pw-3,bottom,0xff1b2b40);g.fill(pw-7,at,pw-3,at+thumb,MUTED);
+            controls.add(new Control(pw-10,top,10,track,()->{double py=WorkspaceLayout.inverse("options",mx,my)[1];optionsScroll=Math.clamp((int)Math.round((py-top-thumb/2.0)/span*limit),0,limit);},"Scroll the options · mouse wheel"));
+        }
+    }
+    /** Runs {@code content} outside the scrolling area, where the bottom buttons stay put. */
+    private void fixed(Gfx g,Runnable content) {
+        if(!scrollActive){content.run();return;}
+        g.pose().popMatrix();g.disableScissor();
+        int shift=scrollShift,clipTop=scrollClipTop,clipBottom=scrollClipBottom;
+        scrollActive=false;scrollShift=0;scrollClipTop=Integer.MIN_VALUE;scrollClipBottom=Integer.MAX_VALUE;
+        try{content.run();}finally{
+            scrollActive=true;scrollShift=shift;scrollClipTop=clipTop;scrollClipBottom=clipBottom;
+            g.enableScissor(0,viewTop,pw,viewBottom);g.pose().pushMatrix();g.pose().translate(0,shift);
+        }
     }
     private void builderOptions(Gfx g) {
         text(g,"CAPABILITIES",10,254,MUTED);
@@ -785,7 +838,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private List<MenuItem> menuItems(int which) {
         return switch(which) {
-            case 0 -> List.of(item("Open reference image…","",ReferenceImages::choose),item("Save tool settings","",()->{ClientState.save();ClientState.notify("Tool settings saved");}),item("Reset tool settings","",()->{ClientState.options=new Options();init();}),submenu("Preferences",item("Keyboard Shortcuts…","",()->ClientCompat.setScreen(minecraft,new KeyboardShortcutsScreen(this))),item("Options…","",()->ClientCompat.setScreen(minecraft,new PreferencesOptionsScreen(this))),item("Selection options…","",()->ClientCompat.setScreen(minecraft,new SelectionOptionsScreen(this)))),item("Exit editor","RShift",this::onClose));
+            case 0 -> List.of(item("Open reference image…","",ReferenceImages::choose),item("Save tool settings","",()->{ClientState.save();ClientState.notify("Tool settings saved");}),item("Reset tool settings","",()->{ClientState.options=new Options();init();}),submenu("Preferences",item("Keyboard Shortcuts…","",()->ClientCompat.setScreen(minecraft,new KeyboardShortcutsScreen(this))),item("Options…","",()->ClientCompat.setScreen(minecraft,new PreferencesOptionsScreen(this)))),item("Exit editor","RShift",this::onClose));
             case 1 -> List.of(item("Undo","Ctrl+Z",()->action("undo")),item("Redo","Ctrl+Y",()->action("redo")),divider(),
                 item("Copy","Ctrl+C",()->action("copy")),item("Cut","Ctrl+X",()->action("cut")),item("Paste","Ctrl+V",()->action("paste")),
                 item("Delete","Del",()->perform(Action.DELETE)),divider(),
@@ -998,9 +1051,9 @@ public final class EditorScreen extends CraftiumScreen {
         if(!apply||area==null)return;
         try{double v=Math.clamp(Double.parseDouble(text.trim()),area.slider().min(),area.slider().typedMax());area.slider().set.accept(area.integer()?Math.round(v):v);}catch(NumberFormatException ignored){}
     }
-    private void text(Gfx g,String text,int x,int y,int color){g.text(font,text,x,y,color,false);}
+    private void text(Gfx g,String text,int x,int y,int color){if(scrollActive)scrollContent=Math.max(scrollContent,y+9);g.text(font,text,x,y,color,false);}
     private String shorten(String text,int pixels){if(font.width(text)<=pixels)return text;return font.plainSubstrByWidth(text,Math.max(0,pixels-9))+"…";}
-    private void wrap(Gfx g,String text,int x,int y,int width,int color,int maxLines){int line=0;for(var row:font.split(Component.literal(text),width)){if(line>=maxLines)break;g.text(font,row,x,y+line*11,color,false);line++;}}
+    private void wrap(Gfx g,String text,int x,int y,int width,int color,int maxLines){int line=0;for(var row:font.split(Component.literal(text),width)){if(line>=maxLines)break;g.text(font,row,x,y+line*11,color,false);line++;}if(scrollActive)scrollContent=Math.max(scrollContent,y+line*11);}
     private String nice(String name){String s=name.toLowerCase(Locale.ROOT).replace('_',' ');return Character.toUpperCase(s.charAt(0))+s.substring(1);}
     public BlockHitResult target(){
         if(inViewport(pointerX/scale,pointerY/scale))lastHit=CraftiumClient.raycast(pointerX,pointerY);
@@ -1109,7 +1162,7 @@ public final class EditorScreen extends CraftiumScreen {
                     EditBox field=entry.getValue();field.setFocused(false);
                     if(transform != (entry.getKey().startsWith("offset")||entry.getKey().equals("copies")))continue;
                     String panel=WorkspaceLayout.fieldPanel(entry.getKey());if(!WorkspaceLayout.visible(panel))continue;var point=WorkspaceLayout.inverse(panel,x,y);
-                    if(point[0]>=field.getX()-3&&point[0]<field.getX()+field.getWidth()+3&&point[1]>=field.getY()-4&&point[1]<field.getY()+15)selected=field;
+                    if(fieldShown(entry.getKey(),field)&&point[0]>=field.getX()-3&&point[0]<field.getX()+field.getWidth()+3&&point[1]>=field.getY()-4&&point[1]<field.getY()+15)selected=field;
                 }
                 if(selected!=null){selected.setFocused(true);String id="";for(var entry:fields.entrySet())if(entry.getValue()==selected)id=entry.getKey();var point=WorkspaceLayout.inverse(WorkspaceLayout.fieldPanel(id),x,y);selected.mouseClicked(new MouseButtonEvent(point[0],point[1],event.buttonInfo()),doubleClick);return true;}
             }
@@ -1222,6 +1275,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("masks")){maskScroll=Math.max(0,maskScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("tools")){toolScroll=Math.clamp(toolScroll+(vertical<0?1:-1),0,maxToolScroll());return true;}
+        if(panels&&!pinnedTab&&o().tool!=Tool.MODIFY&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("options")){optionsScroll=Math.clamp(optionsScroll+(vertical<0?24:-24),0,scrollLimit);return true;}
         if(panels&&!pinnedTab&&!builder&&o().tool==Tool.MODIFY&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("options")){modifyScroll=Math.max(0,modifyScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&pinnedTab&&!builder&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("options")){
             if(vertical<0&&pinnedMore)pinnedScroll++;else if(vertical>0&&pinnedScroll>0)pinnedScroll--;
