@@ -32,7 +32,7 @@ A dedicated server refuses to start without an accepted Minecraft EULA. The buil
 | Client | Editor opens (screenshot `dedicated-editor`) and restores the game mode; client commands select |
 | Persistence | History saved, client disconnects, reconnects, saved history reloads and undoes |
 
-Not yet covered here (covered on 26.2 or Paper only): brushes and Lua, biomes, gizmos, Autoshade, animated rebuild, symmetry, structure import/export files, and the AI bridge on a Fabric server. The run logs "Can't keep up" about two seconds behind three times while the harness holds ticks during large edits; that is the test clock, not a measured server stall.
+Not yet covered here (covered on 26.2 or Paper only): brushes and Lua, biomes, gizmos, Autoshade, animated rebuild, symmetry, structure import/export files, and the AI bridge on a Fabric server. The run logs "Can't keep up" about two seconds behind three times during the large-edit stages. The cause (the harness's accelerated tick clock or a real stall in large edits) has not been established.
 
 ## Needs a human
 
