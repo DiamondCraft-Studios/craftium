@@ -26,7 +26,7 @@
     { "name": "get_surface", "description": "Read the ground height of an area" },
     { "name": "get_palette", "description": "The player's block palette" },
     { "name": "get_screenshot", "description": "See what the player sees, including the preview" },
-    { "name": "look_at", "description": "Turn the player's view toward a block" },
+    { "name": "render_view", "description": "Draw a picture of a box of the world from any angle" },
     { "name": "set_selection", "description": "Select the area to build in" },
     { "name": "clear_selection", "description": "Deselect everything" },
     { "name": "preview_build", "description": "Show a build as a ghost preview" },

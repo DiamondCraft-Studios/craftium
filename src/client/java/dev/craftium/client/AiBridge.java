@@ -283,11 +283,7 @@ public final class AiBridge {
             }
             case "get_palette" -> onClient(AiBridge::palette);
             case "get_screenshot" -> screenshot();
-            case "look_at" -> {
-                if (args.has("view")) { var view = view(args); yield onClient(() -> turn(view[0], view[1])); }
-                var target = point(args, "target");
-                yield onClient(() -> lookAt(target));
-            }
+            case "render_view" -> AiView.render(args);
             case "set_selection" -> { var from = point(args, "from"); var to = point(args, "to"); yield request("select_box", () -> select(from, to)); }
             case "clear_selection" -> request("clear", () -> CraftiumClient.send("clear", null, null));
             case "preview_build" -> {
@@ -304,7 +300,7 @@ public final class AiBridge {
     }
 
     /** Runs {@code action} on the game's thread and returns what it produces. */
-    private static <T> T onClient(Callable<T> action) throws Exception {
+    static <T> T onClient(Callable<T> action) throws Exception {
         var future = new CompletableFuture<T>();
         Minecraft.getInstance().execute(() -> {
             try { future.complete(action.call()); } catch (Throwable t) { future.completeExceptionally(t); }
@@ -319,7 +315,7 @@ public final class AiBridge {
     }
 
     /** Asks the server to read part of its world and waits for the data, which comes back as a packet of its own rather than as a status. */
-    private static JsonObject read(String action, Point from, Point to) throws Exception {
+    static JsonObject read(String action, Point from, Point to) throws Exception {
         var data = new CompletableFuture<String>();
         pace();
         onClient(() -> {
@@ -488,37 +484,6 @@ public final class AiBridge {
         return reply;
     }
 
-    /** Turns the player's view, not their position, toward the middle of a block. Reports the view it had before so it can be put back. */
-    private static JsonObject lookAt(Point target) {
-        var mc = Minecraft.getInstance();
-        if (mc.player == null) throw new IllegalStateException("Not in a world");
-        var eye = mc.player.getEyePosition();
-        double dx = target.x() + .5 - eye.x, dy = target.y() + .5 - eye.y, dz = target.z() + .5 - eye.z;
-        if (dx * dx + dy * dy + dz * dz < 1) throw new IllegalArgumentException("That point is where the player's head is; choose a point further away");
-        return turn((float) Math.toDegrees(Math.atan2(-dx, dz)), (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz))));
-    }
-
-    /** Sets the player's view and reports the one they had, as [yaw, pitch] in degrees, so it can be put back with look_at's view. */
-    private static JsonObject turn(float yaw, float pitch) {
-        var mc = Minecraft.getInstance();
-        if (mc.player == null) throw new IllegalStateException("Not in a world");
-        double before = mc.player.getYRot(), beforePitch = mc.player.getXRot();
-        mc.player.setYRot(yaw);
-        mc.player.setXRot(Math.clamp(pitch, -90f, 90f));
-        var out = new JsonObject();
-        out.addProperty("ok", true);
-        out.add("previousView", array(Math.round(before * 10) / 10.0, Math.round(beforePitch * 10) / 10.0));
-        out.add("view", array(Math.round(yaw * 10) / 10.0, Math.round(mc.player.getXRot() * 10) / 10.0));
-        return out;
-    }
-
-    private static float[] view(JsonObject args) {
-        var element = args.get("view");
-        if (!element.isJsonArray() || element.getAsJsonArray().size() != 2) throw new IllegalArgumentException("\"view\" must be [yaw, pitch]");
-        try { return new float[]{element.getAsJsonArray().get(0).getAsFloat(), element.getAsJsonArray().get(1).getAsFloat()}; }
-        catch (RuntimeException e) { throw new IllegalArgumentException("\"view\" must hold two numbers"); }
-    }
-
     private static JsonObject palette() {
         var out = new JsonObject();
         out.addProperty("ok", true);
@@ -567,7 +532,7 @@ public final class AiBridge {
         return out;
     }
 
-    private static Point point(JsonObject args, String key) {
+    static Point point(JsonObject args, String key) {
         if (!args.has(key) || !args.get(key).isJsonArray() || args.getAsJsonArray(key).size() != 3) throw new IllegalArgumentException("\"" + key + "\" must be [x,y,z]");
         var list = args.getAsJsonArray(key);
         int[] v = new int[3];
@@ -580,7 +545,7 @@ public final class AiBridge {
         return new Point(v[0], v[1], v[2]);
     }
 
-    private static JsonArray array(Number... values) {
+    static JsonArray array(Number... values) {
         var out = new JsonArray();
         for (Number n : values) out.add(n);
         return out;

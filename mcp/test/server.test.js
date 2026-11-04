@@ -54,7 +54,7 @@ test("lists every tool with its hints, and the server's instructions", async () 
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "clear_selection", "get_blocks", "get_palette", "get_screenshot", "get_state", "get_surface", "look_at", "preview_build", "set_selection", "undo"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "clear_selection", "get_blocks", "get_palette", "get_screenshot", "get_state", "get_surface", "preview_build", "render_view", "set_selection", "undo"]);
   assert.equal(tools.find((t) => t.name === "get_state").annotations.readOnlyHint, true);
   assert.equal(tools.find((t) => t.name === "apply_preview").annotations.destructiveHint, true);
   assert.match(tools.find((t) => t.name === "preview_build").description, /cylinder/);
@@ -88,15 +88,15 @@ test("a screenshot reaches the model as an image with the details beside it", as
   await bridge.close();
 });
 
-test("look_at needs a target or a view and passes either through", async () => {
-  const bridge = await fakeBridge({ look_at: { ok: true, previousView: [0, 0], view: [90, 10] } });
+test("render_view passes its box, angle and preview flag through, and its picture comes back as an image", async () => {
+  const bridge = await fakeBridge({ render_view: { ok: true, image: "QUJD", mime: "image/png", width: 800, height: 600, compass: { east: "right", north: "up" } } });
   const client = await connect(bridge.file);
-  const none = await client.callTool({ name: "look_at", arguments: {} });
-  assert.equal(none.isError, true);
-  assert.equal(bridge.seen.length, 0);
-  await client.callTool({ name: "look_at", arguments: { target: [1, 2, 3] } });
-  await client.callTool({ name: "look_at", arguments: { view: [45, 5] } });
-  assert.deepEqual(bridge.seen.map((r) => r.body), [{ target: [1, 2, 3] }, { view: [45, 5] }]);
+  const result = await client.callTool({ name: "render_view", arguments: { from: [0, 0, 0], to: [9, 9, 9], angle: "top", preview: false, sneaky: 1 } });
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(result.content[0], { type: "image", data: "QUJD", mimeType: "image/png" });
+  assert.deepEqual(bridge.seen[0].body, { from: [0, 0, 0], to: [9, 9, 9], angle: "top", preview: false });
+  await client.callTool({ name: "render_view", arguments: { from: [0, 0, 0], to: [1, 1, 1] } });
+  assert.deepEqual(bridge.seen[1].body, { from: [0, 0, 0], to: [1, 1, 1] });
   await bridge.close();
 });
 
@@ -131,7 +131,7 @@ test("get_surface passes its corners and kind to the bridge and nothing else", a
 test("bad arguments are rejected before they reach the game", async () => {
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
-  for (const [name, args] of [["set_selection", { from: [0, 0], to: [1, 1, 1] }], ["get_blocks", { from: [0, 0, 0] }], ["get_surface", { from: [0, 0, 0], to: [1, 1, 1], kind: "water" }], ["set_selection", { from: [0.5, 0, 0], to: [1, 1, 1] }], ["preview_build", { spec: { ops: [] } }], ["preview_build", { spec: "not an object" }]]) {
+  for (const [name, args] of [["set_selection", { from: [0, 0], to: [1, 1, 1] }], ["get_blocks", { from: [0, 0, 0] }], ["get_surface", { from: [0, 0, 0], to: [1, 1, 1], kind: "water" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], angle: "above" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], preview: "yes" }], ["set_selection", { from: [0.5, 0, 0], to: [1, 1, 1] }], ["preview_build", { spec: { ops: [] } }], ["preview_build", { spec: "not an object" }]]) {
     const result = await client.callTool({ name, arguments: args });
     assert.equal(result.isError, true, `${name} ${JSON.stringify(args)}`);
   }

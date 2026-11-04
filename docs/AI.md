@@ -42,14 +42,20 @@ Then ask Claude for a build while the game is open. Claude can select an area in
 | `get_blocks` | Reads the blocks in a box (up to 32,768 at a time), anywhere in the world: the server reads them, so ground your game has not loaded is real blocks and not air |
 | `get_surface` | The top block of every column in an area (up to 128 by 128), to find ground level |
 | `get_palette` | Your current block and recently used blocks |
-| `get_screenshot` | A picture of what you see in the game, including the preview, so Claude can check its own work |
-| `look_at` | Turns your view (not your position) toward a block so the picture shows the build, and turns it back afterwards |
+| `get_screenshot` | A picture of what you see in the game, including the preview |
+| `render_view` | Claude's own camera: a picture of any box of the world from an angle it picks (see [Claude's own view](#claudes-own-view)), so it can check its work without touching your view |
 | `set_selection`, `clear_selection` | Chooses the area builds go in |
 | `preview_build` | Shows a build as a ghost, replacing any earlier preview |
 | `apply_preview` | Builds the preview, as one undoable step |
 | `cancel_preview`, `undo` | Discards the preview, or undoes your last edit |
 
 Claude cannot do anything the editor cannot. Every request goes through the same checks as your own edits: server permissions, protected areas, WorldGuard, the world border and size limits.
+
+## Claude's own view
+
+`render_view` draws a box of the world as flat-shaded blocks, each in the average colour of its texture (so resource packs show), seen from an angle Claude chooses: four isometric corners (`se`, `sw`, `ne`, `nw`), straight down (`top`, north at the top), or level with one side (`north`, `south`, `east`, `west`, for judging heights). It never turns or moves you and does not need the box to be near you. Your waiting preview is drawn over the world tinted violet, so Claude sees what you see. The picture is for Claude only; you keep looking at the violet ghost in the game.
+
+It has no textures, shadows or transparency (water and glass draw as solid colour), so it is for shape, proportion and layout, not for fine detail. A box can be up to 128 blocks a side and 262,144 blocks (for example 64 by 64 by 64); it is read from the server in 32-block pieces, each within the chunk limit below.
 
 ## Reading the world
 
@@ -79,7 +85,7 @@ A build ignores your brush settings (mask, symmetry, height range) and places ex
 
 - The bridge is **off until you turn it on**, and it listens on `127.0.0.1` only.
 - Each launch writes a new random token to `config/craftium/bridge.json`. Requests without it are refused, as are requests that come from a web page (they carry an `Origin`) or name another host.
-- `get_screenshot` sends a picture of your game window (at most 1024 pixels wide) to the AI app, so close anything private on screen first. It is only taken when the AI app asks, and the corner marker shows **AI working…** while it does. `look_at` only turns your view, never moves you.
+- `get_screenshot` sends a picture of your game window (at most 1024 pixels wide) to the AI app, so close anything private on screen first. It is only taken when the AI app asks, and the corner marker shows **AI working…** while it does. `render_view` does not use your screen at all: it draws from block data, so it shows nothing but blocks.
 - Builds are always staged as a ghost first, even if you have turned confirmation off for your own edits. Applying is a separate step.
 - The file is deleted when the bridge stops. If Minecraft crashes and leaves it behind, the extension reports that the game is not running.
 - Anyone who can read your Minecraft folder or run programs as you can read the token, as with any local app. Turn the bridge off when you are not using it.
@@ -131,6 +137,7 @@ Under `--permission` the process can read only those two folders and cannot star
 
 - Bridge: [AiBridge.java](../src/client/java/dev/craftium/client/AiBridge.java). A small loopback HTTP server (no JDK HTTP module, since Minecraft's bundled runtime may omit it) answering `POST /<tool>` with a JSON body and `Authorization: Bearer <token>`. Requests are spaced 120 ms apart because the server silently drops requests that follow another within 65 ms.
 - Build specs: [BuildSpec.java](../src/main/java/dev/craftium/core/BuildSpec.java) (pure, unit tested) and [BuildPlanner.java](../src/main/java/dev/craftium/server/BuildPlanner.java), reached by the `ai_build_preview` request. Apply and cancel reuse `pending_confirm` and `pending_cancel`.
+- Pictures: [VoxelView.java](../src/main/java/dev/craftium/core/VoxelView.java) is the pure renderer (unit tested, no game needed) and [AiView.java](../src/client/java/dev/craftium/client/AiView.java) gathers the blocks, block colours and preview for it. `render_view` reuses `ai_blocks` for the data, in 32-block tiles.
 - Server reads: [AiWorld.java](../src/main/java/dev/craftium/server/AiWorld.java) answers the `ai_blocks`, `ai_surface` and `ai_surface_floor` requests with a `Packets.AiReply` (the `ai_reply` message on Paper). Their limits are the constants at the top of that file (`MAX_BLOCKS`, `MAX_COLUMNS`, `MAX_NEW_CHUNKS`, `MAX_REPLY`); change them there and in the tool descriptions in [mcp/src/tools.js](../mcp/src/tools.js), and update this page. These requests carry their two corners in `target` and `normal`, so `EditorServer` handles them before it checks `normal` as a direction.
 - MCP server: [mcp/](../mcp), with no run-time dependencies. `npm test` starts the real server and talks to it with the official MCP client (a test-only dependency) against a fake bridge, and also checks the limits in `contract.test.js`. `npm run pack` builds the `.mcpb`.
 - Game test: `CRAFTIUM_TEST_SCOPE=ai gradlew :versions:mc-1.21.10:runClientGameTest` enables the bridge in a real world, drives it over HTTP, then runs the real MCP server over stdio to build a pyramid.

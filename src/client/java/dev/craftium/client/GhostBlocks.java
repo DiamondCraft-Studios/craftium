@@ -40,6 +40,11 @@ final class GhostBlocks {
         catch(RuntimeException e){return EMPTY;}
     }
 
+    /** For a picture of the preview: the block states it uses, the blocks it places as x, y, z, state-index quads, and the ones it removes as x, y, z triples. */
+    List<String> stateNames(){return data==null||data.states()==null?List.of():data.states();}
+    int[] placedCells(){return data==null||data.blocks()==null?new int[0]:data.blocks();}
+    int[] removedCells(){return data==null||data.removed()==null?new int[0]:data.removed();}
+
     /** How many blocks the edit or clipboard really holds, which can be more than are drawn. */
     int total(){return data==null?0:data.total();}
 

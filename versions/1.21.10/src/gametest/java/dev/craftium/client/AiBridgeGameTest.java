@@ -80,17 +80,31 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             ctx.takeScreenshot("ai-preview");
             require(ctx.computeOnClient(mc -> ClientState.pending.ai), "an AI preview should be marked as the AI's");
 
-            // Claude's own view: face the preview, take the picture an AI app would get, and turn back.
-            var turned = call("look_at", "{\"target\":[" + (x + 2) + "," + (y + 4) + "," + (z + 2) + "]}");
-            require(turned.get("ok").getAsBoolean(), "look_at: " + turned);
+            // What the player sees, as a screenshot: it is not turned or moved for it.
+            float yawBefore = ctx.computeOnClient(mc -> mc.player.getYRot());
             var shot = call("get_screenshot", "{}");
             require(shot.get("ok").getAsBoolean() && shot.get("mime").getAsString().equals("image/jpeg") && shot.get("width").getAsInt() <= 1024, "get_screenshot: " + shot.keySet());
             byte[] jpeg = java.util.Base64.getDecoder().decode(shot.get("image").getAsString());
             require(jpeg.length > 5_000 && (jpeg[0] & 0xff) == 0xff && (jpeg[1] & 0xff) == 0xd8, "the screenshot should be a real JPEG, was " + jpeg.length + " bytes");
             try { Files.write(java.nio.file.Path.of("screenshots", "ai-tool-screenshot.jpg"), jpeg); } catch (java.io.IOException e) { throw new AssertionError(e); }
-            var back = call("look_at", "{\"view\":" + turned.get("previousView") + "}");
-            require(back.get("ok").getAsBoolean(), "look_at with a view: " + back);
             System.out.println("CRAFTIUM_AI screenshot_ok bytes=" + jpeg.length + " " + shot.get("width") + "x" + shot.get("height"));
+
+            // The AI's own camera: the box with the preview drawn in violet, from two angles, without turning the player.
+            String box = "\"from\":[" + x + "," + y + "," + z + "],\"to\":[" + (x + 4) + "," + (y + 9) + "," + (z + 4) + "]";
+            var view = call("render_view", "{" + box + ",\"angle\":\"se\"}");
+            require(view.get("ok").getAsBoolean() && view.get("mime").getAsString().equals("image/png"), "render_view: " + view);
+            var picture = decode(view);
+            require(violet(picture) > 200, "the preview should be drawn tinted violet, found " + violet(picture) + " pixels");
+            require(view.get("previewBlocksShown").getAsInt() == ghost, "every preview block in the box should be drawn: " + view);
+            var side = call("render_view", "{" + box + ",\"angle\":\"south\",\"preview\":false}");
+            require(side.get("ok").getAsBoolean() && violet(decode(side)) == 0 && side.get("previewBlocksShown").getAsInt() == 0, "without the preview nothing is violet: " + side.keySet());
+            try { Files.write(java.nio.file.Path.of("screenshots", "ai-render-view.png"), java.util.Base64.getDecoder().decode(view.get("image").getAsString())); } catch (java.io.IOException e) { throw new AssertionError(e); }
+            require(ctx.computeOnClient(mc -> mc.player.getYRot()) == yawBefore, "render_view must not turn the player");
+            var tooBig = call("render_view", "{\"from\":[0,0,0],\"to\":[199,9,9]}");
+            require(!tooBig.get("ok").getAsBoolean() && tooBig.get("error").getAsString().contains("128"), "an oversized box should be refused: " + tooBig);
+            var badAngle = call("render_view", "{" + box + ",\"angle\":\"above\"}");
+            require(!badAngle.get("ok").getAsBoolean(), "an unknown angle should be refused: " + badAngle);
+            System.out.println("CRAFTIUM_AI render_view_ok " + view.get("width") + "x" + view.get("height") + " blocks=" + view.getAsJsonArray("blocks").size());
             require(ctx.computeOnClient(mc -> mc.level.getBlockState(new BlockPos(x + 2, y + 3, z + 2)).isAir()), "a preview must not touch the world");
             System.out.println("CRAFTIUM_AI preview_ok blocks=" + ghost);
 
@@ -126,6 +140,9 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             var tooMany = call("get_blocks", "{\"from\":[" + (farX + 2000) + ",0," + farZ + "],\"to\":[" + (farX + 2000 + 127) + ",0," + (farZ + 127) + "]}");
             require(!tooMany.get("ok").getAsBoolean() && tooMany.get("error").getAsString().contains("chunks"), "a read that needs too many new chunks should be refused: " + tooMany);
             System.out.println("CRAFTIUM_AI far_read_ok");
+            var farView = call("render_view", "{\"from\":[" + farX + ",-64," + farZ + "],\"to\":[" + (farX + 15) + ",-50," + (farZ + 15) + "],\"angle\":\"nw\"}");
+            require(farView.get("ok").getAsBoolean() && farView.getAsJsonArray("blocks").size() > 0, "a far render should show real ground: " + farView.keySet());
+            System.out.println("CRAFTIUM_AI far_render_ok");
 
             var undone = call("undo", "{}");
             require(undone.get("ok").getAsBoolean(), "undo: " + undone);
@@ -199,6 +216,22 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
         if (authorization != null) builder.header("Authorization", authorization);
         if (origin != null) builder.header("Origin", origin);
         try { return HttpClient.newHttpClient().sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString()).get().statusCode(); } catch (Exception e) { throw new AssertionError(e); }
+    }
+
+    private static java.awt.image.BufferedImage decode(JsonObject reply) {
+        try { return javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(java.util.Base64.getDecoder().decode(reply.get("image").getAsString()))); }
+        catch (java.io.IOException e) { throw new AssertionError(e); }
+    }
+
+    /** Pixels that are clearly violet: red and blue both well above green, which neither the background nor sandstone is. */
+    private static int violet(java.awt.image.BufferedImage image) {
+        int n = 0;
+        for (int py = 0; py < image.getHeight(); py++)
+            for (int px = 0; px < image.getWidth(); px++) {
+                int c = image.getRGB(px, py), r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
+                if (r > g + 30 && b > g + 30) n++;
+            }
+        return n;
     }
 
     private static void require(boolean ok, String message) { if (!ok) throw new AssertionError(message); }
