@@ -56,6 +56,7 @@ public final class StructureGameTest {
         long voidCells=Arrays.stream(preview.cells()).filter(i->i==StructurePreview.VOID).count();
         require(voidCells==0,"Air was turned to void without being asked: "+voidCells);
         int solidBlocks=preview.blocks();
+        require(Arrays.equals(preview.source(),new int[]{4,3,4}),"The detected size is "+Arrays.toString(preview.source()));
         System.out.println("CRAFTIUM_STRUCTURES_PASS java_preview blocks="+solidBlocks+" air="+Arrays.stream(preview.cells()).filter(i->i==StructurePreview.AIR).count());
 
         // The same, with air turned to void: the preview must change.
@@ -119,6 +120,19 @@ public final class StructureGameTest {
         int clipboard=c.computeOnClient(mc->ClientState.status.clipboardSize());
         require(clipboard>=16,"The imported Bedrock structure left "+clipboard+" blocks in the clipboard");
         System.out.println("CRAFTIUM_STRUCTURES_PASS bedrock_import clipboard="+clipboard+" status="+c.computeOnClient(mc->ClientState.status.message()));
+        // The imported structure must take the placement transforms like a copied one.
+        c.runOnClient(mc->{PlacementPreview.begin(new Point(bx,by+4,bz));});
+        c.waitTicks(10);
+        var before=c.computeOnClient(mc->PlacementPreview.shape.bounds());
+        require(c.computeOnClient(mc->PlacementPreview.active())&&before!=null,"The imported structure did not start a placement");
+        require(before!=null&&before.getXsize()==4&&before.getYsize()==2&&before.getZsize()==4&&before.minX==0&&before.minY==0&&before.minZ==0,"The imported blocks are boxed as "+before+", not 4 x 2 x 4 from the origin");
+        System.out.println("CRAFTIUM_STRUCTURES_PASS placement bounds="+before+" status="+c.computeOnClient(mc->ClientState.status.message()));
+        c.runOnClient(mc->{ClientState.options.yaw=90;ClientState.options.sizeX=1;ClientState.options.sizeY=1;ClientState.options.sizeZ=1;CraftiumClient.send("clipboard_transform",null,null);ClientState.options.yaw=0;});
+        c.waitTicks(20);
+        var after=c.computeOnClient(mc->PlacementPreview.shape.bounds());
+        System.out.println("CRAFTIUM_STRUCTURES_PASS transformed bounds="+after+" status="+c.computeOnClient(mc->ClientState.status.message()));
+        require(!before.equals(after)||before.getXsize()==before.getZsize(),"The transform did not change the imported placement");
+        require(after.getXsize()==4&&after.getYsize()==2&&after.minX==0&&after.minY==0,"The rotated import is "+after);
         System.out.println("CRAFTIUM_STRUCTURES_PASS all (files in "+directory+")");
     }
 

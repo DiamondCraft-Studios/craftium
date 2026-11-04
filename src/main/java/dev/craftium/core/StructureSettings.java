@@ -26,7 +26,7 @@ public final class StructureSettings {
     /** Percent of blocks kept, as the structure block's integrity slider. */
     public int integrity=100;
     public long seed;
-    public boolean includeEntities=true,includeBlocks=true,airToVoid,showInvisible,showBounds=true;
+    public boolean includeEntities=true,includeBlocks=true,airToVoid,showInvisible,showBounds=true,showAxes=true;
 
     public void validate(){
         if(!JAVA.equals(format)&&!BEDROCK.equals(format))format=JAVA;

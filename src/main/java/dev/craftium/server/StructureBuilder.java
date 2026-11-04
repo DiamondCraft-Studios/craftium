@@ -27,6 +27,8 @@ final class StructureBuilder {
     final List<CompoundTag> entities;
     final Point origin;
     final StructureSettings settings;
+    /** The size before mirror and rotation, for the pop-up's size fields. */
+    int[] source;
     final List<String> notes=new ArrayList<>();
 
     private StructureBuilder(StructureSettings settings,int sx,int sy,int sz,BlockSnapshot[] cells,List<CompoundTag> entities,Point origin){
@@ -64,7 +66,8 @@ final class StructureBuilder {
         }
         entities.removeIf(tag->{var at=tag.getListOrEmpty("Pos");return at.getDoubleOr(0,0)<0||at.getDoubleOr(1,0)<0||at.getDoubleOr(2,0)<0||at.getDoubleOr(0,0)>=sx||at.getDoubleOr(1,0)>=sy||at.getDoubleOr(2,0)>=sz;});
         var built=new StructureBuilder(s,sx,sy,sz,cells,entities,clipboard?new Point(0,0,0):min);
-        return built.transformed().thinned().voided();
+        built.source=new int[]{sx,sy,sz};
+        var result=built.transformed().thinned().voided();result.source=built.source;return result;
     }
 
     private static Mirror mirrorOf(String name){return switch(name){case "left_right"->Mirror.LEFT_RIGHT;case "front_back"->Mirror.FRONT_BACK;default->Mirror.NONE;};}
@@ -213,7 +216,7 @@ final class StructureBuilder {
             if(id==null){if(palette.size()>=60_000){out[i]=StructurePreview.VOID;continue;}id=palette.size();indices.put(state,id);palette.add(block(state));}
             out[i]=id;blocks++;
         }
-        return new StructurePreview(sizeX,sizeY,sizeZ,List.copyOf(palette),out,List.copyOf(notes),blocks);
+        return new StructurePreview(sizeX,sizeY,sizeZ,List.copyOf(palette),out,List.copyOf(notes),blocks,source);
     }
     private static StructurePreview.Block block(BlockState state){
         var bounds=new int[]{0,0,0,16,16,16};

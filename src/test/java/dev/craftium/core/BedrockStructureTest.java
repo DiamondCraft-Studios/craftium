@@ -46,7 +46,7 @@ class BedrockStructureTest {
 
     @Test void previewSurvivesItsEncoding(){
         var cells=new int[2*3*4];Arrays.fill(cells,StructurePreview.VOID);cells[5]=0;cells[6]=0;cells[7]=StructurePreview.AIR;cells[23]=1;
-        var preview=new StructurePreview(2,3,4,List.of(new StructurePreview.Block("minecraft:stone",new int[]{0,0,0,16,16,16},true),new StructurePreview.Block("minecraft:torch",new int[]{7,0,7,9,10,9},false)),cells,List.of("note"),3);
+        var preview=new StructurePreview(2,3,4,List.of(new StructurePreview.Block("minecraft:stone",new int[]{0,0,0,16,16,16},true),new StructurePreview.Block("minecraft:torch",new int[]{7,0,7,9,10,9},false)),cells,List.of("note"),3,new int[]{2,3,4});
         var back=StructurePreview.decode(preview.encode());
         assertArrayEquals(cells,back.cells());assertEquals(preview.palette().get(1).name(),back.palette().get(1).name());assertArrayEquals(new int[]{7,0,7,9,10,9},back.palette().get(1).bounds());
         assertEquals(List.of("note"),back.notes());assertEquals(4,back.sizeZ());
@@ -54,19 +54,32 @@ class BedrockStructureTest {
     }
     @Test void rasterDrawsBlocksAndRespondsToTheCamera(){
         var cells=new int[3*3*3];Arrays.fill(cells,0);
-        var preview=new StructurePreview(3,3,3,List.of(new StructurePreview.Block("minecraft:stone",new int[]{0,0,0,16,16,16},true)),cells,List.of(),27);
+        var preview=new StructurePreview(3,3,3,List.of(new StructurePreview.Block("minecraft:stone",new int[]{0,0,0,16,16,16},true)),cells,List.of(),27,new int[]{3,3,3});
         int w=96,h=96;int[] a=new int[w*h],b=new int[w*h];
-        StructureRaster.render(preview,new int[]{0xff808080},new StructureRaster.View(30,30,1,false,false),a,w,h);
-        StructureRaster.render(preview,new int[]{0xff808080},new StructureRaster.View(120,30,1,false,false),b,w,h);
+        StructureRaster.render(preview,new int[]{0xff808080},new StructureRaster.View(30,30,1,false,false,false),a,w,h);
+        StructureRaster.render(preview,new int[]{0xff808080},new StructureRaster.View(120,30,1,false,false,false),b,w,h);
         long drawn=Arrays.stream(a).filter(p->p!=StructureRaster.BACKGROUND).count();
         assertTrue(drawn>500&&drawn<w*h,"the cube covers part of the view: "+drawn);
         assertFalse(Arrays.equals(a,b));
         var voided=new int[27];Arrays.fill(voided,StructurePreview.VOID);
-        var empty=new StructurePreview(3,3,3,preview.palette(),voided,List.of(),0);var c=new int[w*h];
-        StructureRaster.render(empty,new int[]{0xff808080},new StructureRaster.View(30,30,1,false,false),c,w,h);
+        var empty=new StructurePreview(3,3,3,preview.palette(),voided,List.of(),0,new int[]{3,3,3});var c=new int[w*h];
+        StructureRaster.render(empty,new int[]{0xff808080},new StructureRaster.View(30,30,1,false,false,false),c,w,h);
         assertEquals(0,Arrays.stream(c).filter(p->p!=StructureRaster.BACKGROUND).count());
-        StructureRaster.render(empty,new int[]{0xff808080},new StructureRaster.View(30,30,1,true,true),c,w,h);
+        StructureRaster.render(empty,new int[]{0xff808080},new StructureRaster.View(30,30,1,true,true,false),c,w,h);
         assertTrue(Arrays.stream(c).anyMatch(p->p==StructureRaster.VOID_MARK||p==StructureRaster.BOUNDS),"void cells and the bounding box show on request");
+    }
+    @Test void boundingBoxIsHiddenBehindBlocksAndAxesAreColoured(){
+        // A 1-block cube in front of the back edges of a 6-wide box: with depth testing the box must lose pixels to it.
+        var cells=new int[6*6*6];Arrays.fill(cells,StructurePreview.VOID);for(int y=2;y<4;y++)for(int z=2;z<4;z++)for(int x=2;x<4;x++)cells[(y*6+z)*6+x]=0;
+        var preview=new StructurePreview(6,6,6,List.of(new StructurePreview.Block("minecraft:stone",new int[]{0,0,0,16,16,16},true)),cells,List.of(),8,new int[]{6,6,6});
+        int w=160,h=160;int[] without=new int[w*h],with=new int[w*h];
+        StructureRaster.render(preview,new int[]{0xff808080},new StructureRaster.View(30,30,1,false,false,false),without,w,h);
+        StructureRaster.render(preview,new int[]{0xff808080},new StructureRaster.View(30,30,1,true,false,true),with,w,h);
+        long cubeBefore=Arrays.stream(without).filter(p->p==0xff808080||p!=StructureRaster.BACKGROUND).count();
+        long cubeAfter=0;for(int i=0;i<with.length;i++)if(without[i]!=StructureRaster.BACKGROUND&&with[i]!=without[i])cubeAfter++;
+        assertTrue(cubeBefore>0);assertTrue(cubeAfter<cubeBefore/20,"lines are drawn over "+cubeAfter+" of the cube's "+cubeBefore+" pixels");
+        for(int colour:new int[]{StructureRaster.AXIS_X,StructureRaster.AXIS_Y,StructureRaster.AXIS_Z}){final int c=colour;assertTrue(Arrays.stream(with).anyMatch(p->p==c),"axis colour "+Integer.toHexString(c)+" is drawn");}
+        assertTrue(Arrays.stream(with).anyMatch(p->p==StructureRaster.BOUNDS));
     }
     @Test void settingsClampAndNameFiles(){
         var s=new StructureSettings();s.name="Bad Name!";s.rotation=-90;s.integrity=400;s.sizeX=9999;s.mirror="sideways";s.validate();

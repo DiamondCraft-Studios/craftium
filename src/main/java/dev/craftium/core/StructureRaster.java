@@ -9,7 +9,7 @@ import java.util.Arrays;
  */
 public final class StructureRaster {
     /** The camera ({@code yaw} and {@code pitch} in degrees, {@code zoom} 1 fits the structure) and what is drawn besides blocks. */
-    public record View(float yaw,float pitch,float zoom,boolean bounds,boolean invisible){}
+    public record View(float yaw,float pitch,float zoom,boolean bounds,boolean invisible,boolean axes){}
     public static final int BACKGROUND=0xff0d1219,AIR_MARK=0xff7fb8e6,VOID_MARK=0xffe0504a,BOUNDS=0xfff2f5f8;
     // Per direction (-X,+X,-Y,+Y,-Z,+Z): how bright a face looks.
     private static final float[] LIGHT={.70f,.82f,.50f,1f,.62f,.90f};
@@ -43,7 +43,8 @@ public final class StructureRaster {
         var cam=new Camera(p,view,w,h);
         faces(p,colours,cam,pixels,depth,w,h);
         if(view.invisible())marks(p,cam,pixels,depth,w,h);
-        if(view.bounds())box(p,cam,pixels,w,h);
+        if(view.bounds())box(p,cam,pixels,depth,w,h);
+        if(view.axes())axes(p,cam,pixels,depth,w,h);
     }
 
     private static boolean occludes(StructurePreview p,int x,int y,int z){
@@ -113,16 +114,38 @@ public final class StructureRaster {
         }
     }
 
-    private static void box(StructurePreview p,Camera cam,int[] pixels,int w,int h){
+    /** How far in front of a face a line may sit and still show, so a line along a block's edge is not cut by that block. */
+    private static final float LINE_BIAS=.06f;
+    public static final int AXIS_X=0xffff6f6f,AXIS_Y=0xff7be58a,AXIS_Z=0xff6fb2ff;
+
+    private static void box(StructurePreview p,Camera cam,int[] pixels,float[] depth,int w,int h){
         var corner=new float[8][3];
         for(int i=0;i<8;i++)cam.project((i&1)*p.sizeX(),((i>>1)&1)*p.sizeY(),((i>>2)&1)*p.sizeZ(),corner[i]);
-        for(int i=0;i<8;i++)for(int bit=1;bit<8;bit<<=1)if((i&bit)==0)line(corner[i],corner[i|bit],pixels,w,h);
+        for(int i=0;i<8;i++)for(int bit=1;bit<8;bit<<=1)if((i&bit)==0)line(corner[i],corner[i|bit],BOUNDS,1,pixels,depth,w,h);
     }
-    private static void line(float[] a,float[] b,int[] pixels,int w,int h){
+    /** The world's X, Y and Z axes through the structure's origin corner, past the far side of the box, with no arrow heads. */
+    private static void axes(StructurePreview p,Camera cam,int[] pixels,float[] depth,int w,int h){
+        var from=new float[3];var to=new float[3];
+        int[] sizes={p.sizeX(),p.sizeY(),p.sizeZ()},colours={AXIS_X,AXIS_Y,AXIS_Z};
+        int reach=Math.max(sizes[0],Math.max(sizes[1],sizes[2]));
+        for(int axis=0;axis<3;axis++){
+            float length=sizes[axis]+Math.max(1,reach/4f);
+            cam.project(0,0,0,from);
+            cam.project(axis==0?length:0,axis==1?length:0,axis==2?length:0,to);
+            line(from,to,colours[axis],2,pixels,depth,w,h);
+        }
+    }
+    /** A line of {@code thickness} pixels that is hidden where a block is in front of it. */
+    private static void line(float[] a,float[] b,int colour,int thickness,int[] pixels,float[] depth,int w,int h){
         int steps=(int)Math.min(4096,Math.max(Math.abs(b[0]-a[0]),Math.abs(b[1]-a[1])))+1;
+        int low=-(thickness-1)/2,high=thickness/2;
         for(int i=0;i<=steps;i++){
-            float t=i/(float)steps;int x=Math.round(a[0]+(b[0]-a[0])*t),y=Math.round(a[1]+(b[1]-a[1])*t);
-            if(x>=0&&y>=0&&x<w&&y<h)pixels[y*w+x]=BOUNDS;
+            float t=i/(float)steps,z=a[2]+(b[2]-a[2])*t;int x=Math.round(a[0]+(b[0]-a[0])*t),y=Math.round(a[1]+(b[1]-a[1])*t);
+            for(int dy=low;dy<=high;dy++)for(int dx=low;dx<=high;dx++){
+                int px=x+dx,py=y+dy;if(px<0||py<0||px>=w||py>=h)continue;
+                int at=py*w+px;if(z+LINE_BIAS<depth[at])continue;
+                pixels[at]=colour;
+            }
         }
     }
 

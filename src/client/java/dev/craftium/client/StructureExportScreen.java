@@ -41,7 +41,13 @@ final class StructureExportScreen extends CraftiumScreen {
     private record Label(String text,int x,int y,boolean muted){}
     private final List<Label> labels=new ArrayList<>();
 
-    StructureExportScreen(Screen parent){super(Component.literal("Export structure"));this.parent=parent;}
+    /** The source size the size fields last showed, so they are filled in again when the structure changes. */
+    private int[] shownSource;
+
+    StructureExportScreen(Screen parent){
+        super(Component.literal("Export structure"));this.parent=parent;
+        s.sizeX=s.sizeY=s.sizeZ=0; // a new selection has a new size, so start from what is detected
+    }
 
     @Override protected void init(){
         panelWidth=Math.min(width-20,880);panelHeight=Math.min(height-20,500);left=(width-panelWidth)/2;top=(height-panelHeight)/2;
@@ -78,7 +84,8 @@ final class StructureExportScreen extends CraftiumScreen {
         y+=ROW;
 
         row("Size",x,y);
-        numbers(fieldX,y,true,s.sizeX,s.sizeY,s.sizeZ,v->s.sizeX=v,v->s.sizeY=v,v->s.sizeZ=v,false);
+        var detected=ClientStructures.preview==null?new int[3]:ClientStructures.preview.source();shownSource=detected;
+        numbers(fieldX,y,true,s.sizeX>0?s.sizeX:detected[0],s.sizeY>0?s.sizeY:detected[1],s.sizeZ>0?s.sizeZ:detected[2],v->s.sizeX=v,v->s.sizeY=v,v->s.sizeZ=v,false);
         field(new FlatButton(fieldX+3*NUMBER+2,y,fieldWidth-3*NUMBER-2,20,"Detect",()->{s.sizeX=s.sizeY=s.sizeZ=0;changed();rebuildWidgets();}));
         y+=ROW;
 
@@ -104,6 +111,8 @@ final class StructureExportScreen extends CraftiumScreen {
         y+=18;
         field(new FlatCheckbox(x,y,half,16,"Show invisible blocks",s.showInvisible,()->{s.showInvisible=!s.showInvisible;redraw=true;rebuildWidgets();}));
         field(new FlatCheckbox(x+half+4,y,half,16,"Show bounding box",s.showBounds,()->{s.showBounds=!s.showBounds;redraw=true;rebuildWidgets();}));
+        y+=18;
+        field(new FlatCheckbox(x,y,half,16,"Show axes (X Y Z)",s.showAxes,()->{s.showAxes=!s.showAxes;redraw=true;rebuildWidgets();}));
         y+=18;
         maxScroll=Math.max(0,y+scroll-formBottom);scroll=Math.min(scroll,maxScroll);
 
@@ -167,7 +176,7 @@ final class StructureExportScreen extends CraftiumScreen {
 
     private void render(){
         var preview=ClientStructures.preview;if(preview==null||dynamic==null)return;
-        StructureRaster.render(preview,colours,new StructureRaster.View(yaw,pitch,zoom,s.showBounds,s.showInvisible),pixels,textureWidth,textureHeight);
+        StructureRaster.render(preview,colours,new StructureRaster.View(yaw,pitch,zoom,s.showBounds,s.showInvisible,s.showAxes),pixels,textureWidth,textureHeight);
         var image=dynamic.getPixels();
         for(int y=0;y<textureHeight;y++)for(int x=0;x<textureWidth;x++)image.setPixel(x,y,pixels[y*textureWidth+x]);
         dynamic.upload();
@@ -207,6 +216,8 @@ final class StructureExportScreen extends CraftiumScreen {
             shownPreviews=ClientStructures.previews;var preview=ClientStructures.preview;
             if(preview!=null)colours=ClientStructures.colours(preview);
             redraw=true;
+            // Fields left on "detect" show the detected size, so they follow the structure when it changes.
+            if(preview!=null&&!Arrays.equals(preview.source(),shownSource)&&(s.sizeX==0||s.sizeY==0||s.sizeZ==0))rebuildWidgets();
         }
         if(redraw){redraw=false;render();}
 
