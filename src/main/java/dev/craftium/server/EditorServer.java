@@ -114,8 +114,8 @@ public final class EditorServer {
             s.reach=o.reach==null?Options.ReachMode.NORMAL:o.reach;s.farReach=Math.clamp(o.farReach,6,64);s.noClip=o.noClip;s.options=o;
             s.confirmEdits=o.confirmEdits;
             s.currentAction=r.action();s.recordSelection=changesSelection(r.action(),o);
-            // The builder and the clipboard placement preview have their own confirmation, so they apply straight away.
-            s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm");
+            // The builder and the clipboard placement preview have their own confirmation, and dropping a block in the world is one, so they apply straight away.
+            s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("bucket_fill")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm");
             if(r.action().equals("status")) { send(player,s,"Ready",false);return; }
             if(r.action().equals("capabilities")){send(player,s,"Builder capabilities synchronized",false);return;}
             if(r.action().equals("gamemode_editor")){ // sent as the editor opens and closes: no status message, unlike the buttons, and never throttled

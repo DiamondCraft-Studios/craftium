@@ -57,6 +57,7 @@ public final class DedicatedServerGameTest implements FabricClientGameTest {
                 clipboardAndChest();
                 largeSelection();
                 builder();
+                bucketFill();
                 entities();
                 worldRules();
                 libraries();
@@ -197,6 +198,27 @@ public final class DedicatedServerGameTest implements FabricClientGameTest {
         request("clear", null);
         ctx.runOnClient(mc -> ClientState.options.selectionPoints.clear());
         System.out.println(TAG + "fragmented_selection 16000");
+    }
+
+    private void bucketFill() {
+        server.runCommand("fill 0 " + Y + " 6 2 " + Y + " 6 stone");
+        options(o -> {o.noUpdates = true; o.block = "minecraft:gold_block";});
+        request("bucket_fill", new Point(0, Y, 6));
+        for (int x = 0; x <= 2; x++) checkBlock(x, Y, 6, Blocks.GOLD_BLOCK);
+        request("undo", null);
+        for (int x = 0; x <= 2; x++) checkBlock(x, Y, 6, Blocks.STONE);
+        server.runCommand("fill 0 " + Y + " 6 2 " + Y + " 6 air");
+        // With "confirm edits" on, as it is by default, dropping a block applies at once: the drop is the confirmation.
+        server.runCommand("fill 0 " + Y + " 6 2 " + Y + " 6 stone");
+        pause(90);
+        ctx.runOnClient(mc -> {ClientState.options.confirmEdits = true; CraftiumClient.send("bucket_fill", new Point(0, Y, 6), up);});
+        for (int i = 0; i < 8; i++) {pause(60); ctx.waitTicks(2);}
+        until(mc -> !ClientState.status.busy(), "completion of bucket_fill");
+        System.out.println(TAG + "bucket_fill with confirm edits: " + message());
+        for (int x = 0; x <= 2; x++) checkBlock(x, Y, 6, Blocks.GOLD_BLOCK);
+        request("undo", null);
+        server.runCommand("fill 0 " + Y + " 6 2 " + Y + " 6 air");
+        System.out.println(TAG + "bucket fill undo");
     }
 
     private void builder() {
