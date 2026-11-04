@@ -35,6 +35,8 @@ public final class EditorServer {
     public static void disconnect(UUID id) {var session=SESSIONS.get(id);if(session!=null)HistoryStore.save(session);if(AnimatedRebuild.owned(id)){AnimatedRebuild.cancel(id);return;}if(job==null || !job.owner.equals(id))SESSIONS.remove(id);}
     public static void flushHistory(MinecraftServer server){
         AnimatedRebuild.finishOnStop(server);
+        // Players are saved as the server stops, before they are disconnected, so a player still in the editor would be saved as a spectator.
+        for(var entry:SESSIONS.entrySet()){var player=server.getPlayerList().getPlayer(entry.getKey());if(player!=null)restoreMode(player,entry.getValue());}
         if(job!=null){var j=job;rememberInterrupted(j);j.session.busy=false;job=null;}
         for(var session:SESSIONS.values())HistoryStore.save(session);try{HistoryStore.flush();}catch(java.util.concurrent.CompletionException e){ServerPlatform.LOG.error("Could not finish writing editor history during shutdown",e);}
     }
