@@ -22,6 +22,8 @@ public final class ClientCompat {
     public static void toggleHud(Minecraft mc){mc.options.hideGui=!mc.options.hideGui;}
 
     public static Camera camera(Minecraft mc){return mc.gameRenderer.getMainCamera();}
+    /** The frame the game last drew, for screenshots. */
+    public static com.mojang.blaze3d.pipeline.RenderTarget mainTarget(Minecraft mc){return mc.getMainRenderTarget();}
     public static Camera.NearPlane nearPlane(Camera camera){return camera.getNearPlane();}
     public static KeyMapping registerKey(KeyMapping key){return KeyBindingHelper.registerKeyBinding(key);}
 

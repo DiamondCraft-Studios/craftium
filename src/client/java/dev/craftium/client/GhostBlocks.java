@@ -28,6 +28,10 @@ final class GhostBlocks {
     private List<BlockPos> cachedPlaces,removedPlaces=List.of();private Point cachedOrigin;
     /** The tint of blocks an edit is about to remove, over the original blocks that are still in the world. */
 
+    /** Set on a preview an AI app made, which is drawn in violet so it is never taken for one of the player's own edits. */
+    boolean ai;
+    private static final int AI_OUTLINE=0xffc9a0ff,AI_FILL=0x22a070ff,AI_TINT=0x90b57cf0;
+
     private GhostBlocks(Data data){this.data=data;}
 
     static GhostBlocks parse(String json){
@@ -35,6 +39,11 @@ final class GhostBlocks {
         try{var data=Packets.JSON.fromJson(json,Data.class);return data==null||data.total()==0?EMPTY:new GhostBlocks(data);}
         catch(RuntimeException e){return EMPTY;}
     }
+
+    /** For a picture of the preview: the block states it uses, the blocks it places as x, y, z, state-index quads, and the ones it removes as x, y, z triples. */
+    List<String> stateNames(){return data==null||data.states()==null?List.of():data.states();}
+    int[] placedCells(){return data==null||data.blocks()==null?new int[0]:data.blocks();}
+    int[] removedCells(){return data==null||data.removed()==null?new int[0]:data.removed();}
 
     /** How many blocks the edit or clipboard really holds, which can be more than are drawn. */
     int total(){return data==null?0:data.total();}
@@ -67,7 +76,8 @@ final class GhostBlocks {
         if(data==null||!resolve())return;
         Vec3 at=new Vec3(origin.x(),origin.y(),origin.z());
         if(outline){
-            if(!placedShape.isEmpty())placedShape.draw(at,(a,b)->Overlay.line(a,b,ClientState.options.hoverColor,1),ClientState.options.hoverColor,ClientState.options.hoverFill,true);
+            int line=ai?AI_OUTLINE:ClientState.options.hoverColor,fill=ai?AI_FILL:ClientState.options.hoverFill;
+            if(!placedShape.isEmpty())placedShape.draw(at,(a,b)->Overlay.line(a,b,line,1),line,fill,true);
             if(!removedShape.isEmpty())removedShape.draw(at,(a,b)->Overlay.line(a,b,ClientState.options.removedColor,1),ClientState.options.removedColor,ClientState.options.removedFill,true);
         }
         if(!removedPlaces.isEmpty()&&outline)Overlay.blocks(removedPlaces,ClientState.options.removedTint);
@@ -77,6 +87,6 @@ final class GhostBlocks {
             for(Point p:relative)places.add(new BlockPos(p.x()+origin.x(),p.y()+origin.y(),p.z()+origin.z()));
             cachedPlaces=places;cachedOrigin=origin;
         }
-        Overlay.blockStates(states,cachedPlaces,ClientState.options.previewTint);
+        Overlay.blockStates(states,cachedPlaces,ai?AI_TINT:ClientState.options.previewTint);
     }
 }

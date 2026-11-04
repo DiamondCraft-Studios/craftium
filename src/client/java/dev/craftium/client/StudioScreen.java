@@ -40,24 +40,29 @@ public final class StudioScreen extends CraftiumScreen {
         GROUPS.put("Placement",List.of("keepExisting","pasteAir","copyEntities","pasteEntities","mergeBlocks","unlockRotation","gizmoMode","gizmoTarget","gizmoLocal","yaw","pitch","roll","sizeX","sizeY","sizeZ"));
         GROUPS.put("Hotbars",List.of("name"));
         GROUPS.put("Rebuild",List.of("rebuildStartDelay","rebuildMaxDelay","rebuildAirDelay","rebuildSameDelay","rebuildDifferentDelay","rebuildRandomDelay","rebuildHorizontalMultiplier","rebuildVerticalMultiplier","seed"));
+        GROUPS.put("AI",List.of());
         GROUPS.put("Lighting",List.of("shadeSun","shadeFrom","shadeAzimuth","shadeAltitude","shadeAmbientOcclusion","shadeBounces","shadeDither","shadeExposure","shadeSamples","shadeRayLength","shadeAutomatic","shadeFullBlocks","shadeOpaque","shadeNoOres","shadeNoGlazed","shadeNoBlockEntities","materials"));
     }
     public StudioScreen(EditorScreen editor){super(Component.literal("Craftium Studio Inspector"));this.editor=editor;}
     public EditorScreen editor(){return editor;}
+    /** Shows the named tab; the game tests use it to open one directly. */
+    void selectTab(String name){if(GROUPS.containsKey(name)){tab=name;page=0;if(initialized)init();}}
     @Override protected void init(){
         if(!initialized){previousHud=ClientCompat.hudHidden(minecraft);if(!previousHud)ClientCompat.toggleHud(minecraft);initialized=true;}
         uiScale=Math.min(1f,Math.min(width/680f,height/440f));canvasW=Math.round(width/uiScale);canvasH=Math.round(height/uiScale);
         clearWidgets();labels.clear();left=Math.max(12,(canvasW-640)/2);top=30;rows=Math.max(2,(canvasH-(tab.equals("Entities")?250:170))/46);
-        int tx=left,ty=top;for(String name:GROUPS.keySet()){int bw=font.width(name)+13;if(tx+bw>canvasW-18){tx=left;ty+=22;}button(name,tx,ty,bw,18,()->{tab=name;page=0;init();});tx+=bw+3;}
+        int tx=left,ty=top;for(String name:GROUPS.keySet()){int bw=font.width(name)+13;if(tx+bw>canvasW-18){tx=left;ty+=22;}button(name,tx,ty,bw,18,()->{tab=name;page=0;init();}).lit(name.equals("AI")&&AiBridge.running());tx+=bw+3;}
         List<String> names=tab.equals("Script")?List.of():GROUPS.get(tab);int count=rows*columns,total=Math.max(1,(names.size()+count-1)/count);page=Math.clamp(page,0,total-1);
         for(int i=page*count;i<Math.min(names.size(),(page+1)*count);i++){
             String name=names.get(i);int index=i-page*count,x=left+(index%columns)*316,y=top+70+(index/columns)*46;
             createField(name,x,y,300);
         }
         int bottom=canvasH-57;
-        button("‹",left,bottom,24,20,()->{page=Math.max(0,page-1);init();});button("›",left+29,bottom,24,20,()->{page=Math.min(total-1,page+1);init();});
-        labels.add(new Label((page+1)+" / "+total,left+62,bottom+6));
-        button("Apply tool",left+385,bottom,110,20,()->send("use"));
+        if(!tab.equals("AI")){ // this tab has one page and no tool to apply
+            button("‹",left,bottom,24,20,()->{page=Math.max(0,page-1);init();});button("›",left+29,bottom,24,20,()->{page=Math.min(total-1,page+1);init();});
+            labels.add(new Label((page+1)+" / "+total,left+62,bottom+6));
+            button("Apply tool",left+385,bottom,110,20,()->send("use"));
+        }
         button("Save & return",left+505,bottom,122,20,this::onClose);
         if(tab.equals("Script")){
             labels.add(new Label("Lua brush",left,top+60));labels.add(new Label("Lua boolean mask",left+316,top+60));
@@ -113,10 +118,52 @@ public final class StudioScreen extends CraftiumScreen {
         }else if(tab.equals("World")){
             String[] actions={"world_time","world_clear","world_rain","world_thunder","world_random_ticks","world_advance_time","world_advance_weather","world_spawn_mobs","world_keep_inventory","world_block_gravity","world_trample_farmland","world_block_drops","world_player_invulnerability","world_fire_tick","gamemode_creative","gamemode_spectator","gamemode_survival","gamemode_adventure","view_save","view_load"};
             for(int i=0;i<actions.length;i++){String action=actions[i];button(human(action),left+(i%4)*158,top+170+(i/4)*28,150,22,()->send(action));}
+        }else if(tab.equals("AI")){
+            aiTab();
         }else if(tab.equals("Annotations")){
             actionRow(new String[]{"Create","Update","Delete","Clear all","Import image…"},new Runnable[]{()->send("annotation_create"),()->send("annotation_update"),()->send("annotation_delete"),()->send("annotation_clear"),()->AnnotationImages.choose(this::init)});
             button("Browse annotations",left+316,top+254,300,22,()->{String report=ClientState.status.annotations()==null?"No annotations":String.join("\n",ClientState.status.annotations().stream().map(note->note.id()+"  "+note.mode()+"  "+note.text()).toList());ClientCompat.setScreen(minecraft,new ReportScreen(this,report));});
         }
+    }
+    /**
+     * The AI tab: one switch to let an AI app build here, the controls for a build it has previewed, and the steps to get going.
+     * The status card and the pending-preview line are drawn live by {@link #drawAi}.
+     */
+    private void aiTab(){
+        int y=top+70+62;
+        boolean on=AiBridge.running();
+        button(on?"Turn off AI building":"Turn on AI building",left,y,200,24,()->{AiBridge.toggle();message=AiBridge.running()?"AI building is on":"AI building is off";init();}).lit(on);
+        button("Apply preview",left+216,y,130,24,()->send("ai_apply"));
+        button("Discard preview",left+352,y,130,24,()->send("ai_cancel"));
+        button("Undo AI build",left+488,y,128,24,()->send("ai_undo"));
+        int steps=top+70+128;
+        labels.add(new Label("HOW IT WORKS",left,steps));
+        labels.add(new Label("1.  Install the Craftium extension (craftium.mcpb) in Claude Desktop, once.",left,steps+15));
+        labels.add(new Label("2.  Turn on AI building above. Craftium remembers it.",left,steps+29));
+        labels.add(new Label("3.  Ask Claude for a build, such as \"Build an Egyptian pillar in front of me\".",left,steps+43));
+        labels.add(new Label("4.  Look at the ghost in your world. Ask for changes, then say \"apply it\", or press Apply preview.",left,steps+57));
+        labels.add(new Label("Nothing is built until it is applied, and Undo takes a build back. Using a launcher profile?",left,steps+78));
+        labels.add(new Label("Choose the profile's game folder in the extension's settings. Details: docs/AI.md",left,steps+92));
+        // The folder this game keeps its settings in, which is what the extension's Minecraft folder has to be when it is not the default .minecraft.
+        String folder=AiBridge.gameFolder();
+        labels.add(new Label("This game's folder: "+(font.width(folder)>420?"…"+font.plainSubstrByWidth(folder,420,true):folder),left,steps+114));
+        button("Copy game folder",left,steps+128,150,20,()->{minecraft.keyboardHandler.setClipboard(folder);message="Game folder copied";});
+    }
+    /** The live part of the AI tab: a status card for the bridge and a line about a preview that is waiting. */
+    private void drawAi(Gfx g){
+        var o=ClientState.options;var state=AiBridge.indicator();int x=left,y=top+70,width=616;
+        String headline,detail;
+        switch(state){
+            case OFF -> {headline="AI building is off";detail="Turn it on to let Claude Desktop, or another AI app on this computer, build in your world.";}
+            case WAITING -> {headline="On, waiting for the AI app";detail="Open Claude Desktop with the Craftium extension and ask for a build.";}
+            case ACTIVE -> {headline="AI app connected";detail="Last request: "+AiBridge.lastActivity();}
+            default -> {headline="AI is working…";detail="Request: "+AiBridge.lastActivity();}
+        }
+        g.fill(x,y,x+width,y+52,0xff1d2b3b);g.outline(x,y,width,52,o.uiBorder);
+        g.fill(x+12,y+13,x+24,y+25,AiBridge.colour(state));
+        g.text(font,headline,x+34,y+12,o.uiText,false);
+        g.text(font,font.plainSubstrByWidth(detail,width-46),x+34,y+30,o.uiMuted,false);
+        if(ClientState.hasAiPending())g.text(font,"Preview waiting: "+ClientState.aiPending.total()+" blocks. Apply it to build it, or discard it.",x,top+70+96,0xffffdca8,false);
     }
     private void createField(String name,int x,int y,int width){
         try{
@@ -164,6 +211,7 @@ public final class StudioScreen extends CraftiumScreen {
         g.pose().pushMatrix();g.pose().scale(uiScale,uiScale);
         g.fill(0,0,canvasW,canvasH,0xee101923);g.fill(left-12,top-13,Math.min(canvasW-5,left+640),canvasH-25,0xff172330);g.text(font,"CRAFTIUM  /  "+tab.toUpperCase(Locale.ROOT),left,top-25,0xffb5dcfc,false);
         for(Label label:labels)g.text(font,font.plainSubstrByWidth(label.text,625),label.x,label.y,0xff9db5cb,false);
+        if(tab.equals("AI"))drawAi(g);
         drawWidgets(g,(int)(x/uiScale),(int)(y/uiScale),delta);g.text(font,font.plainSubstrByWidth(message.isBlank()?ClientState.status.message():message,canvasW-30),15,canvasH-17,0xffffdca8,false);g.pose().popMatrix();
     }
     @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event,boolean twice){

@@ -1,0 +1,78 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { createHandler, toResult, VERSION } from "../src/protocol.js";
+
+const stub = (reply = { ok: true }) => ({ calls: [], async call(tool, args) { this.calls.push([tool, args]); return reply; } });
+
+test("initialize answers with the version the client asked for, or the newest this server knows", async () => {
+  const handle = createHandler(stub());
+  const known = await handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } });
+  assert.equal(known.result.protocolVersion, "2025-06-18");
+  assert.deepEqual(known.result.capabilities, { tools: {} });
+  assert.equal(known.result.serverInfo.name, "craftium");
+  const future = await handle({ jsonrpc: "2.0", id: 2, method: "initialize", params: { protocolVersion: "2099-01-01" } });
+  assert.equal(future.result.protocolVersion, "2025-11-25");
+});
+
+test("the server's version matches the package and the extension manifest", async () => {
+  const read = async (file) => JSON.parse(await readFile(new URL(`../${file}`, import.meta.url), "utf8"));
+  assert.equal((await read("package.json")).version, VERSION);
+  assert.equal((await read("manifest.json")).version, VERSION);
+});
+
+test("every tool in the manifest is served, and none is missing from it", async () => {
+  const handle = createHandler(stub());
+  const served = (await handle({ jsonrpc: "2.0", id: 1, method: "tools/list" })).result.tools.map((t) => t.name).sort();
+  const listed = (await JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"))).tools.map((t) => t.name).sort();
+  assert.deepEqual(served, listed);
+});
+
+test("ping is answered, notifications are not, unknown methods are refused", async () => {
+  const handle = createHandler(stub());
+  assert.deepEqual((await handle({ jsonrpc: "2.0", id: 7, method: "ping" })).result, {});
+  assert.equal(await handle({ jsonrpc: "2.0", method: "notifications/initialized" }), null);
+  assert.equal(await handle({ jsonrpc: "2.0", method: "something/else" }), null);
+  const refused = await handle({ jsonrpc: "2.0", id: 8, method: "resources/list" });
+  assert.equal(refused.error.code, -32601);
+});
+
+test("malformed messages get an error and never throw", async () => {
+  const handle = createHandler(stub());
+  assert.equal((await handle(null)).error.code, -32600);
+  assert.equal((await handle([{ jsonrpc: "2.0", id: 1, method: "ping" }])).error.code, -32600);
+  assert.equal((await handle({ jsonrpc: "2.0", id: 1 })).error.code, -32600);
+  assert.equal(await handle({ jsonrpc: "2.0" }), null);
+});
+
+test("an unknown tool is a protocol error, and a call needs object arguments", async () => {
+  const bridge = stub();
+  const handle = createHandler(bridge);
+  assert.equal((await handle({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "format_disk" } })).error.code, -32602);
+  const bad = await handle({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "get_state", arguments: [1] } });
+  assert.equal(bad.result.isError, true);
+  assert.equal(bridge.calls.length, 0);
+});
+
+test("a tool with no arguments still works when none are given", async () => {
+  const bridge = stub({ ok: true, inWorld: true });
+  const handle = createHandler(bridge);
+  const response = await handle({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_state" } });
+  assert.deepEqual(JSON.parse(response.result.content[0].text), { inWorld: true });
+  assert.deepEqual(bridge.calls, [["get_state", {}]]);
+});
+
+test("a failure inside the bridge call is reported to the model, not thrown", async () => {
+  const handle = createHandler({ async call() { throw new Error("boom"); } });
+  const response = await handle({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_state", arguments: {} } });
+  assert.equal(response.result.isError, true);
+  assert.match(response.result.content[0].text, /boom/);
+});
+
+test("toResult keeps ok:false as an error and splits a screenshot from its details", () => {
+  assert.deepEqual(toResult({ ok: false, error: "no" }), { isError: true, content: [{ type: "text", text: "no" }] });
+  const shot = toResult({ ok: true, image: "QQ==", width: 2 });
+  assert.equal(shot.content[0].type, "image");
+  assert.equal(shot.content[0].mimeType, "image/jpeg");
+  assert.deepEqual(JSON.parse(shot.content[1].text), { width: 2 });
+});

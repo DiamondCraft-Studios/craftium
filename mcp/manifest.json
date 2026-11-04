@@ -1,0 +1,47 @@
+{
+  "manifest_version": "0.3",
+  "name": "craftium",
+  "display_name": "Craftium",
+  "version": "0.1.0",
+  "description": "Build in Minecraft by chatting: Claude previews builds as a ghost in your game and applies them when you say so.",
+  "long_description": "Connects Claude Desktop to the Craftium Minecraft mod running on this computer. Ask for a build (for example an Egyptian pillar) and Claude looks at the world, describes the build as shapes, and shows it as a ghost preview in your game. Nothing changes in your world until you approve it, and every build can be undone.\n\nIn Minecraft, open the editor, choose the AI menu and Turn on AI building once (or type /craftium ai on) to let this extension connect. It only talks to your own computer.",
+  "author": { "name": "Craftium contributors" },
+  "license": "MIT",
+  "keywords": ["minecraft", "craftium", "building"],
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "src/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/src/index.js"],
+      "env": {
+        "CRAFTIUM_MINECRAFT_DIR": "${user_config.minecraft_dir}"
+      }
+    }
+  },
+  "tools": [
+    { "name": "get_state", "description": "Player position, their selection and your preview status" },
+    { "name": "get_blocks", "description": "Read the blocks in a box of the world" },
+    { "name": "get_surface", "description": "Read the ground height of an area" },
+    { "name": "get_palette", "description": "The player's block palette" },
+    { "name": "get_screenshot", "description": "See what the player sees, including the preview" },
+    { "name": "render_view", "description": "Draw a picture of a box of the world from any angle" },
+    { "name": "preview_build", "description": "Show a build as a ghost preview" },
+    { "name": "apply_preview", "description": "Build the previewed blocks" },
+    { "name": "cancel_preview", "description": "Discard the preview" },
+    { "name": "undo", "description": "Undo the last build you applied" }
+  ],
+  "user_config": {
+    "minecraft_dir": {
+      "type": "directory",
+      "title": "Minecraft folder",
+      "description": "Only needed if your game does not use the default .minecraft folder (for example a Prism, Modrinth or CurseForge profile). Choose the profile's game folder, the one containing config and mods.",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": { "node": ">=18.0.0" }
+  }
+}

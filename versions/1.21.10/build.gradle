@@ -105,7 +105,7 @@ fabricApi {
 // The live Paper check connects to an external server, which bypasses the game-test framework's
 // network synchronizer, so it must be switched off for that scope only.
 tasks.matching { it.name == 'runClientGameTest' }.configureEach {
-    if (System.getenv('CRAFTIUM_TEST_SCOPE') == 'paper') {
+    if (System.getenv('CRAFTIUM_TEST_SCOPE') in ['paper', 'paper-ai']) {
         systemProperty 'fabric.client.gametest.disableNetworkSynchronizer', 'true'
     }
 }

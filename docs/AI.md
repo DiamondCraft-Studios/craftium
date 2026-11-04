@@ -1,0 +1,152 @@
+# AI building with Claude Desktop
+
+Craftium can be driven from an AI app such as Claude Desktop. You chat in the AI app ("build me an Egyptian pillar here"), Claude looks at the world and describes the build as a handful of shapes, and Craftium shows it as a **ghost preview** in your game. Nothing changes in the world until the build is applied, and every applied build is one undo step.
+
+It runs on your own Claude subscription through the AI app. Craftium never sees your account and needs no API key.
+
+```
+Claude Desktop ──stdio──▶ craftium-mcp (Node) ──127.0.0.1──▶ Craftium client mod ──▶ the editor's normal requests
+```
+
+## Set up
+
+1. Install the Craftium mod for your Minecraft version as usual. For multiplayer, Craftium must also be on the server (Fabric, or the Paper/Purpur companion).
+2. Get **craftium.mcpb** (see [Getting the extension](#getting-the-extension)) and install it in Claude Desktop: open the file with Claude Desktop (double-click it), or drag it into Settings → Extensions. It needs Node.js 18 or newer, which Claude Desktop supplies for extensions of this kind.
+3. In Minecraft, open a world and the editor (Right Shift), open the **AI** menu in the top bar and choose **Turn on AI building**. The setting is remembered, and a coloured square appears beside the menu while it is on. (The commands `/craftium ai on`, `/craftium ai off` and `/craftium ai` do the same.)
+4. If your game does not use the default `.minecraft` folder (a Prism, Modrinth App or CurseForge profile, for example), open the extension's settings in Claude Desktop and choose the profile's game folder, the one that contains `config` and `mods`.
+
+A preview made by an AI app is drawn in **violet**, so it is never mistaken for your own blue edit previews, and the marker reads **AI preview** while one is waiting.
+
+While AI building is on, a small **AI** marker shows in the bottom right corner of the game: amber while it waits for the AI app, green once the app has connected, and blue while a request is being answered. The **AI** menu also has **Apply AI preview**, **Discard AI preview** and **Undo last AI build**, so you can approve a build without going back to the chat, and **AI status and setup…**, a page with the same status, the last request and the steps above.
+
+Then ask Claude for a build while the game is open. Claude works on the world itself: it does not need you to select anything, never moves or turns you, and can build anywhere in the world (see [Claude's workspace](#claudes-workspace)). If you have selected an area it takes that as a hint of where you want the build. Look at the ghost in the game, ask for changes, and say when to apply it.
+
+## Getting the extension
+
+`craftium.mcpb` is built from the [mcp](../mcp) folder. Until it is attached to a release, you can get it two ways:
+
+- **From CI:** the *Build craftium-mcp* workflow on GitHub packs it on every change to `mcp/`. Open a run and download the `craftium-mcpb` artifact.
+- **Build it yourself** (needs Node.js 18 or newer and a network connection once, to fetch the packer):
+  ```sh
+  cd mcp
+  npm ci
+  npm run pack
+  ```
+  This writes `mcp/craftium.mcpb`. The `mcp` folder pins Node 24 in `.nvmrc` (run `nvm use` or `fnm use` there if your tool does not switch on its own). If `npx` stops with "Yallist is not a constructor", your npm is too old for your Node version (npm 10.8 with Node 25, for example): use Node 24, or update npm with `npm install -g npm@latest`.
+
+## What Claude can do
+
+| Tool | Does |
+| --- | --- |
+| `get_state` | Your position and facing, the area you have selected (yours, and never changed by Claude), and whether Claude's preview is waiting |
+| `get_blocks` | Reads the blocks in a box (up to 32,768 at a time), anywhere in the world: the server reads them, so ground your game has not loaded is real blocks and not air |
+| `get_surface` | The top block of every column in an area (up to 128 by 128), to find ground level |
+| `get_palette` | Your current block and recently used blocks |
+| `get_screenshot` | A picture of what you see in the game, including the preview |
+| `render_view` | Claude's own camera: a picture of any box of the world from an angle it picks (see [Claude's own view](#claudes-own-view)), so it can check its work without touching your view |
+| `preview_build` | Shows a build as a ghost, replacing any earlier preview |
+| `apply_preview` | Builds the preview, as one undoable step, loading the ground first if nobody is near it |
+| `cancel_preview`, `undo` | Discards the preview, or undoes the last build Claude applied (never your own edits) |
+
+Claude cannot do anything the editor cannot. Every request goes through the same checks as your own edits: server permissions, protected areas, WorldGuard, the world border and size limits.
+
+## Claude's workspace
+
+Claude has a workspace of its own, apart from yours. It never uses or changes your selection, your preview or your undo history, and it never moves or turns you.
+
+- **Its preview** is held separately and drawn in violet. You apply or discard it from the **AI** menu (Enter and Esc still belong to your own edits).
+- **Its undo** only covers builds Claude applied. **Undo last AI build** and the `undo` tool undo those, and nothing else; your own Ctrl+Z is unchanged. This list is not saved: it is dropped when you leave the world, reconnect or change dimension.
+- **Building far away works.** A build is planned and applied by the server, so it can be anywhere in the dimension you are in, with nobody nearby. The ground it reaches is loaded for it, and ground nobody has visited is made (as flying there would). One build may reach at most **36 chunks that are not already loaded** (a square 96 blocks across); a larger one is refused with a message, so Claude builds closer to loaded ground or in pieces. Undoing a far build loads the ground again in the same way.
+- **You still decide.** A build is always shown as a preview first and applied as a separate step. It goes through the same checks as your own edits: permissions, protected areas, WorldGuard and the world border.
+
+## Claude's own view
+
+`render_view` draws a box of the world as flat-shaded blocks, each in the average colour of its texture (so resource packs show), seen from an angle Claude chooses: four isometric corners (`se`, `sw`, `ne`, `nw`), straight down (`top`, north at the top), or level with one side (`north`, `south`, `east`, `west`, for judging heights). It never turns or moves you and does not need the box to be near you. Your waiting preview is drawn over the world tinted violet, so Claude sees what you see. The picture is for Claude only; you keep looking at the violet ghost in the game.
+
+It has no textures, shadows or transparency (water and glass draw as solid colour), so it is for shape, proportion and layout, not for fine detail. A box can be up to 128 blocks a side and 262,144 blocks (for example 64 by 64 by 64); it is read from the server in 32-block pieces, each within the chunk limit below.
+
+## Reading the world
+
+`get_blocks` and `get_surface` are answered by the **server's** world, not by what your game has loaded, so Claude can look at ground that is far from you. A position above or below the world's height limits, or past the world border, reads as `craftium:outside_world` rather than air. Reading ground nobody has visited makes it (as flying there would), so **one call may touch at most 16 chunks that are not already loaded**. A read that needs more is refused with a message saying so, and Claude is told to read a smaller area or read it in pieces. Chunks that are already loaded do not count towards the 16, and chunks past the world border are never read. The other limits are 32,768 blocks for `get_blocks`, 128 by 128 columns for `get_surface`, and about 900 kB for a reply (also refused with a message).
+
+The reads are plain reads: they change nothing, and they need the same permission as editing (`craftium.edit` on Paper/Purpur, operator level on Fabric). They only read the **dimension you are in**; another dimension is not reachable from here.
+
+## Build specs
+
+Claude describes a build as JSON primitives with positions in **world coordinates**, the same numbers `get_blocks` and `get_surface` report, so it builds at the heights it found. An optional `origin` is added to every coordinate, for a build written near zero and placed anywhere. Nothing is selected first: the area a build covers is worked out from its operations. The primitives are: `box`, `sphere` (or ellipsoid), `cylinder`, `cone`, `pyramid`, `line`, `set` and `replace`. Any operation can be `hollow` (shapes) or `repeat` with a step (a row of columns). A later operation overwrites an earlier one, and `minecraft:air` carves. A palette maps short names to block ids, including states such as `minecraft:sandstone_stairs[facing=north]`.
+
+```json
+{
+  "palette": { "sand": "minecraft:cut_sandstone", "cap": "minecraft:smooth_sandstone" },
+  "ops": [
+    { "op": "cylinder", "base": [102, 64, -38], "radius": 2, "height": 8, "block": "sand" },
+    { "op": "box", "from": [100, 72, -40], "to": [104, 73, -36], "block": "cap" }
+  ]
+}
+```
+
+Limits: 256 operations, 64 repeats, radius 128, a build that spans at most 256 blocks along each side, and 131,072 blocks in total; a spec that reaches further is refused with a message saying which side. The ground a build reaches is loaded for it (see [Claude's workspace](#claudes-workspace)). The server rejects unknown block ids, with a message naming the operation at fault, so Claude can correct itself.
+
+A build ignores your brush settings (mask, symmetry, height range) and places exactly what the spec says. It does not check that blocks such as torches have support. Primitives suit pillars, walls, towers, domes and similar shapes; organic shapes such as trees or terrain are better done with the brush tools.
+
+## Safety
+
+- The bridge is **off until you turn it on**, and it listens on `127.0.0.1` only.
+- Each launch writes a new random token to `config/craftium/bridge.json`. Requests without it are refused, as are requests that come from a web page (they carry an `Origin`) or name another host.
+- `get_screenshot` sends a picture of your game window (at most 1024 pixels wide) to the AI app, so close anything private on screen first. It is only taken when the AI app asks, and the corner marker shows **AI working…** while it does. `render_view` does not use your screen at all: it draws from block data, so it shows nothing but blocks.
+- Builds are always staged as a ghost first, even if you have turned confirmation off for your own edits. Applying is a separate step. The ghost is Claude's own, so it cannot be applied by accident with your own Enter key.
+- The file is deleted when the bridge stops. If Minecraft crashes and leaves it behind, the extension reports that the game is not running.
+- Anyone who can read your Minecraft folder or run programs as you can read the token, as with any local app. Turn the bridge off when you are not using it.
+
+## What the extension can do on your computer
+
+Claude Desktop warns that installing an extension "will grant this extension access to everything on your computer". That is true of every extension: it runs as an ordinary program with your permissions, and Claude Desktop does not sandbox it. The warning is generic, so here is what this one actually does, and how that is enforced.
+
+- **It is tiny and has no dependencies.** The packed extension is 8 files and about 11 kB: four short scripts (`mcp/src`, around 375 lines), a manifest, an icon and a readme. It uses no npm packages at run time, so there is no supply chain behind it to audit. It speaks the small part of the MCP protocol it needs itself.
+- **It reads one file:** `config/craftium/bridge.json`, in the default Minecraft folder or the folder you choose in its settings. That file holds the port and token the game wrote for this launch.
+- **It talks to one place:** `127.0.0.1`, the game's bridge on your own computer. It has no code that contacts the internet, starts programs, evaluates text as code, opens listening sockets or writes files.
+- **It forwards only what each tool names.** A tool call is checked, and only the keys that tool defines are sent to the game, so extra data a model adds goes nowhere.
+- **It does not enlarge what the game allows.** The game applies its own checks to everything it receives (see Safety).
+
+These limits are written as tests in [mcp/test/contract.test.js](../mcp/test/contract.test.js): the build fails if the code gains a dependency, imports another Node module, reads another file or environment variable, makes any network call other than the one loopback `fetch`, or can run a program. A change that widens the extension's reach has to change that file as well, where a reviewer will see it.
+
+You do not have to trust the packed file either: it is built from the source in [mcp](../mcp), and you can read it in a few minutes and build it yourself (see Getting the extension). The extension is not signed or verified by Anthropic, which is what the "developer information has not been verified" line in the install dialog means.
+
+**Fence it in further (optional).** Node can restrict a program to the folders you name. If you set the server up by hand instead of installing the `.mcpb`, use Node 22.13 or newer and list only the extension folder and your Minecraft `config` folder, in `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "craftium": {
+      "command": "node",
+      "args": [
+        "--permission",
+        "--allow-fs-read=C:\\path\\to\\craftium\\mcp\\src",
+        "--allow-fs-read=C:\\Users\\you\\AppData\\Roaming\\.minecraft\\config\\craftium",
+        "C:\\path\\to\\craftium\\mcp\\src\\index.js"
+      ]
+    }
+  }
+}
+```
+
+Under `--permission` the process can read only those two folders and cannot start programs or load native add-ons. (Node 24 does not restrict network access, so the loopback-only guarantee still comes from the code and its tests.) Use absolute paths, and if you use a launcher profile, point the second folder at that profile's `config\craftium`. The packed extension does not use this mode, because it cannot know which Node version Claude Desktop runs it with.
+
+## Troubleshooting
+
+- **"Craftium is not reachable"**: open a world, turn on AI building (AI menu in the editor), and check the Minecraft folder setting in the extension if you use a launcher profile.
+- **Running the game from source (`gradlew runClient`) or from a launcher profile**: the game does not use your default `.minecraft` folder, so the extension cannot find it on its own. Open **AI menu → AI status and setup…**, press **Copy game folder**, and paste it into the extension's **Minecraft folder** setting. (For a source run that is `versions/<version>/run` in the checkout you launched from, so make sure you launched from the checkout that has the AI feature.)
+- **"Craftium refused the connection"**: Minecraft restarted and the token changed. Try again, or run `/craftium ai off` then `/craftium ai on`.
+- **"Craftium on the server"**: the world needs Craftium on the server too, as for the editor. In singleplayer this is automatic.
+- **Errors like `ops[2] (cylinder): missing number "radius"`** are the spec's fault, not yours. Claude gets the message and retries.
+- **"That build reaches more than 36 chunks that are not loaded"**: the build is too large for ground nobody has visited. Claude builds closer to loaded ground, or in smaller pieces.
+- Nothing builds on a server: you need the `craftium.edit` permission and Creative mode, as for normal editing.
+
+## For developers
+
+- Bridge: [AiBridge.java](../src/client/java/dev/craftium/client/AiBridge.java). A small loopback HTTP server (no JDK HTTP module, since Minecraft's bundled runtime may omit it) answering `POST /<tool>` with a JSON body and `Authorization: Bearer <token>`. Requests are spaced 120 ms apart because the server silently drops requests that follow another within 65 ms.
+- Build specs: [BuildSpec.java](../src/main/java/dev/craftium/core/BuildSpec.java) (pure, unit tested) and [BuildPlanner.java](../src/main/java/dev/craftium/server/BuildPlanner.java), reached by the `ai_build_preview` request. `BuildSpec.place()` works out the area from the operations, so no selection is needed. The AI's workspace is a second `Session` per player in `EditorServer` (`AI_SESSIONS`), used through `ai_build_preview`, `ai_apply`, `ai_cancel` and `ai_undo`. Its statuses are described through the player's own session, with the AI's preview and undo count in the status fields `aiPendingData`, `aiUndo` and `aiUndoName`. Jobs for it load chunks as they go (`Job.load`), and `AiWorld.MAX_BUILD_CHUNKS` caps how many a build may make.
+- Pictures: [VoxelView.java](../src/main/java/dev/craftium/core/VoxelView.java) is the pure renderer (unit tested, no game needed) and [AiView.java](../src/client/java/dev/craftium/client/AiView.java) gathers the blocks, block colours and preview for it. `render_view` reuses `ai_blocks` for the data, in 32-block tiles.
+- Server reads: [AiWorld.java](../src/main/java/dev/craftium/server/AiWorld.java) answers the `ai_blocks`, `ai_surface` and `ai_surface_floor` requests with a `Packets.AiReply` (the `ai_reply` message on Paper). Their limits are the constants at the top of that file (`MAX_BLOCKS`, `MAX_COLUMNS`, `MAX_NEW_CHUNKS`, `MAX_REPLY`); change them there and in the tool descriptions in [mcp/src/tools.js](../mcp/src/tools.js), and update this page. These requests carry their two corners in `target` and `normal`, so `EditorServer` handles them before it checks `normal` as a direction.
+- MCP server: [mcp/](../mcp), with no run-time dependencies. `npm test` starts the real server and talks to it with the official MCP client (a test-only dependency) against a fake bridge, and also checks the limits in `contract.test.js`. `npm run pack` builds the `.mcpb`.
+- Game test: `CRAFTIUM_TEST_SCOPE=ai gradlew :versions:mc-1.21.10:runClientGameTest` enables the bridge in a real world, drives it over HTTP, then runs the real MCP server over stdio to build a pyramid.
