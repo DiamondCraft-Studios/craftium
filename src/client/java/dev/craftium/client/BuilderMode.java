@@ -48,7 +48,7 @@ public final class BuilderMode {
     }
     public static void nudge(Point axis,int steps){
         if(first==null||second==null)return;preview=true;
-        if(ClientState.options.builderTool==Options.BuilderTool.STACK){stackX=Math.clamp(stackX+axis.x()*steps,-16,16);stackY=Math.clamp(stackY+axis.y()*steps,-16,16);stackZ=Math.clamp(stackZ+axis.z()*steps,-16,16);offset=new Point(stackX*(Math.abs(first.x()-second.x())+1),stackY*(Math.abs(first.y()-second.y())+1),stackZ*(Math.abs(first.z()-second.z())+1));}
+        if(ClientState.options.builderTool==Options.BuilderTool.STACK){stackX=Math.clamp(stackX+axis.x()*steps,-16,16);stackY=Math.clamp(stackY+axis.y()*steps,-16,16);stackZ=Math.clamp(stackZ+axis.z()*steps,-16,16);}
         else offset=new Point(Math.clamp(offset.x()+axis.x()*steps,-128,128),Math.clamp(offset.y()+axis.y()*steps,-128,128),Math.clamp(offset.z()+axis.z()*steps,-128,128));
     }
     /** One step of the nudge: along every axis key held, towards where the player looks, or else along the face looked at most squarely. */
@@ -105,6 +105,7 @@ public final class BuilderMode {
         if(button==0){first=at;second=null;preview=false;offset=new Point(0,0,0);cells=List.of();}
         else if(button==1){if(first==null)first=at;second=at;refresh();}
         else if(first!=null&&second==null){second=at;refresh();} // middle click with only a first point: extend the selection to this block
+        else if(preview&&o.builderTool==Options.BuilderTool.STACK){} // a stack only grows from the selection's own faces: nudge it
         else if(preview){Point min=min();Point normal=CraftiumClient.normal(hit);offset=at.add(normal.x()-min.x(),normal.y()-min.y(),normal.z()-min.z());}
         else if(first==null)magicSelect(hit.getBlockPos());
         else{Point low=min(),high=max();Direction face=hit.getDirection();int axis=face.getAxis().ordinal();int value=axis==0?at.x():axis==1?at.y():at.z();if(face.getAxisDirection()==Direction.AxisDirection.POSITIVE)high=replace(high,axis,value);else low=replace(low,axis,value);first=low;second=high;refresh();}
@@ -142,18 +143,41 @@ public final class BuilderMode {
     public static void corners(Point a,Point b){first=a;second=b;offset=new Point(0,0,0);preview=false;refresh();}
     private static void refresh(){try{var mc=Minecraft.getInstance();cells=Selection.box(first,second).stream().filter(p->!mc.level.getBlockState(new net.minecraft.core.BlockPos(p.x(),p.y(),p.z())).isAir()).toList();ClientState.notify("Selection ready · scroll to nudge · right-click places · left-click cancels");}catch(Exception e){ClientState.notify(e.getMessage());clear();}}
     public static void confirm(){
-        if(first==null||second==null)return;var o=ClientState.options;Point prior1=o.position1,prior2=o.position2;int x=o.offsetX,y=o.offsetY,z=o.offsetZ;o.position1=first;o.position2=second;o.offsetX=offset.x();o.offsetY=offset.y();o.offsetZ=offset.z();CraftiumClient.send("builder_commit",first,new Point(0,1,0));o.position1=prior1;o.position2=prior2;o.offsetX=x;o.offsetY=y;o.offsetZ=z;if(o.builderTool==Options.BuilderTool.CLONE){preview=true;clonePlaced=true;}else clear();
+        if(first==null||second==null)return;var o=ClientState.options;Point prior1=o.position1,prior2=o.position2;int x=o.offsetX,y=o.offsetY,z=o.offsetZ;o.position1=first;o.position2=second;o.offsetX=offset.x();o.offsetY=offset.y();o.offsetZ=offset.z();o.stackX=stackX;o.stackY=stackY;o.stackZ=stackZ;CraftiumClient.send("builder_commit",first,new Point(0,1,0));o.position1=prior1;o.position2=prior2;o.offsetX=x;o.offsetY=y;o.offsetZ=z;o.stackX=o.stackY=o.stackZ=0;
+        if(o.builderTool==Options.BuilderTool.CLONE){preview=true;clonePlaced=true;}
+        else if(o.builderTool==Options.BuilderTool.STACK&&(stackX!=0||stackY!=0||stackZ!=0))grow();
+        else clear();
+    }
+    /** The stack's copies as offsets from the selection, laid edge to edge so nothing is left between them; none of them is the selection itself. */
+    private static List<Point> stackSteps(Point size){
+        var steps=new ArrayList<Point>();
+        for(int i=Math.min(0,stackX);i<=Math.max(0,stackX);i++)for(int j=Math.min(0,stackY);j<=Math.max(0,stackY);j++)for(int k=Math.min(0,stackZ);k<=Math.max(0,stackZ);k++)if(i!=0||j!=0||k!=0)steps.add(new Point(i*size.x(),j*size.y(),k*size.z()));
+        return steps;
+    }
+    /** The selection with the whole stack in it. */
+    private static Point[] stackBounds(){
+        Point min=min(),max=max();return new Point[]{new Point(min.x()+Math.min(0,stackX)*(max.x()-min.x()+1),min.y()+Math.min(0,stackY)*(max.y()-min.y()+1),min.z()+Math.min(0,stackZ)*(max.z()-min.z()+1)),
+            new Point(max.x()+Math.max(0,stackX)*(max.x()-min.x()+1),max.y()+Math.max(0,stackY)*(max.y()-min.y()+1),max.z()+Math.max(0,stackZ)*(max.z()-min.z()+1))};
+    }
+    /** After a stack is placed the selection becomes the whole stack, so stacking again repeats all of it. */
+    private static void grow(){
+        Point min=min(),max=max();Point size=max.add(1-min.x(),1-min.y(),1-min.z());var grown=new ArrayList<>(cells);
+        for(Point step:stackSteps(size))for(Point at:cells)grown.add(at.add(step.x(),step.y(),step.z()));
+        var bounds=stackBounds();first=bounds[0];second=bounds[1];cells=grown;
+        stackX=stackY=stackZ=0;offset=new Point(0,0,0);preview=false;cellBlocksFor=null;
     }
     public static void draw(){
         var o=ClientState.options;if(!active())return;
         if(first!=null){Point min=min(),max=max();
             // Once both corners are set the area is filled in, until the blocks are shown moving out of it.
             boolean leaving=preview&&o.builderTool==Options.BuilderTool.MOVE;
-            Overlay.box(new AABB(min.x(),min.y(),min.z(),max.x()+1,max.y()+1,max.z()+1),0xffffd66d,2,second!=null&&!leaving?SELECTED_FILL:0);
-            if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?java.util.stream.IntStream.rangeClosed(1,o.copies).mapToObj(i->new Point(offset.x()*i,offset.y()*i,offset.z()*i)).toList():List.of(offset);
+            boolean stacking=preview&&second!=null&&o.builderTool==Options.BuilderTool.STACK;
+            Point from=min,to=max;if(stacking){var b=stackBounds();from=b[0];to=b[1];} // the selection grows with the stack
+            Overlay.box(new AABB(from.x(),from.y(),from.z(),to.x()+1,to.y()+1,to.z()+1),0xffffd66d,2,second!=null&&!leaving?SELECTED_FILL:0);
+            if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?stackSteps(size):List.of(offset);
                 var shown=preview(o,min,size,steps);
                 if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),OutlineShape.DELETE); // the blocks that are moving, where they are now
-                if(shown==null)Overlay.box(new AABB(min.x()+offset.x(),min.y()+offset.y(),min.z()+offset.z(),max.x()+offset.x()+1,max.y()+offset.y()+1,max.z()+offset.z()+1),0xff8be3b5,2,0);
+                if(shown==null&&!stacking)Overlay.box(new AABB(min.x()+offset.x(),min.y()+offset.y(),min.z()+offset.z(),max.x()+offset.x()+1,max.y()+offset.y()+1,max.z()+offset.z()+1),0xff8be3b5,2,0);
                 else{shown.shape().draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,0xff8be3b5,1),0xff8be3b5,0x333dd29b,true);if(!shown.places().isEmpty())Overlay.blocks(shown.models(),shown.places(),OutlineShape.GHOST);}
             }
         }
@@ -175,7 +199,7 @@ public final class BuilderMode {
 
     /** Rebuilt only when something it depends on changes, because the outline costs more than a frame can spare. Null when too large. */
     private static Preview preview(Options o,Point min,Point size,List<Point> steps){
-        Object[] key={min,size,offset,o.builderRotation,o.builderFlipAxis,o.builderTool,o.copies};
+        Object[] key={min,size,offset,o.builderRotation,o.builderFlipAxis,o.builderTool,o.copies,stackX,stackY,stackZ};
         if(cachedFor!=null&&cells==cachedCells&&Arrays.equals(key,cachedFor))return cachedPreview;
         var landing=new LinkedHashMap<Point,Point>();
         outer:for(Point step:steps)for(Point at:cells){

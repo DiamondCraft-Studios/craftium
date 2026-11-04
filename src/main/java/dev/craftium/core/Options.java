@@ -52,6 +52,8 @@ public final class Options {
     public int minY = -64, maxY = 319;
     public float flySpeed = 1;
     public int offsetX, offsetY = 1, offsetZ, copies = 3;
+    /** The Builder's Stack: how many whole copies of the selection to lay along each axis, negative for the other way. Only meaningful while a stack is being sent. */
+    public int stackX, stackY, stackZ;
     public Compare compare=Compare.BLOCK;
     public int selectLimit=100_000,selectRange=1,lassoDepth=64;
     /** How many blocks the Select menu's Expand and Shrink move the selection's surface. */
