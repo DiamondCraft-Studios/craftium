@@ -33,6 +33,8 @@ public final class Overlay {
     private static Runnable pendingFrame,frame;
     /** Each model is scaled this much about its centre so the ghost clears the real block instead of fighting it for depth. */
     private static final float GHOST_SCALE=1.004f;
+    /** Depth precision runs out with distance, so the further a block is the more its ghost stands clear of it. */
+    private static float ghostScale(double dx,double dy,double dz){return (float)Math.min(.03,GHOST_SCALE-1+Math.sqrt(dx*dx+dy*dy+dz*dz)*.0004)+1f;}
     private static final int FULL_BRIGHT=0xF000F0;
     private static final Direction[] FACES=Direction.values();
 
@@ -145,7 +147,8 @@ public final class Overlay {
                 final double dx=eye.x-pos.getX()-.5,dy=eye.y-pos.getY()-.5,dz=eye.z-pos.getZ()-.5;
                 stack.pushPose();
                 stack.translate(pos.getX()+.5-eye.x,pos.getY()+.5-eye.y,pos.getZ()+.5-eye.z);
-                stack.scale(GHOST_SCALE,GHOST_SCALE,GHOST_SCALE);
+                float grow=ghostScale(dx,dy,dz);
+                stack.scale(grow,grow,grow);
                 stack.translate(-.5,-.5,-.5);
                 context.submitNodeCollector().submitCustomGeometry(stack,type,(pose,consumer)->{
                     for(var part:parts){
