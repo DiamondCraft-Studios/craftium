@@ -254,7 +254,7 @@ public final class EditorServer {
                 }
                 case "entity_select" -> {if(target==null)throw new IllegalArgumentException("Point near a display or marker");s.selectedEntity=EntityEdits.nearest(player.level(),target).getUUID();send(player,s,"Entity selected",false);}
                 case "entity_select_uuid" -> {var entity=player.level().getEntity(UUID.fromString(o.entityUuid));if(entity==null||!EntityEdits.editable(entity)||entity.distanceToSqr(player)>256*256)throw new IllegalArgumentException("Select a nearby display or marker");s.selectedEntity=entity.getUUID();send(player,s,"Entity selected",false);}
-                case "entity_spawn","entity_update","entity_move","entity_duplicate","entity_delete","entity_transform","entity_gizmo","entity_reset","entity_group","entity_ungroup","entity_group_transform" -> {if(target==null)throw new IllegalArgumentException("Point at a block");start(player,s,EntityEdits.plan(r.action(),player,s,o,target));}
+                case "entity_spawn","entity_update","entity_move","entity_duplicate","entity_delete","entity_transform","entity_gizmo","entity_reset","entity_group","entity_ungroup","entity_group_transform" -> {if(target==null)throw new IllegalArgumentException("Point at a block");var prior=s.selectedEntity;var edit=EntityEdits.plan(r.action(),player,s,o,target);start(player,s,edit.withSelection(Session.SelectionChange.restoring(Map.of("entity",entityText(prior)),Map.of("entity",entityText(s.selectedEntity)))));}
                 case "annotation_create","annotation_update","annotation_delete","annotation_clear" -> {if(target==null)target=o.position1;start(player,s,AnnotationEdits.plan(r.action(),player.level(),o,target));}
                 case "select_box","select_box_adjust" -> {
                     // Adjusting a box starts again from the selection as it was before that box was made.
@@ -549,8 +549,12 @@ public final class EditorServer {
         String pivot=backwards?change.pivotBefore():change.pivotAfter();
         if(pivot!=null)s.pivotUpdate=pivot;
         var values=backwards?change.restoreBefore():change.restoreAfter();
-        if(!values.isEmpty())s.restoreUpdate=dev.craftium.core.Restore.encode(values);
+        if(values.isEmpty())return;
+        var entity=values.get("entity"); // the entity that was selected goes with the edit, as the selection does
+        if(entity!=null)s.selectedEntity=entity.equals("none")?null:UUID.fromString(entity);
+        s.restoreUpdate=dev.craftium.core.Restore.encode(values);
     }
+    private static String entityText(UUID entity){return entity==null?"none":entity.toString();}
     private static void history(ServerPlayer player,Session s,boolean backwards) {
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Wait for the current edit or animated rebuild to finish");
         var from=backwards?s.undo:s.redo;

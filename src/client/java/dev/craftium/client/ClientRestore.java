@@ -10,6 +10,7 @@ final class ClientRestore {
             String value=entry.getValue();
             switch(entry.getKey()){
                 case "box" -> BuilderMode.restoreBox(value);
+                case "entity" -> ClientState.options.entityUuid=value.equals("none")?"":value;
                 default -> {}
             }
         }
