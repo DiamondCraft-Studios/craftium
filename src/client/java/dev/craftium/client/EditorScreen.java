@@ -1072,6 +1072,12 @@ public final class EditorScreen extends CraftiumScreen {
     @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical) {
         if(help||transform||menu>=0)return true;
         ctxCell=-1;
+        if(cameraGesture==CameraGesture.ORBIT&&vertical!=0){ // zoom along the arcball: the camera moves toward its centre
+            orbitDistance=Math.clamp(orbitDistance*(1-.15*Math.signum(vertical)),.5,512);
+            Vec3 eye=orbitPivot.subtract(minecraft.player.getLookAngle().scale(orbitDistance));
+            minecraft.player.setPos(eye.x,eye.y-minecraft.player.getEyeHeight(),eye.z);minecraft.player.setDeltaMovement(Vec3.ZERO);minecraft.player.setOldPosAndRot();
+            return true;
+        }
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("masks")){maskScroll=Math.max(0,maskScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("tools")){toolScroll=Math.clamp(toolScroll+(vertical<0?1:-1),0,maxToolScroll());return true;}
         if(panels&&pinnedTab&&!builder&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("options")){
