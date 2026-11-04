@@ -288,6 +288,12 @@ public final class EditorServer {
                     start(player,s,plan.finish(r.action().equals("move")?"Move selection":r.action().equals("clone")?"Clone selection":"Stack selection"));
                 }
                 case "undo", "redo" -> {s.historyRemaining=0;if(r.action().equals("undo"))undoAnimated(player,s);else history(player,s,false);}
+                case "ai_build_preview" -> {
+                    // An AI client always gets a ghost to look at first, whatever the player's confirm setting, and a new preview replaces the last.
+                    s.confirmEdits=true;s.bypassConfirm=false;
+                    s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingChain=null;s.pendingChainBase=s.pendingChainEdit=null;s.pendingDirty=true;
+                    start(player,s,BuildPlanner.plan(player,s,o));
+                }
                 case "fill", "delete" -> {
                     requireSelection(s);var plan=new EditPlanner(player.level(),s,o);
                     for(Point p:s.selection.points())plan.put(p,r.action().equals("delete")?Blocks.AIR.defaultBlockState():plan.material);
