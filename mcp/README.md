@@ -2,9 +2,18 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets Claude Desktop (or any MCP client) build in Minecraft through the Craftium mod's local AI bridge. User guide: [docs/AI.md](../docs/AI.md).
 
+It has **no run-time dependencies**: four small files in `src/` speak the part of MCP it needs. The official MCP SDK is a dev dependency used only by the tests, and the packed extension carries no `node_modules`. What the code may and may not do is pinned down in `test/contract.test.js`.
+
+| File | Does |
+| --- | --- |
+| `src/index.js` | Reads JSON-RPC lines from stdin, writes them to stdout |
+| `src/protocol.js` | `initialize`, `ping`, `tools/list`, `tools/call` |
+| `src/tools.js` | The tools, their schemas and argument checks, and the guidance given to the model |
+| `src/bridge.js` | Finds the bridge file and calls the game on `127.0.0.1` |
+
 ```sh
-npm install        # once
-npm test           # unit tests against a fake bridge
+npm ci             # once (installs the test-only SDK)
+npm test           # protocol, end-to-end and contract tests
 npm run pack       # builds craftium.mcpb for Claude Desktop (needs network for the packer)
 node test/e2e-client.mjs <path to config/craftium/bridge.json>   # builds a pyramid through a running game
 ```

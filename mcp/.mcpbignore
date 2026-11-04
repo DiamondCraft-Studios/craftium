@@ -1,3 +1,5 @@
 test/
 *.mcpb
 .gitignore
+node_modules/
+package-lock.json

@@ -1,14 +1,16 @@
+// End to end: the real server process, started as Claude Desktop starts it, spoken to by the official MCP client over stdio.
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { Bridge, candidateFiles, NOT_RUNNING } from "../src/bridge.js";
-import { createServer } from "../src/server.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { candidateFiles, NOT_RUNNING } from "../src/bridge.js";
 
+const ENTRY = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "index.js");
 const TOKEN = "t0ken";
 
 /** A stand-in for the game's bridge that records requests and answers from a table. */
@@ -36,17 +38,19 @@ async function fakeBridge(replies) {
   };
 }
 
+const clients = [];
 async function connect(file) {
-  const server = createServer(new Bridge({ files: [file], timeoutMs: 2000 }));
+  const transport = new StdioClientTransport({ command: process.execPath, args: [ENTRY], env: { CRAFTIUM_BRIDGE_FILE: file }, stderr: "ignore" });
   const client = new Client({ name: "test", version: "0" });
-  const [a, b] = InMemoryTransport.createLinkedPair();
-  await Promise.all([server.connect(a), client.connect(b)]);
+  await client.connect(transport);
+  clients.push(client);
   return client;
 }
+test.after(async () => { await Promise.all(clients.map((client) => client.close())); });
 
 const text = (result) => result.content[0].text;
 
-test("lists every tool with a read-only hint where it applies", async () => {
+test("lists every tool with its hints, and the server's instructions", async () => {
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
   const { tools } = await client.listTools();
@@ -54,13 +58,15 @@ test("lists every tool with a read-only hint where it applies", async () => {
   assert.equal(tools.find((t) => t.name === "get_state").annotations.readOnlyHint, true);
   assert.equal(tools.find((t) => t.name === "apply_preview").annotations.destructiveHint, true);
   assert.match(tools.find((t) => t.name === "preview_build").description, /cylinder/);
+  assert.match(client.getInstructions(), /ghost preview/);
+  assert.equal(client.getServerVersion().name, "craftium");
   await bridge.close();
 });
 
-test("a tool call reaches the bridge with the token and its arguments", async () => {
+test("a tool call reaches the bridge with the token and only its arguments", async () => {
   const bridge = await fakeBridge({ get_blocks: { ok: true, palette: ["minecraft:air"], runs: [[0, 8]] } });
   const client = await connect(bridge.file);
-  const result = await client.callTool({ name: "get_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1] } });
+  const result = await client.callTool({ name: "get_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], sneaky: "ignored" } });
   assert.equal(result.isError, undefined);
   assert.deepEqual(JSON.parse(text(result)), { palette: ["minecraft:air"], runs: [[0, 8]] });
   const [request] = bridge.seen;
@@ -116,8 +122,10 @@ test("an ok:false reply becomes an error the model can read", async () => {
 test("bad arguments are rejected before they reach the game", async () => {
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
-  const result = await client.callTool({ name: "set_selection", arguments: { from: [0, 0], to: [1, 1, 1] } }).catch((error) => ({ isError: true, content: [{ text: String(error) }] }));
-  assert.equal(result.isError, true);
+  for (const [name, args] of [["set_selection", { from: [0, 0], to: [1, 1, 1] }], ["get_blocks", { from: [0, 0, 0] }], ["set_selection", { from: [0.5, 0, 0], to: [1, 1, 1] }], ["preview_build", { spec: { ops: [] } }], ["preview_build", { spec: "not an object" }]]) {
+    const result = await client.callTool({ name, arguments: args });
+    assert.equal(result.isError, true, `${name} ${JSON.stringify(args)}`);
+  }
   assert.equal(bridge.seen.length, 0);
   await bridge.close();
 });
@@ -130,8 +138,6 @@ test("without a bridge file the error says how to start it", async () => {
 });
 
 test("a stale file with nothing listening reads as the game not running", async () => {
-  const bridge = await fakeBridge({});
-  await bridge.close(); // the port is now closed but the file remains, as after a crash
   const dir = await mkdtemp(path.join(os.tmpdir(), "craftium-mcp-"));
   const file = path.join(dir, "bridge.json");
   await writeFile(file, JSON.stringify({ port: 1, token: TOKEN }));
@@ -144,7 +150,8 @@ test("a stale file with nothing listening reads as the game not running", async 
 
 test("a refused token tells the player to restart the bridge", async () => {
   const bridge = await fakeBridge({});
-  await writeFile(bridge.file, JSON.stringify({ port: JSON.parse(await (await import("node:fs/promises")).readFile(bridge.file, "utf8")).port, token: "wrong" }));
+  const { port } = JSON.parse(await readFile(bridge.file, "utf8"));
+  await writeFile(bridge.file, JSON.stringify({ port, token: "wrong" }));
   const client = await connect(bridge.file);
   const result = await client.callTool({ name: "get_state", arguments: {} });
   assert.equal(result.isError, true);
