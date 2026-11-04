@@ -263,7 +263,7 @@ final class TransformGizmo {
      * While a handle is held: a thin line through the gizmo along each global axis, hidden where blocks are in front of it, with a tick at every block and a longer one every
      * five, so the distance moved can be read off the world's own grid whichever way the gizmo itself is turned.
      */
-    private static void ruler(Vec3 at){
+    static void ruler(Vec3 at){
         for(int axis=0;axis<3;axis++){
             double[] c={at.x,at.y,at.z};int across=(axis+1)%3;
             double[] from=c.clone(),to=c.clone();from[axis]-=RULER_REACH;to[axis]+=RULER_REACH;

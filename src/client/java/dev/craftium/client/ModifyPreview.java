@@ -47,8 +47,9 @@ final class ModifyPreview {
             shape.draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,o.previewColor,1),o.previewColor,o.previewFill,true);
             if(!places.isEmpty())Overlay.blocks(models,places,o.previewTint);
         }else if(bounds!=null)Overlay.box(bounds,o.previewColor,2,o.previewFill);
-        if(c!=null)guides(o,selected,cursor);
-        else if(o.modifyMode==Options.ModifyMode.TWIST)axisLine(o,selected);
+        // Depth-tested rulers through what the tool turns about, as the gizmo draws while it is dragged: the block under the cursor, or the middle of the selection.
+        if(c!=null){TransformGizmo.ruler(new Vec3(cursor.x()+.5,cursor.y()+.5,cursor.z()+.5));guides(o,selected,cursor);}
+        else{TransformGizmo.ruler(middleOf(selected));if(o.modifyMode==Options.ModifyMode.TWIST)axisLine(o,selected);}
     }
     private static boolean sameKey(Object[] a,Object[] b){
         for(int i=0;i<a.length;i++)if(i==a.length-1?a[i]!=b[i]:!Objects.equals(a[i],b[i]))return false;
@@ -79,7 +80,7 @@ final class ModifyPreview {
     }
     private static void circle(Vec3 centre,Options.ModifyAxis axis,double radius,int colour){
         if(radius<=0)return;
-        for(int i=0;i<96;i++)Overlay.line(around(centre,axis,radius,i*Math.PI/48),around(centre,axis,radius,(i+1)*Math.PI/48),colour,1.5f);
+        for(int i=0;i<96;i++)Overlay.sceneLine(around(centre,axis,radius,i*Math.PI/48),around(centre,axis,radius,(i+1)*Math.PI/48),colour,1.5f);
     }
     /** The circle the nearest block of the selection sweeps (red) and the one the farthest sweeps (green), with a line from the cursor to where each starts. */
     private static void guides(Options o,List<Point> selected,Point cursor){
@@ -91,7 +92,7 @@ final class ModifyPreview {
         double inner=Math.max(0,near-.5),outer=far+.5;
         circle(middle,axis,inner,INNER);circle(middle,axis,outer,OUTER);
         // The lines run on the circle's plane, from the cursor to the closest and farthest point of the selection.
-        Overlay.line(middle,onPlane(middle,axis,nearest),INNER,2);Overlay.line(middle,onPlane(middle,axis,farthest),OUTER,2);
+        Overlay.sceneLine(middle,onPlane(middle,axis,nearest),INNER,2);Overlay.sceneLine(middle,onPlane(middle,axis,farthest),OUTER,2);
         Overlay.text(String.format(Locale.ROOT,"%.1f",inner),pos(around(middle,axis,inner,0)),INNER,0xbb151c26,.02f);
         Overlay.text(String.format(Locale.ROOT,"%.1f",outer),pos(around(middle,axis,outer,0)),OUTER,0xbb151c26,.02f);
     }
@@ -101,6 +102,7 @@ final class ModifyPreview {
     }
     private static Point lowest(List<Point> p){int x=Integer.MAX_VALUE,y=x,z=x;for(Point a:p){x=Math.min(x,a.x());y=Math.min(y,a.y());z=Math.min(z,a.z());}return new Point(x,y,z);}
     private static Point highest(List<Point> p){int x=Integer.MIN_VALUE,y=x,z=x;for(Point a:p){x=Math.max(x,a.x());y=Math.max(y,a.y());z=Math.max(z,a.z());}return new Point(x,y,z);}
+    private static Vec3 middleOf(List<Point> selected){Point min=lowest(selected),max=highest(selected);return new Vec3((min.x()+max.x())/2d+.5,(min.y()+max.y())/2d+.5,(min.z()+max.z())/2d+.5);}
     private static BlockPos pos(Vec3 v){return BlockPos.containing(v);}
     /** Twist turns about a line through the middle of the selection. */
     private static void axisLine(Options o,List<Point> selected){
@@ -108,6 +110,6 @@ final class ModifyPreview {
         Vec3 mid=new Vec3((min.x()+max.x())/2d+.5,(min.y()+max.y())/2d+.5,(min.z()+max.z())/2d+.5);
         Vec3 a=switch(o.modifyAxis){case X->new Vec3(min.x()-1,mid.y,mid.z);case Y->new Vec3(mid.x,min.y()-1,mid.z);case Z->new Vec3(mid.x,mid.y,min.z()-1);};
         Vec3 b=switch(o.modifyAxis){case X->new Vec3(max.x()+2,mid.y,mid.z);case Y->new Vec3(mid.x,max.y()+2,mid.z);case Z->new Vec3(mid.x,mid.y,max.z()+2);};
-        Overlay.line(a,b,AXIS,2);
+        Overlay.sceneLine(a,b,AXIS,2);
     }
 }
