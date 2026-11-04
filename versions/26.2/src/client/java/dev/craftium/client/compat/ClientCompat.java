@@ -24,6 +24,8 @@ public final class ClientCompat {
     public static void toggleHud(Minecraft mc){mc.gui.hud.toggle();}
 
     public static Camera camera(Minecraft mc){return mc.gameRenderer.mainCamera();}
+    /** The frame the game last drew, for screenshots. */
+    public static com.mojang.blaze3d.pipeline.RenderTarget mainTarget(Minecraft mc){return mc.gameRenderer.mainRenderTarget();}
     /** The camera's near plane, used to turn screen points into world rays. */
     public static Camera.NearPlane nearPlane(Camera camera){return camera.getNearPlane(camera.getFov());}
     /** The direction from the camera through a point of the screen, x and y from -1 to 1 across the window. */

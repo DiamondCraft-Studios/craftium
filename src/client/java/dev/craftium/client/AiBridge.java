@@ -39,6 +39,14 @@ public final class AiBridge {
     private static volatile long lastCall;
     private static volatile String lastTool = "";
     private static final long ACTIVE_MILLIS = 120_000;
+    /** Whether the preview waiting in the world (if any) was made by an AI app, so it is drawn in the AI colour. */
+    private static volatile boolean aiPreview;
+
+    /** Marks a preview the server has just described as the AI's, or forgets the mark once nothing is waiting. */
+    static void tagPreview(GhostBlocks pending) {
+        if (pending.total() == 0) { aiPreview = false; return; }
+        pending.ai = aiPreview;
+    }
 
     private AiBridge() {}
 
@@ -77,11 +85,13 @@ public final class AiBridge {
         var state = indicator();
         if (state == State.OFF) return;
         var font = Minecraft.getInstance().font;
-        String text = state == State.WORKING ? "AI working…" : "AI";
+        boolean preview = ClientState.hasPending() && ClientState.pending.ai;
+        String text = state == State.WORKING ? "AI working…" : preview ? "AI preview" : "AI";
+        int accent = preview && state != State.WORKING ? 0xffc9a0ff : colour(state);
         int width = font.width(text) + 22, x = g.guiWidth() - width - 6, y = 6;
         g.fill(x, y, x + width, y + 14, 0xb0101923);
-        g.outline(x, y, width, 14, colour(state));
-        g.fill(x + 5, y + 4, x + 11, y + 10, colour(state));
+        g.outline(x, y, width, 14, accent);
+        g.fill(x + 5, y + 4, x + 11, y + 10, accent);
         g.text(font, text, x + 16, y + 3, 0xffe8f1fa, false);
     }
 
@@ -245,6 +255,12 @@ public final class AiBridge {
             case "get_state" -> onClient(AiBridge::state);
             case "get_blocks" -> { var from = point(args, "from"); var to = point(args, "to"); yield onClient(() -> blocks(from, to)); }
             case "get_palette" -> onClient(AiBridge::palette);
+            case "get_screenshot" -> screenshot();
+            case "look_at" -> {
+                if (args.has("view")) { var view = view(args); yield onClient(() -> turn(view[0], view[1])); }
+                var target = point(args, "target");
+                yield onClient(() -> lookAt(target));
+            }
             case "set_selection" -> { var from = point(args, "from"); var to = point(args, "to"); yield request("select_box", () -> select(from, to)); }
             case "clear_selection" -> request("clear", () -> CraftiumClient.send("clear", null, null));
             case "preview_build" -> {
@@ -322,6 +338,7 @@ public final class AiBridge {
     private static void previewBuild(String spec) {
         var o = ClientState.options;
         o.buildSpec = spec;
+        aiPreview = true; // so the ghost this makes is drawn in the AI colour
         // The spec rides along on this one request and is not kept in the saved settings.
         try { CraftiumClient.send("ai_build_preview", null, null); }
         finally { o.buildSpec = ""; }
@@ -355,6 +372,93 @@ public final class AiBridge {
         out.addProperty("busy", status.busy());
         out.addProperty("lastMessage", status.message());
         return out;
+    }
+
+    /**
+     * What the player sees now, as a JPEG no wider than 1024 pixels, including a preview ghost and the interface. The game gets a
+     * moment first to draw a frame with whatever was just staged or aimed.
+     */
+    private static JsonObject screenshot() throws Exception {
+        Thread.sleep(250);
+        var done = new CompletableFuture<JsonObject>();
+        onClient(() -> {
+            var mc = Minecraft.getInstance();
+            if (mc.level == null || mc.player == null) throw new IllegalStateException("Not in a world");
+            boolean screenOpen = dev.craftium.client.compat.ClientCompat.screen(mc) != null;
+            double yaw = mc.player.getYRot(), pitch = mc.player.getXRot();
+            net.minecraft.client.Screenshot.takeScreenshot(dev.craftium.client.compat.ClientCompat.mainTarget(mc), image -> {
+                try { done.complete(encode(image, screenOpen, yaw, pitch)); }
+                catch (Throwable t) { done.completeExceptionally(t); }
+                finally { image.close(); }
+            });
+            return null;
+        });
+        try { return done.get(WAIT_SECONDS, TimeUnit.SECONDS); }
+        catch (ExecutionException e) { throw new IllegalStateException("Could not capture the screen: " + e.getCause()); }
+    }
+
+    private static JsonObject encode(com.mojang.blaze3d.platform.NativeImage image, boolean screenOpen, double yaw, double pitch) throws IOException {
+        int width = image.getWidth(), height = image.getHeight();
+        var full = new java.awt.image.BufferedImage(width, height, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        full.setRGB(0, 0, width, height, image.getPixels(), 0, width);
+        var shown = full;
+        if (width > 1024) {
+            int w = 1024, h = Math.max(1, Math.round(height * 1024f / width));
+            shown = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            var g = shown.createGraphics();
+            g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(full, 0, 0, w, h, null);
+            g.dispose();
+        }
+        var writer = javax.imageio.ImageIO.getImageWritersByFormatName("jpeg").next();
+        var params = writer.getDefaultWriteParam();
+        params.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
+        params.setCompressionQuality(0.8f);
+        var bytes = new ByteArrayOutputStream();
+        try (var out = new javax.imageio.stream.MemoryCacheImageOutputStream(bytes)) {
+            writer.setOutput(out);
+            writer.write(null, new javax.imageio.IIOImage(shown, null, null), params);
+        } finally { writer.dispose(); }
+        var reply = new JsonObject();
+        reply.addProperty("ok", true);
+        reply.addProperty("image", Base64.getEncoder().encodeToString(bytes.toByteArray()));
+        reply.addProperty("mime", "image/jpeg");
+        reply.addProperty("width", shown.getWidth());
+        reply.addProperty("height", shown.getHeight());
+        reply.addProperty("screenOpen", screenOpen);
+        reply.add("view", array(Math.round(yaw * 10) / 10.0, Math.round(pitch * 10) / 10.0));
+        return reply;
+    }
+
+    /** Turns the player's view, not their position, toward the middle of a block. Reports the view it had before so it can be put back. */
+    private static JsonObject lookAt(Point target) {
+        var mc = Minecraft.getInstance();
+        if (mc.player == null) throw new IllegalStateException("Not in a world");
+        var eye = mc.player.getEyePosition();
+        double dx = target.x() + .5 - eye.x, dy = target.y() + .5 - eye.y, dz = target.z() + .5 - eye.z;
+        if (dx * dx + dy * dy + dz * dz < 1) throw new IllegalArgumentException("That point is where the player's head is; choose a point further away");
+        return turn((float) Math.toDegrees(Math.atan2(-dx, dz)), (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz))));
+    }
+
+    /** Sets the player's view and reports the one they had, as [yaw, pitch] in degrees, so it can be put back with look_at's view. */
+    private static JsonObject turn(float yaw, float pitch) {
+        var mc = Minecraft.getInstance();
+        if (mc.player == null) throw new IllegalStateException("Not in a world");
+        double before = mc.player.getYRot(), beforePitch = mc.player.getXRot();
+        mc.player.setYRot(yaw);
+        mc.player.setXRot(Math.clamp(pitch, -90f, 90f));
+        var out = new JsonObject();
+        out.addProperty("ok", true);
+        out.add("previousView", array(Math.round(before * 10) / 10.0, Math.round(beforePitch * 10) / 10.0));
+        out.add("view", array(Math.round(yaw * 10) / 10.0, Math.round(mc.player.getXRot() * 10) / 10.0));
+        return out;
+    }
+
+    private static float[] view(JsonObject args) {
+        var element = args.get("view");
+        if (!element.isJsonArray() || element.getAsJsonArray().size() != 2) throw new IllegalArgumentException("\"view\" must be [yaw, pitch]");
+        try { return new float[]{element.getAsJsonArray().get(0).getAsFloat(), element.getAsJsonArray().get(1).getAsFloat()}; }
+        catch (RuntimeException e) { throw new IllegalArgumentException("\"view\" must hold two numbers"); }
     }
 
     private static JsonObject palette() {
