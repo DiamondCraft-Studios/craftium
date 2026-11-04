@@ -1,5 +1,9 @@
 # Craftium
 
+[![Support me on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Craftium-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/deviank)
+
+Craftium is free and open source. If you find it useful, you can [support the Claude usage it burns on Ko-fi](https://ko-fi.com/deviank).
+
 **A vibe-coded, open-source building studio for Minecraft. It's an early development preview, so expect rough edges, missing features and the occasional bug.**
 
 Craftium is an AI-assisted, independently implemented Fabric building studio with a Paper/Purpur server companion for **Minecraft Java 26.2** and **1.21.10**. Inspired by Axiom's building workflows, it adopts its documented default keybinds, with original code and icons under the GNU GPL v3 license.
