@@ -166,6 +166,8 @@ public final class Options {
     public int rulerSplit=2;
     /** How the Ruler tool is drawn: its line, the knob at each end, the knob that has the gizmo, and its length label with the box behind it. */
     public int rulerLineColor=0xffffffff,rulerKnobColor=0xff5b9fdb,rulerKnobSelectedColor=0xffffff00,rulerTextColor=0xffffffff,rulerTextBackground=0x80000000;
+    /** The colour of a ruler's line when it runs along the world's X, Y or Z axis (the gizmo's red, green and blue); any other line uses {@link #rulerLineColor}. */
+    public int rulerAxisXColor=0xffff7777,rulerAxisYColor=0xff8bef9a,rulerAxisZColor=0xff78b9ff;
     /** How big the length label is, as a multiple of its normal size: 1 is 100%. Kept between {@link #RULER_LABEL_MIN} and {@link #RULER_LABEL_MAX}. */
     public double rulerLabelSize=1;
     public static final double RULER_LABEL_MIN=.25,RULER_LABEL_MAX=3;

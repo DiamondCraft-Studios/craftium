@@ -310,8 +310,8 @@ public final class CraftiumClient implements ClientModInitializer {
                 Overlay.box(new AABB(landing.x-.5,landing.y-.5,landing.z-.5,landing.x+.5,landing.y+.5,landing.z+.5),o.rulerKnobSelectedColor,2,o.rulerKnobSelectedColor&0xffffff|0x33000000);
             }
             if(end!=null){
-                Overlay.line(start,end,o.rulerLineColor,2);
                 double length=start.distanceTo(end);
+                Overlay.line(start,end,lineColor(o,start,end),2);
                 if(o.rulerMode==Options.RulerMode.CIRCLE){for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(start.add(Math.cos(x)*length,0,Math.sin(x)*length),start.add(Math.cos(y)*length,0,Math.sin(y)*length),o.rulerLineColor,1.5f);}}
                 // The length sits on the middle of the line, as big as the setting says.
                 Overlay.text(Ruler.show(length),start.add(end).scale(.5),o.rulerTextColor,o.rulerTextBackground,.05f*(float)Math.clamp(o.rulerLabelSize,Options.RULER_LABEL_MIN,Options.RULER_LABEL_MAX));
@@ -320,6 +320,14 @@ public final class CraftiumClient implements ClientModInitializer {
             if(end!=null)Overlay.point(end,picked==second?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==second?10:8);
             index+=end==null?1:2;
         }
+    }
+    /** A line that runs along one world axis takes that axis's colour; any other line takes the ruler's own. */
+    private static int lineColor(Options o,Vec3 a,Vec3 b){
+        boolean x=Math.abs(b.x-a.x)>1e-6,y=Math.abs(b.y-a.y)>1e-6,z=Math.abs(b.z-a.z)>1e-6;
+        if(x&&!y&&!z)return o.rulerAxisXColor;
+        if(y&&!x&&!z)return o.rulerAxisYColor;
+        if(z&&!x&&!y)return o.rulerAxisZColor;
+        return o.rulerLineColor;
     }
     private static Vec3 centre(Point p){return new Vec3(p.x()+.5,p.y()+.5,p.z()+.5);}
     private static void handles(EditorScreen screen) {

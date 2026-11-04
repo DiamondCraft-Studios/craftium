@@ -58,6 +58,9 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
 
     private static final List<Entry> RULER_ENTRIES=List.of(
         entry("Ruler","Line",o->o.rulerLineColor,(o,c)->o.rulerLineColor=c),
+        entry("Ruler","Line along X",o->o.rulerAxisXColor,(o,c)->o.rulerAxisXColor=c),
+        entry("Ruler","Line along Y",o->o.rulerAxisYColor,(o,c)->o.rulerAxisYColor=c),
+        entry("Ruler","Line along Z",o->o.rulerAxisZColor,(o,c)->o.rulerAxisZColor=c),
         entry("Ruler","Knobs",o->o.rulerKnobColor,(o,c)->o.rulerKnobColor=c),
         entry("Ruler","Knob (selected)",o->o.rulerKnobSelectedColor,(o,c)->o.rulerKnobSelectedColor=c),
         entry("Length label","Text",o->o.rulerTextColor,(o,c)->o.rulerTextColor=c),
