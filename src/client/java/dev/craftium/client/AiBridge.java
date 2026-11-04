@@ -88,7 +88,7 @@ public final class AiBridge {
         boolean preview = ClientState.hasPending() && ClientState.pending.ai;
         String text = state == State.WORKING ? "AI working…" : preview ? "AI preview" : "AI";
         int accent = preview && state != State.WORKING ? 0xffc9a0ff : colour(state);
-        int width = font.width(text) + 22, x = g.guiWidth() - width - 6, y = 6;
+        int width = font.width(text) + 22, x = g.guiWidth() - width - 6, y = g.guiHeight() - 20; // bottom right, below the key hints and clear of the tips and toasts at the top
         g.fill(x, y, x + width, y + 14, 0xb0101923);
         g.outline(x, y, width, 14, accent);
         g.fill(x + 5, y + 4, x + 11, y + 10, accent);

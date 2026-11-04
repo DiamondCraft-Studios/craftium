@@ -17,7 +17,7 @@ Claude Desktop ──stdio──▶ craftium-mcp (Node) ──127.0.0.1──▶
 
 A preview made by an AI app is drawn in **violet**, so it is never mistaken for your own blue edit previews, and the marker reads **AI preview** while one is waiting.
 
-While AI building is on, a small **AI** marker shows in the top right corner of the game: amber while it waits for the AI app, green once the app has connected, and blue while a request is being answered. The **AI** menu also has **Apply AI preview**, **Discard AI preview** and **Undo last edit**, so you can approve a build without going back to the chat, and **AI status and setup…**, a page with the same status, the last request and the steps above.
+While AI building is on, a small **AI** marker shows in the bottom right corner of the game: amber while it waits for the AI app, green once the app has connected, and blue while a request is being answered. The **AI** menu also has **Apply AI preview**, **Discard AI preview** and **Undo last edit**, so you can approve a build without going back to the chat, and **AI status and setup…**, a page with the same status, the last request and the steps above.
 
 Then ask Claude for a build while the game is open. Claude can select an area in front of you, or you can select one yourself first. Look at the ghost in the game, ask for changes, and say when to apply it.
 
