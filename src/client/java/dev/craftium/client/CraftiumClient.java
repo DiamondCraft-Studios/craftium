@@ -27,7 +27,10 @@ public final class CraftiumClient implements ClientModInitializer {
     public static KeyMapping editorKey,contextKey,swapKey,replaceKey;
     public static final java.util.Map<Tool,KeyMapping> toolKeys=new java.util.EnumMap<>(Tool.class);
     private long lastBuilder;
-    private long breakingSince;
+    private long breakingSince,bulldozeFreshAt,tinkerAt;
+    private boolean rightWas;
+    private BlockHitResult tinkerHit;
+    private net.minecraft.world.level.block.Block tinkerBlock;
     private boolean hadWorld,toolCursor;
     private double lastLiquidOpacity=1;
     @Override public void onInitializeClient() {
@@ -65,7 +68,7 @@ public final class CraftiumClient implements ClientModInitializer {
         UseBlockCallback.EVENT.register((player,level,hand,hit)->{
             var o=ClientState.options;
             boolean block=player.getMainHandItem().getItem() instanceof BlockItem;
-            boolean tinker=player.getMainHandItem().isEmpty()&&o.tinker&&!player.isShiftKeyDown();
+            boolean tinker=player.getMainHandItem().isEmpty()&&o.tinker;
             if(!level.isClientSide() || !player.isCreative() || !supported() || ClientCompat.screen(Minecraft.getInstance())!=null)return InteractionResult.PASS;
             if(block&&vanillaPlacement()){syncPlacement();return InteractionResult.PASS;} // the game places the block; the mod bends it from the server and the client alike
             // Without the mod on the server, nothing there can bend vanilla placement, so the click is sent as an editor request instead.
@@ -154,25 +157,49 @@ public final class CraftiumClient implements ClientModInitializer {
             mc.player.setDeltaMovement(Vec3.ZERO);
         boolean left=GLFW.glfwGetMouseButton(mc.getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_LEFT)==GLFW.GLFW_PRESS;
         boolean right=GLFW.glfwGetMouseButton(mc.getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_RIGHT)==GLFW.GLFW_PRESS;
-        if(!left)breakingSince=0;else if(breakingSince==0)breakingSince=now;
+        if(!left)breakingSince=0;else if(breakingSince==0){breakingSince=now;bulldozeFreshAt=now;ClientState.strokeId=System.nanoTime();} // a stroke is one undo step, however many blocks it breaks
+        if(right&&!rightWas&&o.tinker&&mc.player.getMainHandItem().isEmpty()&&mc.hitResult instanceof BlockHitResult th&&th.getType()==HitResult.Type.BLOCK){tinkerHit=th;tinkerAt=now;}
+        rightWas=right;
+        if(tinkerHit!=null){ // one click is one change: held down it does not repeat; a click that lands during another edit waits briefly for it
+            if(now-tinkerAt>500||!supported())tinkerHit=null;
+            else if(!ClientState.status.busy()){tinker(mc,o,tinkerHit);tinkerHit=null;}
+        }
         if(now-lastBuilder>(o.fastPlace?70:125) && !ClientState.status.busy()) {
             BlockHitResult hit=mc.hitResult instanceof BlockHitResult b && b.getType()==HitResult.Type.BLOCK?b:null;
             if(hit==null&&o.angelPlacement&&right)hit=angelHit(mc);
             boolean canPlace=mc.player.getMainHandItem().getItem() instanceof BlockItem && o.placementCapabilities();
-            boolean canTinker=o.tinker&&mc.player.getMainHandItem().isEmpty()&&!mc.player.isShiftKeyDown();
             if(hit!=null && right && canPlace && vanillaPlacement()) {
                 // The game places the block itself. It only needs a nudge where it would not click by itself: faster than its own repeat, or at a point in the air.
-                if(o.fastPlace||mc.hitResult!=hit){
+                if(mc.hitResult!=hit){
                     var result=mc.gameMode.useItemOn(mc.player,net.minecraft.world.InteractionHand.MAIN_HAND,hit);
                     if(result.consumesAction())mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
                     lastBuilder=now;
                 }
-            } else if(hit!=null && ((left&&(ClientState.symmetry()||o.infiniteReach||o.bulldozer&&now-breakingSince>350))||(right&&(canPlace||canTinker)))) {
+            } else if(hit!=null && ((left&&(ClientState.symmetry()||o.infiniteReach||o.bulldozer&&(bulldozeFreshAt!=0||now-breakingSince>350)))||(right&&canPlace))) {
                 if(mc.player.getMainHandItem().getItem() instanceof BlockItem item)ClientState.pick(BuiltInRegistries.BLOCK.getKey(item.getBlock()).toString());
+                if(left){
+                    var broken=mc.level.getBlockState(hit.getBlockPos());
+                    if(!broken.isAir())mc.level.levelEvent(2001,hit.getBlockPos(),net.minecraft.world.level.block.Block.getId(broken)); // the game's own break sound and particles
+                }
                 send(left?"builder_break":"builder_place",point(hit.getBlockPos()),normal(hit));lastBuilder=now;
-                if(left)mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND); // the attack callback still returns FAIL, which does not swing
+                if(left){bulldozeFreshAt=0;mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);} // the attack callback still returns FAIL, which does not swing
             }
         }
+    }
+    /** Tinker on the block aimed at: a click cycles the chosen property, and a sneaking click chooses the next property. */
+    private void tinker(Minecraft mc,Options o,BlockHitResult hit){
+        var state=mc.level.getBlockState(hit.getBlockPos());
+        if(state.getBlock()!=tinkerBlock){tinkerBlock=state.getBlock();o.tinkerIndex=0;}
+        var property=dev.craftium.runtime.TinkerProperties.pick(state,o.tinkerIndex);
+        if(property==null){ClientState.notify("Tinker: this block has no properties");return;}
+        mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        if(mc.player.isShiftKeyDown()){
+            o.tinkerIndex=Math.floorMod(o.tinkerIndex+1,dev.craftium.runtime.TinkerProperties.of(state).size());
+            ClientState.notify("Tinker: "+dev.craftium.runtime.TinkerProperties.describe(state,dev.craftium.runtime.TinkerProperties.pick(state,o.tinkerIndex)));
+            return;
+        }
+        ClientState.notify("Tinker: "+dev.craftium.runtime.TinkerProperties.describe(dev.craftium.runtime.TinkerProperties.cycle(state,property),property));
+        send("builder_place",point(hit.getBlockPos()),normal(hit));
     }
     public static boolean held(KeyMapping mapping){
         if(mapping.isUnbound())return false;var key=InputConstants.getKey(mapping.saveString());long window=Minecraft.getInstance().getWindow().handle();return key.getType()==InputConstants.Type.MOUSE?GLFW.glfwGetMouseButton(window,key.getValue())==GLFW.GLFW_PRESS:InputConstants.isKeyDown(Minecraft.getInstance().getWindow(),key.getValue());
@@ -226,7 +253,7 @@ public final class CraftiumClient implements ClientModInitializer {
         var options=ClientState.options;boolean colours=action.equals("autoshade")&&options.shadeAutomatic||action.equals("use")&&(options.script.contains("getBlockRGB")||options.script.contains("findClosestBlockToRGB"))||options.maskScript.contains("getBlockRGB")||options.maskScript.contains("findClosestBlockToRGB");options.scriptColours=colours?new java.util.ArrayList<>(BlockColours.snapshot()):new java.util.ArrayList<>();
         ClientAssets.expect(action);
         if(action.equals("select_box")||action.equals("lasso_select")||action.equals("use")&&ClientState.options.tool.selection()){ClientState.selectionPending=true;ClientState.selectingSince=System.currentTimeMillis();ClientState.selectionSizeBefore=ClientState.status.selectionSize();}
-        try{String request=Packets.JSON.toJson(new Packets.Request(action,target,normal,ClientState.options,action.equals("use")?ClientState.strokeId:0));
+        try{String request=Packets.JSON.toJson(new Packets.Request(action,target,normal,ClientState.options,action.equals("use")||action.equals("builder_break")?ClientState.strokeId:0));
             if(ClientPlayNetworking.canSend(Packets.Edit.TYPE))ClientPlayNetworking.send(new Packets.Edit(request));
             else for(byte[] frame:BridgeCodec.encode(Packets.JSON.toJson(new BridgeCodec.Message("edit",request))))ClientPlayNetworking.send(new Packets.Bridge(frame));}finally{options.scriptColours=new java.util.ArrayList<>();}
     }

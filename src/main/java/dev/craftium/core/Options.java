@@ -103,6 +103,8 @@ public final class Options {
     public int polygonSides=6,fluidHeight=100,fontSize=16,textThickness=1,modelColumns=4;
     public String fontName="SansSerif",fontFile="",heightmap="",name="Untitled",entityType="block_display",entityNbt="{}",property="";
     public boolean useBuiltinFont=true,textShadow,fullBlocks=true,denoise=true,maskY,fastPlace,angelPlacement,infiniteReach,noClip;
+    /** Which property Tinker cycles on the block it is used on, picked by sneaking; wraps around the block's properties. */
+    public int tinkerIndex;
     public boolean showCollisionMesh,showLightBlocks,showStructureVoid,expandHitboxes,solidFluids,preventInteractions;
     public double smoothing=2,threshold=.5,meldStrength=1;
     public int annotationColor=0xffa5d6ff,annotationWidth=2;

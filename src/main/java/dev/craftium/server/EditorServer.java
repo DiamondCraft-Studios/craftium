@@ -100,7 +100,7 @@ public final class EditorServer {
             if(r==null || r.action()==null || r.options()==null)throw new IllegalArgumentException("Invalid editor request");
             if(!ServerPlatform.permitted(player,r.action()))throw new IllegalArgumentException("You do not have permission for this Craftium action");
             Options o=r.options();o.validate();
-            s.requestStroke=r.action().equals("use")?r.strokeId():0;
+            s.requestStroke=r.action().equals("use")||r.action().equals("builder_break")?r.strokeId():0;
             if(s.dimension!=null && !s.dimension.equals(player.level().dimension())) {
                 if(s.busy)throw new IllegalArgumentException("Wait for the current operation to finish");
                 HistoryStore.save(s);
@@ -312,8 +312,11 @@ public final class EditorServer {
                     if(target==null)throw new IllegalArgumentException("Point at a block within reach");
                     var plan=new EditPlanner(player.level(),s,o);
                     if(r.action().equals("builder_place")) {
-                        if(o.tinker && player.getMainHandItem().isEmpty()) {o.tool=Tool.TINKER;plan.tool(target,normal);}
-                        else {
+                        if(o.tinker && player.getMainHandItem().isEmpty()) {
+                            var old=plan.state(target);var property=dev.craftium.runtime.TinkerProperties.pick(old,o.tinkerIndex);
+                            if(property==null)throw new IllegalArgumentException("This block has no properties to tinker with");
+                            plan.put(target,dev.craftium.runtime.TinkerProperties.cycle(old,property));
+                        } else {
                             Point at=o.replaceMode?target:target.add(normal.x(),normal.y(),normal.z());
                             plan.put(at,plan.preserve(plan.state(target),plan.material));
                         }
