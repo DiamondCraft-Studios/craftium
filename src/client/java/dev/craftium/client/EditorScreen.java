@@ -389,7 +389,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void builderOptions(Gfx g) {
         text(g,"CAPABILITIES",10,254,MUTED);
         toggle(g,10,273,"Enhanced flight",o().enhancedFlight,()->o().enhancedFlight=!o().enhancedFlight,"Creative flight at the fly speed below");
-        toggle(g,10,296,"Bulldozer",o().bulldozer,()->o().bulldozer=!o().bulldozer,"Click to break a block, hold to keep breaking blocks as you sweep the view; one undo step per stroke");
+        toggle(g,10,296,"Bulldozer",o().bulldozer,()->o().bulldozer=!o().bulldozer,"Hold left click for a moment and the game breaks blocks with no delay between them, so sweeping the view clears a path");
         toggle(g,10,319,"Replace mode",o().replaceMode,()->o().replaceMode=!o().replaceMode,"Placing a block replaces the one you click instead of going beside it · R");
         toggle(g,10,342,"Force place",o().forcePlace,()->o().forcePlace=!o().forcePlace,"Place blocks where they could not survive, like a torch in the air");
         toggle(g,10,365,"No updates",o().noUpdates,()->o().noUpdates=!o().noUpdates,"Placed blocks do not update their neighbours, so they stay when what holds them is removed");

@@ -6,18 +6,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Fast place: while the use key is held, a block is placed the moment the crosshair rests on a block it has not just
@@ -44,8 +37,7 @@ public final class FastPlace {
         if(!o.fastPlace||mc.player==null||mc.level==null||mc.gameMode==null||!mc.player.isCreative()||!CraftiumClient.vanillaPlacement()||ClientCompat.screen(mc)!=null||BuilderMode.active())return false;
         if(!mc.options.keyUse.isDown()||mc.player.isUsingItem()||!(mc.player.getMainHandItem().getItem() instanceof BlockItem))return false;
         if(!(mc.hitResult instanceof BlockHitResult hit)||hit.getType()!=HitResult.Type.BLOCK)return false;
-        // A block that does something when clicked keeps doing it, unless sneaking, as in the game.
-        return mc.player.isShiftKeyDown()||!interactive(mc.level.getBlockState(hit.getBlockPos()).getBlock());
+        return true;
     }
     /** Called from the game's own item use. True to skip its slow repeat, which this replaces; the first click of a press is left to the game. */
     public static boolean cancelVanilla(){
@@ -79,19 +71,5 @@ public final class FastPlace {
         double now=player.position().get(axis),then=lastPlayer.get(axis);
         double block=lastPlaced.get(axis)+(hit.getDirection().getAxisDirection()==net.minecraft.core.Direction.AxisDirection.NEGATIVE?1:0);
         return Math.abs(now-then)>=.99&&Math.abs(then-block)<Math.abs(now-block);
-    }
-
-    private static final Map<Class<?>,Boolean> INTERACTIVE=new HashMap<>();
-    /** Whether the block reacts to a click, found by the shape of the methods it overrides, which holds under any mapping. */
-    private static boolean interactive(Block block){
-        return INTERACTIVE.computeIfAbsent(block.getClass(),type->{
-            for(Class<?> c=type;c!=null&&c!=Block.class&&c!=BlockBehaviour.class&&c!=Object.class;c=c.getSuperclass())
-                for(var m:c.getDeclaredMethods()){
-                    var t=m.getParameterTypes();
-                    if(t.length==5&&t[0]==BlockState.class&&t[1]==Level.class&&t[2]==BlockPos.class&&t[3]==Player.class&&t[4]==BlockHitResult.class)return true;
-                    if(t.length==7&&t[0]==ItemStack.class&&t[1]==BlockState.class&&t[2]==Level.class&&t[3]==BlockPos.class&&t[4]==Player.class&&t[5]==InteractionHand.class&&t[6]==BlockHitResult.class)return true;
-                }
-            return false;
-        });
     }
 }

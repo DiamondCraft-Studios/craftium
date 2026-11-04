@@ -27,7 +27,7 @@ public final class CraftiumClient implements ClientModInitializer {
     public static KeyMapping editorKey,contextKey,swapKey,replaceKey;
     public static final java.util.Map<Tool,KeyMapping> toolKeys=new java.util.EnumMap<>(Tool.class);
     private long lastBuilder;
-    private long breakingSince,bulldozeFreshAt,tinkerAt;
+    private long breakingSince,tinkerAt;
     private boolean rightWas;
     private BlockHitResult tinkerHit;
     private net.minecraft.world.level.block.Block tinkerBlock;
@@ -76,7 +76,7 @@ public final class CraftiumClient implements ClientModInitializer {
             return InteractionResult.PASS;
         });
         AttackBlockCallback.EVENT.register((player,level,hand,pos,face)->
-            level.isClientSide() && player.isCreative() && supported() && (ClientState.symmetry()||ClientState.options.bulldozer||ClientState.options.infiniteReach) ? InteractionResult.FAIL:InteractionResult.PASS);
+            level.isClientSide() && player.isCreative() && supported() && (ClientState.symmetry()||ClientState.options.infiniteReach) ? InteractionResult.FAIL:InteractionResult.PASS);
         HudElementRegistry.addLast(dev.craftium.compat.Compat.id("craftium","builder"),(raw,delta)->{
             var mc=Minecraft.getInstance();if(mc.player==null || !mc.player.isCreative() || ClientCompat.screen(mc)!=null)return;
             var g=Gfx.of(raw);
@@ -157,7 +157,7 @@ public final class CraftiumClient implements ClientModInitializer {
             mc.player.setDeltaMovement(Vec3.ZERO);
         boolean left=GLFW.glfwGetMouseButton(mc.getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_LEFT)==GLFW.GLFW_PRESS;
         boolean right=GLFW.glfwGetMouseButton(mc.getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_RIGHT)==GLFW.GLFW_PRESS;
-        if(!left)breakingSince=0;else if(breakingSince==0){breakingSince=now;bulldozeFreshAt=now;ClientState.strokeId=System.nanoTime();} // a stroke is one undo step, however many blocks it breaks
+        if(!left)breakingSince=0;else if(breakingSince==0){breakingSince=now;ClientState.strokeId=System.nanoTime();} // a symmetric stroke is one undo step
         if(right&&!rightWas&&o.tinker&&mc.player.getMainHandItem().isEmpty()&&mc.hitResult instanceof BlockHitResult th&&th.getType()==HitResult.Type.BLOCK){tinkerHit=th;tinkerAt=now;}
         rightWas=right;
         if(tinkerHit!=null){ // one click is one change: held down it does not repeat; a click that lands during another edit waits briefly for it
@@ -175,14 +175,10 @@ public final class CraftiumClient implements ClientModInitializer {
                     if(result.consumesAction())mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
                     lastBuilder=now;
                 }
-            } else if(hit!=null && ((left&&(ClientState.symmetry()||o.infiniteReach||o.bulldozer&&(bulldozeFreshAt!=0||now-breakingSince>350)))||(right&&canPlace))) {
+            } else if(hit!=null && ((left&&(ClientState.symmetry()||o.infiniteReach))||(right&&canPlace))) {
                 if(mc.player.getMainHandItem().getItem() instanceof BlockItem item)ClientState.pick(BuiltInRegistries.BLOCK.getKey(item.getBlock()).toString());
-                if(left){
-                    var broken=mc.level.getBlockState(hit.getBlockPos());
-                    if(!broken.isAir())mc.level.levelEvent(2001,hit.getBlockPos(),net.minecraft.world.level.block.Block.getId(broken)); // the game's own break sound and particles
-                }
                 send(left?"builder_break":"builder_place",point(hit.getBlockPos()),normal(hit));lastBuilder=now;
-                if(left){bulldozeFreshAt=0;mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);} // the attack callback still returns FAIL, which does not swing
+                if(left){mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);} // the attack callback still returns FAIL, which does not swing
             }
         }
     }
