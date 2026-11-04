@@ -42,6 +42,12 @@ public final class Gfx {
     public void centeredText(Font font,Component text,int x,int y,int color){raw.centeredText(font,text,x,y,color);}
 
     public void item(ItemStack stack,int x,int y){raw.item(stack,x,y);}
+    /** The count and durability bar over an item drawn with {@link #item}. */
+    public void itemDecorations(Font font,ItemStack stack,int x,int y){raw.itemDecorations(font,stack,x,y);}
+    /** A piece of a vanilla GUI sprite: the {@code width} by {@code height} area at {@code u}, {@code v} of a sprite that is {@code spriteWidth} by {@code spriteHeight}, drawn at its own size. */
+    public void spritePiece(String path,int spriteWidth,int spriteHeight,int u,int v,int x,int y,int width,int height){raw.blitSprite(RenderPipelines.GUI_TEXTURED,Identifier.withDefaultNamespace(path),spriteWidth,spriteHeight,u,v,x,y,width,height);}
+    /** A vanilla GUI sprite by path, like {@code hud/hotbar}, drawn at the given size. */
+    public void sprite(String path,int x,int y,int width,int height){raw.blitSprite(RenderPipelines.GUI_TEXTURED,Identifier.withDefaultNamespace(path),x,y,width,height);}
 
     /** Draws a region of a GUI texture, tinted by {@code color}. */
     public void blit(Tex texture,int x,int y,float u,float v,int width,int height,int regionWidth,int regionHeight,int textureWidth,int textureHeight,int color){
