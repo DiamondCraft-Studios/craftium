@@ -601,6 +601,7 @@ public final class EditorScreen extends CraftiumScreen {
         // Drawn back to front, like a paint tool: the foreground sits on top of the background.
         blockSlot(g,x+30,264,"Background block",o().secondary,id->o().secondary=id);
         blockSlot(g,x+10,248,"Foreground block",o().block,id->ClientState.pick(id));
+        pipetteControls(g,x+70,248);
         // The cells flow across the panel and down as far as it reaches; the first is always "+", which adds a block to the palette
         // and makes it the foreground. What does not fit scrolls.
         var blocks=ClientState.palette;int total=blocks.size()+1,top=298,pitch=26,visibleRows=Math.max(1,(pb-6-top+3)/pitch);
@@ -626,6 +627,19 @@ public final class EditorScreen extends CraftiumScreen {
             g.fill(barX,top,barX+5,top+track,0xff1b2838);g.fill(barX,thumbY,barX+5,thumbY+thumb,0xff4a6585);
             controls.add(new Control(barX-2,top,9,track,()->{double py=WorkspaceLayout.inverse("palette",mx,my)[1];paletteScroll=Math.clamp((int)Math.round((py-top-thumb/2.0)/Math.max(1,track-thumb)*max),0,max);},""));
         }
+    }
+    /** Whether the next click on the world takes the block it lands on into the palette, and the block the pointer is over meanwhile. */
+    private boolean pipetting;
+    private String pipetteBlock="";
+    /** The Pipette button and, beside it, a cell showing the item of the block under the pointer while a pipette is in hand. */
+    private void pipetteControls(Gfx g,int x,int y){
+        FlatButton.face(g,x,y,52,30,"Pipette",pipetting,true,false);
+        controls.add(new Control(x,y,52,30,()->pipetting=!pipetting,"Click a block in the world to add it to the palette · Esc cancels"));
+        var hit=pipetting?pipetteTarget(pointerX,pointerY):null;
+        pipetteBlock=hit==null||minecraft.level==null?"":BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos()));
+        int cell=x+58;
+        g.fill(cell,y,cell+30,y+30,0xff1b2838);g.outline(cell,y,30,30,pipetting?ACCENT:LINE);
+        if(!pipetteBlock.isEmpty())BlockPickerScreen.icon(g,font,pipetteBlock,cell+7,y+7);
     }
     /** A 30px swatch for one of the two selected blocks; clicking it opens the block chooser to replace it. */
     private void blockSlot(Gfx g,int x,int y,String label,String block,java.util.function.Consumer<String> set) {
@@ -1184,6 +1198,14 @@ public final class EditorScreen extends CraftiumScreen {
         if(shapeMenu){shapeMenu=false;var picked=event.button()==0?shapeAt(x,y):null;if(picked!=null)o().shape=picked;return true;} // any click closes the picker
         if(ctxCell>=0){int cell=ctxCell;ctxCell=-1;if(x>=ctxX&&x<ctxX+MASK_MENU_WIDTH&&y>=ctxY&&y<ctxY+BLOCK_MENU_LABELS.length*MASK_MENU_ROW&&cell<blocksOf(ctxList).size()){switch((int)((y-ctxY)/MASK_MENU_ROW)){case 0->changeBlock(ctxList,cell);case 1->editBlockState(ctxList,cell);default->removeBlock(ctxList,cell);}}return true;}
         if(event.button()==2&&!help&&!transform&&menu<0)for(int i=sliderAreas.size()-1;i>=0;i--){var a=sliderAreas.get(i);if(a.control().contains(x,y)){a.slider().reset();return true;}} // back to the default, at once
+        if(event.button()==0&&pipetting&&menu<0&&!help&&!transform){
+            var hit=pipetteTarget(event.x(),event.y());
+            if(hit!=null&&minecraft.level!=null){
+                pipetting=false;ClientState.pick(BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos())));ClientState.save();
+                return true;
+            }
+            if(inViewport(x,y))return true; // a click on empty sky keeps the pipette in hand
+        }
         if(event.button()==0) {
             if((panels||transform)&&menu<0&&!help){
                 EditBox selected=null;
@@ -1340,6 +1362,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(event.key()==GLFW.GLFW_KEY_ESCAPE){cancelLargeSelection();return true;}
         }
         if(CraftiumClient.editorKey.matches(event)){onClose();return true;}
+        if(event.key()==GLFW.GLFW_KEY_ESCAPE&&pipetting){pipetting=false;return true;}
         if(event.key()==GLFW.GLFW_KEY_ESCAPE){if(ClientState.hasPending())CraftiumClient.send("pending_cancel",null,null);else if(ShapeObject.active())ShapeObject.cancel();else if(PlacementPreview.active())PlacementPreview.cancel();else if(shapeMenu)shapeMenu=false;else if(ctxCell>=0)ctxCell=-1;else if(help)help=false;else if(transform){transform=false;init();}else if(menu>=0)menu=-1;else onClose();return true;}
         if(EditorBindings.matches(Action.HELP,event)){perform(Action.HELP);return true;}
         if(help||transform)return true;
