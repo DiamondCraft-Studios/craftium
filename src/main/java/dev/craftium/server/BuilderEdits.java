@@ -16,7 +16,7 @@ final class BuilderEdits {
             var todo=new ArrayDeque<Point>();var seen=new HashSet<Point>();todo.add(target);BlockState base=p.state(target);int count=0;
             while(!todo.isEmpty()&&count<128){Point at=todo.removeFirst();if(!seen.add(at)||!p.state(at).is(base.getBlock())||base.isAir())continue;p.put(at,Blocks.AIR.defaultBlockState());count++;for(Point n:EditPlanner.NEIGHBOURS)todo.add(at.add(n.x(),n.y(),n.z()));}return p.finish("Erase connected blocks");
         }
-        var points=Selection.box(o.position1,o.position2);Point min=new Point(Math.min(o.position1.x(),o.position2.x()),Math.min(o.position1.y(),o.position2.y()),Math.min(o.position1.z(),o.position2.z()));Point size=new Point(Math.abs(o.position2.x()-o.position1.x())+1,Math.abs(o.position2.y()-o.position1.y())+1,Math.abs(o.position2.z()-o.position1.z())+1);
+        Collection<Point> points=cells(o);Point min=new Point(Math.min(o.position1.x(),o.position2.x()),Math.min(o.position1.y(),o.position2.y()),Math.min(o.position1.z(),o.position2.z()));Point size=new Point(Math.abs(o.position2.x()-o.position1.x())+1,Math.abs(o.position2.y()-o.position1.y())+1,Math.abs(o.position2.z()-o.position1.z())+1);
         var source=new LinkedHashMap<Point,BlockSnapshot>();Point shift=o.builderOffset;for(Point at:points){p.validate(at);source.put(at,BlockSnapshot.capture(player.level(),EditPlanner.pos(at)));}
         if(o.builderTool==Options.BuilderTool.ERASE){for(Point at:points)p.put(at,Blocks.AIR.defaultBlockState());return p.finish("Erase builder selection");}
         if(o.builderTool==Options.BuilderTool.SMEAR){var line=BrushMath.line(new Point(0,0,0),shift);for(var e:source.entrySet())if(!e.getValue().state().isAir())for(int i=1;i<line.size();i++){Point delta=line.get(i),at=e.getKey().add(delta.x(),delta.y(),delta.z());if(!source.containsKey(at)&&p.solid(at))break;p.put(at,e.getValue());}return p.finish("Smear builder selection");}
@@ -37,6 +37,15 @@ final class BuilderEdits {
         if((long)source.size()*steps.size()>Selection.LIMIT)throw new IllegalArgumentException("Builder stack exceeds the cell limit");
         for(Point step:steps){Point origin=min.add(step.x(),step.y(),step.z());for(var e:captureSession.clipboard.entrySet()){if(!o.pasteAir&&e.getValue().state().isAir())continue;Point q=e.getKey();p.putClipboard(origin.add(q.x(),q.y(),q.z()),e.getValue());}if(o.copyEntities)entities.addAll(ClipboardEntities.paste(player,captureSession,origin));}
         if(entities.size()>128)throw new IllegalArgumentException("Builder entity limit: 128 changes");var edit=p.finish(o.builderTool.name().toLowerCase(Locale.ROOT)+" builder selection");return new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),List.copyOf(entities));
+    }
+    /** The blocks the builder works on: the ones the client sent when the selection is not a plain box, each inside the corners it also sent, or else the whole box. */
+    private static Collection<Point> cells(Options o){
+        if(o.builderCells.isBlank())return Selection.box(o.position1,o.position2);
+        var cells=SelectionCodec.decode(o.builderCells);
+        int x0=Math.min(o.position1.x(),o.position2.x()),y0=Math.min(o.position1.y(),o.position2.y()),z0=Math.min(o.position1.z(),o.position2.z());
+        int x1=Math.max(o.position1.x(),o.position2.x()),y1=Math.max(o.position1.y(),o.position2.y()),z1=Math.max(o.position1.z(),o.position2.z());
+        for(Point at:cells)if(at.x()<x0||at.x()>x1||at.y()<y0||at.y()>y1||at.z()<z0||at.z()>z1)throw new IllegalArgumentException("Selected blocks lie outside the selection box");
+        return cells;
     }
     static BlockState verticalMirror(BlockState state){
         state=StateTransforms.flipHalf(state);

@@ -56,6 +56,8 @@ public final class Options {
     public int stackX, stackY, stackZ;
     /** The Builder's Move, Clone and Smear: how far the selection is taken. Kept apart from the offsets other tools share, which are limited to 128 blocks; this one is not. */
     public Point builderOffset = new Point(0,0,0);
+    /** The builder selection's own blocks, packed by {@link SelectionCodec}, when it is not the whole box between its corners (as after a magic select). Blank for the box. */
+    public String builderCells = "";
     public Compare compare=Compare.BLOCK;
     public int selectLimit=100_000,selectRange=1,lassoDepth=64;
     /** How many blocks the Select menu's Expand and Shrink move the selection's surface. */
@@ -260,6 +262,7 @@ public final class Options {
         for(String value:new String[]{materials,maskExpression,maskScript,script,fontName,fontFile,heightmap,name,entityType,entityNbt,property,annotationMode,billboard})
             if(value==null||value.length()>1_000_000)throw new IllegalArgumentException("Invalid advanced text setting");
         if(script.length()>16384||maskScript.length()>16384||maskExpression.length()>4096||name.length()>80)throw new IllegalArgumentException("Advanced setting is too long");
+        if(builderCells==null||builderCells.length()>2_000_000)throw new IllegalArgumentException("Builder selection is too large");
         if(position1==null||position2==null||symmetryOrigin==null||builderOffset==null)throw new IllegalArgumentException("Missing position");
         builderOffset=new Point(Math.clamp(builderOffset.x(),-WORLD_SPAN,WORLD_SPAN),Math.clamp(builderOffset.y(),-WORLD_SPAN,WORLD_SPAN),Math.clamp(builderOffset.z(),-WORLD_SPAN,WORLD_SPAN));
         stackX=Math.clamp(stackX,-WORLD_SPAN,WORLD_SPAN);stackY=Math.clamp(stackY,-WORLD_SPAN,WORLD_SPAN);stackZ=Math.clamp(stackZ,-WORLD_SPAN,WORLD_SPAN);

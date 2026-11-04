@@ -23,9 +23,12 @@ public final class BuilderMode {
     /** A large magic selection waiting to be confirmed: its box, and how many blocks it found. */
     private static Point heldFirst,heldSecond;
     private static int heldCount;
+    private static List<Point> heldCells;
+    private static boolean heldGrow;
     /**
-     * Whether the selection was begun with magic select, in which case the middle button keeps magic selecting, whatever the tool;
-     * and whether the search under way adds what it finds to the selection instead of starting a new one.
+     * Whether the selection is the blocks magic select found, one by one, rather than the box between two corners: the middle
+     * button then keeps magic selecting, whatever the tool, and {@link #cells} are the selection. And whether the search under
+     * way adds what it finds to the selection instead of starting a new one.
      */
     private static boolean magicStarted,magicGrow;
     private static java.util.concurrent.ExecutorService search=newSearch();
@@ -57,7 +60,7 @@ public final class BuilderMode {
     static boolean usable(){return available();}
     private static boolean available(){var mc=Minecraft.getInstance();return mc.player!=null&&mc.player.isCreative()&&mc.level!=null&&CraftiumClient.supported();}
     public static void reset(){enabled=false;clear();restartSearch();wheel=0;}
-    private static void clear(){first=null;second=null;preview=false;clonePlaced=false;offset=new Point(0,0,0);cells=List.of();stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;magic=null;heldFirst=heldSecond=null;magicStarted=magicGrow=false;}
+    private static void clear(){first=null;second=null;preview=false;clonePlaced=false;offset=new Point(0,0,0);cells=List.of();stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;magic=null;heldFirst=heldSecond=null;heldCells=null;magicStarted=magicGrow=false;}
     /** Another tool keeps the selection, but not what was being done to it. */
     private static void retool(){preview=false;clonePlaced=false;offset=new Point(0,0,0);stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;}
     public static void enable(){if(!available())return;enabled=true;var mc=Minecraft.getInstance();mc.options.keyAttack.setDown(false);mc.options.keyUse.setDown(false);ClientState.notify("Builder: "+name()+" · Alt + wheel changes tool");}
@@ -123,13 +126,13 @@ public final class BuilderMode {
         if(o.builderTool==Options.BuilderTool.SYMMETRY){if(hit!=null&&button==1){Vec3 at=hit.getLocation();double x=Math.rint(at.x*2)/2-.5,y=Math.rint(at.y*2)/2-.5,z=Math.rint(at.z*2)/2-.5;o.symmetryOrigin=new Point((int)Math.floor(x),(int)Math.floor(y),(int)Math.floor(z));o.symmetryHalfX=x!=Math.floor(x);o.symmetryHalfY=y!=Math.floor(y);o.symmetryHalfZ=z!=Math.floor(z);ClientState.save();ClientState.notify("Symmetry node set · Ctrl+F mirrors · Ctrl+R rotates");}return true;}
         if(o.builderTool==Options.BuilderTool.EXTRUDE){if(hit!=null&&button!=2){boolean prior=o.invert;o.invert=button==0;CraftiumClient.send("builder_extrude",CraftiumClient.point(hit.getBlockPos()),CraftiumClient.normal(hit));o.invert=prior;}return true;}
         if(first!=null&&second!=null&&preview){ // something is being done to the selection: left sets the first corner again (dropping what was being done), right places it; the middle button still places it elsewhere
-            if(button==0){if(hit!=null){first=CraftiumClient.point(hit.getBlockPos());retool();refresh();}return true;}
+            if(button==0){if(hit!=null){first=CraftiumClient.point(hit.getBlockPos());magicStarted=false;retool();refresh();}return true;}
             if(button==1){confirm();return true;}
         }
         if(hit==null)return true;Point at=CraftiumClient.point(hit.getBlockPos());
         if(button==2&&o.builderTool==Options.BuilderTool.STACK&&first!=null&&second!=null){stackTo(at);return true;} // middle click: as many copies as it takes to reach the block
         if(first!=null&&second!=null&&button!=2){ // nothing is being done to it yet: left and right move the first and second point
-            if(button==0)first=at;else second=at;offset=new Point(0,0,0);refresh();return true;
+            if(button==0)first=at;else second=at;magicStarted=false;offset=new Point(0,0,0);refresh();return true;
         }
         if(o.builderTool==Options.BuilderTool.ERASE&&first==null&&button==1){CraftiumClient.send("builder_erase_connected",at,CraftiumClient.normal(hit));return true;}
         if(button==0&&clonePlaced){clear();return true;}
@@ -162,14 +165,24 @@ public final class BuilderMode {
         var found=result.found();if(found.isEmpty()||!active())return;
         int x0=Integer.MAX_VALUE,y0=x0,z0=x0,x1=Integer.MIN_VALUE,y1=x1,z1=x1;
         for(Point p:found){x0=Math.min(x0,p.x());y0=Math.min(y0,p.y());z0=Math.min(z0,p.z());x1=Math.max(x1,p.x());y1=Math.max(y1,p.y());z1=Math.max(z1,p.z());}
-        if(magicGrow&&first!=null&&second!=null){Point a=min(),b=max();x0=Math.min(x0,a.x());y0=Math.min(y0,a.y());z0=Math.min(z0,a.z());x1=Math.max(x1,b.x());y1=Math.max(y1,b.y());z1=Math.max(z1,b.z());}
         Point low=new Point(x0,y0,z0),high=new Point(x1,y1,z1);
-        if(found.size()>=ClientState.LARGE_SELECTION){heldFirst=low;heldSecond=high;heldCount=found.size();return;}
-        select(low,high);
+        if(found.size()>=ClientState.LARGE_SELECTION){heldFirst=low;heldSecond=high;heldCount=found.size();heldCells=List.copyOf(found);heldGrow=magicGrow;return;}
+        selectBlocks(found,magicGrow);
     }
-    /** A magic selection taken: from now on the middle button magic selects. */
-    private static void select(Point low,Point high){magicStarted=true;first=low;second=high;offset=new Point(0,0,0);preview=false;refresh();}
-    private static void acceptHeld(){Point low=heldFirst,high=heldSecond;heldFirst=heldSecond=null;select(low,high);}
+    /**
+     * A magic selection taken: the blocks themselves are the selection, and from now on the middle button magic selects. The corners
+     * are the box around them, which the tools use for size, turns and flips. With {@code grow} the blocks join the ones already selected.
+     */
+    private static void selectBlocks(Collection<Point> found,boolean grow){
+        var all=new LinkedHashSet<Point>();
+        if(grow&&magicStarted&&first!=null&&second!=null)all.addAll(cells);
+        all.addAll(found);
+        int x0=Integer.MAX_VALUE,y0=x0,z0=x0,x1=Integer.MIN_VALUE,y1=x1,z1=x1;
+        for(Point p:all){x0=Math.min(x0,p.x());y0=Math.min(y0,p.y());z0=Math.min(z0,p.z());x1=Math.max(x1,p.x());y1=Math.max(y1,p.y());z1=Math.max(z1,p.z());}
+        magicStarted=true;first=new Point(x0,y0,z0);second=new Point(x1,y1,z1);cells=List.copyOf(all);cellBlocksFor=null;offset=new Point(0,0,0);preview=false;
+        ClientState.notify("Selected "+cells.size()+" blocks · scroll to nudge · right-click places · Esc cancels");
+    }
+    private static void acceptHeld(){var blocks=heldCells;boolean grow=heldGrow;heldFirst=heldSecond=null;heldCells=null;selectBlocks(blocks,grow);}
     private static void discardHeld(){heldFirst=heldSecond=null;ClientState.notify("Selection cancelled");}
     /** Sets the stack to run along each axis as many whole copies as reach the block, the block's own copy included; zero where it is already inside the selection. */
     private static void stackTo(Point at){
@@ -180,10 +193,12 @@ public final class BuilderMode {
     }
     private static Point min(){Point b=second==null?first:second;return new Point(Math.min(first.x(),b.x()),Math.min(first.y(),b.y()),Math.min(first.z(),b.z()));}
     private static Point max(){Point b=second==null?first:second;return new Point(Math.max(first.x(),b.x()),Math.max(first.y(),b.y()),Math.max(first.z(),b.z()));}
-    public static void corners(Point a,Point b){first=a;second=b;offset=new Point(0,0,0);preview=false;refresh();}
-    private static void refresh(){try{var mc=Minecraft.getInstance();cells=Selection.box(first,second).stream().filter(p->!mc.level.getBlockState(new net.minecraft.core.BlockPos(p.x(),p.y(),p.z())).isAir()).toList();ClientState.notify("Selection ready · scroll to nudge · right-click places · Esc cancels");}catch(Exception e){ClientState.notify(e.getMessage());clear();}}
+    public static void corners(Point a,Point b){magicStarted=false;first=a;second=b;offset=new Point(0,0,0);preview=false;refresh();}
+    private static void refresh(){try{var mc=Minecraft.getInstance();if(!magicStarted)cells=Selection.box(first,second).stream().filter(p->!mc.level.getBlockState(new net.minecraft.core.BlockPos(p.x(),p.y(),p.z())).isAir()).toList();ClientState.notify("Selection ready · scroll to nudge · right-click places · Esc cancels");}catch(Exception e){ClientState.notify(e.getMessage());clear();}}
     public static void confirm(){
-        if(first==null||second==null)return;var o=ClientState.options;Point prior1=o.position1,prior2=o.position2;o.position1=first;o.position2=second;o.builderOffset=offset;o.stackX=stackX;o.stackY=stackY;o.stackZ=stackZ;CraftiumClient.send("builder_commit",first,new Point(0,1,0));o.position1=prior1;o.position2=prior2;o.builderOffset=new Point(0,0,0);o.stackX=o.stackY=o.stackZ=0;
+        if(first==null||second==null)return;var o=ClientState.options;
+        String packed="";if(magicStarted){try{packed=SelectionCodec.encode(cells);}catch(IllegalArgumentException e){ClientState.notify(e.getMessage());return;}}
+        Point prior1=o.position1,prior2=o.position2;o.position1=first;o.position2=second;o.builderOffset=offset;o.builderCells=packed;o.stackX=stackX;o.stackY=stackY;o.stackZ=stackZ;CraftiumClient.send("builder_commit",first,new Point(0,1,0));o.position1=prior1;o.position2=prior2;o.builderOffset=new Point(0,0,0);o.builderCells="";o.stackX=o.stackY=o.stackZ=0;
         if(o.builderTool==Options.BuilderTool.CLONE){preview=true;clonePlaced=true;}
         else if(o.builderTool==Options.BuilderTool.MOVE)follow();
         else if(o.builderTool==Options.BuilderTool.STACK&&(stackX!=0||stackY!=0||stackZ!=0))grow();
@@ -224,7 +239,10 @@ public final class BuilderMode {
             boolean leaving=preview&&o.builderTool==Options.BuilderTool.MOVE;
             boolean stacking=preview&&second!=null&&o.builderTool==Options.BuilderTool.STACK;
             Point from=min,to=max;if(stacking){var b=stackBounds();from=b[0];to=b[1];} // the selection grows with the stack
-            Overlay.box(new AABB(from.x(),from.y(),from.z(),to.x()+1,to.y()+1,to.z()+1),o.builderSelectionColor,(float)o.builderSelectionWidth,second!=null&&!leaving?o.builderSelectionFill:0);
+            if(magicStarted&&second!=null&&!cells.isEmpty()&&cells.size()<=OUTLINE_LIMIT){ // the blocks themselves, not the box round them
+                if(cells!=shapeOf){selectionShape=OutlineShape.of(cells);shapeOf=cells;}
+                selectionShape.draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,o.builderSelectionColor,(float)o.builderSelectionWidth),o.builderSelectionColor,o.builderSelectionFill,!leaving);
+            }else Overlay.box(new AABB(from.x(),from.y(),from.z(),to.x()+1,to.y()+1,to.z()+1),o.builderSelectionColor,(float)o.builderSelectionWidth,second!=null&&!leaving?o.builderSelectionFill:0);
             if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?stackSteps(size):List.of(offset);
                 if(stacking){drawStack(o,min,size);return;}
                 var shown=preview(o,min,size,steps);
@@ -234,6 +252,10 @@ public final class BuilderMode {
             }
         }
     }
+    /** A magic selection bigger than this is drawn as the one box round it, as its outline costs more than a frame can spare. */
+    private static final int OUTLINE_LIMIT=32_768;
+    private static OutlineShape selectionShape=OutlineShape.EMPTY;
+    private static List<Point> shapeOf;
     /** Past this many copies the stack is shown as the one box around all of it. */
     private static final int STACK_BOX_LIMIT=512;
     /**
