@@ -1,6 +1,7 @@
 package dev.craftium.client;
 
 import com.google.gson.*;
+import dev.craftium.client.compat.ClientCompat;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
@@ -26,7 +27,17 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
         try (var world = ctx.worldBuilder().adjustSettings(s -> { s.setGameMode(WorldCreationUiState.SelectedGameMode.CREATIVE); s.setAllowCommands(true); }).create()) {
             ctx.waitTicks(40);
             world.getClientWorld().waitForChunksDownload();
-            ctx.runOnClient(mc -> ClientState.options.aiBridge = true);
+            // The AI tab of the inspector, off and then switched on the way its button does it.
+            require(!ctx.computeOnClient(mc -> AiBridge.running()), "the bridge should start off");
+            ctx.runOnClient(mc -> { CraftiumClient.open(false); var studio = new StudioScreen((EditorScreen) ClientCompat.screen(mc)); studio.selectTab("AI"); ClientCompat.setScreen(mc, studio); });
+            ctx.waitTicks(5);
+            ctx.takeScreenshot("ai-tab-off");
+            ctx.runOnClient(mc -> AiBridge.toggle());
+            ctx.waitTicks(5);
+            ctx.takeScreenshot("ai-tab-waiting");
+            require(ctx.computeOnClient(mc -> AiBridge.indicator()) == AiBridge.State.WAITING, "a bridge nobody has called should be waiting");
+            ctx.runOnClient(mc -> { ClientCompat.screen(mc).onClose(); ClientCompat.screen(mc).onClose(); }); // back to the editor, then out of it
+            ctx.waitTicks(5);
             for (int i = 0; i < 100 && !ctx.computeOnClient(mc -> AiBridge.running()); i++) ctx.waitTick();
             require(ctx.computeOnClient(mc -> AiBridge.running()), "bridge did not start");
             try {
@@ -111,7 +122,19 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
                 } catch (java.io.IOException e) { throw new AssertionError("node is needed for the shim check", e); }
             } else System.out.println("CRAFTIUM_AI shim_skipped (no mcp directory found)");
 
-            ctx.runOnClient(mc -> ClientState.options.aiBridge = false);
+            // With a preview waiting and an AI app that has just called, the tab and the corner marker show it.
+            require(ctx.computeOnClient(mc -> AiBridge.indicator()) == AiBridge.State.ACTIVE, "a bridge that was just called should be active");
+            ctx.waitTicks(5);
+            ctx.takeScreenshot("ai-hud-active");
+            call("preview_build", "{\"spec\":" + spec + "}");
+            ctx.runOnClient(mc -> { CraftiumClient.open(false); var studio = new StudioScreen((EditorScreen) ClientCompat.screen(mc)); studio.selectTab("AI"); ClientCompat.setScreen(mc, studio); });
+            ctx.waitTicks(5);
+            ctx.takeScreenshot("ai-tab-active");
+            ctx.runOnClient(mc -> { ClientCompat.screen(mc).onClose(); ClientCompat.screen(mc).onClose(); });
+            ctx.waitTicks(5);
+            call("cancel_preview", "{}");
+
+            ctx.runOnClient(mc -> AiBridge.toggle());
             for (int i = 0; i < 100 && ctx.computeOnClient(mc -> AiBridge.running()); i++) ctx.waitTick();
             require(!ctx.computeOnClient(mc -> AiBridge.running()) && !Files.exists(AiBridge.FILE), "turning the bridge off should close it and remove its file");
         }
