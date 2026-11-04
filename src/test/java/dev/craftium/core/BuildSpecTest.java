@@ -118,4 +118,72 @@ class BuildSpecTest {
         assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[{\"op\":\"set\",\"at\":[0,0,0],\"block\":\"stone\"}]}").build(new BuildSpec.Bounds(300, 4, 4)));
         assertThrows(IllegalArgumentException.class, () -> build("{\"ops\":[{\"op\":\"box\",\"from\":[0,0,0],\"to\":[99999,99999,99999],\"block\":\"stone\"}]}"));
     }
+
+    // ---- absolute coordinates: the area is worked out from the operations ------------------------------------
+
+    private static BuildSpec.Result placed(BuildSpec spec) { return spec.build(spec.place()); }
+
+    @Test void aSpecInWorldCoordinatesPlacesItselfWhereItsNumbersSay() {
+        var spec = BuildSpec.parse("{\"ops\":[{\"op\":\"box\",\"from\":[100,64,-50],\"to\":[102,66,-48],\"block\":\"stone\"}]}");
+        var place = spec.place();
+        assertEquals(new Point(100, 64, -50), place.min());
+        assertEquals(new BuildSpec.Bounds(3, 3, 3), place.bounds());
+        var result = spec.build(place);
+        assertEquals(27, result.cells().size());
+        assertTrue(result.cells().containsKey(new Point(0, 0, 0)) && result.cells().containsKey(new Point(2, 2, 2)), "cells are relative to the placement's minimum corner");
+        assertEquals(0, result.clipped());
+    }
+
+    @Test void theOriginIsAddedToEveryCoordinate() {
+        var spec = BuildSpec.parse("{\"origin\":[1000,10,-20],\"ops\":[{\"op\":\"box\",\"from\":[0,0,0],\"to\":[1,1,1],\"block\":\"stone\"},{\"op\":\"set\",\"at\":[5,0,0],\"block\":\"stone\"}]}");
+        var place = spec.place();
+        assertEquals(new Point(1000, 10, -20), place.min());
+        assertEquals(new BuildSpec.Bounds(6, 2, 2), place.bounds());
+    }
+
+    @Test void everyKindOfOperationFitsInsideTheAreaWorkedOutForIt() {
+        for (String op : new String[]{
+                "{\"op\":\"sphere\",\"center\":[-300,70,40],\"radius\":6,\"block\":\"stone\"}",
+                "{\"op\":\"sphere\",\"center\":[5,5,5],\"radii\":[3,7,2],\"block\":\"stone\",\"hollow\":true}",
+                "{\"op\":\"cylinder\",\"base\":[10,0,10],\"radius\":4,\"height\":9,\"axis\":\"x\",\"block\":\"stone\"}",
+                "{\"op\":\"cone\",\"base\":[0,64,0],\"radius\":5,\"height\":8,\"block\":\"stone\"}",
+                "{\"op\":\"pyramid\",\"base\":[-7,3,9],\"radius\":6,\"height\":7,\"axis\":\"z\",\"block\":\"stone\"}",
+                "{\"op\":\"line\",\"from\":[0,0,0],\"to\":[20,9,-13],\"thickness\":4,\"block\":\"stone\"}",
+                "{\"op\":\"set\",\"at\":[[1,2,3],[9,-4,0],[-6,8,8]],\"block\":\"stone\"}",
+                "{\"op\":\"box\",\"from\":[0,0,0],\"to\":[1,1,1],\"block\":\"stone\",\"repeat\":{\"count\":10,\"step\":[-3,2,4]}}"}) {
+            var spec = BuildSpec.parse("{\"ops\":[" + op + "]}");
+            var result = spec.build(spec.place());
+            assertEquals(0, result.clipped(), op);
+            assertFalse(result.cells().isEmpty(), op);
+            // The area is no larger than it needs to be: something touches each of its six faces' planes.
+            var b = spec.place().bounds();
+            assertTrue(result.cells().keySet().stream().anyMatch(p -> p.x() == 0) && result.cells().keySet().stream().anyMatch(p -> p.x() == b.sx() - 1), op);
+            assertTrue(result.cells().keySet().stream().anyMatch(p -> p.y() == 0) && result.cells().keySet().stream().anyMatch(p -> p.y() == b.sy() - 1), op);
+            assertTrue(result.cells().keySet().stream().anyMatch(p -> p.z() == 0) && result.cells().keySet().stream().anyMatch(p -> p.z() == b.sz() - 1), op);
+        }
+    }
+
+    @Test void aSpecInWorldCoordinatesBuildsTheSameBlocksAsOneRelativeToACorner() {
+        String shape = "{\"op\":\"cylinder\",\"base\":[%d,%d,%d],\"radius\":3,\"height\":6,\"block\":\"stone\"}";
+        var relative = BuildSpec.parse("{\"ops\":[" + String.format(shape, 3, 0, 3) + "]}").build(new BuildSpec.Bounds(7, 6, 7));
+        var absolute = placed(BuildSpec.parse("{\"ops\":[" + String.format(shape, 503, 64, -97) + "]}"));
+        assertEquals(relative.cells().keySet(), absolute.cells().keySet());
+    }
+
+    @Test void aSpecThatSpansMoreThanTheBuildLimitIsRefusedWithAMessage() {
+        var e = assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[{\"op\":\"box\",\"from\":[0,0,0],\"to\":[300,0,0],\"block\":\"stone\"}]}").place());
+        assertTrue(e.getMessage().contains("301") && e.getMessage().contains("x"), e.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[{\"op\":\"set\",\"at\":[0,0,0],\"block\":\"stone\"},{\"op\":\"set\",\"at\":[0,0,250],\"block\":\"stone\",\"repeat\":{\"count\":64,\"step\":[0,0,1]}}]}").place());
+    }
+
+    @Test void coordinatesReachTheEdgeOfTheWorldButNotBeyond() {
+        assertEquals(new Point(29_999_990, 64, -29_999_990), BuildSpec.parse("{\"ops\":[{\"op\":\"box\",\"from\":[29999990,64,-29999990],\"to\":[29999995,66,-29999985],\"block\":\"stone\"}]}").place().min());
+        assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[{\"op\":\"set\",\"at\":[30000001,0,0],\"block\":\"stone\"}]}").place());
+        assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"origin\":[1,2],\"ops\":[{\"op\":\"set\",\"at\":[0,0,0],\"block\":\"stone\"}]}"));
+    }
+
+    @Test void placingNamesTheOperationAtFault() {
+        var e = assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[{\"op\":\"set\",\"at\":[0,0,0],\"block\":\"stone\"},{\"op\":\"cylinder\",\"base\":[0,0,0],\"block\":\"stone\"}]}").place());
+        assertTrue(e.getMessage().contains("ops[1]"), e.getMessage());
+    }
 }

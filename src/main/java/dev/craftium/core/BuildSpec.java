@@ -6,9 +6,10 @@ import java.util.regex.Pattern;
 
 /**
  * A build described as a short list of primitives, for an AI model to write and for Craftium to check before anything
- * touches the world. Coordinates are whole numbers relative to the minimum corner of the area being built in, so the
- * same spec fits wherever the player has selected. This class knows nothing about Minecraft: it turns the description
- * into block names at relative positions and the server resolves those names.
+ * touches the world. Coordinates are whole numbers in the world, so a spec uses the same numbers the AI read from the world; an
+ * optional {@code "origin": [x,y,z]} is added to every coordinate, to write a spec near zero and place it anywhere. The area a
+ * spec covers is worked out from its operations, so nothing has to be selected first. This class knows nothing about Minecraft: it
+ * turns the description into block names at positions and the server resolves those names.
  *
  * <pre>
  * { "palette": {"sand": "minecraft:cut_sandstone"},
@@ -34,11 +35,19 @@ public final class BuildSpec {
     public record Bounds(int sx, int sy, int sz) {
         public boolean contains(int x, int y, int z) { return x >= 0 && y >= 0 && z >= 0 && x < sx && y < sy && z < sz; }
     }
+    /**
+     * Where a spec's blocks go: the world position of the lowest corner of everything it describes, how large that is, and the shift
+     * that moves its coordinates so that corner is (0, 0, 0), which is how {@link #build(Placement)} works on it.
+     */
+    public record Placement(Point min, Bounds bounds, int[] shift) {}
     /** The cells to place, and how many generated cells fell outside the area and were dropped (shapes are only generated inside the area, so this undercounts them). */
     public record Result(LinkedHashMap<Point, Cell> cells, int clipped, int operations) {}
 
+    /** The most a coordinate can be: the edge of the world. */
+    private static final int COORDINATE_LIMIT = 30_000_000;
     private final List<JsonObject> ops = new ArrayList<>();
     private final Map<String, String> palette = new LinkedHashMap<>();
+    private final int[] origin = {0, 0, 0};
 
     private BuildSpec() {}
 
@@ -58,6 +67,16 @@ public final class BuildSpec {
             for (var entry : entries) {
                 if (!ALIAS.matcher(entry.getKey()).matches()) throw new IllegalArgumentException("Palette name \"" + entry.getKey() + "\" must be letters, digits, _ or -");
                 spec.palette.put(entry.getKey(), block(entry.getValue(), "palette." + entry.getKey()));
+            }
+        }
+        if (object.has("origin")) {
+            var at = object.get("origin");
+            if (!at.isJsonArray() || at.getAsJsonArray().size() != 3) throw new IllegalArgumentException("\"origin\" must be [x,y,z]");
+            for (int n = 0; n < 3; n++) {
+                var part = at.getAsJsonArray().get(n);
+                if (!part.isJsonPrimitive() || !part.getAsJsonPrimitive().isNumber() || part.getAsDouble() != Math.rint(part.getAsDouble()) || Math.abs(part.getAsDouble()) > COORDINATE_LIMIT)
+                    throw new IllegalArgumentException("\"origin\" must hold whole numbers within the world");
+                spec.origin[n] = (int) part.getAsDouble();
             }
         }
         if (!object.has("ops") || !object.get("ops").isJsonArray()) throw new IllegalArgumentException("Build spec needs an \"ops\" list");
@@ -82,8 +101,46 @@ public final class BuildSpec {
         return names;
     }
 
-    /** Works out the cells the spec places inside {@code bounds}. */
-    public Result build(Bounds bounds) {
+    /**
+     * Where the spec's blocks go and how much room they need, from its operations alone. Each operation's extent is worked out from
+     * its numbers, repeats included, so a spec that reaches further than the build limits is refused here with a message.
+     */
+    public Placement place() {
+        long[] low = {Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE}, high = {Long.MIN_VALUE, Long.MIN_VALUE, Long.MIN_VALUE};
+        for (int i = 0; i < ops.size(); i++) {
+            var op = ops.get(i);
+            String kind = text(op, "op", i, null);
+            long[] extent = extent(kind, op, i);
+            int count = 1;
+            int[] step = {0, 0, 0};
+            if (op.has("repeat")) {
+                if (!op.get("repeat").isJsonObject()) throw fail(i, kind, "\"repeat\" must be {\"count\": n, \"step\": [x,y,z]}");
+                var repeat = op.getAsJsonObject("repeat");
+                count = integer(repeat, "count", i, kind, 1, MAX_REPEAT);
+                step = vector(repeat, "step", i, kind);
+            }
+            for (int axis = 0; axis < 3; axis++) {
+                long last = (long) step[axis] * (count - 1);
+                low[axis] = Math.min(low[axis], Math.min(extent[axis], extent[axis] + last));
+                high[axis] = Math.max(high[axis], Math.max(extent[axis + 3], extent[axis + 3] + last));
+            }
+        }
+        String[] names = {"x", "y", "z"};
+        for (int axis = 0; axis < 3; axis++)
+            if (high[axis] - low[axis] + 1 > MAX_EXTENT)
+                throw new IllegalArgumentException("The build spans " + (high[axis] - low[axis] + 1) + " blocks along " + names[axis] + "; at most " + MAX_EXTENT + " are allowed, so split it into builds that fit");
+        return new Placement(new Point((int) (low[0] + origin[0]), (int) (low[1] + origin[1]), (int) (low[2] + origin[2])),
+                new Bounds((int) (high[0] - low[0] + 1), (int) (high[1] - low[1] + 1), (int) (high[2] - low[2] + 1)),
+                new int[]{(int) -low[0], (int) -low[1], (int) -low[2]});
+    }
+
+    /** The cells the spec places, at positions relative to {@code placement.min()}. */
+    public Result build(Placement placement) { return build(placement.bounds(), placement.shift()); }
+
+    /** Works out the cells the spec places inside {@code bounds}, with positions in the spec taken as relative to the area's lowest corner. */
+    public Result build(Bounds bounds) { return build(bounds, new int[]{0, 0, 0}); }
+
+    private Result build(Bounds bounds, int[] shift) {
         if (bounds.sx() < 1 || bounds.sy() < 1 || bounds.sz() < 1) throw new IllegalArgumentException("The build area is empty");
         if (bounds.sx() > MAX_EXTENT || bounds.sy() > MAX_EXTENT || bounds.sz() > MAX_EXTENT)
             throw new IllegalArgumentException("The build area may be at most " + MAX_EXTENT + " blocks along each side; select a smaller area");
@@ -102,7 +159,7 @@ public final class BuildSpec {
                 step = vector(repeat, "step", i, kind);
             }
             for (int n = 0; n < count; n++) {
-                var shape = shape(kind, op, i, bounds, step[0] * n, step[1] * n, step[2] * n, budget);
+                var shape = shape(kind, op, i, bounds, step[0] * n + shift[0], step[1] * n + shift[1], step[2] * n + shift[2], budget);
                 String block = resolve(op, "block", i);
                 String only = kind.equals("replace") ? resolve(op, "find", i) : null;
                 for (var p : shape) {
@@ -183,6 +240,51 @@ public final class BuildSpec {
                 var b = vector(op, "to", i, kind);
                 int thickness = op.has("thickness") ? integer(op, "thickness", i, kind, 1, 5) : 1;
                 return line(new Point(a[0] + dx, a[1] + dy, a[2] + dz), new Point(b[0] + dx, b[1] + dy, b[2] + dz), thickness, bounds, budget);
+            }
+            default -> throw fail(i, kind, "unknown operation; use box, sphere, cylinder, cone, pyramid, line, set or replace");
+        }
+    }
+
+    /** The lowest and highest cell an operation can reach, as {x0, y0, z0, x1, y1, z1}, before any repeat. */
+    private long[] extent(String kind, JsonObject op, int i) {
+        switch (kind) {
+            case "set" -> {
+                var list = new ArrayList<int[]>();
+                if (op.has("at") && op.get("at").isJsonArray() && !op.getAsJsonArray("at").isEmpty() && op.getAsJsonArray("at").get(0).isJsonArray()) {
+                    var all = op.getAsJsonArray("at");
+                    if (all.size() > 4096) throw fail(i, kind, "\"at\" lists more than 4096 positions");
+                    for (var each : all) list.add(ints(each, "at", i, kind));
+                } else list.add(vector(op, "at", i, kind));
+                long[] out = {Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE, Long.MIN_VALUE, Long.MIN_VALUE, Long.MIN_VALUE};
+                for (int[] v : list) for (int a = 0; a < 3; a++) { out[a] = Math.min(out[a], v[a]); out[a + 3] = Math.max(out[a + 3], v[a]); }
+                return out;
+            }
+            case "box", "replace" -> {
+                var a = vector(op, "from", i, kind);
+                var b = vector(op, "to", i, kind);
+                return new long[]{Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2]), Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2])};
+            }
+            case "sphere" -> {
+                var c = vector(op, "center", i, kind);
+                double[] r = radii(op, i, kind);
+                int[] reach = {(int) Math.ceil(r[0]), (int) Math.ceil(r[1]), (int) Math.ceil(r[2])};
+                return new long[]{c[0] - reach[0], c[1] - reach[1], c[2] - reach[2], c[0] + reach[0], c[1] + reach[1], c[2] + reach[2]};
+            }
+            case "cylinder", "cone", "pyramid" -> {
+                var base = vector(op, "base", i, kind);
+                int radius = integer(op, "radius", i, kind, 0, MAX_RADIUS), height = integer(op, "height", i, kind, 1, MAX_EXTENT);
+                int axis = axis(op, i, kind);
+                long[] out = {base[0] - radius, base[1] - radius, base[2] - radius, base[0] + radius, base[1] + radius, base[2] + radius};
+                out[axis] = base[axis];
+                out[axis + 3] = (long) base[axis] + height - 1;
+                return out;
+            }
+            case "line" -> {
+                var a = vector(op, "from", i, kind);
+                var b = vector(op, "to", i, kind);
+                int thickness = op.has("thickness") ? integer(op, "thickness", i, kind, 1, 5) : 1;
+                int r = (int) Math.ceil((thickness - 1) / 2.0);
+                return new long[]{Math.min(a[0], b[0]) - r, Math.min(a[1], b[1]) - r, Math.min(a[2], b[2]) - r, Math.max(a[0], b[0]) + r, Math.max(a[1], b[1]) + r, Math.max(a[2], b[2]) + r};
             }
             default -> throw fail(i, kind, "unknown operation; use box, sphere, cylinder, cone, pyramid, line, set or replace");
         }
@@ -329,7 +431,7 @@ public final class BuildSpec {
             var part = e.getAsJsonArray().get(n);
             if (!part.isJsonPrimitive() || !part.getAsJsonPrimitive().isNumber()) throw fail(i, kind, "\"" + key + "\" must hold numbers");
             double v = part.getAsDouble();
-            if (v != Math.rint(v) || Math.abs(v) > 100_000) throw fail(i, kind, "\"" + key + "\" must hold whole numbers within ±100000");
+            if (v != Math.rint(v) || Math.abs(v) > COORDINATE_LIMIT) throw fail(i, kind, "\"" + key + "\" must hold whole numbers within the world (±30000000)");
             out[n] = (int) v;
         }
         return out;
