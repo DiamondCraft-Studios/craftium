@@ -251,7 +251,8 @@ public final class EditorScreen extends CraftiumScreen {
             button(g,131,201,25,15,"…",false,()->ClientCompat.setScreen(minecraft,new StudioScreen(this)),"Advanced settings · View → Studio inspector");
             pinnedOptions(g);return;
         }
-        text(g,o().tool.label,10,252,0xffa5cef2);wrap(g,o().tool.description,10,268,LEFT-20,MUTED,3);
+        text(g,o().tool.label,10,252,0xffa5cef2);
+        if(o().tool==Tool.MAGIC_SELECT)searchButtons(g,266);
         button(g,131,201,25,15,"…",false,()->ClientCompat.setScreen(minecraft,new StudioScreen(this)),"Advanced settings · View → Studio inspector");
         if(o().tool==Tool.BOX_SELECT||o().tool==Tool.MAGIC_SELECT||o().tool==Tool.RULER) {
             var s=ClientState.status;
@@ -758,6 +759,17 @@ public final class EditorScreen extends CraftiumScreen {
             final var mode=modes[i];
             button(g,10+(i%2)*(half+4),y+(i/2)*22,half,19,nice(mode.name()),o().mode==mode,()->o().mode=mode,tips[i]);
         }
+    }
+    /** Which ways the Magic Wand's search may spread from the clicked block, two buttons a row with the allowed ones lit. */
+    private void searchButtons(Gfx g,int y){
+        int half=(LEFT-24)/2;var o=o();
+        record Side(String label,String tip,boolean on,Runnable toggle){}
+        var sides=List.of(
+            new Side("Up","Spread to the blocks above the clicked one",o.selectUp,()->o.selectUp=!o.selectUp),
+            new Side("Down","Spread to the blocks below the clicked one",o.selectDown,()->o.selectDown=!o.selectDown),
+            new Side("Horizontal","Spread sideways, level with the clicked block",o.selectHorizontal,()->o.selectHorizontal=!o.selectHorizontal),
+            new Side("Corners","Also connect blocks that only touch at an edge or corner",o.selectCorners,()->o.selectCorners=!o.selectCorners));
+        for(int i=0;i<sides.size();i++){var side=sides.get(i);button(g,10+(i%2)*(half+4),y+(i/2)*21,half,19,side.label(),side.on(),side.toggle(),side.tip());}
     }
     /** Which blocks the Magic Wand connects, as one icon button each with the active one lit. */
     private void compareButtons(Gfx g,int y){
