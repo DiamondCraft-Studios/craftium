@@ -579,22 +579,21 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void builderOptions(Gfx g) {
         text(g,"CAPABILITIES",10,254,MUTED);
-        toggle(g,10,273,"Instant flight",o().enhancedFlight,()->o().instantFlight(!o().enhancedFlight),"Fly with no interpolation: you stop dead the moment you let go of the keys");
-        toggle(g,10,296,"No updates",o().noUpdates,()->o().noUpdates=!o().noUpdates,"Placed blocks do not update their neighbours, so they stay when what holds them is removed");
-        toggle(g,10,319,"Force place",o().forcePlace,()->o().forcePlace=!o().forcePlace,"Place blocks where they could not survive, like a torch in the air");
-        toggle(g,10,342,"Fast place",o().fastPlace,()->o().fastPlace=!o().fastPlace,"Hold right click and sweep the view to place a block on every new block you aim at, with no delay");
-        toggle(g,10,365,"Bulldozer",o().bulldozer,()->o().bulldozer=!o().bulldozer,"Hold left click for a moment, then sweep the view to break every new block you aim at, with no delay");
-        toggle(g,10,388,"Angel place",o().angelPlacement,()->o().angelPlacement=!o().angelPlacement,"Right click in the air to place the held block four blocks ahead, shown as a ghost");
-        toggle(g,10,411,"Tinker",o().tinker,()->o().tinker=!o().tinker,"Right click a block with an empty hand to change it by where you aim (stairs, slabs, walls, fences, facing, switches) · sneak and click to pick a specific property");
-        toggle(g,10,434,"Replace mode",o().replaceMode,()->o().replaceMode=!o().replaceMode,"Placing a block replaces the one you click instead of going beside it · R");
-        button(g,10,457,pw-20,20,"Reach: "+o().reach.label,false,()->o().reach=Options.ReachMode.values()[(o().reach.ordinal()+1)%Options.ReachMode.values().length],()->o().reach=Options.ReachMode.values()[Math.floorMod(o().reach.ordinal()-1,Options.ReachMode.values().length)],"How far you can reach blocks: normal, far (set below) or infinite · right click goes back");
-        slider(g,10,494,pw-20,"Far reach: blocks",o().farReach,6,64,DEFAULTS.farReach,v->o().farReach=(int)Math.round(v),true);
-        slider(g,10,530,pw-20,"Fly speed",o().flySpeed,.1,10,DEFAULTS.flySpeed,v->o().flySpeed=(float)v,false);
-        button(g,10,554,pw-20,20,"Apply flight speed",false,()->action("flight"),"");
+        toggle(g,10,273,"No updates",o().noUpdates,()->o().noUpdates=!o().noUpdates,"Placed blocks do not update their neighbours, so they stay when what holds them is removed");
+        toggle(g,10,296,"Force place",o().forcePlace,()->o().forcePlace=!o().forcePlace,"Place blocks where they could not survive, like a torch in the air");
+        toggle(g,10,319,"Fast place",o().fastPlace,()->o().fastPlace=!o().fastPlace,"Hold right click and sweep the view to place a block on every new block you aim at, with no delay");
+        toggle(g,10,342,"Bulldozer",o().bulldozer,()->o().bulldozer=!o().bulldozer,"Hold left click for a moment, then sweep the view to break every new block you aim at, with no delay");
+        toggle(g,10,365,"Angel place",o().angelPlacement,()->o().angelPlacement=!o().angelPlacement,"Right click in the air to place the held block four blocks ahead, shown as a ghost");
+        toggle(g,10,388,"Tinker",o().tinker,()->o().tinker=!o().tinker,"Right click a block with an empty hand to change it by where you aim (stairs, slabs, walls, fences, facing, switches) · sneak and click to pick a specific property");
+        toggle(g,10,411,"Replace mode",o().replaceMode,()->o().replaceMode=!o().replaceMode,"Placing a block replaces the one you click instead of going beside it · R");
+        button(g,10,434,pw-20,20,"Reach: "+o().reach.label,false,()->o().reach=Options.ReachMode.values()[(o().reach.ordinal()+1)%Options.ReachMode.values().length],()->o().reach=Options.ReachMode.values()[Math.floorMod(o().reach.ordinal()-1,Options.ReachMode.values().length)],"How far you can reach blocks: normal, far (set below) or infinite · right click goes back");
+        slider(g,10,471,pw-20,"Far reach: blocks",o().farReach,6,64,DEFAULTS.farReach,v->o().farReach=(int)Math.round(v),true);
+        slider(g,10,507,pw-20,"Fly speed",o().flySpeed,.1,10,DEFAULTS.flySpeed,v->o().flySpeed=(float)v,false);
+        button(g,10,531,pw-20,20,"Apply flight speed",false,()->action("flight"),"");
         int[] pair=flex(pw-20,6,1,1);
-        button(g,10,580,pair[0],20,"Hotbar ↔",false,()->action("hotbar"),"Swap the hotbar with inventory row 1 · Z");
-        button(g,16+pair[0],580,pair[1],20,"Game mode",false,()->action("gamemode"),"");
-        button(g,10,608,pw-20,20,"Builder tool: "+o().builderTool.name(),false,()->{o().builderTool=Options.BuilderTool.values()[(o().builderTool.ordinal()+1)%Options.BuilderTool.values().length];},()->{o().builderTool=Options.BuilderTool.values()[Math.floorMod(o().builderTool.ordinal()-1,Options.BuilderTool.values().length)];},"Press 0 in the world · Alt + wheel changes tools");
+        button(g,10,557,pair[0],20,"Hotbar ↔",false,()->action("hotbar"),"Swap the hotbar with inventory row 1 · Z");
+        button(g,16+pair[0],557,pair[1],20,"Game mode",false,()->action("gamemode"),"");
+        button(g,10,585,pw-20,20,"Builder tool: "+o().builderTool.name(),false,()->{o().builderTool=Options.BuilderTool.values()[(o().builderTool.ordinal()+1)%Options.BuilderTool.values().length];},()->{o().builderTool=Options.BuilderTool.values()[Math.floorMod(o().builderTool.ordinal()-1,Options.BuilderTool.values().length)];},"Press 0 in the world · Alt + wheel changes tools");
     }
     private void targetInfo(Gfx g) {
         int x=w-RIGHT;panel(g,x,27,RIGHT,82,"Target info");var hit=target();

@@ -36,7 +36,7 @@ public final class Options {
     /** The radius the shape's outer edge is at: the radius, plus {@link #outlineShift()}, within the reach shapes may have. */
     public int outerRadius() { return Math.min(radius + outlineShift(), BrushMath.MAX_REACH); }
     /** Hand placement and breaking only; blocks the editor's tools write never update anything (see BlockSnapshot.NO_UPDATES). */
-    public boolean noUpdates, forcePlace, replaceMode, enhancedFlight, bulldozer, tinker;
+    public boolean noUpdates, forcePlace, replaceMode, bulldozer, tinker;
     public boolean inSelection;
     /** Whether undo and redo flash the blocks they change. */
     public boolean historyPulse = true;
@@ -188,20 +188,13 @@ public final class Options {
     public java.util.List<ColourPlacement> colourField=new java.util.ArrayList<>();
     public boolean autoSwapToCreative=true;
     public boolean cameraFlight,showKeyHints,showBiomes,showMarkerGizmos=true,showDisplayGizmos=true,showAnnotations=true;
-    public double flightMomentum,liquidOpacity=1,minimumBrightness;
-    /** What the flight momentum was before Instant flight set it to zero, to put back when that is turned off. */
-    public double flightMomentumKept;
+    public double liquidOpacity=1,minimumBrightness;
     /**
-     * True once the flight momentum has been chosen, which keeps 0% meaning "stop at once". A momentum that was never touched is also 0, and
-     * then the game's own flight is left alone, so zero alone cannot tell the two apart.
+     * How much the player keeps of their flight speed from one moment to the next, from 0 to 1. 100% (1) is the game's own flight, which is what it
+     * starts as; 0% turns momentum off, so flying starts and stops at once. It is a new setting, so a momentum saved on the old scale (where 0 was
+     * the game's own flight) is not misread.
      */
-    public boolean flightMomentumCustom;
-    /** Instant flight stops you dead, so it takes the momentum away, and gives back what it took when it is turned off. */
-    public void instantFlight(boolean on){
-        if(on==enhancedFlight)return;
-        enhancedFlight=on;
-        if(on){flightMomentumKept=flightMomentum;flightMomentum=0;}else flightMomentum=flightMomentumKept;
-    }
+    public double flightMomentumLevel=1;
     public enum GizmoMode { MOVE,ROTATE,SCALE }
     public GizmoMode gizmoMode=GizmoMode.MOVE;
     public enum GizmoTarget { AUTO,SELECTION,ENTITY }
@@ -227,7 +220,7 @@ public final class Options {
         if (tool == null || shape == null || mode == null) throw new IllegalArgumentException("Invalid tool options");
         if(gizmoMode==null)gizmoMode=GizmoMode.MOVE;gizmoYaw=bounded(gizmoYaw,-360,360);gizmoPitch=bounded(gizmoPitch,-360,360);gizmoRoll=bounded(gizmoRoll,-360,360);
         if(gizmoTarget==null)gizmoTarget=GizmoTarget.AUTO;
-        flightMomentum=bounded(flightMomentum,0,.98);if(flightMomentum>0)flightMomentumCustom=true;flightMomentumKept=bounded(flightMomentumKept,0,.98);liquidOpacity=bounded(liquidOpacity,0,1);minimumBrightness=bounded(minimumBrightness,0,1);
+        flightMomentumLevel=bounded(flightMomentumLevel,0,1);liquidOpacity=bounded(liquidOpacity,0,1);minimumBrightness=bounded(minimumBrightness,0,1);
         if(builderTool==null)throw new IllegalArgumentException("Choose a builder tool");builderRotation=Math.floorMod(builderRotation,4);builderFlipAxis=Math.clamp(builderFlipAxis,-1,2);symmetryRotations=symmetryRotations>=4?4:symmetryRotations>=2?2:1;
         if(shadeFrom==null||shadeLights==null||shadeLights.size()>16||shadeLights.contains(null)||materialWeights==null||materialWeights.size()>256||materialWeights.contains(null))throw new IllegalArgumentException("Invalid lighting or palette options");
         for(var light:shadeLights)if(!Double.isFinite(light.x())||!Double.isFinite(light.y())||!Double.isFinite(light.z())||!Double.isFinite(light.intensity())||Math.abs(light.x())>30_000_000||Math.abs(light.z())>30_000_000||Math.abs(light.y())>4096||light.intensity()<0||light.intensity()>16)throw new IllegalArgumentException("Invalid light source");

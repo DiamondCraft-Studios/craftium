@@ -165,8 +165,6 @@ public final class CraftiumClient implements ClientModInitializer {
         if(!mc.player.isCreative() || !supported())return;
         if(BuilderMode.active())return;
         var o=ClientState.options;long now=System.currentTimeMillis();
-        if(o.enhancedFlight&&o.flightMomentum==0&&mc.player.getAbilities().flying && !mc.options.keyUp.isDown()&&!mc.options.keyDown.isDown()&&!mc.options.keyLeft.isDown()&&!mc.options.keyRight.isDown()&&!mc.options.keyJump.isDown()&&!mc.options.keyShift.isDown())
-            mc.player.setDeltaMovement(Vec3.ZERO);
         boolean left=GLFW.glfwGetMouseButton(mc.getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_LEFT)==GLFW.GLFW_PRESS;
         boolean right=GLFW.glfwGetMouseButton(mc.getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_RIGHT)==GLFW.GLFW_PRESS;
         if(!left)breakingSince=0;else if(breakingSince==0){breakingSince=now;ClientState.strokeId=System.nanoTime();} // a symmetric stroke is one undo step
