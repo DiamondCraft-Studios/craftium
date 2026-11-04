@@ -36,7 +36,10 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             ctx.waitTicks(5);
             ctx.takeScreenshot("ai-tab-waiting");
             require(ctx.computeOnClient(mc -> AiBridge.indicator()) == AiBridge.State.WAITING, "a bridge nobody has called should be waiting");
-            ctx.runOnClient(mc -> { ClientCompat.screen(mc).onClose(); ClientCompat.screen(mc).onClose(); }); // back to the editor, then out of it
+            ctx.runOnClient(mc -> { ClientCompat.screen(mc).onClose(); ((EditorScreen) ClientCompat.screen(mc)).showMenu("AI"); }); // back to the editor, with the AI menu of the bar open
+            ctx.waitTicks(5);
+            ctx.takeScreenshot("ai-menu");
+            ctx.runOnClient(mc -> ClientCompat.screen(mc).onClose()); // out of the editor
             ctx.waitTicks(5);
             for (int i = 0; i < 100 && !ctx.computeOnClient(mc -> AiBridge.running()); i++) ctx.waitTick();
             require(ctx.computeOnClient(mc -> AiBridge.running()), "bridge did not start");
