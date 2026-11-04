@@ -339,7 +339,7 @@ public final class EditorScreen extends CraftiumScreen {
                     text(g,"Start: "+ruler.a.coordinates(),10,353,TEXT);
                     if(ruler.complete()){
                         text(g,"End: "+ruler.b.coordinates(),10,371,TEXT);
-                        text(g,"Length: "+Ruler.show(ruler.length()),10,392,0xffffd783);text(g,"Manhattan: "+ruler.manhattan(),10,410,MUTED);
+                        text(g,"Span: "+ruler.showSpan()+" blocks",10,392,0xffffd783);text(g,"Manhattan: "+ruler.manhattan(),10,410,MUTED);
                     }
                 }
                 button(g,10,423,pw-20,20,"Clear measurement",false,()->{ClientState.rulers.clear();selectedNode=-1;action("ruler_clear");},"");
@@ -1606,9 +1606,9 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         for(int i=0;i<rows&&rulerScroll+i<total;i++){
             var r=ClientState.rulers.get(rulerScroll+i);int ry=top+i*rowHeight;boolean chosen=r==picked;
             if(chosen)g.fill(x+9,ry,x+pw-9,ry+rowHeight,0xff315b84);
-            String label=(rulerScroll+i+1)+"  ·  "+(r.complete()?Ruler.show(r.length()):"second end not placed")+(r.complete()?"  ·  "+modeName(r.mode):"");
+            String label=(rulerScroll+i+1)+"  ·  "+(r.complete()?r.showSpan():"second end not placed")+(r.complete()?"  ·  "+modeName(r.mode):"");
             text(g,shorten(label,pw-40),x+16,ry+5,chosen?TEXT:MUTED);
-            controls.add(new Control(x+9,ry,pw-18,rowHeight,()->{ClientState.selectedRuler=r;selectedNode=-1;TransformGizmo.cancel();},"Pick this ruler"));
+            controls.add(new Control(x+9,ry,pw-18,rowHeight,()->{ClientState.selectedRuler=r;selectedNode=-1;TransformGizmo.cancel();},"Pick this ruler · The number is its span: how many blocks it covers along each axis, counting both end blocks, so two touching blocks are 2 and not 1"));
         }
         if(total>rows){ // a thin bar shows where the list is
             int track=rows*rowHeight,thumb=Math.max(10,track*rows/total),thumbY=top+(track-thumb)*rulerScroll/Math.max(1,total-rows);

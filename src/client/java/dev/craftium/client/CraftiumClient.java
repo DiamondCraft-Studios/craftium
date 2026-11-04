@@ -315,7 +315,7 @@ public final class CraftiumClient implements ClientModInitializer {
                 // The length sits on the middle of the line, as big as the setting says. The game hangs text below the point it is given, so the point
                 // is raised by half the height of a line of text (nine pixels) to leave the text itself centred on the line.
                 float scale=.05f*(float)Math.clamp(o.rulerLabelSize,Options.RULER_LABEL_MIN,Options.RULER_LABEL_MAX);
-                Overlay.text(Ruler.show(length),start.add(end).scale(.5).add(cameraUp().scale(4.5*scale)),o.rulerTextColor,o.rulerTextBackground,scale);
+                Overlay.text(Ruler.showSpan((int)Math.round(Math.abs(end.x-start.x))+1,(int)Math.round(Math.abs(end.y-start.y))+1,(int)Math.round(Math.abs(end.z-start.z))+1),start.add(end).scale(.5).add(cameraUp().scale(4.5*scale)),o.rulerTextColor,o.rulerTextBackground,scale);
             }
             knob(start,picked==first?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==first);
             if(end!=null)knob(end,picked==second?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==second);

@@ -63,9 +63,9 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
         entry("Ruler","Line along Z",o->o.rulerAxisZColor,(o,c)->o.rulerAxisZColor=c),
         entry("Ruler","Knobs",o->o.rulerKnobColor,(o,c)->o.rulerKnobColor=c),
         entry("Ruler","Knob (selected)",o->o.rulerKnobSelectedColor,(o,c)->o.rulerKnobSelectedColor=c),
-        entry("Length label","Text",o->o.rulerTextColor,(o,c)->o.rulerTextColor=c),
-        entry("Length label","Background",o->o.rulerTextBackground,(o,c)->o.rulerTextBackground=c));
-    private static final List<Width> RULER_WIDTHS=List.of(new Width("Length label size",o->o.rulerLabelSize,(o,v)->o.rulerLabelSize=v,Options.RULER_LABEL_MIN*100,Options.RULER_LABEL_MAX*100,true));
+        entry("Span label","Text",o->o.rulerTextColor,(o,c)->o.rulerTextColor=c),
+        entry("Span label","Background",o->o.rulerTextBackground,(o,c)->o.rulerTextBackground=c));
+    private static final List<Width> RULER_WIDTHS=List.of(new Width("Span label size",o->o.rulerLabelSize,(o,v)->o.rulerLabelSize=v,Options.RULER_LABEL_MIN*100,Options.RULER_LABEL_MAX*100,true));
 
     private static Entry entry(String group,String name,ToIntFunction<Options> get,ObjIntConsumer<Options> set){
         return new Entry(group,name,()->get.applyAsInt(ClientState.options),c->set.accept(ClientState.options,c),()->get.applyAsInt(DEFAULTS));
@@ -91,7 +91,7 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     /** The builder tools' selection: its colours, the colours of where it would land, and both line widths. */
     static SelectionOptionsScreen builder(Screen parent){return new SelectionOptionsScreen(parent,"Builder selection options",BUILDER_ENTRIES,BUILDER_WIDTHS,false);}
 
-    /** The Ruler tool's colours: its line, its knobs and its length label. */
+    /** The Ruler tool's colours: its line, its knobs and its span label. */
     static SelectionOptionsScreen ruler(Screen parent){return new SelectionOptionsScreen(parent,"Ruler options",RULER_ENTRIES,RULER_WIDTHS,false);}
 
     @Override protected void init(){

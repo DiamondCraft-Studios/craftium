@@ -31,7 +31,7 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
         new Number("Hover preview limit","No outline when a click would select this many blocks or more",100,20_000,o->o.hoverPreviewLimit,(o,v)->o.hoverPreviewLimit=v),
         new Link("Selection options","How the selection looks: its style, line width and colours",SelectionOptionsScreen::new),
         new Link("Builder selection options","How the builder tools' selection and where it lands look: colours and line widths",SelectionOptionsScreen::builder),
-        new Link("Ruler options","The colours of the ruler's line, its knobs and its length label",SelectionOptionsScreen::ruler));
+        new Link("Ruler options","The colours of the ruler's line, its knobs and its span label",SelectionOptionsScreen::ruler));
 
     private final Screen parent;
     private int page;
