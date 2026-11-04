@@ -313,8 +313,10 @@ public final class CraftiumClient implements ClientModInitializer {
                 double length=start.distanceTo(end);
                 bar(start,end,RULER_LINE_HALF,lineColor(o,start,end));
                 if(o.rulerMode==Options.RulerMode.CIRCLE){for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;bar(start.add(Math.cos(x)*length,0,Math.sin(x)*length),start.add(Math.cos(y)*length,0,Math.sin(y)*length),RULER_LINE_HALF*.75,o.rulerLineColor);}}
-                // The length sits on the middle of the line, as big as the setting says.
-                Overlay.text(Ruler.show(length),start.add(end).scale(.5),o.rulerTextColor,o.rulerTextBackground,.05f*(float)Math.clamp(o.rulerLabelSize,Options.RULER_LABEL_MIN,Options.RULER_LABEL_MAX));
+                // The length sits on the middle of the line, as big as the setting says. The game hangs text below the point it is given, so the point
+                // is raised by half the height of a line of text (nine pixels) to leave the text itself centred on the line.
+                float scale=.05f*(float)Math.clamp(o.rulerLabelSize,Options.RULER_LABEL_MIN,Options.RULER_LABEL_MAX);
+                Overlay.text(Ruler.show(length),start.add(end).scale(.5).add(cameraUp().scale(4.5*scale)),o.rulerTextColor,o.rulerTextBackground,scale);
             }
             knob(start,picked==first?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==first);
             if(end!=null)knob(end,picked==second?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==second);
@@ -349,6 +351,13 @@ public final class CraftiumClient implements ClientModInitializer {
         if(y&&!x&&!z)return o.rulerAxisYColor;
         if(z&&!x&&!y)return o.rulerAxisZColor;
         return o.rulerLineColor;
+    }
+    /** Which way is up on the screen, as a direction in the world: the way the camera's own up is, so it holds when the view is tilted. */
+    private static Vec3 cameraUp(){
+        var camera=ClientCompat.camera(Minecraft.getInstance());
+        Vec3 forward=ClientCompat.ray(camera,0,0).normalize(),above=ClientCompat.ray(camera,0,.3f).normalize();
+        Vec3 up=above.subtract(forward.scale(above.dot(forward)));
+        return up.lengthSqr()<1e-9?new Vec3(0,1,0):up.normalize();
     }
     private static Vec3 centre(Point p){return new Vec3(p.x()+.5,p.y()+.5,p.z()+.5);}
     private static void handles(EditorScreen screen) {
