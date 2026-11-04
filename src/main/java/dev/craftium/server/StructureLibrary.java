@@ -50,12 +50,25 @@ final class StructureLibrary {
             var tag=NbtIo.readCompressed(new ByteArrayInputStream(data),NbtAccounter.create(32*1024*1024));
             blocks=BlueprintLibrary.read(tag,p);entities=AssetNbt.entities(tag,p);
         }
+        blocks=normalized(blocks);
         p.session.clipboard.clear();p.session.clipboardOrigin=null;p.session.clipboard.putAll(blocks);
         p.session.clipboardEntities.clear();p.session.clipboardEntities.addAll(entities);p.session.clipboardDirty=true;
         return "Loaded "+name+" · "+blocks.size()+" blocks"+note+" · paste with Ctrl+V";
     }
 
     private record Bedrock(Map<Point,BlockSnapshot> blocks,Set<String> missing,int approximate){}
+
+    /**
+     * Keeps the blocks and moves them so the lowest corner is 0,0,0. The editor outlines and transforms the clipboard by its
+     * blocks, and measures from that corner, so a file whose first layers are air must not leave the clipboard offset from it.
+     */
+    private static Map<Point,BlockSnapshot> normalized(Map<Point,BlockSnapshot> blocks){
+        int x=Integer.MAX_VALUE,y=Integer.MAX_VALUE,z=Integer.MAX_VALUE;
+        for(var entry:blocks.entrySet())if(!entry.getValue().state().isAir()){var at=entry.getKey();x=Math.min(x,at.x());y=Math.min(y,at.y());z=Math.min(z,at.z());}
+        var result=new LinkedHashMap<Point,BlockSnapshot>();if(x==Integer.MAX_VALUE)return result;
+        for(var entry:blocks.entrySet())if(!entry.getValue().state().isAir())result.put(entry.getKey().add(-x,-y,-z),entry.getValue());
+        return result;
+    }
 
     @SuppressWarnings("unchecked")
     private static Bedrock readBedrock(byte[] data,EditPlanner p){
