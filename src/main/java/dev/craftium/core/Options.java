@@ -147,6 +147,14 @@ public final class Options {
     public boolean autoSwapToCreative=true;
     public boolean cameraFlight,showKeyHints,showBiomes,showMarkerGizmos=true,showDisplayGizmos=true,showAnnotations=true;
     public double flightMomentum,liquidOpacity=1,minimumBrightness;
+    /** What the flight momentum was before Instant flight set it to zero, to put back when that is turned off. */
+    public double flightMomentumKept;
+    /** Instant flight stops you dead, so it takes the momentum away, and gives back what it took when it is turned off. */
+    public void instantFlight(boolean on){
+        if(on==enhancedFlight)return;
+        enhancedFlight=on;
+        if(on){flightMomentumKept=flightMomentum;flightMomentum=0;}else flightMomentum=flightMomentumKept;
+    }
     public enum GizmoMode { MOVE,ROTATE,SCALE }
     public GizmoMode gizmoMode=GizmoMode.MOVE;
     public enum GizmoTarget { AUTO,SELECTION,ENTITY }
@@ -172,7 +180,7 @@ public final class Options {
         if (tool == null || shape == null || mode == null) throw new IllegalArgumentException("Invalid tool options");
         if(gizmoMode==null)gizmoMode=GizmoMode.MOVE;gizmoYaw=bounded(gizmoYaw,-360,360);gizmoPitch=bounded(gizmoPitch,-360,360);gizmoRoll=bounded(gizmoRoll,-360,360);
         if(gizmoTarget==null)gizmoTarget=GizmoTarget.AUTO;
-        flightMomentum=bounded(flightMomentum,0,.98);liquidOpacity=bounded(liquidOpacity,0,1);minimumBrightness=bounded(minimumBrightness,0,1);
+        flightMomentum=bounded(flightMomentum,0,.98);flightMomentumKept=bounded(flightMomentumKept,0,.98);liquidOpacity=bounded(liquidOpacity,0,1);minimumBrightness=bounded(minimumBrightness,0,1);
         if(builderTool==null)throw new IllegalArgumentException("Choose a builder tool");builderRotation=Math.floorMod(builderRotation,4);builderFlipAxis=Math.clamp(builderFlipAxis,-1,2);symmetryRotations=symmetryRotations>=4?4:symmetryRotations>=2?2:1;
         if(shadeFrom==null||shadeLights==null||shadeLights.size()>16||shadeLights.contains(null)||materialWeights==null||materialWeights.size()>256||materialWeights.contains(null))throw new IllegalArgumentException("Invalid lighting or palette options");
         for(var light:shadeLights)if(!Double.isFinite(light.x())||!Double.isFinite(light.y())||!Double.isFinite(light.z())||!Double.isFinite(light.intensity())||Math.abs(light.x())>30_000_000||Math.abs(light.z())>30_000_000||Math.abs(light.y())>4096||light.intensity()<0||light.intensity()>16)throw new IllegalArgumentException("Invalid light source");

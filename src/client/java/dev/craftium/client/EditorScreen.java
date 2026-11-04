@@ -388,7 +388,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void builderOptions(Gfx g) {
         text(g,"CAPABILITIES",10,254,MUTED);
-        toggle(g,10,273,"Enhanced flight",o().enhancedFlight,()->o().enhancedFlight=!o().enhancedFlight,"Creative flight at the fly speed below");
+        toggle(g,10,273,"Instant flight",o().enhancedFlight,()->o().instantFlight(!o().enhancedFlight),"Fly with no interpolation: you stop dead the moment you let go of the keys");
         toggle(g,10,296,"No updates",o().noUpdates,()->o().noUpdates=!o().noUpdates,"Placed blocks do not update their neighbours, so they stay when what holds them is removed");
         toggle(g,10,319,"Force place",o().forcePlace,()->o().forcePlace=!o().forcePlace,"Place blocks where they could not survive, like a torch in the air");
         toggle(g,10,342,"Fast place",o().fastPlace,()->o().fastPlace=!o().fastPlace,"Hold right click and sweep the view to place a block on every new block you aim at, with no delay");
