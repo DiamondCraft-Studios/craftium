@@ -16,17 +16,12 @@ public final class BuilderMode {
     private static Point first,second,offset=new Point(0,0,0);
     private static int stackX,stackY,stackZ;
     private static List<Point> cells=List.of();
-    /** True when {@code cells} are the exact blocks a magic select found, not whatever is in the box around them. */
-    private static boolean exact;
-    /** True while the search running adds what it finds to the blocks already selected, as a middle click does once a magic select has been made. */
-    private static boolean magicAdding;
     private static double wheel;
     /** A Magic Wand search under way on its own thread, so a big one does not stop the game. */
     private static java.util.concurrent.CompletableFuture<MagicWand.Result> magic;
     private static long magicSince;
     /** A large magic selection waiting to be confirmed: its box, and how many blocks it found. */
     private static Point heldFirst,heldSecond;
-    private static List<Point> heldCells=List.of();
     private static int heldCount;
     private static java.util.concurrent.ExecutorService search=newSearch();
     private static final long SEARCH_TIMEOUT=30_000;
@@ -39,7 +34,7 @@ public final class BuilderMode {
     static boolean usable(){return available();}
     private static boolean available(){var mc=Minecraft.getInstance();return mc.player!=null&&mc.player.isCreative()&&mc.level!=null&&CraftiumClient.supported();}
     public static void reset(){enabled=false;clear();restartSearch();wheel=0;}
-    private static void clear(){exact=false;first=null;second=null;preview=false;clonePlaced=false;offset=new Point(0,0,0);cells=List.of();stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;magic=null;heldFirst=heldSecond=null;}
+    private static void clear(){first=null;second=null;preview=false;clonePlaced=false;offset=new Point(0,0,0);cells=List.of();stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;magic=null;heldFirst=heldSecond=null;}
     /** Another tool keeps the selection, but not what was being done to it. */
     private static void retool(){preview=false;clonePlaced=false;offset=new Point(0,0,0);stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;}
     public static void enable(){if(!available())return;enabled=true;var mc=Minecraft.getInstance();mc.options.keyAttack.setDown(false);mc.options.keyUse.setDown(false);ClientState.notify("Builder: "+name()+" · Alt + wheel changes tool");}
@@ -107,8 +102,6 @@ public final class BuilderMode {
             if(button==1){confirm();return true;}
         }
         if(hit==null)return true;Point at=CraftiumClient.point(hit.getBlockPos());
-        // A selection that began as a magic select goes on being one: the middle button adds what it finds to the blocks already selected.
-        if(button==2&&exact&&!preview&&first!=null&&second!=null){magicSelect(hit.getBlockPos(),true);return true;}
         if(first!=null&&second!=null&&button!=2){ // nothing is being done to it yet: left and right move the first and second point
             if(button==0)first=at;else second=at;offset=new Point(0,0,0);refresh();return true;
         }
@@ -119,16 +112,15 @@ public final class BuilderMode {
         else if(first!=null&&second==null){second=at;refresh();} // middle click with only a first point: extend the selection to this block
         else if(preview&&o.builderTool==Options.BuilderTool.STACK){} // a stack only grows from the selection's own faces: nudge it
         else if(preview){Point min=min();Point normal=CraftiumClient.normal(hit);offset=at.add(normal.x()-min.x(),normal.y()-min.y(),normal.z()-min.z());}
-        else if(first==null)magicSelect(hit.getBlockPos(),false);
+        else if(first==null)magicSelect(hit.getBlockPos());
         else{Point low=min(),high=max();Direction face=hit.getDirection();int axis=face.getAxis().ordinal();int value=axis==0?at.x():axis==1?at.y():at.z();if(face.getAxisDirection()==Direction.AxisDirection.POSITIVE)high=replace(high,axis,value);else low=replace(low,axis,value);first=low;second=high;refresh();}
         return true;
     }
     private static Point replace(Point p,int axis,int value){return new Point(axis==0?value:p.x(),axis==1?value:p.y(),axis==2?value:p.z());}
     /** The Magic Wand's search, with the editor's settings, from the block clicked: its bounding box becomes the selection. */
-    private static void magicSelect(net.minecraft.core.BlockPos at,boolean adding){
+    private static void magicSelect(net.minecraft.core.BlockPos at){
         var mc=Minecraft.getInstance();var o=ClientState.options;
         if(mc.level.getBlockState(at).isAir())return;
-        magicAdding=adding;
         var world=MagicPreview.world(mc,at,o);var params=new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,Selection.LIMIT*4);Point start=CraftiumClient.point(at);
         magicSince=System.currentTimeMillis();
         magic=java.util.concurrent.CompletableFuture.supplyAsync(()->MagicWand.select(start,world,params),search);
@@ -151,30 +143,24 @@ public final class BuilderMode {
         if(refreshIn>0&&--refreshIn==0&&first!=null&&second!=null)refresh();
         var running=magic;if(running==null)return;
         if(!running.isDone()){if(System.currentTimeMillis()-magicSince>SEARCH_TIMEOUT){restartSearch();ClientState.notify("Magic select took too long and was stopped");}return;}
-        magic=null;boolean adding=magicAdding;magicAdding=false;
+        magic=null;
         MagicWand.Result result;try{result=running.join();}catch(RuntimeException e){ClientState.notify("Magic select failed");return;}
-        Collection<Point> found=result.found();if(found.isEmpty()||!active())return;
-        if(adding&&exact){var together=new LinkedHashSet<>(cells);together.addAll(found);found=together;} // what is already selected stays
+        var found=result.found();if(found.isEmpty()||!active())return;
         int x0=Integer.MAX_VALUE,y0=x0,z0=x0,x1=Integer.MIN_VALUE,y1=x1,z1=x1;
         for(Point p:found){x0=Math.min(x0,p.x());y0=Math.min(y0,p.y());z0=Math.min(z0,p.z());x1=Math.max(x1,p.x());y1=Math.max(y1,p.y());z1=Math.max(z1,p.z());}
         Point low=new Point(x0,y0,z0),high=new Point(x1,y1,z1);
-        if(found.size()>Selection.LIMIT){ClientState.notify("Too many blocks to move at once ("+found.size()+" found, "+Selection.LIMIT+" at most)");return;}
-        if(found.size()>=ClientState.LARGE_SELECTION){heldFirst=low;heldSecond=high;heldCount=found.size();heldCells=new ArrayList<>(found);return;}
-        select(low,high,new ArrayList<>(found));
+        if(found.size()>=ClientState.LARGE_SELECTION){heldFirst=low;heldSecond=high;heldCount=found.size();return;}
+        select(low,high);
     }
-    /** The blocks a magic select found become the selection, as they are: the box around them is only used to work out where they go. */
-    private static void select(Point low,Point high,List<Point> blocks){
-        first=low;second=high;offset=new Point(0,0,0);preview=false;refresh();
-        cells=blocks;exact=true;cellBlocksFor=null;
-    }
-    private static void acceptHeld(){Point low=heldFirst,high=heldSecond;var blocks=heldCells;heldFirst=heldSecond=null;heldCells=List.of();select(low,high,blocks);}
+    private static void select(Point low,Point high){first=low;second=high;offset=new Point(0,0,0);preview=false;refresh();}
+    private static void acceptHeld(){Point low=heldFirst,high=heldSecond;heldFirst=heldSecond=null;select(low,high);}
     private static void discardHeld(){heldFirst=heldSecond=null;ClientState.notify("Selection cancelled");}
     private static Point min(){Point b=second==null?first:second;return new Point(Math.min(first.x(),b.x()),Math.min(first.y(),b.y()),Math.min(first.z(),b.z()));}
     private static Point max(){Point b=second==null?first:second;return new Point(Math.max(first.x(),b.x()),Math.max(first.y(),b.y()),Math.max(first.z(),b.z()));}
     public static void corners(Point a,Point b){first=a;second=b;offset=new Point(0,0,0);preview=false;refresh();}
-    private static void refresh(){exact=false;try{var mc=Minecraft.getInstance();cells=Selection.box(first,second).stream().filter(p->!mc.level.getBlockState(new net.minecraft.core.BlockPos(p.x(),p.y(),p.z())).isAir()).toList();ClientState.notify("Selection ready · scroll to nudge · right-click places · left-click cancels");}catch(Exception e){ClientState.notify(e.getMessage());clear();}}
+    private static void refresh(){try{var mc=Minecraft.getInstance();cells=Selection.box(first,second).stream().filter(p->!mc.level.getBlockState(new net.minecraft.core.BlockPos(p.x(),p.y(),p.z())).isAir()).toList();ClientState.notify("Selection ready · scroll to nudge · right-click places · left-click cancels");}catch(Exception e){ClientState.notify(e.getMessage());clear();}}
     public static void confirm(){
-        if(first==null||second==null)return;var o=ClientState.options;Point prior1=o.position1,prior2=o.position2;int x=o.offsetX,y=o.offsetY,z=o.offsetZ;o.position1=first;o.position2=second;o.offsetX=offset.x();o.offsetY=offset.y();o.offsetZ=offset.z();o.stackX=stackX;o.stackY=stackY;o.stackZ=stackZ;o.builderCells=exact?SelectionCodec.encode(cells):"";CraftiumClient.send("builder_commit",first,new Point(0,1,0));o.builderCells="";o.position1=prior1;o.position2=prior2;o.offsetX=x;o.offsetY=y;o.offsetZ=z;o.stackX=o.stackY=o.stackZ=0;
+        if(first==null||second==null)return;var o=ClientState.options;Point prior1=o.position1,prior2=o.position2;int x=o.offsetX,y=o.offsetY,z=o.offsetZ;o.position1=first;o.position2=second;o.offsetX=offset.x();o.offsetY=offset.y();o.offsetZ=offset.z();o.stackX=stackX;o.stackY=stackY;o.stackZ=stackZ;CraftiumClient.send("builder_commit",first,new Point(0,1,0));o.position1=prior1;o.position2=prior2;o.offsetX=x;o.offsetY=y;o.offsetZ=z;o.stackX=o.stackY=o.stackZ=0;
         if(o.builderTool==Options.BuilderTool.CLONE){preview=true;clonePlaced=true;}
         else if(o.builderTool==Options.BuilderTool.MOVE)follow();
         else if(o.builderTool==Options.BuilderTool.STACK&&(stackX!=0||stackY!=0||stackZ!=0))grow();
@@ -215,9 +201,7 @@ public final class BuilderMode {
             boolean leaving=preview&&o.builderTool==Options.BuilderTool.MOVE;
             boolean stacking=preview&&second!=null&&o.builderTool==Options.BuilderTool.STACK;
             Point from=min,to=max;if(stacking){var b=stackBounds();from=b[0];to=b[1];} // the selection grows with the stack
-            int fill=second!=null&&!leaving?(o.selectionColor&0xffffff|0x30000000):0;
-            if(exact&&!stacking&&!cells.isEmpty())cellOutline().draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,o.selectionColor,(float)o.selectionWidth),o.selectionColor,fill,true);
-            else Overlay.box(new AABB(from.x(),from.y(),from.z(),to.x()+1,to.y()+1,to.z()+1),o.selectionColor,(float)o.selectionWidth,fill);
+            Overlay.box(new AABB(from.x(),from.y(),from.z(),to.x()+1,to.y()+1,to.z()+1),o.selectionColor,(float)o.selectionWidth,second!=null&&!leaving?(o.selectionColor&0xffffff|0x30000000):0);
             if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?stackSteps(size):List.of(offset);
                 var shown=preview(o,min,size,steps);
                 if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),ClientState.options.removedTint); // the blocks that are moving, where they are now
@@ -225,13 +209,6 @@ public final class BuilderMode {
                 else{shown.shape().draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,ClientState.options.previewColor,1),ClientState.options.previewColor,ClientState.options.previewFill,true);if(!shown.places().isEmpty())Overlay.blocks(shown.models(),shown.places(),ClientState.options.previewTint);}
             }
         }
-    }
-    private static OutlineShape cellOutline;
-    private static List<Point> cellOutlineFor;
-    /** The outline of the exact blocks, made again only when they change. */
-    private static OutlineShape cellOutline(){
-        if(cellOutlineFor!=cells||cellOutline==null){cellOutline=OutlineShape.of(cells);cellOutlineFor=cells;}
-        return cellOutline;
     }
     private static List<net.minecraft.core.BlockPos> cellBlocks;
     private static List<Point> cellBlocksFor;
