@@ -5,7 +5,7 @@
   "name": "Craftium",
   "description": "A creative building studio: selection, painting, sculpting and terrain tools in a familiar docked workspace.",
   "authors": ["Craftium contributors"],
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "icon": "assets/craftium/icon.png",
   "environment": "*",
   "entrypoints": {

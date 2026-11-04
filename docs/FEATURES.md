@@ -82,7 +82,7 @@ Full Axiom parity remains incomplete. Material gaps:
 5. Exact Axiom algorithms and all options: Smart modelling, conforming stamps, fluid simulation, smoothing, path stairs/slabs, lighting and Tinker remain independent approximations.
 6. Broad multiplayer, WorldEdit, protection-plugin, shader/modpack and performance validation. State transforms preserve representable vanilla properties; unsupported orientations use a legal approximation.
 
-Axiom licensing/accounts/whitelist infrastructure is outside this independent MIT mod. No Axiom code or assets were copied. Validation evidence is in [VALIDATION.md](VALIDATION.md).
+Axiom licensing/accounts/whitelist infrastructure is outside this independent GPL-3.0 mod. No Axiom code or assets were copied. Validation evidence is in [VALIDATION.md](VALIDATION.md).
 
 ## Paper and Purpur companion
 

@@ -56,4 +56,6 @@ Set `CRAFTIUM_TEST_SCOPE` to `keybinds`, `builder`, `gizmos`, `gallery`, `viewpo
 - Update the feature coverage and control guide when behavior changes.
 - Cite official documentation when comparing Axiom behavior. Use original code and assets, and preserve third-party license notices.
 
+By submitting a contribution you agree that it is licensed under the project's [GPL-3.0 license](LICENSE).
+
 AI-generated contributions are welcome when the contributor reviews and verifies them. Describe remaining limitations candidly; matching a workflow does not establish complete Axiom parity.
