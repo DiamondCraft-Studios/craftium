@@ -14,7 +14,7 @@
   "scripts": {
     "start": "node src/index.js",
     "test": "node --test \"test/**/*.test.js\"",
-    "pack": "mcpb pack . craftium.mcpb"
+    "pack": "npx --yes @anthropic-ai/mcpb@2.1.2 pack . craftium.mcpb"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

@@ -130,6 +130,14 @@ test("a refused token tells the player to restart the bridge", async () => {
   await bridge.close();
 });
 
+test("a blank or unfilled folder setting is ignored", () => {
+  const home = path.join(path.sep, "home", "player");
+  for (const value of ["", "${user_config.minecraft_dir}"]) {
+    const files = candidateFiles({ CRAFTIUM_MINECRAFT_DIR: value, CRAFTIUM_BRIDGE_FILE: value }, "linux", home);
+    assert.deepEqual(files, [path.join(home, ".minecraft", "config", "craftium", "bridge.json")]);
+  }
+});
+
 test("candidate files honour the overrides and the platform's default folder", () => {
   const home = path.join(path.sep, "home", "player");
   assert.deepEqual(candidateFiles({ CRAFTIUM_BRIDGE_FILE: "/x/bridge.json" }, "linux", home)[0], "/x/bridge.json");

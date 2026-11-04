@@ -11,8 +11,10 @@ export class BridgeError extends Error {}
  */
 export function candidateFiles(env = process.env, platform = process.platform, home = os.homedir()) {
   const files = [];
-  if (env.CRAFTIUM_BRIDGE_FILE) files.push(env.CRAFTIUM_BRIDGE_FILE);
-  if (env.CRAFTIUM_MINECRAFT_DIR) files.push(path.join(env.CRAFTIUM_MINECRAFT_DIR, "config", "craftium", "bridge.json"));
+  // A setting the user left blank may arrive empty or as an unfilled ${...} placeholder; neither names a folder.
+  const given = (value) => (value && !value.includes("${") ? value : undefined);
+  if (given(env.CRAFTIUM_BRIDGE_FILE)) files.push(env.CRAFTIUM_BRIDGE_FILE);
+  if (given(env.CRAFTIUM_MINECRAFT_DIR)) files.push(path.join(env.CRAFTIUM_MINECRAFT_DIR, "config", "craftium", "bridge.json"));
   let minecraft;
   if (platform === "win32") minecraft = path.join(env.APPDATA || path.join(home, "AppData", "Roaming"), ".minecraft");
   else if (platform === "darwin") minecraft = path.join(home, "Library", "Application Support", "minecraft");
