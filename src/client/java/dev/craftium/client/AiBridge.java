@@ -342,6 +342,9 @@ public final class AiBridge {
         o.mode = Selection.Mode.REPLACE;
         try { CraftiumClient.send("select_box", from, null); }
         finally { o.position1 = first; o.position2 = second; o.mode = mode; }
+        // The agent chose this area on purpose, so the "Selected N blocks, confirm?" popup is for the player's own selections only.
+        ClientState.selectionPending = false;
+        ClientState.selectingSince = 0;
     }
 
     private static void previewBuild(String spec) {
