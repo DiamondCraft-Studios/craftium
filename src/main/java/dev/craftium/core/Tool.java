@@ -25,7 +25,7 @@ public enum Tool {
     ROUGHEN("Roughen", "RF", "Sculpt", "Add small, seeded irregularities to exposed surfaces."),
     SHATTER("Shatter", "SH", "Sculpt", "Cut cellular fracture seams through a volume."),
     EXTRUDE("Extrude", "EX", "Sculpt", "Extend exposed faces along the clicked surface normal."),
-    SHAPE("Shape", "SP", "Draw", "Place a sphere, cuboid, octahedron or cylinder."),
+    SHAPE("Shape", "SP", "Draw", "Right-click to put down a shape of your foreground block, shape it with Move, Rotate and Scale, then press Enter to build it."),
     LINE("Line", "LN", "Draw", "Right-click two endpoints to draw a continuous line."),
     ERASE("Erase", "ER", "Draw", "Remove blocks inside the brush with undo."),
     TINKER("Tinker", "TK", "Utility", "Cycle block properties. Sneak to cycle the next property."),

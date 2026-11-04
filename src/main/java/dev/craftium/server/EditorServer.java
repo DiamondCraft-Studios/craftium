@@ -35,6 +35,8 @@ public final class EditorServer {
     public static void disconnect(UUID id) {var session=SESSIONS.get(id);if(session!=null)HistoryStore.save(session);if(AnimatedRebuild.owned(id)){AnimatedRebuild.cancel(id);return;}if(job==null || !job.owner.equals(id))SESSIONS.remove(id);}
     public static void flushHistory(MinecraftServer server){
         AnimatedRebuild.finishOnStop(server);
+        // Players are saved as the server stops, before they are disconnected, so a player still in the editor would be saved as a spectator.
+        for(var entry:SESSIONS.entrySet()){var player=server.getPlayerList().getPlayer(entry.getKey());if(player!=null)restoreMode(player,entry.getValue());}
         if(job!=null){var j=job;rememberInterrupted(j);j.session.busy=false;job=null;}
         for(var session:SESSIONS.values())HistoryStore.save(session);try{HistoryStore.flush();}catch(java.util.concurrent.CompletionException e){ServerPlatform.LOG.error("Could not finish writing editor history during shutdown",e);}
     }
@@ -53,20 +55,31 @@ public final class EditorServer {
     /** The options of a player who is building: creative, permitted and known to the editor. Null otherwise. */
     public static Options capabilities(ServerPlayer player){var s=SESSIONS.get(player.getUUID());return s!=null&&s.options!=null&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities")?s.options:null;}
     /** What is at a position just before vanilla places a block there, kept only when the placement is to be recorded. Null when it is not. */
-    public static Object before(ServerPlayer player,BlockPos at){var o=capabilities(player);return o!=null&&o.placementCapabilities()?BlockSnapshot.capture(player.level(),at):null;}
+    public static Object before(ServerPlayer player,BlockPos at){
+        var o=capabilities(player);if(o==null||!o.placementCapabilities())return null;
+        // The neighbours too: placing a door adds its other half, and a chest or bed changes its partner.
+        var near=new LinkedHashMap<BlockPos,BlockSnapshot>();near.put(at.immutable(),BlockSnapshot.capture(player.level(),at));
+        for(var d:net.minecraft.core.Direction.values()){var n=at.relative(d);near.put(n,BlockSnapshot.capture(player.level(),n));}
+        return near;
+    }
     /**
      * Vanilla has placed a block; the editor adds what it owns on top of that: the symmetric copies, and one undo step for all of them.
      * The placement itself, with its sound and swing, is left to the game.
      */
+    @SuppressWarnings("unchecked")
     public static void placed(ServerPlayer player,BlockPos at,Object snapshot){
         var s=SESSIONS.get(player.getUUID());var o=capabilities(player);if(s==null||o==null)return;
         try{
-            var level=player.level();Point p=EditPlanner.point(at);var before=(BlockSnapshot)snapshot;var after=BlockSnapshot.capture(level,at);
+            var level=player.level();Point p=EditPlanner.point(at);var near=(Map<BlockPos,BlockSnapshot>)snapshot;var before=near.get(at);var after=BlockSnapshot.capture(level,at);
             var plan=new EditPlanner(level,s,o);plan.put(p,after); // the block is already there, so only its mirrors are left to change
             var mirrors=plan.finish("Builder placement");
             if(!mirrors.changes().isEmpty())EditProtection.check(player,mirrors);
             var changes=new ArrayList<Session.Change>();
             if(!(before.state()==after.state()&&Objects.equals(before.data(),after.data())))changes.add(new Session.Change(p,before,after));
+            for(var e:near.entrySet()){ // what vanilla changed beside the block: a door's other half, a chest's partner
+                if(e.getKey().equals(at))continue;var now=BlockSnapshot.capture(level,e.getKey());
+                if(!(e.getValue().state()==now.state()&&Objects.equals(e.getValue().data(),now.data())))changes.add(new Session.Change(EditPlanner.point(e.getKey()),e.getValue(),now));
+            }
             for(var c:mirrors.changes()){
                 if(!ServerPlatform.canChange(player.getUUID(),level,c.pos()))continue;
                 c.after().place(level,EditPlanner.pos(c.pos()),mirrors.flags());changes.add(c);
@@ -182,12 +195,25 @@ public final class EditorServer {
                 case "selection_transform" -> {
                     var plan=new EditPlanner(player.level(),s,o);
                     var before=new ArrayList<>(s.selection.points());
-                    var moved=ModelTransform.apply(plan,s,o);
+                    // While transforms wait for confirmation, a new one works from the original blocks, not from the preview of the last.
+                    var staged=s.pendingEdit;boolean confirming=s.confirmEdits&&!s.bypassConfirm;
+                    var chain=confirming&&staged!=null&&staged==s.pendingChainEdit?s.pendingChain:null;
+                    var base=chain!=null?s.pendingChainBase:confirming?staged:null; // what was staged before the run of transforms began
+                    if(base!=null)for(var c:base.changes())plan.changes.put(c.pos(),c);
+                    var result=ModelTransform.apply(plan,s,o,chain);var moved=result.moved();
                     // The selection follows its blocks; if the edit is cancelled it goes back.
-                    if(s.confirmEdits&&!s.bypassConfirm&&s.pendingSelectionBefore==null)s.pendingSelectionBefore=before;
+                    var priorBefore=s.pendingSelectionBefore;
+                    var original=confirming&&priorBefore!=null?priorBefore:before; // undo puts back the selection from before the whole run
+                    if(confirming&&priorBefore==null)s.pendingSelectionBefore=before;
                     s.selection.combine(moved,Selection.Mode.REPLACE);
-                    try{start(player,s,plan.finish("Transform selection").withSelection(new Session.SelectionChange(before,new ArrayList<>(moved),pivotText(o,0,0,0),pivotText(o,o.offsetX,o.offsetY,o.offsetZ))));}
-                    catch(RuntimeException e){s.selection.restore(before);s.pendingSelectionBefore=null;throw e;}
+                    try{
+                        var edit=plan.finish("Transform selection").withSelection(new Session.SelectionChange(original,new ArrayList<>(moved),pivotText(o,0,0,0),pivotText(o,o.offsetX,o.offsetY,o.offsetZ)));
+                        if(base!=null)edit=new Session.Edit(edit.name(),edit.changes(),base.biomes(),edit.flags(),base.entities(),base.annotations(),edit.selection());
+                        if(confirming)s.pendingEdit=null; // the new edit already holds what was staged, so it replaces it
+                        start(player,s,edit);
+                        if(confirming&&s.pendingEdit!=null){s.pendingChain=result.chain();s.pendingChainBase=base;s.pendingChainEdit=s.pendingEdit;}
+                    }
+                    catch(RuntimeException e){s.selection.restore(before);s.pendingSelectionBefore=priorBefore;if(confirming)s.pendingEdit=staged;throw e;}
                 }
                 case "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo" -> {var plan=new EditPlanner(player.level(),s,o);s.selection.combine(SelectionTransforms.apply(r.action(),plan),Selection.Mode.REPLACE);send(player,s,"Selection updated: "+s.selection.size()+" blocks",false);}
                 case "clear" -> {s.selection.clear();s.corner=null;s.line=null;s.ruler=null;send(player,s,"Selection cleared",false);}
@@ -236,6 +262,7 @@ public final class EditorServer {
                     var plan=new EditPlanner(player.level(),s,o);if(r.action().equals("autoshade"))Autoshade.apply(plan,player);else SelectionOperations.apply(r.action(),plan);start(player,s,plan.finish(r.action().replace('_',' ')));
                 }
                 case "rotate", "flip", "flip_facing" -> {var look=player.getLookAngle();int axis=r.action().equals("flip_facing")?net.minecraft.core.Direction.getApproximateNearest(look.x,look.y,look.z).getAxis().ordinal():0;transform(player,s,r.action().equals("rotate"),axis);}
+                case "flip_x","flip_y","flip_z" -> transform(player,s,false,r.action().charAt(5)-'x');
                 case "clipboard_transform" -> {ClipboardTransforms.transform(s,o);send(player,s,"Clipboard transformed with nearest-neighbour sampling",false);}
                 case "copy" -> copy(player,s,o,false);
                 case "cut" -> copy(player,s,o,true);
@@ -355,8 +382,21 @@ public final class EditorServer {
             }
             case LINE -> {
                 if(s.line==null) {s.line=p;send(player,s,"Line start set · choose the endpoint",false);}
-                else {for(Point point:BrushMath.line(s.line,p))for(Point at:BrushMath.brush(point,Math.min(o.radius,4),o.shape,o.hollow))plan.put(at,plan.material);
+                else {for(Point point:BrushMath.line(s.line,p))for(Point at:BrushMath.brush(point,Math.min(o.radius,4),o.shape,o.hollow,o.outlineThickness,o.pixelPerfect))plan.put(at,plan.material);
                     s.line=null;start(player,s,plan.finish("Draw line"));}
+            }
+            case SHAPE -> {
+                plan.tool(p,normal);
+                var edit=plan.finish(o.tool.label);
+                // What was placed becomes the selection, so the transform tools can take hold of it. Carving leaves nothing to select.
+                var placed=new LinkedHashSet<Point>();
+                if(!o.invert)for(var change:edit.changes())placed.add(change.pos());
+                if(placed.isEmpty()){start(player,s,edit);return;}
+                var before=new ArrayList<>(s.selection.points());
+                if(s.confirmEdits&&!s.bypassConfirm&&s.pendingSelectionBefore==null)s.pendingSelectionBefore=before;
+                s.selection.combine(placed,Selection.Mode.REPLACE);
+                try{start(player,s,edit.withSelection(new Session.SelectionChange(before,new ArrayList<>(placed))));}
+                catch(RuntimeException e){s.selection.restore(before);s.pendingSelectionBefore=null;throw e;}
             }
             default -> {plan.tool(p,normal);start(player,s,plan.finish(o.tool.label));}
         }

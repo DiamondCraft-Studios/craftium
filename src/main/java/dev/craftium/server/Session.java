@@ -36,6 +36,12 @@ final class Session {
     List<Point> historySelection=List.of();long historyRevision;boolean recordSelection;String currentAction="";
     /** The selection before a transform that is waiting for confirmation moved it, so cancelling can put it back. */
     List<Point> pendingSelectionBefore;
+    /**
+     * The transforms behind {@link #pendingEdit} when it holds a run of them, the edit that was staged before the first of them, and the
+     * pending edit they produced (to tell that nothing else has been added to it since). A further transform starts again from the
+     * original blocks instead of from the preview.
+     */
+    ModelTransform.Chain pendingChain;Edit pendingChainBase,pendingChainEdit;
     long requestStroke, lastStroke;
     boolean busy;
     /** A pulse for the client to show with the next status, as "undo|redo:milliseconds:points"; empty when there is none. */

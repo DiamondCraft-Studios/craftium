@@ -50,7 +50,7 @@ public final class CraftiumClient implements ClientModInitializer {
             receiveStatus(payload.json());
         }));
         ClientPlayConnectionEvents.DISCONNECT.register((handler,client)-> {
-            ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);ClientState.pending=GhostBlocks.EMPTY;ClientState.largeSelection=0;
+            ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);ClientState.pending=GhostBlocks.EMPTY;ClientState.largeSelection=0;ShapeObject.cancel();
             ClientState.save();ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
             BuilderMode.reset();placementSynced="";
             ClientCommands.reset();
@@ -288,12 +288,14 @@ public final class CraftiumClient implements ClientModInitializer {
             var s=ClientState.status;
             if(screen.showSelection())SelectionOverlay.draw(TransformGizmo.selectionPreview());
             PlacementPreview.draw();
+            ShapeObject.draw(mc);
             // The wireframe of the brush shows only for tools that use one, not the selection, transform, ruler or annotation tools.
             var tool=ClientState.options.tool;
             boolean brush=!tool.selection()&&!tool.transform()&&tool!=Tool.RULER&&tool!=Tool.ANNOTATION;
-            if(screen.toolActive()&&hit!=null && !PlacementPreview.active() && brush) {
+            if(screen.toolActive()&&hit!=null && !PlacementPreview.active() && !ShapeObject.active() && brush) {
                 int r=ClientState.options.radius;var p=hit.getBlockPos();
-                if(ClientState.options.shape==BrushMath.Shape.CUBE)Overlay.box(new AABB(p).inflate(r),0xffd6eaff,1.5f,0);
+                if(tool==Tool.SHAPE&&BrushGhost.draw(mc,p,ClientState.options)){/* drawn as ghost blocks */}
+                else if(ClientState.options.shape==BrushMath.Shape.CUBE)Overlay.box(new AABB(p).inflate(r),0xffd6eaff,1.5f,0);
                 else {
                     Vec3 c=Vec3.atCenterOf(p);double radius=r+.5;
                     for(int axis=0;axis<3;axis++)for(int i=0;i<48;i++) {

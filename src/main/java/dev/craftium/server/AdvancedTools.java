@@ -35,7 +35,7 @@ final class AdvancedTools {
                     Point at=path.get(index);Point next=path.get(Math.min(path.size()-1,index+1));
                     if(o.useStairsAndSlabs)p.put(at,pathMaterial(p,at,next));
                     else if(o.pathMode==Options.PathMode.BRESENHAM)p.put(at,p.material);
-                    else for(Point v:BrushMath.brush(at,Math.min(o.radius,4),o.shape,o.hollow))p.put(v,p.material);
+                    else for(Point v:BrushMath.brush(at,Math.min(o.radius,4),o.shape,o.hollow,o.outlineThickness,o.pixelPerfect))p.put(v,p.material);
                     if(o.extendToGround){int y=at.y()-1;while(y>=p.level.getMinY()&&p.state(new Point(at.x(),y,at.z())).isAir())p.put(new Point(at.x(),y--,at.z()),p.material);}
                 }
             }

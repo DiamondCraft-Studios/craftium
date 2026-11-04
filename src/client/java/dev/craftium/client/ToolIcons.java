@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.core.BrushMath;
 import dev.craftium.core.Options;
 import dev.craftium.core.Tool;
 import dev.craftium.client.compat.Gfx;
@@ -54,6 +55,29 @@ final class ToolIcons {
             case NBT -> {line(g,x+9,y+3,x+6,y+6,color);line(g,x+6,y+6,x+6,y+10,color);line(g,x+6,y+10,x+3,y+12,color);line(g,x+3,y+12,x+6,y+14,color);line(g,x+6,y+14,x+6,y+18,color);line(g,x+6,y+18,x+9,y+21,color);
                 line(g,x+15,y+3,x+18,y+6,color);line(g,x+18,y+6,x+18,y+10,color);line(g,x+18,y+10,x+21,y+12,color);line(g,x+21,y+12,x+18,y+14,color);line(g,x+18,y+14,x+18,y+18,color);line(g,x+18,y+18,x+15,y+21,color);}
         }
+    }
+    /** The Shape tool's solids, on the same 24 pixel grid as the tool icons. */
+    static void shape(Gfx g,BrushMath.Shape shape,int x,int y,int color) {
+        switch(shape) {
+            case SPHERE -> {ring(g,x+12,y+12,9,9,color);ring(g,x+12,y+12,9,3,color);line(g,x+12,y+3,x+12,y+21,color);}
+            case CUBE -> {line(g,x+12,y+2,x+21,y+7,color);line(g,x+21,y+7,x+21,y+17,color);line(g,x+21,y+17,x+12,y+22,color);line(g,x+12,y+22,x+3,y+17,color);line(g,x+3,y+17,x+3,y+7,color);line(g,x+3,y+7,x+12,y+2,color);line(g,x+3,y+7,x+12,y+12,color);line(g,x+21,y+7,x+12,y+12,color);line(g,x+12,y+12,x+12,y+22,color);}
+            case OCTAHEDRON -> {line(g,x+12,y+2,x+21,y+12,color);line(g,x+21,y+12,x+12,y+22,color);line(g,x+12,y+22,x+3,y+12,color);line(g,x+3,y+12,x+12,y+2,color);line(g,x+3,y+12,x+21,y+12,color);line(g,x+12,y+2,x+12,y+22,color);}
+            case CYLINDER -> {ring(g,x+12,y+6,8,3,color);line(g,x+4,y+6,x+4,y+18,color);line(g,x+20,y+6,x+20,y+18,color);arc(g,x+12,y+18,8,3,0,Math.PI,color);}
+            case PLANE -> {line(g,x+2,y+17,x+7,y+8,color);line(g,x+7,y+8,x+22,y+8,color);line(g,x+22,y+8,x+17,y+17,color);line(g,x+17,y+17,x+2,y+17,color);}
+            case DISK -> {ring(g,x+12,y+12,10,5,color);g.fill(x+11,y+11,x+14,y+14,color);}
+            case POLYGON -> {line(g,x+12,y+3,x+21,y+9,color);line(g,x+21,y+9,x+18,y+20,color);line(g,x+18,y+20,x+6,y+20,color);line(g,x+6,y+20,x+3,y+9,color);line(g,x+3,y+9,x+12,y+3,color);}
+            case PYRAMID -> {line(g,x+12,y+2,x+3,y+17,color);line(g,x+12,y+2,x+13,y+22,color);line(g,x+12,y+2,x+22,y+16,color);line(g,x+3,y+17,x+13,y+22,color);line(g,x+13,y+22,x+22,y+16,color);line(g,x+3,y+17,x+10,y+14,color);line(g,x+10,y+14,x+22,y+16,color);}
+            case CONE -> {line(g,x+12,y+2,x+3,y+18,color);line(g,x+12,y+2,x+21,y+18,color);ring(g,x+12,y+18,9,3,color);}
+            case HEMISPHERE -> {arc(g,x+12,y+16,10,12,Math.PI,Math.PI*2,color);ring(g,x+12,y+16,10,3,color);}
+            case TORUS -> {ring(g,x+12,y+12,10,6,color);ring(g,x+12,y+12,4,2,color);}
+            case TUBE -> {ring(g,x+12,y+6,9,3,color);ring(g,x+12,y+6,4,1,color);line(g,x+3,y+6,x+3,y+18,color);line(g,x+21,y+6,x+21,y+18,color);arc(g,x+12,y+18,9,3,0,Math.PI,color);}
+        }
+    }
+    private static void ring(Gfx g,int cx,int cy,int rx,int ry,int c){arc(g,cx,cy,rx,ry,0,Math.PI*2,c);}
+    /** The part of an ellipse from angle {@code from} to {@code to} (radians, y grows downward), as dots two pixels wide. */
+    private static void arc(Gfx g,int cx,int cy,int rx,int ry,double from,double to,int c){
+        int steps=Math.max(16,(int)((to-from)/(Math.PI*2)*40));
+        for(int i=0;i<=steps;i++){double a=from+(to-from)*i/steps;int px=cx+(int)Math.round(Math.cos(a)*rx),py=cy+(int)Math.round(Math.sin(a)*ry);g.fill(px,py,px+2,py+2,c);}
     }
     static void line(Gfx g,int x1,int y1,int x2,int y2,int c) {
         int steps=Math.max(Math.abs(x2-x1),Math.abs(y2-y1));

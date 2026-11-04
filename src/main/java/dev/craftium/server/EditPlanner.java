@@ -88,8 +88,15 @@ final class EditPlanner {
         }
         put(p,value);
     }
+    /**
+     * Set by the transform tools: the blocks of a selection go exactly where the transform sends them, whatever the mask,
+     * height range, keep-existing, survival and symmetry settings of the brush tools say. Otherwise those settings would
+     * quietly leave parts of some selections behind.
+     */
+    boolean exact;
     void put(Point p, BlockSnapshot value) {
         putOne(p,value);
+        if(exact)return;
         if(!o.symmetryX&&!o.symmetryY&&!o.symmetryZ&&o.symmetryRotations==1)return;
         var origin=o.symmetryOrigin;
         for(int bits=0;bits<8;bits++){
@@ -105,8 +112,8 @@ final class EditPlanner {
     private void putOne(Point p,BlockSnapshot value) {
         validate(p);
         var planned=changes.get(p);
-        if(!accepted(p) || (o.keepExisting && !value.state().isAir() && !state(p).isAir() && (planned==null||!planned.after().state().isAir()))) return;
-        if(!o.forcePlace && !value.state().canSurvive(level,pos(p))) return;
+        if(!exact && (!accepted(p) || (o.keepExisting && !value.state().isAir() && !state(p).isAir() && (planned==null||!planned.after().state().isAir())))) return;
+        if(!exact && !o.forcePlace && !survives(value.state(),p)) return;
         if(value.data()!=null) {
             var tag=value.data().copy();tag.putInt("x",p.x());tag.putInt("y",p.y());tag.putInt("z",p.z());
             value=new BlockSnapshot(value.state(),tag);
@@ -117,6 +124,17 @@ final class EditPlanner {
         if(before.state()==value.state() && Objects.equals(before.data(),value.data())) { changes.remove(p); return; }
         changes.put(p,new Session.Change(p,before,value));
         if(changes.size()+biomes.size()>Selection.LIMIT) throw new IllegalArgumentException("Operation exceeds 131,072 changes");
+    }
+    /**
+     * Whether a block may stand at {@code p}. The upper half of a door or tall plant is judged by its lower half standing one
+     * below, since the real world has no lower half there yet while a whole door is being moved, cloned or pasted; judging the
+     * upper half against the world would silently drop it and leave half a door.
+     */
+    private boolean survives(BlockState state,Point p) {
+        var half=net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF;
+        if(state.hasProperty(half)&&state.getValue(half)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER)
+            return state.setValue(half,net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER).canSurvive(level,pos(p).below());
+        return state.canSurvive(level,pos(p));
     }
     BlockState preserve(BlockState from, BlockState to) {
         for(var property: from.getProperties()) if(to.hasProperty(property)) to=copyProperty(from,to,property);
@@ -258,6 +276,6 @@ final class EditPlanner {
         }
     }
     Session.Edit finish(String name) {
-        return new Session.Edit(name,List.copyOf(changes.values()),List.copyOf(biomes.values()),o.noUpdates?2|16:3);
+        return new Session.Edit(name,List.copyOf(changes.values()),List.copyOf(biomes.values()),BlockSnapshot.NO_UPDATES);
     }
 }

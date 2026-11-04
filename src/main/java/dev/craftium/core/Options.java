@@ -16,7 +16,26 @@ public final class Options {
     public double noiseScale = 8;
     public double density = 0.5;
     public long seed = 42;
-    public boolean invert, hollow, surfaceOnly = true, keepExisting, pasteAir;
+    /** {@code outline} keeps only the shape's edges, in 2D and 3D; it takes the place of {@code hollow}, never alongside it. */
+    public boolean invert, hollow, outline, surfaceOnly = true, keepExisting, pasteAir;
+    /**
+     * For a hollow shape: how many blocks thick the wall is (at most the radius), whether it is drawn the way a pixel artist would, one
+     * block per column with no doubled steps, and where the wall sits against the edge the radius gives the shape.
+     */
+    public int outlineThickness = 1;
+    public boolean pixelPerfect;
+    public StrokeAlign strokeAlign = StrokeAlign.INSIDE;
+    /** INSIDE grows the wall inward from the shape's edge, OUTSIDE outward, and CENTER puts the edge in the middle of it. */
+    public enum StrokeAlign { INSIDE, CENTER, OUTSIDE }
+    /** How far past the radius a hollow shape reaches because of where its wall is aligned: nothing for inside, the wall's thickness for outside. */
+    public int outlineShift() {
+        if (!hollow) return 0;
+        int t = Math.clamp(outlineThickness, 1, Math.max(1, radius));
+        return strokeAlign == StrokeAlign.OUTSIDE ? t : strokeAlign == StrokeAlign.CENTER ? t / 2 : 0;
+    }
+    /** The radius the shape's outer edge is at: the radius, plus {@link #outlineShift()}, within the reach shapes may have. */
+    public int outerRadius() { return Math.min(radius + outlineShift(), BrushMath.MAX_REACH); }
+    /** Hand placement and breaking only; blocks the editor's tools write never update anything (see BlockSnapshot.NO_UPDATES). */
     public boolean noUpdates, forcePlace, replaceMode, enhancedFlight, bulldozer, tinker;
     public boolean inSelection;
     /** Whether undo and redo flash the blocks they change. */
@@ -46,6 +65,8 @@ public final class Options {
     public double selectionWidth=1;
     /** The point one transform request works about, which can differ from the player's pivot, as when scaling from the far side. */
     public boolean aboutSet;
+    /** A selection transform that also turns and mirrors the blocks' states, as the Edit menu's Rotate and Flip do; the gizmo only moves them. */
+    public boolean turnBlocks;
     public double aboutX,aboutY,aboutZ;
     public boolean pivotSet;
     public double pivotX,pivotY,pivotZ;
@@ -150,7 +171,7 @@ public final class Options {
         shadeAzimuth=bounded(shadeAzimuth,-360,360);shadeAltitude=bounded(shadeAltitude,-90,90);shadeAmbientOcclusion=bounded(shadeAmbientOcclusion,0,1);shadeDither=bounded(shadeDither,0,1);shadeExposure=bounded(shadeExposure,.1,4);shadeBounces=Math.clamp(shadeBounces,0,4);shadeSamples=Math.clamp(shadeSamples,1,8);shadeRayLength=Math.clamp(shadeRayLength,4,96);
         if(pinned==null)pinned=new java.util.ArrayList<>();
         if(pinned.size()>256||pinned.stream().anyMatch(name->name==null||name.length()>64))throw new IllegalArgumentException("Invalid pinned properties");
-        radius = Math.clamp(radius,1,24);
+        radius = Math.clamp(radius,1,BrushMath.MAX_RADIUS);
         strength = Double.isFinite(strength) ? Math.clamp(strength,0.1,5) : 1;
         noiseScale = Double.isFinite(noiseScale) ? Math.clamp(noiseScale,1,64) : 8;
         density = Double.isFinite(density) ? Math.clamp(density,0,1) : 0.5;
@@ -174,11 +195,11 @@ public final class Options {
         selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);magicPreviewLimit=Math.clamp(magicPreviewLimit,1,4096);selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
         octaves=Math.clamp(octaves,1,8);lacunarity=bounded(lacunarity,1,4);gain=bounded(gain,.01,1);jitter=bounded(jitter,0,1);
         scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);
-        sizeX=bounded(sizeX,.1,8);sizeY=bounded(sizeY,.1,8);sizeZ=bounded(sizeZ,.1,8);
+        sizeX=Math.copySign(bounded(Math.abs(sizeX),.1,8),sizeX);sizeY=Math.copySign(bounded(Math.abs(sizeY),.1,8),sizeY);sizeZ=Math.copySign(bounded(Math.abs(sizeZ),.1,8),sizeZ); // negative flips
         yaw=bounded(yaw,-360,360);pitch=bounded(pitch,-360,360);roll=bounded(roll,-360,360);
-        exponent=bounded(exponent,.25,16);innerRadius=bounded(innerRadius,.05,.95);slack=bounded(slack,-64,64);
+        exponent=bounded(exponent,.25,16);innerRadius=bounded(innerRadius,.05,.95);outlineThickness=Math.clamp(outlineThickness,1,radius);if(strokeAlign==null)strokeAlign=StrokeAlign.INSIDE;slack=bounded(slack,-64,64);
         baseChance=bounded(baseChance,0,1);minSpacing=bounded(minSpacing,.1,8);smoothing=bounded(smoothing,.1,5);threshold=bounded(threshold,0,1);meldStrength=bounded(meldStrength,0,3);
-        polygonSides=Math.clamp(polygonSides,3,32);fluidHeight=Math.clamp(fluidHeight,0,100);fontSize=Math.clamp(fontSize,6,96);textThickness=Math.clamp(textThickness,1,8);modelColumns=Math.clamp(modelColumns,2,32);
+        polygonSides=Math.clamp(polygonSides,BrushMath.MIN_SIDES,BrushMath.MAX_SIDES);fluidHeight=Math.clamp(fluidHeight,0,100);fontSize=Math.clamp(fontSize,6,96);textThickness=Math.clamp(textThickness,1,8);modelColumns=Math.clamp(modelColumns,2,32);
         if(nodes==null||nodes.size()>64||nodes.contains(null))throw new IllegalArgumentException("Maximum 64 control points");
         if(selectionPoints==null||selectionPoints.size()>32768||selectionPoints.contains(null))throw new IllegalArgumentException("Lasso selection limit: 32,768 blocks");
         for(String value:new String[]{materials,maskExpression,maskScript,script,fontName,fontFile,heightmap,name,entityType,entityNbt,property,annotationMode,billboard})

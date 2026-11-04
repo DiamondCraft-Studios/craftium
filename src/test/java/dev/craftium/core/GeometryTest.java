@@ -10,8 +10,88 @@ class GeometryTest {
             var solid = new HashSet<>(BrushMath.brush(new Point(0,0,0),5,shape,false));
             var shell = new HashSet<>(BrushMath.brush(new Point(0,0,0),5,shape,true));
             assertTrue(solid.containsAll(shell)); assertFalse(shell.contains(new Point(0,0,0)));
-            solid.forEach(p -> assertTrue(solid.contains(new Point(-p.x(),-p.y(),-p.z()))));
+            solid.forEach(p -> assertTrue(solid.contains(new Point(-p.x(),p.y(),p.z())) && solid.contains(new Point(p.x(),p.y(),-p.z())), shape + " is not mirrored sideways"));
+            // The pointed shapes and the hemisphere stand on a base, so they are not the same upside down.
+            if (!EnumSet.of(BrushMath.Shape.PYRAMID, BrushMath.Shape.CONE, BrushMath.Shape.HEMISPHERE).contains(shape))
+                solid.forEach(p -> assertTrue(solid.contains(new Point(p.x(),-p.y(),p.z())), shape + " is not mirrored vertically"));
         }
+    }
+    @Test void spheresHaveNoSingleBlockNubsAtTheAxes() {
+        for (int r = 2; r <= 24; r++) {
+            var sphere = new HashSet<>(BrushMath.brush(new Point(0,0,0),r,BrushMath.Shape.SPHERE,false));
+            // The block at the end of an axis must have a neighbour beside it on the surface, so it is part of a cap.
+            assertTrue(sphere.contains(new Point(r,0,0)) && sphere.contains(new Point(r,1,0)) && sphere.contains(new Point(r,0,1)), "nub at radius " + r);
+            assertFalse(sphere.contains(new Point(r + 1,0,0)));
+        }
+    }
+    @Test void turnedAndScaledShapeMatchesTheCellByCellDefinition() {
+        var o = new Options(); o.shape = BrushMath.Shape.SPHERE; o.radius = 6;
+        o.yaw = 37; o.pitch = -52; o.roll = 11; o.sizeX = 1.5; o.sizeY = .6; o.sizeZ = 1;
+        var made = new HashSet<>(Geometry.shape(new Point(0,0,0), o));
+        double reach = (o.radius + .5) / o.radius;
+        var expected = new HashSet<Point>();
+        int extent = (int) Math.ceil(o.radius * Math.sqrt(o.sizeX*o.sizeX + o.sizeY*o.sizeY + o.sizeZ*o.sizeZ));
+        for (int x = -extent; x <= extent; x++) for (int y = -extent; y <= extent; y++) for (int z = -extent; z <= extent; z++) {
+            var v = Geometry.inverseRotate(new Geometry.Vector(x, y, z), o.yaw, o.pitch, o.roll);
+            double a = v.x() / (o.radius * o.sizeX), b = v.y() / (o.radius * o.sizeY), c = v.z() / (o.radius * o.sizeZ);
+            if (a*a + b*b + c*c <= reach*reach) expected.add(new Point(x, y, z));
+        }
+        assertFalse(made.isEmpty());
+        assertEquals(expected, made);
+    }
+    @Test void aHollowWallKeepsItsThicknessWhenTheShapeIsScaled() {
+        var o = new Options(); o.shape = BrushMath.Shape.CUBE; o.radius = 6; o.hollow = true; o.outlineThickness = 2; o.sizeX = 3;
+        var made = new HashSet<>(Geometry.shape(new Point(0,0,0), o));
+        // Stretched to 37 blocks along X, the wall at each end is still two blocks, and along the unstretched Z axis it is the same two.
+        assertTrue(made.contains(new Point(18,0,0)) && made.contains(new Point(17,0,0)) && !made.contains(new Point(16,0,0)));
+        assertTrue(made.contains(new Point(0,0,6)) && made.contains(new Point(0,0,5)) && !made.contains(new Point(0,0,4)));
+    }
+    @Test void aTurnedShapeKeepsTheBlocksOfTheUnturnedShape() {
+        var o = new Options(); o.shape = BrushMath.Shape.PLANE; o.radius = 6;
+        var flat = new HashSet<>(Geometry.shape(new Point(0,0,0), o));
+        // A turn about the vertical axis keeps the square's size: no row of its edge is lost and its corners stay.
+        o.yaw = 45; assertTrue(Geometry.shape(new Point(0,0,0), o).size() >= 160);
+        // Quarter turns are exact, whichever axis they go about.
+        for (double[] turn : new double[][]{{90,0,0},{180,0,0},{0,90,0},{0,0,90},{0,270,0}}) {
+            o.yaw = turn[0]; o.pitch = turn[1]; o.roll = turn[2];
+            var made = new HashSet<>(Geometry.shape(new Point(0,0,0), o));
+            assertEquals(flat.size(), made.size(), "quarter turn " + Arrays.toString(turn));
+        }
+        // A cube turned a quarter is the same cube.
+        var cube = new Options(); cube.shape = BrushMath.Shape.CUBE; cube.radius = 5; cube.hollow = true; cube.outlineThickness = 2; cube.yaw = 90;
+        assertEquals(new HashSet<>(BrushMath.brush(new Point(0,0,0),5,BrushMath.Shape.CUBE,true,2,false,cube.outlineShift(),6,false)), new HashSet<>(Geometry.shape(new Point(0,0,0), cube)));
+    }
+    @Test void everyShapeIsInExactlyOnePickerGroup() {
+        var listed = new ArrayList<BrushMath.Shape>();
+        BrushMath.GROUPS.values().forEach(listed::addAll);
+        assertEquals(BrushMath.Shape.values().length, listed.size());
+        assertEquals(EnumSet.allOf(BrushMath.Shape.class), EnumSet.copyOf(listed));
+    }
+    @Test void pointedAndFlatShapesHaveTheirForm() {
+        var pyramid = new HashSet<>(BrushMath.brush(new Point(0,0,0),4,BrushMath.Shape.PYRAMID,false));
+        assertTrue(pyramid.contains(new Point(4,-4,4)) && pyramid.contains(new Point(0,4,0)) && !pyramid.contains(new Point(1,4,0)));
+        var cone = new HashSet<>(BrushMath.brush(new Point(0,0,0),4,BrushMath.Shape.CONE,false));
+        assertTrue(cone.contains(new Point(4,-4,0)) && !cone.contains(new Point(4,-4,4)) && cone.contains(new Point(0,4,0)));
+        assertTrue(BrushMath.brush(new Point(0,0,0),6,BrushMath.Shape.PLANE,false).stream().allMatch(p -> p.y() == 0));
+        assertEquals(13 * 13, BrushMath.brush(new Point(0,0,0),6,BrushMath.Shape.PLANE,false).size());
+        assertTrue(BrushMath.brush(new Point(0,0,0),6,BrushMath.Shape.HEMISPHERE,false).stream().allMatch(p -> p.y() >= 0));
+    }
+    @Test void polygonIsFlatAndFollowsItsSides() {
+        var o = new Point(0,0,0);
+        var triangle = BrushMath.brush(o,10,BrushMath.Shape.POLYGON,false,1,false,0,3);
+        var square = BrushMath.brush(o,10,BrushMath.Shape.POLYGON,false,1,false,0,4);
+        var many = BrushMath.brush(o,10,BrushMath.Shape.POLYGON,false,1,false,0,256);
+        assertTrue(triangle.stream().allMatch(p -> p.y() == 0));
+        assertTrue(triangle.size() < square.size() && square.size() < many.size());
+        assertTrue(many.size() <= BrushMath.brush(o,10,BrushMath.Shape.DISK,false).size());
+    }
+    @Test void outlineKeepsOnlyTheEdges() {
+        var o = new Point(0,0,0);
+        var cube = BrushMath.brush(o,3,BrushMath.Shape.CUBE,false,1,false,0,6,true);
+        assertEquals(12 * 5 + 8, cube.size()); // twelve edges of five blocks between eight corners
+        var ring = new HashSet<>(BrushMath.brush(o,8,BrushMath.Shape.DISK,false,1,false,0,6,true));
+        assertTrue(ring.size() < BrushMath.brush(o,8,BrushMath.Shape.DISK,false).size() && !ring.contains(o));
+        assertEquals(new HashSet<>(BrushMath.edges(BrushMath.brush(o,3,BrushMath.Shape.CUBE,false))), new HashSet<>(cube));
     }
     @Test void selectionBooleanOperationsAreAtomicAtTheLimit() {
         var s = new Selection();
