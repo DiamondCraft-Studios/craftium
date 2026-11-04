@@ -39,6 +39,8 @@ final class Session {
     String restoreUpdate="";
     /** The corners of the Box Select tool's box as of this request, and as of the last time a selection was noted in the history: "none" or points. */
     String cornersNow="none",cornersHistory="none";
+    /** The pivot the player had as of this request and as of the one before it, as "none" or "x,y,z". */
+    String pivotNow="none",pivotBeforeRequest="none";
     /** The selection as it was before the last selection action, so a mistaken one can be taken back. Null when there is none. */
     List<Point> selectionBefore;
     /** The selection as of the last time it was noted in the history, the revision it had, and whether the current action is a selection action. */

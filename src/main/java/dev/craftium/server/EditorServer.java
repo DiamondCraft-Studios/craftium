@@ -151,6 +151,7 @@ public final class EditorServer {
                 if(!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly())s.undo.removeFirst();
                 if(s.selectionBefore!=null){s.selection.restore(s.selectionBefore);s.selectionBefore=null;}send(player,s,"Selection cancelled",false);return;}
             if(r.action().equals("select_box")||r.action().equals("lasso_select")||r.action().equals("use")&&o.tool.selection())s.selectionBefore=new ArrayList<>(s.selection.points());
+            s.pivotBeforeRequest=s.pivotNow;s.pivotNow=pivotText(o,0,0,0);
             if(r.action().equals("select_box")||r.action().equals("select_box_adjust")){if(o.position1!=null&&o.position2!=null)s.cornersNow=dev.craftium.core.Restore.points(o.position1,o.position2);}
             else if(changesSelection(r.action(),o))s.cornersNow="none";
             if(r.action().equals("gamemode")||r.action().startsWith("gamemode_")) {
@@ -697,7 +698,9 @@ public final class EditorServer {
             if(s.currentAction.equals("select_box_adjust")&&!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly()){
                 var began=s.undo.removeFirst().selection();before=began.before();handlesBefore=began.restoreBefore();
             }
-            s.remember(Session.Edit.selecting(selectionName(s.currentAction,after.size()),new Session.SelectionChange(before,after,null,null,handlesBefore,handlesAfter)));
+            // Deselecting also lets go of the pivot, so undo gives it back with the selection.
+            boolean pivotLet=s.currentAction.equals("clear")&&!s.pivotBeforeRequest.equals(s.pivotNow);
+            s.remember(Session.Edit.selecting(selectionName(s.currentAction,after.size()),new Session.SelectionChange(before,after,pivotLet?s.pivotBeforeRequest:null,pivotLet?s.pivotNow:null,handlesBefore,handlesAfter)));
         }
         s.historySelection=after;s.historyRevision=s.selection.revision();s.cornersHistory=s.cornersNow;
     }
