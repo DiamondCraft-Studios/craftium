@@ -73,6 +73,10 @@ public final class Options {
     /** The colour (ARGB) and width, in pixels from 0.1 to 10, of the selection's outline. */
     public int selectionColor=0xff2389c6;
     public double selectionWidth=1;
+    /** How the builder tools draw their selection and where it would land, set apart from the editor's selection: colours (ARGB) and line widths. */
+    public int builderSelectionColor=0xff2389c6,builderSelectionFill=0x302389c6,
+        builderPreviewColor=0xff8be3b5,builderPreviewFill=0x2247d29b,builderPreviewTint=0x9046B4EE,builderMovingTint=0x90EE4646;
+    public double builderSelectionWidth=1,builderPreviewWidth=1;
     /** The point one transform request works about, which can differ from the player's pivot, as when scaling from the far side. */
     public boolean aboutSet;
     /** A selection transform that also turns and mirrors the blocks' states, as the Edit menu's Rotate and Flip do; the gizmo only moves them. */
@@ -243,7 +247,7 @@ public final class Options {
         if(author==null||tags==null||author.length()>80||tags.length()>256)throw new IllegalArgumentException("Blueprint metadata is too long");
         if(entityGroup==null||!entityGroup.matches("[A-Za-z0-9_. -]{0,64}"))throw new IllegalArgumentException("Use a plain entity group name");
         entityX=bounded(entityX,-128,128);entityY=bounded(entityY,-128,128);entityZ=bounded(entityZ,-128,128);entityScaleX=bounded(entityScaleX,.01,16);entityScaleY=bounded(entityScaleY,.01,16);entityScaleZ=bounded(entityScaleZ,.01,16);
-        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
+        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;builderSelectionWidth=Double.isFinite(builderSelectionWidth)?Math.clamp(builderSelectionWidth,.1,10):1;builderPreviewWidth=Double.isFinite(builderPreviewWidth)?Math.clamp(builderPreviewWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
         octaves=Math.clamp(octaves,1,8);lacunarity=bounded(lacunarity,1,4);gain=bounded(gain,.01,1);jitter=bounded(jitter,0,1);
         scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);
         sizeX=Math.copySign(bounded(Math.abs(sizeX),.1,8),sizeX);sizeY=Math.copySign(bounded(Math.abs(sizeY),.1,8),sizeY);sizeZ=Math.copySign(bounded(Math.abs(sizeZ),.1,8),sizeZ); // negative flips
