@@ -19,14 +19,17 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
     private static final int LIST_TOP=76,ROW=24;
 
     /** One preference: a switch, or a number set with a slider. */
-    private sealed interface Row permits Toggle,Number {}
+    private sealed interface Row permits Toggle,Number,Link {}
+    /** A row that opens another screen of settings, which returns here. */
+    private record Link(String label,String about,Function<Screen,Screen> open) implements Row {}
     private record Toggle(String label,String about,Function<Options,Boolean> get,java.util.function.BiConsumer<Options,Boolean> set) implements Row {}
     private record Number(String label,String about,int min,int max,Function<Options,Integer> get,java.util.function.BiConsumer<Options,Integer> set) implements Row {}
 
     private static final List<Row> ROWS=List.of(
         new Toggle("Undo / redo pulse","Flash the changed blocks when you undo or redo",o->o.historyPulse,(o,v)->o.historyPulse=v),
         new Toggle("Magic Wand hover preview","Outline what a Magic Wand click would select",o->o.magicPreview,(o,v)->o.magicPreview=v),
-        new Number("Hover preview limit","No outline when a click would select this many blocks or more",100,20_000,o->o.hoverPreviewLimit,(o,v)->o.hoverPreviewLimit=v));
+        new Number("Hover preview limit","No outline when a click would select this many blocks or more",100,20_000,o->o.hoverPreviewLimit,(o,v)->o.hoverPreviewLimit=v),
+        new Link("Selection options","How the selection looks: its style, line width and colours",SelectionOptionsScreen::new));
 
     private final Screen parent;
     private int page;
@@ -45,6 +48,8 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
             if(ROWS.get(i) instanceof Toggle t){
                 addRenderableWidget(new FlatButton(x+245,y,180,20,t.get().apply(o)?"On":"Off",()->{t.set().accept(o,!t.get().apply(o));init();}));
                 addRenderableWidget(new FlatButton(x+430,y,50,20,"Reset",()->{t.set().accept(o,t.get().apply(DEFAULTS));init();}));
+            }else if(ROWS.get(i) instanceof Link link){
+                addRenderableWidget(new FlatButton(x+245,y,180,20,"Open…",()->ClientCompat.setScreen(minecraft,link.open().apply(this))));
             }else if(ROWS.get(i) instanceof Number n){
                 double span=n.max()-n.min();
                 var slider=new FlatSlider(x+245,y,180,20,Component.empty(),(n.get().apply(o)-n.min())/span){
@@ -61,6 +66,8 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
         addRenderableWidget(new FlatButton(x+280,height-62,110,20,"Reset all",()->{for(Row r:ROWS)reset(r);init();}));
         addRenderableWidget(new FlatButton(x+395,height-62,85,20,"Done",this::onClose));
     }
+    private static String labelOf(Row row){return switch(row){case Toggle t->t.label();case Number n->n.label();case Link l->l.label();};}
+    private static String aboutOf(Row row){return switch(row){case Toggle t->t.about();case Number n->n.about();case Link l->l.about();};}
     private static void reset(Row row){
         var o=ClientState.options;
         if(row instanceof Toggle t)t.set().accept(o,t.get().apply(DEFAULTS));
@@ -74,7 +81,7 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
         g.text(font,"General preferences. Ctrl-click a slider to type a value; middle-click resets it.",x,27,0xff8595a8,false);
         for(int i=page*per;i<Math.min(ROWS.size(),(page+1)*per);i++){
             int y=LIST_TOP-6+(i-page*per)*ROW;Row row=ROWS.get(i);
-            String label=row instanceof Toggle t?t.label():((Number)row).label(),about=row instanceof Toggle t?t.about():((Number)row).about();
+            String label=labelOf(row),about=aboutOf(row);
             g.text(font,label,x,y+6,0xffdce6ef,false);
             if(mouseX>=x&&mouseX<x+240&&mouseY>=y&&mouseY<y+20)g.text(font,font.plainSubstrByWidth(about,width-x*2),x,height-92,0xff8595a8,false);
         }

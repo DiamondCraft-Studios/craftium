@@ -27,10 +27,18 @@ abstract class FlatSlider extends CraftiumSlider {
         if(raw==value)return;
         value=raw;applyValue();updateMessage();
     }
+    /** Where the pointer puts a slider's value, 0 to 1 along a track starting at {@code x}. Every slider in the mod reads the pointer this way. */
+    static double fractionAt(double mouseX,int x,int width){return Math.clamp((mouseX-x-2)/(width-4),0,1);}
+    /** Ctrl steps a value by 1 and Shift by 0.01. */
+    static double step(double units,boolean ctrl,boolean shift){return ctrl?Math.round(units):shift?Math.round(units*100)/100d:units;}
     private void slideTo(double mouseX,boolean ctrl,boolean shift){
-        double raw=Math.clamp((mouseX-getX()-2)/(getWidth()-4),0,1),units=min+raw*(max-min);
-        if(ctrl)units=Math.round(units);else if(shift)units=Math.round(units*100)/100d;
-        setUnits(units);
+        setUnits(step(min+fractionAt(mouseX,getX(),getWidth())*(max-min),ctrl,shift));
+    }
+    /** How every slider looks: the track, the part filled up to {@code fraction}, and the value (or the digits being typed). */
+    static void track(Gfx g,int left,int top,int width,int height,double fraction,Component text,boolean typing,boolean hovered,boolean cursorColour){
+        var o=ClientState.options;int filled=(int)Math.round(Math.clamp(fraction,0,1)*(width-4));
+        g.fill(left,top,left+width,top+height,hovered?Hover.fill(0xff1b2b40):0xff1b2b40);g.fill(left+2,top+2,left+2+filled,top+height-2,hovered?Hover.fill(0xff315473):0xff315473);g.outline(left,top,width,height,typing||hovered?o.uiAccent:o.uiBorder);
+        g.centeredText(Minecraft.getInstance().font,text,left+width/2,top+(height-8)/2,cursorColour?0xffffffff:o.uiText);
     }
     private void hideCursor(boolean hide){
         if(hide==cursorHidden)return;
@@ -79,8 +87,7 @@ abstract class FlatSlider extends CraftiumSlider {
     @Override protected void paint(Gfx g,int x,int y,float delta){
         // A release that never reached the slider, such as the screen closing mid-drag, must not leave the cursor hidden.
         if(sliding&&GLFW.glfwGetMouseButton(Minecraft.getInstance().getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_LEFT)!=GLFW.GLFW_PRESS)stopSliding();
-        var o=ClientState.options;int left=getX(),top=getY(),filled=(int)Math.round(value*(getWidth()-4));g.fill(left,top,left+getWidth(),top+getHeight(),0xff1b2b40);g.fill(left+2,top+2,left+2+filled,top+getHeight()-2,0xff315473);g.outline(left,top,getWidth(),getHeight(),typed!=null||isHoveredOrFocused()?o.uiAccent:o.uiBorder);
         Component text=typed==null?getMessage():Component.literal(typed+(System.currentTimeMillis()/500%2==0?"_":""));
-        g.centeredText(Minecraft.getInstance().font,text,left+getWidth()/2,top+(getHeight()-8)/2,typed==null?o.uiText:0xffffffff);
+        track(g,getX(),getY(),getWidth(),getHeight(),value,text,typed!=null,isHoveredOrFocused(),typed!=null);
     }
 }
