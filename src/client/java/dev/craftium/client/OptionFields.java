@@ -64,7 +64,9 @@ final class OptionFields {
         set(name,parsed);
     }
     private static Point point(String input){String[] parts=input.trim().split("[,\\s]+");if(parts.length!=3)throw new IllegalArgumentException();return new Point(Integer.parseInt(parts[0]),Integer.parseInt(parts[1]),Integer.parseInt(parts[2]));}
-    static String human(String name){String s=name.replaceAll("([a-z])([A-Z])","$1 $2").replace('_',' ').toLowerCase(Locale.ROOT);return s.isEmpty()?s:Character.toUpperCase(s.charAt(0))+s.substring(1);}
+    /** Names that read better than the field's own: the four ways the Magic Wand's search can spread share a "Search" prefix. */
+    private static final Map<String,String> LABELS=Map.of("selectUp","Search up","selectDown","Search down","selectHorizontal","Search horizontal","selectCorners","Search corners");
+    static String human(String name){String label=LABELS.get(name);if(label!=null)return label;String s=name.replaceAll("([a-z])([A-Z])","$1 $2").replace('_',' ').toLowerCase(Locale.ROOT);return s.isEmpty()?s:Character.toUpperCase(s.charAt(0))+s.substring(1);}
     static boolean pinned(String name){return ClientState.options.pinned.contains(name);}
     static void togglePin(String name){var pins=ClientState.options.pinned;if(!pins.remove(name))pins.add(name);}
     /** The pinned properties in the order the full inspector lays them out, each once however many pages list it. */
