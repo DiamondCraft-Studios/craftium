@@ -100,7 +100,7 @@ final class BlueprintLibrary {
         }
         indices.forEach(palette::putInt);root.put("Palette",palette);root.putInt("PaletteMax",indices.size());root.putByteArray("BlockData",bytes.toByteArray());root.put("BlockEntities",entities);root.put("Entities",AssetNbt.schematicEntities(p.session));return root;
     }
-    private static LinkedHashMap<Point,BlockSnapshot> read(CompoundTag root,EditPlanner p)throws IOException{
+    static LinkedHashMap<Point,BlockSnapshot> read(CompoundTag root,EditPlanner p)throws IOException{
         if(root.contains("Schematic"))root=root.getCompoundOrEmpty("Schematic");root=AssetNbt.structure(root,p);var result=new LinkedHashMap<Point,BlockSnapshot>();
         if(root.get("Blocks") instanceof ByteArrayTag)root=upgradeLegacy(root,p);
         if(root.contains("palette")){

@@ -45,8 +45,14 @@ public final class BuilderWidget {
     private static final int MIN_PERCENT=100,MAX_PERCENT=999;
     private static boolean dragging;
     private static int left(int guiWidth){return guiWidth/2-96-WIDTH;}
-    private static int top(int guiHeight){return guiHeight-BOTTOM-HEADER-TOGGLES.size()*(ROW+GAP)-ROW-GAP;}
+    private static int top(int guiHeight){return guiHeight-BOTTOM-HEADER-TOGGLES.size()*(ROW+GAP)-2*(ROW+GAP);}
     private static int sliderY(int guiHeight){return top(guiHeight)+HEADER+TOGGLES.size()*(ROW+GAP);}
+    /** The reach row under the flight speed slider: a click steps through normal, far and infinite reach, a right click steps back. */
+    private static int reachY(int guiHeight){return sliderY(guiHeight)+ROW+GAP;}
+    private static void stepReach(int by){
+        var o=ClientState.options;var modes=Options.ReachMode.values();
+        o.reach=modes[Math.floorMod(o.reach.ordinal()+by,modes.length)];ClientState.save();ClientState.notify("Reach: "+o.reach.label);
+    }
     private static void setSpeed(int mouseX,int x){
         int percent=MIN_PERCENT+Math.round((float)Math.clamp((mouseX-x-2)/(double)(WIDTH-5),0,1)*(MAX_PERCENT-MIN_PERCENT));
         ClientState.options.flySpeed=percent/100f;
@@ -208,6 +214,10 @@ public final class BuilderWidget {
         g.text(mc.font,"Flight speed "+percent+"%",x+6,sy+4,0xffdce6ef,false);
         knob(g,x,sy,WIDTH,ROW,(percent-MIN_PERCENT)/(double)(MAX_PERCENT-MIN_PERCENT));
         if(overSlider||dragging)hover="Drag to set the flight speed, also used by the editor camera";
+        int ry=reachY(g.guiHeight());boolean overReach=mx>=x&&mx<x+WIDTH&&my>=ry&&my<ry+ROW;
+        g.fill(x,ry,x+WIDTH,ry+ROW,o.reach!=Options.ReachMode.NORMAL?(overReach?0xff3f7a63:0xff2f6350):(overReach?0xff2f4260:0xff223247));
+        g.text(mc.font,"Reach: "+o.reach.label,x+6,ry+4,o.reach!=Options.ReachMode.NORMAL?0xffe9fff4:0xffdce6ef,false);
+        if(overReach)hover="How far you can reach blocks: normal, far or infinite · right click goes back";
         String item=drawPages(g,mc,mx,my);if(item!=null)hover=item;
         if(hover!=null)g.text(mc.font,hover,Math.max(4,g.guiWidth()/2-mc.font.width(hover)/2),y-18,0xffe6cf8b,false);
         drawCarried(g,mc,mx,my);
@@ -336,6 +346,8 @@ public final class BuilderWidget {
         var mc=Minecraft.getInstance();var win=mc.getWindow();int w=win.getGuiScaledWidth(),h=win.getGuiScaledHeight();
         int x=left(w),y=top(h),mx=mouseX(mc),my=mouseY(mc);
         int[] slot=slotAt(w,h,mx,my);if(slot!=null){unfocus(mc);click(mc,slot[0],slot[1],button);return true;}
+        int reachRow=reachY(h);
+        if(mx>=x&&mx<x+WIDTH&&my>=reachRow&&my<reachRow+ROW&&button<2){unfocus(mc);stepReach(button==0?1:-1);return true;}
         if(button!=0)return true;
         if(inside(mx,my,controlsX(w),h-BOTTOM-18,24,18)){unfocus(mc);toolbox=!toolbox;settingDrag=-1;return true;}
         if(toolbox){

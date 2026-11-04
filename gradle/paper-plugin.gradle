@@ -53,6 +53,7 @@ processResources {
     filesMatching('plugin.yml') { expand version: project.version }
     from(rootProject.file('src/main/resources/assets/craftium/icon.png')) { into 'assets/craftium' }
     from(rootProject.file('branding/craftium.svg')) { into 'assets/craftium' }
+    from(rootProject.file('src/main/resources/assets/craftium/bedrock_blocks.txt.gz')) { into 'assets/craftium' }
 }
 jar {
     from({ configurations.embedded.collect { zipTree(it) } })

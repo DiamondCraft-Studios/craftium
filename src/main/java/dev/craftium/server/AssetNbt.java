@@ -25,6 +25,8 @@ final class AssetNbt {
             ClipboardEntities.walk(tag,item->{if(++count[0]>512)throw new IllegalArgumentException("Asset entity limit: 512 including passengers");var pos=item.getListOrEmpty("Pos");if(pos.size()!=3)throw new IllegalArgumentException("Invalid asset entity position");});result.add(tag);
         }return List.copyOf(result);
     }
-    static ListTag structureEntities(Session session){var result=new ListTag();for(var saved:session.clipboardEntities){var entry=new CompoundTag();var at=saved.getListOrEmpty("Pos");entry.put("pos",at.copy());var blockPos=new ListTag();for(int i=0;i<3;i++)blockPos.add(IntTag.valueOf((int)Math.floor(at.getDoubleOr(i,0))));entry.put("blockPos",blockPos);entry.put("nbt",saved.copy());result.add(entry);}return result;}
-    static ListTag schematicEntities(Session session){var result=new ListTag();for(var saved:session.clipboardEntities){var tag=saved.copy();tag.putString("Id",tag.getStringOr("id",""));tag.remove("id");tag.remove("UUID");result.add(tag);}return result;}
+    static ListTag structureEntities(Session session){return structureEntities(session.clipboardEntities);}
+    static ListTag structureEntities(List<CompoundTag> entities){var result=new ListTag();for(var saved:entities){var entry=new CompoundTag();var at=saved.getListOrEmpty("Pos");entry.put("pos",at.copy());var blockPos=new ListTag();for(int i=0;i<3;i++)blockPos.add(IntTag.valueOf((int)Math.floor(at.getDoubleOr(i,0))));entry.put("blockPos",blockPos);entry.put("nbt",saved.copy());result.add(entry);}return result;}
+    static ListTag schematicEntities(Session session){return schematicEntities(session.clipboardEntities);}
+    static ListTag schematicEntities(List<CompoundTag> entities){var result=new ListTag();for(var saved:entities){var tag=saved.copy();tag.putString("Id",tag.getStringOr("id",""));tag.remove("id");tag.remove("UUID");result.add(tag);}return result;}
 }

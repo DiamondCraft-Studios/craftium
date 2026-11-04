@@ -143,8 +143,10 @@ public final class EditorServer {
                 send(player,s,"Editor reset",false);return;
             }
             long now=System.nanoTime();
-            if(now-s.lastRequest<65_000_000L&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
-            s.lastRequest=now;
+            // The export pop-up asks for a new preview as fields change and must not lose one, or an export, to a request just before it.
+            boolean popup=Set.of("structure_preview","structure_export_file","structure_import_file").contains(r.action());
+            if(now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
+            if(!popup)s.lastRequest=now;
             if(r.action().equals("selection_restore")){
                 if(!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly())s.undo.removeFirst();
                 if(s.selectionBefore!=null){s.selection.restore(s.selectionBefore);s.selectionBefore=null;}send(player,s,"Selection cancelled",false);return;}
@@ -236,6 +238,9 @@ public final class EditorServer {
                 case "ruler_clear" -> {s.ruler=null;send(player,s,"Measurement cleared",false);}
                 case "asset_upload","blueprint_list","blueprint_save","blueprint_load","blueprint_data","structure_export","schematic_export","schematic_import","selection_csv" -> {
                     var plan=new EditPlanner(player.level(),s,o);String result=BlueprintLibrary.act(r.action(),plan);if(Set.of("blueprint_save","structure_export","schematic_export","selection_csv","blueprint_data").contains(r.action()))result+=BlueprintLibrary.download(r.action(),plan,player);send(player,s,result,false);
+                }
+                case "structure_preview","structure_export_file","structure_import_file" -> {
+                    var plan=new EditPlanner(player.level(),s,o);String result=StructureLibrary.act(r.action(),plan,player);if(!result.isEmpty())send(player,s,result,false);
                 }
                 case "entity_copy","entity_cut" -> {
                     var entity=player.level().getEntity(UUID.fromString(o.entityUuid));

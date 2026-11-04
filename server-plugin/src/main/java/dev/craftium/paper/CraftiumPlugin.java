@@ -109,7 +109,7 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
     @Override public boolean permitted(ServerPlayer nativePlayer,String action){
         Player player=getServer().getPlayer(nativePlayer.getUUID());if(player==null||!player.hasPermission("craftium.edit")||!worldAllowed(player.getWorld()))return false;
         if(FABRIC_RULES.contains(action))throw new IllegalArgumentException("This custom world rule currently requires a Fabric server");
-        String permission=action.startsWith("world_")?"world":action.startsWith("gamemode")?"gamemode":action.equals("flight")||action.equals("capabilities")?"capabilities":action.equals("animated_rebuild")||action.equals("rebuild_cancel")?"rebuild":Set.of("asset_upload","structure_export","schematic_export","selection_csv","blueprint_save").contains(action)?"assets":"edit";
+        String permission=action.startsWith("world_")?"world":action.startsWith("gamemode")?"gamemode":action.equals("flight")||action.equals("capabilities")?"capabilities":action.equals("animated_rebuild")||action.equals("rebuild_cancel")?"rebuild":Set.of("asset_upload","structure_export","schematic_export","selection_csv","blueprint_save","structure_preview","structure_export_file","structure_import_file").contains(action)?"assets":"edit";
         return player.hasPermission("craftium."+permission);
     }
     @Override public net.minecraft.commands.CommandSourceStack commands(ServerPlayer player){
