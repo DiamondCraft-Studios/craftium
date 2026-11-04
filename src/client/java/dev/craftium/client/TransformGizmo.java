@@ -66,7 +66,7 @@ final class TransformGizmo {
         if(ShapeObject.gizmoOn())return new Target(Kind.SHAPE,ShapeObject.centre(),null);
         var status=ClientState.status;var o=ClientState.options;
         if(o.tool.transform()){
-            if(o.tool==Tool.PIVOT)return new Target(Kind.PIVOT,pivot(),null);
+            if(o.tool==Tool.PIVOT)return new Target(Kind.PIVOT,pivotAnchor(screen),null);
             return status.selectionSize()>0?new Target(Kind.MODEL,pivot(),null):null;
         }
         if(o.gizmoTarget!=Options.GizmoTarget.ENTITY&&(o.tool==Tool.BOX_SELECT||o.gizmoTarget==Options.GizmoTarget.SELECTION)&&status.selectionSize()>0){Point min=status.min();return new Target(Kind.SELECTION,new Vec3(min.x(),min.y(),min.z()),null);}
@@ -375,6 +375,24 @@ final class TransformGizmo {
         double[] flips=dragging!=null&&dragging.kind==Kind.NODE&&dragFlips!=null&&anchor.distanceTo(dragging.anchor.add(delta))<1e-6?dragFlips:flipsFor(anchor);
         if(flips!=null)for(int i=0;i<3;i++)directions[i]=directions[i].scale(flips[i]);
         return directions;
+    }
+    /** Where the Pivot tool's gizmo was put down when there was no selection and no pivot to show it at; null while one of those exists. */
+    private static Vec3 parked;
+    /**
+     * Where the Pivot tool's gizmo sits. Without a selection or a set pivot there is no centre to show it at (an empty selection reads
+     * as the world origin, far from where you are), so it is put down once, on the block under the pointer or a few blocks ahead of the
+     * camera, and stays there to be grabbed.
+     */
+    private static Vec3 pivotAnchor(EditorScreen screen){
+        var o=ClientState.options;
+        if(o.pivotSet||ClientState.status.selectionSize()>0){parked=null;return pivot();}
+        var mc=Minecraft.getInstance();
+        if(parked!=null&&(mc.player==null||parked.distanceToSqr(mc.player.position())<128*128))return parked;
+        var hit=screen.target();
+        if(hit!=null)return parked=Vec3.atCenterOf(hit.getBlockPos());
+        if(mc.player==null)return pivot();
+        Vec3 ahead=mc.player.getEyePosition().add(mc.player.getLookAngle().scale(6));
+        return parked=new Vec3(Math.floor(ahead.x)+.5,Math.floor(ahead.y)+.5,Math.floor(ahead.z)+.5);
     }
     /** The centre of the selection, or the pivot the player set: the point the Rotate and Scale tools work around. */
     static Vec3 pivot(){
