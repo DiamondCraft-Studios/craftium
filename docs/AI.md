@@ -15,6 +15,8 @@ Claude Desktop ──stdio──▶ craftium-mcp (Node) ──127.0.0.1──▶
 3. In Minecraft, open a world and the editor (Right Shift), choose **View → AI building…**, and press **Turn on AI building**. The setting is remembered. (The commands `/craftium ai on`, `/craftium ai off` and `/craftium ai` do the same.)
 4. If your game does not use the default `.minecraft` folder (a Prism, Modrinth App or CurseForge profile, for example), open the extension's settings in Claude Desktop and choose the profile's game folder, the one that contains `config` and `mods`.
 
+A preview made by an AI app is drawn in **violet**, so it is never mistaken for your own blue edit previews, and the marker reads **AI preview** while one is waiting.
+
 While AI building is on, a small **AI** marker shows in the top right corner of the game: amber while it waits for the AI app, green once the app has connected, and blue while a request is being answered. The **AI** tab of the studio inspector shows the same status, the last request, and buttons to **Apply** or **Discard** a waiting preview and to **Undo** the last edit, so you can approve a build without going back to the chat.
 
 Then ask Claude for a build while the game is open. Claude can select an area in front of you, or you can select one yourself first. Look at the ghost in the game, ask for changes, and say when to apply it.
@@ -26,6 +28,8 @@ Then ask Claude for a build while the game is open. Claude can select an area in
 | `get_state` | Your position and facing, the selection, and whether a preview is waiting |
 | `get_blocks` | Reads the blocks in a box (up to 32,768 at a time) |
 | `get_palette` | Your current block and recently used blocks |
+| `get_screenshot` | A picture of what you see in the game, including the preview, so Claude can check its own work |
+| `look_at` | Turns your view (not your position) toward a block so the picture shows the build, and turns it back afterwards |
 | `set_selection`, `clear_selection` | Chooses the area builds go in |
 | `preview_build` | Shows a build as a ghost, replacing any earlier preview |
 | `apply_preview` | Builds the preview, as one undoable step |
@@ -55,6 +59,7 @@ A build ignores your brush settings (mask, symmetry, height range) and places ex
 
 - The bridge is **off until you turn it on**, and it listens on `127.0.0.1` only.
 - Each launch writes a new random token to `config/craftium/bridge.json`. Requests without it are refused, as are requests that come from a web page (they carry an `Origin`) or name another host.
+- `get_screenshot` sends a picture of your game window (at most 1024 pixels wide) to the AI app, so close anything private on screen first. It is only taken when the AI app asks, and the corner marker shows **AI working…** while it does. `look_at` only turns your view, never moves you.
 - Builds are always staged as a ghost first, even if you have turned confirmation off for your own edits. Applying is a separate step.
 - The file is deleted when the bridge stops. If Minecraft crashes and leaves it behind, the extension reports that the game is not running.
 - Anyone who can read your Minecraft folder or run programs as you can read the token, as with any local app. Turn the bridge off when you are not using it.
