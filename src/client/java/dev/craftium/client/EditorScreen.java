@@ -211,7 +211,7 @@ public final class EditorScreen extends CraftiumScreen {
             int index=i,bw=font.width(names[i])+16;
             button(g,x,2,bw,19,names[i],menu==i,()->{menu=menu==index?-1:index;openSub="";openSub2="";},"");x+=bw;
         }
-        button(g,w-58,3,52,17,"Exit  ×",false,this::onClose,"Return to building · Right Shift");
+        button(g,w-58,3,52,17,"Exit  ×",false,this::onClose,"");
     }
     /** Draws a panel's frame at its real size, and sets {@link #pw}, {@link #ph} and {@link #pb} for the contents to lay themselves out in. */
     private void panel(Gfx g,int x,int y,int width,int height,String title) {
@@ -224,7 +224,7 @@ public final class EditorScreen extends CraftiumScreen {
         g.fill(x,y,x+width,y+height,BG);g.outline(x,y,width,height,LINE);
         g.fill(x+1,y+1,x+width-1,y+18,0xff202a37);g.fill(x+1,y+1,x+3,y+18,ACCENT);
         text(g,"▾",x+7,y+6,MUTED);text(g,title,x+17,y+6,TEXT);
-        if(!id.isBlank()){text(g,"×",x+width-12,y+5,MUTED);controls.add(new Control(x+width-17,y+2,15,14,()->WorkspaceLayout.toggle(id),"Close panel · reopen from Window"));boolean grip=resizeGripHovered(id);g.fill(x+width-6,y+height-6,x+width-2,y+height-2,grip||id.equals(draggedPanel)&&resizePanel?ACCENT:LINE);}
+        if(!id.isBlank()){text(g,"×",x+width-12,y+5,MUTED);controls.add(new Control(x+width-17,y+2,15,14,()->WorkspaceLayout.toggle(id),""));boolean grip=resizeGripHovered(id);g.fill(x+width-6,y+height-6,x+width-2,y+height-2,grip||id.equals(draggedPanel)&&resizePanel?ACCENT:LINE);}
     }
     /** The size of the panel being drawn, and where its bottom edge is; contents lay out against these, never against fixed sizes. */
     private int pw,ph,pb;
@@ -284,7 +284,7 @@ public final class EditorScreen extends CraftiumScreen {
                 g.fill(x,y,x+21,y+21,selected?0xff315b84:0xff223247);
                 if(selected){g.outline(x,y,21,21,0xff8bc7ff);g.fill(x,y+19,x+21,y+21,ACCENT);}
                 g.pose().pushMatrix();g.pose().translate(x,y);g.pose().scale(.82f,.82f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
-                controls.add(new Control(x,y,21,21,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},tool.label+" · "+tool.description));
+                controls.add(new Control(x,y,21,21,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},tool.description));
             }
             y+=TOOL_PITCH;
         }
@@ -443,7 +443,7 @@ public final class EditorScreen extends CraftiumScreen {
             int track=bottom-MODIFY_TOP,thumb=Math.max(14,track*shown/rows.size()),at=MODIFY_TOP+(track-thumb)*modifyScroll/max;
             g.fill(pw-8,MODIFY_TOP,pw-4,bottom,0xff1b2b40);g.fill(pw-8,at,pw-4,at+thumb,MUTED);
             int top=MODIFY_TOP,span=Math.max(1,track-thumb),limit=max;
-            controls.add(new Control(pw-11,top,10,track,()->{double py=WorkspaceLayout.inverse("options",mx,my)[1];modifyScroll=Math.clamp((int)Math.round((py-top-thumb/2.0)/span*limit),0,limit);},"Scroll the properties · mouse wheel"));
+            controls.add(new Control(pw-11,top,10,track,()->{double py=WorkspaceLayout.inverse("options",mx,my)[1];modifyScroll=Math.clamp((int)Math.round((py-top-thumb/2.0)/span*limit),0,limit);},""));
         }
         boolean cursorBound=ModifyMath.usesCursor(o);
         String where=ModifyPreview.anchored()?(cursorBound&&ModifyPreview.anchor()!=null?"Anchored at "+ModifyPreview.anchor().coordinates():"Anchored"):cursorBound?"Following the cursor · click to anchor":"Click to anchor the preview";
@@ -546,7 +546,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(scrollLimit>0){
             int track=bottom-top,thumb=Math.max(14,track*track/(track+scrollLimit)),at=top+(track-thumb)*optionsScroll/scrollLimit,span=Math.max(1,track-thumb),limit=scrollLimit;
             g.fill(pw-7,top,pw-3,bottom,0xff1b2b40);g.fill(pw-7,at,pw-3,at+thumb,MUTED);
-            controls.add(new Control(pw-10,top,10,track,()->{double py=WorkspaceLayout.inverse("options",mx,my)[1];optionsScroll=Math.clamp((int)Math.round((py-top-thumb/2.0)/span*limit),0,limit);},"Scroll the options · mouse wheel"));
+            controls.add(new Control(pw-10,top,10,track,()->{double py=WorkspaceLayout.inverse("options",mx,my)[1];optionsScroll=Math.clamp((int)Math.round((py-top-thumb/2.0)/span*limit),0,limit);},""));
         }
     }
     /** Runs {@code content} outside the scrolling area, where the bottom buttons stay put. */
@@ -573,10 +573,10 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,10,457,pw-20,20,"Reach: "+o().reach.label,false,()->o().reach=Options.ReachMode.values()[(o().reach.ordinal()+1)%Options.ReachMode.values().length],()->o().reach=Options.ReachMode.values()[Math.floorMod(o().reach.ordinal()-1,Options.ReachMode.values().length)],"How far you can reach blocks: normal, far (set below) or infinite · right click goes back");
         slider(g,10,494,pw-20,"Far reach: blocks",o().farReach,6,64,DEFAULTS.farReach,v->o().farReach=(int)Math.round(v),true);
         slider(g,10,530,pw-20,"Fly speed",o().flySpeed,.1,10,DEFAULTS.flySpeed,v->o().flySpeed=(float)v,false);
-        button(g,10,554,pw-20,20,"Apply flight speed",false,()->action("flight"),"Apply the selected flight speed");
+        button(g,10,554,pw-20,20,"Apply flight speed",false,()->action("flight"),"");
         int[] pair=flex(pw-20,6,1,1);
         button(g,10,580,pair[0],20,"Hotbar ↔",false,()->action("hotbar"),"Swap the hotbar with inventory row 1 · Z");
-        button(g,16+pair[0],580,pair[1],20,"Game mode",false,()->action("gamemode"),"Switch between Creative and Spectator");
+        button(g,16+pair[0],580,pair[1],20,"Game mode",false,()->action("gamemode"),"");
         button(g,10,608,pw-20,20,"Builder tool: "+o().builderTool.name(),false,()->{o().builderTool=Options.BuilderTool.values()[(o().builderTool.ordinal()+1)%Options.BuilderTool.values().length];},()->{o().builderTool=Options.BuilderTool.values()[Math.floorMod(o().builderTool.ordinal()-1,Options.BuilderTool.values().length)];},"Press 0 in the world · Alt + wheel changes tools");
     }
     private void targetInfo(Gfx g) {
@@ -603,7 +603,7 @@ public final class EditorScreen extends CraftiumScreen {
         blockSlot(g,x+10,248,"Foreground block",o().block,id->ClientState.pick(id));
         // The first cell is always "+", which adds a block to the palette and makes it the foreground.
         g.fill(x+10,298,x+33,321,0xff243246);g.outline(x+10,298,23,23,LINE);g.centeredText(font,"+",x+21,306,TEXT);
-        controls.add(new Control(x+10,298,23,23,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,"Add to palette","",id->{ClientState.pick(id);ClientState.save();})),"Add a block to the palette"));
+        controls.add(new Control(x+10,298,23,23,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,"Add to palette","",id->{ClientState.pick(id);ClientState.save();})),"Add block"));
         var blocks=ClientState.palette;int i=1;
         for(String block:blocks.subList(0,Math.min(Math.max(0,(pw-20)/26-1),blocks.size()))) {
             int bx=x+10+i*26,by=298;i++;
@@ -674,21 +674,21 @@ public final class EditorScreen extends CraftiumScreen {
         int[] cell=flex(pw-20,9,1,1);
         button(g,x+10,y+24,cell[0],19,"Undo "+ClientState.status.undo(),false,()->action("undo"),"Undo · Ctrl+Z");
         button(g,x+19+cell[0],y+24,cell[1],19,"Redo "+ClientState.status.redo(),false,()->action("redo"),"Redo · Ctrl+Y");
-        int row=y+51,index=0;for(String event:ClientState.status.history()){if(row>y+height-12)break;int steps=++index;text(g,shorten(event,pw-20),x+10,row,MUTED);controls.add(new Control(x+7,row-3,pw-14,14,()->{o().historySteps=steps;action("history_undo_many");},"Undo through this edit"));row+=15;}
+        int row=y+51,index=0;for(String event:ClientState.status.history()){if(row>y+height-12)break;int steps=++index;text(g,shorten(event,pw-20),x+10,row,MUTED);controls.add(new Control(x+7,row-3,pw-14,14,()->{o().historySteps=steps;action("history_undo_many");},""));row+=15;}
     }
     private void masks(Gfx g) {
         int x=w-RIGHT,y=h-212;panel(g,x,y,RIGHT,187,"Tool masks");
         int half=(pw-24)/2;
         maskCols=Math.max(1,(pw-19)/MASK_PITCH);maskRows=Math.max(1,(ph-109)/MASK_PITCH);
-        button(g,x+10,y+24,half,19,"Include",!o().maskExclude,()->o().maskExclude=false,"Include: only change the toggled blocks below");
-        button(g,x+14+half,y+24,half,19,"Exclude",o().maskExclude,()->o().maskExclude=true,"Exclude: change everything except the toggled blocks");
+        button(g,x+10,y+24,half,19,"Include",!o().maskExclude,()->o().maskExclude=false,"");
+        button(g,x+14+half,y+24,half,19,"Exclude",o().maskExclude,()->o().maskExclude=true,"");
         var cells=o().maskBlocks;int total=cells.size()+1,rows=(total+maskCols-1)/maskCols;maskScroll=Math.clamp(maskScroll,0,Math.max(0,rows-maskRows));
         for(int r=0;r<maskRows;r++)for(int c=0;c<maskCols;c++){
             int i=(maskScroll+r)*maskCols+c;if(i>=total)break;
             int bx=x+10+c*MASK_PITCH,by=y+50+r*MASK_PITCH;
             if(i==0){
                 g.fill(bx,by,bx+22,by+22,0xff243246);g.outline(bx,by,22,22,LINE);g.centeredText(font,"+",bx+11,by+7,TEXT);
-                controls.add(new Control(bx,by,22,22,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,"Add to mask","",this::addMaskBlock)),"Add a block to the mask palette"));
+                controls.add(new Control(bx,by,22,22,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,"Add to mask","",this::addMaskBlock)),"Add block"));
                 continue;
             }
             int index=i-1;String block=cells.get(index);boolean on=o().maskActive.contains(block);
@@ -701,7 +701,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(rows>maskRows){
             int track=maskRows*MASK_PITCH-3,thumb=Math.max(10,track*maskRows/rows),thumbY=y+50+(track-thumb)*maskScroll/(rows-maskRows),barX=x+pw-11;
             g.fill(barX,y+50,barX+5,y+50+track,0xff1b2838);g.fill(barX,thumbY,barX+5,thumbY+thumb,0xff4a6585);
-            controls.add(new Control(barX-2,y+50,9,track,()->{double py=WorkspaceLayout.inverse("masks",mx,my)[1];maskScroll=Math.clamp((int)Math.round((py-y-50-thumb/2.0)/Math.max(1,track-thumb)*(rows-maskRows)),0,rows-maskRows);},"Scroll the mask blocks"));
+            controls.add(new Control(barX-2,y+50,9,track,()->{double py=WorkspaceLayout.inverse("masks",mx,my)[1];maskScroll=Math.clamp((int)Math.round((py-y-50-thumb/2.0)/Math.max(1,track-thumb)*(rows-maskRows)),0,rows-maskRows);},""));
         }
         text(g,"Min Y",x+10,y+ph-53,MUTED);text(g,"Max Y",x+pw-90,y+ph-53,MUTED);
         toggle(g,x+10,y+ph-18,"Only in selection",o().inSelection,()->o().inSelection=!o().inSelection,"Only edit blocks inside the current selection. Blocks outside it are left alone, and with nothing selected nothing changes.");
@@ -758,13 +758,13 @@ public final class EditorScreen extends CraftiumScreen {
         g.fill(b[0],b[1],b[0]+b[2],b[1]+b[3],0xf0141d29);g.outline(b[0],b[1],b[2],b[3],ACCENT);
         if(confirm!=null){
             text(g,shorten(confirm.text(),b[2]-20),b[0]+10,b[1]+9,TEXT);
-            button(g,b[0]+10,b[1]+30,112,22,"Confirm",true,this::acceptConfirm,confirm.hint()+" · Enter");
-            button(g,b[0]+128,b[1]+30,112,22,"Cancel",false,this::dismissConfirm,"Leave things as they are · Esc");
+            button(g,b[0]+10,b[1]+30,112,22,"Confirm",true,this::acceptConfirm,"");
+            button(g,b[0]+128,b[1]+30,112,22,"Cancel",false,this::dismissConfirm,"");
             return;
         }
         text(g,"Selected "+ClientState.largeSelection+" blocks, confirm?",b[0]+10,b[1]+9,TEXT);
-        button(g,b[0]+10,b[1]+30,112,22,"Confirm",true,this::confirmLargeSelection,"Keep the selection · Enter");
-        button(g,b[0]+128,b[1]+30,112,22,"Cancel",false,this::cancelLargeSelection,"Go back to the selection you had · Esc");
+        button(g,b[0]+10,b[1]+30,112,22,"Confirm",true,this::confirmLargeSelection,"");
+        button(g,b[0]+128,b[1]+30,112,22,"Cancel",false,this::cancelLargeSelection,"");
     }
     private void confirmLargeSelection(){ClientState.largeSelection=0;SelectionOverlay.update(ClientState.heldSelection);}
     private void cancelLargeSelection(){
@@ -790,7 +790,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(selected){g.outline(x,y,26,26,0xff8bc7ff);g.fill(x,y+24,x+26,y+26,ACCENT);}
             g.pose().pushMatrix();g.pose().translate(x+1,y+1);g.pose().scale(1f,1f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
             int key=EditorControls.toolDefault(tool);
-            controls.add(new Control(x,y,26,26,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},tool.label+(key>0?" · "+(char)key+" / "+(slot+1):" · "+(slot+1))+" · "+tool.description));
+            controls.add(new Control(x,y,26,26,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},tool.description+(key>0?" · "+(char)key+" / "+(slot+1):" · "+(slot+1))));
         }
     }
     private void statusbar(Gfx g) {
