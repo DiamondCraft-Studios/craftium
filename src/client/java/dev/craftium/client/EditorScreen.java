@@ -152,6 +152,7 @@ public final class EditorScreen extends CraftiumScreen {
         BG=o().uiBackground;PANEL=o().uiPanel;LINE=o().uiBorder;ACCENT=o().uiAccent;TEXT=o().uiText;MUTED=o().uiMuted;
         if(!suspended&&layoutKey!=layoutKey())init();
         pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();sliderAreas.clear();dragSources.clear();
+        syncCrosshair();
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
         g.pose().pushMatrix();g.pose().scale(scale,scale);
         topbar(g);
@@ -174,6 +175,7 @@ public final class EditorScreen extends CraftiumScreen {
             g.widget(f,(int)point[0],(int)point[1],delta);g.pose().popMatrix();
         }
         hoverFeedback(g);
+        pipettePreview(g);
         if(!help&&menu<0) {
             String tooltip="";for(var c:controls)if(c.contains(mx,my)&&!c.tip.isEmpty())tooltip=c.tip;
             if(!tooltip.isEmpty()) {
@@ -631,15 +633,35 @@ public final class EditorScreen extends CraftiumScreen {
     /** Whether the next click on the world takes the block it lands on into the palette, and the block the pointer is over meanwhile. */
     private boolean pipetting;
     private String pipetteBlock="";
-    /** The Pipette button and, beside it, a cell showing the item of the block under the pointer while a pipette is in hand. */
+    /** The pipette button, an icon that lights up while the pipette is in hand. */
     private void pipetteControls(Gfx g,int x,int y){
-        FlatButton.face(g,x,y,52,30,"Pipette",pipetting,true,false);
-        controls.add(new Control(x,y,52,30,()->pipetting=!pipetting,"Click a block in the world to add it to the palette · Esc cancels"));
-        var hit=pipetting?pipetteTarget(pointerX,pointerY):null;
-        pipetteBlock=hit==null||minecraft.level==null?"":BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos()));
-        int cell=x+58;
-        g.fill(cell,y,cell+30,y+30,0xff1b2838);g.outline(cell,y,30,30,pipetting?ACCENT:LINE);
-        if(!pipetteBlock.isEmpty())BlockPickerScreen.icon(g,font,pipetteBlock,cell+7,y+7);
+        FlatButton.face(g,x,y,30,30,"",pipetting,true,false);
+        int color=pipetting?0xffffffff:0xffd0deeb;
+        g.fill(x+19,y+6,x+24,y+11,color); // the bulb
+        ToolIcons.line(g,x+16,y+10,x+21,y+15,color); // the collar
+        ToolIcons.line(g,x+8,y+22,x+18,y+12,color);ToolIcons.line(g,x+9,y+23,x+19,y+13,color); // the tube
+        g.fill(x+7,y+23,x+9,y+25,color); // the tip
+        controls.add(new Control(x,y,30,30,()->pipetting=!pipetting,"Click a block in the world to add it to the palette · Esc cancels"));
+    }
+    /** While the pipette is in hand: finds the block under the pointer and shows its item in a cell above and to the right of the cursor. */
+    private void pipettePreview(Gfx g){
+        pipetteBlock="";
+        if(!pipetting||menu>=0||help||transform)return;
+        var hit=pipetteTarget(pointerX,pointerY);
+        if(hit==null||minecraft.level==null)return;
+        pipetteBlock=BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos()));
+        int cx=Math.clamp(mx+12,0,w-30),cy=Math.clamp(my-42,25,h-52);
+        g.fill(cx,cy,cx+30,cy+30,0xf01b2838);g.outline(cx,cy,30,30,ACCENT);
+        BlockPickerScreen.icon(g,font,pipetteBlock,cx+7,cy+7);
+    }
+    private long crosshairCursor;private boolean crosshairShown;
+    /** Over the world with the pipette in hand the pointer is a crosshair. */
+    private void syncCrosshair(){
+        boolean want=pipetting&&!suspended&&menu<0&&!help&&!transform&&inViewport(pointerX/scale,pointerY/scale);
+        if(want==crosshairShown)return;
+        crosshairShown=want;
+        if(want&&crosshairCursor==0)crosshairCursor=GLFW.glfwCreateStandardCursor(GLFW.GLFW_CROSSHAIR_CURSOR);
+        GLFW.glfwSetCursor(minecraft.getWindow().handle(),want?crosshairCursor:0L);
     }
     /** A 30px swatch for one of the two selected blocks; clicking it opens the block chooser to replace it. */
     private void blockSlot(Gfx g,int x,int y,String label,String block,java.util.function.Consumer<String> set) {
@@ -1503,6 +1525,6 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         return best<100;
     }
     private int key(long handle,int key){return GLFW.glfwGetKey(handle,key)==GLFW.GLFW_PRESS?1:0;}
-    @Override public void removed(){TransformGizmo.cancel();draggingNode=draggingPlacement=false;cameraGesture=CameraGesture.NONE;syncCursor();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
+    @Override public void removed(){pipetting=false;syncCrosshair();TransformGizmo.cancel();draggingNode=draggingPlacement=false;cameraGesture=CameraGesture.NONE;syncCursor();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
     @Override public void onClose(){ClientState.save();if(ClientState.largeSelection>0)confirmLargeSelection();ClientCompat.setScreen(minecraft,null);if(ClientState.hasPending()&&CraftiumClient.supported())CraftiumClient.send("pending_cancel",null,null);if(CraftiumClient.supported()&&minecraft.player!=null&&minecraft.player.isSpectator())CraftiumClient.send("gamemode_restore",null,null);}
 }
