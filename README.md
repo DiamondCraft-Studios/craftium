@@ -19,7 +19,7 @@ Craftium is an AI-assisted, independently implemented Fabric building studio wit
 
 For multiplayer, choose a Fabric server with the same mod, or install the companion on **Paper/Purpur**: `craftium-server-0.3.1-dev.jar` for 26.2, or `craftium-server-0.3.1-dev+mc1.21.10.jar` for 1.21.10. Players use the updated Fabric client in both cases. The companion defaults to operators and supports permission grants, protected edits and large transfers. Read [Server installation and permissions](docs/SERVER-PLUGIN.md).
 
-On Fabric servers, editing requires operator permission level 2 and Creative mode. On Paper/Purpur, grant `craftium.edit` and use Creative mode. Creative No Clip and four custom Fabric world rules are currently unavailable on Paper/Purpur.
+On Fabric servers, editing requires operator permission level 2 and Creative mode. On Paper/Purpur, grant `craftium.edit` and use Creative mode. Four custom Fabric world rules are currently unavailable on Paper/Purpur.
 
 The editor scales to Minecraft GUI settings. A 1280 × 720 or larger window is recommended for readable controls.
 

@@ -20,7 +20,7 @@ The plugin shares the Fabric edition's editing implementation: selections, brush
 
 Time, weather, vanilla gamerules, game mode and flight speed have separate permissions. Editor visuals and reference images run on the client.
 
-**Current Paper/Purpur differences:** Creative No Clip and the custom block-gravity, farmland-trampling, block-drop and player-invulnerability rules require Fabric server mixins. The companion rejects those options with an explanation. Vanilla gamerules and ordinary enhanced flight work. Anti-cheat plugins may need their own configuration for extended reach or faster flight.
+**Current Paper/Purpur differences:** The custom block-gravity, farmland-trampling, block-drop and player-invulnerability rules require Fabric server mixins. The companion rejects those options with an explanation. Vanilla gamerules and ordinary enhanced flight work. Anti-cheat plugins may need their own configuration for extended reach or faster flight.
 
 ## Permissions
 

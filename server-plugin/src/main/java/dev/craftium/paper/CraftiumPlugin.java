@@ -57,6 +57,14 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
     }
     @EventHandler public void join(PlayerJoinEvent event){getServer().getScheduler().runTaskLater(this,()->hello(event.getPlayer()),10);}
     @EventHandler public void registered(PlayerRegisterChannelEvent event){if(event.getChannel().equals(BridgeCodec.CHANNEL))getServer().getScheduler().runTask(this,()->hello(event.getPlayer()));}
+    /**
+     * Creative No Clip. The Fabric mod does this in a mixin on Entity.move; a plugin has no such hook, and the server only accepts a player inside
+     * blocks when its noPhysics flag is set while the movement packet is handled. Player.tick clears the flag each tick, and packets are handled
+     * between ticks, so it is set again here as the tick ends (the client sends its own clipped position, which the server then accepts).
+     */
+    @EventHandler public void tickEnd(com.destroystokyo.paper.event.server.ServerTickEndEvent event){
+        for(Player p:getServer().getOnlinePlayers()){var nms=((CraftPlayer)p).getHandle();if(EditorServer.noClip(nms))nms.noPhysics=true;}
+    }
     @EventHandler public void quit(PlayerQuitEvent event){connections.remove(event.getPlayer().getUniqueId());EditorServer.disconnect(((CraftPlayer)event.getPlayer()).getHandle());}
     private void hello(Player player){if(player.isOnline()&&player.getListeningPluginChannels().contains(BridgeCodec.CHANNEL)){connections.computeIfAbsent(player.getUniqueId(),id->new Connection());enqueue(player,"hello","Craftium 0.3 / protocol "+BridgeCodec.VERSION);}}
     private void tick(){
@@ -78,8 +86,6 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
                 var message=Packets.JSON.fromJson(json,BridgeCodec.Message.class);
                 if(message==null||message.version()!=BridgeCodec.VERSION||!"edit".equals(message.kind())||message.data()==null)throw new IllegalArgumentException("Update both Craftium client and server to matching versions");
                 c.ready=true;
-                var request=Packets.JSON.fromJson(message.data(),Packets.Request.class);
-                if(request!=null&&request.options()!=null&&request.options().noClip)throw new IllegalArgumentException("Creative No Clip currently requires a Fabric server; turn it off to edit here");
                 EditorServer.handle(((CraftPlayer)player).getHandle(),message.data());
             });
         }catch(RuntimeException e){c.incoming.clear();error(player,e.getMessage()==null?"Invalid Craftium request":e.getMessage());}

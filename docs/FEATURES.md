@@ -85,4 +85,4 @@ Axiom licensing/accounts/whitelist infrastructure is outside this independent MI
 
 ## Paper and Purpur companion
 
-The server plugin shares the native editing engine and uses a bounded, fragmented plugin-message connection to the updated Fabric client. Permissions, world restrictions, WorldGuard integration and a cancellable preflight event protect operations. Creative No Clip and four custom Fabric world rules remain unavailable on these servers. See [SERVER-PLUGIN.md](SERVER-PLUGIN.md) for installation and limitations.
+The server plugin shares the native editing engine and uses a bounded, fragmented plugin-message connection to the updated Fabric client. Permissions, world restrictions, WorldGuard integration and a cancellable preflight event protect operations. Four custom Fabric world rules remain unavailable on these servers. See [SERVER-PLUGIN.md](SERVER-PLUGIN.md) for installation and limitations.

@@ -31,6 +31,6 @@ Configure allowed worlds and connection budgets in `plugins/Craftium/config.yml`
 
 WorldGuard integration checks protected edits, including undo and redo. Bulk edits use **CraftiumEditEvent** rather than individual Bukkit block-place and block-break events; other protection and logging plugins need a Craftium integration.
 
-Creative No Clip and Craftium's custom gravity, farmland, block-drop and invulnerability rules require a Fabric server. They are unavailable in this companion. Spigot, Folia, other Minecraft versions and proxy routing are not validated.
+Craftium's custom gravity, farmland, block-drop and invulnerability rules require a Fabric server. They are unavailable in this companion. Spigot, Folia, other Minecraft versions and proxy routing are not validated.
 
 **Current release: 0.3.1-dev.** This is a development preview. Editing is limited to 131,072 cells per selection/operation, and large planning operations can still stall a server tick.
