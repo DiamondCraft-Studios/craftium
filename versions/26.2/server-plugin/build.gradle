@@ -1,6 +1,6 @@
 plugins { id 'io.papermc.paperweight.userdev' }
 
-version = project.mod_version
+version = "${project.mod_version}+mc26.2"
 ext {
     paperDevBundle = '26.2.build.134-stable'
     minecraftVersion = '26.2'
