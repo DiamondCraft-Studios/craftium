@@ -377,8 +377,8 @@ public final class EditorScreen extends CraftiumScreen {
             // A polygon's sides take the row under the radius, and everything below moves down a row. The track stops at 64; more is typed.
             if(sidesShown())
                 slider(g,10,375,pw-20,"Sides",o().polygonSides,BrushMath.MIN_SIDES,BrushMath.SLIDER_SIDES,BrushMath.MAX_SIDES,BrushMath.DEFAULT_SIDES,v->o().polygonSides=Math.clamp((int)Math.round(v),BrushMath.MIN_SIDES,BrushMath.MAX_SIDES),true);
-            if(o().tool==Tool.EXTRUDE) // layers, from 1 to the most one edit can build; the track is short for what is usually wanted, and a bigger number is typed in
-                slider(g,10,375+sidesRow()-lift(),pw-20,"Count",o().extrudeCount,1,Selection.LIMIT,Selection.LIMIT,DEFAULTS.extrudeCount,v->o().extrudeCount=(int)Math.clamp(Math.round(v),1,Selection.LIMIT),true);
+            if(o().tool==Tool.EXTRUDE) // layers, 1 to 64
+                slider(g,10,375+sidesRow()-lift(),pw-20,"Count",o().extrudeCount,1,Options.MAX_EXTRUDE_COUNT,Options.MAX_EXTRUDE_COUNT,DEFAULTS.extrudeCount,v->o().extrudeCount=(int)Math.clamp(Math.round(v),1,Options.MAX_EXTRUDE_COUNT),true);
             else if(hasStrength())
                 slider(g,10,375+sidesRow()-lift(),pw-20,"Strength",o().strength,.1,5,DEFAULTS.strength,v->o().strength=v,false);
         }

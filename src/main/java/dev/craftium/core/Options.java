@@ -97,7 +97,8 @@ public final class Options {
     public boolean magicPreview=true;
     /** Whether a big selection waits to be confirmed before it is kept. */
     public boolean largeSelectionWarnings=true;
-    /** Extrude: how many layers one click adds or removes, from 1 up to the most an edit can change. */
+    /** Extrude: how many layers one click adds or removes, from 1 to {@link #MAX_EXTRUDE_COUNT}. */
+    public static final int MAX_EXTRUDE_COUNT=64;
     public int extrudeCount=1;
     public int hoverPreviewLimit=5000;
     public boolean selectUp=true,selectDown=true,selectHorizontal=true,selectCorners,includeNonSolid;
@@ -285,7 +286,7 @@ public final class Options {
         smoothRatio=Double.isFinite(smoothRatio)?Math.max(0,smoothRatio):100;distortDistance=Double.isFinite(distortDistance)?Math.max(0,distortDistance):2;
         distortX=Double.isFinite(distortX)?Math.max(0,distortX):2;distortY=Double.isFinite(distortY)?Math.max(0,distortY):2;distortZ=Double.isFinite(distortZ)?Math.max(0,distortZ):2;
         roughenRatio=Double.isFinite(roughenRatio)?Math.clamp(roughenRatio,0,1):.2;shatterWidth=Double.isFinite(shatterWidth)?Math.max(0,shatterWidth):1;
-        extrudeCount=Math.clamp(extrudeCount,1,Selection.LIMIT);
+        extrudeCount=Math.clamp(extrudeCount,1,MAX_EXTRUDE_COUNT);
         selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;builderSelectionWidth=Double.isFinite(builderSelectionWidth)?Math.clamp(builderSelectionWidth,.1,10):1;builderPreviewWidth=Double.isFinite(builderPreviewWidth)?Math.clamp(builderPreviewWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
         octaves=Math.clamp(octaves,1,8);lacunarity=bounded(lacunarity,1,4);gain=bounded(gain,.01,1);jitter=bounded(jitter,0,1);
         scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);
