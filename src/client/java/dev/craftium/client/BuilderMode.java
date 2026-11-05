@@ -62,7 +62,7 @@ public final class BuilderMode {
     static boolean usable(){return available();}
     private static boolean available(){var mc=Minecraft.getInstance();return mc.player!=null&&mc.player.isCreative()&&mc.level!=null&&CraftiumClient.supported();}
     public static void reset(){enabled=false;clear();restartSearch();wheel=0;}
-    private static void clear(){built=false;first=null;second=null;preview=false;clonePlaced=false;offset=new Point(0,0,0);cells=List.of();stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;magic=null;heldFirst=heldSecond=null;heldCells=null;magicStarted=magicGrow=false;}
+    private static void clear(){built=false;first=null;second=null;preview=false;clonePlaced=false;offset=new Point(0,0,0);cells=List.of();stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;magic=null;heldFirst=heldSecond=null;heldCells=null;magicStarted=magicGrow=magicMode=false;}
     /** Another tool keeps the selection, but not what was being done to it. */
     private static void retool(){preview=false;clonePlaced=false;offset=new Point(0,0,0);stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;}
     public static void enable(){if(!available())return;enabled=true;var mc=Minecraft.getInstance();mc.options.keyAttack.setDown(false);mc.options.keyUse.setDown(false);ClientState.notify("Builder: "+name()+" · Alt + wheel changes tool");}
@@ -75,8 +75,11 @@ public final class BuilderMode {
         if(!enabled){int slot=mc.player.getInventory().getSelectedSlot();if(slot==8&&steps<0||slot==0&&steps>0){enable();return true;}return false;}
         if(CraftiumClient.held(CraftiumClient.contextKey)){var all=Options.BuilderTool.values();ClientState.options.builderTool=all[Math.floorMod(ClientState.options.builderTool.ordinal()-steps,all.length)];retool();ClientState.save();ClientState.notify("Builder: "+name());return true;}
         if(first==null||second==null){enabled=false;mc.player.getInventory().setSelectedSlot(steps>0?8:0);clear();return true;}
+        if(mc.hasControlDown()&&!mc.hasShiftDown()){magicMode=!magicMode;ClientState.notify("Middle click: "+(magicMode?"Magic select (add, Ctrl subtracts)":"Extend the box"));return true;} // with a selection, Ctrl + wheel switches what the middle button does
         nudge(nudgeDirection(),steps,mc.hasControlDown());return true;
     }
+    /** What the middle button does to a selection that is already made: magic select more blocks (Ctrl takes them away) or, when false, grow the box to the block. A magic selection starts in magic mode, a box in extend mode. */
+    private static boolean magicMode;
     public static void nudge(Point axis,int steps){nudge(axis,steps,false);}
     /** With {@code grid} (Ctrl held) a step is the selection's own size along the axis, not one block, so a clone or move goes from cell to cell of the grid the selection makes. A stack already counts whole copies. */
     public static void nudge(Point axis,int steps,boolean grid){
@@ -137,28 +140,28 @@ public final class BuilderMode {
         if(o.builderTool==Options.BuilderTool.EXTRUDE){if(hit!=null&&button!=2){boolean prior=o.invert;o.invert=button==0;CraftiumClient.send("builder_extrude",CraftiumClient.point(hit.getBlockPos()),CraftiumClient.normal(hit));o.invert=prior;}return true;}
         if(button!=0)built=false; // placing or extending the selection takes it out of the state a build left it in
         if(built&&button==0){ // a build left the selection in place: the next left click starts a new one at that block, with no second point
-            if(hit!=null){first=CraftiumClient.point(hit.getBlockPos());second=null;magicStarted=false;cells=List.of();cellBlocksFor=null;retool();built=false;dragButton=0;}
+            if(hit!=null){first=CraftiumClient.point(hit.getBlockPos());second=null;magicStarted=magicMode=false;cells=List.of();cellBlocksFor=null;retool();built=false;dragButton=0;}
             return true;
         }
         if(first!=null&&second!=null&&preview){ // something is being done to the selection: left sets the first corner again (dropping what was being done), right places it; the middle button still places it elsewhere
-            if(button==0){if(hit!=null){first=CraftiumClient.point(hit.getBlockPos());magicStarted=false;retool();refresh();dragButton=0;}return true;}
+            if(button==0){if(hit!=null){first=CraftiumClient.point(hit.getBlockPos());magicStarted=magicMode=false;retool();refresh();dragButton=0;}return true;}
             if(button==1){confirm();return true;}
         }
         if(hit==null)return true;Point at=CraftiumClient.point(hit.getBlockPos());
         if(button==2&&o.builderTool==Options.BuilderTool.STACK&&first!=null&&second!=null){stackTo(at);return true;} // middle click: as many copies as it takes to reach the block
         if(first!=null&&second!=null&&button!=2){ // nothing is being done to it yet: left and right move the first and second point
-            if(button==0)first=at;else second=at;magicStarted=false;offset=new Point(0,0,0);refresh();dragButton=button;return true;
+            if(button==0)first=at;else second=at;magicStarted=magicMode=false;offset=new Point(0,0,0);refresh();dragButton=button;return true;
         }
         if(o.builderTool==Options.BuilderTool.ERASE&&first==null&&button==1){CraftiumClient.send("builder_erase_connected",at,CraftiumClient.normal(hit));return true;}
         if(button==0&&clonePlaced){clear();return true;}
-        if(button==0){first=at;second=null;preview=false;offset=new Point(0,0,0);cells=List.of();magicStarted=false;dragButton=0;}
+        if(button==0){first=at;second=null;preview=false;offset=new Point(0,0,0);cells=List.of();magicStarted=magicMode=false;dragButton=0;}
         else if(button==1){if(first==null)first=at;second=at;refresh();dragButton=1;}
         else if(first!=null&&second==null){second=at;refresh();} // middle click with only a first point: extend the selection to this block
         else if(preview&&o.builderTool==Options.BuilderTool.STACK){} // a stack only grows from the selection's own faces: nudge it
         else if(preview){Point min=min();Point normal=CraftiumClient.normal(hit);offset=at.add(normal.x()-min.x(),normal.y()-min.y(),normal.z()-min.z());}
         else if(first==null)magicSelect(hit.getBlockPos(),false,false);
-        else if(magicStarted)magicSelect(hit.getBlockPos(),true,mc.hasControlDown()); // begun with magic select: the middle button goes on adding what it finds, and with Ctrl takes it away
-        else{Point low=min(),high=max();first=new Point(Math.min(low.x(),at.x()),Math.min(low.y(),at.y()),Math.min(low.z(),at.z()));second=new Point(Math.max(high.x(),at.x()),Math.max(high.y(),at.y()),Math.max(high.z(),at.z()));offset=new Point(0,0,0);refresh();} // both corners set: the box grows to take in the block clicked
+        else if(magicMode)magicSelect(hit.getBlockPos(),true,mc.hasControlDown()); // magic mode: the middle button goes on adding what it finds, and with Ctrl takes it away
+        else{Point low=min(),high=max();first=new Point(Math.min(low.x(),at.x()),Math.min(low.y(),at.y()),Math.min(low.z(),at.z()));second=new Point(Math.max(high.x(),at.x()),Math.max(high.y(),at.y()),Math.max(high.z(),at.z()));magicStarted=magicMode=false;offset=new Point(0,0,0);refresh();} // extend mode: the selection becomes the box grown to take in the block // both corners set: the box grows to take in the block clicked
         return true;
     }
     /** Whether the selection is only the blocks found in it: what magic select found, or, unless Copy air is on, the solid blocks of a box, so the air inside an outlined shape is never selected. */
@@ -221,11 +224,11 @@ public final class BuilderMode {
      */
     private static void selectBlocks(Collection<Point> found,boolean grow){
         var all=new LinkedHashSet<Point>();
-        if(grow&&magicStarted&&first!=null&&second!=null)all.addAll(cells);
+        if(grow&&first!=null&&second!=null)all.addAll(cells);
         all.addAll(found);
         int x0=Integer.MAX_VALUE,y0=x0,z0=x0,x1=Integer.MIN_VALUE,y1=x1,z1=x1;
         for(Point p:all){x0=Math.min(x0,p.x());y0=Math.min(y0,p.y());z0=Math.min(z0,p.z());x1=Math.max(x1,p.x());y1=Math.max(y1,p.y());z1=Math.max(z1,p.z());}
-        magicStarted=true;first=new Point(x0,y0,z0);second=new Point(x1,y1,z1);cells=List.copyOf(all);cellBlocksFor=null;offset=new Point(0,0,0);preview=false;
+        magicStarted=magicMode=true;first=new Point(x0,y0,z0);second=new Point(x1,y1,z1);cells=List.copyOf(all);cellBlocksFor=null;offset=new Point(0,0,0);preview=false;
         ClientState.notify("Selected "+cells.size()+" blocks · scroll to nudge · right-click places · Esc cancels");
     }
     /** Takes the blocks a magic select found out of the selection, which is left as the box round what remains. */
@@ -248,7 +251,7 @@ public final class BuilderMode {
     }
     private static Point min(){Point b=second==null?first:second;return new Point(Math.min(first.x(),b.x()),Math.min(first.y(),b.y()),Math.min(first.z(),b.z()));}
     private static Point max(){Point b=second==null?first:second;return new Point(Math.max(first.x(),b.x()),Math.max(first.y(),b.y()),Math.max(first.z(),b.z()));}
-    public static void corners(Point a,Point b){magicStarted=false;first=a;second=b;offset=new Point(0,0,0);preview=false;refresh();}
+    public static void corners(Point a,Point b){magicStarted=magicMode=false;first=a;second=b;offset=new Point(0,0,0);preview=false;refresh();}
     private static void refresh(){try{var mc=Minecraft.getInstance();if(!magicStarted)cells=Selection.box(first,second).stream().filter(p->!mc.level.getBlockState(new net.minecraft.core.BlockPos(p.x(),p.y(),p.z())).isAir()).toList();ClientState.notify("Selection ready · scroll to nudge · right-click places · Esc cancels");}catch(Exception e){ClientState.notify(e.getMessage());clear();}}
     public static void confirm(){
         if(first==null||second==null)return;var o=ClientState.options;
