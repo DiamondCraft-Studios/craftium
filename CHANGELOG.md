@@ -5,6 +5,7 @@
 ### Builder
 - With a selection, Ctrl + scroll switches the middle button between Magic select (adds blocks, Ctrl-click takes them away) and Extend (grows the box to the block clicked). A magic selection starts in Magic select, a box in Extend.
 - Nudging a clone or move by the selection's own size moved to Ctrl + Shift + scroll, to make room for that.
+- The Builder's magic select follows the Large selection warnings switch in the preferences: with it off, a selection of 1,024 blocks or more is kept without asking.
 
 ## 0.6.0-beta.1
 
