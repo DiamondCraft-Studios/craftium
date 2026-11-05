@@ -1,0 +1,82 @@
+name: Release craftium-mcp
+
+# Pushing a tag named mcp-v<version> (for example mcp-v0.1.0) tests the MCP server, packs
+# craftium.mcpb and publishes a GitHub release with it. Mod releases use v<version>-mc<minecraft>.
+on:
+  push:
+    tags:
+      - 'mcp-v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-mcp-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Read the tag
+        id: tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^mcp-v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)$ ]]; then
+            echo "::error::Tag '$TAG' must look like mcp-v<version>, for example mcp-v0.1.0"
+            exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Check the tag against the project
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          for file in mcp/package.json mcp/manifest.json; do
+            actual="$(node -p "require('./$file').version")"
+            if [ "$actual" != "$VERSION" ]; then
+              echo "::error::The tag says $VERSION but $file has version $actual"
+              exit 1
+            fi
+          done
+
+      - name: Install
+        working-directory: mcp
+        run: npm ci
+
+      - name: Test
+        working-directory: mcp
+        run: npm test
+
+      - name: Pack the extension
+        working-directory: mcp
+        run: npx --yes @anthropic-ai/mcpb@2.1.2 pack . craftium.mcpb
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.tag.outputs.version }}
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
+          REPO: ${{ github.repository }}
+        run: |
+          args=(--repo "$REPO" --title "craftium-mcp $VERSION" --generate-notes --verify-tag)
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "$TAG" mcp/craftium.mcpb "${args[@]}"
