@@ -660,9 +660,10 @@ public final class EditorScreen extends CraftiumScreen {
     private void palette(Gfx g) {
         int x=w-RIGHT;panel(g,x,222,RIGHT,105,"Block palette");
         // Drawn back to front, like a paint tool: the foreground sits on top of the background.
-        blockSlot(g,x+30,264,"Background block",o().secondary,id->o().secondary=id);
-        blockSlot(g,x+10,248,"Foreground block",o().block,id->ClientState.pick(id));
-        pipetteControls(g,x+70,248);
+        handSlot(g,x+10,248);
+        blockSlot(g,x+70,264,"Background block",o().secondary,id->o().secondary=id);
+        blockSlot(g,x+50,248,"Foreground block",o().block,id->ClientState.pick(id));
+        pipetteControls(g,x+110,248);
         // The cells flow across the panel and down as far as it reaches; the first is always "+", which adds a block to the palette
         // and makes it the foreground. What does not fit scrolls.
         var blocks=ClientState.palette;int total=blocks.size()+1,top=298,pitch=26,visibleRows=Math.max(1,(pb-6-top+3)/pitch);
@@ -723,6 +724,15 @@ public final class EditorScreen extends CraftiumScreen {
         GLFW.glfwSetCursor(minecraft.getWindow().handle(),want?crosshairCursor:0L);
     }
     /** A 30px swatch for one of the two selected blocks; clicking it opens the block chooser to replace it. */
+    /** The block in the player's main hand, as it changes; empty when the hand holds no block. Click to make it the foreground, or drag it into the world to bucket fill. */
+    private void handSlot(Gfx g,int x,int y) {
+        String block=minecraft.player!=null&&minecraft.player.getMainHandItem().getItem() instanceof net.minecraft.world.item.BlockItem item?BuiltInRegistries.BLOCK.getKey(item.getBlock()).toString():"";
+        g.fill(x,y,x+30,y+30,0xff1b2838);g.outline(x,y,30,30,LINE);
+        text(g,"Hand",x+3,y+32,MUTED);
+        if(block.isEmpty()){controls.add(new Control(x,y,30,30,()->{},"Hand · no block held"));return;}
+        BlockPickerScreen.icon(g,font,block,x+7,y+7);
+        dragSource(new Control(x,y,30,30,()->{ClientState.pick(block);ClientState.save();},"Hand · "+block+" · Click to set the foreground · Drag into the world to bucket fill"),block);
+    }
     private void blockSlot(Gfx g,int x,int y,String label,String block,java.util.function.Consumer<String> set) {
         g.fill(x,y,x+30,y+30,0xff1b2838);g.outline(x,y,30,30,label.startsWith("Fore")?ACCENT:LINE);
         BlockPickerScreen.icon(g,font,block,x+7,y+7);
