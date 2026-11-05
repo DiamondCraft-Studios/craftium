@@ -1,4 +1,4 @@
-# Craftium 0.5.0-beta.2 coverage
+# Craftium 0.6.0-beta.1 coverage
 
 This is a functional development preview. Implemented equivalents do not establish identical algorithms, complete option coverage or complete Axiom parity. The [documentation audit](PARITY-AUDIT.md) tracks the source pages; the list below describes actual code behavior.
 
