@@ -4,6 +4,7 @@ import dev.craftium.client.compat.Overlay;
 import dev.craftium.core.BrushMath;
 import dev.craftium.core.Options;
 import dev.craftium.core.Point;
+import dev.craftium.core.Selection;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
@@ -18,7 +19,10 @@ import java.util.*;
  */
 final class BrushPreview {
     /** More exposed faces than this are not coloured one by one; the outline of the whole brush is shown instead. */
-    private static final int MAX_FACES=8192;
+    private static final int MAX_FACES=65_536;
+    /** The preview shows brushes well past what can be built (see Selection.LIMIT), since it is only drawn; beyond this it falls back to the box around the brush. */
+    private static final int MAX_BLOCKS=600_000;
+    private static int shownBlocks;
     private static final float LIFT=.003f;
     private static List<Object> key=List.of();
     private static OutlineShape air=OutlineShape.EMPTY;
@@ -29,7 +33,7 @@ final class BrushPreview {
 
     static void draw(Minecraft mc,BlockPos at,Options o){
         if(mc.level==null)return;
-        var now=List.<Object>of(o.tool.brushUse(),o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.outline,at,mc.level.getGameTime()/20);
+        var now=List.<Object>of(o.tool.brushUse(),o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.outline,at,shownBlocks>Selection.LIMIT?0:mc.level.getGameTime()/20); // a huge brush is not worked out again every second
         if(!now.equals(key)){key=now;rebuild(mc,at,o);}
         if(tooLarge){Overlay.box(new AABB(at).inflate(o.radius),o.hoverColor,1.5f,0);return;} // too large to work out: the box it fits in
         int fill=o.hoverColor&0xffffff|0x66000000;
@@ -46,12 +50,13 @@ final class BrushPreview {
         try{
             relative=switch(o.tool.brushUse()){
                 case SMALL_SHAPE->BrushMath.brush(origin,Math.min(o.radius,4),o.shape,o.hollow,o.outlineThickness,o.pixelPerfect);
-                case DISC->BrushMath.brush(origin,o.radius,BrushMath.Shape.DISK,false);
-                case SPHERE->BrushMath.brush(origin,o.radius,BrushMath.Shape.SPHERE,false);
-                default->BrushMath.brush(origin,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline);
+                case DISC->BrushMath.brush(origin,o.radius,BrushMath.Shape.DISK,false,1,false,0,BrushMath.DEFAULT_SIDES,false,MAX_BLOCKS);
+                case SPHERE->BrushMath.brush(origin,o.radius,BrushMath.Shape.SPHERE,false,1,false,0,BrushMath.DEFAULT_SIDES,false,MAX_BLOCKS);
+                default->BrushMath.brush(origin,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline,MAX_BLOCKS);
             };
         }
-        catch(IllegalArgumentException e){tooLarge=true;return;}
+        catch(IllegalArgumentException e){tooLarge=true;shownBlocks=MAX_BLOCKS;return;}
+        shownBlocks=relative.size();
         var level=mc.level;var open=new ArrayList<Point>();var solid=new HashSet<Point>();
         for(Point r:relative){
             Point p=new Point(at.getX()+r.x(),at.getY()+r.y(),at.getZ()+r.z());

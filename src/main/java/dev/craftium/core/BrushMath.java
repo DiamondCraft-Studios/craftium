@@ -108,6 +108,11 @@ public final class BrushMath {
 
     /** As above; with {@code outline} only the shape's edges are kept, and the wall settings are ignored. */
     public static List<Point> brush(Point center, int radius, Shape shape, boolean hollow, int thickness, boolean pixelPerfect, int shift, int sides, boolean outline) {
+        return brush(center, radius, shape, hollow, thickness, pixelPerfect, shift, sides, outline, Selection.LIMIT);
+    }
+
+    /** As above, refusing a shape of more than {@code limit} blocks; a preview may allow more than the {@link Selection#LIMIT} that can be built. */
+    public static List<Point> brush(Point center, int radius, Shape shape, boolean hollow, int thickness, boolean pixelPerfect, int shift, int sides, boolean outline, int limit) {
         if (outline) hollow = false;
         final int corners = Math.clamp(sides, MIN_SIDES, MAX_SIDES);
         if (radius < 1 || radius > MAX_RADIUS) throw new IllegalArgumentException("Radius must be 1–" + MAX_RADIUS);
@@ -121,7 +126,7 @@ public final class BrushMath {
             for (int z = -outer; z <= outer; z++) {
                 if (outline ? !edge(solid, x, y, z) : !solid.at(x, y, z) || cut && contains(shape, x, y, z, inner, corners)) continue;
                 points.add(center.add(x, y, z));
-                if (points.size() > Selection.LIMIT) throw new IllegalArgumentException("Shape exceeds the " + String.format("%,d", Selection.LIMIT) + " block limit; use a smaller radius, or make it hollow");
+                if (points.size() > limit) throw new IllegalArgumentException("Shape exceeds the " + String.format("%,d", limit) + " block limit; use a smaller radius, or make it hollow");
             }
         return hollow && pixelPerfect ? OutlineMath.thin(points, wall) : points;
     }
