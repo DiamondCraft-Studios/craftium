@@ -1,0 +1,114 @@
+name: Release
+
+# Pushing a tag named v<mod version>-mc<minecraft version> (for example v0.5.0-beta.2-mc26.2)
+# builds that Minecraft version and publishes a GitHub release with its JARs.
+on:
+  push:
+    tags:
+      - 'v*-mc*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Read the tag
+        id: tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)-mc([0-9]+(\.[0-9]+)+)$ ]]; then
+            echo "::error::Tag '$TAG' must look like v<version>-mc<minecraft>, for example v0.5.0-beta.2-mc26.2"
+            exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          mc="${BASH_REMATCH[3]}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "mc=$mc" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Check the tag against the project
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+          MC: ${{ steps.tag.outputs.mc }}
+        run: |
+          if [ ! -d "versions/$MC" ]; then
+            echo "::error::versions/$MC does not exist, so there is nothing to build for Minecraft $MC"
+            exit 1
+          fi
+          actual="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          if [ "$actual" != "$VERSION" ]; then
+            echo "::error::The tag says $VERSION but gradle.properties has mod_version=$actual"
+            exit 1
+          fi
+
+      - name: Set up Java 25
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle and validate wrapper
+        uses: gradle/actions/setup-gradle@07d1f8453baaff67fb503883367f8b13e6158a54 # v6
+        with:
+          cache-provider: basic
+
+      - name: Build and run unit tests
+        env:
+          MC: ${{ steps.tag.outputs.mc }}
+        run: ./gradlew ":versions:mc-$MC:build" ":paper-$MC:build" --no-daemon
+
+      - name: Collect the JARs
+        env:
+          MC: ${{ steps.tag.outputs.mc }}
+        run: |
+          mkdir release-jars
+          cp versions/"$MC"/build/libs/*.jar versions/"$MC"/server-plugin/build/libs/*.jar release-jars/
+          rm -f release-jars/*-sources.jar release-jars/*-dev.jar release-jars/*-javadoc.jar
+          ls -l release-jars
+
+      - name: Write the release notes
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          awk -v v="## $VERSION" '
+            $0 == v { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "No CHANGELOG.md section for $VERSION." > notes.md
+          fi
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          MC: ${{ steps.tag.outputs.mc }}
+          VERSION: ${{ steps.tag.outputs.version }}
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
+          REPO: ${{ github.repository }}
+        run: |
+          args=(--repo "$REPO" --title "Craftium $VERSION for Minecraft $MC" --notes-file notes.md --verify-tag)
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "$TAG" release-jars/*.jar "${args[@]}"
