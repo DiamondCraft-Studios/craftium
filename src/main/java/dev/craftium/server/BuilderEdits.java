@@ -17,6 +17,20 @@ final class BuilderEdits {
             while(!todo.isEmpty()&&count<128){Point at=todo.removeFirst();if(!seen.add(at)||!p.state(at).is(base.getBlock())||base.isAir())continue;p.put(at,Blocks.AIR.defaultBlockState());count++;for(Point n:EditPlanner.NEIGHBOURS)todo.add(at.add(n.x(),n.y(),n.z()));}return p.finish("Erase connected blocks");
         }
         Collection<Point> points=cells(o);Point min=new Point(Math.min(o.position1.x(),o.position2.x()),Math.min(o.position1.y(),o.position2.y()),Math.min(o.position1.z(),o.position2.z()));Point size=new Point(Math.abs(o.position2.x()-o.position1.x())+1,Math.abs(o.position2.y()-o.position1.y())+1,Math.abs(o.position2.z()-o.position1.z())+1);
+        if(o.builderTool==Options.BuilderTool.MOVE||o.builderTool==Options.BuilderTool.CLONE||o.builderTool==Options.BuilderTool.STACK||o.builderTool==Options.BuilderTool.SMEAR){
+            // The box and where its copies land may be far from every player: lease their chunks until the edit is done. A rotated copy fits in a square of its longer side.
+            int reach=Math.max(size.x(),size.z());var area=ChunkLease.area().points(points,0,0);
+            if(o.builderTool==Options.BuilderTool.STACK){
+                int sx=o.stackX,sz=o.stackZ;
+                if(((long)Math.abs(sx)+1)*((long)Math.abs(o.stackY)+1)*((long)Math.abs(sz)+1)-1>Selection.LIMIT/Math.max(1,points.size()))throw new IllegalArgumentException("Builder stack exceeds the cell limit");
+                area.box(min.x()+Math.min(0,sx)*size.x(),min.z()+Math.min(0,sz)*size.z(),min.x()+Math.max(0,sx)*size.x()+reach-1,min.z()+Math.max(0,sz)*size.z()+reach-1);
+            }else{
+                int ox=o.builderOffset.x(),oz=o.builderOffset.z();
+                if(o.builderTool==Options.BuilderTool.SMEAR)area.box(min.x()+Math.min(0,ox),min.z()+Math.min(0,oz),min.x()+Math.max(0,ox)+size.x()-1,min.z()+Math.max(0,oz)+size.z()-1);
+                else area.box(min.x()+ox,min.z()+oz,min.x()+ox+reach-1,min.z()+oz+reach-1);
+            }
+            ChunkLease.planning(area.lease(player.level()));
+        }
         var source=new LinkedHashMap<Point,BlockSnapshot>();Point shift=o.builderOffset;for(Point at:points){p.validate(at);source.put(at,BlockSnapshot.capture(player.level(),EditPlanner.pos(at)));}
         if(o.builderTool==Options.BuilderTool.ERASE){for(Point at:points)p.put(at,Blocks.AIR.defaultBlockState());return p.finish("Erase builder selection");}
         if(o.builderTool==Options.BuilderTool.SMEAR){var line=BrushMath.line(new Point(0,0,0),shift);for(var e:source.entrySet())if(!e.getValue().state().isAir())for(int i=1;i<line.size();i++){Point delta=line.get(i),at=e.getKey().add(delta.x(),delta.y(),delta.z());if(!source.containsKey(at)&&p.solid(at))break;p.put(at,e.getValue());}return p.finish("Smear builder selection");}
