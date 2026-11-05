@@ -150,6 +150,8 @@ public final class Options {
     public boolean aiBridge;
     public String fontName="SansSerif",fontFile="",heightmap="",name="Untitled",entityType="block_display",entityNbt="{}",property="";
     public boolean useBuiltinFont=true,textShadow,fullBlocks=true,denoise=true,maskY,fastPlace,angelPlacement,noClip,blockStep;
+    /** Flying slows to a stop as a wall comes close, like a camera focusing in, the first time a movement key is held toward it. */
+    public boolean flyingDof;
     /** How far blocks can be reached: the game's own range, 64 blocks, or as far as can be aimed. */
     public enum ReachMode { NORMAL("normal"),FAR("far"),INFINITE("infinite");public final String label;ReachMode(String label){this.label=label;} }
     public ReachMode reach=ReachMode.NORMAL;

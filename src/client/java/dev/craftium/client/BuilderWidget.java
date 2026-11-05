@@ -25,6 +25,7 @@ public final class BuilderWidget {
         new Toggle("No updates",o->o.noUpdates,o->o.noUpdates=!o.noUpdates,"Placed blocks do not update neighbours"),
         new Toggle("Angel place",o->o.angelPlacement,o->o.angelPlacement=!o.angelPlacement,"Place four blocks ahead in the air"),
         new Toggle("No clip",o->o.noClip,o->o.noClip=!o.noClip,"Fly through blocks in Creative (needs the capabilities permission on servers)"),
+        new Toggle("Flying DoF",o->o.flyingDof,o->o.flyingDof=!o.flyingDof,"Slows you to a stop as you fly up to a wall; let go and move again to bump into it, or pass through it with No clip"),
         new Toggle("Block step",o->o.blockStep,o->o.blockStep=!o.blockStep,"Step up a whole block on your own, as you step up a slab"),
         new Toggle("Tinker",o->o.tinker,o->o.tinker=!o.tinker,"Empty hand cycles a block property"));
     private static final int WIDTH=112,ROW=16,GAP=1,HEADER=14,BOTTOM=28; // BOTTOM keeps clear of the hotbar row and the offhand slot
