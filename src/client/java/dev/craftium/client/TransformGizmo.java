@@ -128,7 +128,7 @@ final class TransformGizmo {
         var center=project(dragging.anchor);if(center==null)return true;
         if(handle==3&&mode==Options.GizmoMode.MOVE){
             // The handle stays under the pointer at the depth it was grabbed, so it goes along when the camera does.
-            Vec3 point=ClientCompat.camera(mc).position().add(pointerRay(x,y).scale(freeDepth)).add(freeOffset);
+            Vec3 point=freePoint(ClientCompat.camera(mc).position(),pointerRay(x,y));
             Vec3 move=point.subtract(dragging.anchor);
             moveTo(move,new Vec3(snap(move.x,increment),snap(move.y,increment),snap(move.z,increment)));return true;
         }
@@ -397,8 +397,7 @@ final class TransformGizmo {
         return Math.clamp(Math.max(target,smooth?.1:1)/n,.01,64);
     }
     /** The depth and offset at which the centre handle was grabbed, so a drag keeps following the pointer as the camera moves. */
-    private static double freeDepth;
-    private static Vec3 freeOffset=Vec3.ZERO;
+    private static Vec3 freeOrigin=Vec3.ZERO,freeNormal=new Vec3(0,0,1),freeOffset=Vec3.ZERO;
     private static double[] dragFlips;
     private static Vec3 pointerRay(double x,double y){
         var mc=Minecraft.getInstance();var camera=ClientCompat.camera(mc);
@@ -406,8 +405,16 @@ final class TransformGizmo {
     }
     private static void grabFree(Vec3 anchor,double x,double y){
         Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
-        freeDepth=anchor.distanceTo(eye);
-        freeOffset=anchor.subtract(eye.add(pointerRay(x,y).scale(freeDepth))); // so the handle does not jump to the pointer
+        // The handle slides over a plane that stays where it was grabbed, facing the camera then. Flying about moves the pointer's ray but not the plane, so the blocks follow the pointer and are not carried along with the player.
+        freeOrigin=anchor;freeNormal=pointerCentre();freeOffset=Vec3.ZERO;
+        freeOffset=anchor.subtract(freePoint(eye,pointerRay(x,y))); // so the handle does not jump to the pointer
+    }
+    private static Vec3 pointerCentre(){return pointerRay(Minecraft.getInstance().getWindow().getGuiScaledWidth()/2d,Minecraft.getInstance().getWindow().getGuiScaledHeight()/2d);}
+    /** Where the pointer's ray from {@code eye} meets the grab plane, moved by the grab offset; the plane's own anchor when the ray runs along it. */
+    private static Vec3 freePoint(Vec3 eye,Vec3 ray){
+        double facing=ray.dot(freeNormal);if(Math.abs(facing)<1e-3)return freeOrigin;
+        double reach=freeOrigin.subtract(eye).dot(freeNormal)/facing;
+        return eye.add(ray.scale(Math.clamp(reach,0,4096))).add(freeOffset);
     }
     /** While the centre handle is held, keeps it with the pointer when only the camera moves (the player flying about). */
     static void followCamera(EditorScreen screen){
