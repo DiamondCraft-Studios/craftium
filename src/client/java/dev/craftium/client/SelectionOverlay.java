@@ -70,7 +70,7 @@ final class SelectionOverlay {
         if(landing!=null)landing.draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,colour,width),colour,ClientState.options.selectionFill,true); // a rotate or scale: the blocks it will leave
         else shape.draw(Vec3.ZERO,transforming?TransformGizmo::line:(a,b)->Overlay.line(a,b,colour,width),colour,ClientState.options.selectionFill,!transforming);
         int contact=ClientState.options.selectionContact;
-        if(!transforming&&(contact>>>24)!=0)for(var q:contacts())Overlay.face(q[0],q[1],q[2],q[3],contact);
+        if(!transforming&&ClientState.options.showSelectionContact&&(contact>>>24)!=0)for(var q:contacts())Overlay.face(q[0],q[1],q[2],q[3],contact);
         if(blocks.isEmpty())return;
         Point moving=TransformGizmo.moveDelta();
         if(moving!=null){ // the blocks being dragged, shown where they would land
