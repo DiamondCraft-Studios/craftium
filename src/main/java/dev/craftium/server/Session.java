@@ -33,6 +33,8 @@ final class Session {
     String clipboardGhost="";boolean clipboardGhostDirty=true;
     /** Copied from the player's options with each request: whether edits wait for confirmation, and whether this request is exempt. */
     boolean confirmEdits,bypassConfirm;
+    /** Why the last planned edit changed nothing, for the "No matching blocks changed" message; null when unknown. */
+    String nothingChangedBecause;
     /** A pivot for the client to take up after an undo or redo, as "none" or "x,y,z"; empty when there is nothing to say. */
     String pivotUpdate="";
     /** Client-side state for the client to take up after an undo or redo, as {@link dev.craftium.core.Restore} text; empty when there is nothing to say. */

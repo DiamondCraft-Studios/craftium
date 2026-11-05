@@ -109,11 +109,31 @@ final class EditPlanner {
             }
         }
     }
+    /** How many placements each check turned away, so an edit that changed nothing can say why. */
+    final EnumMap<Skip,Integer> skipped=new EnumMap<>(Skip.class);
+    enum Skip {
+        HEIGHT("the blocks were outside the height range (Min Y / Max Y in Masks)"),
+        SELECTION("the blocks were outside the selection (Restrict to selection is on)"),
+        MASK("the mask turned the blocks away (block mask, mask block, rules or script)"),
+        KEEP("Keep existing is on and those spots were already filled"),
+        SURVIVE("the blocks could not stand there (turn on Force place in the Builder tab)"),
+        SAME("those spots already hold the block");
+        final String why;Skip(String why){this.why=why;}
+    }
+    private void skip(Skip reason){skipped.merge(reason,1,Integer::sum);}
+    /** Why nothing changed: the check that turned away the most placements, or null when none did. */
+    String skipReason(){return skipped.entrySet().stream().max(Map.Entry.comparingByValue()).map(e->e.getKey().why).orElse(null);}
+    private Skip rejection(Point p){
+        if(p.y()<o.minY||p.y()>o.maxY)return Skip.HEIGHT;
+        if(o.inSelection&&!session.selection.contains(p))return Skip.SELECTION;
+        return Skip.MASK;
+    }
     private void putOne(Point p,BlockSnapshot value) {
         validate(p);
         var planned=changes.get(p);
-        if(!exact && (!accepted(p) || (o.keepExisting && !value.state().isAir() && !state(p).isAir() && (planned==null||!planned.after().state().isAir())))) return;
-        if(!exact && !o.forcePlace && !survives(value.state(),p)) return;
+        if(!exact&&!accepted(p)){skip(rejection(p));return;}
+        if(!exact && o.keepExisting && !value.state().isAir() && !state(p).isAir() && (planned==null||!planned.after().state().isAir())){skip(Skip.KEEP);return;}
+        if(!exact && !o.forcePlace && !survives(value.state(),p)){skip(Skip.SURVIVE);return;}
         if(value.data()!=null) {
             var tag=value.data().copy();tag.putInt("x",p.x());tag.putInt("y",p.y());tag.putInt("z",p.z());
             value=new BlockSnapshot(value.state(),tag);
@@ -121,7 +141,7 @@ final class EditPlanner {
         var previous=changes.get(p);
         var before=previous==null?BlockSnapshot.capture(level,pos(p)):previous.before();
         if(value.data()==null&&before.data()!=null&&before.state().is(value.state().getBlock()))value=new BlockSnapshot(value.state(),before.data());
-        if(before.state()==value.state() && Objects.equals(before.data(),value.data())) { changes.remove(p); return; }
+        if(before.state()==value.state() && Objects.equals(before.data(),value.data())) { changes.remove(p); skip(Skip.SAME); return; }
         changes.put(p,new Session.Change(p,before,value));
         int limit=Math.clamp(o.blockLimit,1,Selection.LIMIT);
         if(changes.size()+biomes.size()>limit) throw new IllegalArgumentException(limit<Selection.LIMIT?"Operation exceeds your block limit of "+String.format("%,d",limit)+" changes; raise it in Options":"Operation exceeds 131,072 changes");
@@ -283,6 +303,7 @@ final class EditPlanner {
         }
     }
     Session.Edit finish(String name) {
+        session.nothingChangedBecause=changes.isEmpty()&&biomes.isEmpty()?skipReason():null;
         return new Session.Edit(name,List.copyOf(changes.values()),List.copyOf(biomes.values()),BlockSnapshot.NO_UPDATES);
     }
 }
