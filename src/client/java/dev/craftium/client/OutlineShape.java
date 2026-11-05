@@ -29,6 +29,8 @@ final class OutlineShape {
         return new OutlineShape(SelectionOutline.of(points),bounds);
     }
 
+    /** A solid box from the block corner {@code lo} up to, not including, {@code hi}, drawn in the selection's style like any other shape. */
+    static OutlineShape box(Point lo,Point hi){return new OutlineShape(SelectionOutline.box(lo,hi),new AABB(lo.x(),lo.y(),lo.z(),hi.x(),hi.y(),hi.z()));}
     /** The box around every block, or null when empty. */
     AABB bounds(){return bounds;}
     boolean isEmpty(){return bounds==null;}

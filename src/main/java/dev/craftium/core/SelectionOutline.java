@@ -35,6 +35,25 @@ public final class SelectionOutline {
 
     private SelectionOutline(){}
 
+    /** The outline of the solid box from the block corner {@code lo} to {@code hi} (exclusive), made directly instead of from its blocks. */
+    public static Result box(Point lo,Point hi){
+        int[] a={lo.x(),lo.y(),lo.z()},b={hi.x(),hi.y(),hi.z()};
+        var edges=new ArrayList<Segment>();var creases=new ArrayList<Crease>();var faces=new ArrayList<Face>();
+        for(int axis=0;axis<3;axis++){
+            int u=(axis+1)%3,v=(axis+2)%3;
+            for(int su=0;su<2;su++)for(int sv=0;sv<2;sv++){
+                int[] from=new int[3],to=new int[3];
+                from[axis]=a[axis];to[axis]=b[axis];from[u]=to[u]=su==0?a[u]:b[u];from[v]=to[v]=sv==0?a[v]:b[v];
+                var edge=new Segment(from[0],from[1],from[2],to[0],to[1],to[2]);
+                edges.add(edge);int nu=u*2+(su==0?1:0),nv=v*2+(sv==0?1:0);creases.add(new Crease(edge,Math.min(nu,nv),Math.max(nu,nv)));
+            }
+            for(int sign=1;sign>=-1;sign-=2){
+                int[] from=a.clone(),to=b.clone();from[axis]=to[axis]=sign>0?b[axis]:a[axis];
+                faces.add(new Face(axis,sign,from[0],from[1],from[2],to[0],to[1],to[2]));
+            }
+        }
+        return new Result(List.copyOf(edges),List.copyOf(faces),List.copyOf(creases));
+    }
     public static Result of(Collection<Point> blocks){
         if(blocks.isEmpty())return Result.EMPTY;
         Set<Point> solid=blocks instanceof Set<Point> set?set:new HashSet<>(blocks);

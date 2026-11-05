@@ -289,15 +289,21 @@ public final class BuilderMode {
             if(blocksOnly()&&second!=null&&!cells.isEmpty()&&cells.size()<=OUTLINE_LIMIT){ // the blocks themselves, not the box round them
                 if(cells!=shapeOf){selectionShape=OutlineShape.of(cells);shapeOf=cells;}
                 selectionShape.drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,!leaving,false);
-            }else Overlay.box(new AABB(from.x(),from.y(),from.z(),to.x()+1,to.y()+1,to.z()+1),o.builderSelectionColor,(float)o.builderSelectionWidth,second!=null&&!leaving?o.builderSelectionFill:0);
+            }else boxShape(from,to.add(1,1,1)).drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,second!=null&&!leaving,false); // in the style set in the preferences
             if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?stackSteps(size):List.of(offset);
                 if(stacking){drawStack(o,min,size);return;}
                 var shown=preview(o,min,size,steps);
                 if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),o.builderMovingTint); // the blocks that are moving, where they are now
-                if(shown==null)Overlay.box(new AABB(min.x()+offset.x(),min.y()+offset.y(),min.z()+offset.z(),max.x()+offset.x()+1,max.y()+offset.y()+1,max.z()+offset.z()+1),o.builderPreviewColor,(float)o.builderPreviewWidth,0);
+                if(shown==null)boxShape(min.add(offset.x(),offset.y(),offset.z()),max.add(offset.x()+1,offset.y()+1,offset.z()+1)).drawPlain(Vec3.ZERO,o.builderPreviewColor,(float)o.builderPreviewWidth,0,false,false);
                 else{shown.shape().drawPlain(Vec3.ZERO,o.builderPreviewColor,(float)o.builderPreviewWidth,o.builderPreviewFill,true,false);if(!shown.places().isEmpty())Overlay.blocks(shown.models(),shown.places(),o.builderPreviewTint);}
             }
         }
+    }
+    private static final Map<Object,OutlineShape> boxes=new HashMap<>();
+    /** The outline of the box between two block corners, kept for as long as it is drawn so its silhouette is not worked out again every frame. */
+    private static OutlineShape boxShape(Point lo,Point hi){
+        if(boxes.size()>1024)boxes.clear();
+        return boxes.computeIfAbsent(List.of(lo,hi),k->OutlineShape.box(lo,hi));
     }
     /** A magic selection bigger than this is drawn as the one box round it, as its outline costs more than a frame can spare. */
     private static final int OUTLINE_LIMIT=32_768;
@@ -312,7 +318,7 @@ public final class BuilderMode {
     private static void drawStack(Options o,Point min,Point size){
         long copies=((long)Math.abs(stackX)+1)*(Math.abs(stackY)+1)*(Math.abs(stackZ)+1)-1;
         if(copies<=STACK_BOX_LIMIT)for(Point step:stackSteps(size))
-            Overlay.box(new AABB(min.x()+step.x(),min.y()+step.y(),min.z()+step.z(),min.x()+step.x()+size.x(),min.y()+step.y()+size.y(),min.z()+step.z()+size.z()),o.builderPreviewColor,(float)o.builderPreviewWidth,o.builderPreviewFill);
+            boxShape(min.add(step.x(),step.y(),step.z()),min.add(step.x()+size.x(),step.y()+size.y(),step.z()+size.z())).drawPlain(Vec3.ZERO,o.builderPreviewColor,(float)o.builderPreviewWidth,o.builderPreviewFill,true,false);
         if(cells.size()*copies>PREVIEW_LIMIT)return;
         Object[] key={min,size,o.builderRotation,o.builderFlipAxis,stackX,stackY,stackZ};
         if(stackFor==null||cells!=stackCells||!Arrays.equals(key,stackFor)){
