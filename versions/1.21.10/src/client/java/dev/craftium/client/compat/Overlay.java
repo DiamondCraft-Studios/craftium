@@ -33,7 +33,7 @@ public final class Overlay {
     private record Line(Vec3 from,Vec3 to,int color,float width,boolean scene) implements Prim {}
     private record Box(AABB box,int stroke,float width,int fill) implements Prim {}
     private record Point(Vec3 at,int color,float size) implements Prim {}
-    private record Label(String text,BlockPos pos,int color,int background,float scale) implements Prim {}
+    private record Label(String text,Vec3 pos,int color,int background,float scale) implements Prim {}
     private record Quad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color) implements Prim {}
     private record Blocks(List<BlockPos> models,List<BlockPos> places,java.util.Set<BlockPos> placed,List<net.minecraft.world.level.block.state.BlockState> states,int tint) implements Prim {}
 
@@ -89,7 +89,9 @@ public final class Overlay {
     public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){blockStates(states,places,new java.util.HashSet<>(places),tint);}
     /** As above, for a caller that keeps {@code placed} (the same positions as a set) between ticks instead of paying to rebuild it each time. */
     public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,java.util.Set<BlockPos> placed,int tint){out.add(new Blocks(places,places,placed,states,tint));}
-    public static void text(String text,BlockPos pos,int color,int background,float scale){out.add(new Label(text,pos,color,background,scale));}
+    public static void text(String text,BlockPos pos,int color,int background,float scale){text(text,new Vec3(pos.getX()+.5,pos.getY()+1.3,pos.getZ()+.5),color,background,scale);}
+    /** A label centred on the point {@code at}. */
+    public static void text(String text,Vec3 at,int color,int background,float scale){out.add(new Label(text,at,color,background,scale));}
 
     // ---- drawing
 
@@ -252,7 +254,7 @@ public final class Overlay {
     private static void label(WorldRenderContext context,Minecraft mc,net.minecraft.client.Camera camera,View view,Label label){
         var stack=context.matrices();
         stack.pushPose();
-        stack.translate(label.pos.getX()+.5-view.eye.x,label.pos.getY()+1.3-view.eye.y,label.pos.getZ()+.5-view.eye.z);
+        stack.translate(label.pos.x-view.eye.x,label.pos.y-view.eye.y,label.pos.z-view.eye.z);
         stack.mulPose(camera.rotation());
         stack.scale(label.scale,-label.scale,label.scale);
         Font font=mc.font;

@@ -15,9 +15,18 @@ abstract class FlightMixin {
     @Inject(method="travel",at=@At("HEAD"),cancellable=true)
     private void craftium$flight(Vec3 input,CallbackInfo ci){
         if(!((Object)this instanceof LocalPlayer player))return;var mc=Minecraft.getInstance();var o=ClientState.options;
-        if(!player.isCreative()||!player.getAbilities().flying||player.isPassenger()||!CraftiumClient.supported()||ClientCompat.screen(mc)!=null||(!o.cameraFlight&&!o.enhancedFlight&&o.flightMomentum==0)){craftium$velocity=Vec3.ZERO;return;}
+        if(!player.isCreative()||!player.getAbilities().flying||player.isPassenger()||!CraftiumClient.supported()||ClientCompat.screen(mc)!=null||(!o.cameraFlight&&o.flightMomentumLevel>=1)){craftium$velocity=Vec3.ZERO;return;}
         double yaw=Math.toRadians(player.getYRot());Vec3 forward=o.cameraFlight?player.getLookAngle():new Vec3(-Math.sin(yaw),0,Math.cos(yaw)),right=new Vec3(Math.cos(yaw),0,Math.sin(yaw));double up=(mc.options.keyJump.isDown()?1:0)-(mc.options.keyShift.isDown()?1:0);
-        Vec3 wanted=forward.scale(input.z).add(right.scale(input.x)).add(0,up,0);if(wanted.lengthSqr()>1)wanted=wanted.normalize();double speed=player.getAbilities().getFlyingSpeed()*10*(player.isSprinting()?2.5:1);wanted=wanted.scale(speed);craftium$velocity=craftium$velocity.scale(o.flightMomentum).add(wanted.scale(1-o.flightMomentum));if(craftium$velocity.lengthSqr()<1e-8)craftium$velocity=Vec3.ZERO;
+        // The game's own flight adds a little speed each tick and then keeps 91% of it sideways and 60% of it up and down. Here the same
+        // speed is reached whatever the momentum is, so 100% flies exactly as the game does and less only shortens how long speed lingers.
+        double acceleration=player.getAbilities().getFlyingSpeed()*(player.isSprinting()?2:1),climb=player.getAbilities().getFlyingSpeed()*3;
+        double sideways=.91,vertical=.6;
+        Vec3 flat=forward.scale(input.z).add(right.scale(input.x));if(flat.lengthSqr()>1)flat=flat.normalize();
+        double topSide=sideways*acceleration/(1-sideways),topVertical=vertical*climb/(1-vertical);
+        Vec3 wanted=new Vec3(flat.x*topSide,flat.y*topSide+up*topVertical,flat.z*topSide);
+        double keepSide=sideways*o.flightMomentumLevel,keepVertical=vertical*o.flightMomentumLevel;
+        craftium$velocity=new Vec3(craftium$velocity.x*keepSide+wanted.x*(1-keepSide),craftium$velocity.y*keepVertical+wanted.y*(1-keepVertical),craftium$velocity.z*keepSide+wanted.z*(1-keepSide));
+        if(craftium$velocity.lengthSqr()<1e-8)craftium$velocity=Vec3.ZERO;
         player.setDeltaMovement(craftium$velocity);player.move(MoverType.SELF,craftium$velocity);player.resetFallDistance();ci.cancel();
     }
 }

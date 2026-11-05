@@ -36,7 +36,7 @@ public final class Options {
     /** The radius the shape's outer edge is at: the radius, plus {@link #outlineShift()}, within the reach shapes may have. */
     public int outerRadius() { return Math.min(radius + outlineShift(), BrushMath.MAX_REACH); }
     /** Hand placement and breaking only; blocks the editor's tools write never update anything (see BlockSnapshot.NO_UPDATES). */
-    public boolean noUpdates, forcePlace, replaceMode, enhancedFlight, bulldozer, tinker;
+    public boolean noUpdates, forcePlace, replaceMode, bulldozer, tinker;
     public boolean inSelection;
     /** Whether undo and redo flash the blocks they change. */
     public boolean historyPulse = true;
@@ -54,6 +54,10 @@ public final class Options {
     public int offsetX, offsetY = 1, offsetZ, copies = 3;
     /** The Builder's Stack: how many whole copies of the selection to lay along each axis, negative for the other way. Only meaningful while a stack is being sent. */
     public int stackX, stackY, stackZ;
+    /** The Builder's Move, Clone and Smear: how far the selection is taken. Kept apart from the offsets other tools share, which are limited to 128 blocks; this one is not. */
+    public Point builderOffset = new Point(0,0,0);
+    /** The builder selection's own blocks, packed by {@link SelectionCodec}, when it is not the whole box between its corners (as after a magic select). Blank for the box. */
+    public String builderCells = "";
     public Compare compare=Compare.BLOCK;
     public int selectLimit=100_000,selectRange=1,lassoDepth=64;
     /** How many blocks the Select menu's Expand and Shrink move the selection's surface. */
@@ -71,6 +75,10 @@ public final class Options {
     /** The colour (ARGB) and width, in pixels from 0.1 to 10, of the selection's outline. */
     public int selectionColor=0xff2389c6;
     public double selectionWidth=1;
+    /** How the builder tools draw their selection and where it would land, set apart from the editor's selection: colours (ARGB) and line widths. */
+    public int builderSelectionColor=0xff2389c6,builderSelectionFill=0x302389c6,
+        builderPreviewColor=0xff8be3b5,builderPreviewFill=0x2247d29b,builderPreviewTint=0x9046B4EE,builderMovingTint=0x90EE4646;
+    public double builderSelectionWidth=1,builderPreviewWidth=1;
     /** The point one transform request works about, which can differ from the player's pivot, as when scaling from the far side. */
     public boolean aboutSet;
     /** A selection transform that also turns and mirrors the blocks' states, as the Edit menu's Rotate and Flip do; the gizmo only moves them. */
@@ -125,7 +133,7 @@ public final class Options {
     /** Whether the client listens on this computer for an AI client (the craftium-mcp shim) to drive the editor. Off until the player turns it on. */
     public boolean aiBridge;
     public String fontName="SansSerif",fontFile="",heightmap="",name="Untitled",entityType="block_display",entityNbt="{}",property="";
-    public boolean useBuiltinFont=true,textShadow,fullBlocks=true,denoise=true,maskY,fastPlace,angelPlacement,noClip;
+    public boolean useBuiltinFont=true,textShadow,fullBlocks=true,denoise=true,maskY,fastPlace,angelPlacement,noClip,blockStep;
     /** How far blocks can be reached: the game's own range, 64 blocks, or as far as can be aimed. */
     public enum ReachMode { NORMAL("normal"),FAR("far"),INFINITE("infinite");public final String label;ReachMode(String label){this.label=label;} }
     public ReachMode reach=ReachMode.NORMAL;
@@ -156,6 +164,13 @@ public final class Options {
     public enum RulerMode { LINE,CIRCLE }
     public RulerMode rulerMode=RulerMode.LINE;
     public int rulerSplit=2;
+    /** How the Ruler tool is drawn: its line, the knob at each end, the knob that has the gizmo, and its length label with the box behind it. */
+    public int rulerLineColor=0xffffffff,rulerKnobColor=0xff5b9fdb,rulerKnobSelectedColor=0xffffff00,rulerTextColor=0xffffffff,rulerTextBackground=0x80000000;
+    /** The colour of a ruler's line when it runs along the world's X, Y or Z axis (the gizmo's red, green and blue); any other line uses {@link #rulerLineColor}. */
+    public int rulerAxisXColor=0xffff7777,rulerAxisYColor=0xff8bef9a,rulerAxisZColor=0xff78b9ff;
+    /** How big the length label is, as a multiple of its normal size: 1 is 100%. Kept between {@link #RULER_LABEL_MIN} and {@link #RULER_LABEL_MAX}. */
+    public double rulerLabelSize=1;
+    public static final double RULER_LABEL_MIN=.25,RULER_LABEL_MAX=3;
     public String entityGroup="";
     public String author="",tags="";
     /** The export pop-up's structure block fields. */
@@ -173,15 +188,13 @@ public final class Options {
     public java.util.List<ColourPlacement> colourField=new java.util.ArrayList<>();
     public boolean autoSwapToCreative=true;
     public boolean cameraFlight,showKeyHints,showBiomes,showMarkerGizmos=true,showDisplayGizmos=true,showAnnotations=true;
-    public double flightMomentum,liquidOpacity=1,minimumBrightness;
-    /** What the flight momentum was before Instant flight set it to zero, to put back when that is turned off. */
-    public double flightMomentumKept;
-    /** Instant flight stops you dead, so it takes the momentum away, and gives back what it took when it is turned off. */
-    public void instantFlight(boolean on){
-        if(on==enhancedFlight)return;
-        enhancedFlight=on;
-        if(on){flightMomentumKept=flightMomentum;flightMomentum=0;}else flightMomentum=flightMomentumKept;
-    }
+    public double liquidOpacity=1,minimumBrightness;
+    /**
+     * How much the player keeps of their flight speed from one moment to the next, from 0 to 1. 100% (1) is the game's own flight, which is what it
+     * starts as; 0% turns momentum off, so flying starts and stops at once. It is a new setting, so a momentum saved on the old scale (where 0 was
+     * the game's own flight) is not misread.
+     */
+    public double flightMomentumLevel=1;
     public enum GizmoMode { MOVE,ROTATE,SCALE }
     public GizmoMode gizmoMode=GizmoMode.MOVE;
     public enum GizmoTarget { AUTO,SELECTION,ENTITY }
@@ -207,7 +220,7 @@ public final class Options {
         if (tool == null || shape == null || mode == null) throw new IllegalArgumentException("Invalid tool options");
         if(gizmoMode==null)gizmoMode=GizmoMode.MOVE;gizmoYaw=bounded(gizmoYaw,-360,360);gizmoPitch=bounded(gizmoPitch,-360,360);gizmoRoll=bounded(gizmoRoll,-360,360);
         if(gizmoTarget==null)gizmoTarget=GizmoTarget.AUTO;
-        flightMomentum=bounded(flightMomentum,0,.98);flightMomentumKept=bounded(flightMomentumKept,0,.98);liquidOpacity=bounded(liquidOpacity,0,1);minimumBrightness=bounded(minimumBrightness,0,1);
+        flightMomentumLevel=bounded(flightMomentumLevel,0,1);liquidOpacity=bounded(liquidOpacity,0,1);minimumBrightness=bounded(minimumBrightness,0,1);
         if(builderTool==null)throw new IllegalArgumentException("Choose a builder tool");builderRotation=Math.floorMod(builderRotation,4);builderFlipAxis=Math.clamp(builderFlipAxis,-1,2);symmetryRotations=symmetryRotations>=4?4:symmetryRotations>=2?2:1;
         if(shadeFrom==null||shadeLights==null||shadeLights.size()>16||shadeLights.contains(null)||materialWeights==null||materialWeights.size()>256||materialWeights.contains(null))throw new IllegalArgumentException("Invalid lighting or palette options");
         for(var light:shadeLights)if(!Double.isFinite(light.x())||!Double.isFinite(light.y())||!Double.isFinite(light.z())||!Double.isFinite(light.intensity())||Math.abs(light.x())>30_000_000||Math.abs(light.z())>30_000_000||Math.abs(light.y())>4096||light.intensity()<0||light.intensity()>16)throw new IllegalArgumentException("Invalid light source");
@@ -228,6 +241,11 @@ public final class Options {
         if(modifyAxis==null||modifyType==null)throw new IllegalArgumentException("Missing advanced options");
         modifyAngle=finite(modifyAngle);modifyTranslateX=finite(modifyTranslateX);modifyTranslateY=finite(modifyTranslateY);modifyTranslateZ=finite(modifyTranslateZ);
         rulerSplit=Math.clamp(rulerSplit,2,16);
+        rulerLabelSize=bounded(rulerLabelSize,RULER_LABEL_MIN,RULER_LABEL_MAX);
+        // The colours the ruler first had, kept in saved settings, give way to the ones it has now; any colour that was changed is left alone.
+        if(rulerLineColor==0xffffd66d&&rulerKnobColor==0xffffd66d&&rulerKnobSelectedColor==0xffffffff&&rulerTextColor==0xffffe4a2&&rulerTextBackground==0xbb151c26){
+            rulerLineColor=0xffffffff;rulerKnobColor=0xff5b9fdb;rulerKnobSelectedColor=0xffffff00;rulerTextColor=0xffffffff;rulerTextBackground=0x80000000;
+        }
         historySteps=Math.clamp(historySteps,1,32);
         if(colourField==null||colourField.size()>4096||colourField.contains(null))throw new IllegalArgumentException("Colour field limit: 4096 blocks");for(var placement:colourField)if(placement.point()==null||placement.block()==null||placement.block().length()>256)throw new IllegalArgumentException("Invalid colour field entry");
         if(scriptVariables==null||scriptVariables.size()>64||maskVariables==null||maskVariables.size()>64||scriptColours==null||scriptColours.size()>4096||scriptColours.contains(null))throw new IllegalArgumentException("Too much script configuration");
@@ -241,7 +259,7 @@ public final class Options {
         if(author==null||tags==null||author.length()>80||tags.length()>256)throw new IllegalArgumentException("Blueprint metadata is too long");
         if(entityGroup==null||!entityGroup.matches("[A-Za-z0-9_. -]{0,64}"))throw new IllegalArgumentException("Use a plain entity group name");
         entityX=bounded(entityX,-128,128);entityY=bounded(entityY,-128,128);entityZ=bounded(entityZ,-128,128);entityScaleX=bounded(entityScaleX,.01,16);entityScaleY=bounded(entityScaleY,.01,16);entityScaleZ=bounded(entityScaleZ,.01,16);
-        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
+        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;builderSelectionWidth=Double.isFinite(builderSelectionWidth)?Math.clamp(builderSelectionWidth,.1,10):1;builderPreviewWidth=Double.isFinite(builderPreviewWidth)?Math.clamp(builderPreviewWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
         octaves=Math.clamp(octaves,1,8);lacunarity=bounded(lacunarity,1,4);gain=bounded(gain,.01,1);jitter=bounded(jitter,0,1);
         scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);
         sizeX=Math.copySign(bounded(Math.abs(sizeX),.1,8),sizeX);sizeY=Math.copySign(bounded(Math.abs(sizeY),.1,8),sizeY);sizeZ=Math.copySign(bounded(Math.abs(sizeZ),.1,8),sizeZ); // negative flips
@@ -254,7 +272,10 @@ public final class Options {
         for(String value:new String[]{materials,maskExpression,maskScript,script,fontName,fontFile,heightmap,name,entityType,entityNbt,property,annotationMode,billboard})
             if(value==null||value.length()>1_000_000)throw new IllegalArgumentException("Invalid advanced text setting");
         if(script.length()>16384||maskScript.length()>16384||maskExpression.length()>4096||name.length()>80)throw new IllegalArgumentException("Advanced setting is too long");
-        if(position1==null||position2==null||symmetryOrigin==null)throw new IllegalArgumentException("Missing position");
+        if(builderCells==null||builderCells.length()>2_000_000)throw new IllegalArgumentException("Builder selection is too large");
+        if(position1==null||position2==null||symmetryOrigin==null||builderOffset==null)throw new IllegalArgumentException("Missing position");
+        builderOffset=new Point(Math.clamp(builderOffset.x(),-WORLD_SPAN,WORLD_SPAN),Math.clamp(builderOffset.y(),-WORLD_SPAN,WORLD_SPAN),Math.clamp(builderOffset.z(),-WORLD_SPAN,WORLD_SPAN));
+        stackX=Math.clamp(stackX,-WORLD_SPAN,WORLD_SPAN);stackY=Math.clamp(stackY,-WORLD_SPAN,WORLD_SPAN);stackZ=Math.clamp(stackZ,-WORLD_SPAN,WORLD_SPAN);
         if(assetData==null||assetData.length()>1_500_000)throw new IllegalArgumentException("Imported asset is too large");
         if(entityUuid==null||entityUuid.length()>64)throw new IllegalArgumentException("Invalid entity identifier");
         if(annotationId==null||annotationId.length()>64)throw new IllegalArgumentException("Invalid annotation identifier");
@@ -269,5 +290,7 @@ public final class Options {
             throw new IllegalArgumentException("Tool setting is too long");
     }
     private static double finite(double value){return Double.isFinite(value)?value:0;}
+    /** Across the whole world, border to border: as far as anything can be moved, and small enough that sums of it cannot overflow. */
+    private static final int WORLD_SPAN=60_000_000;
     private static double bounded(double value,double min,double max){return Double.isFinite(value)?Math.clamp(value,min,max):min;}
 }

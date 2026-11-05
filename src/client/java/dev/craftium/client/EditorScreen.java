@@ -140,7 +140,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(ClientState.largeSelection>0)cancelLargeSelection();
         ClientState.selectionPending=false;ClientState.selectingSince=0;
     }
-    private void deselectTool(){cancelSelectionJobs();toolActive=false;}
+    private void deselectTool(){cancelSelectionJobs();toolActive=false;selectedNode=-1;}
     private void select(Tool tool){
         cancelSelectionJobs();
         if(tool.transform()&&tool!=Tool.PIVOT&&ClientState.status.selectionSize()==0&&!ShapeObject.active())ClientState.notify("Select blocks first, then use "+tool.label);
@@ -160,7 +160,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
         g.pose().pushMatrix();g.pose().scale(scale,scale);
         topbar(g);
-        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);}
+        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);}
         finishPanel(g);
         viewport(g);
         for(int i=1;i<lasso.size();i++)ToolIcons.line(g,(int)(lasso.get(i-1).x()/scale),(int)(lasso.get(i-1).y()/scale),(int)(lasso.get(i).x()/scale),(int)(lasso.get(i).y()/scale),0xffffd66d);
@@ -180,12 +180,19 @@ public final class EditorScreen extends CraftiumScreen {
         }
         hoverFeedback(g);
         pipettePreview(g);
-        if(!help&&menu<0) {
+        if(!help&&menu<0&&ctxCell<0&&!shapeMenu&&confirm==null) { // an open menu or pop-up is what the pointer is for, so no tooltip over it
             String tooltip="";for(var c:controls)if(c.contains(mx,my)&&!c.tip.isEmpty())tooltip=c.tip;
             if(!tooltip.isEmpty()) {
-                int tw=Math.min(320,font.width(tooltip)+14),tx=Math.min(mx+14,w-tw-4),ty=Math.min(my+18,h-34);
-                g.fill(tx,ty,tx+tw,ty+22,0xf5222d3b);g.outline(tx,ty,tw,22,LINE);
-                g.text(font,shorten(tooltip,tw-12),tx+6,ty+7,TEXT,false);
+                // A new line starts a new paragraph; each is wrapped to the pane, and a pane with a title shows it brighter than what follows.
+                String[] paragraphs=tooltip.split("\n");var rows=new ArrayList<net.minecraft.util.FormattedCharSequence>();var firstRows=0;int widest=0;
+                for(int i=0;i<paragraphs.length;i++){
+                    var split=font.split(Component.literal(paragraphs[i]),306);
+                    if(i==0)firstRows=split.size();
+                    for(var row:split){rows.add(row);widest=Math.max(widest,font.width(row));}
+                }
+                int tw=Math.min(320,widest+14),th=rows.size()*10+12,tx=Math.min(mx+14,w-tw-4),ty=Math.min(my+18,h-th-12);
+                g.fill(tx,ty,tx+tw,ty+th,0xf5222d3b);g.outline(tx,ty,tw,th,LINE);
+                for(int i=0;i<rows.size();i++)g.text(font,rows.get(i),tx+6,ty+6+i*10,paragraphs.length>1&&i>=firstRows?MUTED:TEXT,false);
             }
         }
         if(dragBlock!=null&&dragMoved){g.fill(mx-13,my-13,mx+13,my+13,0xdd1b2838);g.outline(mx-13,my-13,26,26,ACCENT);BlockPickerScreen.icon(g,font,dragBlock,mx-8,my-8);}
@@ -292,7 +299,7 @@ public final class EditorScreen extends CraftiumScreen {
                 g.fill(x,y,x+21,y+21,selected?0xff315b84:0xff223247);
                 if(selected){g.outline(x,y,21,21,0xff8bc7ff);g.fill(x,y+19,x+21,y+21,ACCENT);}
                 g.pose().pushMatrix();g.pose().translate(x,y);g.pose().scale(.82f,.82f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
-                controls.add(new Control(x,y,21,21,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},tool.description));
+                controls.add(new Control(x,y,21,21,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},toolTip(tool,0)));
             }
             y+=TOOL_PITCH;
         }
@@ -332,11 +339,11 @@ public final class EditorScreen extends CraftiumScreen {
                     text(g,"Start: "+ruler.a.coordinates(),10,353,TEXT);
                     if(ruler.complete()){
                         text(g,"End: "+ruler.b.coordinates(),10,371,TEXT);
-                        text(g,"Length: "+Ruler.show(ruler.length()),10,392,0xffffd783);text(g,"Manhattan: "+ruler.manhattan(),10,410,MUTED);
+                        text(g,"Span: "+ruler.showSpan()+" blocks",10,392,0xffffd783);text(g,"Manhattan: "+ruler.manhattan(),10,410,MUTED);
                     }
                 }
                 button(g,10,423,pw-20,20,"Clear measurement",false,()->{ClientState.rulers.clear();selectedNode=-1;action("ruler_clear");},"");
-                button(g,10,449,pw-20,20,"Mode: "+o().rulerMode,false,()->o().rulerMode=Options.RulerMode.values()[(o().rulerMode.ordinal()+1)%2],()->o().rulerMode=Options.RulerMode.values()[(o().rulerMode.ordinal()+1)%2],"Inspector → Ruler to split segments and select center");
+                button(g,10,449,pw-20,20,"New rulers: "+o().rulerMode,false,()->o().rulerMode=Options.RulerMode.values()[(o().rulerMode.ordinal()+1)%2],()->o().rulerMode=Options.RulerMode.values()[(o().rulerMode.ordinal()+1)%2],"Inspector → Ruler to split segments and select center");
             } else {
                 text(g,"SELECTION BOUNDS",10,311,MUTED);
                 text(g,"Min  "+s.min().coordinates(),10,333,TEXT);text(g,"Max  "+s.max().coordinates(),10,353,TEXT);
@@ -572,14 +579,14 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void builderOptions(Gfx g) {
         text(g,"CAPABILITIES",10,254,MUTED);
-        toggle(g,10,273,"Instant flight",o().enhancedFlight,()->o().instantFlight(!o().enhancedFlight),"Fly with no interpolation: you stop dead the moment you let go of the keys");
-        toggle(g,10,296,"No updates",o().noUpdates,()->o().noUpdates=!o().noUpdates,"Placed blocks do not update their neighbours, so they stay when what holds them is removed");
-        toggle(g,10,319,"Force place",o().forcePlace,()->o().forcePlace=!o().forcePlace,"Place blocks where they could not survive, like a torch in the air");
-        toggle(g,10,342,"Fast place",o().fastPlace,()->o().fastPlace=!o().fastPlace,"Hold right click and sweep the view to place a block on every new block you aim at, with no delay");
-        toggle(g,10,365,"Bulldozer",o().bulldozer,()->o().bulldozer=!o().bulldozer,"Hold left click for a moment, then sweep the view to break every new block you aim at, with no delay");
-        toggle(g,10,388,"Angel place",o().angelPlacement,()->o().angelPlacement=!o().angelPlacement,"Right click in the air to place the held block four blocks ahead, shown as a ghost");
-        toggle(g,10,411,"Tinker",o().tinker,()->o().tinker=!o().tinker,"Right click a block with an empty hand to change it by where you aim (stairs, slabs, walls, fences, facing, switches) · sneak and click to pick a specific property");
-        toggle(g,10,434,"Replace mode",o().replaceMode,()->o().replaceMode=!o().replaceMode,"Placing a block replaces the one you click instead of going beside it · R");
+        toggle(g,10,273,"No updates",o().noUpdates,()->o().noUpdates=!o().noUpdates,"Placed blocks do not update their neighbours, so they stay when what holds them is removed");
+        toggle(g,10,296,"Force place",o().forcePlace,()->o().forcePlace=!o().forcePlace,"Place blocks where they could not survive, like a torch in the air");
+        toggle(g,10,319,"Fast place",o().fastPlace,()->o().fastPlace=!o().fastPlace,"Hold right click and sweep the view to place a block on every new block you aim at, with no delay");
+        toggle(g,10,342,"Bulldozer",o().bulldozer,()->o().bulldozer=!o().bulldozer,"Hold left click for a moment, then sweep the view to break every new block you aim at, with no delay");
+        toggle(g,10,365,"Angel place",o().angelPlacement,()->o().angelPlacement=!o().angelPlacement,"Right click in the air to place the held block four blocks ahead, shown as a ghost");
+        toggle(g,10,388,"Tinker",o().tinker,()->o().tinker=!o().tinker,"Right click a block with an empty hand to change it by where you aim (stairs, slabs, walls, fences, facing, switches) · sneak and click to pick a specific property");
+        toggle(g,10,411,"Replace mode",o().replaceMode,()->o().replaceMode=!o().replaceMode,"Placing a block replaces the one you click instead of going beside it · R");
+        toggle(g,10,434,"Block step",o().blockStep,()->o().blockStep=!o().blockStep,"Step up a whole block on your own, as you step up a slab");
         button(g,10,457,pw-20,20,"Reach: "+o().reach.label,false,()->o().reach=Options.ReachMode.values()[(o().reach.ordinal()+1)%Options.ReachMode.values().length],()->o().reach=Options.ReachMode.values()[Math.floorMod(o().reach.ordinal()-1,Options.ReachMode.values().length)],"How far you can reach blocks: normal, far (set below) or infinite · right click goes back");
         slider(g,10,494,pw-20,"Far reach: blocks",o().farReach,6,64,DEFAULTS.farReach,v->o().farReach=(int)Math.round(v),true);
         slider(g,10,530,pw-20,"Fly speed",o().flySpeed,.1,10,DEFAULTS.flySpeed,v->o().flySpeed=(float)v,false);
@@ -863,7 +870,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(selected){g.outline(x,y,26,26,0xff8bc7ff);g.fill(x,y+24,x+26,y+26,ACCENT);}
             g.pose().pushMatrix();g.pose().translate(x+1,y+1);g.pose().scale(1f,1f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
             int key=EditorControls.toolDefault(tool);
-            controls.add(new Control(x,y,26,26,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},tool.description+(key>0?" · "+(char)key+" / "+(slot+1):" · "+(slot+1))));
+            controls.add(new Control(x,y,26,26,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},toolTip(tool,slot+1)));
         }
     }
     private void statusbar(Gfx g) {
@@ -1139,6 +1146,13 @@ public final class EditorScreen extends CraftiumScreen {
         try{double v=Double.parseDouble(text.trim());if(!Double.isFinite(v))return;if(area.slider().typedMax()!=Double.POSITIVE_INFINITY)v=Math.clamp(v,area.slider().min(),area.slider().typedMax());area.slider().set.accept(area.integer()?Math.round(v):v);}catch(NumberFormatException ignored){}
     }
     private void text(Gfx g,String text,int x,int y,int color){if(scrollActive)scrollContent=Math.max(scrollContent,y+9);g.text(font,text,x,y,color,false);}
+    /** A tool's tooltip: its name and the key it is on (and the hotbar slot, when it has one) on the first line, its description below. */
+    private static String toolTip(Tool tool,int slot){
+        var mapping=CraftiumClient.toolKeys.get(tool);
+        String key=mapping==null||mapping.isUnbound()?"":mapping.getTranslatedKeyMessage().getString();
+        String shortcut=key.isEmpty()?slot>0?String.valueOf(slot):"":slot>0?key+" / "+slot:key;
+        return tool.label+(shortcut.isEmpty()?"":" ["+shortcut+"]")+"\n"+tool.description;
+    }
     private String shorten(String text,int pixels){if(font.width(text)<=pixels)return text;return font.plainSubstrByWidth(text,Math.max(0,pixels-9))+"…";}
     private void wrap(Gfx g,String text,int x,int y,int width,int color,int maxLines){int line=0;for(var row:font.split(Component.literal(text),width)){if(line>=maxLines)break;g.text(font,row,x,y+line*11,color,false);line++;}if(scrollActive)scrollContent=Math.max(scrollContent,y+line*11);}
     private String nice(String name){String s=name.toLowerCase(Locale.ROOT).replace('_',' ');return Character.toUpperCase(s.charAt(0))+s.substring(1);}
@@ -1289,7 +1303,8 @@ public final class EditorScreen extends CraftiumScreen {
         if(event.button()==0&&TransformGizmo.click(this,event.x(),event.y()))return true;
         if(event.button()==0&&!PlacementPreview.active()){
             var points=handleNodes();double best=144;int index=-1;for(int i=0;i<points.size();i++){var pixel=project(points.get(i),TransformGizmo.nodeOffset());if(pixel==null)continue;double distance=Math.pow(event.x()-pixel[0],2)+Math.pow(event.y()-pixel[1],2);if(distance<best){best=distance;index=i;}}
-            if(index>=0){selectedNode=index;draggingNode=true;placementDragOrigin=points.get(index);placementDragX=event.x();placementDragY=event.y();return true;}
+            if(index>=0){selectedNode=index;if(!toolActive)ClientState.selectedRuler=rulerOfNode(index);draggingNode=true;placementDragOrigin=points.get(index);placementDragX=event.x();placementDragY=event.y();return true;}
+            if(!toolActive){var line=rulerAt(event.x(),event.y());if(line!=null){ClientState.selectedRuler=line;selectedNode=-1;TransformGizmo.cancel();return true;}} // no tool chosen: a click on a ruler picks it, without choosing the Ruler tool
         }
         if(PlacementPreview.active()){
             if(event.button()==1){var hit=target();if(hit!=null){Point p=CraftiumClient.point(hit.getBlockPos()),n=CraftiumClient.normal(hit);PlacementPreview.origin=p.add(n.x(),n.y(),n.z());}return true;}
@@ -1372,6 +1387,7 @@ public final class EditorScreen extends CraftiumScreen {
             return true;
         }
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("palette")){paletteScroll=Math.max(0,paletteScroll+(vertical<0?1:-1));return true;} // clamped when drawn
+        if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("rulers")){rulerScroll=Math.max(0,rulerScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("masks")){maskScroll=Math.max(0,maskScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("tools")){toolScroll=Math.clamp(toolScroll+(vertical<0?1:-1),0,maxToolScroll());return true;}
         if(panels&&!pinnedTab&&o().tool!=Tool.MODIFY&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("options")){optionsScroll=Math.clamp(optionsScroll+(vertical<0?24:-24),0,scrollLimit);return true;}
@@ -1494,7 +1510,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
      * comes back where it was when the handle was grabbed.
      */
     private void syncCursor(){
-        boolean grab=TransformGizmo.dragging()||draggingNode||draggingPlacement||dragging!=null||cameraGesture==CameraGesture.ROTATE; // holding the rotate button is a first-person look
+        boolean grab=TransformGizmo.dragging()||draggingNode||draggingPlacement||dragging!=null||cameraGesture==CameraGesture.ROTATE||cameraGesture==CameraGesture.ORBIT; // holding the rotate button is a first-person look, and the arcball turns the view round a point
         if(grab==cursorHidden)return;
         cursorHidden=grab;
         GLFW.glfwSetInputMode(minecraft.getWindow().handle(),GLFW.GLFW_CURSOR,grab?GLFW.GLFW_CURSOR_DISABLED:GLFW.GLFW_CURSOR_NORMAL);
@@ -1535,7 +1551,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         player.setDeltaMovement(Vec3.ZERO);player.setPos(player.position().add(delta));
         player.setOldPosAndRot(); // the renderer interpolates from the previous position, so make it the current one
     }
-    private List<Point> handleNodes(){return o().tool==Tool.RULER?ClientState.rulerPoints:o().tool==Tool.BOX_SELECT?ClientState.boxCorners:EnumSet.of(Tool.PATH,Tool.MODELLING,Tool.GRADIENT_PAINTER,Tool.SLOPE).contains(o().tool)?o().nodes:new ArrayList<>();}
+    private List<Point> handleNodes(){return !toolActive?ClientState.rulerPoints:o().tool==Tool.BOX_SELECT?ClientState.boxCorners:EnumSet.of(Tool.PATH,Tool.MODELLING,Tool.GRADIENT_PAINTER,Tool.SLOPE).contains(o().tool)?o().nodes:new ArrayList<>();}
     double pointerX(){return pointerX;}
     double pointerY(){return pointerY;}
     boolean pointerInViewport(){return inViewport(pointerX/scale,pointerY/scale);}
@@ -1543,17 +1559,63 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     public int handleAxis(){return nodeAxis;}
     /** Which handle point has the gizmo, as its place in the list of handle points, or -1 for none. */
     public int handleIndex(){return selectedNode>=0&&selectedNode<handleNodes().size()?selectedNode:-1;}
-    /** The ruler the panel shows: the one whose end has the gizmo, or else the latest. */
+    /** The ruler the tool panel shows: the one picked, or else the latest. */
     Ruler currentRuler(){
-        var rulers=ClientState.rulers;if(rulers.isEmpty())return null;
-        int at=handleIndex();
-        for(var r:rulers){int ends=r.complete()?2:1;if(at>=0&&at<ends)return r;at-=ends;}
-        return rulers.getLast();
+        var picked=ClientState.selectedRuler();if(picked!=null)return picked;
+        var rulers=ClientState.rulers;return rulers.isEmpty()?null:rulers.getLast();
     }
-    /** Takes away the ruler that has the gizmo. */
+    /** The ruler that owns the end at this place in the list of all ends, or null. */
+    private Ruler rulerOfNode(int index){
+        int at=index;
+        for(var r:ClientState.rulers){int ends=r.complete()?2:1;if(at<ends)return r;at-=ends;}
+        return null;
+    }
+    /** The ruler whose line the pointer is on, within a few pixels, or null. */
+    private Ruler rulerAt(double x,double y){
+        Ruler found=null;double best=64;
+        for(var r:ClientState.rulers){
+            if(!r.complete())continue;
+            var a=project(r.a,.5);var b=project(r.b,.5);if(a==null||b==null)continue;
+            double dx=b[0]-a[0],dy=b[1]-a[1],length=dx*dx+dy*dy;
+            double t=length<1e-6?0:Math.clamp(((x-a[0])*dx+(y-a[1])*dy)/length,0,1);
+            double distance=Math.pow(x-a[0]-t*dx,2)+Math.pow(y-a[1]-t*dy,2);
+            if(distance<best){best=distance;found=r;}
+        }
+        return found;
+    }
+    /** Takes away the ruler that is picked. */
     private boolean deleteRuler(){
-        if(o().tool!=Tool.RULER||handleIndex()<0)return false;
-        ClientState.rulerPoints.remove(handleIndex());selectedNode=-1;TransformGizmo.cancel();return true;
+        var picked=ClientState.selectedRuler();if(picked==null)return false;
+        ClientState.rulers.remove(picked);ClientState.selectedRuler=null;selectedNode=-1;TransformGizmo.cancel();return true;
+    }
+    private void clearRulers(){ClientState.rulers.clear();ClientState.selectedRuler=null;selectedNode=-1;TransformGizmo.cancel();}
+    private int rulerScroll;
+    private static String modeName(Options.RulerMode mode){return mode==Options.RulerMode.CIRCLE?"Circle":"Line";}
+    /** The Rulers panel: every ruler in this world as an entry to pick, and what can be done to the picked one. */
+    private void rulerPanel(Gfx g){
+        if(ClientState.rulers.isEmpty()&&!(toolActive&&o().tool==Tool.RULER))return; // there is nothing to list until a ruler is made
+        int x=w-RIGHT-244,y=27; // just left of the right-hand panels, clear of the viewport tools
+        panel(g,x,y,236,230,"Rulers");
+        var picked=ClientState.selectedRuler();
+        int[] halves=flex(pw-20,6,1,1);
+        button(g,x+10,y+24,halves[0],19,picked==null?"Mode":"Mode: "+modeName(picked.mode),false,()->{var r=ClientState.selectedRuler();if(r!=null)r.mode=r.mode==Options.RulerMode.LINE?Options.RulerMode.CIRCLE:Options.RulerMode.LINE;},"Change how the picked ruler is drawn: a line, or a line with a circle round its first end");
+        button(g,x+16+halves[0],y+24,halves[1],19,"Delete",false,()->deleteRuler(),"Delete the picked ruler");
+        int top=y+50,bottom=y+ph-32,rowHeight=18,rows=Math.max(1,(bottom-top)/rowHeight),total=ClientState.rulers.size();
+        g.fill(x+8,top-2,x+pw-8,top+rows*rowHeight+1,0xff141c26);g.outline(x+8,top-2,pw-16,rows*rowHeight+3,LINE);
+        rulerScroll=Math.clamp(rulerScroll,0,Math.max(0,total-rows));
+        if(total==0)text(g,"No rulers yet",x+16,top+5,MUTED);
+        for(int i=0;i<rows&&rulerScroll+i<total;i++){
+            var r=ClientState.rulers.get(rulerScroll+i);int ry=top+i*rowHeight;boolean chosen=r==picked;
+            if(chosen)g.fill(x+9,ry,x+pw-9,ry+rowHeight,0xff315b84);
+            String label=(rulerScroll+i+1)+"  ·  "+(r.complete()?r.showSpan():"second end not placed")+(r.complete()?"  ·  "+modeName(r.mode):"");
+            text(g,shorten(label,pw-40),x+16,ry+5,chosen?TEXT:MUTED);
+            controls.add(new Control(x+9,ry,pw-18,rowHeight,()->{ClientState.selectedRuler=r;selectedNode=-1;TransformGizmo.cancel();},"Pick this ruler · The number is its span: how many blocks it covers along each axis, counting both end blocks, so two touching blocks are 2 and not 1"));
+        }
+        if(total>rows){ // a thin bar shows where the list is
+            int track=rows*rowHeight,thumb=Math.max(10,track*rows/total),thumbY=top+(track-thumb)*rulerScroll/Math.max(1,total-rows);
+            g.fill(x+pw-14,top,x+pw-10,top+track,0xff1b2b40);g.fill(x+pw-14,thumbY,x+pw-10,thumbY+thumb,ACCENT);
+        }
+        button(g,x+10,y+ph-26,pw-20,20,"Clear all",false,this::clearRulers,"Delete every ruler in this world");
     }
     public void moveHandle(Point point){if(selectedNode>=0&&selectedNode<handleNodes().size())handleNodes().set(selectedNode,point);}
     private double[] project(Point p){return project(p,0);}
