@@ -82,8 +82,9 @@ public final class BuilderMode {
     public static void nudge(Point axis,int steps,boolean grid){
         if(first==null||second==null)return;preview=true;built=false; // nudging begins a new operation on the selection
         if(grid&&ClientState.options.builderTool!=Options.BuilderTool.STACK){
-            Point low=min(),high=max();
-            offset=offset.add(axis.x()*steps*(high.x()-low.x()+1),axis.y()*steps*(high.y()-low.y()+1),axis.z()*steps*(high.z()-low.z()+1));
+            Point low=min(),high=max();int sx=high.x()-low.x()+1,sz=high.z()-low.z()+1;
+            if(ClientState.options.builderRotation%2==1){int swap=sx;sx=sz;sz=swap;} // a quarter turn swaps the sides the grid is measured on
+            offset=offset.add(axis.x()*steps*sx,axis.y()*steps*(high.y()-low.y()+1),axis.z()*steps*sz);
             return;
         }
         // No range limit: the server still refuses an edit past the world's edge, into unloaded chunks or over the block limit.
