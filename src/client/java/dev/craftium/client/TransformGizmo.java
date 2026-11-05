@@ -295,7 +295,7 @@ final class TransformGizmo {
             default -> text="Move  X "+number(delta.x,true)+"  Y "+number(delta.y,true)+"  Z "+number(delta.z,true);
         }
         Vec3 spot=anchor.add(cameraAxes()[1].scale(6.2*screenScale(anchor)));
-        Overlay.text(text,new net.minecraft.core.BlockPos((int)Math.floor(spot.x),(int)Math.floor(spot.y),(int)Math.floor(spot.z)),0xffffffff,0xcc151c26,.02f);
+        Overlay.text(text,spot,0xffffffff,0xcc151c26,(float)(.02*screenScale(anchor))); // scaled with the gizmo, so it reads the same size at any distance
     }
     private static final double RULER_REACH=64;
     private static final int[] RULER_COLORS={0xaaff7777,0xaa8bef9a,0xaa78b9ff};
@@ -523,7 +523,7 @@ final class TransformGizmo {
         else if(mode==Options.GizmoMode.SCALE&&extent!=null)spot=faceCenter(faceBase!=null?faceBase:anchor,directions,extent,handle);
         else if(mode==Options.GizmoMode.ROTATE)spot=anchor.add(directions[(handle+1)%3].scale(3.5*k));
         else spot=anchor.add(directions[handle].scale(5.3*k));
-        Overlay.text(handleName(mode,handle,extent!=null),new net.minecraft.core.BlockPos((int)Math.floor(spot.x),(int)Math.floor(spot.y),(int)Math.floor(spot.z)),0xffffffff,0xcc151c26,.02f);
+        Overlay.text(handleName(mode,handle,extent!=null),spot,0xffffffff,0xcc151c26,(float)(.02*k)); // scaled with the gizmo, so it reads the same size at any distance
     }
     /** A flat triangle from {@code base} to {@code tip}, turned to face the camera so it reads the same from any angle. */
     private static void arrowhead(Vec3 tip,Vec3 base,int color,float width,double k){
