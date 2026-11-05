@@ -405,23 +405,14 @@ public final class CraftiumClient implements ClientModInitializer {
             if(screen.showSelection())SelectionOverlay.draw(TransformGizmo.selectionPreview());
             PlacementPreview.draw();
             ShapeObject.draw(mc);
-            // The wireframe of the brush shows only for tools that use one, not the selection, transform, ruler or annotation tools.
+            // The outline of the brush shows only for tools that use one, not the selection, transform, ruler or annotation tools.
             var tool=ClientState.options.tool;
-            boolean brush=!tool.selection()&&!tool.transform()&&tool!=Tool.RULER&&tool!=Tool.ANNOTATION&&tool!=Tool.MODIFY;
+            boolean brush=!tool.selection()&&!tool.transform()&&tool!=Tool.RULER&&tool!=Tool.ANNOTATION&&tool!=Tool.MODIFY&&tool!=Tool.EXTRUDE;
             if(tool==Tool.MODIFY&&screen.toolActive())ModifyPreview.draw(mc,hit==null?null:point(hit.getBlockPos()));
             if(screen.toolActive()&&hit!=null && !PlacementPreview.active() && !ShapeObject.active() && brush) {
-                int r=ClientState.options.radius;var p=hit.getBlockPos();
+                var p=hit.getBlockPos();
                 if(tool==Tool.SHAPE&&BrushGhost.draw(mc,p,ClientState.options)){/* drawn as ghost blocks */}
-                else if(ClientState.options.shape==BrushMath.Shape.CUBE)Overlay.box(new AABB(p).inflate(r),0xffd6eaff,1.5f,0);
-                else {
-                    Vec3 c=Vec3.atCenterOf(p);double radius=r+.5;
-                    for(int axis=0;axis<3;axis++)for(int i=0;i<48;i++) {
-                        double a=i*Math.PI/24,b=(i+1)*Math.PI/24;
-                        Vec3 from=axis==0?c.add(Math.cos(a)*radius,Math.sin(a)*radius,0):axis==1?c.add(Math.cos(a)*radius,0,Math.sin(a)*radius):c.add(0,Math.cos(a)*radius,Math.sin(a)*radius);
-                        Vec3 to=axis==0?c.add(Math.cos(b)*radius,Math.sin(b)*radius,0):axis==1?c.add(Math.cos(b)*radius,0,Math.sin(b)*radius):c.add(0,Math.cos(b)*radius,Math.sin(b)*radius);
-                        Overlay.line(from,to,0xffd6eaff,1.2f);
-                    }
-                }
+                else BrushPreview.draw(p,ClientState.options);
             }
         }
     }

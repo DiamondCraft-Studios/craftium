@@ -41,7 +41,9 @@ final class OutlineShape {
      * any transform. With {@code withFill} the exterior faces are filled with {@code fill} too, unless there are too
      * many to draw every frame. When the outline is too detailed, one box around everything is drawn instead.
      */
-    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill){
+    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill){draw(at,lines,stroke,fill,withFill,ClientState.options.selectionStyle);}
+    /** As {@link #draw(Vec3,Lines,int,int,boolean)}, with the outline style chosen by the caller instead of the selection's. */
+    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style){
         if(bounds==null)return;
         if(outline.edges().size()>MAX_EDGES){
             AABB box=bounds.move(at);
@@ -49,7 +51,6 @@ final class OutlineShape {
             return;
         }
         // Only the outline as the camera sees it, unless every edge was asked for or the camera is inside the shape.
-        var style=ClientState.options.selectionStyle;
         if(style==Options.SelectionStyle.ALL_EDGES||!(style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at))&&!silhouette(lines,at))
             for(var s:outline.edges())lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
         if(withFill&&outline.faces().size()<=MAX_FACES)for(var f:outline.faces())face(f,at,fill);
