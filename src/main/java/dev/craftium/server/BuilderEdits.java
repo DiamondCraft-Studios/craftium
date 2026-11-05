@@ -11,7 +11,7 @@ final class BuilderEdits {
     private BuilderEdits(){}
     static Session.Edit plan(ServerPlayer player,Session session,Options o,Point target,Point normal,String action){
         var p=new EditPlanner(player.level(),session,o);
-        if(action.equals("builder_extrude")){o.tool=Tool.EXTRUDE;o.strength=1;AdvancedTools.handle(p,target,normal);return p.finish(o.invert?"Shrink face":"Extrude face");}
+        if(action.equals("builder_extrude")){o.tool=Tool.EXTRUDE;o.extrudeCount=1;AdvancedTools.handle(p,target,normal);return p.finish(o.invert?"Shrink face":"Extrude face");}
         if(action.equals("builder_erase_connected")){
             var todo=new ArrayDeque<Point>();var seen=new HashSet<Point>();todo.add(target);BlockState base=p.state(target);int count=0;
             while(!todo.isEmpty()&&count<128){Point at=todo.removeFirst();if(!seen.add(at)||!p.state(at).is(base.getBlock())||base.isAir())continue;p.put(at,Blocks.AIR.defaultBlockState());count++;for(Point n:EditPlanner.NEIGHBOURS)todo.add(at.add(n.x(),n.y(),n.z()));}return p.finish("Erase connected blocks");

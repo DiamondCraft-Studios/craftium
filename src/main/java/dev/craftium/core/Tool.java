@@ -49,6 +49,23 @@ public enum Tool {
     Tool(String label, String icon, String group, String description) {
         this.label=label; this.icon=icon; this.group=group; this.description=description;
     }
+    /**
+     * What a tool makes of the brush under the cursor. SHAPE builds from the chosen shape and radius; SMALL_SHAPE does too, but the shape is kept to
+     * a radius of 4 (a line or path is drawn with it); DISC and SPHERE use only the radius, as a flat disc or a round ball whatever shape is picked;
+     * NONE has no brush at all, working on the clicked face, block, selection or its own points.
+     */
+    public enum BrushUse { SHAPE, SMALL_SHAPE, DISC, SPHERE, NONE }
+    public BrushUse brushUse() {
+        return switch (this) {
+            case FREEHAND_SELECT, PAINTER, NOISE_PAINTER, BIOME_PAINTER, CLENTAMINATOR, FREEHAND_DRAW, SHAPE, ERASE, SCULPT_DRAW, WELD, MELT, SMOOTH, DISTORT, ROUGHEN, SHATTER, GRADIENT_PAINTER, SCRIPT_BRUSH -> BrushUse.SHAPE;
+            case LINE, PATH -> BrushUse.SMALL_SHAPE;
+            case ELEVATION, FLATTEN, SLOPE, STAMP -> BrushUse.DISC;
+            case ROCK, FLUID_BALL -> BrushUse.SPHERE;
+            default -> BrushUse.NONE;
+        };
+    }
+    /** Whether the shape picker means anything for this tool. */
+    public boolean picksShape() { BrushUse use = brushUse(); return use == BrushUse.SHAPE || use == BrushUse.SMALL_SHAPE; }
     /** The tools that move, rotate or scale the selected blocks around a pivot. */
     public boolean transform() { return this == MOVE || this == ROTATE || this == SCALE || this == PIVOT; }
     public boolean selection() { return this == MAGIC_SELECT || this == BOX_SELECT || this == FREEHAND_SELECT || this == LASSO_SELECT; }

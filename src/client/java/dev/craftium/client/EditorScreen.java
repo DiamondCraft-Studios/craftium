@@ -105,8 +105,10 @@ public final class EditorScreen extends CraftiumScreen {
             } else if(o().tool==Tool.BIOME_PAINTER || o().tool==Tool.CLENTAMINATOR)
                 field("biome",10,382,optionsWidth()-20,o().biome,s->o().biome=s);
             else if(o().tool==Tool.TEXT)field("text",10,326,optionsWidth()-20,o().text,s->o().text=s);
-            else if(o().tool==Tool.ROCK || o().tool==Tool.DISTORT || o().tool==Tool.ROUGHEN || o().tool==Tool.SHATTER)
-                field("seed",10,418,optionsWidth()-20,Long.toString(o().seed),s->{try{o().seed=Long.parseLong(s);}catch(NumberFormatException ignored){}});
+            else if(o().tool==Tool.ROCK)
+                field("seed",10,418-lift(),optionsWidth()-20,Long.toString(o().seed),s->{try{o().seed=Long.parseLong(s);}catch(NumberFormatException ignored){}});
+            else if(o().tool==Tool.DISTORT || o().tool==Tool.ROUGHEN || o().tool==Tool.SHATTER)
+                field("seed",10,383,optionsWidth()-20,Long.toString(o().seed),s->{try{o().seed=Long.parseLong(s);}catch(NumberFormatException ignored){}});
         }
         if(transform){
             int x=w/2-210,y=h/2-92;
@@ -367,15 +369,18 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(o().tool==Tool.MODIFY){modifyOptions(g);return;}
         if(o().tool!=Tool.TEXT) {
-            shapeSelector(g,305);
+            var use=o().tool.brushUse();
+            if(o().tool.picksShape())shapeSelector(g,305);
             // The track stops at 64 to stay usable; a bigger radius is typed in. Shapes are limited by their block count and reach, not by this.
-            slider(g,10,347,pw-20,"Radius",o().radius,1,64,BrushMath.MAX_RADIUS,DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
+            if(use!=Tool.BrushUse.NONE)slider(g,10,347-lift(),pw-20,use==Tool.BrushUse.SMALL_SHAPE?"Radius (shape up to 4)":"Radius",o().radius,1,64,BrushMath.MAX_RADIUS,DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
             o().outlineThickness=Math.clamp(o().outlineThickness,1,o().radius); // a wall is never thicker than the radius
             // A polygon's sides take the row under the radius, and everything below moves down a row. The track stops at 64; more is typed.
             if(sidesShown())
                 slider(g,10,375,pw-20,"Sides",o().polygonSides,BrushMath.MIN_SIDES,BrushMath.SLIDER_SIDES,BrushMath.MAX_SIDES,BrushMath.DEFAULT_SIDES,v->o().polygonSides=Math.clamp((int)Math.round(v),BrushMath.MIN_SIDES,BrushMath.MAX_SIDES),true);
-            if(EnumSet.of(Tool.SCULPT_DRAW,Tool.ROCK,Tool.ELEVATION,Tool.FLATTEN,Tool.SLOPE,Tool.DISTORT,Tool.SHATTER,Tool.EXTRUDE).contains(o().tool))
-                slider(g,10,375+sidesRow(),pw-20,"Strength",o().strength,.1,5,DEFAULTS.strength,v->o().strength=v,false);
+            if(o().tool==Tool.EXTRUDE) // layers, 1 to 64
+                slider(g,10,375+sidesRow()-lift(),pw-20,"Count",o().extrudeCount,1,Options.MAX_EXTRUDE_COUNT,Options.MAX_EXTRUDE_COUNT,DEFAULTS.extrudeCount,v->o().extrudeCount=(int)Math.clamp(Math.round(v),1,Options.MAX_EXTRUDE_COUNT),true);
+            else if(hasStrength())
+                slider(g,10,375+sidesRow()-lift(),pw-20,"Strength",o().strength,.1,5,DEFAULTS.strength,v->o().strength=v,false);
         }
         // Tool-specific controls occupy the same familiar options area.
         switch(o().tool) {
@@ -386,18 +391,48 @@ public final class EditorScreen extends CraftiumScreen {
             }
             case BIOME_PAINTER,CLENTAMINATOR -> text(g,"Biome identifier",10,369,MUTED);
             case TEXT -> {text(g,"Text · A–Z, 0–9, ! ? - .",10,309,MUTED);wrap(g,"Place upright letters on the clicked face. Each character is 5 by 7 blocks.",10,354,pw-20,MUTED,4);}
-            case ROCK,DISTORT,ROUGHEN,SHATTER -> {
-                text(g,"Noise seed",10,405,MUTED);
-                slider(g,10,460,pw-20,"Noise scale",o().noiseScale,1,64,DEFAULTS.noiseScale,v->o().noiseScale=v,false);
-                toggle(g,10,489,"Invert / carve",o().invert,()->o().invert=!o().invert);
+            case DISTORT -> {
+                int half=(pw-24)/2;
+                text(g,"Noise seed",10,370,MUTED);
+                int y=418;
+                if(o().distortSeparate){
+                    slider(g,10,y,pw-20,"Distance X",o().distortX,0,8,Double.POSITIVE_INFINITY,DEFAULTS.distortX,v->o().distortX=Math.max(0,Math.round(v*100)/100d),false);y+=28;
+                    slider(g,10,y,pw-20,"Distance Y",o().distortY,0,8,Double.POSITIVE_INFINITY,DEFAULTS.distortY,v->o().distortY=Math.max(0,Math.round(v*100)/100d),false);y+=28;
+                    slider(g,10,y,pw-20,"Distance Z",o().distortZ,0,8,Double.POSITIVE_INFINITY,DEFAULTS.distortZ,v->o().distortZ=Math.max(0,Math.round(v*100)/100d),false);y+=28;
+                }else{slider(g,10,y,pw-20,"Distance",o().distortDistance,0,8,Double.POSITIVE_INFINITY,DEFAULTS.distortDistance,v->o().distortDistance=Math.max(0,Math.round(v*100)/100d),false);y+=28;}
+                toggle(g,10,y,"Separate axis",o().distortSeparate,()->o().distortSeparate=!o().distortSeparate,"Set how far the noise moves blocks along each axis on its own");y+=22;
+                toggle(g,10,y,"Smooth edges",o().distortSmoothEdges,()->o().distortSmoothEdges=!o().distortSmoothEdges,"Fade the distortion out towards the brush's edge so it blends into the terrain");y+=30;
+                slider(g,10,y+10,pw-20,"Scale",o().noiseScale,1,64,Double.POSITIVE_INFINITY,DEFAULTS.noiseScale,v->o().noiseScale=Math.max(.1,v),false);
+            }
+            case ROUGHEN -> {
+                text(g,"Noise seed",10,370,MUTED);
+                slider(g,10,418,pw-20,"Faces",o().exposedFaces,1,4,6,DEFAULTS.exposedFaces,v->o().exposedFaces=Math.clamp((int)Math.round(v),1,6),true);
+                slider(g,10,446,pw-20,"Roughening ratio",o().roughenRatio,0,1,DEFAULTS.roughenRatio,v->o().roughenRatio=Math.round(v*100)/100d,false);
+                slider(g,10,474,pw-20,"Noise scale",o().noiseScale,1,64,Double.POSITIVE_INFINITY,DEFAULTS.noiseScale,v->o().noiseScale=Math.max(.1,v),false);
+            }
+            case SHATTER -> {
+                int quarter=(pw-32)/4;
+                text(g,"Noise seed",10,370,MUTED);
+                slider(g,10,418,pw-20,"Width",o().shatterWidth,0,8,Double.POSITIVE_INFINITY,DEFAULTS.shatterWidth,v->o().shatterWidth=Math.max(0,Math.round(v*100)/100d),false);
+                text(g,"Noise dimensions",10,438,MUTED);
+                for(var axis:Options.ShatterAxis.values())button(g,10+axis.ordinal()*(quarter+4),450,quarter,20,axis.label,o().shatterAxis==axis,()->o().shatterAxis=axis,axis==Options.ShatterAxis.ALL?"Cracks in all three dimensions":"Cracks only across the "+axis.label+" axis");
+                toggle(g,10,478,"Use active block",o().fractureMaterial,()->o().fractureMaterial=!o().fractureMaterial,"Fill the cracks with the active block instead of removing blocks");
+                slider(g,10,516,pw-20,"Scale",o().noiseScale,1,64,Double.POSITIVE_INFINITY,DEFAULTS.noiseScale,v->o().noiseScale=Math.max(.1,v),false);
+            }
+            case ROCK -> {
+                text(g,"Noise seed",10,405-lift(),MUTED);
+                slider(g,10,460-lift(),pw-20,"Noise scale",o().noiseScale,1,64,DEFAULTS.noiseScale,v->o().noiseScale=v,false);
+                toggle(g,10,489-lift(),"Invert / carve",o().invert,()->o().invert=!o().invert);
             }
             default -> {
-                int row=sidesRow();
+                // Rows follow one another: the slot of a Strength slider is only left open for the tools that have one, and Fill, which belongs to the shape, only for the tools that pick one.
+                int row=sidesRow()-lift()+(o().tool==Tool.SMOOTH?smoothRows(g,375+sidesRow()):hasStrength()?0:-28);
+                int fillRow=o().tool.picksShape()?23:0;
                 toggle(g,10,403+row,"Invert / carve",o().invert,()->o().invert=!o().invert);
-                fillButtons(g,424+row);
-                toggle(g,10,447+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
-                int next=472+row;
-                if(o().hollow){ // the outline's own settings sit under the others, so they only take room while Hollow is chosen
+                if(o().tool.picksShape())fillButtons(g,424+row);
+                toggle(g,10,424+fillRow+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
+                int next=449+fillRow+row;
+                if(o().hollow&&o().tool.picksShape()){ // the outline's own settings sit under the others, so they only take room while Hollow is chosen
                     int cap=Math.max(1,o().radius);
                     slider(g,10,next+10,pw-20,"Outline thickness",o().outlineThickness,1,Math.max(2,Math.min(cap,64)),cap,DEFAULTS.outlineThickness,v->o().outlineThickness=Math.clamp((int)Math.round(v),1,cap),true);
                     text(g,"Align stroke",10,next+34,MUTED);
@@ -966,6 +1001,15 @@ public final class EditorScreen extends CraftiumScreen {
             new Side("Corners","Also connect blocks that only touch at an edge or corner",o.selectCorners,()->o.selectCorners=!o.selectCorners));
         for(int i=0;i<sides.size();i++){var side=sides.get(i);button(g,10+(i%2)*(half+4),y+(i/2)*21,half,19,side.label(),side.on(),side.toggle(),side.tip());}
     }
+    /** Smooth's own controls from {@code y} down, as the docs list them; returns the room they took. */
+    private int smoothRows(Gfx g,int y){
+        var o=o();int third=(pw-28)/3;
+        slider(g,10,y,pw-20,"Smooth strength",o.smoothing,.1,5,DEFAULTS.smoothing,v->o.smoothing=Math.round(v*100)/100d,false);
+        slider(g,10,y+28,pw-20,"Block ratio (%)",o.smoothRatio,50,150,Double.POSITIVE_INFINITY,DEFAULTS.smoothRatio,v->o.smoothRatio=Math.max(0,Math.round(v*10)/10d),false);
+        for(var mode:Options.SmoothMode.values())button(g,10+mode.ordinal()*(third+4),y+56,third,20,mode.label,o.smoothMode==mode,()->o.smoothMode=mode,switch(mode){case STABLE->"Keep the block count at the ratio";case MELT->"Lean towards taking blocks away";case GROW->"Lean towards adding blocks";});
+        toggle(g,10,y+84,"Fix edges",o.smoothFixEdges,()->o.smoothFixEdges=!o.smoothFixEdges,"Leave the brush's outer layer as it was so the smoothing blends into the terrain");
+        return 84;
+    }
     /** Which blocks the Magic Wand connects, as one icon button each with the active one lit. */
     private void compareButtons(Gfx g,int y){
         var kinds=Options.Compare.values();int width=(pw-20-4*(kinds.length-1))/kinds.length;
@@ -1001,7 +1045,17 @@ public final class EditorScreen extends CraftiumScreen {
     /** How far the controls under the radius move down while the Sides slider is shown. */
     private int sidesRow(){return sidesShown()?28:0;}
     /** The tools with their own seed fields and painters have no free row; the + and - keys still change the sides there. */
-    private boolean sidesShown(){return o().shape==BrushMath.Shape.POLYGON&&!EnumSet.of(Tool.ROCK,Tool.DISTORT,Tool.ROUGHEN,Tool.SHATTER,Tool.NOISE_PAINTER,Tool.BIOME_PAINTER,Tool.CLENTAMINATOR).contains(o().tool);}
+    /**
+     * How far the tool's options move up because it has less brush to set: a round brush has no shape picker, and a tool with no brush has no radius
+     * either. Text lays out its own panel, so it keeps its place.
+     */
+    /** The tools with a Strength slider under the radius. */
+    private boolean hasStrength(){return EnumSet.of(Tool.SCULPT_DRAW,Tool.ROCK,Tool.ELEVATION,Tool.FLATTEN,Tool.SLOPE,Tool.EXTRUDE).contains(o().tool);}
+    private int lift(){
+        if(o().tool==Tool.TEXT)return 0;
+        return switch(o().tool.brushUse()){case DISC,SPHERE->32;case NONE->60;default->0;};
+    }
+    private boolean sidesShown(){return o().tool.picksShape()&&o().shape==BrushMath.Shape.POLYGON&&!EnumSet.of(Tool.ROCK,Tool.DISTORT,Tool.ROUGHEN,Tool.SHATTER,Tool.NOISE_PAINTER,Tool.BIOME_PAINTER,Tool.CLENTAMINATOR).contains(o().tool);}
     /** The button that shows the current shape and opens the picker. */
     private void shapeSelector(Gfx g,int y){
         var shape=o().shape;
@@ -1195,8 +1249,11 @@ public final class EditorScreen extends CraftiumScreen {
      */
     private net.minecraft.core.BlockPos lastDragged;
     private boolean useQueued,awaitingReply,repliedSince;
+    /** The Sculpt tools work by strokes: what a stroke stages is built the moment the button is released, without Enter. Modify is built by its own Apply. */
+    private static boolean sculpts(Tool tool){return tool.group.equals("Sculpt")&&tool!=Tool.MODIFY;}
     private long lastUseSent;
     private void dragUse(){
+        if(o().tool==Tool.EXTRUDE||o().tool==Tool.FLOODFILL)return; // one build per click, of what is outlined under the cursor
         if(!o().tool.selection()){use();return;}
         var hit=target();if(hit==null||hit.getBlockPos().equals(lastDragged))return;
         long now=System.currentTimeMillis();
@@ -1242,6 +1299,15 @@ public final class EditorScreen extends CraftiumScreen {
                 Point p=CraftiumClient.point(hit.getBlockPos());var corners=ClientState.boxCorners;
                 // The first click leaves one handle, the second a second one; each can be dragged afterwards.
                 if(corners.size()==1){corners.add(p);selectedNode=1;}else{corners.clear();corners.add(p);selectedNode=0;}
+            }
+        }
+        if((o().tool==Tool.EXTRUDE||o().tool==Tool.FLOODFILL)&&o().largeSelectionWarnings&&confirm==null){
+            // A click that reaches more than a hover preview is made for asks first, because it cannot be looked over before it is built.
+            var hit=target();int count=hit==null?0:ClickPreview.measure(minecraft,hit);
+            if(count>=o().hoverPreviewLimit){
+                Point at=CraftiumClient.point(hit.getBlockPos()),normal=CraftiumClient.normal(hit);
+                confirm=new Confirm("Change "+String.format(Locale.ROOT,"%,d",count)+(count>=ClickPreview.CAP?"+":"")+" blocks, confirm?","Build it",()->CraftiumClient.send("use",at,normal));
+                return;
             }
         }
         action("use");
@@ -1345,7 +1411,7 @@ public final class EditorScreen extends CraftiumScreen {
         String block=BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(hit.getBlockPos()).getBlock()).toString();
         ClientState.pick(block);
     }
-    @Override public boolean mouseReleased(MouseButtonEvent event){if(dragBlock!=null&&event.button()==0){finishBlockDrag(event);return true;}if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting&&o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW")&&o().annotationPoints.size()>1)action("annotation_create");painting=false;ClientState.strokeId=0;if(o().tool==Tool.LASSO_SELECT&&!lasso.isEmpty()){o().selectionPoints=new ArrayList<>(LassoSelection.project(lasso));action("lasso_select");o().selectionPoints.clear();lasso.clear();}}return true;}
+    @Override public boolean mouseReleased(MouseButtonEvent event){if(dragBlock!=null&&event.button()==0){finishBlockDrag(event);return true;}if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting&&o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW")&&o().annotationPoints.size()>1)action("annotation_create");if(painting&&sculpts(o().tool))CraftiumClient.send("stroke_end",null,null);painting=false;ClientState.strokeId=0;if(o().tool==Tool.LASSO_SELECT&&!lasso.isEmpty()){o().selectionPoints=new ArrayList<>(LassoSelection.project(lasso));action("lasso_select");o().selectionPoints.clear();lasso.clear();}}return true;}
     @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy) {
         if(dragBlock!=null){if(!dragMoved&&Math.hypot(event.x()-dragStartX,event.y()-dragStartY)>5)dragMoved=true;return true;}
         if(ReferenceImages.drag(event.x(),event.y()))return true;
@@ -1481,6 +1547,10 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             case EXTRUDE_POINT -> {if((o().tool!=Tool.PATH&&o().tool!=Tool.MODELLING)||o().nodes.isEmpty())return false;if(o().nodes.size()>=64)ClientState.notify("Maximum 64 control points");else{o().nodes.add(o().nodes.getLast());selectedNode=o().nodes.size()-1;}}
             case SAVE_BLUEPRINT -> {if(ClientState.status.clipboardSize()==0&&ClientState.status.clipboardEntityCount()==0)ClientState.notify("Copy a selection first");else ClientCompat.setScreen(minecraft,new SaveBlueprintScreen(this));}
             case SHOW_BIOMES -> o().showBiomes=!o().showBiomes;
+            case CYCLE_SELECTION_STYLE -> {
+                var all=Options.SelectionStyle.values();var next=all[(o().selectionStyle.ordinal()+1)%all.length];o().selectionStyle=next;
+                ClientState.notify("Selection display: "+next.label);
+            }
             case SHOW_SELECTION -> showSelection=!showSelection;case SHOW_ANNOTATIONS -> o().showAnnotations=!o().showAnnotations;
             case SHOW_DISPLAYS -> o().showDisplayGizmos=!o().showDisplayGizmos;case SHOW_MARKERS -> o().showMarkerGizmos=!o().showMarkerGizmos;
             case SHOW_COLLISION -> o().showCollisionMesh=!o().showCollisionMesh;case SHOW_LIGHTS -> o().showLightBlocks=!o().showLightBlocks;case SHOW_VOID -> o().showStructureVoid=!o().showStructureVoid;

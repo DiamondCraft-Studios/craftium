@@ -17,18 +17,29 @@ final class AdvancedTools {
         var o=p.o;
         switch(o.tool) {
             case SMOOTH -> {
+                // A Gaussian blur that moves blocks about without changing how many there are: the cells of the brush are ranked by how much solid
+                // surrounds them and the first ones, as many as the stroke began with times the block ratio, become solid. Melt and Grow lean the
+                // ranking towards taking blocks away or adding them. Fix edges leaves the brush's outer layer alone, so it meets the terrain as it was.
+                var brush=p.brush(center);var inside=new HashSet<>(brush);
                 var candidates=new ArrayList<Point>();int filled=0;
-                for(Point at:p.brush(center))if(p.accepted(at)&&!p.state(at).hasBlockEntity()){candidates.add(at);if(p.solid(at))filled++;}
-                candidates.sort(Comparator.<Point>comparingDouble(at->p.density(at)+(p.solid(at)?.01/o.strength:0)).reversed());
-                for(int i=0;i<candidates.size();i++){Point at=candidates.get(i);if(i<filled){if(!p.solid(at))p.put(at,p.nearestMaterial(at));}else if(p.solid(at))p.put(at,Blocks.AIR.defaultBlockState());}
+                for(Point at:brush)if(p.accepted(at)&&!p.state(at).hasBlockEntity()){
+                    if(o.smoothFixEdges){boolean edge=false;for(Point n:EditPlanner.NEIGHBOURS)if(!inside.contains(at.add(n.x(),n.y(),n.z()))){edge=true;break;}if(edge)continue;}
+                    candidates.add(at);if(p.solid(at))filled++;
+                }
+                double solidBias=switch(o.smoothMode){case MELT->-.05;case GROW->.01;default->.01;},airBias=o.smoothMode==Options.SmoothMode.GROW?.05:0;
+                candidates.sort(Comparator.<Point>comparingDouble(at->p.density(at)+(p.solid(at)?solidBias:airBias)).reversed());
+                int keep=(int)Math.clamp(Math.round(filled*o.smoothRatio/100d),0,candidates.size());
+                for(int i=0;i<candidates.size();i++){Point at=candidates.get(i);if(i<keep){if(!p.solid(at))p.put(at,p.nearestMaterial(at));}else if(p.solid(at))p.put(at,Blocks.AIR.defaultBlockState());}
             }
             case EXTRUDE -> {
-                var todo=new ArrayDeque<Point>();var seen=new HashSet<Point>();todo.add(center);seen.add(center);var base=p.state(center);
-                while(!todo.isEmpty()&&seen.size()<=o.selectLimit){
-                    Point at=todo.removeFirst();if(at.distanceSquared(center)>128*128||!matches(p,base,at)||!p.state(at.add(normal.x(),normal.y(),normal.z())).isAir())continue;
-                    for(int step=1;step<=Math.max(1,(int)o.strength);step++)p.put(at.add(normal.x()*(o.invert?1-step:step),normal.y()*(o.invert?1-step:step),normal.z()*(o.invert?1-step:step)),o.invert?Blocks.AIR.defaultBlockState():p.state(at));
-                    for(Point n:EditPlanner.NEIGHBOURS)if(n.x()*normal.x()+n.y()*normal.y()+n.z()*normal.z()==0){Point next=at.add(n.x(),n.y(),n.z());if(seen.add(next))todo.add(next);}
-                }
+                // The whole face the click lands on, from the same search the hover preview outlines. Expand adds layers in front of it, contract takes them off.
+                var base=p.state(center);
+                var face=SurfaceFill.face(new SurfaceFill.Cells(){
+                    public boolean air(Point a){return p.state(a).isAir();}
+                    public boolean matches(Point a){return AdvancedTools.matches(p,base,a);}
+                },center,normal,o.selectLimit);
+                int count=Math.max(1,o.extrudeCount);
+                for(Point at:face)for(int step=1;step<=count;step++){int s=o.invert?1-step:step;p.put(at.add(normal.x()*s,normal.y()*s,normal.z()*s),o.invert?Blocks.AIR.defaultBlockState():p.state(at));}
             }
             case PATH -> {
                 var path=Geometry.path(o.nodes,o);for(int index=0;index<path.size();index++){
@@ -47,11 +58,11 @@ final class AdvancedTools {
                 for(Point at:p.brush(center))if(p.solid(at)&&(!o.surfaceOnly||p.surface(at))){double t=length==0?0:Geometry.vector(at).subtract(Geometry.vector(a)).dot(vector)/length;p.put(at,p.preserve(p.state(at),p.palette(t,at)));}
             }
             case FLOODFILL -> {
-                Point start=p.state(center).isAir()?center:center.add(normal.x(),normal.y(),normal.z());var matching=p.state(start);var seen=new HashSet<Point>();var todo=new ArrayDeque<Point>();todo.add(start);seen.add(start);int filled=0;
-                while(!todo.isEmpty()&&filled<o.floodLimit&&seen.size()<Selection.LIMIT*8){Point at=todo.removeFirst();if(at.distanceSquared(start)>128*128||p.state(at)!=matching)continue;
-                    if(!o.floodUp&&at.y()>start.y()||!o.floodDown&&at.y()<start.y()||!o.floodHorizontal&&(at.x()!=start.x()||at.z()!=start.z()))continue;p.put(at,p.material);filled++;
-                    for(Point n:EditPlanner.NEIGHBOURS){Point next=at.add(n.x(),n.y(),n.z());if(seen.add(next))todo.add(next);}if(o.floodCorners)for(int x=-1;x<=1;x++)for(int z=-1;z<=1;z++){Point next=at.add(x,0,z);if(seen.add(next))todo.add(next);}
-                }
+                Point start=p.state(center).isAir()?center:center.add(normal.x(),normal.y(),normal.z());var matching=p.state(start);
+                for(Point at:SurfaceFill.flood(new SurfaceFill.Cells(){
+                    public boolean air(Point a){return p.state(a).isAir();}
+                    public boolean matches(Point a){return p.state(a)==matching;}
+                },start,o.floodLimit,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners))p.put(at,p.material);
             }
             case FLUID_BALL -> fluid(p,center,normal);
             case SMEAR -> {

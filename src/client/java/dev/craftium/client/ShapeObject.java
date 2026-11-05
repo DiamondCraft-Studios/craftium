@@ -164,7 +164,7 @@ final class ShapeObject {
         Pose shown=TransformGizmo.shapeDuringDrag(pose);
         var made=make(shown);
         Point at=shown.origin();
-        made.outline().draw(new Vec3(at.x(),at.y(),at.z()),(a,b)->Overlay.line(a,b,ClientState.options.previewColor,1),ClientState.options.previewColor,ClientState.options.previewFill,true);
+        made.outline().drawEmphasised(new Vec3(at.x(),at.y(),at.z()),ClientState.options.previewColor,(float)ClientState.options.selectionWidth,ClientState.options.previewFill,true,false);
         // The foreground block, so swapping it with the background block changes the shape at once; a carve shows what it would remove.
         made.ghost().draw(at,o.invert?null:ShellGhost.state(mc,o.block));
     }

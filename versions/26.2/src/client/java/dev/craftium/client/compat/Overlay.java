@@ -70,6 +70,8 @@ public final class Overlay {
     public static void box(AABB box,int strokeColor,float strokeWidth,int fillColor){Gizmos.cuboid(box,new GizmoStyle(strokeColor,strokeWidth,fillColor)).setAlwaysOnTop();}
     /** A filled quad. Corners are in order, counter-clockwise when seen from the side it faces. */
     public static void face(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){Gizmos.rect(a,b,c,d,GizmoStyle.fill(color)).setAlwaysOnTop();}
+    /** A filled quad that belongs to the scene: blocks in front of it hide it. */
+    public static void sceneFace(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){Gizmos.rect(a,b,c,d,GizmoStyle.fill(color));}
     /**
      * The real models of the blocks at {@code positions}, drawn translucent and tinted by {@code tint} (ARGB)
      * over the blocks themselves. The list is not copied and must not change after this call.

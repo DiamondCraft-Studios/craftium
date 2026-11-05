@@ -34,7 +34,7 @@ public final class Overlay {
     private record Box(AABB box,int stroke,float width,int fill) implements Prim {}
     private record Point(Vec3 at,int color,float size) implements Prim {}
     private record Label(String text,Vec3 pos,int color,int background,float scale) implements Prim {}
-    private record Quad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color) implements Prim {}
+    private record Quad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color,boolean scene) implements Prim {}
     private record Blocks(List<BlockPos> models,List<BlockPos> places,java.util.Set<BlockPos> placed,List<net.minecraft.world.level.block.state.BlockState> states,int tint) implements Prim {}
 
     private static final List<Prim> building=new ArrayList<>();
@@ -70,7 +70,9 @@ public final class Overlay {
     public static void box(AABB box,int strokeColor,float strokeWidth,int fillColor){out.add(new Box(box,strokeColor,strokeWidth,fillColor));}
     public static void point(Vec3 at,int color,float size){out.add(new Point(at,color,size));}
     /** A filled quad. Corners are in order, counter-clockwise when seen from the side it faces. */
-    public static void face(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){out.add(new Quad(a,b,c,d,color));}
+    public static void face(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){out.add(new Quad(a,b,c,d,color,false));}
+    /** A filled quad that belongs to the scene: blocks in front of it hide it. Drawn in the pass that tests depth. */
+    public static void sceneFace(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){out.add(new Quad(a,b,c,d,color,true));}
     /**
      * The real models of the blocks at {@code positions}, drawn translucent and tinted by {@code tint} (ARGB)
      * over the blocks themselves, so stairs, slabs and fences are highlighted in their true shape. The list is
@@ -118,14 +120,17 @@ public final class Overlay {
             }
             case Line l->{if(!l.scene&&visible(l.color))strip(quads,pose,view,l.from,l.to,l.color,l.width);}
             case Point p->{if(visible(p.color))square(quads,pose,view,p);}
-            case Quad q->{if(visible(q.color))quad(quads,pose,view,q.color,q.a,q.b,q.c,q.d);}
+            case Quad q->{if(!q.scene&&visible(q.color))quad(quads,pose,view,q.color,q.a,q.b,q.c,q.d);}
             case Label ignored->{}
             case Blocks ignored->{}
         }
         // Scene lines are drawn by the pipeline of the game's ordinary text background, which tests depth, so blocks in front hide them.
-        if(prims.stream().anyMatch(p->p instanceof Line l&&l.scene)){
+        if(prims.stream().anyMatch(p->p instanceof Line l&&l.scene||p instanceof Quad q&&q.scene)){
             var scene=context.consumers().getBuffer(RenderType.textBackground());
-            for(var prim:prims)if(prim instanceof Line l&&l.scene&&visible(l.color))strip(scene,pose,view,l.from,l.to,l.color,l.width);
+            for(var prim:prims){
+                if(prim instanceof Line l&&l.scene&&visible(l.color))strip(scene,pose,view,l.from,l.to,l.color,l.width);
+                else if(prim instanceof Quad q&&q.scene&&visible(q.color))quad(scene,pose,view,q.color,q.a,q.b,q.c,q.d);
+            }
         }
         // Text asks the buffer source for its own buffers, which closes the one held above, so labels go last.
         for(var prim:prims)if(prim instanceof Label t)label(context,mc,camera,view,t);

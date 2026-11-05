@@ -77,8 +77,8 @@ final class GhostBlocks {
         Vec3 at=new Vec3(origin.x(),origin.y(),origin.z());
         if(outline){
             int line=ai?AI_OUTLINE:ClientState.options.hoverColor,fill=ai?AI_FILL:ClientState.options.hoverFill;
-            if(!placedShape.isEmpty())placedShape.draw(at,(a,b)->Overlay.line(a,b,line,1),line,fill,true);
-            if(!removedShape.isEmpty())removedShape.draw(at,(a,b)->Overlay.line(a,b,ClientState.options.removedColor,1),ClientState.options.removedColor,ClientState.options.removedFill,true);
+            if(!placedShape.isEmpty())placedShape.drawEmphasised(at,line,(float)ClientState.options.selectionWidth,fill,true,false);
+            if(!removedShape.isEmpty())removedShape.drawEmphasised(at,ClientState.options.removedColor,(float)ClientState.options.selectionWidth,ClientState.options.removedFill,true,false);
         }
         if(!removedPlaces.isEmpty()&&outline)Overlay.blocks(removedPlaces,ClientState.options.removedTint);
         if(states.isEmpty())return;

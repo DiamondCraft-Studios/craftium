@@ -50,7 +50,7 @@ public final class BlockPickerScreen extends CraftiumScreen {
     }
     @Override protected void init(){
         scale=Math.min(1f,Math.min(width/(COLS*CELL+60f),height/(ROWS*CELL+150f)));cw=Math.round(width/scale);ch=Math.round(height/scale);clearWidgets();
-        search=new EditBox(font,0,0,COLS*CELL,21,Component.literal("Search blocks"));search.setMaxLength(128);search.setValue(query);search.setResponder(s->{query=s;row=0;filter();});addRenderableWidget(search);filter();
+        search=new EditBox(font,0,0,COLS*CELL,21,Component.literal("Search blocks"));search.setMaxLength(128);search.setValue(query);search.setResponder(s->{query=s;row=0;filter();});addRenderableWidget(search);setInitialFocus(search);filter();
         cancel=new FlatButton(0,0,80,22,"Cancel",this::onClose);addRenderableWidget(cancel);place();
     }
     /** Positions the window, kept on screen, and the widgets that sit in it. */

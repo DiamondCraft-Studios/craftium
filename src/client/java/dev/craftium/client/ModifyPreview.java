@@ -44,7 +44,7 @@ final class ModifyPreview {
         if(problem!=null){return;}
         if(places.isEmpty()&&ModifyMath.usesCursor(o)&&cursor==null)return; // nothing to turn around until the cursor is on a block
         if(shape!=OutlineShape.EMPTY){
-            shape.draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,o.previewColor,1),o.previewColor,o.previewFill,true);
+            shape.drawEmphasised(Vec3.ZERO,o.previewColor,(float)o.selectionWidth,o.previewFill,true,false);
             if(!places.isEmpty())Overlay.blocks(models,places,o.previewTint);
         }else if(bounds!=null)Overlay.box(bounds,o.previewColor,2,o.previewFill);
         // Depth-tested rulers through what the tool turns about, as the gizmo draws while it is dragged: the block under the cursor, or the middle of the selection.
