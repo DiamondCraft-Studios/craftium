@@ -35,6 +35,7 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
         entry("Selection","Outline",o->o.selectionColor,(o,c)->o.selectionColor=c),
         entry("Selection","Fill",o->o.selectionFill,(o,c)->o.selectionFill=c),
         entry("Selection","Selected blocks tint",o->o.selectionTint,(o,c)->o.selectionTint=c),
+        entry("Selection","Face against a solid block",o->o.selectionContact,(o,c)->o.selectionContact=c),
         entry("Destination preview","Outline",o->o.previewColor,(o,c)->o.previewColor=c),
         entry("Destination preview","Fill",o->o.previewFill,(o,c)->o.previewFill=c),
         entry("Destination preview","Blocks tint",o->o.previewTint,(o,c)->o.previewTint=c),

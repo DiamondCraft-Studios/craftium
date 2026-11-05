@@ -74,6 +74,8 @@ public final class Options {
         hoverColor=0xff7fd8ff,hoverFill=0x2240c0ff;
     /** The colour (ARGB) and width, in pixels from 0.1 to 10, of the selection's outline. */
     public int selectionColor=0xff2389c6;
+    /** The colour (ARGB) of a selection's face that touches a solid block outside it. Fully transparent turns it off. */
+    public int selectionContact=0x66ff9f43;
     public double selectionWidth=1;
     /** How the builder tools draw their selection and where it would land, set apart from the editor's selection: colours (ARGB) and line widths. */
     public int builderSelectionColor=0xff2389c6,builderSelectionFill=0x302389c6,
