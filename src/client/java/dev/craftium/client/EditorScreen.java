@@ -1310,8 +1310,17 @@ public final class EditorScreen extends CraftiumScreen {
                 return;
             }
         }
+        if(o().tool.strokes()){ // where this request is aimed becomes where the next one's stroke starts from
+            var hit=target();
+            o().strokeFrom=hit==null?null:strokeLast;
+            strokeLast=hit==null?strokeLast:CraftiumClient.point(hit.getBlockPos());
+            action("use");
+            o().strokeFrom=null;
+            return;
+        }
         action("use");
     }
+    private Point strokeLast;
     /** Called when a handle has been let go of: the box follows the handles, replacing the box it made before. */
     void handlesMoved(){
         if(o().tool!=Tool.BOX_SELECT||ClientState.boxCorners.size()!=2||ClientState.status.busy())return;
@@ -1378,7 +1387,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(!toolActive&&EditorBindings.matches(Action.CROSSHAIR,event)){cameraGesture=CameraGesture.ROTATE;cameraButton=event.button();return true;}
         if(EditorBindings.matches(Action.ROTATE_CAMERA,event)){cameraGesture=CameraGesture.ROTATE;cameraButton=event.button();return true;}
-        if(toolActive&&EditorBindings.matches(Action.USE_TOOL,event)){if(o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW"))o().annotationPoints.clear();painting=true;ClientState.strokeId=System.nanoTime();lastDragged=null;useQueued=false;if(o().tool==Tool.LASSO_SELECT){lasso.clear();lasso.add(new LassoSelection.Pixel(event.x(),event.y()));}else use();}
+        if(toolActive&&EditorBindings.matches(Action.USE_TOOL,event)){if(o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW"))o().annotationPoints.clear();painting=true;strokeLast=null;ClientState.strokeId=System.nanoTime();lastDragged=null;useQueued=false;if(o().tool==Tool.LASSO_SELECT){lasso.clear();lasso.add(new LassoSelection.Pixel(event.x(),event.y()));}else use();}
         if(EditorBindings.matches(Action.PICK_BLOCK,event)){
             // Dragging pans the camera; letting go without having dragged picks the block, as a click always did.
             var hit=target();pickedHit=hit;pendingPick=true;middleDragged=false;

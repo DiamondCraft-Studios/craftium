@@ -397,6 +397,15 @@ public final class EditorServer {
         for(Point p:points)if(mask.allows(plan.state(p)))kept.add(p);
         return kept;
     }
+    /** The blocks a stroke passed over between its last request and this one, when the player wants strokes smoothed; the ends are left out. */
+    private static List<Point> between(Options o,Point p){
+        if(!o.smoothStrokes||o.strokeFrom==null||!o.tool.strokes())return List.of();
+        var path=BrushMath.line(o.strokeFrom,p);
+        if(path.size()>130)return List.of(); // a jump, not a drag
+        var through=new ArrayList<Point>();
+        for(Point q:path)if(!q.equals(o.strokeFrom)&&!q.equals(p))through.add(q);
+        return through;
+    }
     private static void use(ServerPlayer player,Session s,Options o,Point p,Point normal,EditPlanner plan) {
         switch(o.tool) {
             case ANNOTATION -> start(player,s,AnnotationEdits.plan("annotation_create",player.level(),o,p));
@@ -405,6 +414,7 @@ public final class EditorServer {
                 else {s.selection.combine(masked(plan,o,Selection.box(s.corner,p)),o.mode);s.corner=null;send(player,s,"Selected "+s.selection.size()+" blocks",false);}
             }
             case FREEHAND_SELECT -> {
+                for(Point q:between(o,p))s.selection.combine(masked(plan,o,plan.brush(q)),o.mode);
                 s.selection.combine(masked(plan,o,plan.brush(p)),o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
             }
             case MAGIC_SELECT -> {
@@ -441,7 +451,7 @@ public final class EditorServer {
                 try{start(player,s,edit.withSelection(new Session.SelectionChange(before,new ArrayList<>(placed))));}
                 catch(RuntimeException e){s.selection.restore(before);s.pendingSelectionBefore=null;throw e;}
             }
-            default -> {plan.tool(p,normal);start(player,s,plan.finish(o.tool.label));}
+            default -> {for(Point q:between(o,p))plan.tool(q,normal);plan.tool(p,normal);start(player,s,plan.finish(o.tool.label));}
         }
     }
     private static void requireSelection(Session s) {if(s.selection.size()==0)throw new IllegalArgumentException("Create a selection first");}
