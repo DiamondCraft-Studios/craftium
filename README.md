@@ -61,6 +61,22 @@ For Path or Modelling, right-click control points and press Enter to build. Sele
 
 For terrain, use Rock, Weld, Melt, Smooth, Elevation and Slope. The inspector exposes noise, smoothing, surface, symmetry and mask settings. Imported PNG heightmaps are used by Elevation. Floodfill has a count limit independent of brush radius; Fluid Ball uses a bounded flow approximation.
 
+## AI building (experimental)
+
+Craftium can be driven from an AI app such as Claude Desktop. You describe a build in chat ("build me an Egyptian pillar here"), Claude reads the world and answers with a list of shapes, and Craftium shows the result as a violet **ghost preview** in your game. Nothing changes until you apply it, and each applied build is one undo step.
+
+**What it is:** Craftium runs a local bridge (off by default, `127.0.0.1` only, random token per launch), and a small, dependency-free MCP extension (`craftium.mcpb`) connects your AI app to it. It uses the Claude subscription you already have in that app. Craftium never sees your account, has no sign-in of its own and needs no API key. There is no AI built into the mod itself.
+
+**What Claude can do:** read blocks and surface heights anywhere in the world, look at your screen on request, render its own camera views to check its work, stage a build as a preview, and apply or undo it. Builds are made from primitives: boxes, spheres, cylinders, cones, pyramids, lines, single blocks and replacements, with hollowing and repeats. Everything goes through the same permission, protected-area, WorldGuard, world-border and size checks as your own edits.
+
+**What to expect:**
+- It suits pillars, walls, towers, domes and similar geometric structures. Organic shapes such as trees and terrain are better done with the brush tools, and Claude's results depend on how well it plans the shapes. Expect to iterate on the preview.
+- It is an early preview. The extension is not yet attached to a release; you get it from CI or build it yourself. It is not signed or verified by Anthropic, and Claude Desktop will show its generic extension warning.
+- It needs Claude Desktop (or another MCP client, including Claude Code through the plugin in [mcp/](mcp)) and Node.js 18 or newer for the extension. The automated game test for the bridge runs on 1.21.10.
+- A build is limited to 256 operations and 131,072 blocks, and screenshots you allow are sent to the AI app, so close anything private first.
+
+Setup, the full tool list, limits and the safety model are in [AI building](docs/AI.md).
+
 ## Inspector and assets
 
 - **Library:** named tool presets, palettes and clipboard blueprints; authors/tags and a searchable browser with top-down thumbnails and nested folders.
