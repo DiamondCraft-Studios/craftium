@@ -274,8 +274,28 @@ final class TransformGizmo {
         faceBase=faceBase(t).add(delta);plainHandles=t.kind==Kind.MODEL||t.kind==Kind.PIVOT||t.kind==Kind.SHAPE&&ClientState.options.tool.transform();
         render(t.anchor.add(dragging!=null&&effectiveMode(t)==Options.GizmoMode.MOVE?smooth:delta),effectiveMode(t),dragging!=null?handle:hovered,extent(t));
         faceBase=null;plainHandles=false;localBasis=false;
-        if(dragging!=null)ruler(t.anchor.add(effectiveMode(t)==Options.GizmoMode.MOVE?smooth:delta));
+        if(dragging!=null){ruler(t.anchor.add(effectiveMode(t)==Options.GizmoMode.MOVE?smooth:delta));readout(t);}
         if(t.kind==Kind.PIVOT)Overlay.point(t.anchor.add(delta),0xffffd66d,11); // the pivot
+    }
+    /** A number with at most two decimals and no trailing zeros, and a sign when {@code signed}. */
+    private static String number(double value,boolean signed){
+        String text=java.math.BigDecimal.valueOf(Math.rint(value*100)/100).stripTrailingZeros().toPlainString();
+        if(text.equals("-0"))text="0";
+        return signed&&!text.startsWith("-")&&!text.equals("0")?"+"+text:text;
+    }
+    /** While a handle is held: the numbers of the transform in progress above the gizmo, so it can be set exactly: the distance moved, the angles turned, or the new size and scale. */
+    private static void readout(Target t){
+        Vec3 anchor=t.anchor.add(mode==Options.GizmoMode.MOVE?smooth:delta);String text;
+        switch(mode){
+            case ROTATE -> text="Rotate  X "+number(angles.x,true)+"°  Y "+number(angles.y,true)+"°  Z "+number(angles.z,true)+"°";
+            case SCALE -> {
+                String factors="×"+number(size.x,false)+"  ×"+number(size.y,false)+"  ×"+number(size.z,false);
+                text=pickExtent==null?"Scale  "+factors:"Size  "+number(Math.max(1,pickExtent.x)*size.x,false)+" × "+number(Math.max(1,pickExtent.y)*size.y,false)+" × "+number(Math.max(1,pickExtent.z)*size.z,false)+"  ("+factors+")";
+            }
+            default -> text="Move  X "+number(delta.x,true)+"  Y "+number(delta.y,true)+"  Z "+number(delta.z,true);
+        }
+        Vec3 spot=anchor.add(cameraAxes()[1].scale(6.2*screenScale(anchor)));
+        Overlay.text(text,new net.minecraft.core.BlockPos((int)Math.floor(spot.x),(int)Math.floor(spot.y),(int)Math.floor(spot.z)),0xffffffff,0xcc151c26,.02f);
     }
     private static final double RULER_REACH=64;
     private static final int[] RULER_COLORS={0xaaff7777,0xaa8bef9a,0xaa78b9ff};
