@@ -1301,6 +1301,15 @@ public final class EditorScreen extends CraftiumScreen {
                 if(corners.size()==1){corners.add(p);selectedNode=1;}else{corners.clear();corners.add(p);selectedNode=0;}
             }
         }
+        if((o().tool==Tool.EXTRUDE||o().tool==Tool.FLOODFILL)&&o().largeSelectionWarnings&&confirm==null){
+            // A click that reaches more than a hover preview is made for asks first, because it cannot be looked over before it is built.
+            var hit=target();int count=hit==null?0:ClickPreview.measure(minecraft,hit);
+            if(count>=o().hoverPreviewLimit){
+                Point at=CraftiumClient.point(hit.getBlockPos()),normal=CraftiumClient.normal(hit);
+                confirm=new Confirm("Change "+String.format(Locale.ROOT,"%,d",count)+(count>=ClickPreview.CAP?"+":"")+" blocks, confirm?","Build it",()->CraftiumClient.send("use",at,normal));
+                return;
+            }
+        }
         action("use");
     }
     /** Called when a handle has been let go of: the box follows the handles, replacing the box it made before. */

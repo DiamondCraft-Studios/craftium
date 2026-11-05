@@ -12,7 +12,10 @@ import java.util.*;
  * the very search the server builds from ({@link SurfaceFill}), stopping at a cap so hovering stays cheap on a large face or an open space.
  */
 final class ClickPreview {
-    private static final int CAP=20_000,VISITS=60_000;
+    static final int CAP=20_000;
+    private static final int VISITS=60_000;
+    /** How many blocks the last search reached, up to {@link #CAP}. */
+    private static int size;
     private static Object key;
     private static OutlineShape shape=OutlineShape.EMPTY;
     private static boolean removing;
@@ -23,7 +26,7 @@ final class ClickPreview {
         if(hit==null||mc.level==null||tool!=Tool.EXTRUDE&&tool!=Tool.FLOODFILL||TransformGizmo.dragging()||PlacementPreview.active()||ClientState.hasPending()){key=null;shape=OutlineShape.EMPTY;return;}
         BlockPos at=hit.getBlockPos();Point normal=CraftiumClient.normal(hit);
         // The world can change under a still cursor, so the result is also refreshed about once a second.
-        Object now=List.of(tool,at,normal,o.compare,o.selectLimit,o.strength,o.invert,o.floodLimit,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners,mc.level.getGameTime()/20);
+        Object now=List.of(tool,at,normal,o.compare,o.selectLimit,o.extrudeCount,o.invert,o.floodLimit,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners,mc.level.getGameTime()/20);
         if(!Objects.equals(key,now)){key=now;compute(mc,at,normal,o);}
         if(shape.isEmpty())return;
         int colour=removing?o.removedColor:o.hoverColor,fill=removing?o.removedFill:o.hoverFill;
@@ -41,10 +44,13 @@ final class ClickPreview {
                 public boolean air(Point p){return world.air(p);}
                 public boolean matches(Point p){return world.matches(p);}
             },centre,normal,Math.min(o.selectLimit,CAP));
-            int count=Math.max(1,(int)o.strength);removing=o.invert;
+            int count=Math.max(1,o.extrudeCount);removing=o.invert;
             var cells=new LinkedHashSet<Point>();
-            for(Point p:face)for(int step=1;step<=count;step++){int s=o.invert?1-step:step;cells.add(p.add(normal.x()*s,normal.y()*s,normal.z()*s));}
-            shape=OutlineShape.of(cells);
+            fill:for(Point p:face)for(int step=1;step<=count;step++){
+                if(cells.size()>=CAP)break fill;
+                int s=o.invert?1-step:step;cells.add(p.add(normal.x()*s,normal.y()*s,normal.z()*s));
+            }
+            size=cells.size();shape=OutlineShape.of(cells);
         }else{
             Point start=level.getBlockState(at).isAir()?centre:centre.add(normal.x(),normal.y(),normal.z());
             var matching=level.getBlockState(new BlockPos(start.x(),start.y(),start.z()));
@@ -52,7 +58,13 @@ final class ClickPreview {
                 public boolean air(Point p){return level.getBlockState(new BlockPos(p.x(),p.y(),p.z())).isAir();}
                 public boolean matches(Point p){return level.getBlockState(new BlockPos(p.x(),p.y(),p.z()))==matching;}
             },start,Math.min(o.floodLimit,CAP),VISITS,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners);
-            shape=OutlineShape.of(cells);
+            size=cells.size();shape=OutlineShape.of(cells);
         }
+    }
+    /** How many blocks a click at {@code hit} would change, counting up to {@link #CAP}; asked when the button is pressed, so it is never out of date. */
+    static int measure(Minecraft mc,BlockHitResult hit){
+        if(mc.level==null||hit==null)return 0;
+        size=0;compute(mc,hit.getBlockPos(),CraftiumClient.normal(hit),ClientState.options);key=null; // the outline is worked out afresh at the next frame
+        return size;
     }
 }
