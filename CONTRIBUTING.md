@@ -24,7 +24,7 @@ When shared code needs a Minecraft API that differs between versions, call it th
 
 - `main` is the trunk: shared code and every version module. Open pull requests against it.
 - `release/<version>` (for example `release/26.2`) is cut from `main` to ship that version and take hotfixes. Cherry-pick fixes into it; do not develop on it.
-- Tag releases `v<mod version>-mc<version>`, for example `v0.5.0-beta.1-mc26.2`.
+- Tag releases `v<mod version>-mc<version>`, for example `v0.5.0-beta.2-mc26.2`.
 - CI builds only the versions a change touches. Shared code, the root build files and the workflows build all of them.
 
 ## Commit messages
