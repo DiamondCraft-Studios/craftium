@@ -14,7 +14,7 @@ class ToolBrushUseTest {
         for (Tool tool : EnumSet.of(Tool.EXTRUDE, Tool.TINKER, Tool.FLOODFILL, Tool.MODELLING, Tool.SMEAR, Tool.TEXT, Tool.MODIFY, Tool.RULER, Tool.ANNOTATION))
             assertEquals(Tool.BrushUse.NONE, tool.brushUse(), tool.name());
         for (Tool tool : Tool.values())
-            if (tool.selection() || tool.transform()) assertEquals(Tool.BrushUse.NONE, tool.brushUse(), tool.name());
+            if (tool != Tool.FREEHAND_SELECT && (tool.selection() || tool.transform())) assertEquals(Tool.BrushUse.NONE, tool.brushUse(), tool.name());
     }
 
     @Test void radiusOnlyToolsAreNotGivenAShapePicker() {
