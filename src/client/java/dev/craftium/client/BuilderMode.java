@@ -129,22 +129,22 @@ public final class BuilderMode {
         if(o.builderTool==Options.BuilderTool.EXTRUDE){if(hit!=null&&button!=2){boolean prior=o.invert;o.invert=button==0;CraftiumClient.send("builder_extrude",CraftiumClient.point(hit.getBlockPos()),CraftiumClient.normal(hit));o.invert=prior;}return true;}
         if(button!=0)built=false; // placing or extending the selection takes it out of the state a build left it in
         if(built&&button==0){ // a build left the selection in place: the next left click starts a new one at that block, with no second point
-            if(hit!=null){first=CraftiumClient.point(hit.getBlockPos());second=null;magicStarted=false;cells=List.of();cellBlocksFor=null;retool();built=false;}
+            if(hit!=null){first=CraftiumClient.point(hit.getBlockPos());second=null;magicStarted=false;cells=List.of();cellBlocksFor=null;retool();built=false;dragButton=0;}
             return true;
         }
         if(first!=null&&second!=null&&preview){ // something is being done to the selection: left sets the first corner again (dropping what was being done), right places it; the middle button still places it elsewhere
-            if(button==0){if(hit!=null){first=CraftiumClient.point(hit.getBlockPos());magicStarted=false;retool();refresh();}return true;}
+            if(button==0){if(hit!=null){first=CraftiumClient.point(hit.getBlockPos());magicStarted=false;retool();refresh();dragButton=0;}return true;}
             if(button==1){confirm();return true;}
         }
         if(hit==null)return true;Point at=CraftiumClient.point(hit.getBlockPos());
         if(button==2&&o.builderTool==Options.BuilderTool.STACK&&first!=null&&second!=null){stackTo(at);return true;} // middle click: as many copies as it takes to reach the block
         if(first!=null&&second!=null&&button!=2){ // nothing is being done to it yet: left and right move the first and second point
-            if(button==0)first=at;else second=at;magicStarted=false;offset=new Point(0,0,0);refresh();return true;
+            if(button==0)first=at;else second=at;magicStarted=false;offset=new Point(0,0,0);refresh();dragButton=button;return true;
         }
         if(o.builderTool==Options.BuilderTool.ERASE&&first==null&&button==1){CraftiumClient.send("builder_erase_connected",at,CraftiumClient.normal(hit));return true;}
         if(button==0&&clonePlaced){clear();return true;}
-        if(button==0){first=at;second=null;preview=false;offset=new Point(0,0,0);cells=List.of();magicStarted=false;}
-        else if(button==1){if(first==null)first=at;second=at;refresh();}
+        if(button==0){first=at;second=null;preview=false;offset=new Point(0,0,0);cells=List.of();magicStarted=false;dragButton=0;}
+        else if(button==1){if(first==null)first=at;second=at;refresh();dragButton=1;}
         else if(first!=null&&second==null){second=at;refresh();} // middle click with only a first point: extend the selection to this block
         else if(preview&&o.builderTool==Options.BuilderTool.STACK){} // a stack only grows from the selection's own faces: nudge it
         else if(preview){Point min=min();Point normal=CraftiumClient.normal(hit);offset=at.add(normal.x()-min.x(),normal.y()-min.y(),normal.z()-min.z());}
@@ -177,7 +177,23 @@ public final class BuilderMode {
             retool();offset=new Point(0,0,0);cells=List.of();cellBlocksFor=null;refreshIn=3;
         }catch(NumberFormatException ignored){}
     }
+    /** The button (0 left, 1 right) that last set a corner of the box and is still held, so moving over the blocks drags that corner; -1 when none. */
+    private static int dragButton=-1;
+    /** Holding the button that set a corner drags it to each block the pointer crosses, and the box follows in real time. */
+    private static void dragCorner(){
+        if(dragButton<0)return;
+        var mc=Minecraft.getInstance();int button=dragButton;
+        boolean held=GLFW.glfwGetMouseButton(mc.getWindow().handle(),button==0?GLFW.GLFW_MOUSE_BUTTON_LEFT:GLFW.GLFW_MOUSE_BUTTON_RIGHT)==GLFW.GLFW_PRESS;
+        if(!held||!active()||heldFirst!=null||magicStarted||first==null){dragButton=-1;return;}
+        if(!(mc.hitResult instanceof BlockHitResult hit)||hit.getType()!=HitResult.Type.BLOCK)return;
+        Point at=CraftiumClient.point(hit.getBlockPos());
+        Point current=button==0?first:second==null?first:second;
+        if(at.equals(current))return;
+        if(button==0)first=at;else second=at;
+        offset=new Point(0,0,0);if(second!=null)refresh();
+    }
     public static void tick(){
+        dragCorner();
         if(refreshIn>0&&--refreshIn==0&&first!=null&&second!=null)refresh();
         var running=magic;if(running==null)return;
         if(!running.isDone()){if(System.currentTimeMillis()-magicSince>SEARCH_TIMEOUT){restartSearch();ClientState.notify("Magic select took too long and was stopped");}return;}
