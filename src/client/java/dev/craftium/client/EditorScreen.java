@@ -638,7 +638,7 @@ public final class EditorScreen extends CraftiumScreen {
         toggle(g,10,388,"Tinker",o().tinker,()->o().tinker=!o().tinker,"Right click a block with an empty hand to change it by where you aim (stairs, slabs, walls, fences, facing, switches) · sneak and click to pick a specific property");
         toggle(g,10,411,"Replace mode",o().replaceMode,()->o().replaceMode=!o().replaceMode,"Placing a block replaces the one you click instead of going beside it · R");
         toggle(g,10,434,"Block step",o().blockStep,()->o().blockStep=!o().blockStep,"Step up a whole block on your own, as you step up a slab");
-        toggle(g,10,457,"Flying DoF",o().flyingDof,()->o().flyingDof=!o().flyingDof,"Slows you to a stop as you fly up to a wall; let go and move again to bump into it, or pass through it with No clip");
+        toggle(g,10,457,"Sticky flight",o().stickyFlight,()->o().stickyFlight=!o().stickyFlight,"Slows you to a stop as you fly up to a wall; let go and move again to bump into it, or pass through it with No clip");
         button(g,10,480,pw-20,20,"Reach: "+o().reach.label,false,()->o().reach=Options.ReachMode.values()[(o().reach.ordinal()+1)%Options.ReachMode.values().length],()->o().reach=Options.ReachMode.values()[Math.floorMod(o().reach.ordinal()-1,Options.ReachMode.values().length)],"How far you can reach blocks: normal, far (set below) or infinite · right click goes back");
         slider(g,10,517,pw-20,"Far reach: blocks",o().farReach,6,64,DEFAULTS.farReach,v->o().farReach=(int)Math.round(v),true);
         slider(g,10,553,pw-20,"Fly speed",o().flySpeed,.1,10,DEFAULTS.flySpeed,v->o().flySpeed=(float)v,false);

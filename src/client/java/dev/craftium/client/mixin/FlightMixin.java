@@ -12,15 +12,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Player.class)
 abstract class FlightMixin {
     @Unique private Vec3 craftium$velocity=Vec3.ZERO;
-    /** Flying DoF: the wall the player has been slowed by in this hold of the movement keys, and whether that braking has been used up for now. */
+    /** Sticky flight: the wall the player has been slowed by in this hold of the movement keys, and whether that braking has been used up for now. */
     @Unique private boolean craftium$braked,craftium$spent;
     /** How far ahead a wall starts to slow the player, and how close they stop. */
-    @Unique private static final double DOF_RANGE=6,DOF_STOP=.6;
+    @Unique private static final double STICKY_RANGE=6,STICKY_STOP=.6;
     /** The free distance, up to the range, from the middle of the player to the first block in the way along {@code direction}. */
     @Unique private static double craftium$wallAhead(LocalPlayer player,Vec3 direction){
-        Vec3 from=player.getBoundingBox().getCenter(),to=from.add(direction.scale(DOF_RANGE));
+        Vec3 from=player.getBoundingBox().getCenter(),to=from.add(direction.scale(STICKY_RANGE));
         var hit=player.level().clip(new net.minecraft.world.level.ClipContext(from,to,net.minecraft.world.level.ClipContext.Block.COLLIDER,net.minecraft.world.level.ClipContext.Fluid.NONE,player));
-        return hit.getType()==net.minecraft.world.phys.HitResult.Type.MISS?DOF_RANGE:hit.getLocation().distanceTo(from);
+        return hit.getType()==net.minecraft.world.phys.HitResult.Type.MISS?STICKY_RANGE:hit.getLocation().distanceTo(from);
     }
     @Inject(method="travel",at=@At("HEAD"),cancellable=true)
     private void craftium$flight(Vec3 input,CallbackInfo ci){
@@ -36,15 +36,15 @@ abstract class FlightMixin {
         Vec3 wish=forward.scale(input.z).add(right.scale(input.x)).add(0,up,0);if(wish.lengthSqr()>1)wish=wish.normalize();
         double top=keep*acceleration/(1-keep);
         double focus=1;
-        if(o.flyingDof){
+        if(o.stickyFlight){
             if(wish.lengthSqr()<1e-6){ // let go: a brake that was used is spent, so the next hold bumps into the wall, or passes through it with No clip
                 if(craftium$braked)craftium$spent=true;
                 craftium$braked=false;
             }else{
                 double room=craftium$wallAhead(player,wish.normalize());
-                if(room>=DOF_RANGE)craftium$spent=false; // clear of walls again: the next approach brakes afresh
+                if(room>=STICKY_RANGE)craftium$spent=false; // clear of walls again: the next approach brakes afresh
                 else if(!craftium$spent){
-                    double t=Math.clamp((room-DOF_STOP)/(DOF_RANGE-DOF_STOP),0,1);
+                    double t=Math.clamp((room-STICKY_STOP)/(STICKY_RANGE-STICKY_STOP),0,1);
                     focus=t*t*(3-2*t); // eases in and out, like a lens racking focus
                     craftium$braked=true;
                 }
