@@ -217,7 +217,8 @@ public final class EditorServer {
                 // The builder has no range limit; it still stops at the world's edge and at chunks that are not loaded.
                 if(!r.action().startsWith("builder_")&&target.distanceSquared(new Point((int)player.getX(),(int)player.getY(),(int)player.getZ()))>256*256)
                     throw new IllegalArgumentException("Move within 256 blocks of the target");
-                new EditPlanner(player.level(),s,o).validate(target);
+                // A builder commit sends its box's corner as the target, and the box may be far from every player: its chunks are leased while it is planned.
+                if(!r.action().equals("builder_commit"))new EditPlanner(player.level(),s,o).validate(target);
             }
             switch(r.action()) {
                 case "pick_block" -> {
