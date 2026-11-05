@@ -329,7 +329,15 @@ public final class EditorScreen extends CraftiumScreen {
         scrolled(g,262,o().tool.selection()?33:6,o().tool==Tool.MAGIC_SELECT?0:TOOL_NAME_GAP,()->toolBody(g));
     }
     private static final int TOOL_NAME_GAP=36;
+    /** The block limit slider: 1 to 100,000, at the very bottom of the options of every tool that builds, removes or moves blocks. */
+    private void blockLimit(Gfx g,int y){
+        slider(g,10,y,pw-20,"Block limit",o().blockLimit,1,Options.MAX_BLOCK_LIMIT,DEFAULTS.blockLimit,v->o().blockLimit=(int)Math.clamp(Math.round(v),1,Options.MAX_BLOCK_LIMIT),true);
+    }
     private void toolBody(Gfx g) {
+        toolOptions(g);
+        if(o().tool.placesBlocks())blockLimit(g,scrollContent+24);
+    }
+    private void toolOptions(Gfx g) {
         if(o().tool==Tool.MAGIC_SELECT)searchButtons(g,266);
         if(o().tool==Tool.BOX_SELECT||o().tool==Tool.MAGIC_SELECT||o().tool==Tool.RULER) {
             var s=ClientState.status;
@@ -486,6 +494,7 @@ public final class EditorScreen extends CraftiumScreen {
                 rows.add(sliderRow(w,"Angle",o.modifyAngle,-360,360,Double.POSITIVE_INFINITY,DEFAULTS.modifyAngle,v->o.modifyAngle=Math.round(v*10)/10d,false));
             }
         }
+        rows.add(sliderRow(w,"Block limit",o.blockLimit,1,Options.MAX_BLOCK_LIMIT,Options.MAX_BLOCK_LIMIT,DEFAULTS.blockLimit,v->o.blockLimit=(int)Math.clamp(Math.round(v),1,Options.MAX_BLOCK_LIMIT),true));
         int bottom=pb-87,avail=bottom-MODIFY_TOP,max=0,used=0;
         for(int i=rows.size()-1;i>=0;i--){if(used+rows.get(i).height()>avail){max=i+1;break;}used+=rows.get(i).height();}
         modifyScroll=Math.clamp(modifyScroll,0,max);

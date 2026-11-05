@@ -123,7 +123,8 @@ final class EditPlanner {
         if(value.data()==null&&before.data()!=null&&before.state().is(value.state().getBlock()))value=new BlockSnapshot(value.state(),before.data());
         if(before.state()==value.state() && Objects.equals(before.data(),value.data())) { changes.remove(p); return; }
         changes.put(p,new Session.Change(p,before,value));
-        if(changes.size()+biomes.size()>Selection.LIMIT) throw new IllegalArgumentException("Operation exceeds 131,072 changes");
+        int limit=Math.clamp(o.blockLimit,1,Selection.LIMIT);
+        if(changes.size()+biomes.size()>limit) throw new IllegalArgumentException(limit<Selection.LIMIT?"Operation exceeds your block limit of "+String.format("%,d",limit)+" changes; raise it in Options":"Operation exceeds 131,072 changes");
     }
     /**
      * Whether a block may stand at {@code p}. The upper half of a door or tall plant is judged by its lower half standing one

@@ -101,6 +101,9 @@ public final class Options {
     public static final int MAX_EXTRUDE_COUNT=64;
     public int extrudeCount=1;
     public int hoverPreviewLimit=5000;
+    /** The most blocks any one placing tool may change, 1 to {@link #MAX_BLOCK_LIMIT}; an edit that would change more is refused. */
+    public static final int MAX_BLOCK_LIMIT=100_000;
+    public int blockLimit=MAX_BLOCK_LIMIT;
     public boolean selectUp=true,selectDown=true,selectHorizontal=true,selectCorners,includeNonSolid;
     public Noise noise=Noise.SIMPLEX;
     public int octaves=1;
@@ -287,7 +290,7 @@ public final class Options {
         distortX=Double.isFinite(distortX)?Math.max(0,distortX):2;distortY=Double.isFinite(distortY)?Math.max(0,distortY):2;distortZ=Double.isFinite(distortZ)?Math.max(0,distortZ):2;
         roughenRatio=Double.isFinite(roughenRatio)?Math.clamp(roughenRatio,0,1):.2;shatterWidth=Double.isFinite(shatterWidth)?Math.max(0,shatterWidth):1;
         extrudeCount=Math.clamp(extrudeCount,1,MAX_EXTRUDE_COUNT);
-        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;builderSelectionWidth=Double.isFinite(builderSelectionWidth)?Math.clamp(builderSelectionWidth,.1,10):1;builderPreviewWidth=Double.isFinite(builderPreviewWidth)?Math.clamp(builderPreviewWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
+        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);blockLimit=Math.clamp(blockLimit,1,MAX_BLOCK_LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;builderSelectionWidth=Double.isFinite(builderSelectionWidth)?Math.clamp(builderSelectionWidth,.1,10):1;builderPreviewWidth=Double.isFinite(builderPreviewWidth)?Math.clamp(builderPreviewWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
         octaves=Math.clamp(octaves,1,8);lacunarity=bounded(lacunarity,1,4);gain=bounded(gain,.01,1);jitter=bounded(jitter,0,1);
         scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);
         sizeX=Math.copySign(bounded(Math.abs(sizeX),.1,8),sizeX);sizeY=Math.copySign(bounded(Math.abs(sizeY),.1,8),sizeY);sizeZ=Math.copySign(bounded(Math.abs(sizeZ),.1,8),sizeZ); // negative flips

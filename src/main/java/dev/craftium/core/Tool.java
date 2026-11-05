@@ -68,6 +68,8 @@ public enum Tool {
     public boolean picksShape() { BrushUse use = brushUse(); return use == BrushUse.SHAPE || use == BrushUse.SMALL_SHAPE; }
     /** The tools that move, rotate or scale the selected blocks around a pivot. */
     public boolean transform() { return this == MOVE || this == ROTATE || this == SCALE || this == PIVOT; }
+    /** Whether the tool builds, removes or moves blocks, so the block limit applies to it: not the selecting, measuring, annotating or single-block Tinker tools. */
+    public boolean placesBlocks() { return !selection() && this != RULER && this != ANNOTATION && this != TINKER && this != PIVOT; }
     public boolean selection() { return this == MAGIC_SELECT || this == BOX_SELECT || this == FREEHAND_SELECT || this == LASSO_SELECT; }
 
     /**
