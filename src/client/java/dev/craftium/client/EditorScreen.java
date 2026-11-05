@@ -1251,6 +1251,7 @@ public final class EditorScreen extends CraftiumScreen {
     private static boolean sculpts(Tool tool){return tool.group.equals("Sculpt")&&tool!=Tool.MODIFY;}
     private long lastUseSent;
     private void dragUse(){
+        if(o().tool==Tool.EXTRUDE||o().tool==Tool.FLOODFILL)return; // one build per click, of what is outlined under the cursor
         if(!o().tool.selection()){use();return;}
         var hit=target();if(hit==null||hit.getBlockPos().equals(lastDragged))return;
         long now=System.currentTimeMillis();

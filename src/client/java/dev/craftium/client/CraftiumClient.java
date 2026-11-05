@@ -378,7 +378,7 @@ public final class CraftiumClient implements ClientModInitializer {
             AngelGhost.draw(mc);
             ReplaceGhost.draw(mc);
             HistoryPulse.draw();
-            if(screen!=null&&screen.bucketDragging())MagicPreview.drawBucket(mc,screen.bucketTarget());else MagicPreview.draw(mc,hit);
+            if(screen!=null&&screen.bucketDragging())MagicPreview.drawBucket(mc,screen.bucketTarget());else{MagicPreview.draw(mc,hit);ClickPreview.draw(mc,screen!=null&&screen.toolActive()?hit:null);}
             // The Ruler tool shows the block a click would put an end on, outlined and filled as a block of a selection is.
             if(hit!=null&&screen!=null&&screen.toolActive()&&ClientState.options.tool==Tool.RULER){var o=ClientState.options;Overlay.box(new AABB(hit.getBlockPos()),o.selectionColor,(float)o.selectionWidth,o.selectionFill);}
             ClientState.pending.draw(new Point(0,0,0),true);
