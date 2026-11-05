@@ -216,6 +216,26 @@ final class TransformGizmo {
         if(dragging==null||dragging.kind!=Kind.MODEL||mode!=Options.GizmoMode.MOVE)return null;
         return new Point((int)Math.round(delta.x),(int)Math.round(delta.y),(int)Math.round(delta.z));
     }
+    /** Past these the landing is not worked out while dragging: too many blocks, or too much space to look through, for a frame. */
+    private static final int LANDING_BLOCKS=20_000;
+    private static final long LANDING_CELLS=400_000L;
+    private static List<Point> landingFrom;private static Vec3 landingDelta,landingAngles,landingSize,landingAbout;private static OutlineShape landing;
+    /**
+     * The shape the selected blocks land in with a rotate or scale drag as it stands, with square edges like the blocks that
+     * will be built, instead of the old outline turned into diagonal lines. Worked out again only when the drag changes. Null
+     * when nothing is dragged, when the drag is a plain move (the moved outline is exact), or when the selection is too big.
+     */
+    static OutlineShape landing(List<Point> selected){
+        if(dragging==null||dragging.kind!=Kind.MODEL||selected.isEmpty()||selected.size()>LANDING_BLOCKS)return null;
+        if(angles.equals(Vec3.ZERO)&&size.equals(new Vec3(1,1,1)))return null;
+        Vec3 about=aboutPoint();
+        if(landingFrom!=selected||!delta.equals(landingDelta)||!angles.equals(landingAngles)||!size.equals(landingSize)||!about.equals(landingAbout)){
+            landingFrom=selected;landingDelta=delta;landingAngles=angles;landingSize=size;landingAbout=about;
+            var cells=VoxelTransform.landed(selected,new Geometry.Vector(about.x,about.y,about.z),angles.y,angles.x,angles.z,size.x,size.y,size.z,(int)Math.round(delta.x),(int)Math.round(delta.y),(int)Math.round(delta.z),LANDING_CELLS);
+            landing=cells==null||cells.isEmpty()?null:OutlineShape.of(cells);
+        }
+        return landing;
+    }
     /** True when the pointer is on one of the handles of a point gizmo at {@code at}, so a gizmo that is only shown can still be grabbed. */
     static boolean hitsPointHandles(Point at,double x,double y){
         return pick(new Target(Kind.NODE,new Vec3(at.x(),at.y(),at.z()),null),x,y)>=0;
@@ -263,7 +283,7 @@ final class TransformGizmo {
      * While a handle is held: a thin line through the gizmo along each global axis, hidden where blocks are in front of it, with a tick at every block and a longer one every
      * five, so the distance moved can be read off the world's own grid whichever way the gizmo itself is turned.
      */
-    private static void ruler(Vec3 at){
+    static void ruler(Vec3 at){
         for(int axis=0;axis<3;axis++){
             double[] c={at.x,at.y,at.z};int across=(axis+1)%3;
             double[] from=c.clone(),to=c.clone();from[axis]-=RULER_REACH;to[axis]+=RULER_REACH;

@@ -111,3 +111,6 @@ tasks.matching { it.name == 'runClientGameTest' }.configureEach {
         systemProperty 'fabric.client.gametest.disableNetworkSynchronizer', 'true'
     }
 }
+
+// Minecraft options shared by every version and checkout.
+apply from: rootProject.file('gradle/global-options.gradle')

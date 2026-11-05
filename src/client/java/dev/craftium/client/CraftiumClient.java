@@ -256,7 +256,7 @@ public final class CraftiumClient implements ClientModInitializer {
      */
     private static void syncPlacement(){
         var o=ClientState.options;
-        String key=o.symmetryX+","+o.symmetryY+","+o.symmetryZ+","+o.symmetryRotations+","+o.symmetryOrigin+","+o.symmetryHalfX+o.symmetryHalfY+o.symmetryHalfZ+","+o.replaceMode+o.forcePlace+o.noUpdates+o.fastPlace+o.reach+o.farReach+o.angelPlacement+o.preventInteractions+o.noClip;
+        String key=o.symmetryX+","+o.symmetryY+","+o.symmetryZ+","+o.symmetryRotations+","+o.symmetryOrigin+","+o.symmetryHalfX+o.symmetryHalfY+o.symmetryHalfZ+","+o.replaceMode+o.forcePlace+o.noUpdates+o.fastPlace+o.reach+o.farReach+o.angelPlacement+o.preventInteractions+o.noClip+o.blockStep;
         if(key.equals(placementSynced))return;
         placementSynced=key;send("capabilities",null,null);
     }

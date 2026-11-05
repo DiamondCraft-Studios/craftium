@@ -74,6 +74,10 @@ public final class Options {
         hoverColor=0xff7fd8ff,hoverFill=0x2240c0ff;
     /** The colour (ARGB) and width, in pixels from 0.1 to 10, of the selection's outline. */
     public int selectionColor=0xff2389c6;
+    /** The colour (ARGB) of a selection's face that touches a solid block outside it. Fully transparent turns it off. */
+    public int selectionContact=0x33ff9f43;
+    /** Whether those faces are shown at all. */
+    public boolean showSelectionContact=true;
     public double selectionWidth=1;
     /** How the builder tools draw their selection and where it would land, set apart from the editor's selection: colours (ARGB) and line widths. */
     public int builderSelectionColor=0xff2389c6,builderSelectionFill=0x302389c6,
@@ -235,11 +239,11 @@ public final class Options {
         density = Double.isFinite(density) ? Math.clamp(density,0,1) : 0.5;
         farReach = Math.clamp(farReach,6,64);
         flySpeed = Float.isFinite(flySpeed) ? Math.clamp(flySpeed,0.1f,10f) : 1;
-        offsetX=Math.clamp(offsetX,-128,128);offsetY=Math.clamp(offsetY,-128,128);offsetZ=Math.clamp(offsetZ,-128,128);copies=Math.clamp(copies,1,16);
+        copies=Math.max(1,copies); // offsets and copies have no upper limit
         if(compare==null)compare=Compare.ANY; // Gson reads a constant that no longer exists, the old SOLID, as null
         if(noise==null||pathMode==null||modelMode==null||modifyMode==null||shapeKind==null||rulerMode==null)throw new IllegalArgumentException("Missing advanced options");
         if(modifyAxis==null||modifyType==null)throw new IllegalArgumentException("Missing advanced options");
-        modifyAngle=bounded(modifyAngle,-3600,3600);modifyTranslateX=bounded(modifyTranslateX,-256,256);modifyTranslateY=bounded(modifyTranslateY,-256,256);modifyTranslateZ=bounded(modifyTranslateZ,-256,256);
+        modifyAngle=finite(modifyAngle);modifyTranslateX=finite(modifyTranslateX);modifyTranslateY=finite(modifyTranslateY);modifyTranslateZ=finite(modifyTranslateZ);
         rulerSplit=Math.clamp(rulerSplit,2,16);
         rulerLabelSize=bounded(rulerLabelSize,RULER_LABEL_MIN,RULER_LABEL_MAX);
         // The colours the ruler first had, kept in saved settings, give way to the ones it has now; any colour that was changed is left alone.
@@ -289,6 +293,7 @@ public final class Options {
         if (block.length()>256 || secondary.length()>256 || mask.length()>256 || biome.length()>128 || text.length()>48)
             throw new IllegalArgumentException("Tool setting is too long");
     }
+    private static double finite(double value){return Double.isFinite(value)?value:0;}
     /** Across the whole world, border to border: as far as anything can be moved, and small enough that sums of it cannot overflow. */
     private static final int WORLD_SPAN=60_000_000;
     private static double bounded(double value,double min,double max){return Double.isFinite(value)?Math.clamp(value,min,max):min;}
