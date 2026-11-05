@@ -34,7 +34,7 @@ final class MagicPreview {
         Object now=java.util.List.of(at,o.compare,o.hoverPreviewLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,java.util.List.copyOf(o.maskActive),o.maskExclude,mc.level.getGameTime()/20);
         if(!Objects.equals(key,now)){key=now;shape=compute(mc,at,o);}
         if(shape.isEmpty())return;
-        shape.drawEmphasised(Vec3.ZERO,ClientState.options.hoverColor,(float)ClientState.options.selectionWidth,ClientState.options.hoverFill,true,false);
+        shape.drawPlain(Vec3.ZERO,ClientState.options.hoverColor,(float)ClientState.options.selectionWidth,ClientState.options.hoverFill,true,false);
     }
 
     /**
@@ -52,7 +52,7 @@ final class MagicPreview {
                 bucketShape=OutlineShape.of(bucketSearch(mc,at,o).found());
             }
         }
-        if(!bucketShape.isEmpty())bucketShape.drawEmphasised(Vec3.ZERO,ClientState.options.hoverColor,(float)ClientState.options.selectionWidth,ClientState.options.hoverFill,true,false);
+        if(!bucketShape.isEmpty())bucketShape.drawPlain(Vec3.ZERO,ClientState.options.hoverColor,(float)ClientState.options.selectionWidth,ClientState.options.hoverFill,true,false);
     }
 
     private static MagicWand.Result bucketSearch(Minecraft mc,BlockPos at,Options o){

@@ -263,14 +263,14 @@ public final class BuilderMode {
             Point from=min,to=max;if(stacking){var b=stackBounds();from=b[0];to=b[1];} // the selection grows with the stack
             if(magicStarted&&second!=null&&!cells.isEmpty()&&cells.size()<=OUTLINE_LIMIT){ // the blocks themselves, not the box round them
                 if(cells!=shapeOf){selectionShape=OutlineShape.of(cells);shapeOf=cells;}
-                selectionShape.drawEmphasised(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,!leaving,false);
+                selectionShape.drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,!leaving,false);
             }else Overlay.box(new AABB(from.x(),from.y(),from.z(),to.x()+1,to.y()+1,to.z()+1),o.builderSelectionColor,(float)o.builderSelectionWidth,second!=null&&!leaving?o.builderSelectionFill:0);
             if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?stackSteps(size):List.of(offset);
                 if(stacking){drawStack(o,min,size);return;}
                 var shown=preview(o,min,size,steps);
                 if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),o.builderMovingTint); // the blocks that are moving, where they are now
                 if(shown==null)Overlay.box(new AABB(min.x()+offset.x(),min.y()+offset.y(),min.z()+offset.z(),max.x()+offset.x()+1,max.y()+offset.y()+1,max.z()+offset.z()+1),o.builderPreviewColor,(float)o.builderPreviewWidth,0);
-                else{shown.shape().drawEmphasised(Vec3.ZERO,o.builderPreviewColor,(float)o.builderPreviewWidth,o.builderPreviewFill,true,false);if(!shown.places().isEmpty())Overlay.blocks(shown.models(),shown.places(),o.builderPreviewTint);}
+                else{shown.shape().drawPlain(Vec3.ZERO,o.builderPreviewColor,(float)o.builderPreviewWidth,o.builderPreviewFill,true,false);if(!shown.places().isEmpty())Overlay.blocks(shown.models(),shown.places(),o.builderPreviewTint);}
             }
         }
     }

@@ -30,7 +30,7 @@ final class ClickPreview {
         if(!Objects.equals(key,now)){key=now;compute(mc,at,normal,o);}
         if(shape.isEmpty())return;
         int colour=removing?o.removedColor:o.hoverColor,fill=removing?o.removedFill:o.hoverFill;
-        shape.drawEmphasised(Vec3.ZERO,colour,(float)o.selectionWidth,fill,true,false);
+        shape.drawPlain(Vec3.ZERO,colour,(float)o.selectionWidth,fill,true,false);
     }
 
     private static void compute(Minecraft mc,BlockPos at,Point normal,Options o){

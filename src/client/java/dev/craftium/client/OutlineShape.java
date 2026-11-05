@@ -42,34 +42,14 @@ final class OutlineShape {
      * many to draw every frame. When the outline is too detailed, one box around everything is drawn instead.
      */
     void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill){draw(at,lines,stroke,fill,withFill,ClientState.options.selectionStyle);}
-    /** As {@link #draw(Vec3,Lines,int,int,boolean)}, with the outline style chosen by the caller instead of the selection's. */
-    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style){draw(at,lines,null,stroke,fill,withFill,style);}
     /**
-     * The selection's look, shared by whatever else wants it: the silhouette twice as wide and fully opaque over the shape's edges, which stay in view
-     * but thinner and fainter. With {@code scene} the lines are depth-tested, so blocks in front hide them. The selection's style decides what is shown.
+     * The selection's style as it is: the silhouette (or the outline) at the plain line width, with no extra edges. All edges is always
+     * depth-tested. With {@code scene} the other styles' lines are hidden by blocks in front of them too.
      */
-    void drawEmphasised(Vec3 at,int colour,float width,int fill,boolean withFill,boolean scene){draw(at,colour,width,fill,withFill,scene,true);}
-    /**
-     * The selection's style with nothing added: the silhouette (or the outline) at the plain line width and no extra edges. All edges is still
-     * depth-tested. With {@code scene} the lines are hidden by blocks in front of them.
-     */
-    void drawPlain(Vec3 at,int colour,float width,int fill,boolean withFill,boolean scene){draw(at,colour,width,fill,withFill,scene,false);}
-    private void draw(Vec3 at,int colour,float width,int fill,boolean withFill,boolean scene,boolean emphasise){
+    void drawPlain(Vec3 at,int colour,float width,int fill,boolean withFill,boolean scene){
         var style=ClientState.options.selectionStyle;
-        if(style==Options.SelectionStyle.ALL_EDGES){
-            // Every edge, tested against depth so the ones facing you are drawn in full; the ones behind blocks show through at a quarter of the opacity.
-            int back=(colour&0xffffff)|((colour>>>24)/4)<<24;
-            draw(at,(a,b)->sceneLine(a,b,colour,width),(a,b)->Overlay.line(a,b,back,width),colour,fill,withFill,style);
-            return;
-        }
-        if(!emphasise){
-            draw(at,scene?(a,b)->sceneLine(a,b,colour,width):(a,b)->Overlay.line(a,b,colour,width),colour,fill,withFill,style);
-            return;
-        }
-        int faint=(colour&0xffffff)|((colour>>>24)*2/5)<<24;float thin=Math.max(.5f,width*.6f);
-        Lines strong=scene?(a,b)->sceneLine(a,b,colour,width*2):(a,b)->Overlay.line(a,b,colour,width*2);
-        Lines soft=scene?(a,b)->sceneLine(a,b,faint,thin):(a,b)->Overlay.line(a,b,faint,thin);
-        draw(at,strong,soft,colour,fill,withFill,style);
+        Lines lines=scene||style==Options.SelectionStyle.ALL_EDGES?(a,b)->sceneLine(a,b,colour,width):(a,b)->Overlay.line(a,b,colour,width);
+        draw(at,lines,colour,fill,withFill,style);
     }
     /** A depth-tested line, drawn a little toward the camera: the outline lies in the surface of the blocks, so exactly there it would be cut away by them. */
     private static void sceneLine(Vec3 a,Vec3 b,int colour,float width){
@@ -78,11 +58,8 @@ final class OutlineShape {
         Vec3 nudge=distance<1e-6?Vec3.ZERO:toEye.scale((.004+.0006*distance)/distance);
         Overlay.sceneLine(a.add(nudge),b.add(nudge),colour,width);
     }
-    /**
-     * As above, and with the Silhouette style every edge of the outline also goes to {@code edges} (when given), beneath the contour, so the
-     * edges stay in view while the silhouette, drawn through {@code lines}, is the stronger of the two.
-     */
-    void draw(Vec3 at,Lines lines,Lines edges,int stroke,int fill,boolean withFill,Options.SelectionStyle style){
+    /** As {@link #draw(Vec3,Lines,int,int,boolean)}, with the outline style chosen by the caller instead of the selection's. */
+    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style){
         if(bounds==null)return;
         if(outline.edges().size()>MAX_EDGES){
             AABB box=bounds.move(at);
@@ -90,7 +67,6 @@ final class OutlineShape {
             return;
         }
         // Only the outline as the camera sees it, unless every edge was asked for or the camera is inside the shape.
-        if(edges!=null&&style!=Options.SelectionStyle.OUTLINE)for(var s:outline.edges())edges.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
         if(style==Options.SelectionStyle.ALL_EDGES||!(style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at))&&!silhouette(lines,at))
             for(var s:outline.edges())lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
         if(withFill&&outline.faces().size()<=MAX_FACES)for(var f:outline.faces())face(f,at,fill);
