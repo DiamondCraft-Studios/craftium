@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.6.0-beta.1
+
+Changes since 0.5.0-beta.2.
+
+### Block limit
+- Every tool that builds, removes or moves blocks has a Block limit slider at the bottom of its options, from 1 to 100,000. An edit that would change more blocks is refused.
+- When an edit changes nothing, the message now says why: the height range, Only in selection, the mask, Keep existing, blocks that cannot stand there, or spots that already hold the block.
+
+### Builder
+- The Builder tools' boxes follow the selection style from the preferences (All edges, Outline or Silhouette).
+- Holding the left or right button after setting a corner drags it, and the box updates as you go.
+- After a clone, move or stack, the next left click starts a new selection.
+- Ctrl while scrolling nudges a clone or move by the selection's own size, so it goes from cell to cell.
+- A stack is shown as one selection instead of a box round each copy.
+- A box selection is just its solid blocks, so the air inside an outlined shape is not selected, unless Copy air is on.
+- Tool masks have a Use in Builder tools switch (a hard hat, off by default). While it is off the Builder tools ignore the tool masks.
+- The builder's gizmo no longer shows the plane squares and the centre knob, which could not be grabbed.
+
+### Flight
+- Flying up and down is as fast as flying forward and sideways, and diagonals are no faster.
+- Sticky flight (in the toolbox, the Builder tab and the Studio) slows you to a stop as you fly up to a wall. Let go and move again to bump into it, or pass through it with No clip.
+
+### Gizmos
+- Gizmo text is 250% of its old size, stays one size on screen at any distance, and is coloured by axis.
+- While you drag a handle, the offset, angles or new size are shown above the gizmo, one line for each axis.
+- Moving while holding the Move freely handle no longer offsets the blocks.
+
+### Tools
+- Floodfill has Up, Down, Horizontal and Corners switches for its spread, like the Magic Wand.
+- Extrude can grow into replaceable blocks like grass and water (Into grass and water, on by default).
+- Dropping a block from the palette onto the selection fills the whole selection, and a large match no longer gets a bucket fill preview (grass, a superflat floor).
+- The palette has a Hand slot with the block in your hand, left of the foreground and background blocks.
+- The Box Select and Magic Wand options show the selection bounds at the bottom.
+
+### Interface
+- History starts hidden. Tool masks is down to its buttons and one row of blocks, with the height range and Only in selection under a Limits fold, and the Block palette fills the space.
+- The hover preview shows much larger brushes than can be built.
+- The silhouette selection style is drawn without the thin edge lines, and keeps its contour when part of a wide shape lies beside the eye.
+
 ## 0.5.0-beta.2
 
 Changes since 0.5.0-beta.1.
