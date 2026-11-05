@@ -187,17 +187,20 @@ final class EditPlanner {
                     if(!filled && d>.58) put(p,nearestMaterial(p));
                 }
                 case DISTORT -> {
-                    int dx=(int)Math.round((n-.5)*o.strength*2);
-                    int dy=(int)Math.round((noise.sample(p.add(37,71,19))-.5)*o.strength*2),dz=(int)Math.round((noise.sample(p.add(101,13,53))-.5)*o.strength*2);
+                    // The distance is how far the noise moves a block, about half of it either way; it fades out over the outer part of the brush with Smooth edges.
+                    double fade=1;if(o.distortSmoothEdges){double edge=Math.sqrt(p.distanceSquared(c))/(o.radius+.5),t=Math.clamp((edge-.6)/.4,0,1);fade=1-t*t*(3-2*t);}
+                    double reachX=(o.distortSeparate?o.distortX:o.distortDistance)*fade,reachY=(o.distortSeparate?o.distortY:o.distortDistance)*fade,reachZ=(o.distortSeparate?o.distortZ:o.distortDistance)*fade;
+                    int dx=(int)Math.round((n-.5)*reachX*2);
+                    int dy=(int)Math.round((noise.sample(p.add(37,71,19))-.5)*reachY*2),dz=(int)Math.round((noise.sample(p.add(101,13,53))-.5)*reachZ*2);
                     Point source=p.add(dx,dy,dz);validate(source);put(p,BlockSnapshot.capture(level,pos(source)));
                 }
                 case ROUGHEN -> {
-                    if(filled && 6-adjacent(p)>=o.exposedFaces && BrushMath.hash(p.x(),p.y(),p.z(),o.seed)<o.density*.35) {
+                    if(filled && 6-adjacent(p)>=o.exposedFaces && BrushMath.hash(p.x(),p.y(),p.z(),o.seed)<o.roughenRatio) {
                         if(n<.5) put(p,Blocks.AIR.defaultBlockState());
                         else for(Point direction:NEIGHBOURS) { Point at=p.add(direction.x(),direction.y(),direction.z());if(state(at).isAir()) {put(at,old);break;} }
                     }
                 }
-                case SHATTER -> { if(filled && fracture(p)<.075*o.strength) put(p,o.fractureMaterial?material:Blocks.AIR.defaultBlockState()); }
+                case SHATTER -> { if(filled && fracture(p)<o.shatterWidth/o.noiseScale) put(p,o.fractureMaterial?material:Blocks.AIR.defaultBlockState()); }
                 case CLENTAMINATOR -> {
                     if(old.is(Blocks.GRASS_BLOCK)||old.is(Blocks.MYCELIUM)||old.is(Blocks.PODZOL)||old.is(Blocks.SAND)||old.is(Blocks.RED_SAND)||old.is(Blocks.SNOW_BLOCK)) put(p,material);
                 }
@@ -226,12 +229,14 @@ final class EditPlanner {
         return material;
     }
     private double fracture(Point p) {
-        double scale=o.noiseScale,x=p.x()/scale,y=p.y()/scale,z=p.z()/scale;
+        // With one axis chosen only that coordinate counts, so the seams are flat sheets across the axis.
+        var axis=o.shatterAxis;boolean ax=axis==Options.ShatterAxis.ALL||axis==Options.ShatterAxis.X,ay=axis==Options.ShatterAxis.ALL||axis==Options.ShatterAxis.Y,az=axis==Options.ShatterAxis.ALL||axis==Options.ShatterAxis.Z;
+        double scale=o.noiseScale,x=ax?p.x()/scale:0,y=ay?p.y()/scale:0,z=az?p.z()/scale:0;
         int ix=(int)Math.floor(x),iy=(int)Math.floor(y),iz=(int)Math.floor(z);
         double first=Double.MAX_VALUE,second=Double.MAX_VALUE;
-        for(int dx=-1;dx<=1;dx++)for(int dy=-1;dy<=1;dy++)for(int dz=-1;dz<=1;dz++) {
+        for(int dx=ax?-1:0;dx<=(ax?1:0);dx++)for(int dy=ay?-1:0;dy<=(ay?1:0);dy++)for(int dz=az?-1:0;dz<=(az?1:0);dz++) {
             int a=ix+dx,b=iy+dy,c=iz+dz;
-            double px=a+BrushMath.hash(a,b,c,o.seed),py=b+BrushMath.hash(a,b,c,o.seed+1),pz=c+BrushMath.hash(a,b,c,o.seed+2);
+            double px=ax?a+BrushMath.hash(a,b,c,o.seed):0,py=ay?b+BrushMath.hash(a,b,c,o.seed+1):0,pz=az?c+BrushMath.hash(a,b,c,o.seed+2):0;
             double d=(px-x)*(px-x)+(py-y)*(py-y)+(pz-z)*(pz-z);
             if(d<first){second=first;first=d;}else if(d<second)second=d;
         }

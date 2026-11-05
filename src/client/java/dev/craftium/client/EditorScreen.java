@@ -105,8 +105,10 @@ public final class EditorScreen extends CraftiumScreen {
             } else if(o().tool==Tool.BIOME_PAINTER || o().tool==Tool.CLENTAMINATOR)
                 field("biome",10,382,optionsWidth()-20,o().biome,s->o().biome=s);
             else if(o().tool==Tool.TEXT)field("text",10,326,optionsWidth()-20,o().text,s->o().text=s);
-            else if(o().tool==Tool.ROCK || o().tool==Tool.DISTORT || o().tool==Tool.ROUGHEN || o().tool==Tool.SHATTER)
+            else if(o().tool==Tool.ROCK)
                 field("seed",10,418,optionsWidth()-20,Long.toString(o().seed),s->{try{o().seed=Long.parseLong(s);}catch(NumberFormatException ignored){}});
+            else if(o().tool==Tool.DISTORT || o().tool==Tool.ROUGHEN || o().tool==Tool.SHATTER)
+                field("seed",10,383,optionsWidth()-20,Long.toString(o().seed),s->{try{o().seed=Long.parseLong(s);}catch(NumberFormatException ignored){}});
         }
         if(transform){
             int x=w/2-210,y=h/2-92;
@@ -374,7 +376,7 @@ public final class EditorScreen extends CraftiumScreen {
             // A polygon's sides take the row under the radius, and everything below moves down a row. The track stops at 64; more is typed.
             if(sidesShown())
                 slider(g,10,375,pw-20,"Sides",o().polygonSides,BrushMath.MIN_SIDES,BrushMath.SLIDER_SIDES,BrushMath.MAX_SIDES,BrushMath.DEFAULT_SIDES,v->o().polygonSides=Math.clamp((int)Math.round(v),BrushMath.MIN_SIDES,BrushMath.MAX_SIDES),true);
-            if(EnumSet.of(Tool.SCULPT_DRAW,Tool.ROCK,Tool.ELEVATION,Tool.FLATTEN,Tool.SLOPE,Tool.DISTORT,Tool.SHATTER,Tool.EXTRUDE).contains(o().tool))
+            if(EnumSet.of(Tool.SCULPT_DRAW,Tool.ROCK,Tool.ELEVATION,Tool.FLATTEN,Tool.SLOPE,Tool.EXTRUDE).contains(o().tool))
                 slider(g,10,375+sidesRow(),pw-20,"Strength",o().strength,.1,5,DEFAULTS.strength,v->o().strength=v,false);
         }
         // Tool-specific controls occupy the same familiar options area.
@@ -386,13 +388,41 @@ public final class EditorScreen extends CraftiumScreen {
             }
             case BIOME_PAINTER,CLENTAMINATOR -> text(g,"Biome identifier",10,369,MUTED);
             case TEXT -> {text(g,"Text · A–Z, 0–9, ! ? - .",10,309,MUTED);wrap(g,"Place upright letters on the clicked face. Each character is 5 by 7 blocks.",10,354,pw-20,MUTED,4);}
-            case ROCK,DISTORT,ROUGHEN,SHATTER -> {
+            case DISTORT -> {
+                int half=(pw-24)/2;
+                text(g,"Noise seed",10,370,MUTED);
+                int y=418;
+                if(o().distortSeparate){
+                    slider(g,10,y,pw-20,"Distance X",o().distortX,0,8,Double.POSITIVE_INFINITY,DEFAULTS.distortX,v->o().distortX=Math.max(0,Math.round(v*100)/100d),false);y+=28;
+                    slider(g,10,y,pw-20,"Distance Y",o().distortY,0,8,Double.POSITIVE_INFINITY,DEFAULTS.distortY,v->o().distortY=Math.max(0,Math.round(v*100)/100d),false);y+=28;
+                    slider(g,10,y,pw-20,"Distance Z",o().distortZ,0,8,Double.POSITIVE_INFINITY,DEFAULTS.distortZ,v->o().distortZ=Math.max(0,Math.round(v*100)/100d),false);y+=28;
+                }else{slider(g,10,y,pw-20,"Distance",o().distortDistance,0,8,Double.POSITIVE_INFINITY,DEFAULTS.distortDistance,v->o().distortDistance=Math.max(0,Math.round(v*100)/100d),false);y+=28;}
+                toggle(g,10,y,"Separate axis",o().distortSeparate,()->o().distortSeparate=!o().distortSeparate,"Set how far the noise moves blocks along each axis on its own");y+=22;
+                toggle(g,10,y,"Smooth edges",o().distortSmoothEdges,()->o().distortSmoothEdges=!o().distortSmoothEdges,"Fade the distortion out towards the brush's edge so it blends into the terrain");y+=30;
+                slider(g,10,y+10,pw-20,"Scale",o().noiseScale,1,64,Double.POSITIVE_INFINITY,DEFAULTS.noiseScale,v->o().noiseScale=Math.max(.1,v),false);
+            }
+            case ROUGHEN -> {
+                text(g,"Noise seed",10,370,MUTED);
+                slider(g,10,418,pw-20,"Faces",o().exposedFaces,1,4,6,DEFAULTS.exposedFaces,v->o().exposedFaces=Math.clamp((int)Math.round(v),1,6),true);
+                slider(g,10,446,pw-20,"Roughening ratio",o().roughenRatio,0,1,DEFAULTS.roughenRatio,v->o().roughenRatio=Math.round(v*100)/100d,false);
+                slider(g,10,474,pw-20,"Noise scale",o().noiseScale,1,64,Double.POSITIVE_INFINITY,DEFAULTS.noiseScale,v->o().noiseScale=Math.max(.1,v),false);
+            }
+            case SHATTER -> {
+                int quarter=(pw-32)/4;
+                text(g,"Noise seed",10,370,MUTED);
+                slider(g,10,418,pw-20,"Width",o().shatterWidth,0,8,Double.POSITIVE_INFINITY,DEFAULTS.shatterWidth,v->o().shatterWidth=Math.max(0,Math.round(v*100)/100d),false);
+                text(g,"Noise dimensions",10,438,MUTED);
+                for(var axis:Options.ShatterAxis.values())button(g,10+axis.ordinal()*(quarter+4),450,quarter,20,axis.label,o().shatterAxis==axis,()->o().shatterAxis=axis,axis==Options.ShatterAxis.ALL?"Cracks in all three dimensions":"Cracks only across the "+axis.label+" axis");
+                toggle(g,10,478,"Use active block",o().fractureMaterial,()->o().fractureMaterial=!o().fractureMaterial,"Fill the cracks with the active block instead of removing blocks");
+                slider(g,10,516,pw-20,"Scale",o().noiseScale,1,64,Double.POSITIVE_INFINITY,DEFAULTS.noiseScale,v->o().noiseScale=Math.max(.1,v),false);
+            }
+            case ROCK -> {
                 text(g,"Noise seed",10,405,MUTED);
                 slider(g,10,460,pw-20,"Noise scale",o().noiseScale,1,64,DEFAULTS.noiseScale,v->o().noiseScale=v,false);
                 toggle(g,10,489,"Invert / carve",o().invert,()->o().invert=!o().invert);
             }
             default -> {
-                int row=sidesRow();
+                int row=sidesRow()+(o().tool==Tool.SMOOTH?smoothRows(g,375+sidesRow()):0);
                 toggle(g,10,403+row,"Invert / carve",o().invert,()->o().invert=!o().invert);
                 fillButtons(g,424+row);
                 toggle(g,10,447+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
@@ -965,6 +995,15 @@ public final class EditorScreen extends CraftiumScreen {
             new Side("Horizontal","Spread sideways, level with the clicked block",o.selectHorizontal,()->o.selectHorizontal=!o.selectHorizontal),
             new Side("Corners","Also connect blocks that only touch at an edge or corner",o.selectCorners,()->o.selectCorners=!o.selectCorners));
         for(int i=0;i<sides.size();i++){var side=sides.get(i);button(g,10+(i%2)*(half+4),y+(i/2)*21,half,19,side.label(),side.on(),side.toggle(),side.tip());}
+    }
+    /** Smooth's own controls from {@code y} down, as the docs list them; returns the room they took. */
+    private int smoothRows(Gfx g,int y){
+        var o=o();int third=(pw-28)/3;
+        slider(g,10,y,pw-20,"Smooth strength",o.smoothing,.1,5,DEFAULTS.smoothing,v->o.smoothing=Math.round(v*100)/100d,false);
+        slider(g,10,y+28,pw-20,"Block ratio (%)",o.smoothRatio,50,150,Double.POSITIVE_INFINITY,DEFAULTS.smoothRatio,v->o.smoothRatio=Math.max(0,Math.round(v*10)/10d),false);
+        for(var mode:Options.SmoothMode.values())button(g,10+mode.ordinal()*(third+4),y+56,third,20,mode.label,o.smoothMode==mode,()->o.smoothMode=mode,switch(mode){case STABLE->"Keep the block count at the ratio";case MELT->"Lean towards taking blocks away";case GROW->"Lean towards adding blocks";});
+        toggle(g,10,y+84,"Fix edges",o.smoothFixEdges,()->o.smoothFixEdges=!o.smoothFixEdges,"Leave the brush's outer layer as it was so the smoothing blends into the terrain");
+        return 90;
     }
     /** Which blocks the Magic Wand connects, as one icon button each with the active one lit. */
     private void compareButtons(Gfx g,int y){

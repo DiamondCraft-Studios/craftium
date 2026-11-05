@@ -17,10 +17,19 @@ final class AdvancedTools {
         var o=p.o;
         switch(o.tool) {
             case SMOOTH -> {
+                // A Gaussian blur that moves blocks about without changing how many there are: the cells of the brush are ranked by how much solid
+                // surrounds them and the first ones, as many as the stroke began with times the block ratio, become solid. Melt and Grow lean the
+                // ranking towards taking blocks away or adding them. Fix edges leaves the brush's outer layer alone, so it meets the terrain as it was.
+                var brush=p.brush(center);var inside=new HashSet<>(brush);
                 var candidates=new ArrayList<Point>();int filled=0;
-                for(Point at:p.brush(center))if(p.accepted(at)&&!p.state(at).hasBlockEntity()){candidates.add(at);if(p.solid(at))filled++;}
-                candidates.sort(Comparator.<Point>comparingDouble(at->p.density(at)+(p.solid(at)?.01/o.strength:0)).reversed());
-                for(int i=0;i<candidates.size();i++){Point at=candidates.get(i);if(i<filled){if(!p.solid(at))p.put(at,p.nearestMaterial(at));}else if(p.solid(at))p.put(at,Blocks.AIR.defaultBlockState());}
+                for(Point at:brush)if(p.accepted(at)&&!p.state(at).hasBlockEntity()){
+                    if(o.smoothFixEdges){boolean edge=false;for(Point n:EditPlanner.NEIGHBOURS)if(!inside.contains(at.add(n.x(),n.y(),n.z()))){edge=true;break;}if(edge)continue;}
+                    candidates.add(at);if(p.solid(at))filled++;
+                }
+                double solidBias=switch(o.smoothMode){case MELT->-.05;case GROW->.01;default->.01;},airBias=o.smoothMode==Options.SmoothMode.GROW?.05:0;
+                candidates.sort(Comparator.<Point>comparingDouble(at->p.density(at)+(p.solid(at)?solidBias:airBias)).reversed());
+                int keep=(int)Math.clamp(Math.round(filled*o.smoothRatio/100d),0,candidates.size());
+                for(int i=0;i<candidates.size();i++){Point at=candidates.get(i);if(i<keep){if(!p.solid(at))p.put(at,p.nearestMaterial(at));}else if(p.solid(at))p.put(at,Blocks.AIR.defaultBlockState());}
             }
             case EXTRUDE -> {
                 var todo=new ArrayDeque<Point>();var seen=new HashSet<Point>();todo.add(center);seen.add(center);var base=p.state(center);
