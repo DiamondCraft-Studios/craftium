@@ -407,7 +407,7 @@ public final class CraftiumClient implements ClientModInitializer {
             ShapeObject.draw(mc);
             // The outline of the brush shows only for tools that use one, not the selection, transform, ruler or annotation tools.
             var tool=ClientState.options.tool;
-            boolean brush=!tool.selection()&&!tool.transform()&&tool!=Tool.RULER&&tool!=Tool.ANNOTATION&&tool!=Tool.MODIFY&&tool!=Tool.EXTRUDE;
+            boolean brush=!tool.selection()&&!tool.transform()&&tool.brushUse()!=Tool.BrushUse.NONE;
             if(tool==Tool.MODIFY&&screen.toolActive())ModifyPreview.draw(mc,hit==null?null:point(hit.getBlockPos()));
             if(screen.toolActive()&&hit!=null && !PlacementPreview.active() && !ShapeObject.active() && brush) {
                 var p=hit.getBlockPos();

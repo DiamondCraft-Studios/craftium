@@ -369,9 +369,11 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(o().tool==Tool.MODIFY){modifyOptions(g);return;}
         if(o().tool!=Tool.TEXT) {
-            shapeSelector(g,305);
+            var use=o().tool.brushUse();
+            if(o().tool.picksShape())shapeSelector(g,305);
+            else text(g,use==Tool.BrushUse.NONE?"No brush · this tool works on what you click":use==Tool.BrushUse.DISC?"Flat round brush · only the radius counts":"Round brush · only the radius counts",10,309,MUTED);
             // The track stops at 64 to stay usable; a bigger radius is typed in. Shapes are limited by their block count and reach, not by this.
-            slider(g,10,347,pw-20,"Radius",o().radius,1,64,BrushMath.MAX_RADIUS,DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
+            if(use!=Tool.BrushUse.NONE)slider(g,10,347,pw-20,use==Tool.BrushUse.SMALL_SHAPE?"Radius (shape up to 4)":"Radius",o().radius,1,64,BrushMath.MAX_RADIUS,DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
             o().outlineThickness=Math.clamp(o().outlineThickness,1,o().radius); // a wall is never thicker than the radius
             // A polygon's sides take the row under the radius, and everything below moves down a row. The track stops at 64; more is typed.
             if(sidesShown())
@@ -424,10 +426,10 @@ public final class EditorScreen extends CraftiumScreen {
             default -> {
                 int row=sidesRow()+(o().tool==Tool.SMOOTH?smoothRows(g,375+sidesRow()):0);
                 toggle(g,10,403+row,"Invert / carve",o().invert,()->o().invert=!o().invert);
-                fillButtons(g,424+row);
+                if(o().tool.picksShape())fillButtons(g,424+row);
                 toggle(g,10,447+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
                 int next=472+row;
-                if(o().hollow){ // the outline's own settings sit under the others, so they only take room while Hollow is chosen
+                if(o().hollow&&o().tool.picksShape()){ // the outline's own settings sit under the others, so they only take room while Hollow is chosen
                     int cap=Math.max(1,o().radius);
                     slider(g,10,next+10,pw-20,"Outline thickness",o().outlineThickness,1,Math.max(2,Math.min(cap,64)),cap,DEFAULTS.outlineThickness,v->o().outlineThickness=Math.clamp((int)Math.round(v),1,cap),true);
                     text(g,"Align stroke",10,next+34,MUTED);
@@ -1040,7 +1042,7 @@ public final class EditorScreen extends CraftiumScreen {
     /** How far the controls under the radius move down while the Sides slider is shown. */
     private int sidesRow(){return sidesShown()?28:0;}
     /** The tools with their own seed fields and painters have no free row; the + and - keys still change the sides there. */
-    private boolean sidesShown(){return o().shape==BrushMath.Shape.POLYGON&&!EnumSet.of(Tool.ROCK,Tool.DISTORT,Tool.ROUGHEN,Tool.SHATTER,Tool.NOISE_PAINTER,Tool.BIOME_PAINTER,Tool.CLENTAMINATOR).contains(o().tool);}
+    private boolean sidesShown(){return o().tool.picksShape()&&o().shape==BrushMath.Shape.POLYGON&&!EnumSet.of(Tool.ROCK,Tool.DISTORT,Tool.ROUGHEN,Tool.SHATTER,Tool.NOISE_PAINTER,Tool.BIOME_PAINTER,Tool.CLENTAMINATOR).contains(o().tool);}
     /** The button that shows the current shape and opens the picker. */
     private void shapeSelector(Gfx g,int y){
         var shape=o().shape;

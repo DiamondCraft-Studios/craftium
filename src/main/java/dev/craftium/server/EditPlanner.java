@@ -147,9 +147,6 @@ final class EditPlanner {
     BlockState palette(double value,Point at){return materials.get(MaterialList.index(value,o.materialWeights,materials.size(),BrushMath.hash(at.x(),at.y(),at.z(),o.seed),1));}
     void tool(Point c, Point normal) {
         if(AdvancedTools.handle(this,c,normal))return;
-        var points=brush(c);
-        for(Point p: points) validate(p);
-        if(o.tool==Tool.BIOME_PAINTER || o.tool==Tool.CLENTAMINATOR) paintBiomes(points);
         if(o.tool==Tool.TEXT) {
             for(Point p: BlockFont.pixels(o.text)) {
                 Point at=Math.abs(normal.x())==1 ? c.add(0,p.y(),p.x()*-normal.x()) : c.add(p.x()* (normal.z()>0?-1:1),p.y(),0);
@@ -158,6 +155,10 @@ final class EditPlanner {
             return;
         }
         if(o.tool==Tool.ELEVATION || o.tool==Tool.FLATTEN || o.tool==Tool.SLOPE) { heightmap(c,normal); return; }
+        // Text, the height tools and Tinker have no use for a brush shape, so none is built, or refused for being too big, for them.
+        var points=o.tool==Tool.TINKER?List.of(c):brush(c);
+        for(Point p: points) validate(p);
+        if(o.tool==Tool.BIOME_PAINTER || o.tool==Tool.CLENTAMINATOR) paintBiomes(points);
         for(Point p:points) {
             BlockState old=state(p); boolean filled=solid(p);
             double n=noise.sample(p);

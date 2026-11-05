@@ -29,7 +29,7 @@ final class BrushPreview {
 
     static void draw(Minecraft mc,BlockPos at,Options o){
         if(mc.level==null)return;
-        var now=List.<Object>of(o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.outline,at,mc.level.getGameTime()/20);
+        var now=List.<Object>of(o.tool.brushUse(),o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.outline,at,mc.level.getGameTime()/20);
         if(!now.equals(key)){key=now;rebuild(mc,at,o);}
         if(tooLarge){Overlay.box(new AABB(at).inflate(o.radius),o.hoverColor,1.5f,0);return;} // too large to work out: the box it fits in
         int fill=o.hoverColor&0xffffff|0x66000000;
@@ -41,7 +41,16 @@ final class BrushPreview {
         air=OutlineShape.EMPTY;faces=List.of();tooLarge=false;
         List<Point> relative;
         // A brush over the block limit is refused by the server too, so there is no set of blocks to show.
-        try{relative=BrushMath.brush(new Point(0,0,0),o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline);}
+        // Each tool is shown the way it builds: the picked shape, a line or path's small shape, or just a disc or a ball of the radius.
+        var origin=new Point(0,0,0);
+        try{
+            relative=switch(o.tool.brushUse()){
+                case SMALL_SHAPE->BrushMath.brush(origin,Math.min(o.radius,4),o.shape,o.hollow,o.outlineThickness,o.pixelPerfect);
+                case DISC->BrushMath.brush(origin,o.radius,BrushMath.Shape.DISK,false);
+                case SPHERE->BrushMath.brush(origin,o.radius,BrushMath.Shape.SPHERE,false);
+                default->BrushMath.brush(origin,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline);
+            };
+        }
         catch(IllegalArgumentException e){tooLarge=true;return;}
         var level=mc.level;var open=new ArrayList<Point>();var solid=new HashSet<Point>();
         for(Point r:relative){
