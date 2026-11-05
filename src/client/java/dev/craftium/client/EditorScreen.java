@@ -438,6 +438,7 @@ public final class EditorScreen extends CraftiumScreen {
                 int fillRow=o().tool.picksShape()?23:0;
                 toggle(g,10,403+row,"Invert / carve",o().invert,()->o().invert=!o().invert);
                 if(o().tool.picksShape())fillButtons(g,424+row);
+                if(o().tool==Tool.FLOODFILL){floodButtons(g,403+row);row+=48;} // Floodfill has no brush, so its spread takes the room where the radius would be
                 toggle(g,10,424+fillRow+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
                 int next=449+fillRow+row;
                 if(o().hollow&&o().tool.picksShape()){ // the outline's own settings sit under the others, so they only take room while Hollow is chosen
@@ -1011,14 +1012,20 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** Which ways the Magic Wand's search may spread from the clicked block, two buttons a row with the allowed ones lit. */
     private void searchButtons(Gfx g,int y){
-        int half=(pw-24)/2;var o=o();
-        record Side(String label,String tip,boolean on,Runnable toggle){}
-        var sides=List.of(
-            new Side("Up","Spread to the blocks above the clicked one",o.selectUp,()->o.selectUp=!o.selectUp),
-            new Side("Down","Spread to the blocks below the clicked one",o.selectDown,()->o.selectDown=!o.selectDown),
-            new Side("Horizontal","Spread sideways, level with the clicked block",o.selectHorizontal,()->o.selectHorizontal=!o.selectHorizontal),
-            new Side("Corners","Also connect blocks that only touch at an edge or corner",o.selectCorners,()->o.selectCorners=!o.selectCorners));
-        for(int i=0;i<sides.size();i++){var side=sides.get(i);button(g,10+(i%2)*(half+4),y+(i/2)*21,half,19,side.label(),side.on(),side.toggle(),side.tip());}
+        var o=o();
+        sideButtons(g,y,new boolean[]{o.selectUp,o.selectDown,o.selectHorizontal,o.selectCorners},new Runnable[]{()->o.selectUp=!o.selectUp,()->o.selectDown=!o.selectDown,()->o.selectHorizontal=!o.selectHorizontal,()->o.selectCorners=!o.selectCorners});
+    }
+    /** The Floodfill tool's spread, the same four switches as the Magic Wand's search. */
+    private void floodButtons(Gfx g,int y){
+        var o=o();
+        sideButtons(g,y,new boolean[]{o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners},new Runnable[]{()->o.floodUp=!o.floodUp,()->o.floodDown=!o.floodDown,()->o.floodHorizontal=!o.floodHorizontal,()->o.floodCorners=!o.floodCorners});
+    }
+    /** Up, Down, Horizontal and Corners as two rows of switches: which way a search or fill may spread from the clicked block. */
+    private void sideButtons(Gfx g,int y,boolean[] on,Runnable[] flip){
+        int half=(pw-24)/2;
+        String[] labels={"Up","Down","Horizontal","Corners"};
+        String[] tips={"Spread to the blocks above the clicked one","Spread to the blocks below the clicked one","Spread sideways, level with the clicked block","Also connect blocks that only touch at an edge or corner"};
+        for(int i=0;i<4;i++)button(g,10+(i%2)*(half+4),y+(i/2)*21,half,19,labels[i],on[i],flip[i],tips[i]);
     }
     /** Smooth's own controls from {@code y} down, as the docs list them; returns the room they took. */
     private int smoothRows(Gfx g,int y){
