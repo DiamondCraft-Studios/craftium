@@ -1,7 +1,8 @@
 name: Release
 
 # Pushing a tag named v<mod version>-mc<minecraft version> (for example v0.5.0-beta.2-mc26.2)
-# builds that Minecraft version and publishes a GitHub release with its JARs.
+# builds that Minecraft version and publishes a GitHub release with its JARs. The tagged commit must be on main;
+# a tag anywhere else fails the run before anything is built.
 on:
   push:
     tags:
@@ -44,6 +45,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          fetch-depth: 0 # the whole history, so the next step can tell whether the tag is on main
+
+      - name: Check the tag is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag '$GITHUB_REF_NAME' is not on the main branch, so nothing is published. Merge the work into main, then tag the commit on main."
+            exit 1
+          fi
 
       - name: Check the tag against the project
         env:
