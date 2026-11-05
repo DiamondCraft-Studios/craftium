@@ -285,17 +285,18 @@ final class TransformGizmo {
     }
     /** While a handle is held: the numbers of the transform in progress above the gizmo, so it can be set exactly: the distance moved, the angles turned, or the new size and scale. */
     private static void readout(Target t){
-        Vec3 anchor=t.anchor.add(mode==Options.GizmoMode.MOVE?smooth:delta);String text;
+        Vec3 anchor=t.anchor.add(mode==Options.GizmoMode.MOVE?smooth:delta);
+        String header;String[] lines=new String[3];double[] move={delta.x,delta.y,delta.z},turn={angles.x,angles.y,angles.z},factor={size.x,size.y,size.z};
+        double[] extent=pickExtent==null?null:new double[]{Math.max(1,pickExtent.x),Math.max(1,pickExtent.y),Math.max(1,pickExtent.z)};
         switch(mode){
-            case ROTATE -> text="Rotate  X "+number(angles.x,true)+"°  Y "+number(angles.y,true)+"°  Z "+number(angles.z,true)+"°";
-            case SCALE -> {
-                String factors="×"+number(size.x,false)+"  ×"+number(size.y,false)+"  ×"+number(size.z,false);
-                text=pickExtent==null?"Scale  "+factors:"Size  "+number(Math.max(1,pickExtent.x)*size.x,false)+" × "+number(Math.max(1,pickExtent.y)*size.y,false)+" × "+number(Math.max(1,pickExtent.z)*size.z,false)+"  ("+factors+")";
-            }
-            default -> text="Move  X "+number(delta.x,true)+"  Y "+number(delta.y,true)+"  Z "+number(delta.z,true);
+            case ROTATE -> {header="Rotate";for(int axis=0;axis<3;axis++)lines[axis]="XYZ".charAt(axis)+" "+number(turn[axis],true)+"°";}
+            case SCALE -> {header=extent==null?"Scale":"Size";for(int axis=0;axis<3;axis++)lines[axis]="XYZ".charAt(axis)+" "+(extent==null?"×"+number(factor[axis],false):number(extent[axis]*factor[axis],false)+"  (×"+number(factor[axis],false)+")");}
+            default -> {header="Move";for(int axis=0;axis<3;axis++)lines[axis]="XYZ".charAt(axis)+" "+number(move[axis],true);}
         }
-        Vec3 spot=anchor.add(cameraAxes()[1].scale(6.2*screenScale(anchor)));
-        Overlay.text(text,spot,0xffffffff,0xcc151c26,(float)(TEXT_SCALE*screenScale(anchor))); // scaled with the gizmo, so it reads the same size at any distance
+        // Stacked over the gizmo, each axis in its own colour: the header on top, then X, Y and Z.
+        double k=screenScale(anchor)*TEXT_SCALE/.05;Vec3 up=cameraAxes()[1],base=anchor.add(up.scale(6.2*screenScale(anchor)));
+        Overlay.text(header,base.add(up.scale(2.4*k)),0xffffffff,0xcc151c26,(float)(TEXT_SCALE*screenScale(anchor)));
+        for(int axis=0;axis<3;axis++)Overlay.text(lines[axis],base.add(up.scale((2-axis)*0.8*k)),COLORS[axis],0xcc151c26,(float)(TEXT_SCALE*screenScale(anchor)));
     }
     /** The size of the gizmo's text at the gizmo's design distance: 250% of the original .02. */
     private static final double TEXT_SCALE=.05;
@@ -535,7 +536,7 @@ final class TransformGizmo {
         else if(mode==Options.GizmoMode.SCALE&&extent!=null)spot=faceCenter(faceBase!=null?faceBase:anchor,directions,extent,handle);
         else if(mode==Options.GizmoMode.ROTATE)spot=anchor.add(directions[(handle+1)%3].scale(3.5*k));
         else spot=anchor.add(directions[handle].scale(5.3*k));
-        Overlay.text(handleName(mode,handle,extent!=null),spot,0xffffffff,0xcc151c26,(float)(TEXT_SCALE*k)); // scaled with the gizmo, so it reads the same size at any distance
+        Overlay.text(handleName(mode,handle,extent!=null),spot,handle>=0&&handle<3?COLORS[handle]:handle>=4&&handle<7?COLORS[handle-4]:0xffffffff,0xcc151c26,(float)(TEXT_SCALE*k)); // the handle's axis colour, or for a plane the colour of the axis across it // scaled with the gizmo, so it reads the same size at any distance
     }
     /** A flat triangle from {@code base} to {@code tip}, turned to face the camera so it reads the same from any angle. */
     private static void arrowhead(Vec3 tip,Vec3 base,int color,float width,double k){
