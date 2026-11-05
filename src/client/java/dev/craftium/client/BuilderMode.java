@@ -13,6 +13,8 @@ import java.util.*;
 /** A virtual tenth hotbar slot. No inventory slot or held item is replaced. */
 public final class BuilderMode {
     private static boolean enabled,preview,clonePlaced;
+    /** Set when a build (clone, move or stack) leaves the selection in place: the next left click then starts a new selection rather than moving the first corner. */
+    private static boolean built;
     private static Point first,second,offset=new Point(0,0,0);
     private static int stackX,stackY,stackZ;
     private static List<Point> cells=List.of();
@@ -60,7 +62,7 @@ public final class BuilderMode {
     static boolean usable(){return available();}
     private static boolean available(){var mc=Minecraft.getInstance();return mc.player!=null&&mc.player.isCreative()&&mc.level!=null&&CraftiumClient.supported();}
     public static void reset(){enabled=false;clear();restartSearch();wheel=0;}
-    private static void clear(){first=null;second=null;preview=false;clonePlaced=false;offset=new Point(0,0,0);cells=List.of();stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;magic=null;heldFirst=heldSecond=null;heldCells=null;magicStarted=magicGrow=false;}
+    private static void clear(){built=false;first=null;second=null;preview=false;clonePlaced=false;offset=new Point(0,0,0);cells=List.of();stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;magic=null;heldFirst=heldSecond=null;heldCells=null;magicStarted=magicGrow=false;}
     /** Another tool keeps the selection, but not what was being done to it. */
     private static void retool(){preview=false;clonePlaced=false;offset=new Point(0,0,0);stackX=stackY=stackZ=0;var o=ClientState.options;o.builderRotation=0;o.builderFlipAxis=-1;}
     public static void enable(){if(!available())return;enabled=true;var mc=Minecraft.getInstance();mc.options.keyAttack.setDown(false);mc.options.keyUse.setDown(false);ClientState.notify("Builder: "+name()+" · Alt + wheel changes tool");}
@@ -76,7 +78,7 @@ public final class BuilderMode {
         nudge(nudgeDirection(),steps);return true;
     }
     public static void nudge(Point axis,int steps){
-        if(first==null||second==null)return;preview=true;
+        if(first==null||second==null)return;preview=true;built=false; // nudging begins a new operation on the selection
         // No range limit: the server still refuses an edit past the world's edge, into unloaded chunks or over the block limit.
         if(ClientState.options.builderTool==Options.BuilderTool.STACK){stackX+=axis.x()*steps;stackY+=axis.y()*steps;stackZ+=axis.z()*steps;}
         else offset=offset.add(axis.x()*steps,axis.y()*steps,axis.z()*steps);
@@ -125,6 +127,11 @@ public final class BuilderMode {
         var o=ClientState.options;
         if(o.builderTool==Options.BuilderTool.SYMMETRY){if(hit!=null&&button==1){Vec3 at=hit.getLocation();double x=Math.rint(at.x*2)/2-.5,y=Math.rint(at.y*2)/2-.5,z=Math.rint(at.z*2)/2-.5;o.symmetryOrigin=new Point((int)Math.floor(x),(int)Math.floor(y),(int)Math.floor(z));o.symmetryHalfX=x!=Math.floor(x);o.symmetryHalfY=y!=Math.floor(y);o.symmetryHalfZ=z!=Math.floor(z);ClientState.save();ClientState.notify("Symmetry node set · Ctrl+F mirrors · Ctrl+R rotates");}return true;}
         if(o.builderTool==Options.BuilderTool.EXTRUDE){if(hit!=null&&button!=2){boolean prior=o.invert;o.invert=button==0;CraftiumClient.send("builder_extrude",CraftiumClient.point(hit.getBlockPos()),CraftiumClient.normal(hit));o.invert=prior;}return true;}
+        if(button!=0)built=false; // placing or extending the selection takes it out of the state a build left it in
+        if(built&&button==0){ // a build left the selection in place: the next left click starts a new one at that block, with no second point
+            if(hit!=null){first=CraftiumClient.point(hit.getBlockPos());second=null;magicStarted=false;cells=List.of();cellBlocksFor=null;retool();built=false;}
+            return true;
+        }
         if(first!=null&&second!=null&&preview){ // something is being done to the selection: left sets the first corner again (dropping what was being done), right places it; the middle button still places it elsewhere
             if(button==0){if(hit!=null){first=CraftiumClient.point(hit.getBlockPos());magicStarted=false;retool();refresh();}return true;}
             if(button==1){confirm();return true;}
@@ -221,9 +228,9 @@ public final class BuilderMode {
         if(first==null||second==null)return;var o=ClientState.options;
         String packed="";if(magicStarted){try{packed=SelectionCodec.encode(cells);}catch(IllegalArgumentException e){ClientState.notify(e.getMessage());return;}}
         Point prior1=o.position1,prior2=o.position2;o.position1=first;o.position2=second;o.builderOffset=offset;o.builderCells=packed;o.stackX=stackX;o.stackY=stackY;o.stackZ=stackZ;CraftiumClient.send("builder_commit",first,new Point(0,1,0));o.position1=prior1;o.position2=prior2;o.builderOffset=new Point(0,0,0);o.builderCells="";o.stackX=o.stackY=o.stackZ=0;
-        if(o.builderTool==Options.BuilderTool.CLONE){preview=true;clonePlaced=true;}
-        else if(o.builderTool==Options.BuilderTool.MOVE)follow();
-        else if(o.builderTool==Options.BuilderTool.STACK&&(stackX!=0||stackY!=0||stackZ!=0))grow();
+        if(o.builderTool==Options.BuilderTool.CLONE){preview=true;clonePlaced=true;built=true;}
+        else if(o.builderTool==Options.BuilderTool.MOVE){follow();built=true;}
+        else if(o.builderTool==Options.BuilderTool.STACK&&(stackX!=0||stackY!=0||stackZ!=0)){grow();built=true;}
         else clear();
     }
     /** The stack's copies as offsets from the selection, laid edge to edge so nothing is left between them; none of them is the selection itself. */
