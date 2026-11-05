@@ -875,7 +875,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void statusbar(Gfx g) {
         g.fill(0,h-20,w,h,0xff1b222c);g.fill(0,h-21,w,h-20,LINE);
-        text(g,"LMB Drag: Camera     MMB: Pick block     RMB: Use tool     WASD / Space Shift: Fly",9,h-13,MUTED);
+        text(g,ToolHints.line(toolActive?o().tool:null,TransformGizmo.available(this),ShapeObject.active(),font::width,w-150),9,h-13,MUTED);
         text(g,(ClientState.status.busy()?"APPLYING…":"● READY")+"   "+String.format(Locale.ROOT,"%.1f×",o().flySpeed),w-132,h-13,ClientState.status.busy()?0xffffd783:0xff89c9ac);
     }
     private void dropdown(Gfx g) {
@@ -1401,8 +1401,8 @@ public final class EditorScreen extends CraftiumScreen {
         if(EditorBindings.held(Action.ADJUST_RADIUS)){o().radius=Math.clamp(o().radius+(int)Math.signum(vertical),1,BrushMath.MAX_RADIUS);return true;}
         if(!toolActive){zoomToCursor(x,y,vertical);return true;} // no tool chosen: the wheel is the camera's
         if(ShapeObject.active()&&vertical!=0){ShapeObject.adjustRadius((int)Math.signum(vertical));return true;} // the wheel sizes the shape that is down
-        if(TransformGizmo.available(this)){TransformGizmo.nudge(this,EditorControls.nudge(vertical>0?Action.NUDGE_FORWARD:Action.NUDGE_BACK,minecraft.player.getYRot()));}
-        return true;
+        if(TransformGizmo.available(this)){TransformGizmo.nudge(this,EditorControls.nudge(vertical>0?Action.NUDGE_FORWARD:Action.NUDGE_BACK,minecraft.player.getYRot()));return true;}
+        zoomToCursor(x,y,vertical);return true; // the tool has nothing for the wheel to do, so it is the camera's
     }
     @Override public boolean charTyped(CharacterEvent event){if(typing!=null){String c=event.codepointAsString();if(c.length()==1&&(Character.isDigit(c.charAt(0))||".-,".indexOf(c.charAt(0))>=0)&&typed.length()<12)typed+=c.equals(",")?".":c;return true;}for(EditBox field:fields.values())if(field.isFocused())return field.charTyped(event);return false;}
     /** Keys currently held, so a repeat of a key already down (a movement key held while Ctrl goes down) is not read as a fresh shortcut such as Ctrl+D. */
