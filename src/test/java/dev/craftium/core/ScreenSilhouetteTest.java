@@ -27,4 +27,10 @@ class ScreenSilhouetteTest {
     @Test void insideTheShapeThereIsNoContour(){
         assertNull(ScreenSilhouette.of(SelectionOutline.of(Set.of(new Point(0,0,0))),.5,.5,.5));
     }
+    @Test void aLongRowSeenFromNearItsEndStillHasAContour(){
+        var row=new HashSet<Point>();for(int i=0;i<20;i++)row.add(new Point(i,0,0));
+        // Part of the row lies behind the plane through this eye that faces the row's middle.
+        var lines=ScreenSilhouette.of(SelectionOutline.of(row),.5,.5,2);
+        assertNotNull(lines);assertFalse(lines.isEmpty());
+    }
 }

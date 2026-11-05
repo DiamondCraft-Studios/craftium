@@ -38,11 +38,26 @@ public final class ScreenSilhouette {
     /** The contour seen from the eye, or null when it cannot be worked out (the eye is inside or beside the shape, or the shape is too detailed). */
     public static List<Line> of(SelectionOutline.Result outline,double ex,double ey,double ez){
         if(outline.creases().isEmpty())return null;
-        // The plane faces the middle of the outline.
+        // The plane first faces the middle of the outline.
         double cx=0,cy=0,cz=0;int n=0;
-        for(var c:outline.creases()){var s=c.segment();cx+=s.x0()+s.x1();cy+=s.y0()+s.y1();cz+=s.z0()+s.z1();n+=2;}
-        cx/=n;cy/=n;cz/=n;
-        double fx=cx-ex,fy=cy-ey,fz=cz-ez,fl=Math.sqrt(fx*fx+fy*fy+fz*fz);
+        double minX=Double.MAX_VALUE,minY=Double.MAX_VALUE,minZ=Double.MAX_VALUE,maxX=-Double.MAX_VALUE,maxY=-Double.MAX_VALUE,maxZ=-Double.MAX_VALUE;
+        for(var c:outline.creases()){
+            var s=c.segment();cx+=s.x0()+s.x1();cy+=s.y0()+s.y1();cz+=s.z0()+s.z1();n+=2;
+            minX=Math.min(minX,Math.min(s.x0(),s.x1()));maxX=Math.max(maxX,Math.max(s.x0(),s.x1()));
+            minY=Math.min(minY,Math.min(s.y0(),s.y1()));maxY=Math.max(maxY,Math.max(s.y0(),s.y1()));
+            minZ=Math.min(minZ,Math.min(s.z0(),s.z1()));maxZ=Math.max(maxZ,Math.max(s.z0(),s.z1()));
+        }
+        var result=project(outline,ex,ey,ez,cx/n-ex,cy/n-ey,cz/n-ez);
+        if(result!=null)return result;
+        // Part of a wide shape can lie beside or behind the plane through the eye. The direction to the nearest point of the box around the shape
+        // always has the whole shape in front of it, as long as the eye is outside that box.
+        double nx=Math.max(minX,Math.min(ex,maxX))-ex,ny=Math.max(minY,Math.min(ey,maxY))-ey,nz=Math.max(minZ,Math.min(ez,maxZ))-ez;
+        if(nx*nx+ny*ny+nz*nz<1e-12)return null;
+        return project(outline,ex,ey,ez,nx,ny,nz);
+    }
+
+    private static List<Line> project(SelectionOutline.Result outline,double ex,double ey,double ez,double fx,double fy,double fz){
+        double fl=Math.sqrt(fx*fx+fy*fy+fz*fz);
         if(fl<1e-6)return null;
         fx/=fl;fy/=fl;fz/=fl;
         double hx=Math.abs(fy)<.99?0:1,hy=Math.abs(fy)<.99?1:0;
