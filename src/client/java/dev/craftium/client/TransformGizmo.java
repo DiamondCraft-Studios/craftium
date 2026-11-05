@@ -318,9 +318,12 @@ final class TransformGizmo {
         }
     }
     /** The handles at {@code anchor} for show only, as in builder mode where they can't be dragged. */
-    static void display(Vec3 anchor){display(anchor,ALL_AXES);}
+    static void display(Vec3 anchor){show(anchor,ALL_AXES,true);}
     /** Like {@link #display(Vec3)}, but only the axes whose bit is set in {@code axes} (X is 1, Y is 2, Z is 4): the plane squares need both of theirs. */
-    static void display(Vec3 anchor,int axes){axisMask=axes;try{render(anchor,Options.GizmoMode.MOVE,-1,null);}finally{axisMask=ALL_AXES;}}
+    static void display(Vec3 anchor,int axes){show(anchor,axes,false);}
+    /** The builder's handles can't be grabbed, so the plane squares and the centre knob, which only exist to be grabbed, are left out; the box corners' can be, so they keep theirs. */
+    private static void show(Vec3 anchor,int axes,boolean faces){axisMask=axes;showFaces=faces;try{render(anchor,Options.GizmoMode.MOVE,-1,null);}finally{axisMask=ALL_AXES;showFaces=true;}}
+    private static boolean showFaces=true;
     private static final int ALL_AXES=7;
     private static int axisMask=ALL_AXES;
     /**
@@ -506,7 +509,7 @@ final class TransformGizmo {
             else if(currentMode==Options.GizmoMode.SCALE){Vec3 end=extent!=null?faceCenter(faceBase!=null?faceBase:anchor,directions,extent,i):anchor.add(directions[i].scale(5*k));if(extent==null)Overlay.line(anchor,end,color,active==i?4:2);Overlay.box(new AABB(end.add(-.2*k,-.2*k,-.2*k),end.add(.2*k,.2*k,.2*k)),color,active==i?2:1,color&0x99ffffff|0x66000000);}
             else{Vec3 tip=anchor.add(directions[i].scale(5.3*k)),base=anchor.add(directions[i].scale(4.5*k));Overlay.line(anchor,base,color,active==i?4:2);arrowhead(tip,base,color,active==i?3:2,k);}
             }
-            if((currentMode==Options.GizmoMode.MOVE||currentMode==Options.GizmoMode.SCALE)&&(axisMask>>(i+1)%3&1)!=0&&(axisMask>>(i+2)%3&1)!=0){ // a square in each plane: moves, or scales, the two axes of that plane
+            if(showFaces&&(currentMode==Options.GizmoMode.MOVE||currentMode==Options.GizmoMode.SCALE)&&(axisMask>>(i+1)%3&1)!=0&&(axisMask>>(i+2)%3&1)!=0){ // a square in each plane: moves, or scales, the two axes of that plane
                 Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3],at=anchor.add(a.scale(1.4*k)).add(b.scale(1.4*k));boolean hot=active==4+i;
                 planeSquare(at,a,b,.2*k,hot?brighten(COLORS[i]):COLORS[i],hot);
             }
@@ -521,7 +524,7 @@ final class TransformGizmo {
         if(currentMode==Options.GizmoMode.SCALE&&plainHandles){ // the Scale tool's circle in the middle scales every axis
             Vec3[] cam=cameraAxes();circle(anchor,cam[0],cam[1],.32*k,active==3?CENTER_ACTIVE:CENTER,active==3?3:2f);
         }
-        if(currentMode!=Options.GizmoMode.ROTATE&&!plainHandles&&axisMask==ALL_AXES){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
+        if(showFaces&&currentMode!=Options.GizmoMode.ROTATE&&!plainHandles&&axisMask==ALL_AXES){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
     }
     /** Names the handle under the pointer next to it. */
     private static void label(Vec3 anchor,Vec3[] directions,double k,Vec3 extent,Options.GizmoMode mode,int handle){
