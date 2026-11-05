@@ -78,6 +78,12 @@ final class ToolIcons {
             case TUBE -> {ring(g,x+12,y+6,9,3,color);ring(g,x+12,y+6,4,1,color);line(g,x+3,y+6,x+3,y+18,color);line(g,x+21,y+6,x+21,y+18,color);arc(g,x+12,y+18,9,3,0,Math.PI,color);}
         }
     }
+    /** A hard hat in a 19 by 19 button at {@code x}, {@code y}: a dome with a ridge, over a brim. */
+    static void hardHat(Gfx g,int x,int y,int c){
+        arc(g,x+9,y+12,6,7,Math.PI,Math.PI*2,c);
+        g.fill(x+8,y+4,x+10,y+11,c);
+        g.fill(x+2,y+12,x+17,y+14,c);
+    }
     private static void ring(Gfx g,int cx,int cy,int rx,int ry,int c){arc(g,cx,cy,rx,ry,0,Math.PI*2,c);}
     /** The part of an ellipse from angle {@code from} to {@code to} (radians, y grows downward), as dots two pixels wide. */
     private static void arc(Gfx g,int cx,int cy,int rx,int ry,double from,double to,int c){

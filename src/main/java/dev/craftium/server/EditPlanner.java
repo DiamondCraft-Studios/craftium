@@ -64,7 +64,10 @@ final class EditPlanner {
         if(!level.isInWorldBounds(pos(p)) || !level.hasChunk(p.x()>>4,p.z()>>4)) return Blocks.AIR.defaultBlockState();
         return level.getBlockState(pos(p));
     }
+    /** Set for the builder tools, which ignore the tool masks unless {@link Options#maskInBuilder} is on. */
+    boolean builder;
     boolean accepted(Point p) {
+        if(builder&&!o.maskInBuilder)return true;
         if(p.y()<o.minY || p.y()>o.maxY) return false;
         if(o.inSelection && !session.selection.contains(p)) return false;
         if(!blockMask.isEmpty()&&inBlockMask(p)==o.maskExclude) return false;

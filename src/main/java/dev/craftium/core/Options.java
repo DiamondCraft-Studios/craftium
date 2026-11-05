@@ -47,6 +47,8 @@ public final class Options {
     public java.util.List<String> maskBlocks = new java.util.ArrayList<>(), maskActive = new java.util.ArrayList<>();
     /** False: edit only the toggled blocks. True: edit everything but them. With none toggled the block mask does nothing. */
     public boolean maskExclude;
+    /** Whether the tool masks (block mask, mask block, rules, script, height range and restrict to selection) also apply to the builder tools. */
+    public boolean maskInBuilder;
     public String biome = "minecraft:plains";
     public String text = "CRAFTIUM";
     public int minY = -64, maxY = 319;
