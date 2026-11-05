@@ -90,7 +90,7 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
         super(Component.literal(title));this.parent=parent;heading=title.toUpperCase(Locale.ROOT);this.entries=entries;this.widths=widths;this.styled=styled;
     }
     /** The builder tools' selection: its colours, the colours of where it would land, and both line widths. */
-    static SelectionOptionsScreen builder(Screen parent){return new SelectionOptionsScreen(parent,"Builder selection options",BUILDER_ENTRIES,BUILDER_WIDTHS,false);}
+    static SelectionOptionsScreen builder(Screen parent){return new SelectionOptionsScreen(parent,"Builder selection options",BUILDER_ENTRIES,BUILDER_WIDTHS,true);}
 
     /** The Ruler tool's colours: its line, its knobs and its span label. */
     static SelectionOptionsScreen ruler(Screen parent){return new SelectionOptionsScreen(parent,"Ruler options",RULER_ENTRIES,RULER_WIDTHS,false);}
