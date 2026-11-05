@@ -38,7 +38,7 @@ final class AdvancedTools {
                     public boolean air(Point a){return p.state(a).isAir();}
                     public boolean matches(Point a){return AdvancedTools.matches(p,base,a);}
                 },center,normal,o.selectLimit);
-                int count=Math.max(1,(int)o.strength);
+                int count=Math.max(1,o.extrudeCount);
                 for(Point at:face)for(int step=1;step<=count;step++){int s=o.invert?1-step:step;p.put(at.add(normal.x()*s,normal.y()*s,normal.z()*s),o.invert?Blocks.AIR.defaultBlockState():p.state(at));}
             }
             case PATH -> {
