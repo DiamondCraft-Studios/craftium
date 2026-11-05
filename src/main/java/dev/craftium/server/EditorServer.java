@@ -368,7 +368,13 @@ public final class EditorServer {
                 case "bucket_fill" -> {
                     // Dragging a block into the world: the Magic Wand, always comparing by block, then a replace with the active block.
                     if(target==null)throw new IllegalArgumentException("Drop the block onto a block within reach");
-                    var plan=new EditPlanner(player.level(),s,o);var origin=plan.state(target);
+                    var plan=new EditPlanner(player.level(),s,o);
+                    if(s.selection.contains(target)){ // dropped on the selection: the block fills all of it
+                        for(Point p:s.selection.points())plan.put(p,plan.material);
+                        start(player,s,plan.finish("Fill selection"));
+                        return;
+                    }
+                    var origin=plan.state(target);
                     if(origin.isAir())throw new IllegalArgumentException("Drop the block onto a block, not empty space");
                     var found=MagicWand.select(target,new MagicWand.World(){
                         public boolean loaded(Point at){return player.level().hasChunk(at.x()>>4,at.z()>>4);}

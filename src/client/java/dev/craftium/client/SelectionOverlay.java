@@ -19,6 +19,11 @@ final class SelectionOverlay {
     /** The selected blocks as last received; replaced, never changed, so the same list means the same selection. */
     static List<Point> points(){return selected;}
     private static Set<BlockPos> blockSet=Set.of();
+    private static Set<Point> pointSet=Set.of();
+    /** Whether the block is one of the selected blocks, however many there are. */
+    static boolean contains(BlockPos at){return !pointSet.isEmpty()&&pointSet.contains(new Point(at.getX(),at.getY(),at.getZ()));}
+    /** The outline of the whole selection. */
+    static OutlineShape outline(){return shape;}
     private static List<Vec3[]> contacts=List.of();
     private static long contactsAt;
     private SelectionOverlay(){}
@@ -27,7 +32,7 @@ final class SelectionOverlay {
         var points=SelectionCodec.decode(data);selected=List.copyOf(points);
         shape=OutlineShape.of(points);
         blocks=points.size()>MAX_GHOST_BLOCKS?List.of():points.stream().map(p->new BlockPos(p.x(),p.y(),p.z())).toList();
-        blockSet=new HashSet<>(blocks);contactsAt=0;
+        blockSet=new HashSet<>(blocks);pointSet=new HashSet<>(selected);contactsAt=0;
     }
     /**
      * The faces of the selection that touch a solid block outside it, so it is clear whether the selection sits inside a solid

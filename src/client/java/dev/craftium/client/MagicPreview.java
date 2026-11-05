@@ -45,6 +45,11 @@ final class MagicPreview {
         var o=ClientState.options;
         if(hit==null||mc.level==null){bucketKey=null;bucketShape=OutlineShape.EMPTY;return;}
         BlockPos at=hit.getBlockPos();
+        if(SelectionOverlay.contains(at)){ // dropped on the selection, the block fills the whole selection: outline that rather than what is connected
+            bucketKey=null;bucketShape=OutlineShape.EMPTY;
+            SelectionOverlay.outline().drawPlain(Vec3.ZERO,ClientState.options.hoverColor,(float)ClientState.options.selectionWidth,ClientState.options.hoverFill,true,false);
+            return;
+        }
         Object now=java.util.List.of(at,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,o.selectLimit,o.hoverPreviewLimit,mc.level.getGameTime()/20);
         if(!Objects.equals(bucketKey,now)){
             bucketKey=now;bucketShape=OutlineShape.EMPTY;
