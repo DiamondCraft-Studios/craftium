@@ -286,7 +286,7 @@ public final class BuilderMode {
             boolean leaving=preview&&o.builderTool==Options.BuilderTool.MOVE;
             boolean stacking=preview&&second!=null&&o.builderTool==Options.BuilderTool.STACK;
             Point from=min,to=max;if(stacking){var b=stackBounds();from=b[0];to=b[1];} // the selection grows with the stack
-            if(blocksOnly()&&second!=null&&!cells.isEmpty()&&cells.size()<=OUTLINE_LIMIT){ // the blocks themselves, not the box round them
+            if(!stacking&&blocksOnly()&&second!=null&&!cells.isEmpty()&&cells.size()<=OUTLINE_LIMIT){ // the blocks themselves (while stacking, the one box round the whole stack), not the box round them
                 if(cells!=shapeOf){selectionShape=OutlineShape.of(cells);shapeOf=cells;}
                 selectionShape.drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,!leaving,false);
             }else boxShape(from,to.add(1,1,1)).drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,second!=null&&!leaving,false); // in the style set in the preferences
