@@ -412,7 +412,7 @@ public final class CraftiumClient implements ClientModInitializer {
             if(screen.toolActive()&&hit!=null && !PlacementPreview.active() && !ShapeObject.active() && brush) {
                 var p=hit.getBlockPos();
                 if(tool==Tool.SHAPE&&BrushGhost.draw(mc,p,ClientState.options)){/* drawn as ghost blocks */}
-                else BrushPreview.draw(p,ClientState.options);
+                else BrushPreview.draw(mc,p,ClientState.options);
             }
         }
     }

@@ -4,32 +4,67 @@ import dev.craftium.client.compat.Overlay;
 import dev.craftium.core.BrushMath;
 import dev.craftium.core.Options;
 import dev.craftium.core.Point;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import java.util.List;
+import java.util.*;
 
 /**
- * The brush under the cursor, drawn as the blocks it would reach: the outline of the very block set the server builds, in the style
- * {@link Options#brushPreviewStyle} picks (Outline by default). It replaces the smooth wireframe sphere, which showed the radius but
- * not which blocks were affected. The outline is kept and only rebuilt when the shape or its size changes.
+ * The brush under the cursor, as the blocks it would reach, depth-tested so terrain in front of it hides it. Where the brush sits in
+ * solid blocks it colours the faces of those blocks you can see, with no outline; where it sits in open air, in front of the terrain,
+ * it is the outline of those blocks, drawn like the selection's silhouette, as it is and without its extra edges. Uses the hover preview's colours.
+ * It is worked out again when the shape, the block under the cursor or, once a second, the world changes.
  */
 final class BrushPreview {
-    private static final int COLOUR=0xffd6eaff;
+    /** More exposed faces than this are not coloured one by one; the outline of the whole brush is shown instead. */
+    private static final int MAX_FACES=8192;
+    private static final float LIFT=.003f;
     private static List<Object> key=List.of();
-    private static OutlineShape shape=OutlineShape.EMPTY;
+    private static OutlineShape air=OutlineShape.EMPTY;
+    private static List<Vec3[]> faces=List.of();
+    private static boolean tooLarge;
 
     private BrushPreview(){}
 
-    static void draw(BlockPos at,Options o){
-        var now=List.<Object>of(o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.outline);
-        if(!now.equals(key)){
-            key=now;
-            // A brush over the block limit is refused by the server too, so there is no set of blocks to outline.
-            try{shape=OutlineShape.of(BrushMath.brush(new Point(0,0,0),o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline));}
-            catch(IllegalArgumentException e){shape=OutlineShape.EMPTY;}
-        }
-        if(shape.isEmpty()){Overlay.box(new AABB(at).inflate(o.radius),COLOUR,1.5f,0);return;} // too large to outline: the box it fits in
-        shape.draw(new Vec3(at.getX(),at.getY(),at.getZ()),(a,b)->Overlay.line(a,b,COLOUR,1.2f),COLOUR,0,false,o.brushPreviewStyle);
+    static void draw(Minecraft mc,BlockPos at,Options o){
+        if(mc.level==null)return;
+        var now=List.<Object>of(o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.outline,at,mc.level.getGameTime()/20);
+        if(!now.equals(key)){key=now;rebuild(mc,at,o);}
+        if(tooLarge){Overlay.box(new AABB(at).inflate(o.radius),o.hoverColor,1.5f,0);return;} // too large to work out: the box it fits in
+        int fill=o.hoverColor&0xffffff|0x66000000;
+        for(var f:faces)Overlay.sceneFace(f[0],f[1],f[2],f[3],fill);
+        air.drawPlain(Vec3.ZERO,o.hoverColor,(float)o.selectionWidth,0,false,true); // the selection's silhouette as it is, depth-tested
     }
+
+    private static void rebuild(Minecraft mc,BlockPos at,Options o){
+        air=OutlineShape.EMPTY;faces=List.of();tooLarge=false;
+        List<Point> relative;
+        // A brush over the block limit is refused by the server too, so there is no set of blocks to show.
+        try{relative=BrushMath.brush(new Point(0,0,0),o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline);}
+        catch(IllegalArgumentException e){tooLarge=true;return;}
+        var level=mc.level;var open=new ArrayList<Point>();var solid=new HashSet<Point>();
+        for(Point r:relative){
+            Point p=new Point(at.getX()+r.x(),at.getY()+r.y(),at.getZ()+r.z());
+            if(level.getBlockState(new BlockPos(p.x(),p.y(),p.z())).isAir())open.add(p);else solid.add(p);
+        }
+        var found=new ArrayList<Vec3[]>();
+        for(Point p:solid)for(var d:net.minecraft.core.Direction.values()){
+            if(!level.getBlockState(new BlockPos(p.x()+d.getStepX(),p.y()+d.getStepY(),p.z()+d.getStepZ())).isAir())continue; // buried faces cannot be seen
+            found.add(face(p,d));
+            if(found.size()>MAX_FACES){tooLarge=true;return;}
+        }
+        faces=found;
+        air=OutlineShape.of(open);
+    }
+
+    /** The face of the block at {@code p} on the side {@code d} points to, lifted off the block so it does not fight it for depth, counter-clockwise from outside. */
+    private static Vec3[] face(Point p,net.minecraft.core.Direction d){
+        int axis=d.getAxis().ordinal();boolean positive=d.getAxisDirection()==net.minecraft.core.Direction.AxisDirection.POSITIVE;
+        double[] base={p.x(),p.y(),p.z()};base[axis]+=positive?1+LIFT:-LIFT;
+        int u=(axis+1)%3,v=(axis+2)%3;
+        if(!positive){int t=u;u=v;v=t;} // the other way round faces the other way
+        return new Vec3[]{at(base,0,0,u,v),at(base,1,0,u,v),at(base,1,1,u,v),at(base,0,1,u,v)};
+    }
+    private static Vec3 at(double[] base,int a,int b,int u,int v){double[] c=base.clone();c[u]+=a;c[v]+=b;return new Vec3(c[0],c[1],c[2]);}
 }
