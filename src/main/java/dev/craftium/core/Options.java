@@ -95,6 +95,8 @@ public final class Options {
     public int selectionResize;
     /** Hovering with the Magic Wand outlines what a click would select, unless that is this many blocks or more: likely terrain, not an object. */
     public boolean magicPreview=true;
+    /** Whether a big selection waits to be confirmed before it is kept. */
+    public boolean largeSelectionWarnings=true;
     public int hoverPreviewLimit=5000;
     public boolean selectUp=true,selectDown=true,selectHorizontal=true,selectCorners,includeNonSolid;
     public Noise noise=Noise.SIMPLEX;
