@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.7.0-beta.1
+
+Changes since 0.6.0-beta.1.
 
 ### Builder
 - With a selection, Ctrl + scroll switches the middle button between Magic select (adds blocks, Ctrl-click takes them away) and Extend (grows the box to the block clicked). A magic selection starts in Magic select, a box in Extend.
