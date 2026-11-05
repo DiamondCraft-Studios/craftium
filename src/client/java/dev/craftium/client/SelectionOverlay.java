@@ -68,7 +68,8 @@ final class SelectionOverlay {
         int colour=ClientState.options.selectionColor;float width=(float)ClientState.options.selectionWidth;
         var landing=transforming?TransformGizmo.landing(selected):null;
         if(landing!=null)landing.draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,colour,width),colour,ClientState.options.selectionFill,true); // a rotate or scale: the blocks it will leave
-        else shape.draw(Vec3.ZERO,transforming?TransformGizmo::line:(a,b)->Overlay.line(a,b,colour,width),colour,ClientState.options.selectionFill,!transforming);
+        else if(transforming)shape.draw(Vec3.ZERO,TransformGizmo::line,colour,ClientState.options.selectionFill,false);
+        else shape.drawEmphasised(Vec3.ZERO,colour,width,ClientState.options.selectionFill,true,false);
         int contact=ClientState.options.selectionContact;
         if(!transforming&&ClientState.options.showSelectionContact&&(contact>>>24)!=0)for(var q:contacts())Overlay.face(q[0],q[1],q[2],q[3],contact);
         if(blocks.isEmpty())return;
