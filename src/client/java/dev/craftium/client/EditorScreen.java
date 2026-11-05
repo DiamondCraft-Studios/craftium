@@ -93,10 +93,12 @@ public final class EditorScreen extends CraftiumScreen {
         if(!hudHidden){previousHideGui=ClientCompat.hudHidden(minecraft);hudHidden=true;if(!previousHideGui)ClientCompat.toggleHud(minecraft);}
         scale=Math.min(1f,Math.min(width/1000f,height/562f));w=Math.round(width/scale);h=Math.round(height/scale);
         fields.clear();suspended=false;
-        int masksW=WorkspaceLayout.width("masks",RIGHT),masksH=WorkspaceLayout.height("masks",187),masksY=h-212;
+        int masksW=WorkspaceLayout.width("masks",RIGHT),masksH=WorkspaceLayout.height("masks",masksHeight()),masksY=masksTop();
         layoutKey=layoutKey();
-        field("minY",w-RIGHT+10,masksY+masksH-39,80,Integer.toString(o().minY),s->{try{o().minY=Integer.parseInt(s);}catch(NumberFormatException ignored){}});
-        field("maxY",w-RIGHT+masksW-90,masksY+masksH-39,80,Integer.toString(o().maxY),s->{try{o().maxY=Integer.parseInt(s);}catch(NumberFormatException ignored){}});
+        if(maskLimitsOpen){
+            field("minY",w-RIGHT+10,masksY+masksH-39,80,Integer.toString(o().minY),s->{try{o().minY=Integer.parseInt(s);}catch(NumberFormatException ignored){}});
+            field("maxY",w-RIGHT+masksW-90,masksY+masksH-39,80,Integer.toString(o().maxY),s->{try{o().maxY=Integer.parseInt(s);}catch(NumberFormatException ignored){}});
+        }
         if(!builder) {
             if(pinnedTab)pinnedFields();
             else if(o().tool==Tool.NOISE_PAINTER) {
@@ -663,7 +665,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,x+18+bottom[0]+bottom[1],186,bottom[2],20,"Paste in place",false,()->CraftiumClient.send("paste_in_place",null,null),"Paste at the coordinates the blocks were copied from");
     }
     private void palette(Gfx g) {
-        int x=w-RIGHT;panel(g,x,222,RIGHT,105,"Block palette");
+        int x=w-RIGHT;panel(g,x,222,RIGHT,Math.max(105,masksTop()-6-222),"Block palette"); // down to the Tool masks
         // Drawn back to front, like a paint tool: the foreground sits on top of the background.
         handSlot(g,x+10,248);
         blockSlot(g,x+70,264,"Background block",o().secondary,id->o().secondary=id);
@@ -784,17 +786,16 @@ public final class EditorScreen extends CraftiumScreen {
     private void dismissConfirm(){confirm=null;}
     private void swapBlocks() {String front=o().block;ClientState.pick(o().secondary);o().secondary=front;ClientState.save();}
     private void history(Gfx g) {
-        int x=w-RIGHT,y=333;
-        panel(g,x,y,RIGHT,Math.max(50,h-551),"History");int height=ph;
+        int x=w-2*RIGHT-8,y=333; // beside the right-hand column, which the palette now fills; hidden until opened
+        panel(g,x,y,RIGHT,Math.max(120,h-551),"History");int height=ph;
         int[] cell=flex(pw-20,9,1,1);
         button(g,x+10,y+24,cell[0],19,"Undo "+ClientState.status.undo(),false,()->action("undo"),"Undo · Ctrl+Z");
         button(g,x+19+cell[0],y+24,cell[1],19,"Redo "+ClientState.status.redo(),false,()->action("redo"),"Redo · Ctrl+Y");
         int row=y+51,index=0;for(String event:ClientState.status.history()){if(row>y+height-12)break;int steps=++index;text(g,shorten(event,pw-20),x+10,row,MUTED);controls.add(new Control(x+7,row-3,pw-14,14,()->{o().historySteps=steps;action("history_undo_many");},""));row+=15;}
     }
     private void masks(Gfx g) {
-        int x=w-RIGHT,y=h-212;panel(g,x,y,RIGHT,187,"Tool masks");
-        int half=(pw-24)/2;
-        maskCols=Math.max(1,(pw-19)/MASK_PITCH);maskRows=Math.max(1,(ph-109)/MASK_PITCH);
+        int x=w-RIGHT,y=masksTop();panel(g,x,y,RIGHT,masksHeight(),"Tool masks");
+        maskCols=Math.max(1,(pw-19)/MASK_PITCH);maskRows=1;
         button(g,x+10,y+24,19,19,"",o().maskInBuilder,()->o().maskInBuilder=!o().maskInBuilder,"Use in Builder tools · "+(o().maskInBuilder?"On: the tool masks also apply to the Builder tools":"Off: the Builder tools ignore the tool masks"));
         ToolIcons.hardHat(g,x+10,y+24,o().maskInBuilder?0xffffffff:0xffa9bccd);
         int share=(pw-20-23-4)/2;
@@ -821,9 +822,18 @@ public final class EditorScreen extends CraftiumScreen {
             g.fill(barX,y+50,barX+5,y+50+track,0xff1b2838);g.fill(barX,thumbY,barX+5,thumbY+thumb,0xff4a6585);
             controls.add(new Control(barX-2,y+50,9,track,()->{double py=WorkspaceLayout.inverse("masks",mx,my)[1];maskScroll=Math.clamp((int)Math.round((py-y-50-thumb/2.0)/Math.max(1,track-thumb)*(rows-maskRows)),0,rows-maskRows);},""));
         }
-        text(g,"Min Y",x+10,y+ph-53,MUTED);text(g,"Max Y",x+pw-90,y+ph-53,MUTED);
-        toggle(g,x+10,y+ph-18,"Only in selection",o().inSelection,()->o().inSelection=!o().inSelection,"Only edit blocks inside the current selection. Blocks outside it are left alone, and with nothing selected nothing changes.");
+        // The height range and Only in selection fold away under one heading, so the panel is the buttons and a row of blocks.
+        text(g,(maskLimitsOpen?"▾ ":"▸ ")+"Limits",x+10,y+78,MUTED);
+        controls.add(new Control(x+7,y+75,pw-14,14,()->{maskLimitsOpen=!maskLimitsOpen;init();},"Height range and Only in selection"));
+        if(maskLimitsOpen){
+            text(g,"Min Y",x+10,y+ph-53,MUTED);text(g,"Max Y",x+pw-90,y+ph-53,MUTED);
+            toggle(g,x+10,y+ph-18,"Only in selection",o().inSelection,()->o().inSelection=!o().inSelection,"Only edit blocks inside the current selection. Blocks outside it are left alone, and with nothing selected nothing changes.");
+        }
     }
+    private boolean maskLimitsOpen;
+    /** The Tool masks panel: the buttons and one row of blocks, and with the limits unfolded the height range and Only in selection under them. It sits against the bottom of the screen. */
+    private int masksHeight(){return maskLimitsOpen?150:98;}
+    private int masksTop(){return h-25-masksHeight();}
     private int maskCols=7,maskRows=3;
     private static final int MASK_PITCH=25,MASK_MENU_WIDTH=110,MASK_MENU_ROW=18;
     private int maskScroll,paletteScroll,ctxCell=-1,ctxX,ctxY;
