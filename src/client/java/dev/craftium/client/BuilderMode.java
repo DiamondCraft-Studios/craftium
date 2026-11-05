@@ -299,8 +299,9 @@ public final class BuilderMode {
             boolean stacking=preview&&second!=null&&o.builderTool==Options.BuilderTool.STACK;
             Point from=min,to=max;if(stacking){var b=stackBounds();from=b[0];to=b[1];} // the selection grows with the stack
             if(!stacking&&blocksOnly()&&second!=null&&!cells.isEmpty()&&cells.size()<=OUTLINE_LIMIT){ // the blocks themselves (while stacking, the one box round the whole stack), not the box round them
-                if(cells!=shapeOf){selectionShape=OutlineShape.of(cells);shapeOf=cells;}
-                selectionShape.drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,!leaving,false);
+                if(leaving){if(cells!=shapeOf){selectionShape=OutlineShape.of(cells);shapeOf=cells;}
+                    selectionShape.drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,false,false);}
+                else drawInScene(o); // not moving: faces on the ground are coloured dimly, with no edges, and only what is in open air is outlined
             }else boxShape(from,to.add(1,1,1)).drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,second!=null&&!leaving,false); // in the style set in the preferences
             if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?stackSteps(size):List.of(offset);
                 if(stacking){drawStack(o,min,size);return;}
@@ -321,6 +322,17 @@ public final class BuilderMode {
     private static final int OUTLINE_LIMIT=32_768;
     private static OutlineShape selectionShape=OutlineShape.EMPTY;
     private static List<Point> shapeOf;
+    private static SceneShape sceneShape=SceneShape.EMPTY;
+    private static List<Point> sceneOf;private static long sceneAt;
+    /** The selection's blocks as the world hides them (see {@link SceneShape}); worked out again when the selection changes or, once a second, the world does. */
+    private static void drawInScene(Options o){
+        var level=Minecraft.getInstance().level;if(level==null)return;
+        long second=level.getGameTime()/20;
+        if(cells!=sceneOf||second!=sceneAt){sceneShape=SceneShape.of(level,cells,true);sceneOf=cells;sceneAt=second;}
+        if(sceneShape.tooLarge()){boxShape(min(),max().add(1,1,1)).drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,true,false);return;}
+        int fill=(o.builderSelectionFill>>>24)!=0?o.builderSelectionFill:o.builderSelectionColor&0xffffff|SceneShape.FACE_ALPHA;
+        sceneShape.draw(fill,o.builderSelectionColor,(float)o.builderSelectionWidth,0);
+    }
     /**
      * The stack's preview: the blocks' models where they land. The whole stack is one selection, drawn by {@link #draw()}, with no box round each copy; the models are kept until the stack, the selection or the turn changes.
      */
