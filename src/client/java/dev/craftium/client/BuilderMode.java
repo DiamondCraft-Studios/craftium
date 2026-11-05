@@ -309,16 +309,11 @@ public final class BuilderMode {
     private static final int OUTLINE_LIMIT=32_768;
     private static OutlineShape selectionShape=OutlineShape.EMPTY;
     private static List<Point> shapeOf;
-    /** Past this many copies the stack is shown as the one box around all of it. */
-    private static final int STACK_BOX_LIMIT=512;
     /**
-     * The stack's preview: a box for each copy, and the blocks' models where they land. The cost of an outline round every copy
-     * made scrolling the wheel stutter, so none is made; the models are kept until the stack, the selection or the turn changes.
+     * The stack's preview: the blocks' models where they land. The whole stack is one selection, drawn by {@link #draw()}, with no box round each copy; the models are kept until the stack, the selection or the turn changes.
      */
     private static void drawStack(Options o,Point min,Point size){
         long copies=((long)Math.abs(stackX)+1)*(Math.abs(stackY)+1)*(Math.abs(stackZ)+1)-1;
-        if(copies<=STACK_BOX_LIMIT)for(Point step:stackSteps(size))
-            boxShape(min.add(step.x(),step.y(),step.z()),min.add(step.x()+size.x(),step.y()+size.y(),step.z()+size.z())).drawPlain(Vec3.ZERO,o.builderPreviewColor,(float)o.builderPreviewWidth,o.builderPreviewFill,true,false);
         if(cells.size()*copies>PREVIEW_LIMIT)return;
         Object[] key={min,size,o.builderRotation,o.builderFlipAxis,stackX,stackY,stackZ};
         if(stackFor==null||cells!=stackCells||!Arrays.equals(key,stackFor)){
