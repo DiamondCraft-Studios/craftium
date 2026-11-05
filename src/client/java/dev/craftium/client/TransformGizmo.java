@@ -318,6 +318,13 @@ final class TransformGizmo {
             }
         }
     }
+    /** A line from one point to another, as thin as the ruler: white, or in the colour of the axis when it runs along exactly one world axis. */
+    static void guideLine(Vec3 from,Vec3 to){
+        int along=-1,differing=0;double[] a={from.x,from.y,from.z},b={to.x,to.y,to.z};
+        for(int axis=0;axis<3;axis++)if(Math.abs(a[axis]-b[axis])>1e-6){differing++;along=axis;}
+        if(differing==0)return;
+        Overlay.sceneLine(from,to,differing==1?RULER_COLORS[along]:0xaaffffff,1);
+    }
     /** The handles at {@code anchor} for show only, as in builder mode where they can't be dragged. */
     static void display(Vec3 anchor){show(anchor,ALL_AXES,true);}
     /** Like {@link #display(Vec3)}, but only the axes whose bit is set in {@code axes} (X is 1, Y is 2, Z is 4): the plane squares need both of theirs. */

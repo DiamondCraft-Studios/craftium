@@ -27,6 +27,8 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
 
     private static final List<Row> ROWS=List.of(
         new Toggle("Undo / redo pulse","Flash the changed blocks when you undo or redo",o->o.historyPulse,(o,v)->o.historyPulse=v),
+        new Toggle("Enter to build","On: an edit waits for Enter before it is built. Off: a stroke is built when you let go of the button, and any other edit is built at once",o->o.enterToBuild,(o,v)->o.enterToBuild=v),
+        new Toggle("Live Builder selection box","After the first Builder click, draw the box to the block you aim at and let it follow your aim",o->o.builderLiveBox,(o,v)->o.builderLiveBox=v),
         new Toggle("Large selection warnings","Ask before keeping a selection of 1,024 blocks or more; a right click confirms it",o->o.largeSelectionWarnings,(o,v)->o.largeSelectionWarnings=v),
         new Toggle("Magic Wand hover preview","Outline what a Magic Wand click would select",o->o.magicPreview,(o,v)->o.magicPreview=v),
         new Toggle("Mark faces against solid blocks","Tint the selection's faces that touch a solid block outside it; the colour is in Selection options",o->o.showSelectionContact,(o,v)->o.showSelectionContact=v),

@@ -10,6 +10,7 @@ import java.util.*;
 final class BuilderEdits {
     private BuilderEdits(){}
     static Session.Edit plan(ServerPlayer player,Session session,Options o,Point target,Point normal,String action){
+        o.keepExisting=o.builderKeepExisting; // the Builder has its own Keep existing, so the editor's does not apply to it
         var p=new EditPlanner(player.level(),session,o);p.builder=true;
         if(action.equals("builder_extrude")){o.tool=Tool.EXTRUDE;o.extrudeCount=1;AdvancedTools.handle(p,target,normal);return p.finish(o.invert?"Shrink face":"Extrude face");}
         if(action.equals("builder_erase_connected")){

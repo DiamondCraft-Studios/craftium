@@ -8,6 +8,17 @@
 - The Builder's magic select follows the Large selection warnings switch in the preferences: with it off, a selection of 1,024 blocks or more is kept without asking.
 - A Builder selection is drawn like the brush preview: where it lies in the ground, the faces you can see are coloured dimly, and its outline is hidden wherever blocks are in front of it.
 - The selection is anchored by its centre: the gizmo sits there, and a middle click while moving or cloning puts the centre block on the spot clicked.
+- Holding Alt in Builder mode shows the tool list with numbers, and pressing 1 to 7 picks that tool.
+- Holding Ctrl with the Extrude tool is Smart extrude: the face takes in the stairs, slabs, walls and other variants of the clicked block's material, and each keeps its own shape as it is extruded.
+- After the first click, the gizmo's ruler follows the block you aim at, with a thin line back to the first block (white, or in the axis colour when it runs along a world axis), to read distances off the grid. The Ruler switch in the Builder flags turns it off.
+- After the first click the Builder draws the box to the block you aim at, and it follows your aim. The Live Builder selection box switch in the preferences turns it off.
+- The Builder's Keep existing is its own setting and no longer follows the editor's, which the Builder no longer follows either.
+- The block selector also lists blocks that have no item of their own, such as water and lava, as plain blocks.
+
+### Editor
+- The Paint tools build what a stroke staged as soon as the button is released, as the Sculpt tools do, without waiting for Enter.
+- Block cells can be dragged between the Hand, Foreground, Background, Block palette and Tool masks. Cells in the block selector can be dragged out to them too (not back in), and the selector stays open.
+- Enter to build is a switch in the preferences, on by default. Off, a stroke is built when you let go of the button and any other edit is built at once.
 
 ## 0.6.0-beta.1
 
