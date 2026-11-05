@@ -45,11 +45,14 @@ final class MagicPreview {
         var o=ClientState.options;
         if(hit==null||mc.level==null){bucketKey=null;bucketShape=OutlineShape.EMPTY;return;}
         BlockPos at=hit.getBlockPos();
-        Object now=java.util.List.of(at,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,o.selectLimit,mc.level.getGameTime()/20);
+        Object now=java.util.List.of(at,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,o.selectLimit,o.hoverPreviewLimit,mc.level.getGameTime()/20);
         if(!Objects.equals(bucketKey,now)){
             bucketKey=now;bucketShape=OutlineShape.EMPTY;
             if(!mc.level.getBlockState(at).isAir()){
-                bucketShape=OutlineShape.of(bucketSearch(mc,at,o).found());
+                // As with the Magic Wand hover preview, a match this big is most likely terrain (grass, a superflat floor), so it is not outlined.
+                int limit=Math.min(o.selectLimit,o.hoverPreviewLimit);
+                var result=MagicWand.select(CraftiumClient.point(at),world(mc,at,o,Options.Compare.BLOCK,false),new MagicWand.Params(limit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,VISIT_CAP));
+                if(!result.truncated()&&result.found().size()<o.hoverPreviewLimit)bucketShape=OutlineShape.of(result.found());
             }
         }
         if(!bucketShape.isEmpty())bucketShape.drawPlain(Vec3.ZERO,ClientState.options.hoverColor,(float)ClientState.options.selectionWidth,ClientState.options.hoverFill,true,false);
