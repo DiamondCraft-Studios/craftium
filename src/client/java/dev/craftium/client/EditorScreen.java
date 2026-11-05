@@ -159,7 +159,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(!suspended){fly();syncCursor();}
         BG=o().uiBackground;PANEL=o().uiPanel;LINE=o().uiBorder;ACCENT=o().uiAccent;TEXT=o().uiText;MUTED=o().uiMuted;
         if(!suspended&&layoutKey!=layoutKey())init();
-        pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();sliderAreas.clear();dragSources.clear();
+        pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();sliderAreas.clear();dragSources.clear();dropTargets.clear();
         syncCrosshair();
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
         g.pose().pushMatrix();g.pose().scale(scale,scale);
@@ -199,7 +199,9 @@ public final class EditorScreen extends CraftiumScreen {
                 for(int i=0;i<rows.size();i++)g.text(font,rows.get(i),tx+6,ty+6+i*10,paragraphs.length>1&&i>=firstRows?MUTED:TEXT,false);
             }
         }
-        if(dragBlock!=null&&dragMoved){g.fill(mx-13,my-13,mx+13,my+13,0xdd1b2838);g.outline(mx-13,my-13,26,26,ACCENT);BlockPickerScreen.icon(g,font,dragBlock,mx-8,my-8);}
+        if(dragBlock!=null&&dragMoved){
+            for(int i=dropTargets.size()-1;i>=0;i--){var t=dropTargets.get(i).area();if(t.contains(mx,my)){g.pose().pushMatrix();WorkspaceLayout.apply(g,t.panel());g.outline(t.x(),t.y(),t.width(),t.height(),ACCENT);g.pose().popMatrix();break;}} // the cell the block would land in
+            g.fill(mx-13,my-13,mx+13,my+13,0xdd1b2838);g.outline(mx-13,my-13,26,26,ACCENT);BlockPickerScreen.icon(g,font,dragBlock,mx-8,my-8);}
         g.pose().popMatrix();ReferenceImages.draw(g,true,mouseX,mouseY);
     }
     /** Whether the pointer is free to act on the controls, not held by a drag or covered by a pop-up. */
@@ -667,6 +669,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void palette(Gfx g) {
         int x=w-RIGHT;panel(g,x,222,RIGHT,Math.max(105,masksTop()-6-222),"Block palette"); // down to the Tool masks
+        dropArea(x,222,RIGHT,Math.max(105,masksTop()-6-222),this::dropInPalette); // a block dropped anywhere on the panel joins the palette
         // Drawn back to front, like a paint tool: the foreground sits on top of the background.
         handSlot(g,x+10,248);
         blockSlot(g,x+70,264,"Background block",o().secondary,id->o().secondary=id);
@@ -690,7 +693,7 @@ public final class EditorScreen extends CraftiumScreen {
             int index=i-1;String block=blocks.get(index);
             boolean active=o().block.equals(block);g.fill(bx,by,bx+23,by+23,active?0xff315b84:0xff1b2838);if(active)g.outline(bx,by,23,23,ACCENT);
             BlockPickerScreen.icon(g,font,block,bx+3,by+3);
-            dragSource(new Control(bx,by,23,23,()->ClientState.pick(block),()->openBlockMenu(BlockList.PALETTE,index),block+" · Click to set the foreground · Drag into the world to bucket fill · Right-click for options"),block);
+            dragSource(new Control(bx,by,23,23,()->ClientState.pick(block),()->openBlockMenu(BlockList.PALETTE,index),block+" · Click to set the foreground · Drag into the world to bucket fill, or to another slot · Right-click for options"),block);
         }
         if(bar){
             int track=visibleRows*pitch-3,thumb=Math.max(10,track*visibleRows/rows),thumbY=top+(track-thumb)*paletteScroll/Math.max(1,limit),barX=x+pw-11,max=limit;
@@ -736,6 +739,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void handSlot(Gfx g,int x,int y) {
         String block=minecraft.player!=null&&minecraft.player.getMainHandItem().getItem() instanceof net.minecraft.world.item.BlockItem item?BuiltInRegistries.BLOCK.getKey(item.getBlock()).toString():"";
         g.fill(x,y,x+30,y+30,0xff1b2838);g.outline(x,y,30,30,LINE);
+        dropArea(x,y,30,30,this::dropInHand);
         text(g,"Hand",x+3,y+32,MUTED);
         if(block.isEmpty()){controls.add(new Control(x,y,30,30,()->{},"Hand · no block held"));return;}
         BlockPickerScreen.icon(g,font,block,x+7,y+7);
@@ -743,6 +747,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void blockSlot(Gfx g,int x,int y,String label,String block,java.util.function.Consumer<String> set) {
         g.fill(x,y,x+30,y+30,0xff1b2838);g.outline(x,y,30,30,label.startsWith("Fore")?ACCENT:LINE);
+        dropArea(x,y,30,30,id->{set.accept(id);ClientState.save();});
         BlockPickerScreen.icon(g,font,block,x+7,y+7);
         dragSource(new Control(x,y,30,30,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,label,block,id->{set.accept(id);ClientState.save();})),label+" · "+block+" · Click to replace · Drag into the world to bucket fill"),block);
     }
@@ -755,10 +760,34 @@ public final class EditorScreen extends CraftiumScreen {
     /** The block under the pointer for that fill, or null while the pointer is over a panel rather than the world. */
     BlockHitResult bucketTarget(){return bucketDragging()&&inViewport(pointerX/scale,pointerY/scale)?target():null;}
     private void dragSource(Control control,String block){controls.add(control);dragSources.add(new DragSource(control,block));}
+    /** Where a dragged block cell can be dropped: the hand, the two blocks, the palette and the tool masks. Rebuilt with the panels each frame. */
+    private record DropTarget(Control area,java.util.function.Consumer<String> accept){}
+    private final List<DropTarget> dropTargets=new ArrayList<>();
+    private void dropArea(int x,int y,int width,int height,java.util.function.Consumer<String> accept){dropTargets.add(new DropTarget(new Control(x,y,width,height,()->{},""),accept));}
+    /** Drops the block on the cell under the pointer (raw window coordinates), if there is one. Also used by the block chooser, whose cells can be dragged here. */
+    boolean dropBlock(double rawX,double rawY,String block){
+        double px=rawX/scale,py=rawY/scale;
+        for(int i=dropTargets.size()-1;i>=0;i--){var t=dropTargets.get(i);if(t.area().contains(px,py)){t.accept().accept(block);return true;}}
+        return false;
+    }
+    private void dropInPalette(String block){
+        if(block.isEmpty()||block.equals("minecraft:air"))return;
+        if(!ClientState.palette.contains(block)){ClientState.palette.addFirst(block);while(ClientState.palette.size()>18)ClientState.palette.removeLast();}
+        ClientState.save();
+    }
+    /** Puts the block in the player's main hand, as the creative inventory would. Blocks without an item (liquids) cannot be held. */
+    private void dropInHand(String block){
+        var id=dev.craftium.compat.Compat.tryParse(block.split("\\[",2)[0]);
+        var item=id==null?null:BuiltInRegistries.BLOCK.getOptional(id).map(b->b.asItem()).orElse(null);
+        if(minecraft.player==null||minecraft.gameMode==null||!minecraft.player.isCreative()){ClientState.notify("Only a creative player can hold it");return;}
+        if(item==null||item==net.minecraft.world.item.Items.AIR){ClientState.notify("That block has no item to hold");return;}
+        minecraft.gameMode.handleCreativeModeItemAdd(new net.minecraft.world.item.ItemStack(item),36+minecraft.player.getInventory().getSelectedSlot());
+    }
     /** Ends a drag from a block cell: a plain click does what the cell does, a drop in the world bucket fills where it lands. */
     private void finishBlockDrag(MouseButtonEvent event){
         String block=dragBlock;Runnable click=dragClick;boolean moved=dragMoved;dragBlock=null;dragClick=null;dragMoved=false;
         if(!moved){click.run();return;}
+        if(dropBlock(event.x(),event.y(),block))return;
         if(!inViewport(event.x()/scale,event.y()/scale))return;
         pointerX=event.x();pointerY=event.y();var hit=CraftiumClient.raycast(event.x(),event.y());
         if(hit==null){ClientState.notify("Drop the block onto a block in the world");return;}
@@ -796,6 +825,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void masks(Gfx g) {
         int x=w-RIGHT,y=masksTop();panel(g,x,y,RIGHT,masksHeight(),"Tool masks");
+        dropArea(x,y,RIGHT,masksHeight(),b->{if(!b.isEmpty()&&!b.equals("minecraft:air"))addMaskBlock(b);});
         maskCols=Math.max(1,(pw-19)/MASK_PITCH);maskRows=1;
         button(g,x+10,y+24,19,19,"",o().maskInBuilder,()->o().maskInBuilder=!o().maskInBuilder,"Use in Builder tools · "+(o().maskInBuilder?"On: the tool masks also apply to the Builder tools":"Off: the Builder tools ignore the tool masks"));
         ToolIcons.hardHat(g,x+10,y+24,o().maskInBuilder?0xffffffff:0xffa9bccd);
@@ -815,8 +845,8 @@ public final class EditorScreen extends CraftiumScreen {
             g.fill(bx,by,bx+22,by+22,on?0xff315b84:0xff1b2838);g.outline(bx,by,22,22,on?ACCENT:LINE);
             BlockPickerScreen.icon(g,font,block,bx+3,by+3);
             if(block.contains("["))g.fill(bx+16,by+16,bx+20,by+20,0xffffd66d);
-            controls.add(new Control(bx,by,22,22,()->toggleMaskBlock(block),()->openBlockMenu(BlockList.MASK,index),
-                block+(on?" · On":" · Off")+" · Click to toggle · Right-click for options"));
+            dragSource(new Control(bx,by,22,22,()->toggleMaskBlock(block),()->openBlockMenu(BlockList.MASK,index),
+                block+(on?" · On":" · Off")+" · Click to toggle · Drag to another slot · Right-click for options"),block);
         }
         if(rows>maskRows){
             int track=maskRows*MASK_PITCH-3,thumb=Math.max(10,track*maskRows/rows),thumbY=y+50+(track-thumb)*maskScroll/(rows-maskRows),barX=x+pw-11;
@@ -1293,8 +1323,8 @@ public final class EditorScreen extends CraftiumScreen {
      */
     private net.minecraft.core.BlockPos lastDragged;
     private boolean useQueued,awaitingReply,repliedSince;
-    /** The Sculpt tools work by strokes: what a stroke stages is built the moment the button is released, without Enter. Modify is built by its own Apply. */
-    private static boolean sculpts(Tool tool){return tool.group.equals("Sculpt")&&tool!=Tool.MODIFY;}
+    /** The Sculpt and Paint tools work by strokes: what a stroke stages is built the moment the button is released, without Enter. So does every tool when Enter to build is off in the preferences. Modify is built by its own Apply. */
+    private boolean sculpts(Tool tool){return !o().enterToBuild||(tool.group.equals("Sculpt")&&tool!=Tool.MODIFY)||tool.group.equals("Paint");}
     private long lastUseSent;
     private void dragUse(){
         if(o().tool==Tool.EXTRUDE||o().tool==Tool.FLOODFILL)return; // one build per click, of what is outlined under the cursor

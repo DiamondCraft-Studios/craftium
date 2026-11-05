@@ -36,7 +36,7 @@ final class AdvancedTools {
                 var base=p.state(center);
                 var face=SurfaceFill.face(new SurfaceFill.Cells(){
                     public boolean air(Point a){var s=p.state(a);return s.isAir()||o.extrudeReplaceable&&s.canBeReplaced();}
-                    public boolean matches(Point a){return AdvancedTools.matches(p,base,a);}
+                    public boolean matches(Point a){return o.smartExtrude?sameFamily(base,p.state(a)):AdvancedTools.matches(p,base,a);}
                 },center,normal,o.selectLimit);
                 int count=Math.max(1,o.extrudeCount);
                 for(Point at:face)for(int step=1;step<=count;step++){int s=o.invert?1-step:step;p.put(at.add(normal.x()*s,normal.y()*s,normal.z()*s),o.invert?Blocks.AIR.defaultBlockState():p.state(at));}
@@ -154,6 +154,14 @@ final class AdvancedTools {
             Point at=Math.abs(normal.x())==1?c.add(v.z(),v.y(),-v.x()*normal.x()):c.add(v.x(),v.y(),v.z());p.put(at,p.material);
         }
     }
+    /** The block's name without what makes it a variant: oak_stairs, oak_slab, oak_fence and oak_planks are all "oak". */
+    static String family(BlockState state){
+        String name=BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
+        String base=name.replaceAll("_(stairs|slab|wall|fence_gate|fence|button|pressure_plate)$","").replaceAll("_(planks|block)$","").replaceAll("_bricks$","_brick").replaceAll("_tiles$","_tile");
+        return base;
+    }
+    /** Whether {@code other} is a solid block of the same family as {@code original}: the same block, or a stair, slab, wall or other variant of the same material. */
+    static boolean sameFamily(BlockState original,BlockState other){return !other.isAir()&&(other.is(original.getBlock())||family(original).equals(family(other)));}
     static BlockState typeReplace(EditPlanner p,BlockState old,BlockState target){
         String from=BuiltInRegistries.BLOCK.getKey(old.getBlock()).getPath(),to=BuiltInRegistries.BLOCK.getKey(target.getBlock()).getPath();
         for(String suffix:new String[]{"_stairs","_slab","_wall","_fence","_fence_gate","_button","_pressure_plate","_door","_trapdoor"})if(from.endsWith(suffix)){

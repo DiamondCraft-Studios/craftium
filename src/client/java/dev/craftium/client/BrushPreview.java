@@ -18,15 +18,11 @@ import java.util.*;
  * It is worked out again when the shape, the block under the cursor or, once a second, the world changes.
  */
 final class BrushPreview {
-    /** More exposed faces than this are not coloured one by one; the outline of the whole brush is shown instead. */
-    private static final int MAX_FACES=65_536;
     /** The preview shows brushes well past what can be built (see Selection.LIMIT), since it is only drawn; beyond this it falls back to the box around the brush. */
     private static final int MAX_BLOCKS=600_000;
     private static int shownBlocks;
-    private static final float LIFT=.003f;
     private static List<Object> key=List.of();
-    private static OutlineShape air=OutlineShape.EMPTY;
-    private static List<Vec3[]> faces=List.of();
+    private static SceneShape shape=SceneShape.EMPTY;
     private static boolean tooLarge;
 
     private BrushPreview(){}
@@ -36,13 +32,12 @@ final class BrushPreview {
         var now=List.<Object>of(o.tool.brushUse(),o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.outline,at,shownBlocks>Selection.LIMIT?0:mc.level.getGameTime()/20); // a huge brush is not worked out again every second
         if(!now.equals(key)){key=now;rebuild(mc,at,o);}
         if(tooLarge){Overlay.box(new AABB(at).inflate(o.radius),o.hoverColor,1.5f,0);return;} // too large to work out: the box it fits in
-        int fill=o.hoverColor&0xffffff|0x66000000;
-        for(var f:faces)Overlay.sceneFace(f[0],f[1],f[2],f[3],fill);
-        air.drawPlain(Vec3.ZERO,o.hoverColor,(float)o.selectionWidth,0,false,true); // the selection's silhouette as it is, depth-tested
+        int fill=o.hoverColor&0xffffff|SceneShape.FACE_ALPHA;
+        shape.draw(fill,o.hoverColor,(float)o.selectionWidth,0); // dim faces on the ground, the selection's silhouette in the air
     }
 
     private static void rebuild(Minecraft mc,BlockPos at,Options o){
-        air=OutlineShape.EMPTY;faces=List.of();tooLarge=false;
+        shape=SceneShape.EMPTY;tooLarge=false;
         List<Point> relative;
         // A brush over the block limit is refused by the server too, so there is no set of blocks to show.
         // Each tool is shown the way it builds: the picked shape, a line or path's small shape, or just a disc or a ball of the radius.
@@ -57,28 +52,9 @@ final class BrushPreview {
         }
         catch(IllegalArgumentException e){tooLarge=true;shownBlocks=MAX_BLOCKS;return;}
         shownBlocks=relative.size();
-        var level=mc.level;var open=new ArrayList<Point>();var solid=new HashSet<Point>();
-        for(Point r:relative){
-            Point p=new Point(at.getX()+r.x(),at.getY()+r.y(),at.getZ()+r.z());
-            if(level.getBlockState(new BlockPos(p.x(),p.y(),p.z())).isAir())open.add(p);else solid.add(p);
-        }
-        var found=new ArrayList<Vec3[]>();
-        for(Point p:solid)for(var d:net.minecraft.core.Direction.values()){
-            if(!level.getBlockState(new BlockPos(p.x()+d.getStepX(),p.y()+d.getStepY(),p.z()+d.getStepZ())).isAir())continue; // buried faces cannot be seen
-            found.add(face(p,d));
-            if(found.size()>MAX_FACES){tooLarge=true;return;}
-        }
-        faces=found;
-        air=OutlineShape.of(open);
+        var absolute=new ArrayList<Point>(relative.size());
+        for(Point r:relative)absolute.add(new Point(at.getX()+r.x(),at.getY()+r.y(),at.getZ()+r.z()));
+        shape=SceneShape.of(mc.level,absolute);
+        tooLarge=shape.tooLarge();
     }
-
-    /** The face of the block at {@code p} on the side {@code d} points to, lifted off the block so it does not fight it for depth, counter-clockwise from outside. */
-    private static Vec3[] face(Point p,net.minecraft.core.Direction d){
-        int axis=d.getAxis().ordinal();boolean positive=d.getAxisDirection()==net.minecraft.core.Direction.AxisDirection.POSITIVE;
-        double[] base={p.x(),p.y(),p.z()};base[axis]+=positive?1+LIFT:-LIFT;
-        int u=(axis+1)%3,v=(axis+2)%3;
-        if(!positive){int t=u;u=v;v=t;} // the other way round faces the other way
-        return new Vec3[]{at(base,0,0,u,v),at(base,1,0,u,v),at(base,1,1,u,v),at(base,0,1,u,v)};
-    }
-    private static Vec3 at(double[] base,int a,int b,int u,int v){double[] c=base.clone();c[u]+=a;c[v]+=b;return new Vec3(c[0],c[1],c[2]);}
 }

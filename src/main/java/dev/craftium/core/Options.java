@@ -65,6 +65,8 @@ public final class Options {
     /** How many blocks the Select menu's Expand and Shrink move the selection's surface. */
     /** Edits that place or remove blocks are shown as a ghost first and only applied when confirmed with Enter. */
     public boolean confirmEdits=true;
+    /** Whether an edit waits for Enter before it is built. Off, a stroke is built when the button is let go and every other action is built at once. */
+    public boolean enterToBuild=true;
     /** The point the Rotate and Scale tools work around. When not set it is the centre of the selection. */
     /** How much of a selection's outline is drawn: every edge, the creases on the camera's side, or only the contour of what it covers on the screen. */
     public enum SelectionStyle { ALL_EDGES("All edges"),OUTLINE("Outline"),SILHOUETTE("Silhouette");public final String label;SelectionStyle(String label){this.label=label;} }
@@ -104,6 +106,14 @@ public final class Options {
     public int extrudeCount=1;
     /** Extrude: whether replaceable blocks, such as grass and water, count as open space that a face grows into, and are replaced by it. */
     public boolean extrudeReplaceable=true;
+    /** Builder extrude with Ctrl held: the face takes in the whole family of the clicked block (stairs, slabs, walls and the like), each block keeping its own shape. Set by the client for the one click. */
+    public boolean smartExtrude;
+    /** Builder tools: after the first click, the gizmo's ruler follows the block being aimed at, with a line back to the first block. */
+    public boolean builderRuler=true;
+    /** Builder tools: after the first click, the box between that block and the one aimed at is drawn, and follows the aim. */
+    public boolean builderLiveBox=true;
+    /** Builder tools: blocks already where the selection lands are not overwritten. Apart from the editor's Keep existing, which the Builder does not follow. */
+    public boolean builderKeepExisting;
     public int hoverPreviewLimit=5000;
     /** The most blocks any one placing tool may change, 1 to {@link #MAX_BLOCK_LIMIT}; an edit that would change more is refused. */
     public static final int MAX_BLOCK_LIMIT=100_000;
