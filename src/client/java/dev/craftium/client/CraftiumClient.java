@@ -111,7 +111,11 @@ public final class CraftiumClient implements ClientModInitializer {
         String message=next.message();
         if(!(message.startsWith("Selected ")||message.startsWith("Lasso selected ")||message.startsWith("Magic Wand: ")))return;
         ClientState.selectionPending=false;ClientState.selectingSince=0;
-        if(next.selectionSize()-ClientState.selectionSizeBefore<ClientState.LARGE_SELECTION)return;
+        int added=next.selectionSize()-ClientState.selectionSizeBefore;
+        if(added<ClientState.LARGE_SELECTION)return;
+        // A Magic Wand click that had its outline under the cursor was seen before it was made, so it needs no warning; only a selection too big for that preview asks.
+        var options=ClientState.options;
+        if(options.tool==Tool.MAGIC_SELECT&&options.magicPreview&&added<options.hoverPreviewLimit)return;
         var mc=Minecraft.getInstance();
         // Set at once, before this status is drawn, so the popup comes first and the selection is not built until it is confirmed.
         if(ClientCompat.screen(mc) instanceof EditorScreen)ClientState.largeSelection=next.selectionSize();
