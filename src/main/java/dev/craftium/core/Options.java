@@ -100,6 +100,8 @@ public final class Options {
     /** Extrude: how many layers one click adds or removes, from 1 to {@link #MAX_EXTRUDE_COUNT}. */
     public static final int MAX_EXTRUDE_COUNT=64;
     public int extrudeCount=1;
+    /** Extrude: whether replaceable blocks, such as grass and water, count as open space that a face grows into, and are replaced by it. */
+    public boolean extrudeReplaceable=true;
     public int hoverPreviewLimit=5000;
     /** The most blocks any one placing tool may change, 1 to {@link #MAX_BLOCK_LIMIT}; an edit that would change more is refused. */
     public static final int MAX_BLOCK_LIMIT=100_000;

@@ -35,7 +35,7 @@ final class AdvancedTools {
                 // The whole face the click lands on, from the same search the hover preview outlines. Expand adds layers in front of it, contract takes them off.
                 var base=p.state(center);
                 var face=SurfaceFill.face(new SurfaceFill.Cells(){
-                    public boolean air(Point a){return p.state(a).isAir();}
+                    public boolean air(Point a){var s=p.state(a);return s.isAir()||o.extrudeReplaceable&&s.canBeReplaced();}
                     public boolean matches(Point a){return AdvancedTools.matches(p,base,a);}
                 },center,normal,o.selectLimit);
                 int count=Math.max(1,o.extrudeCount);

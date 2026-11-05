@@ -26,7 +26,7 @@ final class ClickPreview {
         if(hit==null||mc.level==null||tool!=Tool.EXTRUDE&&tool!=Tool.FLOODFILL||TransformGizmo.dragging()||PlacementPreview.active()||ClientState.hasPending()){key=null;shape=OutlineShape.EMPTY;return;}
         BlockPos at=hit.getBlockPos();Point normal=CraftiumClient.normal(hit);
         // The world can change under a still cursor, so the result is also refreshed about once a second.
-        Object now=List.of(tool,at,normal,o.compare,o.selectLimit,o.extrudeCount,o.invert,o.floodLimit,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners,mc.level.getGameTime()/20);
+        Object now=List.of(tool,at,normal,o.compare,o.selectLimit,o.extrudeCount,o.extrudeReplaceable,o.invert,o.floodLimit,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners,mc.level.getGameTime()/20);
         if(!Objects.equals(key,now)){key=now;compute(mc,at,normal,o);}
         if(shape.isEmpty())return;
         int colour=removing?o.removedColor:o.hoverColor,fill=removing?o.removedFill:o.hoverFill;
@@ -41,7 +41,7 @@ final class ClickPreview {
             var compare=o.compare==Options.Compare.NBT?Options.Compare.BLOCK:o.compare; // block entity data is not all known here
             var world=MagicPreview.world(mc,at,o,compare,false);
             var face=SurfaceFill.face(new SurfaceFill.Cells(){
-                public boolean air(Point p){return world.air(p);}
+                public boolean air(Point p){return world.air(p)||o.extrudeReplaceable&&level.getBlockState(new BlockPos(p.x(),p.y(),p.z())).canBeReplaced();}
                 public boolean matches(Point p){return world.matches(p);}
             },centre,normal,Math.min(o.selectLimit,CAP));
             int count=Math.max(1,o.extrudeCount);removing=o.invert;

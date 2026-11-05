@@ -444,6 +444,7 @@ public final class EditorScreen extends CraftiumScreen {
                 if(o().tool.picksShape())fillButtons(g,424+row);
                 toggle(g,10,424+fillRow+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
                 int next=449+fillRow+row;
+                if(o().tool==Tool.EXTRUDE){toggle(g,10,next,"Into grass and water",o().extrudeReplaceable,()->o().extrudeReplaceable=!o().extrudeReplaceable,"Grow into replaceable blocks like grass and water, replacing them, instead of stopping at them");next+=22;}
                 if(o().hollow&&o().tool.picksShape()){ // the outline's own settings sit under the others, so they only take room while Hollow is chosen
                     int cap=Math.max(1,o().radius);
                     slider(g,10,next+10,pw-20,"Outline thickness",o().outlineThickness,1,Math.max(2,Math.min(cap,64)),cap,DEFAULTS.outlineThickness,v->o().outlineThickness=Math.clamp((int)Math.round(v),1,cap),true);
