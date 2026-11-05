@@ -7,6 +7,7 @@
 - Nudging a clone or move by the selection's own size moved to Ctrl + Shift + scroll, to make room for that.
 - The Builder's magic select follows the Large selection warnings switch in the preferences: with it off, a selection of 1,024 blocks or more is kept without asking.
 - A Builder selection is drawn like the brush preview: where it lies in the ground, the faces you can see are coloured dimly, and its outline is hidden wherever blocks are in front of it.
+- The selection is anchored by its centre: the gizmo sits there, and a middle click while moving or cloning puts the centre block on the spot clicked.
 
 ## 0.6.0-beta.1
 

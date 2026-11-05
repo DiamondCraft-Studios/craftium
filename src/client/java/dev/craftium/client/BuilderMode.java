@@ -158,7 +158,7 @@ public final class BuilderMode {
         else if(button==1){if(first==null)first=at;second=at;refresh();dragButton=1;}
         else if(first!=null&&second==null){second=at;refresh();} // middle click with only a first point: extend the selection to this block
         else if(preview&&o.builderTool==Options.BuilderTool.STACK){} // a stack only grows from the selection's own faces: nudge it
-        else if(preview){Point min=min();Point normal=CraftiumClient.normal(hit);offset=at.add(normal.x()-min.x(),normal.y()-min.y(),normal.z()-min.z());}
+        else if(preview){Point min=min(),max=max();Point normal=CraftiumClient.normal(hit);Point mid=new Point(Math.floorDiv(min.x()+max.x(),2),Math.floorDiv(min.y()+max.y(),2),Math.floorDiv(min.z()+max.z(),2));offset=at.add(normal.x()-mid.x(),normal.y()-mid.y(),normal.z()-mid.z());} // anchored by the centre block
         else if(first==null)magicSelect(hit.getBlockPos(),false,false);
         else if(magicMode)magicSelect(hit.getBlockPos(),true,mc.hasControlDown()); // magic mode: the middle button goes on adding what it finds, and with Ctrl takes it away
         else{Point low=min(),high=max();first=new Point(Math.min(low.x(),at.x()),Math.min(low.y(),at.y()),Math.min(low.z(),at.z()));second=new Point(Math.max(high.x(),at.x()),Math.max(high.y(),at.y()),Math.max(high.z(),at.z()));magicStarted=magicMode=false;offset=new Point(0,0,0);refresh();} // extend mode: the selection becomes the box grown to take in the block // both corners set: the box grows to take in the block clicked
@@ -394,12 +394,14 @@ public final class BuilderMode {
         int x=g.guiWidth()/2-total/2;
         for(int i=0;i<text.length;i++){g.text(font,text[i],x,y,colors[i],false);x+=font.width(text[i]);}
     }
-    /** Where the transform handles are shown: the corner of the selection, where it would land. Null with no selection. */
+    /** Where the transform handles are shown: the centre of the selection, where it would land. Null with no selection. */
     public static Vec3 gizmoAnchor(){
         var tool=ClientState.options.builderTool;
         // Only the tools that move blocks have anything to drag: erase, extrude and symmetry do not, and nor does a lone first point.
         if(!active()||first==null||second==null||tool!=Options.BuilderTool.MOVE&&tool!=Options.BuilderTool.CLONE&&tool!=Options.BuilderTool.STACK&&tool!=Options.BuilderTool.SMEAR)return null;
-Point m=min();return new Vec3(m.x()+offset.x(),m.y()+offset.y(),m.z()+offset.z());}
+Vec3 c=center();return new Vec3(c.x+offset.x(),c.y+offset.y(),c.z+offset.z());}
+    /** The middle of the selection's box, in world coordinates: the point the selection is anchored by. */
+    private static Vec3 center(){Point a=min(),b=max();return new Vec3((a.x()+b.x()+1)/2d,(a.y()+b.y()+1)/2d,(a.z()+b.z()+1)/2d);}
     private static void drawFlags(Gfx g,Minecraft mc){
         int x=flagLeft(g.guiWidth()),top=flagTop(g.guiHeight()),over=flagAt(mc);var o=ClientState.options;
         g.fill(x-4,top-20,x+FLAG_W+4,g.guiHeight()-24,0xf510151c);g.text(mc.font,"Builder flags",x,top-14,0xffdce6ef,false);
