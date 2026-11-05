@@ -377,7 +377,7 @@ public final class EditorScreen extends CraftiumScreen {
             // A polygon's sides take the row under the radius, and everything below moves down a row. The track stops at 64; more is typed.
             if(sidesShown())
                 slider(g,10,375,pw-20,"Sides",o().polygonSides,BrushMath.MIN_SIDES,BrushMath.SLIDER_SIDES,BrushMath.MAX_SIDES,BrushMath.DEFAULT_SIDES,v->o().polygonSides=Math.clamp((int)Math.round(v),BrushMath.MIN_SIDES,BrushMath.MAX_SIDES),true);
-            if(EnumSet.of(Tool.SCULPT_DRAW,Tool.ROCK,Tool.ELEVATION,Tool.FLATTEN,Tool.SLOPE,Tool.EXTRUDE).contains(o().tool))
+            if(hasStrength())
                 slider(g,10,375+sidesRow()-lift(),pw-20,"Strength",o().strength,.1,5,DEFAULTS.strength,v->o().strength=v,false);
         }
         // Tool-specific controls occupy the same familiar options area.
@@ -423,11 +423,13 @@ public final class EditorScreen extends CraftiumScreen {
                 toggle(g,10,489-lift(),"Invert / carve",o().invert,()->o().invert=!o().invert);
             }
             default -> {
-                int row=sidesRow()-lift()+(o().tool==Tool.SMOOTH?smoothRows(g,375+sidesRow()):0);
+                // Rows follow one another: the slot of a Strength slider is only left open for the tools that have one, and Fill, which belongs to the shape, only for the tools that pick one.
+                int row=sidesRow()-lift()+(o().tool==Tool.SMOOTH?smoothRows(g,375+sidesRow()):hasStrength()?0:-28);
+                int fillRow=o().tool.picksShape()?23:0;
                 toggle(g,10,403+row,"Invert / carve",o().invert,()->o().invert=!o().invert);
                 if(o().tool.picksShape())fillButtons(g,424+row);
-                toggle(g,10,447+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
-                int next=472+row;
+                toggle(g,10,424+fillRow+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
+                int next=449+fillRow+row;
                 if(o().hollow&&o().tool.picksShape()){ // the outline's own settings sit under the others, so they only take room while Hollow is chosen
                     int cap=Math.max(1,o().radius);
                     slider(g,10,next+10,pw-20,"Outline thickness",o().outlineThickness,1,Math.max(2,Math.min(cap,64)),cap,DEFAULTS.outlineThickness,v->o().outlineThickness=Math.clamp((int)Math.round(v),1,cap),true);
@@ -1004,7 +1006,7 @@ public final class EditorScreen extends CraftiumScreen {
         slider(g,10,y+28,pw-20,"Block ratio (%)",o.smoothRatio,50,150,Double.POSITIVE_INFINITY,DEFAULTS.smoothRatio,v->o.smoothRatio=Math.max(0,Math.round(v*10)/10d),false);
         for(var mode:Options.SmoothMode.values())button(g,10+mode.ordinal()*(third+4),y+56,third,20,mode.label,o.smoothMode==mode,()->o.smoothMode=mode,switch(mode){case STABLE->"Keep the block count at the ratio";case MELT->"Lean towards taking blocks away";case GROW->"Lean towards adding blocks";});
         toggle(g,10,y+84,"Fix edges",o.smoothFixEdges,()->o.smoothFixEdges=!o.smoothFixEdges,"Leave the brush's outer layer as it was so the smoothing blends into the terrain");
-        return 90;
+        return 84;
     }
     /** Which blocks the Magic Wand connects, as one icon button each with the active one lit. */
     private void compareButtons(Gfx g,int y){
@@ -1045,6 +1047,8 @@ public final class EditorScreen extends CraftiumScreen {
      * How far the tool's options move up because it has less brush to set: a round brush has no shape picker, and a tool with no brush has no radius
      * either. Text lays out its own panel, so it keeps its place.
      */
+    /** The tools with a Strength slider under the radius. */
+    private boolean hasStrength(){return EnumSet.of(Tool.SCULPT_DRAW,Tool.ROCK,Tool.ELEVATION,Tool.FLATTEN,Tool.SLOPE,Tool.EXTRUDE).contains(o().tool);}
     private int lift(){
         if(o().tool==Tool.TEXT)return 0;
         return switch(o().tool.brushUse()){case DISC,SPHERE->32;case NONE->60;default->0;};
