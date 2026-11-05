@@ -98,7 +98,6 @@ public final class CraftiumClient implements ClientModInitializer {
     public static void resetEditor(){
         ClientState.selectionPending=false;ClientState.selectingSince=0;ClientState.selectionSizeBefore=0;ClientState.largeSelection=0;ClientState.heldSelection="";
         ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.aiPending=GhostBlocks.EMPTY;ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
-        ClientState.rulers.clear();
         ShapeObject.cancel();TransformGizmo.cancel();PlacementPreview.cancel();BuilderMode.reset();SelectionOverlay.update("");
     }
     private static void receiveStatus(String json){
@@ -146,7 +145,7 @@ public final class CraftiumClient implements ClientModInitializer {
         EditorBindings.migrate(mc);
         if(mc.player==null || mc.level==null){hadWorld=false;toolCursor=false;return;}
         ClientCommands.tick();
-        BuilderMode.tick();BuilderWidget.tick();
+        BuilderMode.tick();BuilderWidget.tick();RulerStore.tick(mc);
         SelectingIndicator.tick(mc);
         if(BuilderMode.active()&&held(contextKey)||BuilderWidget.active()){if(!toolCursor){mc.mouseHandler.releaseMouse();toolCursor=true;}}
         else if(toolCursor){if(ClientCompat.screen(mc)==null)mc.mouseHandler.grabMouse();toolCursor=false;}
@@ -166,8 +165,6 @@ public final class CraftiumClient implements ClientModInitializer {
         if(!mc.player.isCreative() || !supported())return;
         if(BuilderMode.active())return;
         var o=ClientState.options;long now=System.currentTimeMillis();
-        if(o.enhancedFlight&&o.flightMomentum==0&&mc.player.getAbilities().flying && !mc.options.keyUp.isDown()&&!mc.options.keyDown.isDown()&&!mc.options.keyLeft.isDown()&&!mc.options.keyRight.isDown()&&!mc.options.keyJump.isDown()&&!mc.options.keyShift.isDown())
-            mc.player.setDeltaMovement(Vec3.ZERO);
         boolean left=GLFW.glfwGetMouseButton(mc.getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_LEFT)==GLFW.GLFW_PRESS;
         boolean right=GLFW.glfwGetMouseButton(mc.getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_RIGHT)==GLFW.GLFW_PRESS;
         if(!left)breakingSince=0;else if(breakingSince==0){breakingSince=now;ClientState.strokeId=System.nanoTime();} // a symmetric stroke is one undo step
@@ -298,26 +295,68 @@ public final class CraftiumClient implements ClientModInitializer {
     /** Every ruler: its line (or circle), its length, and a knob at each end. The end being dragged shows where it will land, and the length with it. */
     private static void drawRulers(EditorScreen screen){
         var o=ClientState.options;
-        boolean editing=screen!=null&&o.tool==Tool.RULER;
+        boolean editing=screen!=null&&!screen.toolActive(); // the rulers can be picked up when no tool is chosen
         int picked=editing?screen.handleIndex():-1;Vec3 live=editing?TransformGizmo.liveNode():null;
         int index=0;
         for(var ruler:ClientState.rulers){
             Vec3 start=centre(ruler.a),end=ruler.b==null?null:centre(ruler.b);
             int first=index,second=index+1;
-            if(live!=null){ // the knob under the gizmo follows the drag, settled onto the block it will land on
+            if(live!=null&&(picked==first||end!=null&&picked==second)){ // the knob under the gizmo follows the drag, settled onto the block it will land on
                 Vec3 landing=new Vec3(Math.round(live.x-.5)+.5,Math.round(live.y-.5)+.5,Math.round(live.z-.5)+.5);
-                if(picked==first)start=landing;else if(end!=null&&picked==second)end=landing;
+                if(picked==first)start=landing;else end=landing;
+                // The block it will land on is outlined, as a single block of a selection is.
+                Overlay.box(new AABB(landing.x-.5,landing.y-.5,landing.z-.5,landing.x+.5,landing.y+.5,landing.z+.5),o.rulerKnobSelectedColor,2,o.rulerKnobSelectedColor&0xffffff|0x33000000);
             }
             if(end!=null){
-                Overlay.line(start,end,0xffffd66d,2);
                 double length=start.distanceTo(end);
-                if(o.rulerMode==Options.RulerMode.CIRCLE){for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;Overlay.line(start.add(Math.cos(x)*length,0,Math.sin(x)*length),start.add(Math.cos(y)*length,0,Math.sin(y)*length),0xffffd66d,1.5f);}}
-                Overlay.text(Ruler.show(length)+" blocks",net.minecraft.core.BlockPos.containing(start.add(end).scale(.5)).above(),0xffffe4a2,0xbb151c26,.02f);
+                double thickness=ruler==ClientState.selectedRuler()?RULER_LINE_HALF*1.6:RULER_LINE_HALF;
+                bar(start,end,thickness,lineColor(o,start,end));
+                if(ruler.mode==Options.RulerMode.CIRCLE){for(int j=0;j<96;j++){double x=j*Math.PI/48,y=(j+1)*Math.PI/48;bar(start.add(Math.cos(x)*length,0,Math.sin(x)*length),start.add(Math.cos(y)*length,0,Math.sin(y)*length),RULER_LINE_HALF*.75,o.rulerLineColor);}}
+                // The length sits on the middle of the line, as big as the setting says. The game hangs text below the point it is given, so the point
+                // is raised by half the height of a line of text (nine pixels) to leave the text itself centred on the line.
+                float scale=.05f*(float)Math.clamp(o.rulerLabelSize,Options.RULER_LABEL_MIN,Options.RULER_LABEL_MAX);
+                Overlay.text(Ruler.showSpan((int)Math.round(Math.abs(end.x-start.x))+1,(int)Math.round(Math.abs(end.y-start.y))+1,(int)Math.round(Math.abs(end.z-start.z))+1),start.add(end).scale(.5).add(cameraUp().scale(4.5*scale)),o.rulerTextColor,o.rulerTextBackground,scale);
             }
-            Overlay.point(start,picked==first?0xffffffff:0xffffd66d,picked==first?10:8);
-            if(end!=null)Overlay.point(end,picked==second?0xffffffff:0xffffd66d,picked==second?10:8);
+            knob(start,picked==first?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==first);
+            if(end!=null)knob(end,picked==second?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==second);
             index+=end==null?1:2;
         }
+    }
+    /** The ruler is made of real size: its line is this thick and its knobs this big in blocks, so they grow and shrink with distance like the blocks around them. */
+    private static final double RULER_LINE_HALF=.04,RULER_KNOB_HALF=.07,RULER_KNOB_SELECTED_HALF=.09;
+    /** A knob: a small solid cube. */
+    private static void knob(Vec3 at,int color,boolean selected){
+        double h=selected?RULER_KNOB_SELECTED_HALF:RULER_KNOB_HALF;
+        Overlay.box(new AABB(at.x-h,at.y-h,at.z-h,at.x+h,at.y+h,at.z+h),color&0xffffff,1,color); // no outline of its own: an outline is a fixed number of pixels wide
+    }
+    /** A line of real thickness from {@code a} to {@code b}: a square bar, drawn as four faces, each facing both ways. */
+    private static void bar(Vec3 a,Vec3 b,double half,int color){
+        Vec3 along=b.subtract(a);double length=along.length();if(length<1e-6)return;
+        along=along.scale(1/length);
+        Vec3 up=Math.abs(along.y)<.9?new Vec3(0,1,0):new Vec3(1,0,0);
+        Vec3 u=along.cross(up).normalize().scale(half),v=along.cross(u).normalize().scale(half);
+        Vec3[] from={a.add(u).add(v),a.subtract(u).add(v),a.subtract(u).subtract(v),a.add(u).subtract(v)};
+        Vec3[] to={b.add(u).add(v),b.subtract(u).add(v),b.subtract(u).subtract(v),b.add(u).subtract(v)};
+        for(int i=0;i<4;i++){
+            int j=(i+1)%4;
+            Overlay.face(from[i],from[j],to[j],to[i],color);
+            Overlay.face(to[i],to[j],from[j],from[i],color);
+        }
+    }
+    /** A line that runs along one world axis takes that axis's colour; any other line takes the ruler's own. */
+    private static int lineColor(Options o,Vec3 a,Vec3 b){
+        boolean x=Math.abs(b.x-a.x)>1e-6,y=Math.abs(b.y-a.y)>1e-6,z=Math.abs(b.z-a.z)>1e-6;
+        if(x&&!y&&!z)return o.rulerAxisXColor;
+        if(y&&!x&&!z)return o.rulerAxisYColor;
+        if(z&&!x&&!y)return o.rulerAxisZColor;
+        return o.rulerLineColor;
+    }
+    /** Which way is up on the screen, as a direction in the world: the way the camera's own up is, so it holds when the view is tilted. */
+    private static Vec3 cameraUp(){
+        var camera=ClientCompat.camera(Minecraft.getInstance());
+        Vec3 forward=ClientCompat.ray(camera,0,0).normalize(),above=ClientCompat.ray(camera,0,.3f).normalize();
+        Vec3 up=above.subtract(forward.scale(above.dot(forward)));
+        return up.lengthSqr()<1e-9?new Vec3(0,1,0):up.normalize();
     }
     private static Vec3 centre(Point p){return new Vec3(p.x()+.5,p.y()+.5,p.z()+.5);}
     private static void handles(EditorScreen screen) {
@@ -336,6 +375,8 @@ public final class CraftiumClient implements ClientModInitializer {
             ReplaceGhost.draw(mc);
             HistoryPulse.draw();
             if(screen!=null&&screen.bucketDragging())MagicPreview.drawBucket(mc,screen.bucketTarget());else MagicPreview.draw(mc,hit);
+            // The Ruler tool shows the block a click would put an end on, outlined and filled as a block of a selection is.
+            if(hit!=null&&screen!=null&&screen.toolActive()&&ClientState.options.tool==Tool.RULER){var o=ClientState.options;Overlay.box(new AABB(hit.getBlockPos()),o.selectionColor,(float)o.selectionWidth,o.selectionFill);}
             ClientState.pending.draw(new Point(0,0,0),true);
             ClientState.aiPending.draw(new Point(0,0,0),true);
             if(ClientState.options.showMarkerGizmos||ClientState.options.showDisplayGizmos){int count=0;for(var entity:mc.level.entitiesForRendering()){boolean show=entity instanceof net.minecraft.world.entity.Marker&&ClientState.options.showMarkerGizmos||entity instanceof net.minecraft.world.entity.Display&&ClientState.options.showDisplayGizmos;if(!show||entity.distanceToSqr(mc.player)>128*128||++count>256)continue;Vec3 at=entity.position();int color=entity.getUUID().toString().equals(ClientState.options.entityUuid)?0xffffd66d:0xffe6edf7;Overlay.point(at,color,6);Overlay.box(new AABB(at.add(-.08,-.08,-.08),at.add(.08,.08,.08)),color,1,0);}}

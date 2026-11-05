@@ -94,6 +94,8 @@ public final class Overlay {
      * background and divides its scale by 16, so the background is ignored here and the scale is multiplied back.
      */
     public static void text(String text,BlockPos pos,int color,int background,float scale){Gizmos.billboardTextOverBlock(text,pos,0,color,scale*16f).setAlwaysOnTop();}
+    /** A label centred on the point {@code at}, with the same scale and background rules as above. */
+    public static void text(String text,Vec3 at,int color,int background,float scale){Gizmos.billboardText(text,at,net.minecraft.gizmos.TextGizmo.Style.forColorAndCentered(color).withScale(scale*16f)).setAlwaysOnTop();}
 
     /** True when the neighbouring block's matching side is fully solid, so a face on this side could never be seen. */
     private static boolean hidden(net.minecraft.world.level.BlockGetter level,BlockPos pos,Direction face){

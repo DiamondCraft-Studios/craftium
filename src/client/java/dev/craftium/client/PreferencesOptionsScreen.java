@@ -29,7 +29,9 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
         new Toggle("Undo / redo pulse","Flash the changed blocks when you undo or redo",o->o.historyPulse,(o,v)->o.historyPulse=v),
         new Toggle("Magic Wand hover preview","Outline what a Magic Wand click would select",o->o.magicPreview,(o,v)->o.magicPreview=v),
         new Number("Hover preview limit","No outline when a click would select this many blocks or more",100,20_000,o->o.hoverPreviewLimit,(o,v)->o.hoverPreviewLimit=v),
-        new Link("Selection options","How the selection looks: its style, line width and colours",SelectionOptionsScreen::new));
+        new Link("Selection options","How the selection looks: its style, line width and colours",SelectionOptionsScreen::new),
+        new Link("Builder selection options","How the builder tools' selection and where it lands look: colours and line widths",SelectionOptionsScreen::builder),
+        new Link("Ruler options","The colours of the ruler's line, its knobs and its span label",SelectionOptionsScreen::ruler));
 
     private final Screen parent;
     private int page;

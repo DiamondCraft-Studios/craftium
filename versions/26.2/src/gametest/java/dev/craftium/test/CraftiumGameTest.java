@@ -95,9 +95,9 @@ public final class CraftiumGameTest implements FabricClientGameTest {
     }
     private void viewingCapabilities(){
         ctx.getInput().pressKey(org.lwjgl.glfw.GLFW.GLFW_KEY_0);ctx.waitTick();require(ctx.computeOnClient(mc->BuilderMode.active()),"Native 0 key did not activate the tenth slot");ctx.getInput().pressKey(org.lwjgl.glfw.GLFW.GLFW_KEY_1);ctx.waitTick();require(ctx.computeOnClient(mc->!BuilderMode.active()),"Native 1 key did not leave the tenth slot");
-        require(ctx.computeOnClient(mc->{var o=ClientState.options;o.cameraFlight=true;o.enhancedFlight=true;o.flightMomentum=0;mc.player.getAbilities().flying=true;mc.player.setXRot(-45);double y=mc.player.getY();mc.player.travel(new net.minecraft.world.phys.Vec3(0,0,1));return mc.player.getY()>y+.01;}),"Camera flight did not follow the camera pitch");
-        require(ctx.computeOnClient(mc->{ClientState.options.flightMomentum=.8;mc.player.travel(new net.minecraft.world.phys.Vec3(0,0,1));double before=mc.player.getDeltaMovement().length();mc.player.travel(net.minecraft.world.phys.Vec3.ZERO);double after=mc.player.getDeltaMovement().length();return after>0&&after<before;}),"Flight momentum did not retain and decay velocity");
-        options(o->{o.cameraFlight=false;o.flightMomentum=0;o.enhancedFlight=false;o.minimumBrightness=.8;o.liquidOpacity=.25;});ctx.waitTicks(4);options(o->{o.minimumBrightness=0;o.liquidOpacity=1;});ctx.waitTicks(4);
+        require(ctx.computeOnClient(mc->{var o=ClientState.options;o.cameraFlight=true;o.flightMomentumLevel=0;mc.player.getAbilities().flying=true;mc.player.setXRot(-45);double y=mc.player.getY();mc.player.travel(new net.minecraft.world.phys.Vec3(0,0,1));return mc.player.getY()>y+.01;}),"Camera flight did not follow the camera pitch");
+        require(ctx.computeOnClient(mc->{ClientState.options.flightMomentumLevel=.8;mc.player.travel(new net.minecraft.world.phys.Vec3(0,0,1));double before=mc.player.getDeltaMovement().length();mc.player.travel(net.minecraft.world.phys.Vec3.ZERO);double after=mc.player.getDeltaMovement().length();return after>0&&after<before;}),"Flight momentum did not retain and decay velocity");
+        options(o->{o.cameraFlight=false;o.flightMomentumLevel=1;o.minimumBrightness=.8;o.liquidOpacity=.25;});ctx.waitTicks(4);options(o->{o.minimumBrightness=0;o.liquidOpacity=1;});ctx.waitTicks(4);
         System.out.println("CRAFTIUM_VIEWING_PASS camera_flight momentum_decay brightness fluid_recompile");
     }
     private void gizmoControls(){
@@ -161,7 +161,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
         options(o->{o.tool=Tool.MAGIC_SELECT;o.surfaceOnly=false;});request("use",new Point(0,-1,0));
         require(ctx.computeOnClient(mc->ClientState.status.selectionSize()>0),"Magic selection was empty");
         options(o->o.tool=Tool.RULER);request("use",new Point(0,0,0));request("use",new Point(3,4,0));
-        require(ctx.computeOnClient(mc->ClientState.status.message().contains("5.00")),"Ruler distance was incorrect");
+        require(ctx.computeOnClient(mc->ClientState.status.message().contains("Ruler: 5 blocks")),"Ruler distance was incorrect");
         options(o->{o.tool=Tool.LINE;o.radius=1;});request("use",new Point(0,5,0));request("use",new Point(6,5,0));checkBlock(new Point(3,5,0),Blocks.ANDESITE);
     }
     private void selectionTransforms() {

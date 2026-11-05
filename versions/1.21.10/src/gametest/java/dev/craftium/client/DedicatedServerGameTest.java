@@ -57,6 +57,8 @@ public final class DedicatedServerGameTest implements FabricClientGameTest {
                 clipboardAndChest();
                 largeSelection();
                 builder();
+                bucketFill();
+                blockStep();
                 entities();
                 worldRules();
                 libraries();
@@ -199,10 +201,45 @@ public final class DedicatedServerGameTest implements FabricClientGameTest {
         System.out.println(TAG + "fragmented_selection 16000");
     }
 
+    /** Block step raises the player's step height to a whole block on the server, and takes it away again. */
+    private void blockStep() {
+        options(o -> o.blockStep = true);
+        request("status", null);
+        ctx.waitTicks(5);
+        require(stepHeight() >= 1.0, "Block step did not raise the step height: " + stepHeight());
+        options(o -> o.blockStep = false);
+        request("status", null);
+        ctx.waitTicks(5);
+        require(stepHeight() < 1.0, "Block step did not give the step height back: " + stepHeight());
+        System.out.println(TAG + "block step on off");
+    }
+    private double stepHeight() {return server.computeOnServer(s -> s.getPlayerList().getPlayers().get(0).getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.STEP_HEIGHT));}
+
+    private void bucketFill() {
+        server.runCommand("fill 0 " + Y + " 6 2 " + Y + " 6 stone");
+        options(o -> {o.noUpdates = true; o.block = "minecraft:gold_block";});
+        request("bucket_fill", new Point(0, Y, 6));
+        for (int x = 0; x <= 2; x++) checkBlock(x, Y, 6, Blocks.GOLD_BLOCK);
+        request("undo", null);
+        for (int x = 0; x <= 2; x++) checkBlock(x, Y, 6, Blocks.STONE);
+        server.runCommand("fill 0 " + Y + " 6 2 " + Y + " 6 air");
+        // With "confirm edits" on, as it is by default, dropping a block applies at once: the drop is the confirmation.
+        server.runCommand("fill 0 " + Y + " 6 2 " + Y + " 6 stone");
+        pause(90);
+        ctx.runOnClient(mc -> {ClientState.options.confirmEdits = true; CraftiumClient.send("bucket_fill", new Point(0, Y, 6), up);});
+        for (int i = 0; i < 8; i++) {pause(60); ctx.waitTicks(2);}
+        until(mc -> !ClientState.status.busy(), "completion of bucket_fill");
+        System.out.println(TAG + "bucket_fill with confirm edits: " + message());
+        for (int x = 0; x <= 2; x++) checkBlock(x, Y, 6, Blocks.GOLD_BLOCK);
+        request("undo", null);
+        server.runCommand("fill 0 " + Y + " 6 2 " + Y + " 6 air");
+        System.out.println(TAG + "bucket fill undo");
+    }
+
     private void builder() {
         server.runCommand("setblock 0 " + Y + " 6 gold_block");
         server.runCommand("setblock 1 " + Y + " 6 diamond_block");
-        options(o -> {o.noUpdates = true; o.builderTool = Options.BuilderTool.MOVE; o.offsetX = 3; o.offsetY = 0; o.offsetZ = 0;});
+        options(o -> {o.noUpdates = true; o.builderTool = Options.BuilderTool.MOVE; o.builderOffset = new Point(3, 0, 0);});
         pos(0, Y, 6, 1, Y, 6);
         request("builder_commit", new Point(0, Y, 6));
         checkBlock(0, Y, 6, Blocks.AIR);
@@ -311,6 +348,8 @@ public final class DedicatedServerGameTest implements FabricClientGameTest {
         request("fill", null);
         checkBlock(4, Y, 4, Blocks.LAPIS_BLOCK);
         request("history_save", null);
+        ctx.runOnClient(mc -> {ClientState.rulers.clear(); var ruler = new Ruler(new Point(1, Y, 2)); ruler.b = new Point(4, Y + 1, 6); ruler.mode = Options.RulerMode.CIRCLE; ClientState.rulers.add(ruler);});
+        ctx.waitTicks(10); // the rulers are kept for this world as soon as they change
         connection.close();
         for (int i = 0; i < 100 && server.computeOnServer(s -> s.getPlayerCount() != 0); i++) ctx.waitTick();
         require(server.computeOnServer(s -> s.getPlayerCount() == 0), "The player is still counted after disconnecting");
@@ -320,6 +359,9 @@ public final class DedicatedServerGameTest implements FabricClientGameTest {
             until(mc -> CraftiumClient.supported(), "channel negotiation after reconnect");
             request("history_reload", null);
             require(ctx.computeOnClient(mc -> ClientState.status.undo()) >= 1, "Saved history was not restored after reconnecting");
+            ctx.waitTicks(10);
+            require(ctx.computeOnClient(mc -> ClientState.rulers.size() == 1 && ClientState.rulers.getFirst().a.equals(new Point(1, Y, 2)) && new Point(4, Y + 1, 6).equals(ClientState.rulers.getFirst().b) && ClientState.rulers.getFirst().mode == Options.RulerMode.CIRCLE), "Rulers (and each one's mode) were not restored after reconnecting");
+            System.out.println(TAG + "rulers restored after reconnect");
             request("undo", null);
             checkBlock(4, Y, 4, Blocks.AIR);
             System.out.println(TAG + "persistence disconnect reconnect history_reload undo");

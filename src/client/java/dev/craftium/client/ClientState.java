@@ -40,6 +40,10 @@ public final class ClientState {
     public static final int LARGE_SELECTION=1024;
     /** The measurements the Ruler tool has made, each with a knob at both ends. */
     public static final List<Ruler> rulers=new ArrayList<>();
+    /** The ruler picked in the Rulers panel or in the world, or null. */
+    public static Ruler selectedRuler;
+    /** The picked ruler if it is still there, else null. */
+    public static Ruler selectedRuler(){if(selectedRuler!=null&&!rulers.contains(selectedRuler))selectedRuler=null;return selectedRuler;}
     /** The ends of every ruler, one after the other, as one list: the tool's handles work on it, and adding a point places the next end. */
     public static final List<Point> rulerPoints=new java.util.AbstractList<>(){
         @Override public int size(){int count=0;for(var r:rulers)count+=r.complete()?2:1;return count;}
@@ -58,7 +62,7 @@ public final class ClientState {
         @Override public void add(int index,Point point){
             if(index!=size())throw new UnsupportedOperationException("Ruler ends are added at the end");
             if(!rulers.isEmpty()&&!rulers.getLast().complete())rulers.getLast().b=point;
-            else if(rulers.size()<256)rulers.add(new Ruler(point));
+            else if(rulers.size()<256){var ruler=new Ruler(point);ruler.mode=options.rulerMode;rulers.add(ruler);} // a new ruler starts as the mode chosen for new ones
             else throw new IllegalArgumentException("Ruler limit: 256 rulers");
         }
         /** Taking an end away takes its whole ruler. */

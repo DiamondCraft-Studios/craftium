@@ -27,12 +27,33 @@ public final class SmokeGameTest implements FabricClientGameTest {
                 ClientState.rulerPoints.clear();
                 ClientState.rulerPoints.add(new Point(base.getX()-3,base.getY()+1,base.getZ()));
                 ClientState.rulerPoints.add(new Point(base.getX()+3,base.getY()+3,base.getZ()+2));
+                ClientState.rulerPoints.add(new Point(base.getX()-3,base.getY(),base.getZ()-2)); // a second ruler that runs along the X axis
+                ClientState.rulerPoints.add(new Point(base.getX()+3,base.getY(),base.getZ()-2));
                 BuilderMode.select(Options.BuilderTool.CLONE);
                 BuilderMode.corners(new Point(base.getX()-1,base.getY(),base.getZ()+1),new Point(base.getX()+1,base.getY()+2,base.getZ()+3));
             });
             ctx.waitTicks(5);
             ctx.takeScreenshot("overlay");
             System.out.println("CRAFTIUM_SMOKE overlay_drawn");
+
+            // Flight momentum: 0% stops at once, and 100% leaves the game's own flight, which keeps drifting.
+            ctx.runOnClient(mc->{var o=ClientState.options;o.cameraFlight=false;mc.player.getAbilities().flying=true;});
+            boolean stops=ctx.computeOnClient(mc->{
+                ClientState.options.flightMomentumLevel=0;
+                mc.player.setDeltaMovement(new net.minecraft.world.phys.Vec3(.5,0,0));
+                mc.player.travel(net.minecraft.world.phys.Vec3.ZERO);
+                return mc.player.getDeltaMovement().lengthSqr()==0;
+            });
+            boolean drifts=ctx.computeOnClient(mc->{
+                ClientState.options.flightMomentumLevel=1;
+                mc.player.setDeltaMovement(new net.minecraft.world.phys.Vec3(.5,0,0));
+                mc.player.travel(net.minecraft.world.phys.Vec3.ZERO);
+                return mc.player.getDeltaMovement().lengthSqr()>0;
+            });
+            ctx.runOnClient(mc->{mc.player.getAbilities().flying=false;mc.player.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);});
+            System.out.println("CRAFTIUM_SMOKE flight_momentum zero_stops="+stops+" full_drifts="+drifts);
+            if(!stops)throw new AssertionError("Flight momentum at 0% still drifted");
+            if(!drifts)throw new AssertionError("Flight momentum at 100% did not leave the game's own flight");
 
             // Minimum brightness and liquid opacity exercise the lightmap and fluid mixins.
             ctx.runOnClient(mc->{ClientState.options.minimumBrightness=.5;ClientState.options.liquidOpacity=.5;});

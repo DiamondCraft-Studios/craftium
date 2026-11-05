@@ -68,6 +68,8 @@ final class Session {
     boolean clipboardDirty=true;
     List<dev.craftium.core.BlueprintInfo> library=List.of();
     boolean noClip;
+    /** Whether the player steps up a whole block on their own, as they step up a slab. */
+    boolean blockStep;
     dev.craftium.core.Options.ReachMode reach=dev.craftium.core.Options.ReachMode.NORMAL;
     int farReach=32;
     /** The options of the player's latest request, which vanilla block placement reads for the capabilities it bends. */

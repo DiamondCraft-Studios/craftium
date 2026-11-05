@@ -25,8 +25,8 @@ public final class BuilderWidget {
         new Toggle("No updates",o->o.noUpdates,o->o.noUpdates=!o.noUpdates,"Placed blocks do not update neighbours"),
         new Toggle("Angel place",o->o.angelPlacement,o->o.angelPlacement=!o.angelPlacement,"Place four blocks ahead in the air"),
         new Toggle("No clip",o->o.noClip,o->o.noClip=!o.noClip,"Fly through blocks in Creative (needs the capabilities permission on servers)"),
-        new Toggle("Tinker",o->o.tinker,o->o.tinker=!o.tinker,"Empty hand cycles a block property"),
-        new Toggle("Instant flight",o->o.enhancedFlight,o->o.instantFlight(!o.enhancedFlight),"Fly with no interpolation: stop dead on release (sets flight momentum to 0)"));
+        new Toggle("Block step",o->o.blockStep,o->o.blockStep=!o.blockStep,"Step up a whole block on your own, as you step up a slab"),
+        new Toggle("Tinker",o->o.tinker,o->o.tinker=!o.tinker,"Empty hand cycles a block property"));
     private static final int WIDTH=112,ROW=16,GAP=1,HEADER=14,BOTTOM=28; // BOTTOM keeps clear of the hotbar row and the offhand slot
     private BuilderWidget(){}
 
@@ -237,8 +237,7 @@ public final class BuilderWidget {
     }
     private static final List<Setting> SETTINGS=List.of(
         new Setting("Min brightness","The world is lit at least this much: 100% is full bright",true,o->o.minimumBrightness,(o,v)->o.minimumBrightness=v),
-        // Momentum is stored up to 98% (at 100% you could never stop), so the slider runs over that range.
-        new Setting("Flight momentum","How long you keep drifting after letting go of the keys · locked at 0% by Instant flight",true,o->o.flightMomentum/.98,(o,v)->o.flightMomentum=v*.98,o->o.enhancedFlight),
+        new Setting("Flight momentum","How long you keep drifting after letting go of the keys: 100% is the game's own flight, 0% stops you the moment you let go",true,o->o.flightMomentumLevel,(o,v)->o.flightMomentumLevel=v),
         new Setting("Expand block hitboxes","Every block is targeted as a full cube for now, so torches and panes are easy to hit",false,o->o.expandHitboxes?1:0,(o,v)->o.expandHitboxes=v>0),
         new Setting("Solid fluid hitboxes","Water and lava can be targeted, so they can be broken by hand",false,o->o.solidFluids?1:0,(o,v)->o.solidFluids=v>0),
         new Setting("Prevent block interactions","Chests, crafting tables and the like do not open when clicked",false,o->o.preventInteractions?1:0,(o,v)->o.preventInteractions=v>0));

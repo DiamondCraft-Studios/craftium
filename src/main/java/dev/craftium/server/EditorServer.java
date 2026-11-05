@@ -91,7 +91,7 @@ public final class EditorServer {
             send(player,s,"Placed "+changes.size()+(changes.size()==1?" block":" blocks"),false);
         }catch(IllegalArgumentException e){send(player,s,e.getMessage(),true);}
     }
-    public static boolean noClip(ServerPlayer player){var s=SESSIONS.get(player.getUUID());return s!=null&&s.noClip&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities");}
+    public static boolean noClip(ServerPlayer player){var s=SESSIONS.get(player.getUUID());return s!=null&&s.noClip&&player.isCreative()&&player.getAbilities().flying&&ServerPlatform.permitted(player,"capabilities");} // only while flying
 
     public static void handle(ServerPlayer player,String json) {
         var s=SESSIONS.computeIfAbsent(player.getUUID(),id->new Session());
@@ -111,11 +111,11 @@ public final class EditorServer {
             s.dimension=player.level().dimension();
             HistoryStore.attach(player,s);
             if(o.noClip&&!s.noClip&&player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}
-            s.reach=o.reach==null?Options.ReachMode.NORMAL:o.reach;s.farReach=Math.clamp(o.farReach,6,64);s.noClip=o.noClip;s.options=o;
+            s.reach=o.reach==null?Options.ReachMode.NORMAL:o.reach;s.farReach=Math.clamp(o.farReach,6,64);s.noClip=o.noClip;s.blockStep=o.blockStep;s.options=o;
             s.confirmEdits=o.confirmEdits;
             s.currentAction=r.action();s.recordSelection=changesSelection(r.action(),o);
-            // The builder and the clipboard placement preview have their own confirmation, so they apply straight away.
-            s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm");
+            // The builder and the clipboard placement preview have their own confirmation, and dropping a block in the world is one, so they apply straight away.
+            s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("bucket_fill")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm");
             if(r.action().equals("status")) { send(player,s,"Ready",false);return; }
             if(r.action().equals("capabilities")){send(player,s,"Builder capabilities synchronized",false);return;}
             if(r.action().equals("gamemode_editor")){ // sent as the editor opens and closes: no status message, unlike the buttons, and never throttled
@@ -197,7 +197,8 @@ public final class EditorServer {
             Point target=r.target(),normal=r.normal()==null?new Point(0,1,0):r.normal();
             if(Math.abs(normal.x())+Math.abs(normal.y())+Math.abs(normal.z())!=1)throw new IllegalArgumentException("Invalid surface normal");
             if(target!=null) {
-                if(target.distanceSquared(new Point((int)player.getX(),(int)player.getY(),(int)player.getZ()))>256*256)
+                // The builder has no range limit; it still stops at the world's edge and at chunks that are not loaded.
+                if(!r.action().startsWith("builder_")&&target.distanceSquared(new Point((int)player.getX(),(int)player.getY(),(int)player.getZ()))>256*256)
                     throw new IllegalArgumentException("Move within 256 blocks of the target");
                 new EditPlanner(player.level(),s,o).validate(target);
             }
@@ -597,11 +598,20 @@ public final class EditorServer {
         AnimatedRebuild.tick(server);
         if(++historyTicks%100==0)for(var session:SESSIONS.values())HistoryStore.save(session);
         var reachId=dev.craftium.compat.Compat.id("craftium","builder_reach");
+        var stepId=dev.craftium.compat.Compat.id("craftium","block_step");
         for(var player:server.getPlayerList().getPlayers()){
             var s=SESSIONS.get(player.getUUID());
             var range=player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.BLOCK_INTERACTION_RANGE);
             // Reach is the game's own block interaction range, raised for as long as the capability is on, so every vanilla check agrees with it.
             var mode=s!=null&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities")?s.reach:Options.ReachMode.NORMAL;
+            // Block step is the game's own step height, raised to a whole block for as long as the capability is on, so walking up a block works like a slab.
+            var step=player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.STEP_HEIGHT);
+            if(step!=null){
+                double lift=s!=null&&s.blockStep&&player.isCreative()&&ServerPlatform.permitted(player,"capabilities")?Math.max(0,1-step.getBaseValue()):0;
+                var held=step.getModifier(stepId);
+                if(held!=null&&(lift==0||held.amount()!=lift))step.removeModifier(stepId);
+                if(lift!=0&&step.getModifier(stepId)==null)step.addTransientModifier(new net.minecraft.world.entity.ai.attributes.AttributeModifier(stepId,lift,net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE));
+            }
             if(range!=null){
                 double extra=switch(mode){case NORMAL->0;case FAR->s.farReach-range.getBaseValue();case INFINITE->250;};
                 var current=range.getModifier(reachId);
