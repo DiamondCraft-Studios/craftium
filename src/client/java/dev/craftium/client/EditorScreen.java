@@ -371,7 +371,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(o().tool!=Tool.TEXT) {
             var use=o().tool.brushUse();
             if(o().tool.picksShape())shapeSelector(g,305);
-            else text(g,use==Tool.BrushUse.NONE?"No brush · this tool works on what you click":use==Tool.BrushUse.DISC?"Flat round brush · only the radius counts":"Round brush · only the radius counts",10,309,MUTED);
+            else if(use!=Tool.BrushUse.NONE)text(g,use==Tool.BrushUse.DISC?"Flat round brush · only the radius counts":"Round brush · only the radius counts",10,309,MUTED);
             // The track stops at 64 to stay usable; a bigger radius is typed in. Shapes are limited by their block count and reach, not by this.
             if(use!=Tool.BrushUse.NONE)slider(g,10,347,pw-20,use==Tool.BrushUse.SMALL_SHAPE?"Radius (shape up to 4)":"Radius",o().radius,1,64,BrushMath.MAX_RADIUS,DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
             o().outlineThickness=Math.clamp(o().outlineThickness,1,o().radius); // a wall is never thicker than the radius
