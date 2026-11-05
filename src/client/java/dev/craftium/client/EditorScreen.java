@@ -106,7 +106,7 @@ public final class EditorScreen extends CraftiumScreen {
                 field("biome",10,382,optionsWidth()-20,o().biome,s->o().biome=s);
             else if(o().tool==Tool.TEXT)field("text",10,326,optionsWidth()-20,o().text,s->o().text=s);
             else if(o().tool==Tool.ROCK)
-                field("seed",10,418,optionsWidth()-20,Long.toString(o().seed),s->{try{o().seed=Long.parseLong(s);}catch(NumberFormatException ignored){}});
+                field("seed",10,418-lift(),optionsWidth()-20,Long.toString(o().seed),s->{try{o().seed=Long.parseLong(s);}catch(NumberFormatException ignored){}});
             else if(o().tool==Tool.DISTORT || o().tool==Tool.ROUGHEN || o().tool==Tool.SHATTER)
                 field("seed",10,383,optionsWidth()-20,Long.toString(o().seed),s->{try{o().seed=Long.parseLong(s);}catch(NumberFormatException ignored){}});
         }
@@ -371,15 +371,14 @@ public final class EditorScreen extends CraftiumScreen {
         if(o().tool!=Tool.TEXT) {
             var use=o().tool.brushUse();
             if(o().tool.picksShape())shapeSelector(g,305);
-            else if(use!=Tool.BrushUse.NONE)text(g,use==Tool.BrushUse.DISC?"Flat round brush · only the radius counts":"Round brush · only the radius counts",10,309,MUTED);
             // The track stops at 64 to stay usable; a bigger radius is typed in. Shapes are limited by their block count and reach, not by this.
-            if(use!=Tool.BrushUse.NONE)slider(g,10,347,pw-20,use==Tool.BrushUse.SMALL_SHAPE?"Radius (shape up to 4)":"Radius",o().radius,1,64,BrushMath.MAX_RADIUS,DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
+            if(use!=Tool.BrushUse.NONE)slider(g,10,347-lift(),pw-20,use==Tool.BrushUse.SMALL_SHAPE?"Radius (shape up to 4)":"Radius",o().radius,1,64,BrushMath.MAX_RADIUS,DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
             o().outlineThickness=Math.clamp(o().outlineThickness,1,o().radius); // a wall is never thicker than the radius
             // A polygon's sides take the row under the radius, and everything below moves down a row. The track stops at 64; more is typed.
             if(sidesShown())
                 slider(g,10,375,pw-20,"Sides",o().polygonSides,BrushMath.MIN_SIDES,BrushMath.SLIDER_SIDES,BrushMath.MAX_SIDES,BrushMath.DEFAULT_SIDES,v->o().polygonSides=Math.clamp((int)Math.round(v),BrushMath.MIN_SIDES,BrushMath.MAX_SIDES),true);
             if(EnumSet.of(Tool.SCULPT_DRAW,Tool.ROCK,Tool.ELEVATION,Tool.FLATTEN,Tool.SLOPE,Tool.EXTRUDE).contains(o().tool))
-                slider(g,10,375+sidesRow(),pw-20,"Strength",o().strength,.1,5,DEFAULTS.strength,v->o().strength=v,false);
+                slider(g,10,375+sidesRow()-lift(),pw-20,"Strength",o().strength,.1,5,DEFAULTS.strength,v->o().strength=v,false);
         }
         // Tool-specific controls occupy the same familiar options area.
         switch(o().tool) {
@@ -419,12 +418,12 @@ public final class EditorScreen extends CraftiumScreen {
                 slider(g,10,516,pw-20,"Scale",o().noiseScale,1,64,Double.POSITIVE_INFINITY,DEFAULTS.noiseScale,v->o().noiseScale=Math.max(.1,v),false);
             }
             case ROCK -> {
-                text(g,"Noise seed",10,405,MUTED);
-                slider(g,10,460,pw-20,"Noise scale",o().noiseScale,1,64,DEFAULTS.noiseScale,v->o().noiseScale=v,false);
-                toggle(g,10,489,"Invert / carve",o().invert,()->o().invert=!o().invert);
+                text(g,"Noise seed",10,405-lift(),MUTED);
+                slider(g,10,460-lift(),pw-20,"Noise scale",o().noiseScale,1,64,DEFAULTS.noiseScale,v->o().noiseScale=v,false);
+                toggle(g,10,489-lift(),"Invert / carve",o().invert,()->o().invert=!o().invert);
             }
             default -> {
-                int row=sidesRow()+(o().tool==Tool.SMOOTH?smoothRows(g,375+sidesRow()):0);
+                int row=sidesRow()-lift()+(o().tool==Tool.SMOOTH?smoothRows(g,375+sidesRow()):0);
                 toggle(g,10,403+row,"Invert / carve",o().invert,()->o().invert=!o().invert);
                 if(o().tool.picksShape())fillButtons(g,424+row);
                 toggle(g,10,447+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
@@ -1042,6 +1041,14 @@ public final class EditorScreen extends CraftiumScreen {
     /** How far the controls under the radius move down while the Sides slider is shown. */
     private int sidesRow(){return sidesShown()?28:0;}
     /** The tools with their own seed fields and painters have no free row; the + and - keys still change the sides there. */
+    /**
+     * How far the tool's options move up because it has less brush to set: a round brush has no shape picker, and a tool with no brush has no radius
+     * either. Text lays out its own panel, so it keeps its place.
+     */
+    private int lift(){
+        if(o().tool==Tool.TEXT)return 0;
+        return switch(o().tool.brushUse()){case DISC,SPHERE->32;case NONE->60;default->0;};
+    }
     private boolean sidesShown(){return o().tool.picksShape()&&o().shape==BrushMath.Shape.POLYGON&&!EnumSet.of(Tool.ROCK,Tool.DISTORT,Tool.ROUGHEN,Tool.SHATTER,Tool.NOISE_PAINTER,Tool.BIOME_PAINTER,Tool.CLENTAMINATOR).contains(o().tool);}
     /** The button that shows the current shape and opens the picker. */
     private void shapeSelector(Gfx g,int y){
