@@ -326,7 +326,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,pw-51,201,25,15,"…",false,()->ClientCompat.setScreen(minecraft,new StudioScreen(this)),"Advanced settings · View → Studio inspector");
         if(o().tool==Tool.MODIFY){modifyOptions(g);return;}
         // The Magic Wand's search buttons fill the room under the name; every other tool starts right under it.
-        scrolled(g,262,o().tool.selection()?33:6,o().tool==Tool.MAGIC_SELECT?0:TOOL_NAME_GAP,()->toolBody(g));
+        scrolled(g,262,o().tool==Tool.BOX_SELECT||o().tool==Tool.MAGIC_SELECT?100:o().tool.selection()?33:6,o().tool==Tool.MAGIC_SELECT?0:TOOL_NAME_GAP,()->toolBody(g));
     }
     private static final int TOOL_NAME_GAP=36;
     /** The block limit slider: 1 to 100,000, at the very bottom of the options of every tool that builds, removes or moves blocks. */
@@ -355,16 +355,19 @@ public final class EditorScreen extends CraftiumScreen {
                 button(g,10,423,pw-20,20,"Clear measurement",false,()->{ClientState.rulers.clear();selectedNode=-1;action("ruler_clear");},"");
                 button(g,10,449,pw-20,20,"New rulers: "+o().rulerMode,false,()->o().rulerMode=Options.RulerMode.values()[(o().rulerMode.ordinal()+1)%2],()->o().rulerMode=Options.RulerMode.values()[(o().rulerMode.ordinal()+1)%2],"Inspector → Ruler to split segments and select center");
             } else {
-                text(g,"SELECTION BOUNDS",10,311,MUTED);
-                text(g,"Min  "+s.min().coordinates(),10,333,TEXT);text(g,"Max  "+s.max().coordinates(),10,353,TEXT);
-                text(g,s.selectionSize()+" blocks",10,379,0xffa5cef2);
-                modeButtons(g,394);
+                modeButtons(g,311);
                 if(o().tool==Tool.MAGIC_SELECT){
-                    compareButtons(g,444);
-                    toggle(g,10,474,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
-                    toggle(g,10,492,"Hover preview (under "+o().hoverPreviewLimit+")",o().magicPreview,()->o().magicPreview=!o().magicPreview);
+                    compareButtons(g,361);
+                    toggle(g,10,391,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
+                    toggle(g,10,409,"Hover preview (under "+o().hoverPreviewLimit+")",o().magicPreview,()->o().magicPreview=!o().magicPreview);
                 }
-                fixed(g,()->fillClear(g));
+                // The bounds are only information, so they sit at the very bottom, over the Fill and Clear buttons.
+                fixed(g,()->{
+                    text(g,"SELECTION BOUNDS",10,pb-96,MUTED);
+                    text(g,"Min  "+s.min().coordinates(),10,pb-84,TEXT);text(g,"Max  "+s.max().coordinates(),10,pb-72,TEXT);
+                    text(g,s.selectionSize()+" blocks",10,pb-60,0xffa5cef2);
+                    fillClear(g);
+                });
             }
             return;
         }
@@ -435,10 +438,10 @@ public final class EditorScreen extends CraftiumScreen {
             default -> {
                 // Rows follow one another: the slot of a Strength slider is only left open for the tools that have one, and Fill, which belongs to the shape, only for the tools that pick one.
                 int row=sidesRow()-lift()+(o().tool==Tool.SMOOTH?smoothRows(g,375+sidesRow()):hasStrength()?0:-28);
+                if(o().tool==Tool.FLOODFILL){floodButtons(g,403+row);row+=48;} // Floodfill has no brush, so its spread takes the room where the radius would be
                 int fillRow=o().tool.picksShape()?23:0;
                 toggle(g,10,403+row,"Invert / carve",o().invert,()->o().invert=!o().invert);
                 if(o().tool.picksShape())fillButtons(g,424+row);
-                if(o().tool==Tool.FLOODFILL){floodButtons(g,403+row);row+=48;} // Floodfill has no brush, so its spread takes the room where the radius would be
                 toggle(g,10,424+fillRow+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
                 int next=449+fillRow+row;
                 if(o().hollow&&o().tool.picksShape()){ // the outline's own settings sit under the others, so they only take room while Hollow is chosen
