@@ -29,7 +29,6 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
         new Toggle("Undo / redo pulse","Flash the changed blocks when you undo or redo",o->o.historyPulse,(o,v)->o.historyPulse=v),
         new Toggle("Large selection warnings","Ask before keeping a selection of 1,024 blocks or more; a right click confirms it",o->o.largeSelectionWarnings,(o,v)->o.largeSelectionWarnings=v),
         new Toggle("Magic Wand hover preview","Outline what a Magic Wand click would select",o->o.magicPreview,(o,v)->o.magicPreview=v),
-        new Toggle("Smooth brush strokes","Freehand and Sculpt tools fill in the blocks between cursor positions, so a fast drag is a smooth line",o->o.smoothStrokes,(o,v)->o.smoothStrokes=v),
         new Toggle("Mark faces against solid blocks","Tint the selection's faces that touch a solid block outside it; the colour is in Selection options",o->o.showSelectionContact,(o,v)->o.showSelectionContact=v),
         new Number("Hover preview limit","No outline when a click would select this many blocks or more",100,20_000,o->o.hoverPreviewLimit,(o,v)->o.hoverPreviewLimit=v),
         new Link("Selection options","How the selection looks: its style, line width and colours",SelectionOptionsScreen::new),

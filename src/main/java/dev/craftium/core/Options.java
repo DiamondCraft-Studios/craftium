@@ -95,10 +95,6 @@ public final class Options {
     public int selectionResize;
     /** Hovering with the Magic Wand outlines what a click would select, unless that is this many blocks or more: likely terrain, not an object. */
     public boolean magicPreview=true;
-    /** Freehand and Sculpt strokes fill in the blocks between two cursor positions, so a fast drag leaves a smooth line instead of dots. */
-    public boolean smoothStrokes=true;
-    /** Sent with a stroke's request: where the stroke's previous request was aimed, or null for the first of a stroke. */
-    public Point strokeFrom;
     /** Whether a big selection waits to be confirmed before it is kept. */
     public boolean largeSelectionWarnings=true;
     /** Extrude: how many layers one click adds or removes, from 1 to {@link #MAX_EXTRUDE_COUNT}. */

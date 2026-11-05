@@ -64,8 +64,6 @@ public enum Tool {
             default -> BrushUse.NONE;
         };
     }
-    /** The brush tools worked by dragging, whose strokes are filled in between cursor positions. */
-    public boolean strokes() { return this == FREEHAND_SELECT || this == FREEHAND_DRAW || this == SCULPT_DRAW || this == WELD || this == MELT || this == SMOOTH || this == DISTORT || this == ROUGHEN || this == SHATTER; }
     /** Whether the shape picker means anything for this tool. */
     public boolean picksShape() { BrushUse use = brushUse(); return use == BrushUse.SHAPE || use == BrushUse.SMALL_SHAPE; }
     /** The tools that move, rotate or scale the selected blocks around a pivot. */
