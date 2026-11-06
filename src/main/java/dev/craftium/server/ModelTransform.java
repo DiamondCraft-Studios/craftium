@@ -3,13 +3,12 @@ package dev.craftium.server;
 import dev.craftium.core.*;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Mirror;
-import net.minecraft.world.level.block.Rotation;
 import java.util.*;
 
 /**
  * Moves, rotates and scales the blocks of the selection around a pivot, as the Move, Rotate and Scale tools do.
  * Every cell the transformed shape covers looks back to the cell it came from, so rotated and scaled shapes have
- * no holes; the cells left behind are cleared. The blocks themselves are not turned, only where they are.
+ * no holes; the cells left behind are cleared. With {@code turnBlocks} the blocks' states are turned too.
  */
 final class ModelTransform {
     /** The most cells a transform may cover, so one request cannot be asked to visit a huge volume. */
@@ -89,7 +88,8 @@ final class ModelTransform {
         if(o.sizeX<0)state=state.mirror(Mirror.FRONT_BACK);
         if(o.sizeY<0)state=BuilderEdits.verticalMirror(state);
         if(o.sizeZ<0)state=state.mirror(Mirror.LEFT_RIGHT);
-        state=state.rotate(Rotation.values()[Math.floorMod((int)Math.round(o.yaw/90),4)]);
+        // Yaw, pitch and roll all turn facing, axis, half and rotation properties, so stairs and the like follow the selection.
+        state=StateTransforms.rotate(state,o.yaw,o.pitch,o.roll);
         return new BlockSnapshot(state,block.data());
     }
 

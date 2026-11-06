@@ -89,7 +89,7 @@ public final class Options {
     public double builderSelectionWidth=1,builderPreviewWidth=1;
     /** The point one transform request works about, which can differ from the player's pivot, as when scaling from the far side. */
     public boolean aboutSet;
-    /** A selection transform that also turns and mirrors the blocks' states, as the Edit menu's Rotate and Flip do; the gizmo only moves them. */
+    /** A selection transform that also turns and mirrors the blocks' states, as the Edit menu's Rotate and Flip and the gizmo do. */
     public boolean turnBlocks;
     public double aboutX,aboutY,aboutZ;
     public boolean pivotSet;

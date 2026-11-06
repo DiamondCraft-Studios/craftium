@@ -179,6 +179,7 @@ final class TransformGizmo {
             else if(t.kind==Kind.MODEL){
                 if(request.offsetX==0&&request.offsetY==0&&request.offsetZ==0&&angles.equals(Vec3.ZERO)&&size.equals(new Vec3(1,1,1)))return true; // nothing was changed
                 Vec3 about=mode==Options.GizmoMode.SCALE?aboutPoint():t.anchor;
+                request.turnBlocks=true; // stairs and other oriented blocks turn with the selection
                 request.aboutSet=true;request.aboutX=about.x;request.aboutY=about.y;request.aboutZ=about.z;
                 CraftiumClient.send("selection_transform",null,null);
                 // The pivot goes with the blocks when they are moved.

@@ -9,6 +9,7 @@ on:
       - 'branding/craftium.png'
       - '.github/workflows/build-mcp.yml'
   pull_request:
+    types: [opened, reopened]
     branches: [main]
     paths:
       - 'mcp/**'

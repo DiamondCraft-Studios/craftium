@@ -7,7 +7,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.*;
 import java.util.*;
 
-final class BuilderEdits {
+public final class BuilderEdits {
     private BuilderEdits(){}
     static Session.Edit plan(ServerPlayer player,Session session,Options o,Point target,Point normal,String action){
         o.keepExisting=o.builderKeepExisting; // the Builder has its own Keep existing, so the editor's does not apply to it
@@ -25,7 +25,7 @@ final class BuilderEdits {
         var entities=new ArrayList<Session.EntityChange>();var captureSession=new Session();captureSession.selection.combine(points,Selection.Mode.REPLACE);
         if(o.copyEntities){var capture=ClipboardEntities.capture(player,captureSession);captureSession.clipboardEntities.addAll(capture.relative());if(o.builderTool==Options.BuilderTool.MOVE)entities.addAll(capture.removals());}
         if(o.builderTool==Options.BuilderTool.MOVE){boolean keep=o.keepExisting;o.keepExisting=false;for(Point at:points)p.put(at,Blocks.AIR.defaultBlockState());o.keepExisting=keep;}
-        for(var entry:source.entrySet()){Point q=entry.getKey().add(-min.x(),-min.y(),-min.z());Point transformed=BuilderTransform.apply(q,size,o.builderRotation,o.builderFlipAxis);var value=entry.getValue();BlockState state=value.state();if(o.builderFlipAxis==0)state=state.mirror(Mirror.FRONT_BACK);else if(o.builderFlipAxis==2)state=state.mirror(Mirror.LEFT_RIGHT);else if(o.builderFlipAxis==1)state=verticalMirror(state);state=state.rotate(Rotation.values()[o.builderRotation]);captureSession.clipboard.put(transformed,new BlockSnapshot(state,value.data()));}
+        for(var entry:source.entrySet()){Point q=entry.getKey().add(-min.x(),-min.y(),-min.z());Point transformed=BuilderTransform.apply(q,size,o.builderRotation,o.builderFlipAxis);var value=entry.getValue();BlockState state=value.state();state=turn(state,o.builderRotation,o.builderFlipAxis);captureSession.clipboard.put(transformed,new BlockSnapshot(state,value.data()));}
         ClipboardEntities.transform(captureSession,v->{var relative=new Geometry.Vector(v.x()-.5,v.y()-.5,v.z()-.5);Point base=relative.voxel();Point transformed=BuilderTransform.apply(base,size,o.builderRotation,o.builderFlipAxis);var delta=relative.subtract(Geometry.vector(base));if(o.builderFlipAxis==0)delta=new Geometry.Vector(-delta.x(),delta.y(),delta.z());if(o.builderFlipAxis==1)delta=new Geometry.Vector(delta.x(),-delta.y(),delta.z());if(o.builderFlipAxis==2)delta=new Geometry.Vector(delta.x(),delta.y(),-delta.z());delta=Geometry.rotate(delta,o.builderRotation*90,0,0);return Geometry.vector(transformed).add(delta).add(new Geometry.Vector(.5,.5,.5));},o.builderRotation*90,o.builderFlipAxis>=0);
         // A stack is whole copies laid edge to edge along each axis, so there are never gaps; the counts say how many in each direction (negative: the other way).
         var steps=new ArrayList<Point>();
@@ -61,6 +61,11 @@ final class BuilderEdits {
         return cells;
     }
     private static String box(Point a,Point b){return a.x()+","+a.y()+","+a.z()+","+b.x()+","+b.y()+","+b.z();}
+    /** A block's state after the builder's flip (axis 0, 1 or 2, or -1 for none) and quarter turns, so stairs and the like face the way they will land. The preview shares this. */
+    public static BlockState turn(BlockState state,int turns,int flipAxis){
+        if(flipAxis==0)state=state.mirror(Mirror.FRONT_BACK);else if(flipAxis==2)state=state.mirror(Mirror.LEFT_RIGHT);else if(flipAxis==1)state=verticalMirror(state);
+        return state.rotate(Rotation.values()[Math.floorMod(turns,4)]);
+    }
     static BlockState verticalMirror(BlockState state){
         state=StateTransforms.flipHalf(state);
         if(state.hasProperty(BlockStateProperties.FACING)&&state.getValue(BlockStateProperties.FACING).getAxis()==net.minecraft.core.Direction.Axis.Y)state=state.setValue(BlockStateProperties.FACING,state.getValue(BlockStateProperties.FACING).getOpposite());return state;
