@@ -2,6 +2,7 @@ package dev.craftium.core;
 
 import org.junit.jupiter.api.Test;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 class LatestResultTest {
@@ -56,6 +57,50 @@ class LatestResultTest {
         assertFalse(r.busy());
         release.countDown();Thread.sleep(50);
         assertNull(r.poll());
+    }
+
+    @Test void inTheOtherModeAnAnswerToAReplacedRequestIsStillDelivered() throws Exception{
+        var r=new LatestResult<String>("test",false);
+        var started=new CountDownLatch(1);var release=new CountDownLatch(1);
+        r.submit(()->{started.countDown();try{release.await();}catch(InterruptedException e){}return "old";});
+        started.await();
+        r.submit(()->"new");     // asked for while the first is still running
+        release.countDown();
+        assertEquals("old",await(r),"the answer that was already being worked on, a little out of date");
+        assertEquals("new",await(r),"and then the newer one");
+        assertFalse(r.busy());
+    }
+
+    @Test void inTheOtherModeAReplacedRequestThatNeverStartedIsSkipped() throws Exception{
+        var r=new LatestResult<String>("test",false);
+        var started=new CountDownLatch(1);var release=new CountDownLatch(1);
+        r.submit(()->{started.countDown();try{release.await();}catch(InterruptedException e){}return "first";});
+        started.await();
+        var skipped=new AtomicInteger();
+        r.submit(()->{skipped.incrementAndGet();return "second";});
+        r.submit(()->"third");
+        release.countDown();
+        assertEquals("first",await(r));assertEquals("third",await(r));
+        assertEquals(0,skipped.get(),"a request replaced before it began is never run");
+    }
+
+    @Test void inTheOtherModeCancelStillDiscardsARunningRequest() throws Exception{
+        var r=new LatestResult<String>("test",false);
+        var started=new CountDownLatch(1);var release=new CountDownLatch(1);
+        r.submit(()->{started.countDown();try{release.await();}catch(InterruptedException e){}return "late";});
+        started.await();
+        r.cancel();
+        release.countDown();Thread.sleep(50);
+        assertNull(r.poll());assertFalse(r.busy());
+    }
+
+    @Test void resultsSharingAThreadKeepToTheirOwnRequests() throws Exception{
+        var shared=Executors.newSingleThreadExecutor();
+        try{
+            var a=new LatestResult<String>(shared,true);var b=new LatestResult<String>(shared,true);
+            a.submit(()->"a");b.submit(()->"b");
+            assertEquals("a",await(a));assertEquals("b",await(b));
+        }finally{shared.shutdownNow();}
     }
 
     @Test void aFailingRequestDoesNotLeaveItBusy() throws Exception{
