@@ -14,8 +14,14 @@ import java.util.*;
  */
 final class OutlineShape {
     static final OutlineShape EMPTY=new OutlineShape(SelectionOutline.Result.EMPTY,null);
-    /** Beyond these the outline is too detailed to draw every tick, so the shape falls back to its bounding box. */
-    static int maxEdges=8192,maxFaces=4096; // not final only so the draw-cost game test can lift them; nothing else changes them
+    /**
+     * Beyond these the outline is too detailed to draw every frame, so the shape falls back to its bounding box. Measured with the
+     * selection draw-cost game test: a 100,000-block selection with about 25,000 edges and 18,000 faces still draws at 70 frames a
+     * second or more, and each thousand adds roughly a quarter of a millisecond, so these leave the box for selections that are
+     * far busier than anything a person selects on purpose.
+     */
+    static final int DEFAULT_MAX_EDGES=40_000,DEFAULT_MAX_FACES=30_000;
+    static int maxEdges=DEFAULT_MAX_EDGES,maxFaces=DEFAULT_MAX_FACES; // not final only so the draw-cost game test can lift them; nothing else changes them
 
     private final SelectionOutline.Result outline;
     private final AABB bounds;
