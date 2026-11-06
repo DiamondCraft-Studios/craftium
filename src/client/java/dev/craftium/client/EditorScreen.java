@@ -793,8 +793,14 @@ public final class EditorScreen extends CraftiumScreen {
     private void dropInHand(String block){
         var id=dev.craftium.compat.Compat.tryParse(block.split("\\[",2)[0]);
         var item=id==null?null:BuiltInRegistries.BLOCK.getOptional(id).map(b->b.asItem()).orElse(null);
-        if(minecraft.player==null||minecraft.gameMode==null||!minecraft.player.isCreative()){ClientState.notify("Only a creative player can hold it");return;}
         if(item==null||item==net.minecraft.world.item.Items.AIR){ClientState.notify("That block has no item to hold");return;}
+        // In the editor the player is a spectator, which cannot use the creative menu, so the server sets the inventory instead.
+        if(minecraft.player!=null&&minecraft.player.isSpectator()){
+            String prior=o().block;o().block=block;
+            try{CraftiumClient.send("hand_set",null,null);}finally{o().block=prior;}
+            return;
+        }
+        if(minecraft.player==null||minecraft.gameMode==null||!minecraft.player.isCreative()){ClientState.notify("Only a creative player can hold it");return;}
         // What is in the hand is not thrown away: the block goes to the first empty hotbar slot, which is then the one held. Only a full hotbar replaces the held item.
         var inventory=minecraft.player.getInventory();int slot=inventory.getSelectedSlot();
         if(!inventory.getItem(slot).isEmpty())for(int i=0;i<9;i++)if(inventory.getItem(i).isEmpty()){slot=i;break;}

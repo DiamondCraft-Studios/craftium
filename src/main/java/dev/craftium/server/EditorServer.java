@@ -227,6 +227,17 @@ public final class EditorServer {
             }
             if(!player.isCreative()&&!player.isSpectator())throw new IllegalArgumentException("Switch to Creative or Spectator mode to edit");
             if((r.action().equals("undo")||r.action().equals("rebuild_cancel"))&&AnimatedRebuild.owned(player.getUUID())){AnimatedRebuild.cancel(player.getUUID());send(player,s,"Cancelling rebuild and restoring the original structure…",false);return;}
+            if(r.action().equals("hand_set")){ // a block dragged to the Hand slot: the editor's player is a spectator, which cannot use the creative menu, so the inventory is set here
+                if(!player.isCreative()&&!(player.isSpectator()&&s.previousMode==GameType.CREATIVE))throw new IllegalArgumentException("Only a creative player can hold it");
+                var name=o.block==null?"":o.block;int bracket=name.indexOf('[');var id=dev.craftium.compat.Compat.tryParse(bracket<0?name:name.substring(0,bracket));
+                var item=id==null?null:net.minecraft.core.registries.BuiltInRegistries.BLOCK.getOptional(id).map(b->b.asItem()).orElse(null);
+                if(item==null||item==net.minecraft.world.item.Items.AIR)throw new IllegalArgumentException("That block has no item to hold");
+                // What is in the hand is not thrown away: the block goes to the first empty hotbar slot, which is then the one held. Only a full hotbar replaces the held item.
+                var inventory=player.getInventory();int slot=inventory.getSelectedSlot();
+                if(!inventory.getItem(slot).isEmpty())for(int i=0;i<9;i++)if(inventory.getItem(i).isEmpty()){slot=i;break;}
+                inventory.setItem(slot,new net.minecraft.world.item.ItemStack(item));inventory.setSelectedSlot(slot);
+                player.inventoryMenu.broadcastChanges();return;
+            }
             if(r.action().equals("hotbar_next")||r.action().equals("hotbar_previous")){send(player,s,HotbarLibrary.cycle(player,s,o,r.action().equals("hotbar_next")?1:-1),false);return;}
             if(r.action().equals("hotbar_save")||r.action().equals("hotbar_load")||r.action().equals("hotbar_list")){
                 String result=HotbarLibrary.apply(r.action(),player,o);if(r.action().equals("hotbar_list"))ServerPlatform.send(player,new Packets.Report(result));send(player,s,r.action().equals("hotbar_list")?"Saved hotbars listed":result,false);return;
