@@ -509,7 +509,7 @@ final class TransformGizmo {
     /** Move handles end in flat triangular arrowheads, rotate handles are rings, scale handles are squares, and the centre is a square of its own. */
     private static void render(Vec3 anchor,Options.GizmoMode currentMode,int active,Vec3 extent){
         Vec3[] directions=axesAt(anchor);double k=screenScale(anchor);
-        boolean held=dragging!=null&&active>=0; // while a handle is held, only that handle is drawn
+        boolean held=ClientState.options.gizmoHideOthers&&dragging!=null&&active>=0; // while a handle is held, only that handle is drawn
         for(int i=0;i<3;i++){int color=active==i?brighten(COLORS[i]):COLORS[i];
             if((axisMask>>i&1)!=0&&!(held&&active!=i)){
             if(currentMode==Options.GizmoMode.ROTATE){
