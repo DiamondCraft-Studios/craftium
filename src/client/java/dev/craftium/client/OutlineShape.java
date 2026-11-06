@@ -45,6 +45,8 @@ final class OutlineShape {
     /** The box around every block, or null when empty. */
     AABB bounds(){return bounds;}
     boolean isEmpty(){return bounds==null;}
+    /** Whether the shape has the contour of the screen to draw, and not just its creases. For the draw-cost game test. */
+    boolean hasContour(){return contourEnds!=null&&contourEnds.length>0;}
 
     /** Receives a line, after any transform the caller wants applied. */
     interface Lines{void line(Vec3 from,Vec3 to);}
@@ -140,23 +142,52 @@ final class OutlineShape {
     }
 
     private Vec3 contourEye,contourAt;
-    private List<ScreenSilhouette.Line> contourLines;
     private Vec3[] contourEnds;
+    /** The lines of a contour, ready to draw, and the offset of the shape they were worked out for. */
+    private record Contour(Vec3 at,Vec3[] ends){}
+    private static final Vec3[] NO_CONTOUR=new Vec3[0];
+    /** Past this many creases the contour takes long enough to work out that it is done off the game thread. */
+    private static final int ASYNC_CREASES=1500;
+    /** One thread does every shape's contour, one after another; a request replaced before its turn is skipped. */
+    private static final java.util.concurrent.ExecutorService CONTOUR_THREAD=java.util.concurrent.Executors.newSingleThreadExecutor(task->{
+        var thread=new Thread(task,"Craftium selection contour");thread.setDaemon(true);thread.setPriority(Thread.NORM_PRIORITY-1);return thread;});
+    private LatestResult<Contour> contourJob;
     /**
      * Draws only the contour of the shape on the screen. Worked out again only when the camera or the shape moves.
      * Returns false when there is none to draw, so the caller falls back to the creases.
+     * <p>
+     * A big shape's contour takes tens of milliseconds, which would stall the game every time the camera moved, so it is worked out on
+     * another thread. The game goes on drawing the last one that was finished, which a moving camera barely changes, and the creases
+     * until the first is ready. If the shape itself has moved the old one is dropped, because it would be drawn in the wrong place.
      */
     private boolean contour(Lines lines,Vec3 at){
         Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
-        if(contourEye==null||contourEye.distanceToSqr(eye)>1e-8||!at.equals(contourAt)){
-            contourEye=eye;contourAt=at;
-            contourLines=ScreenSilhouette.of(outline,eye.x-at.x,eye.y-at.y,eye.z-at.z);
-            if(contourLines==null)contourEnds=null;
-            else{contourEnds=new Vec3[contourLines.size()*2];int i=0;for(var l:contourLines){contourEnds[i++]=new Vec3(l.x0(),l.y0(),l.z0()).add(at);contourEnds[i++]=new Vec3(l.x1(),l.y1(),l.z1()).add(at);}}
+        boolean changed=contourEye==null||contourEye.distanceToSqr(eye)>1e-8||!at.equals(contourAt);
+        if(outline.creases().size()<=ASYNC_CREASES){
+            if(changed){
+                contourEye=eye;contourAt=at;
+                contourEnds=ends(ScreenSilhouette.of(outline,eye.x-at.x,eye.y-at.y,eye.z-at.z),at);
+            }
+        }else{
+            if(contourJob==null)contourJob=new LatestResult<>(CONTOUR_THREAD,false);
+            if(changed){
+                if(!at.equals(contourAt))contourEnds=null;
+                contourEye=eye;contourAt=at;
+                double x=eye.x-at.x,y=eye.y-at.y,z=eye.z-at.z;
+                contourJob.submit(()->new Contour(at,ends(ScreenSilhouette.of(outline,x,y,z),at)));
+            }
+            var ready=contourJob.poll();
+            if(ready!=null&&ready.at().equals(at))contourEnds=ready.ends();
         }
         if(contourEnds==null||contourEnds.length==0)return false;
         for(int i=0;i<contourEnds.length;i+=2)lines.line(contourEnds[i],contourEnds[i+1]);
         return true;
+    }
+    private static Vec3[] ends(List<ScreenSilhouette.Line> contour,Vec3 at){
+        if(contour==null||contour.isEmpty())return NO_CONTOUR;
+        var ends=new Vec3[contour.size()*2];int i=0;
+        for(var l:contour){ends[i++]=new Vec3(l.x0(),l.y0(),l.z0()).add(at);ends[i++]=new Vec3(l.x1(),l.y1(),l.z1()).add(at);}
+        return ends;
     }
 
     /**
