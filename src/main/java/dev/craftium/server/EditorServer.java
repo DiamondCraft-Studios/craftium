@@ -21,6 +21,8 @@ public final class EditorServer {
     /** The AI's workspace of each player: the preview it is holding and the builds it can undo. Never saved, and dropped when the player leaves. */
     private static final Map<UUID,Session> AI_SESSIONS=new HashMap<>();
     private static Job job;
+    /** How long one tick may spend writing an edit's blocks: 20 of its 50 ms, which leaves the rest of the tick its time and still finishes a large undo in a few ticks. */
+    private static final long APPLY_BUDGET_NANOS=20_000_000L;
     private static int historyTicks;
     private record Job(UUID owner, ServerLevel level, Session session, Session.Edit edit,
                        boolean backwards, boolean history, int[] cursor, List<Session.Change> applied, long strokeId, boolean load) {}
@@ -633,7 +635,7 @@ public final class EditorServer {
         }
         if(job==null)return;var j=job;
         try {
-            var list=j.edit.changes();long deadline=System.nanoTime()+8_000_000L;int count=0;
+            var list=j.edit.changes();long deadline=System.nanoTime()+APPLY_BUDGET_NANOS;int count=0;
             // Only the time budget limits a tick: the clock is read every 16 blocks, because a fixed block cap left most of the budget unused.
             while(j.cursor[0]<list.size() && ((++count&15)!=0 || System.nanoTime()<deadline)) {
                 var c=list.get(j.cursor[0]++);BlockPos at=EditPlanner.pos(c.pos());
