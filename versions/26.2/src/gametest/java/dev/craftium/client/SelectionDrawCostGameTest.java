@@ -31,6 +31,12 @@ public final class SelectionDrawCostGameTest {
         for(int x=0;x<side;x++)for(int z=0;z<side;z++){int h=8+(int)(6*Math.sin(x/9.0)+6*Math.cos(z/7.0)+rnd.nextInt(3));for(int y=0;y<h;y++)s.add(new Point(x-side/2,y,z-side/2));}
         return s;
     }
+    /** Rolling ground with noise, rougher than {@link #terrain}: the busiest heightfield that still fits under both caps. */
+    private static List<Point> roughTerrain(int side,int base,int amp,int noise,long seed){
+        var rnd=new Random(seed);var s=new ArrayList<Point>();
+        for(int x=0;x<side;x++)for(int z=0;z<side;z++){int h=base+(int)(amp*Math.sin(x/4.0)+amp*Math.cos(z/3.0))+rnd.nextInt(noise);for(int y=0;y<Math.max(1,h);y++)s.add(new Point(x-side/2,y,z-side/2));}
+        return s;
+    }
     private static List<Point> scatter(int side,double density,long seed){
         var rnd=new Random(seed);var s=new ArrayList<Point>();
         for(int x=0;x<side;x++)for(int y=0;y<side;y++)for(int z=0;z<side;z++)if(rnd.nextDouble()<density)s.add(new Point(x-side/2,y,z-side/2));
@@ -55,6 +61,7 @@ public final class SelectionDrawCostGameTest {
             new Shape("hollow sphere r=40",()->sphere(40,true)),
             new Shape("terrain 100x100",()->terrain(100,2)),
             new Shape("scatter 50^3 @80%",()->scatter(50,.8,6)),
+            new Shape("rough terrain (both caps)",()->roughTerrain(100,10,7,5,9)), // 36,800 edges and 23,900 faces: about 90% and 80% of the caps
             new Shape("scatter 36^3 @50% (at cap)",()->scatter(36,.5,8)),     // close to the default edge cap: the busiest shape still drawn in full
             new Shape("scatter 100^3 @10% (box)",()->scatter(100,.1,7)));    // 650,000 edges: far past the caps, so the box is what is left
         var report=new StringBuilder();
@@ -120,6 +127,26 @@ public final class SelectionDrawCostGameTest {
                 Collections.sort(d);
                 double seconds=moving.size()<2?1:(moving.get(moving.size()-1)-moving.get(0))/1e9;
                 report.append(String.format(Locale.ROOT,"%-24s %8d %8d %8d | %-26s %8.1f %8.1f %8.1f   worst %.1f ms, true contour when still: %s%n",shape.name(),points.size(),counts[0],counts[1],"camera moving",(moving.size()-1)/seconds,d.isEmpty()?-1:d.get(d.size()/2),d.isEmpty()?-1:d.get((int)(d.size()*.95)),d.isEmpty()?-1:d.get(d.size()-1),contour?"yes":"no (creases)"));
+            }
+            if(counts[0]<=OutlineShape.DEFAULT_MAX_EDGES){
+                // The camera in the middle of the shape: the walls are seen from behind, the screen is washed, and the silhouette has nothing to outline.
+                int minX=Integer.MAX_VALUE,minY=Integer.MAX_VALUE,minZ=Integer.MAX_VALUE,maxX=Integer.MIN_VALUE,maxY=Integer.MIN_VALUE,maxZ=Integer.MIN_VALUE;
+                for(Point p:points){minX=Math.min(minX,p.x());minY=Math.min(minY,p.y());minZ=Math.min(minZ,p.z());maxX=Math.max(maxX,p.x());maxY=Math.max(maxY,p.y());maxZ=Math.max(maxZ,p.z());}
+                double ix=(minX+maxX+1)/2.0,iy=(minY+maxY+1)/2.0-1.62,iz=(minZ+maxZ+1)/2.0; // the feet, so the eyes are at the middle
+                double[] home=c.computeOnClient(mc->new double[]{mc.player.getX(),mc.player.getY(),mc.player.getZ()});
+                c.waitTicks(SETTLE_TICKS);
+                STAMPS.clear();
+                for(int t=0;t<MEASURE_TICKS;t++){c.runOnClient(mc->mc.player.setPos(ix,iy,iz));c.waitTicks(1);}
+                var inside=new ArrayList<>(STAMPS);
+                String note=c.computeOnClient(mc->String.valueOf(SelectionOverlay.outline().fallback()));
+                var d=new ArrayList<Double>();for(int i=1;i<inside.size();i++)d.add((inside.get(i)-inside.get(i-1))/1e6);
+                Collections.sort(d);
+                double seconds=inside.size()<2?1:(inside.get(inside.size()-1)-inside.get(0))/1e9;
+                report.append(String.format(Locale.ROOT,"%-24s %8d %8d %8d | %-26s %8.1f %8.1f %8.1f   worst %.1f ms, shown as: %s%n",shape.name(),points.size(),counts[0],counts[1],"camera inside",(inside.size()-1)/seconds,d.isEmpty()?-1:d.get(d.size()/2),d.isEmpty()?-1:d.get((int)(d.size()*.95)),d.isEmpty()?-1:d.get(d.size()-1),note));
+                c.runOnClient(mc->mc.player.setPos(home[0],home[1],home[2]));
+                c.waitTicks(20);
+                String outside=c.computeOnClient(mc->String.valueOf(SelectionOverlay.outline().fallback()));
+                report.append(String.format(Locale.ROOT,"%-24s back outside, shown as: %s%n",shape.name(),outside));
             }
             report.append(String.format(Locale.ROOT,"%-24s update() on the client thread: %.1f ms, worst frame in the 30 ticks after selecting: %.1f ms%n",shape.name(),update[0]/1e6,worst));
         }
