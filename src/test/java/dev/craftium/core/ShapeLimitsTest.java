@@ -63,6 +63,18 @@ class ShapeLimitsTest {
         assertTrue(ShapeLimits.maxRadius(o) >= 192);
     }
 
+    @Test void theLargestShapesAreBuiltInAFewSeconds() {
+        for (var shape : new BrushMath.Shape[]{BrushMath.Shape.SPHERE, BrushMath.Shape.CUBE, BrushMath.Shape.CYLINDER, BrushMath.Shape.DISK}) {
+            var o = new Options(); o.shape = shape; o.hollow = true; o.radius = 999; o.validate();
+            long start = System.nanoTime();
+            int blocks = BrushMath.brush(new Point(0, 0, 0), o.radius, shape, true, o.outlineThickness, o.pixelPerfect, o.outlineShift(), o.polygonSides, false).size();
+            long ms = (System.nanoTime() - start) / 1_000_000;
+            System.out.println("LARGEST " + shape + " radius " + o.radius + " -> " + blocks + " blocks in " + ms + " ms");
+            assertTrue(blocks <= Selection.LIMIT);
+            assertTrue(ms < 8_000, shape + " took " + ms + " ms");
+        }
+    }
+
     @Test void aShapeTooBigToLookAtIsRefusedAtOnce() {
         long start = System.nanoTime();
         assertThrows(IllegalArgumentException.class, () -> BrushMath.brush(new Point(0, 0, 0), 900, BrushMath.Shape.CUBE, true));
