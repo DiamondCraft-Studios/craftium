@@ -327,9 +327,9 @@ public final class BuilderMode {
             if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?stackSteps(size):List.of(offset);
                 if(stacking){drawStack(o,min,size);return;}
                 var shown=preview(o,min,size,steps);
-                if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),o.builderMovingTint); // the blocks that are moving, where they are now
-                if(shown==null)boxShape(min.add(offset.x(),offset.y(),offset.z()),max.add(offset.x()+1,offset.y()+1,offset.z()+1)).drawPlain(Vec3.ZERO,o.builderPreviewColor,(float)o.builderPreviewWidth,0,false,false);
-                else{shown.shape().drawPlain(Vec3.ZERO,o.builderPreviewColor,(float)o.builderPreviewWidth,o.builderPreviewFill,true,false);if(!shown.places().isEmpty())Overlay.blockStates(turned(shown.models(),o),shown.places(),o.builderPreviewTint);}
+                if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),o.removedTint); // the blocks that are moving, where they are now
+                if(shown==null)boxShape(min.add(offset.x(),offset.y(),offset.z()),max.add(offset.x()+1,offset.y()+1,offset.z()+1)).drawPlain(Vec3.ZERO,o.previewColor,(float)o.builderPreviewWidth,0,false,false);
+                else{shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.builderPreviewWidth,o.previewFill,true,false);if(!shown.places().isEmpty())Overlay.blockStates(turned(shown.models(),o),shown.places(),o.previewTint);}
             }
         }
     }
@@ -369,7 +369,7 @@ public final class BuilderMode {
             }
             stackFor=key;stackCells=cells;stackModels=models;stackPlaces=places;
         }
-        if(!stackPlaces.isEmpty())Overlay.blockStates(turned(stackModels,o),stackPlaces,o.builderPreviewTint);
+        if(!stackPlaces.isEmpty())Overlay.blockStates(turned(stackModels,o),stackPlaces,o.previewTint);
     }
     /** The blocks at {@code models} as they will stand once the builder's turn and flip are applied, so oriented blocks are drawn facing their new way. */
     private static List<net.minecraft.world.level.block.state.BlockState> turned(List<net.minecraft.core.BlockPos> models,Options o){

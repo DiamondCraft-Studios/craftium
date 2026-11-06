@@ -55,6 +55,8 @@ final class OutlineShape {
         Lines lines=scene||style==Options.SelectionStyle.ALL_EDGES?(a,b)->sceneLine(a,b,colour,width):(a,b)->Overlay.line(a,b,colour,width);
         draw(at,lines,colour,fill,backFill,withFill,style);
     }
+    /** Only the fill of the exterior faces, with no outline: how blocks about to be removed are shown. */
+    void drawFill(Vec3 at,int fill){draw(at,(a,b)->{},0,fill,true,ClientState.options.selectionStyle);}
     /** A depth-tested line, drawn a little toward the camera: the outline lies in the surface of the blocks, so exactly there it would be cut away by them. */
     private static void sceneLine(Vec3 a,Vec3 b,int colour,float width){
         Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position(),mid=a.add(b).scale(.5),toEye=eye.subtract(mid);

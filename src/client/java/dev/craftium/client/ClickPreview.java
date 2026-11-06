@@ -29,8 +29,8 @@ final class ClickPreview {
         Object now=List.of(tool,at,normal,o.compare,o.selectLimit,o.extrudeCount,o.extrudeReplaceable,o.invert,o.blockLimit,o.floodGap,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners,mc.level.getGameTime()/20);
         if(!Objects.equals(key,now)){key=now;compute(mc,at,normal,o);}
         if(shape.isEmpty())return;
-        int colour=removing?o.removedColor:o.hoverColor,fill=removing?o.removedFill:o.hoverFill;
-        shape.drawPlain(Vec3.ZERO,colour,(float)o.selectionWidth,fill,true,false);
+        if(removing)shape.drawFill(Vec3.ZERO,o.removedFill); // blocks that go are only filled, never outlined
+        else shape.drawPlain(Vec3.ZERO,o.hoverColor,(float)o.selectionWidth,o.hoverFill,true,false);
     }
 
     private static void compute(Minecraft mc,BlockPos at,Point normal,Options o){
