@@ -66,7 +66,16 @@ final class OutlineShape {
     void drawPlain(Vec3 at,int colour,float width,int fill,int backFill,boolean withFill,boolean scene){
         var style=ClientState.options.selectionStyle;
         Lines lines=scene||style==Options.SelectionStyle.ALL_EDGES?(a,b)->sceneLine(a,b,colour,width):(a,b)->Overlay.line(a,b,colour,width);
-        draw(at,lines,colour,fill,backFill,withFill,style);
+        draw(at,lines,colour,fill,backFill,withFill,style,null);
+    }
+    /**
+     * As the first drawPlain, for a shape that is being changed as it is looked at, such as the blocks a drag will leave, which are worked out
+     * again at every step. Its silhouette is always found from this frame's camera, never from an earlier one.
+     */
+    void drawLive(Vec3 at,int colour,float width,int fill,boolean withFill){
+        var style=ClientState.options.selectionStyle;
+        Lines lines=style==Options.SelectionStyle.ALL_EDGES?(a,b)->sceneLine(a,b,colour,width):(a,b)->Overlay.line(a,b,colour,width);
+        draw(at,lines,colour,fill,fill,withFill,style,java.util.function.UnaryOperator.identity());
     }
     /** Only the fill of the exterior faces, with no outline: how blocks about to be removed are shown. */
     void drawFill(Vec3 at,int fill){draw(at,(a,b)->{},0,fill,true,ClientState.options.selectionStyle);}
@@ -78,8 +87,15 @@ final class OutlineShape {
         Overlay.sceneLine(a.add(nudge),b.add(nudge),colour,width);
     }
     /** As {@link #draw(Vec3,Lines,int,int,boolean)}, with the outline style chosen by the caller instead of the selection's. */
-    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style){draw(at,lines,stroke,fill,fill,withFill,style);}
-    private void draw(Vec3 at,Lines lines,int stroke,int fill,int backFill,boolean withFill,Options.SelectionStyle style){
+    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style){draw(at,lines,stroke,fill,fill,withFill,style,null);}
+    /**
+     * As above, for a shape whose lines {@code lines} moves somewhere else, as a drag does. What the camera sees of the moved shape is not what it
+     * sees of the shape where it is, so the silhouette is worked out from where the camera is relative to the shape as it was before the move:
+     * {@code eyeInShape} turns the camera's position into that. The shape changes with every step of the drag, so only a silhouette that can be
+     * found within the frame is used, never a late one from another thread.
+     */
+    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape){draw(at,lines,stroke,fill,fill,withFill,style,eyeInShape);}
+    private void draw(Vec3 at,Lines lines,int stroke,int fill,int backFill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape){
         if(bounds==null)return;
         if(outline.edges().size()>maxEdges){
             AABB box=bounds.move(at);
@@ -87,7 +103,7 @@ final class OutlineShape {
             return;
         }
         // Only the outline as the camera sees it, unless every edge was asked for or the camera is inside the shape.
-        if(style==Options.SelectionStyle.ALL_EDGES||!(style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at))&&!silhouette(lines,at))
+        if(style==Options.SelectionStyle.ALL_EDGES||!(style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at,eyeInShape))&&!silhouette(lines,at,eyeInShape))
             allEdges(lines,at);
         if(withFill&&outline.faces().size()<=maxFaces){
             // Only a camera inside the shape sees its walls from behind; from outside, every face keeps the one fill.
@@ -160,9 +176,11 @@ final class OutlineShape {
      * another thread. The game goes on drawing the last one that was finished, which a moving camera barely changes, and the creases
      * until the first is ready. If the shape itself has moved the old one is dropped, because it would be drawn in the wrong place.
      */
-    private boolean contour(Lines lines,Vec3 at){
-        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
+    private boolean contour(Lines lines,Vec3 at,java.util.function.UnaryOperator<Vec3> eyeInShape){
+        Vec3 eye=eyeIn(eyeInShape);
+        boolean live=eyeInShape!=null;
         boolean changed=contourEye==null||contourEye.distanceToSqr(eye)>1e-8||!at.equals(contourAt);
+        if(live&&outline.creases().size()>ASYNC_CREASES)return false; // too much to find within the frame, and a late answer would be for an earlier step of the drag
         if(outline.creases().size()<=ASYNC_CREASES){
             if(changed){
                 contourEye=eye;contourAt=at;
@@ -194,8 +212,8 @@ final class OutlineShape {
      * Draws the creases where one of the two faces points toward the camera and the other away, which is the outline of
      * the shape on the screen. Returns false when there are none, as when the camera is inside the shape.
      */
-    private boolean silhouette(Lines lines,Vec3 at){
-        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
+    private boolean silhouette(Lines lines,Vec3 at,java.util.function.UnaryOperator<Vec3> eyeInShape){
+        Vec3 eye=eyeIn(eyeInShape);
         int drawn=0;
         boolean here=at.equals(Vec3.ZERO);
         Vec3[] ready=null;
@@ -212,6 +230,11 @@ final class OutlineShape {
             index++;
         }
         return drawn>0;
+    }
+    /** The camera's position, or where it is relative to the shape if the shape is being moved by something. */
+    private static Vec3 eyeIn(java.util.function.UnaryOperator<Vec3> eyeInShape){
+        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
+        return eyeInShape==null?eye:eyeInShape.apply(eye);
     }
     /** True when the face with this direction, on a plane through the point, faces the eye. */
     private static boolean towards(int direction,Vec3 eye,double x,double y,double z){

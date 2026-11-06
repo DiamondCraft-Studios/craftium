@@ -45,6 +45,43 @@ class ScreenSilhouetteIndexTest {
         assertTrue(compared>100,"too few of the cases had a contour to compare: "+compared);
     }
 
+    private static List<List<Long>> sorted(List<ScreenSilhouette.Line> lines,double dx,double dy,double dz){
+        var out=new ArrayList<List<Long>>();
+        for(var l:lines){
+            long[] a={Math.round((l.x0()+dx)*1e5),Math.round((l.y0()+dy)*1e5),Math.round((l.z0()+dz)*1e5)},b={Math.round((l.x1()+dx)*1e5),Math.round((l.y1()+dy)*1e5),Math.round((l.z1()+dz)*1e5)};
+            boolean swap=a[0]!=b[0]?a[0]>b[0]:a[1]!=b[1]?a[1]>b[1]:a[2]>b[2]; // a line has no direction
+            out.add(swap?List.of(b[0],b[1],b[2],a[0],a[1],a[2]):List.of(a[0],a[1],a[2],b[0],b[1],b[2]));
+        }
+        out.sort(Comparator.comparing(Object::toString));
+        return out;
+    }
+
+    /**
+     * Dragging a selection draws its outline unmoved and then moves the lines. The contour the camera sees of the moved shape is the contour of the
+     * unmoved shape seen from the camera taken back by the move, with the lines moved. The contour seen from the camera as it is, which is what was
+     * drawn before, is a different set of lines, and moved it leaves ends that do not meet.
+     */
+    @Test void aMovedShapeHasTheContourOfTheUnmovedOneSeenFromTheCameraTakenBack(){
+        var rnd=new Random(3);
+        int differing=0,checked=0;
+        for(int n=0;n<40;n++){
+            var blocks=blob(rnd,3+rnd.nextInt(6),60+rnd.nextInt(300));
+            int mx=rnd.nextInt(60)-30,my=rnd.nextInt(60)-30,mz=rnd.nextInt(60)-30;
+            var moved=new HashSet<Point>();for(var p:blocks)moved.add(new Point(p.x()+mx,p.y()+my,p.z()+mz));
+            var here=SelectionOutline.of(blocks);var there=SelectionOutline.of(moved);
+            double ex=(rnd.nextDouble()-.5)*120,ey=(rnd.nextDouble()-.5)*120,ez=(rnd.nextDouble()-.5)*120;
+            var truth=ScreenSilhouette.of(there,ex,ey,ez);
+            var fromTakenBack=ScreenSilhouette.of(here,ex-mx,ey-my,ez-mz);
+            var fromCamera=ScreenSilhouette.of(here,ex,ey,ez);
+            if(truth==null||fromTakenBack==null||fromCamera==null)continue;
+            checked++;
+            assertEquals(sorted(truth,0,0,0),sorted(fromTakenBack,mx,my,mz),"shape "+n);
+            if(!sorted(truth,0,0,0).equals(sorted(fromCamera,mx,my,mz)))differing++;
+        }
+        assertTrue(checked>15,"too few cases had a contour: "+checked);
+        assertTrue(differing>checked/2,"the premise: the contour seen from the unmoved position should usually be wrong for the moved shape ("+differing+" of "+checked+")");
+    }
+
     /** A hundred thousand blocks of rolling ground: far too many segment-and-face pairs for the plain scan, which gave up on it. */
     @Test void aLargeSelectionNowHasAContour(){
         var rnd=new Random(2);var blocks=new HashSet<Point>();
