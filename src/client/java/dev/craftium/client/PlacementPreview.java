@@ -24,6 +24,12 @@ public final class PlacementPreview {
         if(ClientState.status.clipboardSize()==0&&ClientState.status.clipboardEntityCount()==0){ClientState.notify("Copy a selection or load a blueprint first");return;}
         origin=at;axis=0;ClientState.notify("Placement ready · drag an axis · arrows / Page Up / Page Down · Enter to place · Esc to cancel");
     }
+    /** Starts a placement where the clipboard's blocks were copied from, ready to nudge and confirm; nothing is built until Enter. */
+    public static void beginInPlace(){
+        var from=ClientState.status.clipboardOrigin();
+        if(from==null){ClientState.notify("These blocks were not copied from the world, so there is no place to put them back to");return;}
+        begin(from);
+    }
     public static boolean active(){return origin!=null;}
     static void cancel(){origin=null;}
     static void nudge(int amount){if(origin!=null)origin=origin.add(axis==0?amount:0,axis==1?amount:0,axis==2?amount:0);}
