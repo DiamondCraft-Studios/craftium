@@ -134,6 +134,28 @@ class SelectionOutlineBenchmark {
         System.out.println(out);
     }
 
+    /** What the client does on its own thread when a selection arrives, apart from the outline: decode it and make the lists and sets that point lookups use. */
+    @Test void decodeCost() throws Exception{
+        var out=new StringBuilder(String.format("%-22s %8s %10s %12s %12s%n","shape","blocks","bytes","decode ms","copies ms"));
+        for(var shape:List.of(new Shape("sphere r=31",()->sphere(31,false)),new Shape("terrain 100x100",()->terrain(100,8,2)),new Shape("scatter 50^3 @80%",()->scatter(50,.8,5)))){
+            var points=new ArrayList<>(shape.make().get());
+            String encoded=SelectionCodec.encode(points);
+            Set<Point> decoded=null;
+            for(int i=0;i<WARMUP;i++)decoded=SelectionCodec.decode(encoded);
+            long[] d=new long[RUNS],c=new long[RUNS];
+            for(int i=0;i<RUNS;i++){
+                long t=System.nanoTime();decoded=SelectionCodec.decode(encoded);d[i]=System.nanoTime()-t;
+                t=System.nanoTime();var list=List.copyOf(decoded);var set=new HashSet<>(list);c[i]=System.nanoTime()-t;
+                if(set.size()!=list.size())throw new AssertionError();
+            }
+            Arrays.sort(d);Arrays.sort(c);
+            out.append(String.format("%-22s %8d %10d %12.1f %12.1f%n",shape.name(),points.size(),encoded.length(),ms(d[RUNS/2]),ms(c[RUNS/2])));
+        }
+        Path dir=Path.of(System.getProperty("user.dir"),"build","bench");Files.createDirectories(dir);
+        Files.writeString(dir.resolve("selection-decode.txt"),out.toString());
+        System.out.println(out);
+    }
+
     private static boolean toward(int direction,double dx,double dy,double dz){
         int[] n=SelectionOutline.normal(direction);return n[0]*dx+n[1]*dy+n[2]*dz>0;
     }
