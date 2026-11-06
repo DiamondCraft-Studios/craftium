@@ -63,10 +63,10 @@ final class GhostBlocks {
         int[] b=data.blocks();
         for(int i=0;i+3<b.length;i+=4){points.add(new Point(b[i],b[i+1],b[i+2]));list.add(palette.get(b[i+3]));}
         relative=points;states=list;
-        placedShape=OutlineShape.of(points);
+        placedShape=OutlineShape.ofLater(points);
         var gone=new ArrayList<Point>();int[] r=data.removed();
         for(int i=0;i+2<r.length;i+=3)gone.add(new Point(r[i],r[i+1],r[i+2]));
-        removedShape=OutlineShape.of(gone);
+        removedShape=OutlineShape.ofLater(gone);
         removedPlaces=gone.stream().map(p->new BlockPos(p.x(),p.y(),p.z())).toList();
         return true;
     }

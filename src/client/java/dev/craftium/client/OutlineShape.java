@@ -24,8 +24,10 @@ final class OutlineShape {
     static final int DEFAULT_MAX_EDGES=40_000,DEFAULT_MAX_FACES=30_000;
     static int maxEdges=DEFAULT_MAX_EDGES,maxFaces=DEFAULT_MAX_FACES; // not final only so the draw-cost game test can lift them; nothing else changes them
 
-    private final SelectionOutline.Result outline;
+    private volatile SelectionOutline.Result outline;
     private final AABB bounds;
+    /** False only for a shape made by {@link #ofLater}, until its outline has been worked out. */
+    private volatile boolean ready=true;
     // The outline's corners as ready-made points, made on first use. Building a few of them per edge and face every frame was a large part of the
     // cost of a big shape, and a shape that is drawn where it is never changes. A shape drawn moved by something still works them out each time.
     private Vec3[] edgeEnds,creaseEnds;
@@ -35,10 +37,33 @@ final class OutlineShape {
 
     static OutlineShape of(Collection<Point> points){
         if(points.isEmpty())return EMPTY;
+        return new OutlineShape(SelectionOutline.of(points),boundsOf(points));
+    }
+    private static AABB boundsOf(Collection<Point> points){
         AABB bounds=null;
         for(Point p:points){var cell=new AABB(p.x(),p.y(),p.z(),p.x()+1,p.y()+1,p.z()+1);bounds=bounds==null?cell:bounds.minmax(cell);}
-        return new OutlineShape(SelectionOutline.of(points),bounds);
+        return bounds;
     }
+    /** One thread works out every {@link #ofLater} outline, one after another. */
+    private static final java.util.concurrent.ExecutorService LATER=java.util.concurrent.Executors.newSingleThreadExecutor(task->{
+        var thread=new Thread(task,"Craftium outline");thread.setDaemon(true);thread.setPriority(Thread.NORM_PRIORITY-1);return thread;});
+    /**
+     * As {@link #of}, for a big set of blocks that is shown once, such as the blocks of an edit waiting to be confirmed: the outline takes a
+     * couple of hundred milliseconds for a hundred thousand blocks, which would freeze the game if it were worked out here. The shape draws
+     * nothing until it is ready. {@code points} must not change afterwards. Small sets are worked out at once, since that is quicker than the hand-over.
+     */
+    static OutlineShape ofLater(Collection<Point> points){
+        if(points.size()<=LATER_FROM)return of(points);
+        var shape=new OutlineShape(SelectionOutline.Result.EMPTY,boundsOf(points));
+        shape.ready=false;
+        LATER.execute(()->{shape.outline=SelectionOutline.of(points);shape.ready=true;});
+        return shape;
+    }
+    private static final int LATER_FROM=2000;
+    /** Whether the outline has been worked out; always true unless the shape came from {@link #ofLater}. */
+    boolean ready(){return ready;}
+    /** How many edges the outline has, for the draw-cost game test. */
+    int edgeCount(){return outline.edges().size();}
 
     /** A solid box from the block corner {@code lo} up to, not including, {@code hi}, drawn in the selection's style like any other shape. */
     static OutlineShape box(Point lo,Point hi){return new OutlineShape(SelectionOutline.box(lo,hi),new AABB(lo.x(),lo.y(),lo.z(),hi.x(),hi.y(),hi.z()));}
@@ -96,7 +121,7 @@ final class OutlineShape {
      */
     void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape){draw(at,lines,stroke,fill,fill,withFill,style,eyeInShape);}
     private void draw(Vec3 at,Lines lines,int stroke,int fill,int backFill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape){
-        if(bounds==null)return;
+        if(bounds==null||!ready)return;
         boxed=outline.edges().size()>maxEdges;
         if(boxed){
             AABB box=bounds.move(at);
@@ -150,7 +175,7 @@ final class OutlineShape {
     }
     /** Whether the camera is inside the shape. Shapes with too many faces to be filled are not worked out, which keeps the frame cheap. */
     boolean cameraInside(){
-        if(bounds==null||outline.faces().size()>maxFaces)return false;
+        if(bounds==null||!ready||outline.faces().size()>maxFaces)return false;
         return inside(ClientCompat.camera(Minecraft.getInstance()).position());
     }
     /** Whether {@code eye}, relative to the shape, is inside it: a ray along +x crosses an odd number of the closed surface's faces. */

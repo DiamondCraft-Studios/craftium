@@ -69,6 +69,16 @@ public final class SelectionDrawCostGameTest {
         c.runOnClient(mc->{mc.options.enableVsync().set(false);mc.options.framerateLimit().set(260);mc.options.inactivityFpsLimit().set(net.minecraft.client.InactivityFpsLimit.MINIMIZED);}); // vsync would round every frame to a multiple of 16.7 ms, and the AFK limit drops the game to 30 fps after a minute without input
         String settings=c.computeOnClient(mc->"framerateLimit="+mc.options.framerateLimit().get()+" vsync="+mc.options.enableVsync().get()+" windowActive="+mc.isWindowActive());
         report.append("options: ").append(settings).append("\n");
+        // An outline shown once, such as the ghost of an edit waiting to be confirmed: worked out here it freezes the game, so it is worked out on another thread.
+        var bigPoints=roughTerrain(100,10,7,5,9);
+        OutlineShape[] made=new OutlineShape[2];long[] spent=new long[2];
+        c.runOnClient(mc->{
+            long t=System.nanoTime();made[0]=OutlineShape.of(bigPoints);spent[0]=System.nanoTime()-t;
+            t=System.nanoTime();made[1]=OutlineShape.ofLater(bigPoints);spent[1]=System.nanoTime()-t;
+        });
+        long begun=System.nanoTime();
+        c.waitFor(mc->made[1].ready(),1200);
+        report.append(String.format(Locale.ROOT,"OutlineShape for %d blocks: of() takes %.1f ms on the client thread, ofLater() %.1f ms and is ready %.0f ms later, same outline: %s%n",bigPoints.size(),spent[0]/1e6,spent[1]/1e6,(System.nanoTime()-begun)/1e6,made[0].edgeCount()==made[1].edgeCount()));
         // The order is the shapes, then the two small ones again: if the small ones come back slow too, it is the machine or the game's frame cap, not the shape.
         var order=new ArrayList<>(shapes);order.add(new Shape("CONTROL cube 16^3",()->scatter(16,1,0)));order.add(new Shape("CONTROL sphere r=10",()->sphere(10,false)));
         String only=System.getenv("CRAFTIUM_PERF_ONLY"); // optional: only the shapes whose name contains one of these comma-separated words, to repeat a measurement
