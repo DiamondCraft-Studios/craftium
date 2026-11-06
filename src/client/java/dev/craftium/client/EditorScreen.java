@@ -167,6 +167,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(!suspended&&layoutKey!=layoutKey())init();
         pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();sliderAreas.clear();dragSources.clear();dropTargets.clear();
         syncCrosshair();
+        SelectionOverlay.tint(g); // under the panels, so only the world is washed
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
         g.pose().pushMatrix();g.pose().scale(scale,scale);
         topbar(g);
@@ -445,18 +446,20 @@ public final class EditorScreen extends CraftiumScreen {
             case ROCK -> {
                 text(g,"Noise seed",10,405-lift(),MUTED);
                 slider(g,10,460-lift(),pw-20,"Noise scale",o().noiseScale,1,64,DEFAULTS.noiseScale,v->o().noiseScale=v,false);
-                toggle(g,10,489-lift(),"Invert / carve",o().invert,()->o().invert=!o().invert);
             }
             default -> {
                 // Rows follow one another: the slot of a Strength slider is only left open for the tools that have one, and Fill, which belongs to the shape, only for the tools that pick one.
                 int row=sidesRow()-lift()+(o().tool==Tool.SMOOTH?smoothRows(g,375+sidesRow()):hasStrength()?0:-28);
-                if(o().tool==Tool.FLOODFILL){floodButtons(g,403+row);row+=48;} // Floodfill has no brush, so its spread takes the room where the radius would be
+                if(o().tool==Tool.FLOODFILL){ // Floodfill has no brush, so its spread takes the room where the radius would be
+                    floodButtons(g,403+row);row+=48;
+                    slider(g,10,403+row+10,pw-20,"Gap tolerance",o().floodGap,0,8,Options.MAX_FLOOD_GAP,DEFAULTS.floodGap,v->o().floodGap=(int)Math.clamp(Math.round(v),0,Options.MAX_FLOOD_GAP),true);row+=38;
+                }
                 int fillRow=o().tool.picksShape()?23:0;
-                toggle(g,10,403+row,"Invert / carve",o().invert,()->o().invert=!o().invert);
-                if(o().tool.picksShape())fillButtons(g,424+row);
-                toggle(g,10,424+fillRow+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
-                int next=449+fillRow+row;
-                if(o().tool==Tool.EXTRUDE){toggle(g,10,next,"Into grass and water",o().extrudeReplaceable,()->o().extrudeReplaceable=!o().extrudeReplaceable,"Grow into replaceable blocks like grass and water, replacing them, instead of stopping at them");next+=22;}
+                if(o().tool.picksShape())fillButtons(g,403+row);
+                toggle(g,10,403+fillRow+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
+                int next=428+fillRow+row;
+                if(o().tool==Tool.EXTRUDE){toggle(g,10,next,"Into grass and water",o().extrudeReplaceable,()->o().extrudeReplaceable=!o().extrudeReplaceable,"Grow into replaceable blocks like grass and water, replacing them, instead of stopping at them");next+=22;
+                    toggle(g,10,next,"Smart extrude",o().smartExtrude,()->o().smartExtrude=!o().smartExtrude,"Take in the whole family of the clicked block, stairs, slabs and walls of the same material, each block keeping its own shape");next+=22;}
                 if(o().hollow&&o().tool.picksShape()){ // the outline's own settings sit under the others, so they only take room while Hollow is chosen
                     int cap=Math.max(1,o().radius);
                     slider(g,10,next+10,pw-20,"Outline thickness",o().outlineThickness,1,Math.max(2,Math.min(cap,64)),cap,DEFAULTS.outlineThickness,v->o().outlineThickness=Math.clamp((int)Math.round(v),1,cap),true);
@@ -526,7 +529,7 @@ public final class EditorScreen extends CraftiumScreen {
         boolean cursorBound=ModifyMath.usesCursor(o);
         String where=ModifyPreview.anchored()?(cursorBound&&ModifyPreview.anchor()!=null?"Anchored at "+ModifyPreview.anchor().coordinates():"Anchored"):cursorBound?"Following the cursor · click to anchor":"Click to anchor the preview";
         text(g,where,10,pb-75,ModifyPreview.anchored()?0xffffd66d:MUTED);
-        button(g,10,pb-53,pw-20,20,"Edit anchor",!ModifyPreview.anchored(),ModifyPreview::edit,"Let the guides and preview follow the cursor again; click to anchor them somewhere else");
+        button(g,10,pb-53,pw-20,20,"Edit anchor",ModifyPreview.knob(),()->{boolean on=ModifyPreview.editAnchor(SelectionOverlay.points().isEmpty()?null:SelectionOverlay.points().getFirst());selectedNode=on?0:-1;if(!on)TransformGizmo.cancel();},"Turn the anchor into a knob the Move gizmo can carry · click again to let the preview follow the cursor");
         button(g,10,pb-27,pw-20,20,"Apply (Enter)",false,()->action("use"),"Build the previewed result");
     }
     private ModifyRow sliderRow(int w,String label,double value,double min,double max,double typedMax,double def,java.util.function.DoubleConsumer set,boolean integer){return sliderRow(w,label,value,min,max,typedMax,def,set,integer,false);}
@@ -845,8 +848,10 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,x+10,y+24,19,19,"",o().maskInBuilder,()->o().maskInBuilder=!o().maskInBuilder,"Use in Builder tools · "+(o().maskInBuilder?"On: the tool masks also apply to the Builder tools":"Off: the Builder tools ignore the tool masks"));
         ToolIcons.hardHat(g,x+10,y+24,o().maskInBuilder?0xffffffff:0xffa9bccd);
         int share=(pw-20-23-4)/2;
-        button(g,x+33,y+24,share,19,"Include",!o().maskExclude,()->o().maskExclude=false,"");
-        button(g,x+37+share,y+24,share,19,"Exclude",o().maskExclude,()->o().maskExclude=true,"");
+        // Include and Exclude are never on together; clicking the one that is on turns both off, and the mask is ignored.
+        boolean include=!o().maskOff&&!o().maskExclude,exclude=!o().maskOff&&o().maskExclude;
+        button(g,x+33,y+24,share,19,"Include",include,()->{o().maskOff=include;o().maskExclude=false;ClientState.save();},"Only blocks in the mask may be changed · click again to ignore the mask");
+        button(g,x+37+share,y+24,share,19,"Exclude",exclude,()->{o().maskOff=exclude;o().maskExclude=true;ClientState.save();},"Blocks in the mask are kept out of every change · click again to ignore the mask");
         var cells=o().maskBlocks;int total=cells.size()+1,rows=(total+maskCols-1)/maskCols;maskScroll=Math.clamp(maskScroll,0,Math.max(0,rows-maskRows));
         for(int r=0;r<maskRows;r++)for(int c=0;c<maskCols;c++){
             int i=(maskScroll+r)*maskCols+c;if(i>=total)break;
@@ -1749,7 +1754,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         player.setDeltaMovement(Vec3.ZERO);player.setPos(player.position().add(delta));
         player.setOldPosAndRot(); // the renderer interpolates from the previous position, so make it the current one
     }
-    private List<Point> handleNodes(){return !toolActive?ClientState.rulerPoints:o().tool==Tool.BOX_SELECT?ClientState.boxCorners:EnumSet.of(Tool.PATH,Tool.MODELLING,Tool.GRADIENT_PAINTER,Tool.SLOPE).contains(o().tool)?o().nodes:new ArrayList<>();}
+    private List<Point> handleNodes(){return !toolActive?ClientState.rulerPoints:o().tool==Tool.BOX_SELECT?ClientState.boxCorners:EnumSet.of(Tool.PATH,Tool.MODELLING,Tool.GRADIENT_PAINTER,Tool.SLOPE).contains(o().tool)?o().nodes:o().tool==Tool.MODIFY?ModifyPreview.knobNodes():new ArrayList<>();}
     double pointerX(){return pointerX;}
     double pointerY(){return pointerY;}
     boolean pointerInViewport(){return inViewport(pointerX/scale,pointerY/scale);}

@@ -46,7 +46,12 @@ public final class Options {
     /** The blocks shown as cells in the mask palette, and which of them are toggled on. A cell with a state ("[") matches that exact state; without one, any state of the block. */
     public java.util.List<String> maskBlocks = new java.util.ArrayList<>(), maskActive = new java.util.ArrayList<>();
     /** False: edit only the toggled blocks. True: edit everything but them. With none toggled the block mask does nothing. */
+    /** Whether the toggled blocks only let blocks through (include, the default) or keep them out (exclude). Neither applies while {@link #maskOff} is set. */
     public boolean maskExclude;
+    /** Whether holding a gizmo handle hides the others, so only the one being dragged is drawn. */
+    public boolean gizmoHideOthers=true;
+    /** Include and Exclude both switched off, as they start: the block mask is ignored altogether, whatever blocks are toggled. */
+    public boolean maskOff=true;
     /** Whether the tool masks (block mask, mask block, rules, script, height range and restrict to selection) also apply to the builder tools. */
     public boolean maskInBuilder;
     public String biome = "minecraft:plains";
@@ -72,9 +77,13 @@ public final class Options {
     public enum SelectionStyle { ALL_EDGES("All edges"),OUTLINE("Outline"),SILHOUETTE("Silhouette");public final String label;SelectionStyle(String label){this.label=label;} }
     public SelectionStyle selectionStyle=SelectionStyle.SILHOUETTE;
     /** Colours (ARGB) of the selection and of the previews that go with it. The tints multiply the block's own texture, so they are lighter than they look. */
+    /** The fill of the selection's faces as seen from inside it, so standing in a selection reads differently from looking at one. */
+    public int selectionInsideFill=0x40ffa63d;
+    /** A wash over the whole screen while the camera is inside the selection; alpha 0 turns it off. */
+    public int selectionInsideTint=0x18ffa63d;
     public int selectionFill=0x225d91ff,selectionTint=0x9046B4EE,
         previewColor=0xff8be3b5,previewFill=0x2247d29b,previewTint=0x9046B4EE,
-        removedColor=0xffff7777,removedFill=0x22ff5555,removedTint=0x90EE4646,
+        removedFill=0x22ff5555,removedTint=0x90EE4646,
         hoverColor=0xff7fd8ff,hoverFill=0x2240c0ff;
     /** The colour (ARGB) and width, in pixels from 0.1 to 10, of the selection's outline. */
     public int selectionColor=0xff2389c6;
@@ -84,8 +93,7 @@ public final class Options {
     public boolean showSelectionContact=true;
     public double selectionWidth=1;
     /** How the builder tools draw their selection and where it would land, set apart from the editor's selection: colours (ARGB) and line widths. */
-    public int builderSelectionColor=0xff2389c6,builderSelectionFill=0x302389c6,
-        builderPreviewColor=0xff8be3b5,builderPreviewFill=0x2247d29b,builderPreviewTint=0x9046B4EE,builderMovingTint=0x90EE4646;
+    public int builderSelectionColor=0xff2389c6,builderSelectionFill=0x302389c6;
     public double builderSelectionWidth=1,builderPreviewWidth=1;
     /** The point one transform request works about, which can differ from the player's pivot, as when scaling from the far side. */
     public boolean aboutSet;
@@ -103,6 +111,8 @@ public final class Options {
     public boolean largeSelectionWarnings=true;
     /** Extrude: how many layers one click adds or removes, from 1 to {@link #MAX_EXTRUDE_COUNT}. */
     public static final int MAX_EXTRUDE_COUNT=64;
+    /** The widest gap, in blocks, a Floodfill can be told to close. */
+    public static final int MAX_FLOOD_GAP=16;
     public int extrudeCount=1;
     /** Extrude: whether replaceable blocks, such as grass and water, count as open space that a face grows into, and are replaced by it. */
     public boolean extrudeReplaceable=true;
@@ -208,7 +218,7 @@ public final class Options {
     public int uiBackground=0xf510141a,uiPanel=0xff10151c,uiAccent=0xff5b9fdb,uiText=0xffdce6ef,uiMuted=0xff8595a8,uiBorder=0xff303b49;
     public enum FluidType { WATER,LAVA,SNOW }
     public FluidType fluidType=FluidType.WATER;
-    public int floodLimit=1000,flowLength=7,fluidQuality=1;
+    public int floodGap,flowLength=7,fluidQuality=1;
     public boolean floodUp,floodDown=true,floodHorizontal=true,floodCorners,requireSupport,infiniteSources,fillEdges=true,removeFluidsWithoutSources;
     public enum RulerMode { LINE,CIRCLE }
     public RulerMode rulerMode=RulerMode.LINE;
@@ -335,7 +345,7 @@ public final class Options {
         if(annotationId==null||annotationId.length()>64)throw new IllegalArgumentException("Invalid annotation identifier");
         worldTime=Math.clamp(worldTime,0,2_000_000_000);randomTickSpeed=Math.clamp(randomTickSpeed,0,4096);
         exposedFaces=Math.clamp(exposedFaces,1,6);
-        if(fluidType==null)throw new IllegalArgumentException("Choose a fluid");floodLimit=Math.clamp(floodLimit,1,Selection.LIMIT);flowLength=Math.clamp(flowLength,1,32);fluidQuality=Math.clamp(fluidQuality,1,4);
+        if(fluidType==null)throw new IllegalArgumentException("Choose a fluid");floodGap=Math.clamp(floodGap,0,MAX_FLOOD_GAP);flowLength=Math.clamp(flowLength,1,32);fluidQuality=Math.clamp(fluidQuality,1,4);
         if (maskBlocks==null || maskActive==null || maskBlocks.size()>64 || maskActive.size()>64) throw new IllegalArgumentException("Block mask limit: 64 blocks");
         for (var list : java.util.List.of(maskBlocks, maskActive)) for (String entry : list) if (entry==null || entry.length()>256) throw new IllegalArgumentException("Invalid block mask entry");
         if (block == null || secondary == null || mask == null || biome == null || text == null)

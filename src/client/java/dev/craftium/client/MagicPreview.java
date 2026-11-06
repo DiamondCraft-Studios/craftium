@@ -31,7 +31,7 @@ final class MagicPreview {
         if(hit==null||mc.level==null||o.tool!=Tool.MAGIC_SELECT||!o.magicPreview||TransformGizmo.dragging()||PlacementPreview.active()){key=null;shape=OutlineShape.EMPTY;return;}
         BlockPos at=hit.getBlockPos();
         // The world can change under a still cursor, so the result is also refreshed about once a second.
-        Object now=java.util.List.of(at,o.compare,o.hoverPreviewLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,java.util.List.copyOf(o.maskActive),o.maskExclude,mc.level.getGameTime()/20);
+        Object now=java.util.List.of(at,o.compare,o.hoverPreviewLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,java.util.List.copyOf(o.maskActive),o.maskExclude,o.maskOff,mc.level.getGameTime()/20);
         if(!Objects.equals(key,now)){key=now;shape=compute(mc,at,o);}
         if(shape.isEmpty())return;
         shape.drawPlain(Vec3.ZERO,ClientState.options.hoverColor,(float)ClientState.options.selectionWidth,ClientState.options.hoverFill,true,false);

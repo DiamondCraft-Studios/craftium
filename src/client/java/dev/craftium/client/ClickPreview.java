@@ -13,7 +13,7 @@ import java.util.*;
  */
 final class ClickPreview {
     static final int CAP=20_000;
-    private static final int VISITS=60_000;
+    private static final int VISITS=120_000; // a preview of 10,000 open cells looks at about six times as many, so this keeps it from stopping short and leaving gaps
     /** How many blocks the last search reached, up to {@link #CAP}. */
     private static int size;
     private static Object key;
@@ -26,11 +26,11 @@ final class ClickPreview {
         if(hit==null||mc.level==null||tool!=Tool.EXTRUDE&&tool!=Tool.FLOODFILL||TransformGizmo.dragging()||PlacementPreview.active()||ClientState.hasPending()){key=null;shape=OutlineShape.EMPTY;return;}
         BlockPos at=hit.getBlockPos();Point normal=CraftiumClient.normal(hit);
         // The world can change under a still cursor, so the result is also refreshed about once a second.
-        Object now=List.of(tool,at,normal,o.compare,o.selectLimit,o.extrudeCount,o.extrudeReplaceable,o.invert,o.floodLimit,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners,mc.level.getGameTime()/20);
+        Object now=List.of(tool,at,normal,o.compare,o.selectLimit,o.extrudeCount,o.extrudeReplaceable,o.smartExtrude,o.invert,o.blockLimit,o.floodGap,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners,mc.level.getGameTime()/20);
         if(!Objects.equals(key,now)){key=now;compute(mc,at,normal,o);}
         if(shape.isEmpty())return;
-        int colour=removing?o.removedColor:o.hoverColor,fill=removing?o.removedFill:o.hoverFill;
-        shape.drawPlain(Vec3.ZERO,colour,(float)o.selectionWidth,fill,true,false);
+        if(removing)shape.drawFill(Vec3.ZERO,o.removedFill); // blocks that go are only filled, never outlined
+        else shape.drawPlain(Vec3.ZERO,o.hoverColor,(float)o.selectionWidth,o.hoverFill,true,false);
     }
 
     private static void compute(Minecraft mc,BlockPos at,Point normal,Options o){
@@ -41,9 +41,10 @@ final class ClickPreview {
             var compare=o.compare==Options.Compare.NBT?Options.Compare.BLOCK:o.compare; // block entity data is not all known here
             var world=MagicPreview.world(mc,at,o,compare,false);
             boolean chosen=SelectionOverlay.contains(at); // a click on the selection looks only among the selected blocks
+            var base=level.getBlockState(at);
             var face=SurfaceFill.face(new SurfaceFill.Cells(){
                 public boolean air(Point p){return world.air(p)||o.extrudeReplaceable&&level.getBlockState(new BlockPos(p.x(),p.y(),p.z())).canBeReplaced();}
-                public boolean matches(Point p){return (!chosen||SelectionOverlay.contains(new BlockPos(p.x(),p.y(),p.z())))&&world.matches(p);}
+                public boolean matches(Point p){return (!chosen||SelectionOverlay.contains(new BlockPos(p.x(),p.y(),p.z())))&&(o.smartExtrude?dev.craftium.server.BlockFamily.same(base,level.getBlockState(new BlockPos(p.x(),p.y(),p.z()))):world.matches(p));}
             },centre,normal,Math.min(o.selectLimit,CAP));
             int count=Math.max(1,o.extrudeCount);removing=o.invert;
             var cells=new LinkedHashSet<Point>();
@@ -59,7 +60,8 @@ final class ClickPreview {
             var cells=SurfaceFill.flood(new SurfaceFill.Cells(){
                 public boolean air(Point p){return level.getBlockState(new BlockPos(p.x(),p.y(),p.z())).isAir();}
                 public boolean matches(Point p){return(!chosen||SelectionOverlay.contains(new BlockPos(p.x(),p.y(),p.z())))&&level.getBlockState(new BlockPos(p.x(),p.y(),p.z()))==matching;}
-            },start,Math.min(o.floodLimit,CAP),VISITS,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners);
+                public boolean solid(Point p){var s=level.getBlockState(new BlockPos(p.x(),p.y(),p.z()));return !s.isAir()&&s!=matching;}
+            },start,Math.min(o.blockLimit,CAP),VISITS,o.floodGap,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners);
             size=cells.size();shape=OutlineShape.of(cells);
         }
     }

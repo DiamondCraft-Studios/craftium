@@ -18,7 +18,7 @@ public final class BlockMask {
     private final boolean exclude;
     private BlockMask(Options options){
         exclude=options.maskExclude;
-        for(String text:options.maskActive){
+        if(!options.maskOff)for(String text:options.maskActive){
             int open=text.indexOf('[');var id=Compat.tryParse(open<0?text:text.substring(0,open));if(id==null)continue;
             var block=BuiltInRegistries.BLOCK.getOptional(id);if(block.isEmpty())continue;
             var properties=new LinkedHashMap<String,String>();int close=text.lastIndexOf(']');

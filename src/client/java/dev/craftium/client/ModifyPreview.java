@@ -23,20 +23,39 @@ final class ModifyPreview {
     private static OutlineShape shape=OutlineShape.EMPTY;
     private static AABB bounds;
     private static String problem;
-    private static boolean anchored;
-    private static Point anchorAt;
+    /** The anchor, when there is one. A list, so that the Move gizmo can carry it as it does the handle points of the other tools. */
+    private static final List<Point> anchors=new ArrayList<>();
+    /** Whether the anchor is a knob the Move gizmo is on. */
+    private static boolean knob;
+    private static Point lastCursor;
     /** Whether the preview is fixed where it was put, instead of following the cursor. */
-    static boolean anchored(){return anchored;}
-    static Point anchor(){return anchorAt;}
+    static boolean anchored(){return !anchors.isEmpty();}
+    static Point anchor(){return anchors.isEmpty()?null:anchors.getFirst();}
     /** Fixes the preview at the cursor. Once it is anchored another click does nothing: the settings change that same preview. */
-    static void place(Point cursor){if(anchored)return;anchored=true;anchorAt=cursor;}
+    static void place(Point cursor){if(anchored())return;anchors.add(cursor);}
+    /** Whether the anchor is a knob the Move gizmo carries. */
+    static boolean knob(){return knob&&anchored();}
+    /** The handle points the Move gizmo can carry for this tool: the anchor while it is a knob, else none. */
+    static List<Point> knobNodes(){return knob()?anchors:new ArrayList<>();}
+    /**
+     * The Edit anchor button. Without an anchor yet, the anchor is put where the cursor was and becomes a knob; with one it becomes a knob;
+     * with a knob it lets go and the preview follows the cursor again. Returns whether there is a knob now.
+     */
+    static boolean editAnchor(Point fallback){
+        if(knob()){edit();return false;}
+        if(!anchored()){Point at=lastCursor!=null?lastCursor:fallback;if(at==null)return false;anchors.add(at);}
+        knob=true;return true;
+    }
     /** Lets the preview follow the cursor again. */
-    static void edit(){anchored=false;anchorAt=null;}
+    static void edit(){anchors.clear();knob=false;}
 
     static void draw(Minecraft mc,Point cursor){
         var o=ClientState.options;var selected=SelectionOverlay.points();
         if(o.tool!=Tool.MODIFY||selected.isEmpty()||mc.level==null)return;
-        if(anchored&&anchorAt!=null)cursor=anchorAt;
+        lastCursor=cursor;
+        if(anchored())cursor=anchor();
+        var live=knob()?TransformGizmo.liveNode():null; // the knob while the gizmo carries it, so the preview moves with it
+        if(live!=null){double shift=TransformGizmo.nodeOffset();cursor=new Point((int)Math.round(live.x-shift),(int)Math.round(live.y-shift),(int)Math.round(live.z-shift));}
         if(ClientState.hasPending())return; // a waiting edit shows its own blocks
         var c=ModifyMath.usesCursor(o)?cursor:null;
         Object[] now={o.modifyMode,o.modifyAxis,o.modifyType,o.modifyAngle,o.modifyRelative,o.modifyTranslate,o.modifyTranslateX,o.modifyTranslateY,o.modifyTranslateZ,o.modifyTranslateScale,o.copies,o.offsetX,o.offsetY,o.offsetZ,o.pasteAir,c,selected};

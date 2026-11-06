@@ -65,7 +65,8 @@ final class AdvancedTools {
                 for(Point at:SurfaceFill.flood(new SurfaceFill.Cells(){
                     public boolean air(Point a){return p.state(a).isAir();}
                     public boolean matches(Point a){return (within==null||within.contains(a))&&p.state(a)==matching;}
-                },start,o.floodLimit,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners))p.put(at,p.material);
+                    public boolean solid(Point a){var s=p.state(a);return !s.isAir()&&s!=matching;}
+                },start,Math.clamp(o.blockLimit,1,Selection.LIMIT),Selection.LIMIT*8,o.floodGap,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners))p.put(at,p.material);
             }
             case FLUID_BALL -> fluid(p,center,normal);
             case SMEAR -> {
@@ -157,14 +158,8 @@ final class AdvancedTools {
             Point at=Math.abs(normal.x())==1?c.add(v.z(),v.y(),-v.x()*normal.x()):c.add(v.x(),v.y(),v.z());p.put(at,p.material);
         }
     }
-    /** The block's name without what makes it a variant: oak_stairs, oak_slab, oak_fence and oak_planks are all "oak". */
-    static String family(BlockState state){
-        String name=BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
-        String base=name.replaceAll("_(stairs|slab|wall|fence_gate|fence|button|pressure_plate)$","").replaceAll("_(planks|block)$","").replaceAll("_bricks$","_brick").replaceAll("_tiles$","_tile");
-        return base;
-    }
-    /** Whether {@code other} is a solid block of the same family as {@code original}: the same block, or a stair, slab, wall or other variant of the same material. */
-    static boolean sameFamily(BlockState original,BlockState other){return !other.isAir()&&(other.is(original.getBlock())||family(original).equals(family(other)));}
+    static String family(BlockState state){return BlockFamily.of(state);}
+    static boolean sameFamily(BlockState original,BlockState other){return BlockFamily.same(original,other);}
     static BlockState typeReplace(EditPlanner p,BlockState old,BlockState target){
         String from=BuiltInRegistries.BLOCK.getKey(old.getBlock()).getPath(),to=BuiltInRegistries.BLOCK.getKey(target.getBlock()).getPath();
         for(String suffix:new String[]{"_stairs","_slab","_wall","_fence","_fence_gate","_button","_pressure_plate","_door","_trapdoor"})if(from.endsWith(suffix)){

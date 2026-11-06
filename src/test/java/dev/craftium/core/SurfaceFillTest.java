@@ -43,4 +43,19 @@ class SurfaceFillTest {
         assertEquals(10, SurfaceFill.flood(world, new Point(2, 1, 2), 10, true, true, true, false).size());
         assertEquals(3, SurfaceFill.flood(world, new Point(2, 0, 2), 1000, true, false, false, false).size()); // straight up only
     }
+
+    @Test void aGapToleranceKeepsTheFillFromLeakingThroughANarrowOpening() {
+        // Two 5x5 rooms side by side (x 0-4 and x 6-10, y 0-4, z 0-4) divided by a wall at x=5 with a 1x2 doorway in it.
+        var world = new SurfaceFill.Cells() {
+            private boolean inside(Point p) { return p.y() >= 0 && p.y() < 5 && p.z() >= 0 && p.z() < 5 && p.x() >= 0 && p.x() <= 10; }
+            public boolean air(Point p) { return matches(p); }
+            public boolean matches(Point p) { return inside(p) && (p.x() != 5 || p.y() < 2 && p.z() == 2); }
+            public boolean solid(Point p) { return !matches(p); }
+        };
+        var start = new Point(2, 2, 2);
+        assertEquals(125 + 2 + 125, SurfaceFill.flood(world, start, 100_000, 1_000_000, 0, true, true, true, false).size()); // leaks into the far room
+        var closed = SurfaceFill.flood(world, start, 100_000, 1_000_000, 2, true, true, true, false);
+        assertEquals(125, closed.size());
+        assertFalse(closed.contains(new Point(7, 2, 2)));
+    }
 }

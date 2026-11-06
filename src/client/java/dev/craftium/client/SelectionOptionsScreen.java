@@ -12,9 +12,8 @@ import java.util.*;
 import java.util.function.*;
 
 /**
- * How the selection looks: its style, the width of its lines and every colour it and its previews are drawn in.
- * Clicking a colour's swatch opens an editor for it, with a typeable hex code and a slider for each channel.
- * {@link #builder} opens the same screen on the builder tools' own selection, which has no style.
+ * How the selection looks, in the editor and in the builder tools: its style, the width of its lines and every colour it and its previews
+ * are drawn in, grouped by use. Clicking a colour's swatch opens an editor for it, with a typeable hex code and a slider for each channel.
  */
 public final class SelectionOptionsScreen extends CraftiumScreen {
     private static final int W=640,H=420,ROW=19;
@@ -31,31 +30,27 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
         String show(double units){return percent?Math.round(units)+"%":Double.toString(Math.round(units*100)/100d);}
     }
 
+    /** Every colour of the editor's and the builder tools' selections and previews, grouped by what they are used for. */
     private static final List<Entry> ENTRIES=List.of(
         entry("Selection","Outline",o->o.selectionColor,(o,c)->o.selectionColor=c),
         entry("Selection","Fill",o->o.selectionFill,(o,c)->o.selectionFill=c),
+        entry("Selection","Fill seen from inside",o->o.selectionInsideFill,(o,c)->o.selectionInsideFill=c),
+        entry("Selection","Screen tint inside",o->o.selectionInsideTint,(o,c)->o.selectionInsideTint=c),
         entry("Selection","Selected blocks tint",o->o.selectionTint,(o,c)->o.selectionTint=c),
         entry("Selection","Face against a solid block",o->o.selectionContact,(o,c)->o.selectionContact=c),
-        entry("Destination preview","Outline",o->o.previewColor,(o,c)->o.previewColor=c),
-        entry("Destination preview","Fill",o->o.previewFill,(o,c)->o.previewFill=c),
-        entry("Destination preview","Blocks tint",o->o.previewTint,(o,c)->o.previewTint=c),
-        entry("Removed blocks","Outline",o->o.removedColor,(o,c)->o.removedColor=c),
-        entry("Removed blocks","Fill",o->o.removedFill,(o,c)->o.removedFill=c),
-        entry("Removed blocks","Blocks tint",o->o.removedTint,(o,c)->o.removedTint=c),
-        entry("Hover preview","Outline",o->o.hoverColor,(o,c)->o.hoverColor=c),
-        entry("Hover preview","Fill",o->o.hoverFill,(o,c)->o.hoverFill=c));
-    private static final List<Width> WIDTHS=List.of(new Width("Line width",o->o.selectionWidth,(o,v)->o.selectionWidth=v));
-
-    private static final List<Entry> BUILDER_ENTRIES=List.of(
         entry("Builder selection","Outline",o->o.builderSelectionColor,(o,c)->o.builderSelectionColor=c),
         entry("Builder selection","Fill",o->o.builderSelectionFill,(o,c)->o.builderSelectionFill=c),
-        entry("Where it lands","Outline",o->o.builderPreviewColor,(o,c)->o.builderPreviewColor=c),
-        entry("Where it lands","Fill",o->o.builderPreviewFill,(o,c)->o.builderPreviewFill=c),
-        entry("Where it lands","Blocks tint",o->o.builderPreviewTint,(o,c)->o.builderPreviewTint=c),
-        entry("Blocks being moved","Blocks tint",o->o.builderMovingTint,(o,c)->o.builderMovingTint=c));
-    private static final List<Width> BUILDER_WIDTHS=List.of(
-        new Width("Selection line width",o->o.builderSelectionWidth,(o,v)->o.builderSelectionWidth=v),
-        new Width("Landing line width",o->o.builderPreviewWidth,(o,v)->o.builderPreviewWidth=v));
+        entry("Destination blocks","Outline",o->o.previewColor,(o,c)->o.previewColor=c),
+        entry("Destination blocks","Fill",o->o.previewFill,(o,c)->o.previewFill=c),
+        entry("Destination blocks","Blocks tint",o->o.previewTint,(o,c)->o.previewTint=c),
+        entry("Remove blocks","Fill",o->o.removedFill,(o,c)->o.removedFill=c),
+        entry("Remove blocks","Blocks tint",o->o.removedTint,(o,c)->o.removedTint=c),
+        entry("Hover preview","Outline",o->o.hoverColor,(o,c)->o.hoverColor=c),
+        entry("Hover preview","Fill",o->o.hoverFill,(o,c)->o.hoverFill=c));
+    private static final List<Width> WIDTHS=List.of(
+        new Width("Selection line width",o->o.selectionWidth,(o,v)->o.selectionWidth=v),
+        new Width("Builder selection line width",o->o.builderSelectionWidth,(o,v)->o.builderSelectionWidth=v),
+        new Width("Destination line width",o->o.builderPreviewWidth,(o,v)->o.builderPreviewWidth=v));
 
     private static final List<Entry> RULER_ENTRIES=List.of(
         entry("Ruler","Line",o->o.rulerLineColor,(o,c)->o.rulerLineColor=c),
@@ -76,7 +71,7 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     private final String heading;
     private final List<Entry> entries;
     private final List<Width> widths;
-    /** Whether the screen sets the selection's style: the editor's selection has one, the builder's does not. */
+    /** Whether the screen sets the selection's style: the selection screen does, the ruler's does not. */
     private final boolean styled;
     private int left,top,selected=-1;
     private EditBox hex;
@@ -89,9 +84,6 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     private SelectionOptionsScreen(Screen parent,String title,List<Entry> entries,List<Width> widths,boolean styled){
         super(Component.literal(title));this.parent=parent;heading=title.toUpperCase(Locale.ROOT);this.entries=entries;this.widths=widths;this.styled=styled;
     }
-    /** The builder tools' selection: its colours, the colours of where it would land, and both line widths. */
-    static SelectionOptionsScreen builder(Screen parent){return new SelectionOptionsScreen(parent,"Builder selection options",BUILDER_ENTRIES,BUILDER_WIDTHS,true);}
-
     /** The Ruler tool's colours: its line, its knobs and its span label. */
     static SelectionOptionsScreen ruler(Screen parent){return new SelectionOptionsScreen(parent,"Ruler options",RULER_ENTRIES,RULER_WIDTHS,false);}
 
@@ -99,24 +91,24 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
         left=(width-W)/2;top=(height-H)/2;
         clearWidgets();hex=null;
         var o=ClientState.options;
-        int sy=top+34;
+        int ex0=left+W-290,sy=top+262; // the style and the line widths sit under the colour editor, so the list of colours has the whole left side
         if(styled){
-            addRenderableWidget(new FlatButton(left+14,sy,300,20,"Style: "+o.selectionStyle.label+"   (click to cycle)",()->{
+            addRenderableWidget(new FlatButton(ex0,sy,270,20,"Style: "+o.selectionStyle.label+"   (click to cycle)",()->{
                 var all=Options.SelectionStyle.values();o.selectionStyle=all[(o.selectionStyle.ordinal()+1)%all.length];init();
             }).back(()->{var all=Options.SelectionStyle.values();o.selectionStyle=all[(o.selectionStyle.ordinal()+all.length-1)%all.length];init();}));
-            sy+=26;
+            sy+=38; // the line under the button says what the style does
         }
         for(var w:widths){
             double low=w.min(),span=w.max()-w.min();
-            var widthSlider=new FlatSlider(left+14,sy,300,19,Component.empty(),(w.units(w.get().applyAsDouble(o))-low)/span){
+            var widthSlider=new FlatSlider(ex0,sy,270,19,Component.empty(),(w.units(w.get().applyAsDouble(o))-low)/span){
                 protected void updateMessage(){setMessage(Component.literal(w.label()+": "+w.show(low+value*span)));}
                 protected void applyValue(){w.set().accept(o,w.fromUnits(low+value*span));}
             };
             widthSlider.range(low,w.max(),w.units(w.get().applyAsDouble(DEFAULTS)));widthSlider.setRaw((w.units(w.get().applyAsDouble(o))-low)/span);addRenderableWidget(widthSlider);
-            sy+=24;
+            sy+=22;
         }
-        addRenderableWidget(new FlatButton(left+14,top+H-34,146,22,"Reset all",()->{for(var e:entries)e.set().accept(e.fallback().getAsInt());for(var w:widths)w.set().accept(o,w.get().applyAsDouble(DEFAULTS));if(styled)o.selectionStyle=DEFAULTS.selectionStyle;init();}));
-        addRenderableWidget(new FlatButton(left+168,top+H-34,146,22,"Done",this::onClose));
+        addRenderableWidget(new FlatButton(ex0,top+H-30,132,22,"Reset all",()->{for(var e:entries)e.set().accept(e.fallback().getAsInt());for(var w:widths)w.set().accept(o,w.get().applyAsDouble(DEFAULTS));if(styled)o.selectionStyle=DEFAULTS.selectionStyle;init();}));
+        addRenderableWidget(new FlatButton(ex0+138,top+H-30,132,22,"Done",this::onClose));
         if(selected<0)return;
         var entry=entries.get(selected);int ex=left+W-290;
         hex=new EditBox(font,ex,top+78,100,20,Component.literal("Hex colour"));
@@ -157,7 +149,7 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     }
 
     private int rowY(int index){
-        int y=top+34+(styled?26:0)+widths.size()*24+8;String group="";
+        int y=top+34;String group="";
         for(int i=0;i<=index;i++){
             if(!entries.get(i).group().equals(group)){group=entries.get(i).group();y+=15;}
             if(i<index)y+=ROW;
@@ -186,7 +178,7 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
             g.text(font,"Hex",ex+108,top+84,0xff9db5cb,false);
             g.text(font,"6 digits keep the opacity · 8 digits are RRGGBBAA",ex,top+240,0xff7e91a4,false);
         }else g.text(font,"Click a colour to edit it",left+W-290,top+40,0xff9db5cb,false);
-        if(styled)g.text(font,o.selectionStyle==Options.SelectionStyle.SILHOUETTE?"Silhouette: only the contour of the selection on the screen":o.selectionStyle==Options.SelectionStyle.OUTLINE?"Outline: the edges on the near side of the selection":"All edges: every edge of the selection",left+330,top+H-26,0xff7e91a4,false);
+        if(styled)g.text(font,o.selectionStyle==Options.SelectionStyle.SILHOUETTE?"Silhouette: only the contour on the screen":o.selectionStyle==Options.SelectionStyle.OUTLINE?"Outline: the edges on the near side":"All edges: every edge of the selection",left+W-290,top+286,0xff7e91a4,false);
         drawWidgets(g,mouseX,mouseY,delta);
     }
 

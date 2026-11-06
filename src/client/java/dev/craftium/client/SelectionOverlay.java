@@ -64,6 +64,12 @@ final class SelectionOverlay {
         }
         return c;
     }
+    /** A faint wash over the whole screen while the camera is inside the selection, like the one under water. Drawn with the interface, not in the world. */
+    static void tint(dev.craftium.client.compat.Gfx g){
+        int colour=ClientState.options.selectionInsideTint;
+        if((colour>>>24)==0||shape.isEmpty()||!shape.cameraInside())return;
+        g.fill(0,0,g.guiWidth(),g.guiHeight(),colour);
+    }
     /**
      * Draws the selection as one outline around its outer surface, with a fill on each exterior face. While the
      * transform gizmo is being dragged only the outline is drawn, moved by the transform being applied.
@@ -74,7 +80,7 @@ final class SelectionOverlay {
         var landing=transforming?TransformGizmo.landing(selected):null;
         if(landing!=null)landing.drawPlain(Vec3.ZERO,colour,width,ClientState.options.selectionFill,true,false); // a rotate or scale: the blocks it will leave
         else if(transforming)shape.draw(Vec3.ZERO,TransformGizmo::line,colour,ClientState.options.selectionFill,false);
-        else shape.drawPlain(Vec3.ZERO,colour,width,ClientState.options.selectionFill,true,false);
+        else shape.drawPlain(Vec3.ZERO,colour,width,ClientState.options.selectionFill,ClientState.options.selectionInsideFill,true,false);
         int contact=ClientState.options.selectionContact;
         if(!transforming&&ClientState.options.showSelectionContact&&(contact>>>24)!=0)for(var q:contacts())Overlay.face(q[0],q[1],q[2],q[3],contact);
         if(blocks.isEmpty())return;
