@@ -33,7 +33,7 @@ public final class BuilderPrediction {
     static void apply(Options o,Point min,Point max,Collection<Point> cells,List<Point> steps){
         undo=Map.of();
         var tool=o.builderTool;
-        if(tool!=Options.BuilderTool.MOVE&&tool!=Options.BuilderTool.CLONE&&tool!=Options.BuilderTool.STACK)return;
+        if(tool!=Options.BuilderTool.MOVE&&tool!=Options.BuilderTool.CLONE&&tool!=Options.BuilderTool.STACK&&tool!=Options.BuilderTool.ERASE)return;
         if(o.copyEntities||o.builderKeepExisting)return;
         var mc=Minecraft.getInstance();var level=mc.level;if(level==null||mc.player==null||!mc.player.isCreative())return;
         Point size=max.add(1-min.x(),1-min.y(),1-min.z());
@@ -43,8 +43,8 @@ public final class BuilderPrediction {
         var source=new LinkedHashMap<Point,BlockState>();
         for(Point at:points)source.put(at,level.getBlockState(pos(at)));
         var result=new LinkedHashMap<BlockPos,BlockState>();
-        if(tool==Options.BuilderTool.MOVE)for(Point at:points)result.put(pos(at),net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
-        for(Point step:steps)for(var e:source.entrySet()){
+        if(tool==Options.BuilderTool.MOVE||tool==Options.BuilderTool.ERASE)for(Point at:points)result.put(pos(at),net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+        if(tool!=Options.BuilderTool.ERASE)for(Point step:steps)for(var e:source.entrySet()){
             BlockState state=BuilderEdits.turn(e.getValue(),o.builderRotation,o.builderFlipAxis);
             if(!o.pasteAir&&state.isAir())continue;
             Point q=BuilderTransform.apply(e.getKey().subtract(min),size,o.builderRotation,o.builderFlipAxis).add(min.x()+step.x(),min.y()+step.y(),min.z()+step.z());
