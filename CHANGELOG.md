@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.8.0-beta.1
+
+Changes since 0.7.0-beta.1.
+
+### Builder
+- Smart extrude is also an option on the editor's Extrude tool.
+- Extrude and Floodfill stay inside the selection they are clicked in.
+- Floodfill has a paint bucket icon, grows as a ball, follows the Block limit, closes gaps in thin walls, and its default limit is 10,000.
+- Rotating a selection with the gizmo turns stairs and other oriented blocks with it, and the preview ghosts are drawn with the turn and flip applied.
+- A selection fills its inside faces in their own colour, and the screen is washed while the camera is inside it.
+- All selection colours are in one screen, grouped by use. The landing colours became Destination blocks, the moved blocks tint joined Remove blocks, and blocks about to be removed are filled instead of outlined.
+- Each shape has its own size controls in the tool options, with a Chain toggle.
+- The brush has a Flow setting for how often a stroke applies it.
+- The builder draws a white bounding box when Copy air is off, shows a live size readout, and `;` cycles the selection style.
+- The ruler highlights the first block hit in white while an end is moved.
+
+### Editor
+- Edit anchor turns the Modify anchor into a knob that the move gizmo carries. The preview follows the cursor until it is anchored, and then follows the knob while the gizmo drags it.
+- While the gizmo holds one handle, the other handles are hidden. A preference turns this off, and it is on by default.
+- Tool masks can have include and exclude both switched off, and a new tool mask starts that way.
+- The invert / carve toggle is gone from the editor.
+- Slider values can be typed like a text box (Ctrl-click). Modify sliders are capped at 64 while typing, and Angle drags past 360.
+- Modify has Translate Scale and the gizmo shows drag hints.
+- Dropping a block on the Hand keeps the item you are holding.
+- Keep existing is ignored while Replace mode is on.
+
 ## 0.7.0-beta.1
 
 Changes since 0.6.0-beta.1.
