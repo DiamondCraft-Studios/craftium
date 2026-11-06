@@ -640,6 +640,9 @@ public final class EditorServer {
                 if((j.load||j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) && expected.matches(j.level,at)) {
                     if(!ServerPlatform.canChange(j.owner,j.level,c.pos()))throw new IllegalArgumentException("Edit permission or region access changed");
                     desired.place(j.level,at,j.edit.flags());j.applied.add(c);
+                } else if(j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) {
+                    // Skipped: resend the block as it is, so a client that predicted this edit puts it back.
+                    var now=j.level.getBlockState(at);j.level.sendBlockUpdated(at,now,now,2);
                 }
             }
             if(j.cursor[0]<list.size())return;
