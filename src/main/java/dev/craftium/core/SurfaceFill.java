@@ -37,9 +37,12 @@ public final class SurfaceFill {
     /** As above, giving up after {@code visits} cells have been looked at, which bounds the work when the space is open. */
     public static List<Point> flood(Cells world, Point start, int limit, int visits, boolean up, boolean down, boolean horizontal, boolean corners) {
         var found = new ArrayList<Point>();
-        var todo = new ArrayDeque<Point>();var seen = new HashSet<Point>();todo.add(start);seen.add(start);
+        // Nearest by straight-line distance, not by steps: a queue in step order grows an octahedron in open space, this grows a ball.
+        // The tie-breaks keep the order the same on the client and the server.
+        var todo = new PriorityQueue<Point>(Comparator.<Point>comparingDouble(p -> p.distanceSquared(start)).thenComparingInt(Point::x).thenComparingInt(Point::y).thenComparingInt(Point::z));
+        var seen = new HashSet<Point>();todo.add(start);seen.add(start);
         while (!todo.isEmpty() && found.size() < limit && seen.size() < visits) {
-            Point at = todo.removeFirst();
+            Point at = todo.poll();
             if (at.distanceSquared(start) > 128 * 128 || !world.matches(at)) continue;
             if (!up && at.y() > start.y() || !down && at.y() < start.y() || !horizontal && (at.x() != start.x() || at.z() != start.z())) continue;
             found.add(at);
