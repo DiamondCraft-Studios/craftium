@@ -65,7 +65,8 @@ final class AdvancedTools {
                 for(Point at:SurfaceFill.flood(new SurfaceFill.Cells(){
                     public boolean air(Point a){return p.state(a).isAir();}
                     public boolean matches(Point a){return (within==null||within.contains(a))&&p.state(a)==matching;}
-                },start,o.floodLimit,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners))p.put(at,p.material);
+                    public boolean solid(Point a){var s=p.state(a);return !s.isAir()&&s!=matching;}
+                },start,Math.clamp(o.blockLimit,1,Selection.LIMIT),Selection.LIMIT*8,o.floodGap,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners))p.put(at,p.material);
             }
             case FLUID_BALL -> fluid(p,center,normal);
             case SMEAR -> {

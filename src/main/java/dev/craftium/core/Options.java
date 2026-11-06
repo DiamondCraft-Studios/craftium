@@ -103,6 +103,8 @@ public final class Options {
     public boolean largeSelectionWarnings=true;
     /** Extrude: how many layers one click adds or removes, from 1 to {@link #MAX_EXTRUDE_COUNT}. */
     public static final int MAX_EXTRUDE_COUNT=64;
+    /** The widest gap, in blocks, a Floodfill can be told to close. */
+    public static final int MAX_FLOOD_GAP=16;
     public int extrudeCount=1;
     /** Extrude: whether replaceable blocks, such as grass and water, count as open space that a face grows into, and are replaced by it. */
     public boolean extrudeReplaceable=true;
@@ -208,7 +210,7 @@ public final class Options {
     public int uiBackground=0xf510141a,uiPanel=0xff10151c,uiAccent=0xff5b9fdb,uiText=0xffdce6ef,uiMuted=0xff8595a8,uiBorder=0xff303b49;
     public enum FluidType { WATER,LAVA,SNOW }
     public FluidType fluidType=FluidType.WATER;
-    public int floodLimit=10_000,flowLength=7,fluidQuality=1;
+    public int floodGap,flowLength=7,fluidQuality=1;
     public boolean floodUp,floodDown=true,floodHorizontal=true,floodCorners,requireSupport,infiniteSources,fillEdges=true,removeFluidsWithoutSources;
     public enum RulerMode { LINE,CIRCLE }
     public RulerMode rulerMode=RulerMode.LINE;
@@ -335,7 +337,7 @@ public final class Options {
         if(annotationId==null||annotationId.length()>64)throw new IllegalArgumentException("Invalid annotation identifier");
         worldTime=Math.clamp(worldTime,0,2_000_000_000);randomTickSpeed=Math.clamp(randomTickSpeed,0,4096);
         exposedFaces=Math.clamp(exposedFaces,1,6);
-        if(fluidType==null)throw new IllegalArgumentException("Choose a fluid");floodLimit=Math.clamp(floodLimit,1,Selection.LIMIT);flowLength=Math.clamp(flowLength,1,32);fluidQuality=Math.clamp(fluidQuality,1,4);
+        if(fluidType==null)throw new IllegalArgumentException("Choose a fluid");floodGap=Math.clamp(floodGap,0,MAX_FLOOD_GAP);flowLength=Math.clamp(flowLength,1,32);fluidQuality=Math.clamp(fluidQuality,1,4);
         if (maskBlocks==null || maskActive==null || maskBlocks.size()>64 || maskActive.size()>64) throw new IllegalArgumentException("Block mask limit: 64 blocks");
         for (var list : java.util.List.of(maskBlocks, maskActive)) for (String entry : list) if (entry==null || entry.length()>256) throw new IllegalArgumentException("Invalid block mask entry");
         if (block == null || secondary == null || mask == null || biome == null || text == null)

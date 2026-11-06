@@ -450,7 +450,10 @@ public final class EditorScreen extends CraftiumScreen {
             default -> {
                 // Rows follow one another: the slot of a Strength slider is only left open for the tools that have one, and Fill, which belongs to the shape, only for the tools that pick one.
                 int row=sidesRow()-lift()+(o().tool==Tool.SMOOTH?smoothRows(g,375+sidesRow()):hasStrength()?0:-28);
-                if(o().tool==Tool.FLOODFILL){floodButtons(g,403+row);row+=48;} // Floodfill has no brush, so its spread takes the room where the radius would be
+                if(o().tool==Tool.FLOODFILL){ // Floodfill has no brush, so its spread takes the room where the radius would be
+                    floodButtons(g,403+row);row+=48;
+                    slider(g,10,403+row+10,pw-20,"Gap tolerance",o().floodGap,0,8,Options.MAX_FLOOD_GAP,DEFAULTS.floodGap,v->o().floodGap=(int)Math.clamp(Math.round(v),0,Options.MAX_FLOOD_GAP),true);row+=38;
+                }
                 int fillRow=o().tool.picksShape()?23:0;
                 toggle(g,10,403+row,"Invert / carve",o().invert,()->o().invert=!o().invert);
                 if(o().tool.picksShape())fillButtons(g,424+row);

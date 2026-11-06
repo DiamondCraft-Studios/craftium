@@ -26,7 +26,7 @@ final class ClickPreview {
         if(hit==null||mc.level==null||tool!=Tool.EXTRUDE&&tool!=Tool.FLOODFILL||TransformGizmo.dragging()||PlacementPreview.active()||ClientState.hasPending()){key=null;shape=OutlineShape.EMPTY;return;}
         BlockPos at=hit.getBlockPos();Point normal=CraftiumClient.normal(hit);
         // The world can change under a still cursor, so the result is also refreshed about once a second.
-        Object now=List.of(tool,at,normal,o.compare,o.selectLimit,o.extrudeCount,o.extrudeReplaceable,o.invert,o.floodLimit,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners,mc.level.getGameTime()/20);
+        Object now=List.of(tool,at,normal,o.compare,o.selectLimit,o.extrudeCount,o.extrudeReplaceable,o.invert,o.blockLimit,o.floodGap,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners,mc.level.getGameTime()/20);
         if(!Objects.equals(key,now)){key=now;compute(mc,at,normal,o);}
         if(shape.isEmpty())return;
         int colour=removing?o.removedColor:o.hoverColor,fill=removing?o.removedFill:o.hoverFill;
@@ -59,7 +59,8 @@ final class ClickPreview {
             var cells=SurfaceFill.flood(new SurfaceFill.Cells(){
                 public boolean air(Point p){return level.getBlockState(new BlockPos(p.x(),p.y(),p.z())).isAir();}
                 public boolean matches(Point p){return(!chosen||SelectionOverlay.contains(new BlockPos(p.x(),p.y(),p.z())))&&level.getBlockState(new BlockPos(p.x(),p.y(),p.z()))==matching;}
-            },start,Math.min(o.floodLimit,CAP),VISITS,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners);
+                public boolean solid(Point p){var s=level.getBlockState(new BlockPos(p.x(),p.y(),p.z()));return !s.isAir()&&s!=matching;}
+            },start,Math.min(o.blockLimit,CAP),VISITS,o.floodGap,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners);
             size=cells.size();shape=OutlineShape.of(cells);
         }
     }
