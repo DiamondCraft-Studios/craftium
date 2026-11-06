@@ -15,7 +15,7 @@ import java.util.*;
 final class OutlineShape {
     static final OutlineShape EMPTY=new OutlineShape(SelectionOutline.Result.EMPTY,null);
     /** Beyond these the outline is too detailed to draw every tick, so the shape falls back to its bounding box. */
-    private static final int MAX_EDGES=8192,MAX_FACES=4096;
+    static int maxEdges=8192,maxFaces=4096; // not final only so the draw-cost game test can lift them; nothing else changes them
 
     private final SelectionOutline.Result outline;
     private final AABB bounds;
@@ -68,7 +68,7 @@ final class OutlineShape {
     void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style){draw(at,lines,stroke,fill,fill,withFill,style);}
     private void draw(Vec3 at,Lines lines,int stroke,int fill,int backFill,boolean withFill,Options.SelectionStyle style){
         if(bounds==null)return;
-        if(outline.edges().size()>MAX_EDGES){
+        if(outline.edges().size()>maxEdges){
             AABB box=bounds.move(at);
             if(withFill)Overlay.box(box,stroke,1,fill);else boxLines(box,lines);
             return;
@@ -76,7 +76,7 @@ final class OutlineShape {
         // Only the outline as the camera sees it, unless every edge was asked for or the camera is inside the shape.
         if(style==Options.SelectionStyle.ALL_EDGES||!(style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at))&&!silhouette(lines,at))
             for(var s:outline.edges())lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
-        if(withFill&&outline.faces().size()<=MAX_FACES){
+        if(withFill&&outline.faces().size()<=maxFaces){
             // Only a camera inside the shape sees its walls from behind; from outside, every face keeps the one fill.
             Vec3 eye=backFill==fill?null:ClientCompat.camera(Minecraft.getInstance()).position().subtract(at);
             boolean inside=eye!=null&&inside(eye);
@@ -90,7 +90,7 @@ final class OutlineShape {
     }
     /** Whether the camera is inside the shape. Shapes with too many faces to be filled are not worked out, which keeps the frame cheap. */
     boolean cameraInside(){
-        if(bounds==null||outline.faces().size()>MAX_FACES)return false;
+        if(bounds==null||outline.faces().size()>maxFaces)return false;
         return inside(ClientCompat.camera(Minecraft.getInstance()).position());
     }
     /** Whether {@code eye}, relative to the shape, is inside it: a ray along +x crosses an odd number of the closed surface's faces. */
