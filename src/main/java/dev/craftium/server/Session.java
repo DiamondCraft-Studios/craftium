@@ -61,6 +61,8 @@ final class Session {
     ModelTransform.Chain pendingChain;Edit pendingChainBase,pendingChainEdit;
     long requestStroke, lastStroke;
     boolean busy;
+    /** Builder commits that arrived while an edit was being applied, as the requests were sent; each is planned when its turn comes, against the world as the earlier ones left it. */
+    final ArrayDeque<String> queued=new ArrayDeque<>();
     /** A pulse for the client to show with the next status, as "undo|redo:milliseconds:points"; empty when there is none. */
     String pulse="";
     UUID selectedEntity;

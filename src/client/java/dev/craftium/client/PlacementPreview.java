@@ -27,9 +27,9 @@ public final class PlacementPreview {
     public static boolean active(){return origin!=null;}
     static void cancel(){origin=null;}
     static void nudge(int amount){if(origin!=null)origin=origin.add(axis==0?amount:0,axis==1?amount:0,axis==2?amount:0);}
-    public static void confirm(){if(origin!=null&&!ClientState.status.busy()){CraftiumClient.send("paste_at",origin,new Point(0,1,0));origin=null;}}
-    public static void pasteCopy(){if(origin!=null&&!ClientState.status.busy())CraftiumClient.send("paste_at",origin,new Point(0,1,0));}
-    public static void pasteAndSelect(){if(origin!=null&&!ClientState.status.busy()){CraftiumClient.send("paste_select",origin,new Point(0,1,0));origin=null;}}
+    public static void confirm(){if(origin!=null&&!ClientState.status.busy()){BuilderPrediction.paste(ClientState.options,origin,ghost.placed());CraftiumClient.send("paste_at",origin,new Point(0,1,0));origin=null;}}
+    public static void pasteCopy(){if(origin!=null&&!ClientState.status.busy()){BuilderPrediction.paste(ClientState.options,origin,ghost.placed());CraftiumClient.send("paste_at",origin,new Point(0,1,0));}}
+    public static void pasteAndSelect(){if(origin!=null&&!ClientState.status.busy()){BuilderPrediction.paste(ClientState.options,origin,ghost.placed());CraftiumClient.send("paste_select",origin,new Point(0,1,0));origin=null;}}
     public static void snapToGround(){
         var mc=net.minecraft.client.Minecraft.getInstance();if(origin==null||mc.level==null)return;var bottom=new HashMap<Long,Point>();
         for(Point p:SelectionCodec.decode(data)){long key=((long)p.x()<<32)|(p.z()&0xffffffffL);var old=bottom.get(key);if(old==null||p.y()<old.y())bottom.put(key,p);}

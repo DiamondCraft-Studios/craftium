@@ -93,6 +93,9 @@ public final class EditorServer {
     }
     public static boolean noClip(ServerPlayer player){var s=SESSIONS.get(player.getUUID());return s!=null&&s.noClip&&player.isCreative()&&player.getAbilities().flying&&ServerPlatform.permitted(player,"capabilities");} // only while flying
 
+    /** How many builder commits wait behind the edit being applied; past this the newest is turned down as before. */
+    private static final int QUEUE_LIMIT=8;
+    private static boolean replaying;
     public static void handle(ServerPlayer player,String json) {
         var s=SESSIONS.computeIfAbsent(player.getUUID(),id->new Session());
         try {
@@ -143,15 +146,16 @@ public final class EditorServer {
                 return;
             }
             if(r.action().equals("editor_reset")){ // the way out of a stuck editor: forgets whatever is half done, but never an edit being applied
-                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingChain=null;s.pendingChainBase=s.pendingChainEdit=null;s.pendingDirty=true;s.selectionBefore=null;
+                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingChain=null;s.pendingChainBase=s.pendingChainEdit=null;s.pendingDirty=true;s.selectionBefore=null;s.queued.clear();
                 s.selection.clear();s.corner=s.ruler=s.line=null;s.selectedEntity=null;s.historyRemaining=0;s.pulse="";
                 if((job==null||!job.owner.equals(player.getUUID()))&&!AnimatedRebuild.owned(player.getUUID()))s.busy=false;
                 send(player,s,"Editor reset",false);return;
             }
             long now=System.nanoTime();
+            // A builder commit is a deliberate click, not a stream, so it is never dropped by the throttle below: a lost one would leave the selection placed on the client only.
             // The export pop-up asks for a new preview as fields change and must not lose one, or an export, to a request just before it.
             boolean popup=Set.of("structure_preview","structure_export_file","structure_import_file").contains(r.action());
-            if(now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
+            if(!replaying&&!r.action().equals("builder_commit")&&now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             if(!popup)s.lastRequest=now;
             if(r.action().equals("selection_restore")){
                 if(!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly())s.undo.removeFirst();
@@ -176,7 +180,14 @@ public final class EditorServer {
             if(r.action().equals("hotbar_save")||r.action().equals("hotbar_load")||r.action().equals("hotbar_list")){
                 String result=HotbarLibrary.apply(r.action(),player,o);if(r.action().equals("hotbar_list"))ServerPlatform.send(player,new Packets.Report(result));send(player,s,r.action().equals("hotbar_list")?"Saved hotbars listed":result,false);return;
             }
-            if(s.busy)throw new IllegalArgumentException("Applying edit… please wait");
+            if(s.busy){
+                // A builder commit waits its turn instead of being lost; it is planned once the edit before it has landed.
+                if(r.action().equals("builder_commit")&&job!=null&&job.owner.equals(player.getUUID())&&!job.history){
+                    if(s.queued.size()>=QUEUE_LIMIT)throw new IllegalArgumentException("Too many edits waiting · let them finish");
+                    s.queued.addLast(json);return;
+                }
+                throw new IllegalArgumentException("Applying edit… please wait");
+            }
             if(r.action().startsWith("world_")||r.action().equals("view_save")||r.action().equals("view_load")){send(player,s,WorldControls.apply(r.action(),player,o),false);return;}
             if(r.action().equals("flight")) {
                 player.getAbilities().setFlyingSpeed(.05f*o.flySpeed);
@@ -640,6 +651,9 @@ public final class EditorServer {
                 if((j.load||j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) && expected.matches(j.level,at)) {
                     if(!ServerPlatform.canChange(j.owner,j.level,c.pos()))throw new IllegalArgumentException("Edit permission or region access changed");
                     desired.place(j.level,at,j.edit.flags());j.applied.add(c);
+                } else if(j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) {
+                    // Skipped: resend the block as it is, so a client that predicted this edit puts it back.
+                    var now=j.level.getBlockState(at);j.level.sendBlockUpdated(at,now,now,2);
                 }
             }
             if(j.cursor[0]<list.size())return;
@@ -667,12 +681,21 @@ public final class EditorServer {
             else release(j);
             if(!appliedAnnotations.isEmpty())for(var other:server.getPlayerList().getPlayers())if(!other.getUUID().equals(j.owner)&&other.level()==j.level){var session=SESSIONS.get(other.getUUID());if(session!=null)send(other,session,"Annotations updated",false);}
             if(player!=null&&j.history&&j.session.historyRemaining!=0){boolean backwards=j.session.historyRemaining>0;j.session.historyRemaining+=backwards?-1:1;try{history(player,j.session,backwards);}catch(IllegalArgumentException e){j.session.historyRemaining=0;send(player,j.session,e.getMessage(),true);}}
+            if(player!=null)drain(player,j.session);else j.session.queued.clear();
         } catch(Exception e) {
+            j.session.queued.clear();
             ServerPlatform.LOG.error("Craftium edit interrupted",e);
             rememberInterrupted(j);
             j.session.busy=false;job=null;var player=server.getPlayerList().getPlayer(j.owner);
             if(player!=null)send(player,j.session,"Edit interrupted. Applied changes remain in history.",true);
             else release(j);
+        }
+    }
+    /** Runs the next waiting builder commit, if the edit before it is done. A queued request that fails is reported like any other, and the ones behind it still run. */
+    private static void drain(ServerPlayer player,Session s){
+        while(!s.busy&&!s.queued.isEmpty()){
+            replaying=true;
+            try{handle(player,s.queued.removeFirst());}finally{replaying=false;}
         }
     }
     /** Lets go of a finished job's session when its player has left: the player's is saved and dropped, the AI's is just dropped. */
