@@ -30,8 +30,15 @@ public final class PredictionGameTest {
         c.runOnClient(mc->BuilderPrediction.rejected());
         require(c.computeOnClient(mc->mc.level.getBlockState(base).isAir()&&mc.level.getBlockState(second).isAir()),"A rejected edit was not taken back");
         // The server confirms: a later rejection no longer touches what it settled.
-        c.runOnClient(mc->{BuilderPrediction.paste(ClientState.options,origin,Map.of(new Point(0,0,0),stone));BuilderPrediction.confirmed();BuilderPrediction.rejected();});
+        c.runOnClient(mc->{BuilderPrediction.paste(ClientState.options,origin,Map.of(new Point(0,0,0),stone));BuilderPrediction.confirmed("Applied Paste clipboard · 1 changes");BuilderPrediction.rejected();});
         require(c.computeOnClient(mc->mc.level.getBlockState(base).is(Blocks.STONE)),"A confirmed edit was undone by a later rejection");
+        // Two edits in flight over the same block: the older is rejected, and the newer stays on screen until it is answered itself.
+        BlockPos over=base.south(6);Point overAt=origin.add(0,0,6);
+        c.runOnClient(mc->{BuilderPrediction.paste(ClientState.options,overAt,Map.of(new Point(0,0,0),stone));BuilderPrediction.paste(ClientState.options,overAt,Map.of(new Point(0,0,0),gold));});
+        c.runOnClient(mc->BuilderPrediction.rejected());
+        require(c.computeOnClient(mc->mc.level.getBlockState(over).is(Blocks.GOLD_BLOCK)),"Rejecting the older of two edits took the newer one's blocks away");
+        c.runOnClient(mc->BuilderPrediction.rejected());
+        require(c.computeOnClient(mc->mc.level.getBlockState(over).isAir()),"Rejecting the newer edit did not restore the original block, only the older edit's");
         // Anything the client cannot work out exactly is left to the server.
         c.runOnClient(mc->{ClientState.options.pasteAir=true;BuilderPrediction.paste(ClientState.options,origin.add(0,0,3),Map.of(new Point(0,0,0),gold));ClientState.options.pasteAir=false;});
         require(c.computeOnClient(mc->mc.level.getBlockState(base.south(3)).isAir()),"A paste with Copy air on was predicted");
