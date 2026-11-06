@@ -679,7 +679,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,x+22+top[0]+top[1],159,top[2],20,"Paste",false,()->action("paste"),"Paste at cursor · Ctrl+V");
         button(g,x+10,186,bottom[0],20,"Rotate",false,()->action("rotate"),"Rotate clipboard 90° · Ctrl+R");
         button(g,x+14+bottom[0],186,bottom[1],20,"Mirror",false,()->action("flip"),"Mirror clipboard on X · Ctrl+F");
-        button(g,x+18+bottom[0]+bottom[1],186,bottom[2],20,"Paste in place",false,PlacementPreview::beginInPlace,"Start a placement at the coordinates the blocks were copied from · Enter builds it");
+        button(g,x+18+bottom[0]+bottom[1],186,bottom[2],20,"Paste in place",false,PlacementPreview::beginInPlace,"Start a placement at the coordinates the blocks were copied from · Ctrl+Shift+V · Enter builds it");
     }
     private void palette(Gfx g) {
         int x=w-RIGHT;panel(g,x,222,RIGHT,Math.max(105,masksTop()-6-222),"Block palette"); // down to the Tool masks
@@ -1685,7 +1685,7 @@ public final class EditorScreen extends CraftiumScreen {
             case UNDO,UNDO_ALT -> action("undo");
             case DESELECT -> action("clear");
             case TOGGLE_MOVE -> toggleTool(Tool.MOVE);case TOGGLE_ROTATE -> toggleTool(Tool.ROTATE);case TOGGLE_SCALE -> toggleTool(Tool.SCALE);case TOGGLE_PIVOT -> toggleTool(Tool.PIVOT);
-case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut");case DUPLICATE -> action("duplicate");case PASTE -> action("paste");
+case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut");case DUPLICATE -> action("duplicate");case PASTE -> action("paste");case PASTE_IN_PLACE -> PlacementPreview.beginInPlace();
             case COPY_AIR -> {boolean old=o().pasteAir;o().pasteAir=true;action("copy");o().pasteAir=old;}
             case DELETE -> {if(deleteRuler()){}else if(ShapeObject.active())ShapeObject.cancel();else if(PlacementPreview.active())PlacementPreview.cancel();else action("delete");}
             case SWAP_BLOCKS -> swapBlocks();

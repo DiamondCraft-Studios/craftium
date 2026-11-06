@@ -15,7 +15,7 @@ public final class EditorControls {
         ARCBALL("Arcball camera",Binding.mouse(0,CONTROL)),PAN_CAMERA("Pan camera",Binding.mouse(1,CONTROL)),ADJUST_RADIUS("Adjust tool radius",Binding.mouse(2,CONTROL)),
         CROSSHAIR("Crosshair",Binding.mouse(1,0)),ADJUST_SPEED("Adjust flight speed"),
         CONFIRM("Confirm / clear selection",257,0),UNDO("Undo",'Z',CONTROL),REDO("Redo",'Y',CONTROL),COPY("Copy",'C',CONTROL),COPY_AIR("Copy with air"),
-        PASTE("Paste",'V',CONTROL),DELETE("Delete",261,0),CUT("Cut",'X',CONTROL),DUPLICATE("Duplicate",'J',CONTROL),
+        PASTE("Paste",'V',CONTROL),PASTE_IN_PLACE("Paste in place",'V',CONTROL|SHIFT),DELETE("Delete",261,0),CUT("Cut",'X',CONTROL),DUPLICATE("Duplicate",'J',CONTROL),
         SWAP_BLOCKS("Swap foreground / background block",'X',0),EXTRUDE_POINT("Extrude point",'E',0),SAVE_BLUEPRINT("Save blueprint",'P',CONTROL),
         SHOW_SELECTION("Show selections"),CYCLE_SELECTION_STYLE("Cycle selection display",';',0),SHOW_BIOMES("Show biomes",'B',CONTROL),SHOW_ANNOTATIONS("Show annotations"),
         SHOW_DISPLAYS("Show display gizmos"),SHOW_MARKERS("Show marker gizmos"),SHOW_COLLISION("Show collision mesh"),SHOW_LIGHTS("Show light blocks"),SHOW_VOID("Show structure void"),
