@@ -97,14 +97,18 @@ final class OutlineShape {
     void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape){draw(at,lines,stroke,fill,fill,withFill,style,eyeInShape);}
     private void draw(Vec3 at,Lines lines,int stroke,int fill,int backFill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape){
         if(bounds==null)return;
-        if(outline.edges().size()>maxEdges){
+        boxed=outline.edges().size()>maxEdges;
+        if(boxed){
             AABB box=bounds.move(at);
             if(withFill)Overlay.box(box,stroke,1,fill);else boxLines(box,lines);
             return;
         }
         // Only the outline as the camera sees it, unless every edge was asked for or the camera is inside the shape.
-        if(style==Options.SelectionStyle.ALL_EDGES||!(style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at,eyeInShape))&&!silhouette(lines,at,eyeInShape))
+        boolean contoured=style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at,eyeInShape);
+        if(style==Options.SelectionStyle.ALL_EDGES||!contoured&&!silhouette(lines,at,eyeInShape))
             allEdges(lines,at);
+        if(style!=Options.SelectionStyle.SILHOUETTE||contoured)outlineSince=0;
+        else if(outlineSince==0)outlineSince=System.nanoTime();
         if(withFill&&outline.faces().size()<=maxFaces){
             // Only a camera inside the shape sees its walls from behind; from outside, every face keeps the one fill.
             Vec3 eye=backFill==fill?null:ClientCompat.camera(Minecraft.getInstance()).position().subtract(at);
@@ -159,6 +163,20 @@ final class OutlineShape {
 
     private Vec3 contourEye,contourAt;
     private Vec3[] contourEnds;
+    /** Whether the camera is inside the shape, as last worked out; only worked out when the camera or the shape moves. */
+    private boolean eyeBuried;
+    /** When the last frames that wanted a silhouette began showing the outline instead, or 0 while they get one. */
+    private long outlineSince;
+    private boolean boxed;
+    /**
+     * Why the shape is not drawn the way it was asked for, in a word for the interface, or null when it is. The silhouette style shows the
+     * outline instead when there is no contour on the screen to draw, as when the camera is inside the shape; that is only reported once it
+     * has lasted a moment, so the first frames before a contour is ready do not flash it. A shape too detailed to draw is shown as its box.
+     */
+    String fallback(){
+        if(boxed)return "box view";
+        return outlineSince!=0&&System.nanoTime()-outlineSince>400_000_000L?"outline view":null;
+    }
     /** The lines of a contour, ready to draw, and the offset of the shape they were worked out for. */
     private record Contour(Vec3 at,Vec3[] ends){}
     private static final Vec3[] NO_CONTOUR=new Vec3[0];
@@ -180,6 +198,12 @@ final class OutlineShape {
         Vec3 eye=eyeIn(eyeInShape);
         boolean live=eyeInShape!=null;
         boolean changed=contourEye==null||contourEye.distanceToSqr(eye)>1e-8||!at.equals(contourAt);
+        if(changed)eyeBuried=inside(eye.subtract(at));
+        if(eyeBuried){ // inside the solid there is no edge of the shape against the background, and the picture of what is around the camera is not one to outline
+            contourEye=eye;contourAt=at;contourEnds=null;
+            if(contourJob!=null)contourJob.cancel();
+            return false;
+        }
         if(live&&outline.creases().size()>ASYNC_CREASES)return false; // too much to find within the frame, and a late answer would be for an earlier step of the drag
         if(outline.creases().size()<=ASYNC_CREASES){
             if(changed){
