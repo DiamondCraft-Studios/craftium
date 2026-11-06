@@ -57,6 +57,19 @@ public final class EditorServer {
             else for(var c:run)(j.backwards?c.before():c.after()).place(j.level,EditPlanner.pos(c.pos()),flags);
             from=to;
         }
+        if(!j.backwards&&!j.history&&j.edit.name().equals(IN_WORLD_BREAK))breakEffects(j.level,due);
+    }
+    /** The name of the edit a left click in the world makes while the break is the editor's, not the game's: infinite reach or symmetry. */
+    static final String IN_WORLD_BREAK="Bulldozer";
+    /** Most blocks that play the game's break effect for one edit, so a long held break does not flood clients with particles. */
+    private static final int BREAK_EFFECTS=16;
+    /** The sound and particles the game plays when a player breaks a block, which the editor's own break would otherwise skip. */
+    private static void breakEffects(net.minecraft.server.level.ServerLevel level,List<Session.Change> broken){
+        int played=0;
+        for(var c:broken){
+            var old=c.before().state();if(old.isAir()||played++>=BREAK_EFFECTS)continue;
+            level.levelEvent(2001,EditPlanner.pos(c.pos()),net.minecraft.world.level.block.Block.getId(old)); // 2001 is the game's block break event
+        }
     }
     private EditorServer() {}
     public static void clear() { SESSIONS.clear();AI_SESSIONS.clear();job=null;AnnotationEdits.clear();AnimatedRebuild.clear(); }
@@ -410,7 +423,7 @@ public final class EditorServer {
                         }
                         start(player,s,plan.finish("Builder placement"));
                     } else if(r.action().equals("builder_break")) {
-                        plan.put(target,Blocks.AIR.defaultBlockState());start(player,s,plan.finish("Bulldozer"));
+                        plan.put(target,Blocks.AIR.defaultBlockState());start(player,s,plan.finish(IN_WORLD_BREAK));
                     } else use(player,s,o,target,normal,plan);
                 }
                 case "bucket_fill" -> {
