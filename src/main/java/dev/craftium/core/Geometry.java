@@ -27,6 +27,16 @@ public final class Geometry {
         double yy=y*Math.cos(b)-z*Math.sin(b);z=y*Math.sin(b)+z*Math.cos(b);y=yy;
         return new Vector(x*Math.cos(a)-z*Math.sin(a),y,x*Math.sin(a)+z*Math.cos(a));
     }
+    /**
+     * The point that a drag's transform sends to {@code image}. The transform scales a point by {@code size} about {@code about}, turns it
+     * by yaw, pitch and roll (as {@link #rotate} does), puts it back about the same point and then adds {@code offset}. Null when the
+     * transform squashes the shape flat along some axis, so there is no way back.
+     */
+    public static Vector untransform(Vector image,Vector about,Vector size,double yaw,double pitch,double roll,Vector offset){
+        if(Math.abs(size.x)<1e-9||Math.abs(size.y)<1e-9||Math.abs(size.z)<1e-9)return null;
+        var turned=inverseRotate(image.subtract(offset).subtract(about),yaw,pitch,roll);
+        return new Vector(about.x+turned.x/size.x,about.y+turned.y/size.y,about.z+turned.z/size.z);
+    }
     public static List<Point> shape(Point center,Options o) {
         if(o.shapeKind==Options.ShapeKind.BRUSH&&o.yaw==0&&o.pitch==0&&o.roll==0&&o.sizeX==1&&o.sizeY==1&&o.sizeZ==1)
             return BrushMath.brush(center,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline);
