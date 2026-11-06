@@ -89,7 +89,7 @@ class SelectionOutlineBenchmark {
     @Test void run() throws Exception{
         var out=new StringBuilder();
         out.append(String.format("%-22s %8s %9s %9s %9s %8s | %9s %9s %12s | %s%n",
-            "shape","blocks","build ms","edges","faces","creases","contour ms","contours","candidates*","verdict"));
+            "shape","blocks","build ms","edges","faces","creases","contour ms","contours","orig ms","verdict"));
         for(var shape:shapes()){
             Set<Point> blocks=shape.make().get();
             if(blocks.size()>Selection.LIMIT){out.append(String.format("%-22s %8d  over the %d block limit, skipped%n",shape.name(),blocks.size(),Selection.LIMIT));continue;}
@@ -109,25 +109,22 @@ class SelectionOutlineBenchmark {
             long[] ct=new long[RUNS];
             for(int i=0;i<RUNS;i++){long t=System.nanoTime();contour=ScreenSilhouette.of(result,ex,ey,ez);ct[i]=System.nanoTime()-t;}
             Arrays.sort(ct);
-
-            // Creases on the silhouette are the pairs ScreenSilhouette would test against the front faces.
-            long candidates=0;
-            for(var c:result.creases()){
-                var s=c.segment();double mx=(s.x0()+s.x1())/2d,my=(s.y0()+s.y1())/2d,mz=(s.z0()+s.z1())/2d;
-                if(toward(c.normalA(),ex-mx,ey-my,ez-mz)!=toward(c.normalB(),ex-mx,ey-my,ez-mz))candidates++;
-            }
-            long pairs=candidates*result.faces().size();
+            // The same contour by the algorithm as it was before the grid and the sweep, which gave up (null) on a big shape.
+            long[] ot=new long[RUNS];List<ReferenceSilhouette.Line> original=null;
+            for(int i=0;i<RUNS;i++){long t=System.nanoTime();original=ReferenceSilhouette.of(result,ex,ey,ez);ot[i]=System.nanoTime()-t;}
+            Arrays.sort(ot);
+            String originalMs=original==null?"gave up":String.format("%.1f",ms(ot[RUNS/2]));
 
             String verdict;
             if(result.edges().size()>MAX_EDGES)verdict="BOX (edges>"+MAX_EDGES+")";
             else if(result.faces().size()>MAX_FACES)verdict="no fill (faces>"+MAX_FACES+")";
             else verdict="ok";
-            if(contour==null)verdict+=", contour null"+(pairs>3_000_000L?" (over budget)":"");
-            out.append(String.format("%-22s %8d %9.1f %9d %9d %8d | %9.1f %9s %12d | %s%n",
+            if(contour==null)verdict+=", contour null";
+            out.append(String.format("%-22s %8d %9.1f %9d %9d %8d | %9.1f %9s %12s | %s%n",
                 shape.name(),blocks.size(),median,result.edges().size(),result.faces().size(),result.creases().size(),
-                ms(ct[RUNS/2]),contour==null?"null":String.valueOf(contour.size()),pairs,verdict));
+                ms(ct[RUNS/2]),contour==null?"null":String.valueOf(contour.size()),originalMs,verdict));
         }
-        out.append("\n* candidate creases x faces, the work ScreenSilhouette's 3,000,000 budget limits.\n");
+        out.append("\ncontour ms: the contour as the game finds it now; orig ms: the same contour by the original algorithm (it gave up past 3,000,000 segment-and-face pairs).\n");
         out.append("Heap: ").append(Runtime.getRuntime().maxMemory()/1048576).append(" MB max. Build ms is the median of ").append(RUNS).append(" runs after ").append(WARMUP).append(" warm-ups.\n");
         Path dir=Path.of(System.getProperty("user.dir"),"build","bench");Files.createDirectories(dir);
         Files.writeString(dir.resolve("selection-outline.txt"),out.toString());
@@ -156,7 +153,4 @@ class SelectionOutlineBenchmark {
         System.out.println(out);
     }
 
-    private static boolean toward(int direction,double dx,double dy,double dz){
-        int[] n=SelectionOutline.normal(direction);return n[0]*dx+n[1]*dy+n[2]*dz>0;
-    }
 }
