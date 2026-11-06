@@ -2,6 +2,8 @@ package dev.craftium.client;
 
 import dev.craftium.core.*;
 import dev.craftium.server.BuilderEdits;
+import dev.craftium.net.Packets;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Block;
@@ -35,7 +37,7 @@ public final class BuilderPrediction {
         var tool=o.builderTool;
         if(tool!=Options.BuilderTool.MOVE&&tool!=Options.BuilderTool.CLONE&&tool!=Options.BuilderTool.STACK&&tool!=Options.BuilderTool.ERASE)return;
         if(o.copyEntities||o.builderKeepExisting)return;
-        var mc=Minecraft.getInstance();var level=mc.level;if(level==null||mc.player==null||!mc.player.isCreative())return;
+        var mc=Minecraft.getInstance();var level=mc.level;if(level==null||mc.player==null||!mc.player.isCreative()||!direct())return;
         Point size=max.add(1-min.x(),1-min.y(),1-min.z());
         Collection<Point> points=cells!=null?cells:Selection.box(min,max);
         if((long)points.size()*(steps.size()+1)>LIMIT)return;
@@ -62,7 +64,7 @@ public final class BuilderPrediction {
         if(clipboard==null||o.pasteAir||o.mergeBlocks||o.keepExisting)return;
         if(o.symmetryX||o.symmetryY||o.symmetryZ||o.symmetryRotations!=1)return;
         if(o.pasteEntities&&ClientState.status.clipboardEntityCount()>0)return;
-        var mc=Minecraft.getInstance();var level=mc.level;if(level==null||mc.player==null||!mc.player.isCreative())return;
+        var mc=Minecraft.getInstance();var level=mc.level;if(level==null||mc.player==null||!mc.player.isCreative()||!direct())return;
         if(clipboard.size()>LIMIT)return;
         var result=new LinkedHashMap<BlockPos,BlockState>();
         for(var e:clipboard.entrySet()){var at=e.getKey();result.put(pos(origin.add(at.x(),at.y(),at.z())),e.getValue());}
@@ -88,5 +90,10 @@ public final class BuilderPrediction {
     }
     /** The server finished the edit; its updates are the truth from here on. */
     static void confirmed(){undo=Map.of();}
+    /**
+     * Only where the edit goes straight to Craftium on the server. Through the Paper companion (the bridge) the server can hold
+     * region and world-border protection the client cannot see, so a predicted edit there would show and then snap back.
+     */
+    private static boolean direct(){return ClientPlayNetworking.canSend(Packets.Edit.TYPE);}
     private static BlockPos pos(Point p){return new BlockPos(p.x(),p.y(),p.z());}
 }
