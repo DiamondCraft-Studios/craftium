@@ -19,16 +19,20 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
     private static final int LIST_TOP=76,ROW=24;
 
     /** One preference: a switch, or a number set with a slider. */
-    private sealed interface Row permits Toggle,Number,Link {}
+    private sealed interface Row permits Toggle,Number,Link,Cycle {}
     /** A row that opens another screen of settings, which returns here. */
     private record Link(String label,String about,Function<Screen,Screen> open) implements Row {}
     private record Toggle(String label,String about,Function<Options,Boolean> get,java.util.function.BiConsumer<Options,Boolean> set) implements Row {}
+    /** A choice among a few named values: the button shows the current one and a click steps to the next. */
+    private record Cycle(String label,String about,Function<Options,String> get,java.util.function.Consumer<Options> next,java.util.function.BiConsumer<Options,Options> reset) implements Row {}
     private record Number(String label,String about,int min,int max,Function<Options,Integer> get,java.util.function.BiConsumer<Options,Integer> set) implements Row {}
 
     private static final List<Row> ROWS=List.of(
         new Toggle("Undo / redo pulse","Flash the changed blocks when you undo or redo",o->o.historyPulse,(o,v)->o.historyPulse=v),
         new Toggle("Enter to build","On: an edit waits for Enter before it is built. Off: a stroke is built when you let go of the button, and any other edit is built at once",o->o.enterToBuild,(o,v)->o.enterToBuild=v),
         new Toggle("Undo normal building","On: the blocks you place and break by hand go into the undo history, a held place button as one step. Off: only the editor and Builder tools can be undone",o->o.recordPlayerBuilding,(o,v)->o.recordPlayerBuilding=v),
+        new Toggle("Builder follows Editor magic select","On: the Builder's magic select uses the Magic Wand settings from the editor. Off: it uses its own, set by the block match below, and picks up to the largest selection allowed",o->o.builderFollowsMagic,(o,v)->o.builderFollowsMagic=v),
+        new Cycle("Builder magic select matches","What the Builder's magic select treats as connected when it does not follow the editor: any block, the same block, the same block state, a shared tag, or the same block entity data",o->o.builderMagicCompare.name().charAt(0)+o.builderMagicCompare.name().substring(1).toLowerCase(),o->o.builderMagicCompare=Options.Compare.values()[(o.builderMagicCompare.ordinal()+1)%Options.Compare.values().length],(o,d)->o.builderMagicCompare=d.builderMagicCompare),
         new Toggle("Live Builder selection box","After the first Builder click, draw the box to the block you aim at and let it follow your aim",o->o.builderLiveBox,(o,v)->o.builderLiveBox=v),
         new Toggle("Hide other gizmo handles","While a gizmo handle is held, draw only that handle",o->o.gizmoHideOthers,(o,v)->o.gizmoHideOthers=v),
         new Toggle("Large selection warnings","Ask before keeping a selection of 1,024 blocks or more; a right click confirms it",o->o.largeSelectionWarnings,(o,v)->o.largeSelectionWarnings=v),
@@ -55,6 +59,9 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
             if(ROWS.get(i) instanceof Toggle t){
                 addRenderableWidget(new FlatButton(x+245,y,180,20,t.get().apply(o)?"On":"Off",()->{t.set().accept(o,!t.get().apply(o));init();}));
                 addRenderableWidget(new FlatButton(x+430,y,50,20,"Reset",()->{t.set().accept(o,t.get().apply(DEFAULTS));init();}));
+            }else if(ROWS.get(i) instanceof Cycle c){
+                addRenderableWidget(new FlatButton(x+245,y,180,20,c.get().apply(o),()->{c.next().accept(o);init();}));
+                addRenderableWidget(new FlatButton(x+430,y,50,20,"Reset",()->{c.reset().accept(o,DEFAULTS);init();}));
             }else if(ROWS.get(i) instanceof Link link){
                 addRenderableWidget(new FlatButton(x+245,y,180,20,"Open…",()->ClientCompat.setScreen(minecraft,link.open().apply(this))));
             }else if(ROWS.get(i) instanceof Number n){
@@ -73,12 +80,13 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
         addRenderableWidget(new FlatButton(x+280,height-62,110,20,"Reset all",()->{for(Row r:ROWS)reset(r);init();}));
         addRenderableWidget(new FlatButton(x+395,height-62,85,20,"Done",this::onClose));
     }
-    private static String labelOf(Row row){return switch(row){case Toggle t->t.label();case Number n->n.label();case Link l->l.label();};}
-    private static String aboutOf(Row row){return switch(row){case Toggle t->t.about();case Number n->n.about();case Link l->l.about();};}
+    private static String labelOf(Row row){return switch(row){case Toggle t->t.label();case Number n->n.label();case Link l->l.label();case Cycle c->c.label();};}
+    private static String aboutOf(Row row){return switch(row){case Toggle t->t.about();case Number n->n.about();case Link l->l.about();case Cycle c->c.about();};}
     private static void reset(Row row){
         var o=ClientState.options;
         if(row instanceof Toggle t)t.set().accept(o,t.get().apply(DEFAULTS));
         else if(row instanceof Number n)n.set().accept(o,n.get().apply(DEFAULTS));
+        else if(row instanceof Cycle c)c.reset().accept(o,DEFAULTS);
     }
 
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){

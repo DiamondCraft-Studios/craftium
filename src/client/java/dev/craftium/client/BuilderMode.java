@@ -174,7 +174,10 @@ public final class BuilderMode {
     private static void magicSelect(net.minecraft.core.BlockPos at,boolean grow,boolean subtract){
         var mc=Minecraft.getInstance();var o=ClientState.options;
         if(mc.level.getBlockState(at).isAir())return;
-        var world=MagicPreview.world(mc,at,o);var params=new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,Integer.MAX_VALUE,Selection.LIMIT*4);Point start=CraftiumClient.point(at);
+        // Following the editor, the Magic Wand's own settings decide; otherwise the Builder matches by its own choice, up to the largest selection, with the wand's plain defaults.
+        var world=o.builderFollowsMagic?MagicPreview.world(mc,at,o):MagicPreview.world(mc,at,o,o.builderMagicCompare,true);
+        var params=o.builderFollowsMagic?new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,Integer.MAX_VALUE,Selection.LIMIT*4)
+            :new MagicWand.Params(Selection.LIMIT,1,false,true,true,true,true,Integer.MAX_VALUE,Selection.LIMIT*4);Point start=CraftiumClient.point(at);
         magicSince=System.currentTimeMillis();magicGrow=grow;magicSubtract=subtract;
         magic=java.util.concurrent.CompletableFuture.supplyAsync(()->MagicWand.select(start,world,params),search);
     }

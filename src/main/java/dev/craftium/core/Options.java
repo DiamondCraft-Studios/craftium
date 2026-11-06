@@ -56,6 +56,9 @@ public final class Options {
     public boolean maskInBuilder;
     /** Whether the blocks you place and break by hand, with the game's own clicks, go into the undo history. */
     public boolean recordPlayerBuilding=true;
+    /** Whether the Builder's magic select uses the editor's Magic Wand settings; when off it matches by {@link #builderMagicCompare}, with the widest limit and the wand's plain defaults. */
+    public boolean builderFollowsMagic=true;
+    public Compare builderMagicCompare=Compare.BLOCK;
     public String biome = "minecraft:plains";
     public String text = "CRAFTIUM";
     public int minY = -64, maxY = 319;
@@ -297,6 +300,7 @@ public final class Options {
         farReach = Math.clamp(farReach,6,64);
         flySpeed = Float.isFinite(flySpeed) ? Math.clamp(flySpeed,0.1f,10f) : 1;
         copies=Math.max(1,copies); // offsets and copies have no upper limit
+        if(builderMagicCompare==null)builderMagicCompare=Compare.BLOCK;
         if(compare==null)compare=Compare.ANY; // Gson reads a constant that no longer exists, the old SOLID, as null
         if(noise==null||pathMode==null||modelMode==null||modifyMode==null||shapeKind==null||rulerMode==null)throw new IllegalArgumentException("Missing advanced options");
         if(modifyAxis==null||modifyType==null)throw new IllegalArgumentException("Missing advanced options");
