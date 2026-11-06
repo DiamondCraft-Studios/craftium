@@ -634,7 +634,8 @@ public final class EditorServer {
         if(job==null)return;var j=job;
         try {
             var list=j.edit.changes();long deadline=System.nanoTime()+8_000_000L;int count=0;
-            while(j.cursor[0]<list.size() && count++<2048 && System.nanoTime()<deadline) {
+            // Only the time budget limits a tick: the clock is read every 16 blocks, because a fixed block cap left most of the budget unused.
+            while(j.cursor[0]<list.size() && ((++count&15)!=0 || System.nanoTime()<deadline)) {
                 var c=list.get(j.cursor[0]++);BlockPos at=EditPlanner.pos(c.pos());
                 var expected=j.backwards?c.after():c.before();var desired=j.backwards?c.before():c.after();
                 if((j.load||j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) && expected.matches(j.level,at)) {
