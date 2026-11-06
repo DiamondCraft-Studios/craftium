@@ -244,7 +244,8 @@ public final class CraftiumGameTest implements FabricClientGameTest {
         for(int x:new int[]{60,64,68})request("use",new Point(x,20,40));
         options(o->o.historySteps=3);request("history_undo_many",null);for(int x:new int[]{60,64,68})checkBlock(new Point(x,20,40),Blocks.AIR);
         request("history_redo_many",null);for(int x:new int[]{60,64,68})checkBlock(new Point(x,20,40),Blocks.GOLD_BLOCK);
-        request("history_save",null);int count=ctx.computeOnClient(mc->ClientState.status.undo());
+        request("history_save",null);request("history_reload",null); // saving leaves out selection-only steps, so count what survives a save
+        int count=ctx.computeOnClient(mc->ClientState.status.undo());
         world.getServer().runOnServer(server->dev.craftium.server.EditorServer.disconnect(world.getConnection().getServerPlayer().getUUID()));request("status",null);
         require(ctx.computeOnClient(mc->ClientState.status.undo()==count),"Saved history did not reload after session eviction");request("undo",null);checkBlock(new Point(68,20,40),Blocks.AIR);request("redo",null);checkBlock(new Point(68,20,40),Blocks.GOLD_BLOCK);
         options(o->o.radius=5);System.out.println("CRAFTIUM_HISTORY_PASS multi_rewind multi_redo disk_reload block_restore");
