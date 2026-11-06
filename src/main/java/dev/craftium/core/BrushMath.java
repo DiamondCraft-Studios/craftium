@@ -66,9 +66,9 @@ public final class BrushMath {
     }
 
     /** The largest radius that can be set, typed or dragged to; the slider stops short of it, at 64. */
-    public static final int MAX_RADIUS = 128;
+    public static final int MAX_RADIUS = 999;
     /** The farthest from its centre any block of a shape may be, however its wall is aligned or it is scaled. The work grows with its cube. */
-    public static final int MAX_REACH = 128;
+    public static final int MAX_REACH = 999;
 
     public static List<Point> brush(Point center, int radius, Shape shape, boolean hollow) {
         return brush(center, radius, shape, hollow, 1, false, 0);
@@ -118,16 +118,31 @@ public final class BrushMath {
         if (radius < 1 || radius > MAX_RADIUS) throw new IllegalArgumentException("Radius must be 1–" + MAX_RADIUS);
         int wall = Math.clamp(thickness, 1, radius);
         final int outer = Math.min(radius + (hollow ? Math.max(0, shift) : 0), MAX_REACH);
+        // Refused before any work when it is plainly too big: the cells to look at, or the blocks it must hold.
+        if (ShapeLimits.cells(shape, outer) > ShapeLimits.SCAN_CELLS) throw new IllegalArgumentException("Shape is too large to build; use a smaller radius");
+        if (ShapeLimits.blocks(shape, radius, hollow, thickness, pixelPerfect, shift, corners, outline) > Math.max(limit, 0) * 1.05 + 64)
+            throw new IllegalArgumentException("Shape exceeds the " + String.format("%,d", limit) + " block limit; use a smaller radius, or make it hollow");
         var points = new ArrayList<Point>();
         int inner = outer - wall; // the edge of the cut; below zero there is nothing to cut out, so the shape stays solid
         boolean cut = hollow && !pixelPerfect && inner >= 0;
         Solid solid = (x, y, z) -> contains(shape, x, y, z, outer, corners);
-        for (int x = -outer; x <= outer; x++) for (int y = -outer; y <= outer; y++)
-            for (int z = -outer; z <= outer; z++) {
-                if (outline ? !edge(solid, x, y, z) : !solid.at(x, y, z) || cut && contains(shape, x, y, z, inner, corners)) continue;
-                points.add(center.add(x, y, z));
-                if (points.size() > limit) throw new IllegalArgumentException("Shape exceeds the " + String.format("%,d", limit) + " block limit; use a smaller radius, or make it hollow");
+        // Only the cells that can be inside are looked at: the cell test below is what decides, these bounds just leave out the ones it would refuse.
+        final double reach2 = (outer + .5) * (outer + .5), tube = .25 * outer + .5;
+        final boolean flat = shape == Shape.PLANE || shape == Shape.DISK || shape == Shape.POLYGON;
+        final boolean round = shape == Shape.SPHERE || shape == Shape.HEMISPHERE, radial = shape == Shape.CYLINDER || shape == Shape.CONE || shape == Shape.TUBE || shape == Shape.TORUS || shape == Shape.DISK || shape == Shape.POLYGON || round;
+        for (int x = -outer; x <= outer; x++) {
+            if (radial && (double) x * x > reach2) continue;
+            int yHigh = flat ? 0 : round ? (int) Math.sqrt(reach2 - (double) x * x) : shape == Shape.TORUS ? (int) tube : outer;
+            int yLow = flat ? 0 : shape == Shape.HEMISPHERE ? 0 : -yHigh;
+            for (int y = yLow; y <= yHigh; y++) {
+                int zBound = round ? (int) Math.sqrt(Math.max(0, reach2 - (double) x * x - (double) y * y)) : radial ? (int) Math.sqrt(reach2 - (double) x * x) : outer;
+                for (int z = -zBound; z <= zBound; z++) {
+                    if (outline ? !edge(solid, x, y, z) : !solid.at(x, y, z) || cut && contains(shape, x, y, z, inner, corners)) continue;
+                    points.add(center.add(x, y, z));
+                    if (points.size() > limit) throw new IllegalArgumentException("Shape exceeds the " + String.format("%,d", limit) + " block limit; use a smaller radius, or make it hollow");
+                }
             }
+        }
         return hollow && pixelPerfect ? OutlineMath.thin(points, wall) : points;
     }
 

@@ -25,7 +25,7 @@ public final class EditorServer {
     private static final long APPLY_BUDGET_NANOS=20_000_000L;
     private static int historyTicks;
     private record Job(UUID owner, ServerLevel level, Session session, Session.Edit edit,
-                       boolean backwards, boolean history, int[] cursor, List<Session.Change> applied, long strokeId, boolean load, List<Session.Change> order) {}
+                       boolean backwards, boolean history, int[] cursor, List<Session.Change> applied, long strokeId, boolean load, List<Session.Change> order, boolean record) {}
     /** How many blocks are checked and then written together; a tick looks at the clock between slices. */
     private static final int SLICE=1024;
     /** An edit's blocks grouped by chunk, each chunk's in the order the edit has them, so a chunk can be written in one pass (see {@link BulkPlace}). */
@@ -56,6 +56,19 @@ public final class EditorServer {
             if(BulkPlace.applies(run.size(),flags))BulkPlace.place(j.level,j.level.getChunk(cx,cz),run,j.backwards,flags);
             else for(var c:run)(j.backwards?c.before():c.after()).place(j.level,EditPlanner.pos(c.pos()),flags);
             from=to;
+        }
+        if(!j.backwards&&!j.history&&j.edit.name().equals(IN_WORLD_BREAK))breakEffects(j.level,due);
+    }
+    /** The name of the edit a left click in the world makes while the break is the editor's, not the game's: infinite reach or symmetry. */
+    static final String IN_WORLD_BREAK="Bulldozer";
+    /** Most blocks that play the game's break effect for one edit, so a long held break does not flood clients with particles. */
+    private static final int BREAK_EFFECTS=16;
+    /** The sound and particles the game plays when a player breaks a block, which the editor's own break would otherwise skip. */
+    private static void breakEffects(net.minecraft.server.level.ServerLevel level,List<Session.Change> broken){
+        int played=0;
+        for(var c:broken){
+            var old=c.before().state();if(old.isAir()||played++>=BREAK_EFFECTS)continue;
+            level.levelEvent(2001,EditPlanner.pos(c.pos()),net.minecraft.world.level.block.Block.getId(old)); // 2001 is the game's block break event
         }
     }
     private EditorServer() {}
@@ -107,7 +120,7 @@ public final class EditorServer {
         var s=SESSIONS.get(player.getUUID());var o=capabilities(player);if(s==null||o==null)return;
         try{
             var level=player.level();Point p=EditPlanner.point(at);var near=(Map<BlockPos,BlockSnapshot>)snapshot;var before=near.get(at);var after=BlockSnapshot.capture(level,at);
-            var plan=new EditPlanner(level,s,o);plan.put(p,after); // the block is already there, so only its mirrors are left to change
+            var plan=new EditPlanner(level,s,o);plan.builder=true;plan.put(p,after); // the block is already there, so only its mirrors are left to change; masks apply as they do to the Builder tools
             var mirrors=plan.finish("Builder placement");
             if(!mirrors.changes().isEmpty())EditProtection.check(player,mirrors);
             var changes=new ArrayList<Session.Change>();
@@ -121,7 +134,8 @@ public final class EditorServer {
                 c.after().place(level,EditPlanner.pos(c.pos()),mirrors.flags());changes.add(c);
             }
             if(changes.isEmpty())return;
-            s.remember(new Session.Edit("Builder placement",changes,List.of(),mirrors.flags()).withBuilder(true));
+            if(!o.recordPlayerBuilding){send(player,s,"Placed "+changes.size()+(changes.size()==1?" block":" blocks"),false);return;} // by hand, and not kept in the history
+            s.remember(new Session.Edit("Builder placement",changes,List.of(),mirrors.flags()).withBuilder(true),s.placeStroke);
             send(player,s,"Placed "+changes.size()+(changes.size()==1?" block":" blocks"),false);
         }catch(IllegalArgumentException e){send(player,s,e.getMessage(),true);}
     }
@@ -139,7 +153,9 @@ public final class EditorServer {
             if(r==null || r.action()==null || r.options()==null)throw new IllegalArgumentException("Invalid editor request");
             if(!ServerPlatform.permitted(player,r.action()))throw new IllegalArgumentException("You do not have permission for this Craftium action");
             Options o=r.options();o.validate();
-            s.requestStroke=r.action().equals("use")||r.action().equals("builder_break")?r.strokeId():0;
+            boolean inWorld=r.action().equals("builder_place")||r.action().equals("builder_break");
+            s.requestRecord=o.recordPlayerBuilding||!inWorld; // a click in the world is the player building by hand; the editor's own tools always are recorded
+            s.requestStroke=r.action().equals("use")||inWorld?r.strokeId():0;
             if(s.dimension!=null && !s.dimension.equals(player.level().dimension())) {
                 if(s.busy)throw new IllegalArgumentException("Wait for the current operation to finish");
                 HistoryStore.save(s);
@@ -156,6 +172,7 @@ public final class EditorServer {
                 ||!o.enterToBuild&&!r.action().equals("use"); // with Enter to build off, a stroke is staged until the button is let go (stroke_end) and any other action is built at once
             if(r.action().equals("status")) { send(player,s,"Ready",false);return; }
             if(r.action().equals("capabilities")){send(player,s,"Builder capabilities synchronized",false);return;}
+            if(r.action().equals("place_stroke")||r.action().equals("place_stroke_end")){s.placeStroke=r.action().equals("place_stroke")?r.strokeId():0;return;} // the game's own placements while the button is held; never throttled or answered
             if(r.action().equals("gamemode_editor")){ // sent as the editor opens and closes: no status message, unlike the buttons, and never throttled
                 if(!player.isSpectator()){s.previousMode=player.gameMode.getGameModeForPlayer();player.setGameMode(GameType.SPECTATOR);}
                 return;
@@ -210,6 +227,17 @@ public final class EditorServer {
             }
             if(!player.isCreative()&&!player.isSpectator())throw new IllegalArgumentException("Switch to Creative or Spectator mode to edit");
             if((r.action().equals("undo")||r.action().equals("rebuild_cancel"))&&AnimatedRebuild.owned(player.getUUID())){AnimatedRebuild.cancel(player.getUUID());send(player,s,"Cancelling rebuild and restoring the original structure…",false);return;}
+            if(r.action().equals("hand_set")){ // a block dragged to the Hand slot: the editor's player is a spectator, which cannot use the creative menu, so the inventory is set here
+                if(!player.isCreative()&&!(player.isSpectator()&&s.previousMode==GameType.CREATIVE))throw new IllegalArgumentException("Only a creative player can hold it");
+                var name=o.block==null?"":o.block;int bracket=name.indexOf('[');var id=dev.craftium.compat.Compat.tryParse(bracket<0?name:name.substring(0,bracket));
+                var item=id==null?null:net.minecraft.core.registries.BuiltInRegistries.BLOCK.getOptional(id).map(b->b.asItem()).orElse(null);
+                if(item==null||item==net.minecraft.world.item.Items.AIR)throw new IllegalArgumentException("That block has no item to hold");
+                // What is in the hand is not thrown away: the block goes to the first empty hotbar slot, which is then the one held. Only a full hotbar replaces the held item.
+                var inventory=player.getInventory();int slot=inventory.getSelectedSlot();
+                if(!inventory.getItem(slot).isEmpty())for(int i=0;i<9;i++)if(inventory.getItem(i).isEmpty()){slot=i;break;}
+                inventory.setItem(slot,new net.minecraft.world.item.ItemStack(item));inventory.setSelectedSlot(slot);
+                player.inventoryMenu.broadcastChanges();return;
+            }
             if(r.action().equals("hotbar_next")||r.action().equals("hotbar_previous")){send(player,s,HotbarLibrary.cycle(player,s,o,r.action().equals("hotbar_next")?1:-1),false);return;}
             if(r.action().equals("hotbar_save")||r.action().equals("hotbar_load")||r.action().equals("hotbar_list")){
                 String result=HotbarLibrary.apply(r.action(),player,o);if(r.action().equals("hotbar_list"))ServerPlatform.send(player,new Packets.Report(result));send(player,s,r.action().equals("hotbar_list")?"Saved hotbars listed":result,false);return;
@@ -353,7 +381,7 @@ public final class EditorServer {
                     for(Point p:s.selection.points()){plan.validate(p);source.put(p,BlockSnapshot.capture(player.level(),EditPlanner.pos(p)));}
                     if(r.action().equals("move"))for(Point p:source.keySet())plan.put(p,Blocks.AIR.defaultBlockState());
                     int count=r.action().equals("stack")?o.copies:1;
-                    if((long)source.size()*count>Selection.LIMIT)throw new IllegalArgumentException("Stack exceeds 131,072 blocks");
+                    if((long)source.size()*count>Selection.LIMIT)throw new IllegalArgumentException("Stack exceeds "+String.format("%,d",Selection.LIMIT)+" blocks");
                     for(int i=1;i<=count;i++)for(var e:source.entrySet()) {
                         var p=e.getKey();if(e.getValue().state().isAir()&&!o.pasteAir)continue;
                         plan.put(p.add(o.offsetX*i,o.offsetY*i,o.offsetZ*i),e.getValue());
@@ -395,6 +423,8 @@ public final class EditorServer {
                 case "use", "builder_place", "builder_break" -> {
                     if(target==null)throw new IllegalArgumentException("Point at a block within reach");
                     var plan=new EditPlanner(player.level(),s,o);
+                    // A click in the world is not a Builder tool, but it follows the same rule: the tool masks apply only where "Use in Builder tools" is on.
+                    if(!r.action().equals("use"))plan.builder=true;
                     if(r.action().equals("builder_place")) {
                         if(o.tinker && player.getMainHandItem().isEmpty()) {
                             var old=plan.state(target);
@@ -408,7 +438,7 @@ public final class EditorServer {
                         }
                         start(player,s,plan.finish("Builder placement"));
                     } else if(r.action().equals("builder_break")) {
-                        plan.put(target,Blocks.AIR.defaultBlockState());start(player,s,plan.finish("Bulldozer"));
+                        plan.put(target,Blocks.AIR.defaultBlockState());start(player,s,plan.finish(IN_WORLD_BREAK));
                     } else use(player,s,o,target,normal,plan);
                 }
                 case "bucket_fill" -> {
@@ -504,11 +534,11 @@ public final class EditorServer {
             BlockPos at=EditPlanner.pos(p);
             if(!player.level().hasChunk(p.x()>>4,p.z()>>4))throw new IllegalArgumentException("Selection reaches unloaded chunks");
             var snapshot=BlockSnapshot.capture(player.level(),at);bytes+=128+(snapshot.data()==null?0:snapshot.data().toString().length()*2);
-            if(bytes>32*1024*1024)throw new IllegalArgumentException("Clipboard exceeds 32 MiB; select a smaller area");
+            if(bytes>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Clipboard exceeds "+Selection.HISTORY_BYTES/1024/1024+" MiB; select a smaller area");
             next.put(p.subtract(min),snapshot);
         }
         var entities=o.copyEntities?ClipboardEntities.capture(player,s):new ClipboardEntities.Capture(List.of(),List.of());
-        for(var tag:entities.relative()){bytes+=tag.toString().length()*2;if(bytes>32*1024*1024)throw new IllegalArgumentException("Clipboard exceeds 32 MiB including entities");}
+        for(var tag:entities.relative()){bytes+=tag.toString().length()*2;if(bytes>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Clipboard exceeds "+Selection.HISTORY_BYTES/1024/1024+" MiB including entities");}
         s.clipboard.clear();s.clipboard.putAll(next);s.clipboardEntities.clear();s.clipboardEntities.addAll(entities.relative());
         s.clipboardOrigin=min;
         s.clipboardDirty=true;
@@ -552,7 +582,7 @@ public final class EditorServer {
                 ai.pendingEdit=null;ai.pendingDirty=true; // a new preview replaces the last, and stays gone if this one is refused
                 var edit=BuildPlanner.plan(player,ai,o);
                 if(edit.changes().isEmpty()){send(player,ai,"No matching blocks changed",false);return;}
-                if(edit.estimatedBytes()>32*1024*1024)throw new IllegalArgumentException("Edit exceeds the 32 MiB history budget; use a smaller build");
+                if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller build");
                 EditProtection.check(player,edit);
                 ai.pendingEdit=edit;
                 send(player,ai,"AI preview ready: "+edit.changes().size()+" blocks",false);
@@ -563,7 +593,7 @@ public final class EditorServer {
                 if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
                 EditProtection.check(player,edit);
                 ai.pendingEdit=null;ai.pendingDirty=true;
-                ai.busy=true;job=new Job(player.getUUID(),player.level(),ai,edit,false,false,new int[]{0},new ArrayList<>(),0,true,byChunk(edit.changes()));
+                ai.busy=true;job=new Job(player.getUUID(),player.level(),ai,edit,false,false,new int[]{0},new ArrayList<>(),0,true,byChunk(edit.changes()),true);
                 send(player,ai,"Applying "+edit.name()+"…",false);
             }
             case "ai_cancel" -> {
@@ -580,11 +610,11 @@ public final class EditorServer {
             edit=edit.withSelection(change.with(Map.of("shape",s.shapeAtRequest),Map.of("shape","none")));
         }
         if(edit.changes().isEmpty() && edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()){var why=s.nothingChangedBecause;s.nothingChangedBecause=null;send(player,s,why==null?"No matching blocks changed":"No matching blocks changed: "+why,false);return;}
-        if(edit.estimatedBytes()>32*1024*1024)throw new IllegalArgumentException("Edit exceeds the 32 MiB history budget; use a smaller region");
+        if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller region");
         EditProtection.check(player,edit);
         if(s.confirmEdits&&!s.bypassConfirm){stage(player,s,edit);return;}
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
-        s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,false,false,new int[]{0},new ArrayList<>(),s.requestStroke,false,byChunk(edit.changes()));
+        s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,false,false,new int[]{0},new ArrayList<>(),s.requestStroke,false,byChunk(edit.changes()),s.requestRecord);
         send(player,s,"Applying "+edit.name()+"…",false);
     }
     /** Holds the edit as a ghost for the player to confirm; edits made while one is waiting are added to it. */
@@ -647,7 +677,7 @@ public final class EditorServer {
             for(var c:edit.biomes())if(!player.level().hasChunk(c.cell().x()>>2,c.cell().z()>>2))throw new IllegalArgumentException("Move closer to the biome chunks before undo/redo");
         }
         EditProtection.check(player,edit);
-        from.removeFirst();s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,backwards,true,new int[]{0},new ArrayList<>(),0,s.ai,byChunk(edit.changes()));
+        from.removeFirst();s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,backwards,true,new int[]{0},new ArrayList<>(),0,s.ai,byChunk(edit.changes()),true);
         s.lastStroke=0;
         send(player,s,backwards?"Undoing…":"Redoing…",false);
     }
@@ -701,7 +731,7 @@ public final class EditorServer {
                 j.session.recalculateBytes();
                 j.session.historyDirty=true;
                 j.session.event((j.backwards?"Undo ":"Redo ")+j.edit.name());
-            } else j.session.remember(actual,j.strokeId);
+            } else if(j.record)j.session.remember(actual,j.strokeId);
             j.session.busy=false;job=null;
             if(j.history&&!j.backwards&&j.session.historyRemaining==0&&!j.applied.isEmpty()&&j.session.options!=null&&j.session.options.historyPulse)j.session.pulse="redo:700:"+SelectionCodec.encode(pulsePoints(j.applied.stream().map(Session.Change::pos).toList()));
             var player=server.getPlayerList().getPlayer(j.owner);
@@ -805,7 +835,7 @@ public final class EditorServer {
         if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
         if(ai!=null&&ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit);ai.pendingDirty=false;}
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate);s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
+        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin);s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
         ServerPlatform.send(player,new Packets.Update(Packets.JSON.toJson(status)));
     }
 }

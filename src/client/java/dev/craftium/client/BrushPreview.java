@@ -20,6 +20,8 @@ import java.util.*;
 final class BrushPreview {
     /** The preview shows brushes well past what can be built (see Selection.LIMIT), since it is only drawn; beyond this it falls back to the box around the brush. */
     private static final int MAX_BLOCKS=600_000;
+    /** The most cells the preview looks at to draw a shape: it is worked out on the frame that needs it, so it gets a good deal less than a build is allowed. A bigger shape is drawn as its box. */
+    private static final double PREVIEW_CELLS=24e6;
     private static int shownBlocks;
     private static List<Object> key=List.of();
     private static SceneShape shape=SceneShape.EMPTY;
@@ -42,6 +44,11 @@ final class BrushPreview {
         // A brush over the block limit is refused by the server too, so there is no set of blocks to show.
         // Each tool is shown the way it builds: the picked shape, a line or path's small shape, or just a disc or a ball of the radius.
         var origin=new Point(0,0,0);
+        var use=o.tool.brushUse();
+        double cells=use==dev.craftium.core.Tool.BrushUse.SMALL_SHAPE?0:dev.craftium.core.ShapeSizes.isDefault(o)||use==dev.craftium.core.Tool.BrushUse.DISC||use==dev.craftium.core.Tool.BrushUse.SPHERE
+            ?dev.craftium.core.ShapeLimits.cells(use==dev.craftium.core.Tool.BrushUse.DISC?BrushMath.Shape.DISK:use==dev.craftium.core.Tool.BrushUse.SPHERE?BrushMath.Shape.SPHERE:o.shape,Math.min(o.outerRadius(),BrushMath.MAX_REACH))
+            :Math.pow(2*Math.ceil(o.outerRadius()*Math.max(o.sizeX,Math.max(o.sizeY,o.sizeZ)))+1,3);
+        if(cells>PREVIEW_CELLS){tooLarge=true;shownBlocks=MAX_BLOCKS;return;}
         try{
             relative=switch(o.tool.brushUse()){
                 case SMALL_SHAPE->BrushMath.brush(origin,Math.min(o.radius,4),o.shape,o.hollow,o.outlineThickness,o.pixelPerfect);

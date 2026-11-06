@@ -208,7 +208,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(dragBlock!=null&&dragMoved){
             for(int i=dropTargets.size()-1;i>=0;i--){var t=dropTargets.get(i).area();if(t.contains(mx,my)){g.pose().pushMatrix();WorkspaceLayout.apply(g,t.panel());g.outline(t.x(),t.y(),t.width(),t.height(),ACCENT);g.pose().popMatrix();break;}} // the cell the block would land in
-            g.fill(mx-13,my-13,mx+13,my+13,0xdd1b2838);g.outline(mx-13,my-13,26,26,ACCENT);BlockPickerScreen.icon(g,font,dragBlock,mx-8,my-8);}
+            BlockDragCursor.draw(g,font,dragBlock,mx,my,w,h,ACCENT);}else BlockDragCursor.release();
         g.pose().popMatrix();ReferenceImages.draw(g,true,mouseX,mouseY);
     }
     /** Whether the pointer is free to act on the controls, not held by a drag or covered by a pop-up. */
@@ -340,7 +340,7 @@ public final class EditorScreen extends CraftiumScreen {
         scrolled(g,262,o().tool==Tool.BOX_SELECT||o().tool==Tool.MAGIC_SELECT?100:o().tool.selection()?33:6,o().tool==Tool.MAGIC_SELECT?0:TOOL_NAME_GAP,()->toolBody(g));
     }
     private static final int TOOL_NAME_GAP=36;
-    /** The block limit slider: 1 to 100,000, at the very bottom of the options of every tool that builds, removes or moves blocks. */
+    /** The block limit slider: 1 to {@link Options#MAX_BLOCK_LIMIT}, at the very bottom of the options of every tool that builds, removes or moves blocks. */
     private void blockLimit(Gfx g,int y){
         slider(g,10,y,pw-20,"Block limit",o().blockLimit,1,Options.MAX_BLOCK_LIMIT,DEFAULTS.blockLimit,v->o().blockLimit=(int)Math.clamp(Math.round(v),1,Options.MAX_BLOCK_LIMIT),true);
     }
@@ -395,7 +395,7 @@ public final class EditorScreen extends CraftiumScreen {
             var use=o().tool.brushUse();
             if(o().tool.picksShape())shapeSelector(g,305);
             // The track stops at 64 to stay usable; a bigger radius is typed in. Shapes are limited by their block count and reach, not by this.
-            if(use!=Tool.BrushUse.NONE)slider(g,10,347-lift(),pw-20,use==Tool.BrushUse.SMALL_SHAPE?"Radius (shape up to 4)":"Radius",o().radius,1,64,BrushMath.MAX_RADIUS,DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
+            if(use!=Tool.BrushUse.NONE)slider(g,10,347-lift(),pw-20,use==Tool.BrushUse.SMALL_SHAPE?"Radius (shape up to 4)":radiusLabel(),o().radius,1,Math.min(64,dev.craftium.core.ShapeLimits.maxRadius(o())),dev.craftium.core.ShapeLimits.maxRadius(o()),DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
             o().outlineThickness=Math.clamp(o().outlineThickness,1,o().radius); // a wall is never thicker than the radius
             // A polygon's sides take the row under the radius, and everything below moves down a row. The track stops at 64; more is typed.
             if(sidesShown())
@@ -679,7 +679,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,x+22+top[0]+top[1],159,top[2],20,"Paste",false,()->action("paste"),"Paste at cursor · Ctrl+V");
         button(g,x+10,186,bottom[0],20,"Rotate",false,()->action("rotate"),"Rotate clipboard 90° · Ctrl+R");
         button(g,x+14+bottom[0],186,bottom[1],20,"Mirror",false,()->action("flip"),"Mirror clipboard on X · Ctrl+F");
-        button(g,x+18+bottom[0]+bottom[1],186,bottom[2],20,"Paste in place",false,()->CraftiumClient.send("paste_in_place",null,null),"Paste at the coordinates the blocks were copied from");
+        button(g,x+18+bottom[0]+bottom[1],186,bottom[2],20,"Paste in place",false,PlacementPreview::beginInPlace,"Start a placement at the coordinates the blocks were copied from · Ctrl+Shift+V · Enter builds it");
     }
     private void palette(Gfx g) {
         int x=w-RIGHT;panel(g,x,222,RIGHT,Math.max(105,masksTop()-6-222),"Block palette"); // down to the Tool masks
@@ -726,7 +726,7 @@ public final class EditorScreen extends CraftiumScreen {
         ToolIcons.line(g,x+16,y+10,x+21,y+15,color); // the collar
         ToolIcons.line(g,x+8,y+22,x+18,y+12,color);ToolIcons.line(g,x+9,y+23,x+19,y+13,color); // the tube
         g.fill(x+7,y+23,x+9,y+25,color); // the tip
-        controls.add(new Control(x,y,30,30,()->pipetting=!pipetting,"Click a block in the world to add it to the palette · Esc cancels"));
+        controls.add(new Control(x,y,30,30,()->pipetting=!pipetting,"Click a block in the world to take it as the foreground · Ctrl + click adds it to the palette and keeps the pipette · Esc cancels"));
     }
     /** While the pipette is in hand: finds the block under the pointer and shows its item in a cell above and to the right of the cursor. */
     private void pipettePreview(Gfx g){
@@ -786,15 +786,21 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void dropInPalette(String block){
         if(block.isEmpty()||block.equals("minecraft:air"))return;
-        if(!ClientState.palette.contains(block)){ClientState.palette.addFirst(block);while(ClientState.palette.size()>18)ClientState.palette.removeLast();}
+        ClientState.addToPalette(block);
         ClientState.save();
     }
     /** Puts the block in the player's main hand, as the creative inventory would. Blocks without an item (liquids) cannot be held. */
     private void dropInHand(String block){
         var id=dev.craftium.compat.Compat.tryParse(block.split("\\[",2)[0]);
         var item=id==null?null:BuiltInRegistries.BLOCK.getOptional(id).map(b->b.asItem()).orElse(null);
-        if(minecraft.player==null||minecraft.gameMode==null||!minecraft.player.isCreative()){ClientState.notify("Only a creative player can hold it");return;}
         if(item==null||item==net.minecraft.world.item.Items.AIR){ClientState.notify("That block has no item to hold");return;}
+        // In the editor the player is a spectator, which cannot use the creative menu, so the server sets the inventory instead.
+        if(minecraft.player!=null&&minecraft.player.isSpectator()){
+            String prior=o().block;o().block=block;
+            try{CraftiumClient.send("hand_set",null,null);}finally{o().block=prior;}
+            return;
+        }
+        if(minecraft.player==null||minecraft.gameMode==null||!minecraft.player.isCreative()){ClientState.notify("Only a creative player can hold it");return;}
         // What is in the hand is not thrown away: the block goes to the first empty hotbar slot, which is then the one held. Only a full hotbar replaces the held item.
         var inventory=minecraft.player.getInventory();int slot=inventory.getSelectedSlot();
         if(!inventory.getItem(slot).isEmpty())for(int i=0;i<9;i++)if(inventory.getItem(i).isEmpty()){slot=i;break;}
@@ -1047,7 +1053,7 @@ public final class EditorScreen extends CraftiumScreen {
                 item("Delete","Del",()->perform(Action.DELETE)),divider(),
                 submenu("Rotate",item("Rotate 90","",()->rotateBy(1)),item("Rotate 180","",()->rotateBy(2)),item("Rotate 270","",()->rotateBy(3))),
                 submenu("Flip",item("Flip X","",()->flip(0)),item("Flip Y","",()->flip(1)),item("Flip Z","",()->flip(2))),divider(),
-                item("Paste at cursor","",this::pasteAtCursor),item("Paste in place","",()->CraftiumClient.send("paste_in_place",null,null)),divider(),
+                item("Paste at cursor","",this::pasteAtCursor),item("Paste in place","",PlacementPreview::beginInPlace),divider(),
                 item("Edits history","",()->ClientCompat.setScreen(minecraft,new HistoryScreen(this))));
             case 2 -> List.of(item("Deselect","Alt+D",()->action("clear")),item("Inverse","",()->action("selection_invert")),
                 item(showSelection?"Hide selection":"Show selection","",()->showSelection=!showSelection),divider(),
@@ -1147,6 +1153,8 @@ public final class EditorScreen extends CraftiumScreen {
     /** The brush tools that paint along a stroke have a flow; a selection, or a shape that is put down and then built, does not. */
     private boolean flowShown(){return sizes()&&!o().tool.selection()&&o().tool!=Tool.SHAPE;}
     private int sizeHeight(){int n=dev.craftium.core.ShapeSizes.rows(o().shape).size();return n*28+(n>1?24:0)+(flowShown()?28:0);}
+    /** The radius slider's name, saying how far this shape can go when that is less than the largest radius there is. */
+    private String radiusLabel(){int most=dev.craftium.core.ShapeLimits.maxRadius(o());return most<BrushMath.MAX_RADIUS?"Radius (up to "+most+" for this shape)":"Radius";}
     private void sizeControls(Gfx g,int y){
         var o=o();var rows=dev.craftium.core.ShapeSizes.rows(o.shape);
         ShapeObject.syncOptions(); // a shape already put down shows the sizes its handles gave it
@@ -1459,7 +1467,11 @@ public final class EditorScreen extends CraftiumScreen {
         if(event.button()==0&&pipetting&&menu<0&&!help&&!transform){
             var hit=pipetteTarget(event.x(),event.y());
             if(hit!=null&&minecraft.level!=null){
-                pipetting=false;ClientState.pick(BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos())));ClientState.save();
+                String picked=BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos()));
+                // Ctrl keeps the pipette in hand and adds each block to the palette; a plain click sets the foreground and puts it away.
+                if(minecraft.hasControlDown()){if(ClientState.addToPalette(picked))ClientState.notify("Added to the palette: "+picked);}
+                else{pipetting=false;ClientState.pick(picked);}
+                ClientState.save();
                 return true;
             }
             if(inViewport(x,y))return true; // a click on empty sky keeps the pipette in hand
@@ -1554,7 +1566,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(cameraGesture!=CameraGesture.NONE){
             // A few pixels of wobble on a middle click is still a click, not a pan.
             if(pendingPick&&!middleDragged){if(Math.hypot(event.x()-gestureX,event.y()-gestureY)<=3)return true;middleDragged=true;}
-            if(cameraGesture==CameraGesture.RADIUS)o().radius=Math.clamp(initialRadius+(int)Math.round(((event.x()-gestureX)-(event.y()-gestureY))/8),1,BrushMath.MAX_RADIUS);
+            if(cameraGesture==CameraGesture.RADIUS)o().radius=Math.clamp(initialRadius+(int)Math.round(((event.x()-gestureX)-(event.y()-gestureY))/8),1,dev.craftium.core.ShapeLimits.maxRadius(o()));
             else if(cameraGesture==CameraGesture.ROTATE)minecraft.player.turn(dx*2,dy*2);
             else if(cameraGesture==CameraGesture.ORBIT){minecraft.player.turn(dx*2,dy*2);Vec3 eye=orbitPivot.subtract(minecraft.player.getLookAngle().scale(orbitDistance));minecraft.player.setPos(eye.x,eye.y-minecraft.player.getEyeHeight(),eye.z);}
             else{var camera=ClientCompat.camera(minecraft);var near=ClientCompat.nearPlane(camera);Vec3 center=near.getPointOnPlane(0,0),right=near.getPointOnPlane(1,0).subtract(center).normalize(),up=near.getPointOnPlane(0,1).subtract(center).normalize();double units=2*orbitDistance*Math.tan(Math.toRadians(ClientCompat.fov(minecraft,camera))/2)/height;minecraft.player.setPos(minecraft.player.position().add(right.scale(-dx*units)).add(up.scale(dy*units)));}
@@ -1599,7 +1611,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(builder){action(vertical>0?"hotbar_previous":"hotbar_next");return true;}
         if(EditorBindings.held(Action.ADJUST_SPEED)){o().flySpeed=Math.clamp(o().flySpeed+(float)vertical*.2f,.1f,10f);action("flight");return true;}
-        if(EditorBindings.held(Action.ADJUST_RADIUS)){o().radius=Math.clamp(o().radius+(int)Math.signum(vertical),1,BrushMath.MAX_RADIUS);return true;}
+        if(EditorBindings.held(Action.ADJUST_RADIUS)){o().radius=Math.clamp(o().radius+(int)Math.signum(vertical),1,dev.craftium.core.ShapeLimits.maxRadius(o()));return true;}
         if(!toolActive){zoomToCursor(x,y,vertical);return true;} // no tool chosen: the wheel is the camera's
         if(ShapeObject.active()&&vertical!=0){ShapeObject.adjustRadius((int)Math.signum(vertical));return true;} // the wheel sizes the shape that is down
         if(TransformGizmo.available(this)){TransformGizmo.nudge(this,EditorControls.nudge(vertical>0?Action.NUDGE_FORWARD:Action.NUDGE_BACK,minecraft.player.getYRot()));return true;}
@@ -1647,7 +1659,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(step!=0){o().polygonSides=Math.clamp(o().polygonSides+step,BrushMath.MIN_SIDES,BrushMath.MAX_SIDES);return true;}
         }
         if(toolActive&&ToolHints.brush(o().tool)&&(event.modifiers()&7)==0&&(event.key()==GLFW.GLFW_KEY_LEFT_BRACKET||event.key()==GLFW.GLFW_KEY_RIGHT_BRACKET)){ // [ and ] shrink and grow the brush
-            o().radius=Math.clamp(o().radius+(event.key()==GLFW.GLFW_KEY_RIGHT_BRACKET?1:-1),1,BrushMath.MAX_RADIUS);return true;
+            o().radius=Math.clamp(o().radius+(event.key()==GLFW.GLFW_KEY_RIGHT_BRACKET?1:-1),1,dev.craftium.core.ShapeLimits.maxRadius(o()));return true;
         }
         for(Action binding:Action.values())if(!EditorBindings.get(binding).mouse()&&EditorBindings.matches(binding,event)&&perform(binding))return true;
         if(event.key()==GLFW.GLFW_KEY_BACKSPACE&&(event.modifiers()&7)==0){perform(Action.DELETE);return true;}
@@ -1673,7 +1685,7 @@ public final class EditorScreen extends CraftiumScreen {
             case UNDO,UNDO_ALT -> action("undo");
             case DESELECT -> action("clear");
             case TOGGLE_MOVE -> toggleTool(Tool.MOVE);case TOGGLE_ROTATE -> toggleTool(Tool.ROTATE);case TOGGLE_SCALE -> toggleTool(Tool.SCALE);case TOGGLE_PIVOT -> toggleTool(Tool.PIVOT);
-case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut");case DUPLICATE -> action("duplicate");case PASTE -> action("paste");
+case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut");case DUPLICATE -> action("duplicate");case PASTE -> action("paste");case PASTE_IN_PLACE -> PlacementPreview.beginInPlace();
             case COPY_AIR -> {boolean old=o().pasteAir;o().pasteAir=true;action("copy");o().pasteAir=old;}
             case DELETE -> {if(deleteRuler()){}else if(ShapeObject.active())ShapeObject.cancel();else if(PlacementPreview.active())PlacementPreview.cancel();else action("delete");}
             case SWAP_BLOCKS -> swapBlocks();
@@ -1835,6 +1847,6 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         return best<100;
     }
     private int key(long handle,int key){return GLFW.glfwGetKey(handle,key)==GLFW.GLFW_PRESS?1:0;}
-    @Override public void removed(){keysDown.clear();pipetting=false;syncCrosshair();TransformGizmo.cancel();draggingNode=draggingPlacement=false;cameraGesture=CameraGesture.NONE;syncCursor();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
+    @Override public void removed(){BlockDragCursor.release();keysDown.clear();pipetting=false;syncCrosshair();TransformGizmo.cancel();draggingNode=draggingPlacement=false;cameraGesture=CameraGesture.NONE;syncCursor();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
     @Override public void onClose(){ClientState.save();if(ClientState.largeSelection>0)confirmLargeSelection();ClientCompat.setScreen(minecraft,null);if(ClientState.hasPending()&&CraftiumClient.supported())CraftiumClient.send("pending_cancel",null,null);if(CraftiumClient.supported()&&minecraft.player!=null&&minecraft.player.isSpectator())CraftiumClient.send("gamemode_restore",null,null);}
 }

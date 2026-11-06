@@ -3,7 +3,10 @@ package dev.craftium.core;
 import java.util.*;
 
 public final class Selection {
-    public static final int LIMIT = 131_072;
+    /** The most blocks one edit or selection may hold: 2^20. */
+    public static final int LIMIT = 1_048_576;
+    /** What an edit of that many blocks takes to remember for undo, at 128 bytes a block, with room for block entity data. One player's history may hold about this much. */
+    public static final int HISTORY_BYTES = 160 * 1024 * 1024;
     public enum Mode { REPLACE, ADD, SUBTRACT, INTERSECT }
     private final LinkedHashSet<Point> points = new LinkedHashSet<>();
     private long revision;
@@ -22,13 +25,13 @@ public final class Selection {
             case SUBTRACT -> next.removeAll(incoming);
             case INTERSECT -> next.retainAll(new HashSet<>(incoming));
         }
-        if (next.size() > LIMIT) throw new IllegalArgumentException("Selection limit: 131,072 blocks");
+        if (next.size() > LIMIT) throw new IllegalArgumentException("Selection limit: "+String.format("%,d",LIMIT)+" blocks");
         points.clear(); points.addAll(next);revision++;
     }
     public static List<Point> box(Point a, Point b) {
         long sx = Math.abs((long)a.x()-b.x())+1, sy = Math.abs((long)a.y()-b.y())+1, sz = Math.abs((long)a.z()-b.z())+1;
         if (sx > LIMIT || sy > LIMIT || sz > LIMIT || sx*sy*sz > LIMIT)
-            throw new IllegalArgumentException("Box exceeds 131,072 blocks");
+            throw new IllegalArgumentException("Box exceeds "+String.format("%,d",LIMIT)+" blocks");
         var result = new ArrayList<Point>((int)(sx*sy*sz));
         for (int x = Math.min(a.x(),b.x()); x <= Math.max(a.x(),b.x()); x++)
             for (int y = Math.min(a.y(),b.y()); y <= Math.max(a.y(),b.y()); y++)

@@ -26,7 +26,7 @@ final class AnimatedRebuild {
         var next=new Run();next.owner=player.getUUID();next.level=player.level();next.session=session;next.options=options;var plan=new EditPlanner(next.level,session,options);var recovery=new ArrayList<Session.Change>();
         for(Point p:session.selection.points()){plan.validate(p);var snapshot=BlockSnapshot.capture(next.level,EditPlanner.pos(p));next.original.put(p,snapshot);if(!snapshot.state().isAir())recovery.add(new Session.Change(p,snapshot,AIR));}
         if(recovery.isEmpty())throw new IllegalArgumentException("Select a structure containing blocks");next.recovery=new Session.Edit("Animated rebuild recovery",List.copyOf(recovery),List.of(),2|16);
-        if(next.recovery.estimatedBytes()>32*1024*1024)throw new IllegalArgumentException("Rebuild exceeds the history budget");
+        if(next.recovery.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Rebuild exceeds the history budget");
         EditProtection.check(player,next.recovery);
         next.order=schedule(next);next.clear=new ArrayList<>(next.original.keySet());session.remember(next.recovery);HistoryStore.save(session);HistoryStore.flush();session.busy=true;run=next;EditorServer.send(player,session,"Animated rebuild preparing · Ctrl+Z cancels and restores the structure",false);
     }

@@ -21,6 +21,7 @@ This matches published defaults. A running copy of Axiom was not used for compar
 | Editor | Ctrl + LMB / RMB / MMB drag | Orbit / pan / radius |
 | Editor | Ctrl + Z / Y | Undo / redo |
 | Editor | Ctrl + C / X / V / J | Copy / cut / paste / duplicate |
+| Editor | Ctrl + Shift + V | Paste in place: start a placement where the blocks were copied from |
 | Editor | Ctrl + P / B | Save blueprint / biome borders |
 | Selection | Ctrl + F / R | Fill / replace |
 | Placement | Ctrl + R / F | Rotate / flip along facing axis |

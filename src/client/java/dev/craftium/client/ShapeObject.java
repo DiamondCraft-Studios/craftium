@@ -83,7 +83,7 @@ final class ShapeObject {
     /** Grows or shrinks the shape's radius by {@code step}; the sizes are kept within reach of the new radius. */
     static void adjustRadius(int step){
         var o=ClientState.options;
-        o.radius=Math.clamp(o.radius+step,1,BrushMath.MAX_RADIUS);
+        o.radius=Math.clamp(o.radius+step,1,dev.craftium.core.ShapeLimits.maxRadius(o));
         o.outlineThickness=Math.clamp(o.outlineThickness,1,o.radius);
         if(pose!=null)pose=fit(pose,o.outerRadius());
     }

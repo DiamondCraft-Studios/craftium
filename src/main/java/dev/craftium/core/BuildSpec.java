@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
  * Later operations overwrite earlier ones; {@code minecraft:air} carves.
  */
 public final class BuildSpec {
-    public static final int MAX_OPS = 256, MAX_REPEAT = 64, MAX_EXTENT = 256, MAX_RADIUS = 128, MAX_BLOCKS = Selection.LIMIT, MAX_PALETTE = 64;
+    public static final int MAX_OPS = 256, MAX_REPEAT = 64, MAX_EXTENT = 256, MAX_RADIUS = 128, MAX_BLOCKS = 131_072, MAX_PALETTE = 64;
     /** Cells examined across the whole spec, so a pile of large operations cannot stall the server thread. */
     private static final long WORK_BUDGET = 40_000_000L;
     private static final Pattern BLOCK = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+(\\[[a-z0-9_=,]*])?|[a-z0-9_./-]+(\\[[a-z0-9_=,]*])?");

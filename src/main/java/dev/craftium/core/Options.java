@@ -28,7 +28,9 @@ public final class Options {
     /** INSIDE grows the wall inward from the shape's edge, OUTSIDE outward, and CENTER puts the edge in the middle of it. */
     public enum StrokeAlign { INSIDE, CENTER, OUTSIDE }
     /** How far past the radius a hollow shape reaches because of where its wall is aligned: nothing for inside, the wall's thickness for outside. */
-    public int outlineShift() {
+    public int outlineShift() { return outlineShift(radius); }
+    /** As {@link #outlineShift()}, for a radius other than the one set. */
+    public int outlineShift(int radius) {
         if (!hollow) return 0;
         int t = Math.clamp(outlineThickness, 1, Math.max(1, radius));
         return strokeAlign == StrokeAlign.OUTSIDE ? t : strokeAlign == StrokeAlign.CENTER ? t / 2 : 0;
@@ -54,6 +56,11 @@ public final class Options {
     public boolean maskOff=true;
     /** Whether the tool masks (block mask, mask block, rules, script, height range and restrict to selection) also apply to the builder tools. */
     public boolean maskInBuilder;
+    /** Whether the blocks you place and break by hand, with the game's own clicks, go into the undo history. */
+    public boolean recordPlayerBuilding=true;
+    /** Whether the Builder's magic select uses the editor's Magic Wand settings; when off it matches by {@link #builderMagicCompare}, with the widest limit and the wand's plain defaults. */
+    public boolean builderFollowsMagic=true;
+    public Compare builderMagicCompare=Compare.BLOCK;
     public String biome = "minecraft:plains";
     public String text = "CRAFTIUM";
     public int minY = -64, maxY = 319;
@@ -129,7 +136,7 @@ public final class Options {
     public int brushFlow=FLOW_DEFAULT;
     public int hoverPreviewLimit=5000;
     /** The most blocks any one placing tool may change, 1 to {@link #MAX_BLOCK_LIMIT}; an edit that would change more is refused. */
-    public static final int MAX_BLOCK_LIMIT=100_000;
+    public static final int MAX_BLOCK_LIMIT=Selection.LIMIT;
     public int blockLimit=MAX_BLOCK_LIMIT;
     public boolean selectUp=true,selectDown=true,selectHorizontal=true,selectCorners,includeNonSolid;
     public Noise noise=Noise.SIMPLEX;
@@ -289,12 +296,15 @@ public final class Options {
         if(pinned==null)pinned=new java.util.ArrayList<>();
         if(pinned.size()>256||pinned.stream().anyMatch(name->name==null||name.length()>64))throw new IllegalArgumentException("Invalid pinned properties");
         radius = Math.clamp(radius,1,BrushMath.MAX_RADIUS);
+        radius = Math.min(radius,ShapeLimits.maxRadius(this)); // a shape that would pass the block limit is held to the size that does not
+        if(shape!=null&&(shapeKind==null||shapeKind==ShapeKind.BRUSH)){var rows=ShapeSizes.rows(shape);ShapeSizes.fit(this,rows);ShapeSizes.fitBlocks(this,rows);}
         strength = Double.isFinite(strength) ? Math.clamp(strength,0.1,5) : 1;
         noiseScale = Double.isFinite(noiseScale) ? Math.clamp(noiseScale,1,64) : 8;
         density = Double.isFinite(density) ? Math.clamp(density,0,1) : 0.5;
         farReach = Math.clamp(farReach,6,64);
         flySpeed = Float.isFinite(flySpeed) ? Math.clamp(flySpeed,0.1f,10f) : 1;
         copies=Math.max(1,copies); // offsets and copies have no upper limit
+        if(builderMagicCompare==null)builderMagicCompare=Compare.BLOCK;
         if(compare==null)compare=Compare.ANY; // Gson reads a constant that no longer exists, the old SOLID, as null
         if(noise==null||pathMode==null||modelMode==null||modifyMode==null||shapeKind==null||rulerMode==null)throw new IllegalArgumentException("Missing advanced options");
         if(modifyAxis==null||modifyType==null)throw new IllegalArgumentException("Missing advanced options");
