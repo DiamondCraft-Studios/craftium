@@ -21,9 +21,43 @@ public final class EditorServer {
     /** The AI's workspace of each player: the preview it is holding and the builds it can undo. Never saved, and dropped when the player leaves. */
     private static final Map<UUID,Session> AI_SESSIONS=new HashMap<>();
     private static Job job;
+    /** How long one tick may spend writing an edit's blocks: 20 of its 50 ms, which leaves the rest of the tick its time and still finishes a large undo in a few ticks. */
+    private static final long APPLY_BUDGET_NANOS=20_000_000L;
     private static int historyTicks;
     private record Job(UUID owner, ServerLevel level, Session session, Session.Edit edit,
-                       boolean backwards, boolean history, int[] cursor, List<Session.Change> applied, long strokeId, boolean load) {}
+                       boolean backwards, boolean history, int[] cursor, List<Session.Change> applied, long strokeId, boolean load, List<Session.Change> order) {}
+    /** How many blocks are checked and then written together; a tick looks at the clock between slices. */
+    private static final int SLICE=1024;
+    /** An edit's blocks grouped by chunk, each chunk's in the order the edit has them, so a chunk can be written in one pass (see {@link BulkPlace}). */
+    private static List<Session.Change> byChunk(List<Session.Change> changes){
+        var grouped=new ArrayList<>(changes);
+        grouped.sort(Comparator.comparingLong((Session.Change c)->((long)(c.pos().x()>>4)<<32)|((c.pos().z()>>4)&0xffffffffL)));
+        return grouped;
+    }
+    /** Checks which of these blocks the edit may still change, then writes them, a chunk at a time. */
+    private static void applySlice(Job j,List<Session.Change> slice){
+        var due=new ArrayList<Session.Change>(slice.size());
+        for(var c:slice){
+            BlockPos at=EditPlanner.pos(c.pos());var expected=j.backwards?c.after():c.before();
+            if((j.load||j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) && expected.matches(j.level,at)) {
+                if(!ServerPlatform.canChange(j.owner,j.level,c.pos()))throw new IllegalArgumentException("Edit permission or region access changed");
+                due.add(c);
+            } else if(j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) {
+                // Skipped: resend the block as it is, so a client that predicted this edit puts it back.
+                var now=j.level.getBlockState(at);j.level.sendBlockUpdated(at,now,now,2);
+            }
+        }
+        j.applied.addAll(due); // recorded before they are written: undoing a block that was not written is a no-op, losing one that was is not
+        int flags=j.edit.flags();
+        for(int from=0;from<due.size();){
+            int cx=due.get(from).pos().x()>>4,cz=due.get(from).pos().z()>>4,to=from;
+            while(to<due.size()&&due.get(to).pos().x()>>4==cx&&due.get(to).pos().z()>>4==cz)to++;
+            var run=due.subList(from,to);
+            if(BulkPlace.applies(run.size(),flags))BulkPlace.place(j.level,j.level.getChunk(cx,cz),run,j.backwards,flags);
+            else for(var c:run)(j.backwards?c.before():c.after()).place(j.level,EditPlanner.pos(c.pos()),flags);
+            from=to;
+        }
+    }
     private EditorServer() {}
     public static void clear() { SESSIONS.clear();AI_SESSIONS.clear();job=null;AnnotationEdits.clear();AnimatedRebuild.clear(); }
     /** Gives the player back the game mode the editor replaced, if it still has one to give back. */
@@ -529,7 +563,7 @@ public final class EditorServer {
                 if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
                 EditProtection.check(player,edit);
                 ai.pendingEdit=null;ai.pendingDirty=true;
-                ai.busy=true;job=new Job(player.getUUID(),player.level(),ai,edit,false,false,new int[]{0},new ArrayList<>(),0,true);
+                ai.busy=true;job=new Job(player.getUUID(),player.level(),ai,edit,false,false,new int[]{0},new ArrayList<>(),0,true,byChunk(edit.changes()));
                 send(player,ai,"Applying "+edit.name()+"…",false);
             }
             case "ai_cancel" -> {
@@ -550,7 +584,7 @@ public final class EditorServer {
         EditProtection.check(player,edit);
         if(s.confirmEdits&&!s.bypassConfirm){stage(player,s,edit);return;}
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
-        s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,false,false,new int[]{0},new ArrayList<>(),s.requestStroke,false);
+        s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,false,false,new int[]{0},new ArrayList<>(),s.requestStroke,false,byChunk(edit.changes()));
         send(player,s,"Applying "+edit.name()+"…",false);
     }
     /** Holds the edit as a ghost for the player to confirm; edits made while one is waiting are added to it. */
@@ -613,7 +647,7 @@ public final class EditorServer {
             for(var c:edit.biomes())if(!player.level().hasChunk(c.cell().x()>>2,c.cell().z()>>2))throw new IllegalArgumentException("Move closer to the biome chunks before undo/redo");
         }
         EditProtection.check(player,edit);
-        from.removeFirst();s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,backwards,true,new int[]{0},new ArrayList<>(),0,s.ai);
+        from.removeFirst();s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,backwards,true,new int[]{0},new ArrayList<>(),0,s.ai,byChunk(edit.changes()));
         s.lastStroke=0;
         send(player,s,backwards?"Undoing…":"Redoing…",false);
     }
@@ -644,17 +678,11 @@ public final class EditorServer {
         }
         if(job==null)return;var j=job;
         try {
-            var list=j.edit.changes();long deadline=System.nanoTime()+8_000_000L;int count=0;
-            while(j.cursor[0]<list.size() && count++<2048 && System.nanoTime()<deadline) {
-                var c=list.get(j.cursor[0]++);BlockPos at=EditPlanner.pos(c.pos());
-                var expected=j.backwards?c.after():c.before();var desired=j.backwards?c.before():c.after();
-                if((j.load||j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) && expected.matches(j.level,at)) {
-                    if(!ServerPlatform.canChange(j.owner,j.level,c.pos()))throw new IllegalArgumentException("Edit permission or region access changed");
-                    desired.place(j.level,at,j.edit.flags());j.applied.add(c);
-                } else if(j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) {
-                    // Skipped: resend the block as it is, so a client that predicted this edit puts it back.
-                    var now=j.level.getBlockState(at);j.level.sendBlockUpdated(at,now,now,2);
-                }
+            var list=j.order();long deadline=System.nanoTime()+APPLY_BUDGET_NANOS;
+            // Only the time budget limits a tick: a fixed block cap left most of it unused.
+            while(j.cursor[0]<list.size() && System.nanoTime()<deadline) {
+                int from=j.cursor[0],to=Math.min(list.size(),from+SLICE);j.cursor[0]=to;
+                applySlice(j,list.subList(from,to));
             }
             if(j.cursor[0]<list.size())return;
             if(!EditProtection.allowed(j.owner,j.level,new Session.Edit(j.edit.name(),List.of(),List.of(),j.edit.flags(),j.edit.entities(),j.edit.annotations())))throw new IllegalArgumentException("Entity or annotation access changed");

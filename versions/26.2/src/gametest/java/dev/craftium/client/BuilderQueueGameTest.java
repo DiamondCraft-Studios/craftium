@@ -63,5 +63,24 @@ public final class BuilderQueueGameTest {
         settle(c,w);
         require(w.getServer().computeOnServer(s->s.overworld().getBlockState(middle).is(Blocks.DIRT)&&s.overworld().getBlockState(new BlockPos(sx,sy,sz+5)).isAir()),"The undo did not skip the changed cell and clear the others");
         require(c.computeOnClient(mc->mc.level.getBlockState(middle).is(Blocks.DIRT)),"A skipped cell was not sent again, so the client kept its stale block");
+
+        // The same with an edit big enough to be written a chunk at a time: the skipped cell is still sent again, and the rest are still cleared.
+        int lx=bx+40,ly=by,lz=bz;
+        w.getServer().runCommand("fill "+lx+" "+ly+" "+lz+" "+(lx+7)+" "+(ly+3)+" "+(lz+7)+" stone");
+        c.waitTicks(10);
+        commit(c,new Point(lx,ly,lz),new Point(lx+7,ly+3,lz+7),Options.BuilderTool.CLONE,new Point(0,0,10));
+        settle(c,w);
+        BlockPos kept=new BlockPos(lx+4,ly+2,lz+14);
+        require(w.getServer().computeOnServer(s->s.overworld().getBlockState(kept).is(Blocks.STONE)&&s.overworld().getBlockState(new BlockPos(lx,ly,lz+10)).is(Blocks.STONE)),"The large clone did not land");
+        w.getServer().runOnServer(s->s.overworld().setBlock(kept,Blocks.DIRT.defaultBlockState(),3)); // changed behind the edit's back: undoing it must skip this cell
+        c.waitTicks(5);
+        c.runOnClient(mc->mc.level.setBlock(kept,Blocks.GOLD_BLOCK.defaultBlockState(),18));
+        long written=dev.craftium.server.BulkPlace.blocksWritten;
+        pause();
+        c.runOnClient(mc->CraftiumClient.send("builder_undo",null,null));
+        settle(c,w);
+        require(dev.craftium.server.BulkPlace.blocksWritten-written>100,"The large undo was not written a chunk at a time, so this did not test that path");
+        require(w.getServer().computeOnServer(s->s.overworld().getBlockState(kept).is(Blocks.DIRT)&&s.overworld().getBlockState(new BlockPos(lx,ly,lz+10)).isAir()&&s.overworld().getBlockState(new BlockPos(lx+7,ly+3,lz+17)).isAir()),"The large undo did not skip the changed cell and clear the others");
+        require(c.computeOnClient(mc->mc.level.getBlockState(kept).is(Blocks.DIRT)),"A skipped cell in a large edit was not sent again, so the client kept its stale block");
     }
 }

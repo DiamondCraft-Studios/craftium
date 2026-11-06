@@ -35,6 +35,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             if("branding".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){screenshot();return;}
             if("gizmos".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){gizmoControls();return;}
             if("builder".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){builderToolsAndLighting();return;}
+            if("bulk".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){bulkChunkWrite();return;}
             selectionAndHistory();
             clipboardAndBlockEntities();
             selectionTransforms();
@@ -54,6 +55,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             viewingCapabilities();
             gizmoControls();
             blockOrientation();
+            bulkChunkWrite();
             conflictAndLimits();
             screenshot();
         }
@@ -70,13 +72,70 @@ public final class CraftiumGameTest implements FabricClientGameTest {
     }
     /** These scenarios check edits as they land, so they opt out of confirming each one with Enter. */
     private void options(java.util.function.Consumer<Options> set){ctx.runOnClient(mc->{ClientState.options.confirmEdits=false;set.accept(ClientState.options);});}
+    /** Everything the chunk write has to keep as the per-block path does: the blocks, both light layers and the four heightmaps around a box. */
+    private Object[] captureBox(int x0,int y0,int z0,int x1,int y1,int z1){
+        return world.getServer().computeOnServer(server->{
+            var level=server.overworld();var p=new BlockPos.MutableBlockPos();int n=(x1-x0)*(y1-y0)*(z1-z0);
+            var sky=new byte[n];var block=new byte[n];var states=new int[n];int i=0;
+            for(int x=x0;x<x1;x++)for(int y=y0;y<y1;y++)for(int z=z0;z<z1;z++){p.set(x,y,z);sky[i]=(byte)level.getBrightness(net.minecraft.world.level.LightLayer.SKY,p);block[i]=(byte)level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,p);states[i]=net.minecraft.world.level.block.Block.getId(level.getBlockState(p));i++;}
+            var heights=new java.util.ArrayList<Integer>();
+            for(int cx=x0>>4;cx<=x1>>4;cx++)for(int cz=z0>>4;cz<=z1>>4;cz++){var chunk=level.getChunk(cx,cz);for(var type:new net.minecraft.world.level.levelgen.Heightmap.Types[]{net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR,net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE})for(int x=0;x<16;x++)for(int z=0;z<16;z++)heights.add(chunk.getHeight(type,x,z));}
+            return new Object[]{sky,block,states,heights.stream().mapToInt(Integer::intValue).toArray()};
+        });
+    }
+    private static final String[] BOX_LAYERS={"sky light","block light","blocks","heightmaps"};
+    private static int differing(Object[] a,Object[] b,int layer){int d=0;int len=java.lang.reflect.Array.getLength(a[layer]);for(int i=0;i<len;i++)if(!java.util.Objects.equals(java.lang.reflect.Array.get(a[layer],i),java.lang.reflect.Array.get(b[layer],i)))d++;return d;}
+    private static void sameBox(String what,Object[] expected,Object[] actual){for(int layer=0;layer<4;layer++){int d=differing(expected,actual,layer);require(d==0,what+": "+d+" differing "+BOX_LAYERS[layer]);}}
+    /**
+     * Large edits are written a chunk at a time. Pastes the same mixed structure, with light sources, leaves, glass and a chest,
+     * with that turned off and on, inside one chunk and across chunk borders, and requires the blocks, both light layers and the
+     * heightmaps to come out the same after the paste and after undoing it.
+     */
+    private void bulkChunkWrite(){
+        world.getServer().runCommand("forceload add 192 192 240 288");world.getServer().runCommand("tp @a 212 90 250 180 0");ctx.waitTicks(60);world.getConnection().waitForChunksDownload();
+        try{
+            bulkLayout("inside one chunk",208,208,208,272,16,16);
+            bulkLayout("across chunk borders",200,200,200,260,24,24);
+        }finally{
+            dev.craftium.server.BulkPlace.enabled=true;
+            world.getServer().runCommand("fill 200 60 200 223 75 223 air");world.getServer().runCommand("forceload remove 192 192 240 288");world.getServer().runCommand("tp @a 0 20 18 180 25");ctx.waitTicks(20);
+        }
+        System.out.println("CRAFTIUM_BULK_WRITE_PASS paste undo blocks sky_light block_light heightmaps chest");
+    }
+    private void bulkLayout(String label,int sx,int sz,int tx,int tz,int w,int d){
+        final int sy=60,ty=60,h=16;
+        world.getServer().runOnServer(server->{
+            var level=server.overworld();var random=new java.util.Random(12345);
+            var leaves=Blocks.OAK_LEAVES.defaultBlockState().setValue(net.minecraft.world.level.block.LeavesBlock.PERSISTENT,true); // leaves that decay would change the structure between captures
+            var palette=new net.minecraft.world.level.block.state.BlockState[]{Blocks.AIR.defaultBlockState(),Blocks.AIR.defaultBlockState(),Blocks.AIR.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.GLOWSTONE.defaultBlockState(),leaves,Blocks.GLASS.defaultBlockState(),Blocks.SEA_LANTERN.defaultBlockState()};
+            for(int x=0;x<w;x++)for(int y=0;y<h;y++)for(int z=0;z<d;z++)level.setBlock(new BlockPos(sx+x,sy+y,sz+z),palette[random.nextInt(palette.length)],2|16);
+            level.setBlock(new BlockPos(sx+3,sy+3,sz+3),Blocks.CHEST.defaultBlockState(),2|16);
+        });
+        options(o->{o.position1=new Point(sx,sy,sz);o.position2=new Point(sx+w-1,sy+h-1,sz+d-1);});request("select_box",null);request("copy",null);
+        ctx.waitTicks(40);
+        int x0=tx-2,y0=ty-2,z0=tz-2,x1=tx+w+2,y1=ty+h+2,z1=tz+d+2;
+        var baseline=captureBox(x0,y0,z0,x1,y1,z1);
+        dev.craftium.server.BulkPlace.enabled=false;
+        request("paste_at",new Point(tx,ty,tz));ctx.waitTicks(60);var slowPlaced=captureBox(x0,y0,z0,x1,y1,z1);
+        request("undo",null);ctx.waitTicks(60);var slowUndone=captureBox(x0,y0,z0,x1,y1,z1);
+        dev.craftium.server.BulkPlace.enabled=true;
+        long before=dev.craftium.server.BulkPlace.blocksWritten;
+        request("paste_at",new Point(tx,ty,tz));ctx.waitTicks(60);var fastPlaced=captureBox(x0,y0,z0,x1,y1,z1);
+        request("undo",null);ctx.waitTicks(60);var fastUndone=captureBox(x0,y0,z0,x1,y1,z1);
+        require(dev.craftium.server.BulkPlace.blocksWritten-before>w*d*h/2,label+": the paste and undo were not written a chunk at a time");
+        require(differing(baseline,slowPlaced,0)>0&&differing(baseline,slowPlaced,1)>0&&differing(baseline,slowPlaced,3)>0,label+": the paste did not change the sky light, block light and heightmaps this test compares");
+        sameBox(label+", pasting a chunk at a time",slowPlaced,fastPlaced);
+        sameBox(label+", undoing a chunk at a time",slowUndone,fastUndone);
+        sameBox(label+", undoing the per-block paste",baseline,slowUndone);
+        sameBox(label+", undoing the chunk-at-a-time paste",baseline,fastUndone);
+    }
     private void builderToolsAndLighting(){
-        ctx.runOnClient(mc->ClientState.options=new Options());options(o->{o.noUpdates=true;o.position1=new Point(55,25,45);o.position2=new Point(56,25,45);o.builderTool=Options.BuilderTool.MOVE;o.offsetX=3;o.offsetY=0;o.offsetZ=0;});
+        ctx.runOnClient(mc->ClientState.options=new Options());options(o->{o.noUpdates=true;o.position1=new Point(55,25,45);o.position2=new Point(56,25,45);o.builderTool=Options.BuilderTool.MOVE;o.builderOffset=new Point(3,0,0);});
         world.getServer().runOnServer(server->{var level=server.overworld();level.setBlock(new BlockPos(55,25,45),Blocks.GOLD_BLOCK.defaultBlockState(),18);level.setBlock(new BlockPos(56,25,45),Blocks.DIAMOND_BLOCK.defaultBlockState(),18);});
         request("builder_commit",new Point(55,25,45));checkBlock(new Point(55,25,45),Blocks.AIR);checkBlock(new Point(58,25,45),Blocks.GOLD_BLOCK);checkBlock(new Point(59,25,45),Blocks.DIAMOND_BLOCK);request("undo",null);checkBlock(new Point(55,25,45),Blocks.GOLD_BLOCK);
-        options(o->{o.keepExisting=true;o.offsetX=1;});request("builder_commit",new Point(55,25,45));checkBlock(new Point(55,25,45),Blocks.AIR);checkBlock(new Point(56,25,45),Blocks.GOLD_BLOCK);checkBlock(new Point(57,25,45),Blocks.DIAMOND_BLOCK);request("undo",null);checkBlock(new Point(55,25,45),Blocks.GOLD_BLOCK);checkBlock(new Point(56,25,45),Blocks.DIAMOND_BLOCK);options(o->{o.keepExisting=false;o.offsetX=3;});
-        options(o->{o.builderTool=Options.BuilderTool.CLONE;o.builderRotation=1;o.offsetZ=4;});request("builder_commit",new Point(55,25,45));checkBlock(new Point(58,25,49),Blocks.GOLD_BLOCK);checkBlock(new Point(58,25,50),Blocks.DIAMOND_BLOCK);request("undo",null);
-        options(o->{o.builderTool=Options.BuilderTool.STACK;o.builderRotation=0;o.offsetX=0;o.offsetZ=3;o.copies=3;});request("builder_commit",new Point(55,25,45));checkBlock(new Point(55,25,54),Blocks.GOLD_BLOCK);request("undo",null);
+        options(o->{o.keepExisting=true;o.builderOffset=new Point(1,0,0);});request("builder_commit",new Point(55,25,45));checkBlock(new Point(55,25,45),Blocks.AIR);checkBlock(new Point(56,25,45),Blocks.GOLD_BLOCK);checkBlock(new Point(57,25,45),Blocks.DIAMOND_BLOCK);request("undo",null);checkBlock(new Point(55,25,45),Blocks.GOLD_BLOCK);checkBlock(new Point(56,25,45),Blocks.DIAMOND_BLOCK);options(o->{o.keepExisting=false;o.builderOffset=new Point(3,0,0);});
+        options(o->{o.builderTool=Options.BuilderTool.CLONE;o.builderRotation=1;o.builderOffset=new Point(3,0,4);});request("builder_commit",new Point(55,25,45));checkBlock(new Point(58,25,49),Blocks.GOLD_BLOCK);checkBlock(new Point(58,25,50),Blocks.DIAMOND_BLOCK);request("undo",null);
+        options(o->{o.builderTool=Options.BuilderTool.STACK;o.builderRotation=0;o.stackZ=3;});request("builder_commit",new Point(55,25,45));checkBlock(new Point(55,25,48),Blocks.GOLD_BLOCK);checkBlock(new Point(55,25,49),Blocks.AIR);request("undo",null);
         ctx.runOnClient(mc->{BuilderMode.select(Options.BuilderTool.CLONE);BuilderMode.corners(new Point(55,25,45),new Point(56,25,45));BuilderMode.nudge(new Point(0,1,0),2);BuilderMode.confirm();BuilderMode.reset();});world.getConnection().waitForServerboundPackets();ctx.waitTicks(8);world.getConnection().waitForClientboundPackets();checkBlock(new Point(55,27,45),Blocks.GOLD_BLOCK);request("undo",null);
         options(o->{o.builderTool=Options.BuilderTool.ERASE;});request("builder_commit",new Point(55,25,45));checkBlock(new Point(55,25,45),Blocks.AIR);request("undo",null);
         options(o->{o.symmetryOrigin=new Point(65,25,45);o.symmetryHalfX=true;o.symmetryX=true;o.block="minecraft:emerald_block";o.position1=new Point(64,25,45);o.position2=o.position1;});request("select_box",null);request("fill",null);checkBlock(new Point(67,25,45),Blocks.EMERALD_BLOCK);request("undo",null);
@@ -246,7 +305,8 @@ public final class CraftiumGameTest implements FabricClientGameTest {
         for(int x:new int[]{60,64,68})request("use",new Point(x,20,40));
         options(o->o.historySteps=3);request("history_undo_many",null);for(int x:new int[]{60,64,68})checkBlock(new Point(x,20,40),Blocks.AIR);
         request("history_redo_many",null);for(int x:new int[]{60,64,68})checkBlock(new Point(x,20,40),Blocks.GOLD_BLOCK);
-        request("history_save",null);int count=ctx.computeOnClient(mc->ClientState.status.undo());
+        request("history_save",null);request("history_reload",null); // saving leaves out selection-only steps, so count what survives a save
+        int count=ctx.computeOnClient(mc->ClientState.status.undo());
         world.getServer().runOnServer(server->dev.craftium.server.EditorServer.disconnect(world.getConnection().getServerPlayer().getUUID()));request("status",null);
         require(ctx.computeOnClient(mc->ClientState.status.undo()==count),"Saved history did not reload after session eviction");request("undo",null);checkBlock(new Point(68,20,40),Blocks.AIR);request("redo",null);checkBlock(new Point(68,20,40),Blocks.GOLD_BLOCK);
         options(o->o.radius=5);System.out.println("CRAFTIUM_HISTORY_PASS multi_rewind multi_redo disk_reload block_restore");
@@ -323,7 +383,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
     private void remainingTools(){
         options(o->{o.selectionPoints=new java.util.ArrayList<>(java.util.List.of(new Point(30,15,30),new Point(31,15,30),new Point(30,16,30)));o.mode=Selection.Mode.REPLACE;});request("lasso_select",null);
         require(ctx.computeOnClient(mc->SelectionCodec.decode(ClientState.status.selectionData()).size()==3),"Irregular selection data was not synchronized");
-        options(o->{o.tool=Tool.FLOODFILL;o.block="minecraft:gold_block";o.blockLimit=9;o.floodUp=false;o.floodDown=false;o.floodHorizontal=true;});request("use",new Point(40,15,30));checkBlock(new Point(40,15,30),Blocks.GOLD_BLOCK);request("undo",null);checkBlock(new Point(40,15,30),Blocks.AIR);
+        options(o->{o.tool=Tool.FLOODFILL;o.block="minecraft:gold_block";o.blockLimit=9;o.floodUp=false;o.floodDown=false;o.floodHorizontal=true;});request("use",new Point(40,15,30));checkBlock(new Point(40,15,30),Blocks.GOLD_BLOCK);request("undo",null);checkBlock(new Point(40,15,30),Blocks.AIR);options(o->o.blockLimit=Options.MAX_BLOCK_LIMIT);
         world.getServer().runOnServer(server->{for(int x=37;x<=43;x++)for(int z=27;z<=33;z++)server.overworld().setBlock(new BlockPos(x,9,z),Blocks.STONE.defaultBlockState(),2);});
         options(o->{o.tool=Tool.FLUID_BALL;o.fluidType=Options.FluidType.SNOW;o.radius=1;o.requireSupport=true;o.flowLength=3;});request("use",new Point(40,9,30));checkBlock(new Point(40,10,30),Blocks.SNOW);request("undo",null);checkBlock(new Point(40,10,30),Blocks.AIR);
         options(o->{o.position1=new Point(30,15,30);o.position2=o.position1;o.block="minecraft:gold_block";});request("select_box",null);request("fill",null);request("copy",null);
