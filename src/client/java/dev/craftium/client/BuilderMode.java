@@ -266,6 +266,10 @@ public final class BuilderMode {
     public static void confirm(){
         if(first==null||second==null)return;var o=ClientState.options;
         String packed="";if(blocksOnly()){try{packed=SelectionCodec.encode(cells);}catch(IllegalArgumentException e){ClientState.notify(e.getMessage());return;}}
+        if(o.builderTool==Options.BuilderTool.MOVE||o.builderTool==Options.BuilderTool.CLONE||o.builderTool==Options.BuilderTool.STACK){
+            Point lo=min(),hi=max();Point size=hi.add(1-lo.x(),1-lo.y(),1-lo.z());
+            BuilderPrediction.apply(o,lo,hi,blocksOnly()?cells:null,o.builderTool==Options.BuilderTool.STACK?stackSteps(size):List.of(offset));
+        }
         Point prior1=o.position1,prior2=o.position2;o.position1=first;o.position2=second;o.builderOffset=offset;o.builderCells=packed;o.stackX=stackX;o.stackY=stackY;o.stackZ=stackZ;CraftiumClient.send("builder_commit",first,new Point(0,1,0));o.position1=prior1;o.position2=prior2;o.builderOffset=new Point(0,0,0);o.builderCells="";o.stackX=o.stackY=o.stackZ=0;
         if(o.builderTool==Options.BuilderTool.CLONE){preview=true;clonePlaced=true;built=true;}
         else if(o.builderTool==Options.BuilderTool.MOVE){follow();built=true;}
