@@ -265,7 +265,7 @@ final class TransformGizmo {
         return 0xff000000|Math.min(255,r+70)<<16|Math.min(255,g+70)<<8|Math.min(255,b+70);
     }
     /** How far a handle point sits from its block's corner: a ruler's ends are drawn at the middle of their blocks, so the gizmo is too. */
-    static double nodeOffset(){return dev.craftium.client.compat.ClientCompat.screen(net.minecraft.client.Minecraft.getInstance()) instanceof EditorScreen editor&&!editor.toolActive()?.5:0;}
+    static double nodeOffset(){return dev.craftium.client.compat.ClientCompat.screen(net.minecraft.client.Minecraft.getInstance()) instanceof EditorScreen editor&&(!editor.toolActive()||ClientState.options.tool==Tool.MODIFY)?.5:0;}
     /** Where the handle being dragged is right now, or null when no handle point is being dragged. */
     static Vec3 liveNode(){return dragging!=null&&dragging.kind==Kind.NODE?dragging.anchor.add(delta):null;}
     static boolean selectionPreview(){return dragging!=null&&(dragging.kind==Kind.SELECTION||dragging.kind==Kind.MODEL);}

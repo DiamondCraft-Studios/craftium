@@ -529,7 +529,7 @@ public final class EditorScreen extends CraftiumScreen {
         boolean cursorBound=ModifyMath.usesCursor(o);
         String where=ModifyPreview.anchored()?(cursorBound&&ModifyPreview.anchor()!=null?"Anchored at "+ModifyPreview.anchor().coordinates():"Anchored"):cursorBound?"Following the cursor · click to anchor":"Click to anchor the preview";
         text(g,where,10,pb-75,ModifyPreview.anchored()?0xffffd66d:MUTED);
-        button(g,10,pb-53,pw-20,20,"Edit anchor",!ModifyPreview.anchored(),ModifyPreview::edit,"Let the guides and preview follow the cursor again; click to anchor them somewhere else");
+        button(g,10,pb-53,pw-20,20,"Edit anchor",ModifyPreview.knob(),()->{boolean on=ModifyPreview.editAnchor(SelectionOverlay.points().isEmpty()?null:SelectionOverlay.points().getFirst());selectedNode=on?0:-1;if(!on)TransformGizmo.cancel();},"Turn the anchor into a knob the Move gizmo can carry · click again to let the preview follow the cursor");
         button(g,10,pb-27,pw-20,20,"Apply (Enter)",false,()->action("use"),"Build the previewed result");
     }
     private ModifyRow sliderRow(int w,String label,double value,double min,double max,double typedMax,double def,java.util.function.DoubleConsumer set,boolean integer){return sliderRow(w,label,value,min,max,typedMax,def,set,integer,false);}
@@ -1754,7 +1754,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         player.setDeltaMovement(Vec3.ZERO);player.setPos(player.position().add(delta));
         player.setOldPosAndRot(); // the renderer interpolates from the previous position, so make it the current one
     }
-    private List<Point> handleNodes(){return !toolActive?ClientState.rulerPoints:o().tool==Tool.BOX_SELECT?ClientState.boxCorners:EnumSet.of(Tool.PATH,Tool.MODELLING,Tool.GRADIENT_PAINTER,Tool.SLOPE).contains(o().tool)?o().nodes:new ArrayList<>();}
+    private List<Point> handleNodes(){return !toolActive?ClientState.rulerPoints:o().tool==Tool.BOX_SELECT?ClientState.boxCorners:EnumSet.of(Tool.PATH,Tool.MODELLING,Tool.GRADIENT_PAINTER,Tool.SLOPE).contains(o().tool)?o().nodes:o().tool==Tool.MODIFY?ModifyPreview.knobNodes():new ArrayList<>();}
     double pointerX(){return pointerX;}
     double pointerY(){return pointerY;}
     boolean pointerInViewport(){return inViewport(pointerX/scale,pointerY/scale);}
