@@ -39,7 +39,7 @@ final class ModifyPreview {
         if(anchored&&anchorAt!=null)cursor=anchorAt;
         if(ClientState.hasPending())return; // a waiting edit shows its own blocks
         var c=ModifyMath.usesCursor(o)?cursor:null;
-        Object[] now={o.modifyMode,o.modifyAxis,o.modifyType,o.modifyAngle,o.modifyRelative,o.modifyTranslate,o.modifyTranslateX,o.modifyTranslateY,o.modifyTranslateZ,o.copies,o.offsetX,o.offsetY,o.offsetZ,o.pasteAir,c,selected};
+        Object[] now={o.modifyMode,o.modifyAxis,o.modifyType,o.modifyAngle,o.modifyRelative,o.modifyTranslate,o.modifyTranslateX,o.modifyTranslateY,o.modifyTranslateZ,o.modifyTranslateScale,o.copies,o.offsetX,o.offsetY,o.offsetZ,o.pasteAir,c,selected};
         if(key==null||!sameKey(key,now)){key=now;rebuild(mc,o,selected,c);}
         if(problem!=null){return;}
         if(places.isEmpty()&&ModifyMath.usesCursor(o)&&cursor==null)return; // nothing to turn around until the cursor is on a block

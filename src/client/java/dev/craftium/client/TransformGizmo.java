@@ -211,6 +211,8 @@ final class TransformGizmo {
     /** One outline segment of a selection being transformed, moved by the transform in progress. */
     static void line(Vec3 from,Vec3 to){Overlay.line(transformed(from),transformed(to),ClientState.options.previewColor,1.5f);}
     static boolean dragging(){return dragging!=null;}
+    /** The mode of the handle being dragged, or null when none is held. */
+    static Options.GizmoMode draggingMode(){return dragging==null?null:mode;}
     /** How far the selected blocks are being dragged by the Move tool, in whole blocks; null when no such drag is under way. */
     static Point moveDelta(){
         if(dragging==null||dragging.kind!=Kind.MODEL||mode!=Options.GizmoMode.MOVE)return null;

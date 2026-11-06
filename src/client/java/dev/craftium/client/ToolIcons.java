@@ -14,7 +14,12 @@ final class ToolIcons {
             case PATH,MODELLING -> {line(g,x+3,y+19,x+9,y+5,color);line(g,x+9,y+5,x+20,y+17,color);for(int[] p:new int[][]{{3,19},{9,5},{20,17}})g.fill(x+p[0]-2,y+p[1]-2,x+p[0]+3,y+p[1]+3,color);}
             case GRADIENT_PAINTER -> {for(int i=0;i<5;i++)g.fill(x+3+i*4,y+3,x+6+i*4,y+22,(color&0xffffff)|((80+i*40)<<24));}
             case SCRIPT_BRUSH -> {line(g,x+8,y+5,x+2,y+12,color);line(g,x+2,y+12,x+8,y+19,color);line(g,x+17,y+5,x+23,y+12,color);line(g,x+23,y+12,x+17,y+19,color);line(g,x+15,y+3,x+10,y+22,color);}
-            case FLOODFILL,FLUID_BALL -> {line(g,x+12,y+2,x+3,y+15,color);line(g,x+12,y+2,x+21,y+15,color);line(g,x+3,y+15,x+8,y+22,color);line(g,x+8,y+22,x+17,y+22,color);line(g,x+17,y+22,x+21,y+15,color);}
+            case FLOODFILL -> { // a paint bucket tipped over to pour: a solid pail on its corner, a loop handle on its pivot, and a drop falling from the lip
+                fillQuad(g,x+1,y+14,x+12,y+3,x+20,y+11,x+9,y+22,color);
+                g.outline(x+5,y+1,4,9,color);g.fill(x+7,y+7,x+10,y+11,color); // the handle and the pivot it turns on
+                g.fill(x+20,y+13,x+21,y+15,color);g.fill(x+19,y+15,x+22,y+17,color);g.fill(x+18,y+17,x+23,y+21,color);g.fill(x+19,y+21,x+22,y+22,color); // the drop
+            }
+            case FLUID_BALL -> {line(g,x+12,y+2,x+3,y+15,color);line(g,x+12,y+2,x+21,y+15,color);line(g,x+3,y+15,x+8,y+22,color);line(g,x+8,y+22,x+17,y+22,color);line(g,x+17,y+22,x+21,y+15,color);}
             case MOVE -> {line(g,x+12,y+2,x+12,y+22,color);line(g,x+2,y+12,x+22,y+12,color);line(g,x+12,y+2,x+8,y+7,color);line(g,x+12,y+2,x+16,y+7,color);line(g,x+22,y+12,x+17,y+8,color);line(g,x+22,y+12,x+17,y+16,color);}
             case ROTATE -> { // most of a circle, with an arrowhead where it ends
                 for(int i=0;i<20;i++){double a=Math.toRadians(45+i*15),b=Math.toRadians(45+(i+1)*15);line(g,x+12+(int)Math.round(Math.cos(a)*8),y+12+(int)Math.round(Math.sin(a)*8),x+12+(int)Math.round(Math.cos(b)*8),y+12+(int)Math.round(Math.sin(b)*8),color);}
@@ -89,6 +94,26 @@ final class ToolIcons {
     private static void arc(Gfx g,int cx,int cy,int rx,int ry,double from,double to,int c){
         int steps=Math.max(16,(int)((to-from)/(Math.PI*2)*40));
         for(int i=0;i<=steps;i++){double a=from+(to-from)*i/steps;int px=cx+(int)Math.round(Math.cos(a)*rx),py=cy+(int)Math.round(Math.sin(a)*ry);g.fill(px,py,px+2,py+2,c);}
+    }
+    /** A filled four-sided shape, row by row; the corners go round the shape in order. */
+    static void fillQuad(Gfx g,int x1,int y1,int x2,int y2,int x3,int y3,int x4,int y4,int color){
+        int[] xs={x1,x2,x3,x4},ys={y1,y2,y3,y4};
+        int top=Math.min(Math.min(y1,y2),Math.min(y3,y4)),bottom=Math.max(Math.max(y1,y2),Math.max(y3,y4));
+        for(int y=top;y<bottom;y++){
+            double at=y+.5,low=Double.MAX_VALUE,high=-Double.MAX_VALUE;
+            for(int i=0;i<4;i++){
+                int j=(i+1)%4;if((ys[i]<=at)==(ys[j]<=at))continue;
+                double cross=xs[i]+(at-ys[i])*(xs[j]-xs[i])/(double)(ys[j]-ys[i]);low=Math.min(low,cross);high=Math.max(high,cross);
+            }
+            if(high>low)g.fill((int)Math.round(low),y,(int)Math.round(high),y+1,color);
+        }
+    }
+    /** Two links of a chain, 17 by 9 pixels. Joined when {@code linked}; apart, with a gap between them, when not. */
+    static void chain(Gfx g,int x,int y,int color,boolean linked){
+        int gap=linked?0:3;
+        g.outline(x,y+1,9,7,color);g.outline(x+8+gap,y+1,9,7,color); // the two links
+        if(linked)g.fill(x+5,y+3,x+12,y+6,color); // the bar through both, where they overlap
+        else{line(g,x+5,y+8,x+7,y+5,color);line(g,x+10,y+4,x+12,y+1,color);} // a break between them
     }
     static void line(Gfx g,int x1,int y1,int x2,int y2,int c) {
         int steps=Math.max(Math.abs(x2-x1),Math.abs(y2-y1));

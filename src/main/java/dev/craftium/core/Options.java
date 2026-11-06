@@ -114,6 +114,9 @@ public final class Options {
     public boolean builderLiveBox=true;
     /** Builder tools: blocks already where the selection lands are not overwritten. Apart from the editor's Keep existing, which the Builder does not follow. */
     public boolean builderKeepExisting;
+    /** Brush flow, 1 to 100: how often a stroke applies the brush. 100 is as often as the server allows (about 30 times a second), 25 the usual rate (about 7 a second), less leaves wider gaps along the stroke. */
+    public static final int FLOW_MIN=3,FLOW_MAX=100,FLOW_DEFAULT=25;
+    public int brushFlow=FLOW_DEFAULT;
     public int hoverPreviewLimit=5000;
     /** The most blocks any one placing tool may change, 1 to {@link #MAX_BLOCK_LIMIT}; an edit that would change more is refused. */
     public static final int MAX_BLOCK_LIMIT=100_000;
@@ -146,7 +149,11 @@ public final class Options {
     /** Modify: Add Translation, which offsets where a revolve or the last rotated copy ends up. */
     public boolean modifyTranslate;
     public double modifyTranslateX,modifyTranslateY,modifyTranslateZ;
+    /** Modify: a multiplier on the Add Translation offset, so one set of sliders can be stretched or shrunk. */
+    public double modifyTranslateScale=1;
     public ShapeKind shapeKind=ShapeKind.BRUSH;
+    /** Whether changing one size control of a shape changes the others by the same factor, so its proportions stay (see {@link ShapeSizes}). */
+    public boolean sizeChain=true;
     public java.util.List<Point> nodes=new java.util.ArrayList<>();
     public java.util.List<Point> selectionPoints=new java.util.ArrayList<>();
     public Point position1=new Point(0,0,0),position2=new Point(0,0,0),symmetryOrigin=new Point(0,0,0);
@@ -281,7 +288,7 @@ public final class Options {
         if(compare==null)compare=Compare.ANY; // Gson reads a constant that no longer exists, the old SOLID, as null
         if(noise==null||pathMode==null||modelMode==null||modifyMode==null||shapeKind==null||rulerMode==null)throw new IllegalArgumentException("Missing advanced options");
         if(modifyAxis==null||modifyType==null)throw new IllegalArgumentException("Missing advanced options");
-        modifyAngle=finite(modifyAngle);modifyTranslateX=finite(modifyTranslateX);modifyTranslateY=finite(modifyTranslateY);modifyTranslateZ=finite(modifyTranslateZ);
+        modifyAngle=finite(modifyAngle);modifyTranslateX=Math.clamp(finite(modifyTranslateX),-64,64);modifyTranslateY=Math.clamp(finite(modifyTranslateY),-64,64);modifyTranslateZ=Math.clamp(finite(modifyTranslateZ),-64,64);modifyTranslateScale=Math.clamp(finite(modifyTranslateScale),-64,64);
         rulerSplit=Math.clamp(rulerSplit,2,16);
         rulerLabelSize=bounded(rulerLabelSize,RULER_LABEL_MIN,RULER_LABEL_MAX);
         // The colours the ruler first had, kept in saved settings, give way to the ones it has now; any colour that was changed is left alone.
@@ -305,7 +312,7 @@ public final class Options {
         smoothRatio=Double.isFinite(smoothRatio)?Math.max(0,smoothRatio):100;distortDistance=Double.isFinite(distortDistance)?Math.max(0,distortDistance):2;
         distortX=Double.isFinite(distortX)?Math.max(0,distortX):2;distortY=Double.isFinite(distortY)?Math.max(0,distortY):2;distortZ=Double.isFinite(distortZ)?Math.max(0,distortZ):2;
         roughenRatio=Double.isFinite(roughenRatio)?Math.clamp(roughenRatio,0,1):.2;shatterWidth=Double.isFinite(shatterWidth)?Math.max(0,shatterWidth):1;
-        extrudeCount=Math.clamp(extrudeCount,1,MAX_EXTRUDE_COUNT);
+        extrudeCount=Math.clamp(extrudeCount,1,MAX_EXTRUDE_COUNT);brushFlow=Math.clamp(brushFlow,FLOW_MIN,FLOW_MAX);
         selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);blockLimit=Math.clamp(blockLimit,1,MAX_BLOCK_LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;builderSelectionWidth=Double.isFinite(builderSelectionWidth)?Math.clamp(builderSelectionWidth,.1,10):1;builderPreviewWidth=Double.isFinite(builderPreviewWidth)?Math.clamp(builderPreviewWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
         octaves=Math.clamp(octaves,1,8);lacunarity=bounded(lacunarity,1,4);gain=bounded(gain,.01,1);jitter=bounded(jitter,0,1);
         scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);

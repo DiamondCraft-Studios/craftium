@@ -225,6 +225,11 @@ public final class CraftiumClient implements ClientModInitializer {
     public static boolean held(KeyMapping mapping){
         if(mapping.isUnbound())return false;var key=InputConstants.getKey(mapping.saveString());long window=Minecraft.getInstance().getWindow().handle();return key.getType()==InputConstants.Type.MOUSE?GLFW.glfwGetMouseButton(window,key.getValue())==GLFW.GLFW_PRESS:InputConstants.isKeyDown(Minecraft.getInstance().getWindow(),key.getValue());
     }
+    /** Steps the selection's display to the next style (silhouette, outline, all edges) and says which. Used by the editor and the Builder alike. */
+    public static void cycleSelectionStyle(){
+        var o=ClientState.options;var all=Options.SelectionStyle.values();var next=all[(o.selectionStyle.ordinal()+1)%all.length];o.selectionStyle=next;
+        ClientState.notify("Selection display: "+next.label);ClientState.save();
+    }
     public static boolean ingameKey(net.minecraft.client.input.KeyEvent event,int action){
         var mc=Minecraft.getInstance();if(action!=GLFW.GLFW_PRESS||ClientCompat.screen(mc)!=null||mc.player==null||!mc.player.isCreative()||!supported())return false;
         if(EntityShortcuts.ingame(event))return true;
@@ -233,6 +238,7 @@ public final class CraftiumClient implements ClientModInitializer {
             boolean undo=EditorBindings.matches(EditorControls.Action.UNDO,event);
             if(undo||EditorBindings.matches(EditorControls.Action.REDO,event)){send(undo?"builder_undo":"builder_redo",null,null);return true;}
         }
+        if(BuilderMode.active()&&EditorBindings.matches(EditorControls.Action.CYCLE_SELECTION_STYLE,event)){cycleSelectionStyle();return true;} // the Builder has no screen open, so this key is read here
         if(EditorBindings.matches(EditorControls.Action.INGAME_COPY,event)){
             var hit=mc.hitResult instanceof BlockHitResult b&&b.getType()==HitResult.Type.BLOCK?b:null;
             if(hit!=null){send("pick_block",point(hit.getBlockPos()),normal(hit));return true;}
@@ -312,6 +318,10 @@ public final class CraftiumClient implements ClientModInitializer {
                 // The block it will land on is outlined, as a single block of a selection is.
                 Overlay.box(new AABB(landing.x-.5,landing.y-.5,landing.z-.5,landing.x+.5,landing.y+.5,landing.z+.5),o.rulerKnobSelectedColor,2,o.rulerKnobSelectedColor&0xffffff|0x33000000);
             }
+            if(end!=null&&live!=null&&(picked==first||picked==second)){ // while an end is being moved: the first block the ruler runs into is marked with a white cube
+                var hit=firstBlockOnRuler(start,end);
+                if(hit!=null)Overlay.box(new AABB(hit.getX()-.01,hit.getY()-.01,hit.getZ()-.01,hit.getX()+1.01,hit.getY()+1.01,hit.getZ()+1.01),0xffffffff,2,0x55ffffff);
+            }
             if(end!=null){
                 double length=start.distanceTo(end);
                 double thickness=ruler==ClientState.selectedRuler()?RULER_LINE_HALF*1.6:RULER_LINE_HALF;
@@ -326,6 +336,20 @@ public final class CraftiumClient implements ClientModInitializer {
             if(end!=null)knob(end,picked==second?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==second);
             index+=end==null?1:2;
         }
+    }
+    /**
+     * The first block along the ruler, walking from its start towards its end, that is not air. The block the walk begins in is skipped,
+     * since a ruler's ends sit on blocks. Null if the ruler runs through nothing.
+     */
+    private static net.minecraft.core.BlockPos firstBlockOnRuler(Vec3 start,Vec3 end){
+        var level=Minecraft.getInstance().level;if(level==null)return null;
+        Vec3 along=end.subtract(start);double length=along.length();if(length<1e-6)return null;
+        var origin=net.minecraft.core.BlockPos.containing(start);
+        for(double d=.05;d<=length;d+=.05){
+            var pos=net.minecraft.core.BlockPos.containing(start.add(along.scale(d/length)));
+            if(!pos.equals(origin)&&!level.getBlockState(pos).isAir())return pos;
+        }
+        return null;
     }
     /** The ruler is made of real size: its line is this thick and its knobs this big in blocks, so they grow and shrink with distance like the blocks around them. */
     private static final double RULER_LINE_HALF=.04,RULER_KNOB_HALF=.07,RULER_KNOB_SELECTED_HALF=.09;

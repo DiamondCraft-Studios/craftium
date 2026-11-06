@@ -254,6 +254,11 @@ public final class BuilderMode {
         preview=true;clonePlaced=false;
         ClientState.notify("Stack "+stackX+" × "+stackY+" × "+stackZ+" · right-click places · Esc cancels");
     }
+    /** With one corner set and the live box on, the block aimed at, which is where the box reaches until the second corner is placed; otherwise null. */
+    private static Point liveCorner(){
+        if(first==null||second!=null||!ClientState.options.builderLiveBox||heldFirst!=null)return null;
+        return Minecraft.getInstance().hitResult instanceof BlockHitResult aim&&aim.getType()==HitResult.Type.BLOCK?CraftiumClient.point(aim.getBlockPos()):null;
+    }
     private static Point min(){Point b=second==null?first:second;return new Point(Math.min(first.x(),b.x()),Math.min(first.y(),b.y()),Math.min(first.z(),b.z()));}
     private static Point max(){Point b=second==null?first:second;return new Point(Math.max(first.x(),b.x()),Math.max(first.y(),b.y()),Math.max(first.z(),b.z()));}
     public static void corners(Point a,Point b){magicStarted=magicMode=false;first=a;second=b;offset=new Point(0,0,0);preview=false;refresh();}
@@ -307,8 +312,9 @@ public final class BuilderMode {
             boolean stacking=preview&&second!=null&&o.builderTool==Options.BuilderTool.STACK;
             Point from=min,to=max;if(stacking){var b=stackBounds();from=b[0];to=b[1];} // the selection grows with the stack
             boolean live=false; // one corner set: the box to the block aimed at, following the aim
-            if(second==null&&o.builderLiveBox&&heldFirst==null&&Minecraft.getInstance().hitResult instanceof BlockHitResult aim&&aim.getType()==HitResult.Type.BLOCK){
-                Point at=CraftiumClient.point(aim.getBlockPos());
+            Point liveAt=liveCorner();
+            if(liveAt!=null){
+                Point at=liveAt;
                 from=new Point(Math.min(first.x(),at.x()),Math.min(first.y(),at.y()),Math.min(first.z(),at.z()));to=new Point(Math.max(first.x(),at.x()),Math.max(first.y(),at.y()),Math.max(first.z(),at.z()));live=true;
             }
             if(!stacking&&blocksOnly()&&second!=null&&!cells.isEmpty()&&cells.size()<=OUTLINE_LIMIT){ // the blocks themselves (while stacking, the one box round the whole stack), not the box round them
@@ -316,6 +322,8 @@ public final class BuilderMode {
                     selectionShape.drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,false,false);}
                 else drawInScene(o); // not moving: faces on the ground are coloured dimly, with no edges, and only what is in open air is outlined
             }else boxShape(from,to.add(1,1,1)).drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,(second!=null&&!leaving)||live,false); // in the style set in the preferences
+            // With Copy air off the air inside the box is left out, so the box itself is shown as a plain white outline round what is copied. With it on, the whole box is the selection and is drawn as above.
+            if(!o.pasteAir)boxShape(from,to.add(1,1,1)).drawPlain(Vec3.ZERO,0xffffffff,(float)o.builderSelectionWidth,0,(second!=null&&!leaving)||live,false);
             if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?stackSteps(size):List.of(offset);
                 if(stacking){drawStack(o,min,size);return;}
                 var shown=preview(o,min,size,steps);
@@ -438,6 +446,11 @@ Vec3 c=center();return new Vec3(c.x+offset.x(),c.y+offset.y(),c.z+offset.z());}
         if(heldFirst!=null){String ask="Selected "+heldCount+" blocks, confirm?  ·  RMB or Enter Confirm  ·  LMB or Esc Cancel";g.fill(g.guiWidth()/2-mc.font.width(ask)/2-8,g.guiHeight()/2+22,g.guiWidth()/2+mc.font.width(ask)/2+8,g.guiHeight()/2+42,0xf0141d29);g.text(mc.font,ask,g.guiWidth()/2-mc.font.width(ask)/2,g.guiHeight()/2+28,0xffffd66d,false);}
         String hint=ClientState.options.builderTool==Options.BuilderTool.EXTRUDE?"LMB Shrink  ·  RMB Extrude  ·  Hold Ctrl: Smart extrude (stairs, slabs, walls too)":ClientState.options.builderTool==Options.BuilderTool.SYMMETRY?"RMB Set node  ·  Ctrl+F Mirror  ·  Ctrl+R Rotate":first==null?"LMB First corner  ·  RMB Second corner  ·  MMB Magic select":second!=null&&!preview?(ClientState.options.builderTool==Options.BuilderTool.ERASE?"Enter Erase  ·  ":"")+"LMB Move 1st  ·  RMB Move 2nd  ·  "+(magicStarted?"MMB Magic add  ·  Ctrl+MMB Magic subtract":"MMB Extend")+"  ·  Wheel Nudge (Ctrl: by size)  ·  XYZ Axis  ·  Ctrl+R/F":second!=null?"LMB Move 1st  ·  RMB Place  ·  MMB "+(ClientState.options.builderTool==Options.BuilderTool.STACK?"Stack to block":"Face")+"  ·  Wheel Nudge (Ctrl: by size)  ·  XYZ Axis  ·  Ctrl+R/F":"LMB Restart  ·  RMB or MMB Second corner";
         g.text(mc.font,hint,g.guiWidth()/2-mc.font.width(hint)/2,g.guiHeight()-57,0xffc7d6e5,false);
-        if(first!=null){Point a=min(),b=max();axisReadout(g,mc.font,g.guiHeight()-81,"Size "," × ",b.x()-a.x()+1,b.y()-a.y()+1,b.z()-a.z()+1,"   Offset ",", ",offset.x(),offset.y(),offset.z());}
+        if(first!=null){
+            // The size is that of the box as it is drawn: following the aim before the second corner is placed, and the whole stack while stacking.
+            Point a=min(),b=max();var aim=liveCorner();
+            if(aim!=null){a=new Point(Math.min(first.x(),aim.x()),Math.min(first.y(),aim.y()),Math.min(first.z(),aim.z()));b=new Point(Math.max(first.x(),aim.x()),Math.max(first.y(),aim.y()),Math.max(first.z(),aim.z()));}
+            else if(second!=null&&preview&&ClientState.options.builderTool==Options.BuilderTool.STACK){var bounds=stackBounds();a=bounds[0];b=bounds[1];}
+            axisReadout(g,mc.font,g.guiHeight()-81,"Size "," × ",b.x()-a.x()+1,b.y()-a.y()+1,b.z()-a.z()+1,"   Offset ",", ",offset.x(),offset.y(),offset.z());}
     }
 }

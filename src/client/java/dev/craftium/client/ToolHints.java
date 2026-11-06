@@ -1,6 +1,7 @@
 package dev.craftium.client;
 
 import dev.craftium.core.EditorControls.Action;
+import dev.craftium.core.Options;
 import dev.craftium.core.Tool;
 import java.util.*;
 
@@ -19,15 +20,26 @@ final class ToolHints {
         hints.add(EditorBindings.label(Action.PICK_BLOCK)+": Pick block");
         if(tool!=null&&confirms(tool))hints.add(EditorBindings.label(Action.CONFIRM)+": Apply");
         hints.add(wheel(tool,gizmo,shape));
-        if(tool!=null&&brush(tool))hints.add(EditorBindings.label(Action.ADJUST_RADIUS)+"+Wheel: Radius");
+        if(tool!=null&&brush(tool))hints.add(EditorBindings.label(Action.ADJUST_RADIUS)+"+Wheel / [ ]: Radius");
         hints.add("WASD / Space Shift: Fly");
         return hints;
     }
 
-    /** The line to draw, as many hints as fit in {@code room} pixels. */
-    static String line(Tool tool,boolean gizmo,boolean shape,java.util.function.ToIntFunction<String> width,int room){
+    /** The hints while a gizmo handle is held: what letting go does, and the keys that change how the drag snaps. */
+    static List<String> held(Options.GizmoMode mode){
+        var hints=new ArrayList<String>();
+        hints.add(EditorBindings.label(Action.USE_TOOL)+" Release: Apply");
+        if(mode==Options.GizmoMode.ROTATE){hints.add("Shift: 1° steps");hints.add("Ctrl: Coarse steps");}
+        else if(mode==Options.GizmoMode.SCALE){hints.add("Shift: Fine");hints.add("Ctrl: Scale evenly");hints.add("Alt: From centre");}
+        else hints.add("Alt: From centre");
+        hints.add("WASD / Space Shift: Fly");
+        return hints;
+    }
+
+    /** The line to draw, as many hints as fit in {@code room} pixels. {@code held} is the mode of the gizmo handle being dragged, or null when none is. */
+    static String line(Tool tool,boolean gizmo,boolean shape,Options.GizmoMode held,java.util.function.ToIntFunction<String> width,int room){
         var line=new StringBuilder();
-        for(String hint:of(tool,gizmo,shape)){
+        for(String hint:held!=null?held(held):of(tool,gizmo,shape)){
             String next=line.isEmpty()?hint:line+"     "+hint;
             if(!line.isEmpty()&&width.applyAsInt(next)>room)break;
             line=new StringBuilder(next);
@@ -42,7 +54,7 @@ final class ToolHints {
         return "Wheel: Zoom";
     }
     /** Tools that act through a brush, so the radius shortcut applies. */
-    private static boolean brush(Tool tool){return !tool.selection()&&!tool.transform()&&tool!=Tool.RULER&&tool!=Tool.ANNOTATION&&tool!=Tool.MODIFY&&tool!=Tool.LINE&&tool!=Tool.PATH&&tool!=Tool.MODELLING&&tool!=Tool.SHAPE;}
+    static boolean brush(Tool tool){return !tool.selection()&&!tool.transform()&&tool!=Tool.RULER&&tool!=Tool.ANNOTATION&&tool!=Tool.MODIFY&&tool!=Tool.LINE&&tool!=Tool.PATH&&tool!=Tool.MODELLING&&tool!=Tool.SHAPE;}
     private static boolean confirms(Tool tool){return tool.transform()&&tool!=Tool.PIVOT||tool==Tool.SHAPE;}
     private static String use(Tool tool){
         return switch(tool){
