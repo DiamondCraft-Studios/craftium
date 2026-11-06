@@ -66,12 +66,22 @@ public final class BlockPickerScreen extends CraftiumScreen {
             else{String tag=b.getName().getString();tag=tag.substring(0,Math.min(2,tag.length()));g.text(font,tag,x+8-font.width(tag)/2,y+4,0xff9db5cb,false);}
         });
     }
-    /** A 16 by 16 liquid block: its colour with a lit top and a shaded side, so it reads as a cube like the other cells. */
+    /**
+     * A liquid block drawn like the blocks in item slots: a cube seen from a corner, 16 by 16, with a lit top and a left and a right side
+     * that fall darker, in the liquid's own colour. It is rasterised a column at a time from the outline of the cube, so it needs no texture.
+     */
     private static void liquid(Gfx g,int x,int y,int colour){
-        g.fill(x,y,x+16,y+16,colour);
-        g.fill(x,y,x+16,y+4,lighter(colour,.28f));
-        g.fill(x+13,y+4,x+16,y+16,darker(colour,.78f));
-        g.outline(x,y,16,16,darker(colour,.6f));
+        int top=lighter(colour,.22f),left=darker(colour,.8f),right=darker(colour,.58f),edge=darker(colour,.4f);
+        for(int c=0;c<16;c++){
+            double u=Math.abs(c+.5-8)/7.5;                       // 0 at the middle column, 1 at the outer edges
+            double rim=1+3.5*u,crease=8.5-4*u,base=15.5-3.5*u;     // where the top begins, where the sides begin, where the cube ends
+            int a=(int)Math.round(rim),b=(int)Math.round(crease),d=(int)Math.round(base);
+            g.fill(x+c,y+a,x+c+1,y+b,top);
+            g.fill(x+c,y+b,x+c+1,y+d,c<8?left:right);
+            g.fill(x+c,y+a,x+c+1,y+a+1,lighter(top,.25f));       // the rim of the top catches the light
+            g.fill(x+c,y+d-1,x+c+1,y+d,edge);                    // and the underside is the darkest line
+        }
+        g.fill(x+7,y+9,x+9,y+16,edge);                           // the vertical edge where the two sides meet
     }
     private static int lighter(int c,float by){return shade(c,by,true);}
     private static int darker(int c,float by){return shade(c,by,false);}
