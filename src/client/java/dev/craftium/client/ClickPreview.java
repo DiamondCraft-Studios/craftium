@@ -13,7 +13,7 @@ import java.util.*;
  */
 final class ClickPreview {
     static final int CAP=20_000;
-    private static final int VISITS=60_000;
+    private static final int VISITS=120_000; // a preview of 10,000 open cells looks at about six times as many, so this keeps it from stopping short and leaving gaps
     /** How many blocks the last search reached, up to {@link #CAP}. */
     private static int size;
     private static Object key;

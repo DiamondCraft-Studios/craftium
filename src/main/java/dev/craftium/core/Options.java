@@ -208,7 +208,7 @@ public final class Options {
     public int uiBackground=0xf510141a,uiPanel=0xff10151c,uiAccent=0xff5b9fdb,uiText=0xffdce6ef,uiMuted=0xff8595a8,uiBorder=0xff303b49;
     public enum FluidType { WATER,LAVA,SNOW }
     public FluidType fluidType=FluidType.WATER;
-    public int floodLimit=1000,flowLength=7,fluidQuality=1;
+    public int floodLimit=10_000,flowLength=7,fluidQuality=1;
     public boolean floodUp,floodDown=true,floodHorizontal=true,floodCorners,requireSupport,infiniteSources,fillEdges=true,removeFluidsWithoutSources;
     public enum RulerMode { LINE,CIRCLE }
     public RulerMode rulerMode=RulerMode.LINE;
