@@ -71,6 +71,14 @@ final class GhostBlocks {
         return true;
     }
 
+    /** The blocks it places by offset, or null when it cannot say exactly (nothing to read yet, or more blocks than it carries). */
+    Map<Point,BlockState> placed(){
+        if(data==null||!resolve()||relative.size()!=data.total())return null;
+        var out=new LinkedHashMap<Point,BlockState>();
+        for(int i=0;i<relative.size();i++)out.put(relative.get(i),states.get(i));
+        return out;
+    }
+
     /** Draws the ghost with its blocks moved by {@code origin}. */
     void draw(Point origin,boolean outline){
         if(data==null||!resolve())return;

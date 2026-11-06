@@ -50,6 +50,25 @@ public final class BuilderPrediction {
             Point q=BuilderTransform.apply(e.getKey().subtract(min),size,o.builderRotation,o.builderFlipAxis).add(min.x()+step.x(),min.y()+step.y(),min.z()+step.z());
             result.put(pos(q),state);
         }
+        write(level,result);
+    }
+    /**
+     * Predicts pasting the clipboard at {@code origin}. {@code clipboard} is the blocks the placement preview holds (null when
+     * it cannot say exactly). Left to the server when the paste depends on anything the client cannot see: air that clears,
+     * entities, merging, symmetry or Keep existing.
+     */
+    static void paste(Options o,Point origin,Map<Point,BlockState> clipboard){
+        undo=Map.of();
+        if(clipboard==null||o.pasteAir||o.mergeBlocks||o.keepExisting)return;
+        if(o.symmetryX||o.symmetryY||o.symmetryZ||o.symmetryRotations!=1)return;
+        if(o.pasteEntities&&ClientState.status.clipboardEntityCount()>0)return;
+        var mc=Minecraft.getInstance();var level=mc.level;if(level==null||mc.player==null||!mc.player.isCreative())return;
+        if(clipboard.size()>LIMIT)return;
+        var result=new LinkedHashMap<BlockPos,BlockState>();
+        for(var e:clipboard.entrySet()){var at=e.getKey();result.put(pos(origin.add(at.x(),at.y(),at.z())),e.getValue());}
+        write(level,result);
+    }
+    private static void write(net.minecraft.client.multiplayer.ClientLevel level,Map<BlockPos,BlockState> result){
         var before=new HashMap<BlockPos,BlockState>();
         for(var e:result.entrySet()){
             var at=e.getKey();
