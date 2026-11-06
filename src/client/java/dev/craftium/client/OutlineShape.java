@@ -86,6 +86,11 @@ final class OutlineShape {
             }
         }
     }
+    /** Whether the camera is inside the shape. Shapes with too many faces to be filled are not worked out, which keeps the frame cheap. */
+    boolean cameraInside(){
+        if(bounds==null||outline.faces().size()>MAX_FACES)return false;
+        return inside(ClientCompat.camera(Minecraft.getInstance()).position());
+    }
     /** Whether {@code eye}, relative to the shape, is inside it: a ray along +x crosses an odd number of the closed surface's faces. */
     private boolean inside(Vec3 eye){
         if(bounds==null||!bounds.contains(eye))return false;

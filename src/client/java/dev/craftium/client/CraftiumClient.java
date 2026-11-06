@@ -83,6 +83,7 @@ public final class CraftiumClient implements ClientModInitializer {
         HudElementRegistry.addLast(dev.craftium.compat.Compat.id("craftium","builder"),(raw,delta)->{
             var mc=Minecraft.getInstance();if(mc.player==null || !mc.player.isCreative() || ClientCompat.screen(mc)!=null)return;
             var g=Gfx.of(raw);
+            SelectionOverlay.tint(g);
             ReferenceImages.draw(g,false,0,0);
             int h=g.guiHeight();
             if(System.currentTimeMillis()<ClientState.noticeUntil)g.text(mc.font,ClientState.notice,8,8,0xffffd891,false);
