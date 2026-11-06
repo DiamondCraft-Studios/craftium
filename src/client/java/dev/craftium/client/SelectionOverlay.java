@@ -13,6 +13,15 @@ final class SelectionOverlay {
     private static final int MAX_GHOST_BLOCKS=4096;
     private static String encoded="";
     private static OutlineShape shape=OutlineShape.EMPTY;
+    /**
+     * The outline is worked out on a worker thread, because for a selection of a hundred thousand blocks it takes a couple of
+     * hundred milliseconds, which would freeze the game. Until it is ready the previous outline stays on screen.
+     */
+    private static final LatestResult<OutlineShape> building=new LatestResult<>("Craftium selection outline");
+    /** Whether the outline of the latest selection is still being worked out. */
+    static boolean building(){return building.busy();}
+    /** Takes over a finished outline. Called wherever the outline is read, so it always shows the newest one that is ready. */
+    private static void adopt(){var ready=building.poll();if(ready!=null)shape=ready;}
     private static List<BlockPos> blocks=List.of(),moved=List.of();
     private static Point movedBy;
     private static List<Point> selected=List.of();
@@ -23,14 +32,15 @@ final class SelectionOverlay {
     /** Whether the block is one of the selected blocks, however many there are. */
     static boolean contains(BlockPos at){return !pointSet.isEmpty()&&pointSet.contains(new Point(at.getX(),at.getY(),at.getZ()));}
     /** The outline of the whole selection. */
-    static OutlineShape outline(){return shape;}
+    static OutlineShape outline(){adopt();return shape;}
     private static List<Vec3[]> contacts=List.of();
     private static long contactsAt;
     private SelectionOverlay(){}
     static void update(String data){
         if(Objects.equals(encoded,data))return;encoded=data;
         var points=SelectionCodec.decode(data);selected=List.copyOf(points);
-        shape=OutlineShape.of(points);
+        if(points.isEmpty()){building.cancel();shape=OutlineShape.EMPTY;} // nothing to wait for: an empty selection must not linger on screen
+        else building.submit(()->OutlineShape.of(points)); // the decoded set is not touched again here: the lists below are copies
         blocks=points.size()>MAX_GHOST_BLOCKS?List.of():points.stream().map(p->new BlockPos(p.x(),p.y(),p.z())).toList();
         blockSet=new HashSet<>(blocks);pointSet=new HashSet<>(selected);contactsAt=0;
     }
@@ -66,6 +76,7 @@ final class SelectionOverlay {
     }
     /** A faint wash over the whole screen while the camera is inside the selection, like the one under water. Drawn with the interface, not in the world. */
     static void tint(dev.craftium.client.compat.Gfx g){
+        adopt();
         int colour=ClientState.options.selectionInsideTint;
         if((colour>>>24)==0||shape.isEmpty()||!shape.cameraInside())return;
         g.fill(0,0,g.guiWidth(),g.guiHeight(),colour);
@@ -75,6 +86,7 @@ final class SelectionOverlay {
      * transform gizmo is being dragged only the outline is drawn, moved by the transform being applied.
      */
     static void draw(boolean transforming){
+        adopt();
         if(shape.isEmpty())return;
         int colour=ClientState.options.selectionColor;float width=(float)ClientState.options.selectionWidth;
         var landing=transforming?TransformGizmo.landing(selected):null;
