@@ -33,10 +33,11 @@ final class AdvancedTools {
             }
             case EXTRUDE -> {
                 // The whole face the click lands on, from the same search the hover preview outlines. Expand adds layers in front of it, contract takes them off.
-                var base=p.state(center);
+                // With a selection under the click, the face is found among the selected blocks only.
+                var base=p.state(center);var within=p.builder?null:p.session.selection;if(within!=null&&!within.contains(center))within=null;var chosen=within;
                 var face=SurfaceFill.face(new SurfaceFill.Cells(){
                     public boolean air(Point a){var s=p.state(a);return s.isAir()||o.extrudeReplaceable&&s.canBeReplaced();}
-                    public boolean matches(Point a){return o.smartExtrude?sameFamily(base,p.state(a)):AdvancedTools.matches(p,base,a);}
+                    public boolean matches(Point a){return (chosen==null||chosen.contains(a))&&(o.smartExtrude?sameFamily(base,p.state(a)):AdvancedTools.matches(p,base,a));}
                 },center,normal,o.selectLimit);
                 int count=Math.max(1,o.extrudeCount);
                 for(Point at:face)for(int step=1;step<=count;step++){int s=o.invert?1-step:step;p.put(at.add(normal.x()*s,normal.y()*s,normal.z()*s),o.invert?Blocks.AIR.defaultBlockState():p.state(at));}
@@ -59,9 +60,11 @@ final class AdvancedTools {
             }
             case FLOODFILL -> {
                 Point start=p.state(center).isAir()?center:center.add(normal.x(),normal.y(),normal.z());var matching=p.state(start);
+                // With the start inside the selection, the fill spreads through selected cells only.
+                var within=p.builder||!p.session.selection.contains(start)?null:p.session.selection;
                 for(Point at:SurfaceFill.flood(new SurfaceFill.Cells(){
                     public boolean air(Point a){return p.state(a).isAir();}
-                    public boolean matches(Point a){return p.state(a)==matching;}
+                    public boolean matches(Point a){return (within==null||within.contains(a))&&p.state(a)==matching;}
                 },start,o.floodLimit,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners))p.put(at,p.material);
             }
             case FLUID_BALL -> fluid(p,center,normal);

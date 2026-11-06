@@ -40,9 +40,10 @@ final class ClickPreview {
             if(level.getBlockState(at).isAir())return;
             var compare=o.compare==Options.Compare.NBT?Options.Compare.BLOCK:o.compare; // block entity data is not all known here
             var world=MagicPreview.world(mc,at,o,compare,false);
+            boolean chosen=SelectionOverlay.contains(at); // a click on the selection looks only among the selected blocks
             var face=SurfaceFill.face(new SurfaceFill.Cells(){
                 public boolean air(Point p){return world.air(p)||o.extrudeReplaceable&&level.getBlockState(new BlockPos(p.x(),p.y(),p.z())).canBeReplaced();}
-                public boolean matches(Point p){return world.matches(p);}
+                public boolean matches(Point p){return (!chosen||SelectionOverlay.contains(new BlockPos(p.x(),p.y(),p.z())))&&world.matches(p);}
             },centre,normal,Math.min(o.selectLimit,CAP));
             int count=Math.max(1,o.extrudeCount);removing=o.invert;
             var cells=new LinkedHashSet<Point>();
@@ -54,9 +55,10 @@ final class ClickPreview {
         }else{
             Point start=level.getBlockState(at).isAir()?centre:centre.add(normal.x(),normal.y(),normal.z());
             var matching=level.getBlockState(new BlockPos(start.x(),start.y(),start.z()));
+            boolean chosen=SelectionOverlay.contains(new BlockPos(start.x(),start.y(),start.z())); // starting inside the selection keeps the fill inside it
             var cells=SurfaceFill.flood(new SurfaceFill.Cells(){
                 public boolean air(Point p){return level.getBlockState(new BlockPos(p.x(),p.y(),p.z())).isAir();}
-                public boolean matches(Point p){return level.getBlockState(new BlockPos(p.x(),p.y(),p.z()))==matching;}
+                public boolean matches(Point p){return(!chosen||SelectionOverlay.contains(new BlockPos(p.x(),p.y(),p.z())))&&level.getBlockState(new BlockPos(p.x(),p.y(),p.z()))==matching;}
             },start,Math.min(o.floodLimit,CAP),VISITS,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners);
             size=cells.size();shape=OutlineShape.of(cells);
         }
