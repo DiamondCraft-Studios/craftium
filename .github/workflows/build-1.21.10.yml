@@ -18,6 +18,7 @@ on:
       - '.github/workflows/build-1.21.10.yml'
       - '.github/workflows/build-version.yml'
   pull_request:
+    types: [opened, reopened]
     branches: [main, release/1.21.10]
     paths:
       - 'src/**'
