@@ -52,7 +52,7 @@ public final class BuilderWidget {
     private static int reachY(int guiHeight){return sliderY(guiHeight)+ROW+GAP;}
     private static void stepReach(int by){
         var o=ClientState.options;var modes=Options.ReachMode.values();
-        o.reach=modes[Math.floorMod(o.reach.ordinal()+by,modes.length)];ClientState.save();ClientState.notify("Reach: "+o.reach.label);
+        CraftiumClient.guardClick(by>0?0:1);o.reach=modes[Math.floorMod(o.reach.ordinal()+by,modes.length)];ClientState.save();ClientState.notify("Reach: "+o.reach.label);
     }
     private static void setSpeed(int mouseX,int x){
         int percent=MIN_PERCENT+Math.round((float)Math.clamp((mouseX-x-2)/(double)(WIDTH-5),0,1)*(MAX_PERCENT-MIN_PERCENT));

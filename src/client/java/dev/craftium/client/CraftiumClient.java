@@ -173,6 +173,12 @@ public final class CraftiumClient implements ClientModInitializer {
         var o=ClientState.options;long now=System.currentTimeMillis();
         boolean left=GLFW.glfwGetMouseButton(mc.getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_LEFT)==GLFW.GLFW_PRESS;
         boolean right=GLFW.glfwGetMouseButton(mc.getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_RIGHT)==GLFW.GLFW_PRESS;
+        // The click that changed the reach is not a click on the world: it is ignored for a tick, and until the button is let go.
+        if(guardLeft&&!left)guardLeft=false;
+        if(guardRight&&!right)guardRight=false;
+        if(clickGuard>0||guardLeft)left=false;
+        if(clickGuard>0||guardRight)right=false;
+        if(clickGuard>0)clickGuard--;
         if(!left)breakingSince=0;else if(breakingSince==0){breakingSince=now;ClientState.strokeId=System.nanoTime();} // a symmetric stroke is one undo step
         if(right&&!rightWas&&o.tinker&&mc.player.getMainHandItem().isEmpty()&&mc.hitResult instanceof BlockHitResult th&&th.getType()==HitResult.Type.BLOCK){tinkerHit=th;tinkerAt=now;}
         rightWas=right;
@@ -249,6 +255,14 @@ public final class CraftiumClient implements ClientModInitializer {
             if(hit!=null){send("builder_break",point(hit.getBlockPos()),normal(hit));return true;}
         }
         return false;
+    }
+    /** Ticks left in which a click is ignored, and the buttons that were down for the click that began it and must be let go first. */
+    private static int clickGuard;private static boolean guardLeft,guardRight;
+    /** How many ticks a click on the Builder's own controls is kept from reaching the world. */
+    private static final int CLICK_GUARD_TICKS=1;
+    /** Called when a click on the Builder's widget changes something the world click would act on, such as the reach: the click must not also break or place a block. */
+    public static void guardClick(int button){
+        clickGuard=CLICK_GUARD_TICKS;if(button==0)guardLeft=true;else if(button==1)guardRight=true;
     }
     public static void open(boolean builder){open(builder,false);}
     private static void open(boolean builder,boolean heldContext) {
