@@ -152,9 +152,10 @@ public final class EditorServer {
                 send(player,s,"Editor reset",false);return;
             }
             long now=System.nanoTime();
+            // A builder commit is a deliberate click, not a stream, so it is never dropped by the throttle below: a lost one would leave the selection placed on the client only.
             // The export pop-up asks for a new preview as fields change and must not lose one, or an export, to a request just before it.
             boolean popup=Set.of("structure_preview","structure_export_file","structure_import_file").contains(r.action());
-            if(!replaying&&now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
+            if(!replaying&&!r.action().equals("builder_commit")&&now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             if(!popup)s.lastRequest=now;
             if(r.action().equals("selection_restore")){
                 if(!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly())s.undo.removeFirst();
