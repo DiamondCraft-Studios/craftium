@@ -208,7 +208,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(dragBlock!=null&&dragMoved){
             for(int i=dropTargets.size()-1;i>=0;i--){var t=dropTargets.get(i).area();if(t.contains(mx,my)){g.pose().pushMatrix();WorkspaceLayout.apply(g,t.panel());g.outline(t.x(),t.y(),t.width(),t.height(),ACCENT);g.pose().popMatrix();break;}} // the cell the block would land in
-            g.fill(mx-13,my-13,mx+13,my+13,0xdd1b2838);g.outline(mx-13,my-13,26,26,ACCENT);BlockPickerScreen.icon(g,font,dragBlock,mx-8,my-8);}
+            BlockDragCursor.draw(g,font,dragBlock,mx,my,w,h,ACCENT);}else BlockDragCursor.release();
         g.pose().popMatrix();ReferenceImages.draw(g,true,mouseX,mouseY);
     }
     /** Whether the pointer is free to act on the controls, not held by a drag or covered by a pop-up. */
@@ -726,7 +726,7 @@ public final class EditorScreen extends CraftiumScreen {
         ToolIcons.line(g,x+16,y+10,x+21,y+15,color); // the collar
         ToolIcons.line(g,x+8,y+22,x+18,y+12,color);ToolIcons.line(g,x+9,y+23,x+19,y+13,color); // the tube
         g.fill(x+7,y+23,x+9,y+25,color); // the tip
-        controls.add(new Control(x,y,30,30,()->pipetting=!pipetting,"Click a block in the world to add it to the palette · Esc cancels"));
+        controls.add(new Control(x,y,30,30,()->pipetting=!pipetting,"Click a block in the world to take it as the foreground · Ctrl + click adds it to the palette and keeps the pipette · Esc cancels"));
     }
     /** While the pipette is in hand: finds the block under the pointer and shows its item in a cell above and to the right of the cursor. */
     private void pipettePreview(Gfx g){
@@ -786,7 +786,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void dropInPalette(String block){
         if(block.isEmpty()||block.equals("minecraft:air"))return;
-        if(!ClientState.palette.contains(block)){ClientState.palette.addFirst(block);while(ClientState.palette.size()>18)ClientState.palette.removeLast();}
+        ClientState.addToPalette(block);
         ClientState.save();
     }
     /** Puts the block in the player's main hand, as the creative inventory would. Blocks without an item (liquids) cannot be held. */
@@ -1459,7 +1459,11 @@ public final class EditorScreen extends CraftiumScreen {
         if(event.button()==0&&pipetting&&menu<0&&!help&&!transform){
             var hit=pipetteTarget(event.x(),event.y());
             if(hit!=null&&minecraft.level!=null){
-                pipetting=false;ClientState.pick(BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos())));ClientState.save();
+                String picked=BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos()));
+                // Ctrl keeps the pipette in hand and adds each block to the palette; a plain click sets the foreground and puts it away.
+                if(minecraft.hasControlDown()){if(ClientState.addToPalette(picked))ClientState.notify("Added to the palette: "+picked);}
+                else{pipetting=false;ClientState.pick(picked);}
+                ClientState.save();
                 return true;
             }
             if(inViewport(x,y))return true; // a click on empty sky keeps the pipette in hand
@@ -1835,6 +1839,6 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         return best<100;
     }
     private int key(long handle,int key){return GLFW.glfwGetKey(handle,key)==GLFW.GLFW_PRESS?1:0;}
-    @Override public void removed(){keysDown.clear();pipetting=false;syncCrosshair();TransformGizmo.cancel();draggingNode=draggingPlacement=false;cameraGesture=CameraGesture.NONE;syncCursor();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
+    @Override public void removed(){BlockDragCursor.release();keysDown.clear();pipetting=false;syncCrosshair();TransformGizmo.cancel();draggingNode=draggingPlacement=false;cameraGesture=CameraGesture.NONE;syncCursor();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
     @Override public void onClose(){ClientState.save();if(ClientState.largeSelection>0)confirmLargeSelection();ClientCompat.setScreen(minecraft,null);if(ClientState.hasPending()&&CraftiumClient.supported())CraftiumClient.send("pending_cancel",null,null);if(CraftiumClient.supported()&&minecraft.player!=null&&minecraft.player.isSpectator())CraftiumClient.send("gamemode_restore",null,null);}
 }

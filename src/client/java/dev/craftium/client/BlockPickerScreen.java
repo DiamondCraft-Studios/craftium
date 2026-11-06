@@ -124,7 +124,7 @@ public final class BlockPickerScreen extends CraftiumScreen {
         drawWidgets(g,mx,my,delta);
         g.text(font,hover.isEmpty()?shown.size()+" blocks":font.plainSubstrByWidth(name(hover)+"  ·  "+hover,COLS*CELL-90),left,top+ROWS*CELL+42,hover.isEmpty()?0xff9db5cb:0xffdce6ef,false);
         if(parent instanceof EditorScreen)g.text(font,"Alt + click a block in the world to take that exact block",left,top+ROWS*CELL+54,0xff6f8499,false);
-        if(pressed>=0&&pulled&&pressed<shown.size()){g.fill(mx-13,my-13,mx+13,my+13,0xdd1b2838);g.outline(mx-13,my-13,26,26,0xff7cc4ff);icon(g,font,shown.get(pressed),mx-8,my-8);} // the cell being carried
+        if(pressed>=0&&pulled&&pressed<shown.size())BlockDragCursor.draw(g,font,shown.get(pressed),mx,my,cw,ch,0xff7cc4ff);else BlockDragCursor.release(); // the cell being carried
         g.pose().popMatrix();
     }
     @Override public boolean mouseClicked(MouseButtonEvent event,boolean twice){
@@ -166,5 +166,6 @@ public final class BlockPickerScreen extends CraftiumScreen {
     }
     @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){row=Math.clamp(row+(int)-Math.signum(vertical),0,maxRow());return true;}
     @Override public boolean isPauseScreen(){return false;}
-    @Override public void onClose(){ClientCompat.setScreen(minecraft,parent);}
+    @Override public void onClose(){BlockDragCursor.release();ClientCompat.setScreen(minecraft,parent);}
+    @Override public void removed(){BlockDragCursor.release();super.removed();}
 }
