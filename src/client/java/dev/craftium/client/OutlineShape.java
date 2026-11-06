@@ -26,6 +26,10 @@ final class OutlineShape {
 
     private final SelectionOutline.Result outline;
     private final AABB bounds;
+    // The outline's corners as ready-made points, made on first use. Building a few of them per edge and face every frame was a large part of the
+    // cost of a big shape, and a shape that is drawn where it is never changes. A shape drawn moved by something still works them out each time.
+    private Vec3[] edgeEnds,creaseEnds;
+    private Vec3[][] quads;
 
     private OutlineShape(SelectionOutline.Result outline,AABB bounds){this.outline=outline;this.bounds=bounds;}
 
@@ -82,18 +86,45 @@ final class OutlineShape {
         }
         // Only the outline as the camera sees it, unless every edge was asked for or the camera is inside the shape.
         if(style==Options.SelectionStyle.ALL_EDGES||!(style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at))&&!silhouette(lines,at))
-            for(var s:outline.edges())lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
+            allEdges(lines,at);
         if(withFill&&outline.faces().size()<=maxFaces){
             // Only a camera inside the shape sees its walls from behind; from outside, every face keeps the one fill.
             Vec3 eye=backFill==fill?null:ClientCompat.camera(Minecraft.getInstance()).position().subtract(at);
             boolean inside=eye!=null&&inside(eye);
+            Vec3[][] ready=at.equals(Vec3.ZERO)?quads():null;int next=0;
             for(var f:outline.faces()){
                 int colour=fill;
                 if(inside){double plane=switch(f.axis()){case 0->f.x0();case 1->f.y0();default->f.z0();},from=switch(f.axis()){case 0->eye.x;case 1->eye.y;default->eye.z;};
                     if(f.sign()*(from-plane)<=0)colour=backFill;}
-                face(f,at,colour);
+                if(ready!=null){Vec3[] q=ready[next++];Overlay.face(q[0],q[1],q[2],q[3],colour);}else face(f,at,colour);
             }
         }
+    }
+    private void allEdges(Lines lines,Vec3 at){
+        if(at.equals(Vec3.ZERO)){var ends=edgeEnds;if(ends==null)edgeEnds=ends=ends(outline.edges());for(int i=0;i<ends.length;i+=2)lines.line(ends[i],ends[i+1]);return;}
+        for(var s:outline.edges())lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
+    }
+    private static Vec3[] ends(List<SelectionOutline.Segment> segments){
+        var ends=new Vec3[segments.size()*2];int i=0;
+        for(var s:segments){ends[i++]=new Vec3(s.x0(),s.y0(),s.z0());ends[i++]=new Vec3(s.x1(),s.y1(),s.z1());}
+        return ends;
+    }
+    /** Every exterior rectangle as four corners, already in the order the overlay wants them. */
+    private Vec3[][] quads(){
+        var made=quads;
+        if(made==null){
+            made=new Vec3[outline.faces().size()][];int i=0;
+            for(var f:outline.faces()){
+                int[] lo={f.x0(),f.y0(),f.z0()},hi={f.x1(),f.y1(),f.z1()};
+                int axis=f.axis(),u=(axis+1)%3,v=(axis+2)%3;
+                int[][] ring={{lo[u],lo[v]},{hi[u],lo[v]},{hi[u],hi[v]},{lo[u],hi[v]}};
+                Vec3[] c=new Vec3[4];
+                for(int k=0;k<4;k++){double[] p=new double[3];p[axis]=lo[axis];p[u]=ring[k][0];p[v]=ring[k][1];c[k]=new Vec3(p[0],p[1],p[2]);}
+                made[i++]=f.sign()>0?c:new Vec3[]{c[3],c[2],c[1],c[0]};
+            }
+            quads=made;
+        }
+        return made;
     }
     /** Whether the camera is inside the shape. Shapes with too many faces to be filled are not worked out, which keeps the frame cheap. */
     boolean cameraInside(){
@@ -110,6 +141,7 @@ final class OutlineShape {
 
     private Vec3 contourEye,contourAt;
     private List<ScreenSilhouette.Line> contourLines;
+    private Vec3[] contourEnds;
     /**
      * Draws only the contour of the shape on the screen. Worked out again only when the camera or the shape moves.
      * Returns false when there is none to draw, so the caller falls back to the creases.
@@ -119,9 +151,11 @@ final class OutlineShape {
         if(contourEye==null||contourEye.distanceToSqr(eye)>1e-8||!at.equals(contourAt)){
             contourEye=eye;contourAt=at;
             contourLines=ScreenSilhouette.of(outline,eye.x-at.x,eye.y-at.y,eye.z-at.z);
+            if(contourLines==null)contourEnds=null;
+            else{contourEnds=new Vec3[contourLines.size()*2];int i=0;for(var l:contourLines){contourEnds[i++]=new Vec3(l.x0(),l.y0(),l.z0()).add(at);contourEnds[i++]=new Vec3(l.x1(),l.y1(),l.z1()).add(at);}}
         }
-        if(contourLines==null||contourLines.isEmpty())return false;
-        for(var l:contourLines)lines.line(new Vec3(l.x0(),l.y0(),l.z0()).add(at),new Vec3(l.x1(),l.y1(),l.z1()).add(at));
+        if(contourEnds==null||contourEnds.length==0)return false;
+        for(int i=0;i<contourEnds.length;i+=2)lines.line(contourEnds[i],contourEnds[i+1]);
         return true;
     }
 
@@ -132,12 +166,19 @@ final class OutlineShape {
     private boolean silhouette(Lines lines,Vec3 at){
         Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
         int drawn=0;
+        boolean here=at.equals(Vec3.ZERO);
+        Vec3[] ready=null;
+        if(here){ready=creaseEnds;if(ready==null)creaseEnds=ready=ends(outline.creases().stream().map(SelectionOutline.Crease::segment).toList());}
+        int index=0;
         for(var crease:outline.creases()){
             var s=crease.segment();
             double mx=(s.x0()+s.x1())/2d+at.x,my=(s.y0()+s.y1())/2d+at.y,mz=(s.z0()+s.z1())/2d+at.z;
             if(towards(crease.normalA(),eye,mx,my,mz)!=towards(crease.normalB(),eye,mx,my,mz)){
-                lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));drawn++;
+                if(here)lines.line(ready[index*2],ready[index*2+1]);
+                else lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
+                drawn++;
             }
+            index++;
         }
         return drawn>0;
     }

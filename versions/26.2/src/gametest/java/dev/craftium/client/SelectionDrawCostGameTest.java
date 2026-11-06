@@ -64,8 +64,8 @@ public final class SelectionDrawCostGameTest {
         report.append("options: ").append(settings).append("\n");
         // The order is the shapes, then the two small ones again: if the small ones come back slow too, it is the machine or the game's frame cap, not the shape.
         var order=new ArrayList<>(shapes);order.add(new Shape("CONTROL cube 16^3",()->scatter(16,1,0)));order.add(new Shape("CONTROL sphere r=10",()->sphere(10,false)));
-        String only=System.getenv("CRAFTIUM_PERF_ONLY"); // optional: only the shapes whose name contains this, to repeat one measurement
-        if(only!=null&&!only.isBlank())order.removeIf(sh->!sh.name().contains(only)&&!sh.name().startsWith("CONTROL"));
+        String only=System.getenv("CRAFTIUM_PERF_ONLY"); // optional: only the shapes whose name contains one of these comma-separated words, to repeat a measurement
+        if(only!=null&&!only.isBlank())order.removeIf(sh->!sh.name().startsWith("CONTROL")&&Arrays.stream(only.split(",")).noneMatch(sh.name()::contains));
         for(var shape:order){
             var points=new ArrayList<Point>();
             for(Point p:shape.make().get())points.add(new Point(p.x()+ox,p.y()+oy,p.z()+oz));
