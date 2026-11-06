@@ -446,7 +446,6 @@ public final class EditorScreen extends CraftiumScreen {
             case ROCK -> {
                 text(g,"Noise seed",10,405-lift(),MUTED);
                 slider(g,10,460-lift(),pw-20,"Noise scale",o().noiseScale,1,64,DEFAULTS.noiseScale,v->o().noiseScale=v,false);
-                toggle(g,10,489-lift(),"Invert / carve",o().invert,()->o().invert=!o().invert);
             }
             default -> {
                 // Rows follow one another: the slot of a Strength slider is only left open for the tools that have one, and Fill, which belongs to the shape, only for the tools that pick one.
@@ -456,10 +455,9 @@ public final class EditorScreen extends CraftiumScreen {
                     slider(g,10,403+row+10,pw-20,"Gap tolerance",o().floodGap,0,8,Options.MAX_FLOOD_GAP,DEFAULTS.floodGap,v->o().floodGap=(int)Math.clamp(Math.round(v),0,Options.MAX_FLOOD_GAP),true);row+=38;
                 }
                 int fillRow=o().tool.picksShape()?23:0;
-                toggle(g,10,403+row,"Invert / carve",o().invert,()->o().invert=!o().invert);
-                if(o().tool.picksShape())fillButtons(g,424+row);
-                toggle(g,10,424+fillRow+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
-                int next=449+fillRow+row;
+                if(o().tool.picksShape())fillButtons(g,403+row);
+                toggle(g,10,403+fillRow+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
+                int next=428+fillRow+row;
                 if(o().tool==Tool.EXTRUDE){toggle(g,10,next,"Into grass and water",o().extrudeReplaceable,()->o().extrudeReplaceable=!o().extrudeReplaceable,"Grow into replaceable blocks like grass and water, replacing them, instead of stopping at them");next+=22;
                     toggle(g,10,next,"Smart extrude",o().smartExtrude,()->o().smartExtrude=!o().smartExtrude,"Take in the whole family of the clicked block, stairs, slabs and walls of the same material, each block keeping its own shape");next+=22;}
                 if(o().hollow&&o().tool.picksShape()){ // the outline's own settings sit under the others, so they only take room while Hollow is chosen

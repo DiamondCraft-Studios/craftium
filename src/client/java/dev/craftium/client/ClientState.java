@@ -84,7 +84,7 @@ public final class ClientState {
     public static boolean symmetry(){return options.symmetryX||options.symmetryY||options.symmetryZ||options.symmetryRotations>1;}
     public static void load() {
         if(!Files.exists(CONFIG))return;
-        try {Options saved=Packets.JSON.fromJson(Files.readString(CONFIG),Options.class);saved.validate();options=saved;}
+        try {Options saved=Packets.JSON.fromJson(Files.readString(CONFIG),Options.class);saved.validate();saved.invert=false;options=saved;}
         catch(Exception e){Craftium.LOG.warn("Could not read craftium.json; using defaults",e);}
     }
     public static void save() {
