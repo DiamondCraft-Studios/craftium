@@ -57,7 +57,7 @@ public final class CraftiumClient implements ClientModInitializer {
             ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);
             ClientState.save();resetEditor();placementSynced="";
             ClientCommands.reset();
-            ClientAssets.clear();bridge.clear();
+            ClientAssets.clear();bridge.clear();BlockSearch.clear(); // another world may have other data packs, so its tags and tabs are looked up again
             PlacementPreview.update("");
             ClientState.blueprints=List.of();ClientState.libraryVersion++;
         });

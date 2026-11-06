@@ -108,8 +108,9 @@ public final class BlockPickerScreen extends CraftiumScreen {
     private int thumbY(){return maxRow()==0?trackTop():trackTop()+(trackHeight()-thumbHeight())*row/maxRow();}
     private void scrollTo(double y){int travel=trackHeight()-thumbHeight();if(travel>0)row=Math.clamp((int)Math.round((y-trackTop()-thumbHeight()/2.0)/travel*maxRow()),0,maxRow());}
     private void filter(){
-        String needle=query.toLowerCase(Locale.ROOT).trim();
-        shown=needle.isEmpty()?all():all().stream().filter(id->id.toLowerCase(Locale.ROOT).contains(needle)||name(id).toLowerCase(Locale.ROOT).contains(needle)).toList();
+        var found=dev.craftium.core.BlockQuery.parse(query);
+        shown=found.isEmpty()?all():all().stream().filter(id->found.matches(BlockSearch.of(id,name(id)))).toList();
+        if(search!=null)search.setTextColor(found.valid()?0xffe0e0e0:0xffff7b7b); // a search with a quote left open is still run, but shown in red
         row=Math.clamp(row,0,maxRow());
     }
     private int maxRow(){return Math.max(0,(shown.size()+COLS-1)/COLS-ROWS);}
@@ -121,7 +122,7 @@ public final class BlockPickerScreen extends CraftiumScreen {
         if(parent instanceof EditorScreen editor)editor.suspended=true;
         drawUnder(parent,g,-1,-1,delta);
         int mx=(int)(mouseX/scale),my=(int)(mouseY/scale);g.pose().pushMatrix();g.pose().scale(scale,scale);
-        g.fill(left-12,top-26,left+COLS*CELL+12,top+ROWS*CELL+68,0xff172330);
+        g.fill(left-12,top-26,left+COLS*CELL+12,top+ROWS*CELL+80,0xff172330);
         g.text(font,"Select block",left,top-17,0xffb5dcfc,false);g.text(font,heading,left+COLS*CELL-font.width(heading),top-17,0xff9db5cb,false);
         int hovered=cellAt(mx,my);hover=hovered<0?"":shown.get(hovered);
         for(int r=0;r<ROWS;r++)for(int c=0;c<COLS;c++){
@@ -134,13 +135,14 @@ public final class BlockPickerScreen extends CraftiumScreen {
         drawWidgets(g,mx,my,delta);
         g.text(font,hover.isEmpty()?shown.size()+" blocks":font.plainSubstrByWidth(name(hover)+"  ·  "+hover,COLS*CELL-90),left,top+ROWS*CELL+42,hover.isEmpty()?0xff9db5cb:0xffdce6ef,false);
         if(parent instanceof EditorScreen)g.text(font,"Alt + click a block in the world to take that exact block",left,top+ROWS*CELL+54,0xff6f8499,false);
+        g.text(font,font.plainSubstrByWidth("Search  @mod  #tooltip  $tag  %tab  &id  ^colour  ·  -not  ·  a|b  ·  * ?  ·  \"exact words\"",COLS*CELL),left,top+ROWS*CELL+66,0xff6f8499,false);
         if(pressed>=0&&pulled&&pressed<shown.size())BlockDragCursor.draw(g,font,shown.get(pressed),mx,my,cw,ch,0xff7cc4ff);else BlockDragCursor.release(); // the cell being carried
         g.pose().popMatrix();
     }
     @Override public boolean mouseClicked(MouseButtonEvent event,boolean twice){
         double x=event.x()/scale,y=event.y()/scale;int i=cellAt(x,y);
         // Alt + click on the world outside this window takes that exact block, state and all, instead of one from the list.
-        boolean outside=!(x>=left-12&&x<left+COLS*CELL+12&&y>=top-26&&y<top+ROWS*CELL+68);
+        boolean outside=!(x>=left-12&&x<left+COLS*CELL+12&&y>=top-26&&y<top+ROWS*CELL+80);
         if(event.button()==0&&outside&&altDown()&&parent instanceof EditorScreen editor){
             var hit=editor.pipetteTarget(event.x(),event.y());
             if(hit!=null&&minecraft.level!=null){chosen.accept(BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos())));ClientCompat.setScreen(minecraft,parent);}
@@ -167,7 +169,7 @@ public final class BlockPickerScreen extends CraftiumScreen {
             if(i>=shown.size())return true;
             if(!drag){chosen.accept(shown.get(i));ClientCompat.setScreen(minecraft,parent);return true;}
             // Dragged out: only onto the editor's slots behind this window; the chooser stays open for the next one.
-            double x=event.x()/scale,y=event.y()/scale;boolean inside=x>=left-12&&x<left+COLS*CELL+12&&y>=top-26&&y<top+ROWS*CELL+68;
+            double x=event.x()/scale,y=event.y()/scale;boolean inside=x>=left-12&&x<left+COLS*CELL+12&&y>=top-26&&y<top+ROWS*CELL+80;
             if(!inside&&parent instanceof EditorScreen editor&&editor.dropBlock(event.x(),event.y(),shown.get(i)))ClientState.notify(name(shown.get(i))+" placed");
             return true;
         }
