@@ -107,7 +107,7 @@ public final class EditorServer {
         var s=SESSIONS.get(player.getUUID());var o=capabilities(player);if(s==null||o==null)return;
         try{
             var level=player.level();Point p=EditPlanner.point(at);var near=(Map<BlockPos,BlockSnapshot>)snapshot;var before=near.get(at);var after=BlockSnapshot.capture(level,at);
-            var plan=new EditPlanner(level,s,o);plan.put(p,after); // the block is already there, so only its mirrors are left to change
+            var plan=new EditPlanner(level,s,o);plan.builder=true;plan.put(p,after); // the block is already there, so only its mirrors are left to change; masks apply as they do to the Builder tools
             var mirrors=plan.finish("Builder placement");
             if(!mirrors.changes().isEmpty())EditProtection.check(player,mirrors);
             var changes=new ArrayList<Session.Change>();
@@ -395,6 +395,8 @@ public final class EditorServer {
                 case "use", "builder_place", "builder_break" -> {
                     if(target==null)throw new IllegalArgumentException("Point at a block within reach");
                     var plan=new EditPlanner(player.level(),s,o);
+                    // A click in the world is not a Builder tool, but it follows the same rule: the tool masks apply only where "Use in Builder tools" is on.
+                    if(!r.action().equals("use"))plan.builder=true;
                     if(r.action().equals("builder_place")) {
                         if(o.tinker && player.getMainHandItem().isEmpty()) {
                             var old=plan.state(target);
