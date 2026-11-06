@@ -340,7 +340,7 @@ public final class EditorScreen extends CraftiumScreen {
         scrolled(g,262,o().tool==Tool.BOX_SELECT||o().tool==Tool.MAGIC_SELECT?100:o().tool.selection()?33:6,o().tool==Tool.MAGIC_SELECT?0:TOOL_NAME_GAP,()->toolBody(g));
     }
     private static final int TOOL_NAME_GAP=36;
-    /** The block limit slider: 1 to 100,000, at the very bottom of the options of every tool that builds, removes or moves blocks. */
+    /** The block limit slider: 1 to {@link Options#MAX_BLOCK_LIMIT}, at the very bottom of the options of every tool that builds, removes or moves blocks. */
     private void blockLimit(Gfx g,int y){
         slider(g,10,y,pw-20,"Block limit",o().blockLimit,1,Options.MAX_BLOCK_LIMIT,DEFAULTS.blockLimit,v->o().blockLimit=(int)Math.clamp(Math.round(v),1,Options.MAX_BLOCK_LIMIT),true);
     }
