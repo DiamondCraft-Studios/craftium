@@ -23,7 +23,7 @@ final class HistoryPulse {
         if(!ClientState.options.historyPulse)return;
         String pulse=status.pulse();if(pulse==null||pulse.isBlank())return;
         String[] parts=pulse.split(":",3);if(parts.length<3)return;
-        try{undo=parts[0].equals("undo");duration=Long.parseLong(parts[1]);shape=OutlineShape.of(SelectionCodec.decode(parts[2]));start=System.currentTimeMillis();}
+        try{undo=parts[0].equals("undo");duration=Long.parseLong(parts[1]);shape=OutlineShape.ofLater(SelectionCodec.decode(parts[2]));start=System.currentTimeMillis();}
         catch(RuntimeException e){shape=OutlineShape.EMPTY;}
     }
     /** How long ago the next edit to undo or redo was made, now; -1 when there is none. */
@@ -33,6 +33,7 @@ final class HistoryPulse {
     }
     static void draw(){
         if(shape.isEmpty())return;
+        if(!shape.ready()){start=System.currentTimeMillis();return;} // the flash begins once there is an outline to flash
         long elapsed=System.currentTimeMillis()-start;
         if(elapsed>=duration){shape=OutlineShape.EMPTY;return;}
         // One flash at full strength that dies away exponentially (ease out expo).

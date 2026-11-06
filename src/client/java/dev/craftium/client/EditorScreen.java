@@ -668,7 +668,7 @@ public final class EditorScreen extends CraftiumScreen {
         int x=w-RIGHT;panel(g,x,27,RIGHT,82,"Target info");var hit=target();
         if(hit!=null&&minecraft.level!=null){var p=hit.getBlockPos();text(g,p.getX()+"  /  "+p.getY()+"  /  "+p.getZ(),x+10,53,TEXT);text(g,shorten(BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(p).getBlock()).toString(),pw-20),x+10,69,MUTED);}
         else text(g,"Point at a block",x+10,53,MUTED);
-        text(g,ClientState.status.selectionSize()+" blocks selected",x+10,89,0xffa5cef2);
+        var shown=SelectionOverlay.outline().fallback();text(g,shown==null?ClientState.status.selectionSize()+" blocks selected":ClientState.status.selectionSize()+" blocks · "+shown,x+10,89,0xffa5cef2);
     }
     private void clipboard(Gfx g) {
         int x=w-RIGHT;panel(g,x,115,RIGHT,101,"Clipboard");

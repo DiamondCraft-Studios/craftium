@@ -209,6 +209,18 @@ final class TransformGizmo {
         return com.mojang.blaze3d.platform.InputConstants.isKeyDown(window,org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_ALT)||com.mojang.blaze3d.platform.InputConstants.isKeyDown(window,org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_ALT);
     }
     private static Vec3 transformed(Vec3 world){if(dragging==null)return world;if(dragging.kind==Kind.MODEL)return rawTransform(world).add(delta);if(normalizationDirty){normalization=Vec3.ZERO;if(dragging.kind==Kind.PLACEMENT||dragging.kind==Kind.SELECTION){AABB bounds;if(dragging.kind==Kind.PLACEMENT){Point p=PlacementPreview.origin;bounds=bounds().move(p.x(),p.y(),p.z());}else{var status=ClientState.status;Point min=status.min(),max=status.max();bounds=new AABB(min.x(),min.y(),min.z(),max.x()+1,max.y()+1,max.z()+1);}double x=Double.POSITIVE_INFINITY,y=x,z=x;for(int i=0;i<8;i++){Vec3 corner=rawTransform(new Vec3((i&1)==0?bounds.minX:bounds.maxX,(i&2)==0?bounds.minY:bounds.maxY,(i&4)==0?bounds.minZ:bounds.maxZ));x=Math.min(x,corner.x);y=Math.min(y,corner.y);z=Math.min(z,corner.z);}normalization=new Vec3(bounds.minX-x,bounds.minY-y,bounds.minZ-z);}normalizationDirty=false;}return rawTransform(world).add(normalization).add(delta);}
+    /**
+     * Where {@code eye} is relative to the selection as it was before the drag: the point the drag's transform sends to it. The outline is drawn
+     * unmoved and then moved by the transform, so the silhouette the camera sees of the moved shape is the silhouette of the unmoved one seen
+     * from here. An affine transform keeps straight lines straight, so this is exact for moves, turns and scales alike. The camera itself when
+     * nothing is dragged or the transform cannot be undone.
+     */
+    static Vec3 eyeInShape(Vec3 eye){
+        if(dragging==null)return eye;
+        Vec3 about=aboutPoint(),moved=transformed(Vec3.ZERO).subtract(rawTransform(Vec3.ZERO)); // the part of the transform that is not the scale and turn: the move
+        var back=Geometry.untransform(new Geometry.Vector(eye.x,eye.y,eye.z),new Geometry.Vector(about.x,about.y,about.z),new Geometry.Vector(size.x,size.y,size.z),angles.y,angles.x,angles.z,new Geometry.Vector(moved.x,moved.y,moved.z));
+        return back==null?eye:new Vec3(back.x(),back.y(),back.z());
+    }
     /** One outline segment of a selection being transformed, moved by the transform in progress. */
     static void line(Vec3 from,Vec3 to){Overlay.line(transformed(from),transformed(to),ClientState.options.previewColor,1.5f);}
     static boolean dragging(){return dragging!=null;}
