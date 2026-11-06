@@ -97,6 +97,13 @@ public final class ClientState {
     public static void notify(String message) {notice=message;noticeUntil=System.currentTimeMillis()+4500;}
     public static void pick(String block) {
         // A block already in the palette keeps its cell; only a new one is added, at the front.
-        options.block=block;if(!palette.contains(block)){palette.addFirst(block);while(palette.size()>18)palette.removeLast();}
+        options.block=block;addToPalette(block);
+    }
+    /** The most blocks the palette keeps; the oldest fall off the end. */
+    public static final int PALETTE_LIMIT=64;
+    /** Adds a block to the front of the palette without making it the foreground. A block already there keeps its cell. */
+    public static boolean addToPalette(String block) {
+        if(palette.contains(block))return false;
+        palette.addFirst(block);while(palette.size()>PALETTE_LIMIT)palette.removeLast();return true;
     }
 }
