@@ -61,12 +61,14 @@ class LatestResultTest {
 
     @Test void inTheOtherModeAnAnswerToAReplacedRequestIsStillDelivered() throws Exception{
         var r=new LatestResult<String>("test",false);
-        var started=new CountDownLatch(1);var release=new CountDownLatch(1);
+        var started=new CountDownLatch(1);var release=new CountDownLatch(1);var releaseNew=new CountDownLatch(1);
         r.submit(()->{started.countDown();try{release.await();}catch(InterruptedException e){}return "old";});
         started.await();
-        r.submit(()->"new");     // asked for while the first is still running
+        r.submit(()->{try{releaseNew.await();}catch(InterruptedException e){}return "new";}); // asked for while the first is still running, and held back
         release.countDown();
         assertEquals("old",await(r),"the answer that was already being worked on, a little out of date");
+        assertTrue(r.busy(),"the newer request has not finished");
+        releaseNew.countDown();
         assertEquals("new",await(r),"and then the newer one");
         assertFalse(r.busy());
     }
@@ -76,11 +78,13 @@ class LatestResultTest {
         var started=new CountDownLatch(1);var release=new CountDownLatch(1);
         r.submit(()->{started.countDown();try{release.await();}catch(InterruptedException e){}return "first";});
         started.await();
-        var skipped=new AtomicInteger();
+        var skipped=new AtomicInteger();var releaseThird=new CountDownLatch(1);
         r.submit(()->{skipped.incrementAndGet();return "second";});
-        r.submit(()->"third");
+        r.submit(()->{try{releaseThird.await();}catch(InterruptedException e){}return "third";}); // held back, so "first" can be read before it lands
         release.countDown();
-        assertEquals("first",await(r));assertEquals("third",await(r));
+        assertEquals("first",await(r));
+        releaseThird.countDown();
+        assertEquals("third",await(r));
         assertEquals(0,skipped.get(),"a request replaced before it began is never run");
     }
 
