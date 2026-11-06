@@ -48,10 +48,12 @@ final class OutlineShape {
      * The selection's style as it is: the silhouette (or the outline) at the plain line width, with no extra edges. All edges is always
      * depth-tested. With {@code scene} the other styles' lines are hidden by blocks in front of them too.
      */
-    void drawPlain(Vec3 at,int colour,float width,int fill,boolean withFill,boolean scene){
+    void drawPlain(Vec3 at,int colour,float width,int fill,boolean withFill,boolean scene){drawPlain(at,colour,width,fill,fill,withFill,scene);}
+    /** As above, with the faces that point away from the camera filled in {@code backFill}: with the camera inside the shape, those are the walls around it. */
+    void drawPlain(Vec3 at,int colour,float width,int fill,int backFill,boolean withFill,boolean scene){
         var style=ClientState.options.selectionStyle;
         Lines lines=scene||style==Options.SelectionStyle.ALL_EDGES?(a,b)->sceneLine(a,b,colour,width):(a,b)->Overlay.line(a,b,colour,width);
-        draw(at,lines,colour,fill,withFill,style);
+        draw(at,lines,colour,fill,backFill,withFill,style);
     }
     /** A depth-tested line, drawn a little toward the camera: the outline lies in the surface of the blocks, so exactly there it would be cut away by them. */
     private static void sceneLine(Vec3 a,Vec3 b,int colour,float width){
@@ -61,7 +63,8 @@ final class OutlineShape {
         Overlay.sceneLine(a.add(nudge),b.add(nudge),colour,width);
     }
     /** As {@link #draw(Vec3,Lines,int,int,boolean)}, with the outline style chosen by the caller instead of the selection's. */
-    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style){
+    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style){draw(at,lines,stroke,fill,fill,withFill,style);}
+    private void draw(Vec3 at,Lines lines,int stroke,int fill,int backFill,boolean withFill,Options.SelectionStyle style){
         if(bounds==null)return;
         if(outline.edges().size()>MAX_EDGES){
             AABB box=bounds.move(at);
@@ -71,7 +74,24 @@ final class OutlineShape {
         // Only the outline as the camera sees it, unless every edge was asked for or the camera is inside the shape.
         if(style==Options.SelectionStyle.ALL_EDGES||!(style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at))&&!silhouette(lines,at))
             for(var s:outline.edges())lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
-        if(withFill&&outline.faces().size()<=MAX_FACES)for(var f:outline.faces())face(f,at,fill);
+        if(withFill&&outline.faces().size()<=MAX_FACES){
+            // Only a camera inside the shape sees its walls from behind; from outside, every face keeps the one fill.
+            Vec3 eye=backFill==fill?null:ClientCompat.camera(Minecraft.getInstance()).position().subtract(at);
+            boolean inside=eye!=null&&inside(eye);
+            for(var f:outline.faces()){
+                int colour=fill;
+                if(inside){double plane=switch(f.axis()){case 0->f.x0();case 1->f.y0();default->f.z0();},from=switch(f.axis()){case 0->eye.x;case 1->eye.y;default->eye.z;};
+                    if(f.sign()*(from-plane)<=0)colour=backFill;}
+                face(f,at,colour);
+            }
+        }
+    }
+    /** Whether {@code eye}, relative to the shape, is inside it: a ray along +x crosses an odd number of the closed surface's faces. */
+    private boolean inside(Vec3 eye){
+        if(bounds==null||!bounds.contains(eye))return false;
+        int crossed=0;
+        for(var f:outline.faces())if(f.axis()==0&&f.x0()>eye.x&&eye.y>=f.y0()&&eye.y<f.y1()&&eye.z>=f.z0()&&eye.z<f.z1())crossed++;
+        return (crossed&1)==1;
     }
 
     private Vec3 contourEye,contourAt;

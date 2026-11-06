@@ -72,6 +72,8 @@ public final class Options {
     public enum SelectionStyle { ALL_EDGES("All edges"),OUTLINE("Outline"),SILHOUETTE("Silhouette");public final String label;SelectionStyle(String label){this.label=label;} }
     public SelectionStyle selectionStyle=SelectionStyle.SILHOUETTE;
     /** Colours (ARGB) of the selection and of the previews that go with it. The tints multiply the block's own texture, so they are lighter than they look. */
+    /** The fill of the selection's faces as seen from inside it, so standing in a selection reads differently from looking at one. */
+    public int selectionInsideFill=0x40ffa63d;
     public int selectionFill=0x225d91ff,selectionTint=0x9046B4EE,
         previewColor=0xff8be3b5,previewFill=0x2247d29b,previewTint=0x9046B4EE,
         removedColor=0xffff7777,removedFill=0x22ff5555,removedTint=0x90EE4646,
