@@ -16,7 +16,7 @@ import org.lwjgl.glfw.GLFW;
 abstract class FlatSlider extends CraftiumSlider {
     private double min,max=1,initial=Double.NaN;
     private boolean sliding,cursorHidden;
-    private String typed;
+    private NumberEntry entry;private boolean selectingText;
     FlatSlider(int x,int y,int width,int height,Component label,double value){super(x,y,width,height,label,value);}
     void setRaw(double value){this.value=value;updateMessage();}
     /** The units the value is typed and stepped in, and the value a middle click resets to (in the same units). */
@@ -47,47 +47,52 @@ abstract class FlatSlider extends CraftiumSlider {
     }
     private void stopSliding(){sliding=false;hideCursor(false);}
     private void finishTyping(boolean apply){
-        String text=typed;typed=null;
-        if(!apply||text==null)return;
+        var finished=entry;entry=null;selectingText=false;
+        if(!apply||finished==null)return;
+        String text=finished.text();
         try{setUnits(Double.parseDouble(text.trim()));}catch(NumberFormatException ignored){}
     }
     @Override public boolean mouseClicked(MouseButtonEvent event,boolean doubleClick){
         if(!active||!visible||!isMouseOver(event.x(),event.y())){finishTyping(true);return false;}
         if(event.button()==2){if(!Double.isNaN(initial))setUnits(initial);return true;}
         if(event.button()!=0)return false;
-        if(Minecraft.getInstance().hasControlDown()){
+        var mc=Minecraft.getInstance();
+        if(entry!=null){ // already typing: a click puts the caret there, Shift stretches the selection, Ctrl or a double click selects all
+            if(mc.hasControlDown()||doubleClick)entry.selectAll();else entry.click(event.x(),getX(),getWidth(),mc.hasShiftDown());
+            selectingText=true;return true;
+        }
+        if(mc.hasControlDown()){
             String text=Double.toString(Math.rint(units()*1000)/1000);
-            typed=text.endsWith(".0")?text.substring(0,text.length()-2):text;return true;
+            entry=new NumberEntry();entry.start(text.endsWith(".0")?text.substring(0,text.length()-2):text);return true; // all of it selected
         }
         finishTyping(true);sliding=true;hideCursor(true);
         slideTo(event.x(),false,Minecraft.getInstance().hasShiftDown());return true;
     }
     @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy){
+        if(selectingText&&entry!=null&&event.button()==0){entry.drag(event.x(),getX(),getWidth());return true;}
         if(!sliding||event.button()!=0)return false;
         var mc=Minecraft.getInstance();slideTo(event.x(),mc.hasControlDown(),mc.hasShiftDown());return true;
     }
     @Override public boolean mouseReleased(MouseButtonEvent event){
+        if(selectingText){selectingText=false;return true;}
         if(!sliding)return false;
         stopSliding();return true;
     }
     @Override public void setFocused(boolean focused){super.setFocused(focused);if(!focused)finishTyping(true);}
     @Override public boolean keyPressed(KeyEvent event){
-        if(typed==null)return super.keyPressed(event);
-        if(event.key()==GLFW.GLFW_KEY_ENTER||event.key()==GLFW.GLFW_KEY_KP_ENTER)finishTyping(true);
-        else if(event.key()==GLFW.GLFW_KEY_ESCAPE)finishTyping(false);
-        else if(event.key()==GLFW.GLFW_KEY_BACKSPACE&&!typed.isEmpty())typed=typed.substring(0,typed.length()-1);
+        if(entry==null)return super.keyPressed(event);
+        switch(entry.key(event)){case APPLY->finishTyping(true);case CANCEL->finishTyping(false);default->{}}
         return true;
     }
     @Override public boolean charTyped(CharacterEvent event){
-        if(typed==null)return false;
-        String c=event.codepointAsString();
-        if(c.length()==1&&(Character.isDigit(c.charAt(0))||".-,".indexOf(c.charAt(0))>=0)&&typed.length()<12)typed+=c.equals(",")?".":c;
+        if(entry==null)return false;
+        entry.type(event.codepointAsString());
         return true;
     }
     @Override protected void paint(Gfx g,int x,int y,float delta){
         // A release that never reached the slider, such as the screen closing mid-drag, must not leave the cursor hidden.
         if(sliding&&GLFW.glfwGetMouseButton(Minecraft.getInstance().getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_LEFT)!=GLFW.GLFW_PRESS)stopSliding();
-        Component text=typed==null?getMessage():Component.literal(typed+(System.currentTimeMillis()/500%2==0?"_":""));
-        track(g,getX(),getY(),getWidth(),getHeight(),value,text,typed!=null,isHoveredOrFocused(),typed!=null);
+        track(g,getX(),getY(),getWidth(),getHeight(),value,entry==null?getMessage():Component.empty(),entry!=null,isHoveredOrFocused(),entry!=null);
+        if(entry!=null)entry.paint(g,getX(),getY(),getWidth(),getHeight());
     }
 }
