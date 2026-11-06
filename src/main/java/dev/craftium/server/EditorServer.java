@@ -25,7 +25,7 @@ public final class EditorServer {
     private static final long APPLY_BUDGET_NANOS=20_000_000L;
     private static int historyTicks;
     private record Job(UUID owner, ServerLevel level, Session session, Session.Edit edit,
-                       boolean backwards, boolean history, int[] cursor, List<Session.Change> applied, long strokeId, boolean load, List<Session.Change> order) {}
+                       boolean backwards, boolean history, int[] cursor, List<Session.Change> applied, long strokeId, boolean load, List<Session.Change> order, boolean record) {}
     /** How many blocks are checked and then written together; a tick looks at the clock between slices. */
     private static final int SLICE=1024;
     /** An edit's blocks grouped by chunk, each chunk's in the order the edit has them, so a chunk can be written in one pass (see {@link BulkPlace}). */
@@ -134,7 +134,8 @@ public final class EditorServer {
                 c.after().place(level,EditPlanner.pos(c.pos()),mirrors.flags());changes.add(c);
             }
             if(changes.isEmpty())return;
-            s.remember(new Session.Edit("Builder placement",changes,List.of(),mirrors.flags()).withBuilder(true));
+            if(!o.recordPlayerBuilding){send(player,s,"Placed "+changes.size()+(changes.size()==1?" block":" blocks"),false);return;} // by hand, and not kept in the history
+            s.remember(new Session.Edit("Builder placement",changes,List.of(),mirrors.flags()).withBuilder(true),s.placeStroke);
             send(player,s,"Placed "+changes.size()+(changes.size()==1?" block":" blocks"),false);
         }catch(IllegalArgumentException e){send(player,s,e.getMessage(),true);}
     }
@@ -152,7 +153,9 @@ public final class EditorServer {
             if(r==null || r.action()==null || r.options()==null)throw new IllegalArgumentException("Invalid editor request");
             if(!ServerPlatform.permitted(player,r.action()))throw new IllegalArgumentException("You do not have permission for this Craftium action");
             Options o=r.options();o.validate();
-            s.requestStroke=r.action().equals("use")||r.action().equals("builder_break")?r.strokeId():0;
+            boolean inWorld=r.action().equals("builder_place")||r.action().equals("builder_break");
+            s.requestRecord=o.recordPlayerBuilding||!inWorld; // a click in the world is the player building by hand; the editor's own tools always are recorded
+            s.requestStroke=r.action().equals("use")||inWorld?r.strokeId():0;
             if(s.dimension!=null && !s.dimension.equals(player.level().dimension())) {
                 if(s.busy)throw new IllegalArgumentException("Wait for the current operation to finish");
                 HistoryStore.save(s);
@@ -169,6 +172,7 @@ public final class EditorServer {
                 ||!o.enterToBuild&&!r.action().equals("use"); // with Enter to build off, a stroke is staged until the button is let go (stroke_end) and any other action is built at once
             if(r.action().equals("status")) { send(player,s,"Ready",false);return; }
             if(r.action().equals("capabilities")){send(player,s,"Builder capabilities synchronized",false);return;}
+            if(r.action().equals("place_stroke")||r.action().equals("place_stroke_end")){s.placeStroke=r.action().equals("place_stroke")?r.strokeId():0;return;} // the game's own placements while the button is held; never throttled or answered
             if(r.action().equals("gamemode_editor")){ // sent as the editor opens and closes: no status message, unlike the buttons, and never throttled
                 if(!player.isSpectator()){s.previousMode=player.gameMode.getGameModeForPlayer();player.setGameMode(GameType.SPECTATOR);}
                 return;
@@ -578,7 +582,7 @@ public final class EditorServer {
                 if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
                 EditProtection.check(player,edit);
                 ai.pendingEdit=null;ai.pendingDirty=true;
-                ai.busy=true;job=new Job(player.getUUID(),player.level(),ai,edit,false,false,new int[]{0},new ArrayList<>(),0,true,byChunk(edit.changes()));
+                ai.busy=true;job=new Job(player.getUUID(),player.level(),ai,edit,false,false,new int[]{0},new ArrayList<>(),0,true,byChunk(edit.changes()),true);
                 send(player,ai,"Applying "+edit.name()+"…",false);
             }
             case "ai_cancel" -> {
@@ -599,7 +603,7 @@ public final class EditorServer {
         EditProtection.check(player,edit);
         if(s.confirmEdits&&!s.bypassConfirm){stage(player,s,edit);return;}
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
-        s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,false,false,new int[]{0},new ArrayList<>(),s.requestStroke,false,byChunk(edit.changes()));
+        s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,false,false,new int[]{0},new ArrayList<>(),s.requestStroke,false,byChunk(edit.changes()),s.requestRecord);
         send(player,s,"Applying "+edit.name()+"…",false);
     }
     /** Holds the edit as a ghost for the player to confirm; edits made while one is waiting are added to it. */
@@ -662,7 +666,7 @@ public final class EditorServer {
             for(var c:edit.biomes())if(!player.level().hasChunk(c.cell().x()>>2,c.cell().z()>>2))throw new IllegalArgumentException("Move closer to the biome chunks before undo/redo");
         }
         EditProtection.check(player,edit);
-        from.removeFirst();s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,backwards,true,new int[]{0},new ArrayList<>(),0,s.ai,byChunk(edit.changes()));
+        from.removeFirst();s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,backwards,true,new int[]{0},new ArrayList<>(),0,s.ai,byChunk(edit.changes()),true);
         s.lastStroke=0;
         send(player,s,backwards?"Undoing…":"Redoing…",false);
     }
@@ -716,7 +720,7 @@ public final class EditorServer {
                 j.session.recalculateBytes();
                 j.session.historyDirty=true;
                 j.session.event((j.backwards?"Undo ":"Redo ")+j.edit.name());
-            } else j.session.remember(actual,j.strokeId);
+            } else if(j.record)j.session.remember(actual,j.strokeId);
             j.session.busy=false;job=null;
             if(j.history&&!j.backwards&&j.session.historyRemaining==0&&!j.applied.isEmpty()&&j.session.options!=null&&j.session.options.historyPulse)j.session.pulse="redo:700:"+SelectionCodec.encode(pulsePoints(j.applied.stream().map(Session.Change::pos).toList()));
             var player=server.getPlayerList().getPlayer(j.owner);

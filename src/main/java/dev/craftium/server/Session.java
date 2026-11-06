@@ -60,6 +60,10 @@ final class Session {
      */
     ModelTransform.Chain pendingChain;Edit pendingChainBase,pendingChainEdit;
     long requestStroke, lastStroke;
+    /** The stroke the game's own placements belong to while the place button is held, so they undo as one; 0 when no stroke is open. */
+    long placeStroke;
+    /** Whether the edit this request starts goes into the undo history. */
+    boolean requestRecord=true;
     boolean busy;
     /** Builder commits that arrived while an edit was being applied, as the requests were sent; each is planned when its turn comes, against the world as the earlier ones left it. */
     final ArrayDeque<String> queued=new ArrayDeque<>();

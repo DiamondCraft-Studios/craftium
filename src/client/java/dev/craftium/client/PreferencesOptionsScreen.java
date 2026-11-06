@@ -28,6 +28,7 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
     private static final List<Row> ROWS=List.of(
         new Toggle("Undo / redo pulse","Flash the changed blocks when you undo or redo",o->o.historyPulse,(o,v)->o.historyPulse=v),
         new Toggle("Enter to build","On: an edit waits for Enter before it is built. Off: a stroke is built when you let go of the button, and any other edit is built at once",o->o.enterToBuild,(o,v)->o.enterToBuild=v),
+        new Toggle("Undo normal building","On: the blocks you place and break by hand go into the undo history, a held place button as one step. Off: only the editor and Builder tools can be undone",o->o.recordPlayerBuilding,(o,v)->o.recordPlayerBuilding=v),
         new Toggle("Live Builder selection box","After the first Builder click, draw the box to the block you aim at and let it follow your aim",o->o.builderLiveBox,(o,v)->o.builderLiveBox=v),
         new Toggle("Hide other gizmo handles","While a gizmo handle is held, draw only that handle",o->o.gizmoHideOthers,(o,v)->o.gizmoHideOthers=v),
         new Toggle("Large selection warnings","Ask before keeping a selection of 1,024 blocks or more; a right click confirms it",o->o.largeSelectionWarnings,(o,v)->o.largeSelectionWarnings=v),

@@ -54,6 +54,8 @@ public final class Options {
     public boolean maskOff=true;
     /** Whether the tool masks (block mask, mask block, rules, script, height range and restrict to selection) also apply to the builder tools. */
     public boolean maskInBuilder;
+    /** Whether the blocks you place and break by hand, with the game's own clicks, go into the undo history. */
+    public boolean recordPlayerBuilding=true;
     public String biome = "minecraft:plains";
     public String text = "CRAFTIUM";
     public int minY = -64, maxY = 319;
