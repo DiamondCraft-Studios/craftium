@@ -15,6 +15,8 @@ Changes since 0.7.0-beta.1.
 - The brush has a Flow setting for how often a stroke applies it.
 - The builder draws a white bounding box when Copy air is off, shows a live size readout, and `;` cycles the selection style.
 - The ruler highlights the first block hit in white while an end is moved.
+- Builder move, clone, stack and erase, and pasting the clipboard, show their result at once instead of waiting for the server. If the server turns the edit down, the blocks go back. This is off through the Paper companion, with Copy air, Merge blocks, symmetry or Keep existing on, and when entities are copied.
+- A builder edit sent while another is still being applied waits its turn instead of being refused.
 
 ### Editor
 - Edit anchor turns the Modify anchor into a knob that the move gizmo carries. The preview follows the cursor until it is anchored, and then follows the knob while the gizmo drags it.
