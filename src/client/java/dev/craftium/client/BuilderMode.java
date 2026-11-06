@@ -329,7 +329,7 @@ public final class BuilderMode {
                 var shown=preview(o,min,size,steps);
                 if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),o.builderMovingTint); // the blocks that are moving, where they are now
                 if(shown==null)boxShape(min.add(offset.x(),offset.y(),offset.z()),max.add(offset.x()+1,offset.y()+1,offset.z()+1)).drawPlain(Vec3.ZERO,o.builderPreviewColor,(float)o.builderPreviewWidth,0,false,false);
-                else{shown.shape().drawPlain(Vec3.ZERO,o.builderPreviewColor,(float)o.builderPreviewWidth,o.builderPreviewFill,true,false);if(!shown.places().isEmpty())Overlay.blocks(shown.models(),shown.places(),o.builderPreviewTint);}
+                else{shown.shape().drawPlain(Vec3.ZERO,o.builderPreviewColor,(float)o.builderPreviewWidth,o.builderPreviewFill,true,false);if(!shown.places().isEmpty())Overlay.blockStates(turned(shown.models(),o),shown.places(),o.builderPreviewTint);}
             }
         }
     }
@@ -369,7 +369,13 @@ public final class BuilderMode {
             }
             stackFor=key;stackCells=cells;stackModels=models;stackPlaces=places;
         }
-        if(!stackPlaces.isEmpty())Overlay.blocks(stackModels,stackPlaces,o.builderPreviewTint);
+        if(!stackPlaces.isEmpty())Overlay.blockStates(turned(stackModels,o),stackPlaces,o.builderPreviewTint);
+    }
+    /** The blocks at {@code models} as they will stand once the builder's turn and flip are applied, so oriented blocks are drawn facing their new way. */
+    private static List<net.minecraft.world.level.block.state.BlockState> turned(List<net.minecraft.core.BlockPos> models,Options o){
+        var level=Minecraft.getInstance().level;var states=new ArrayList<net.minecraft.world.level.block.state.BlockState>(models.size());
+        for(var pos:models)states.add(dev.craftium.server.BuilderEdits.turn(level.getBlockState(pos),o.builderRotation,o.builderFlipAxis));
+        return states;
     }
     private static Object[] stackFor;
     private static List<Point> stackCells;
