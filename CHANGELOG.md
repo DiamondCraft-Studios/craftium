@@ -27,6 +27,19 @@ Changes since 0.7.0-beta.1.
 - Modify has Translate Scale and the gizmo shows drag hints.
 - Dropping a block on the Hand keeps the item you are holding.
 - Keep existing is ignored while Replace mode is on.
+- The block chooser draws water and lava as an isometric cube, and searches the way JEI does: `@mod`, `#tooltip`, `$tag`, `%tab`, `&id`, `^colour`, `-` to leave a word out, `|` for alternatives, quotes for exact words, and `*` and `?` as wildcards.
+- Paste in place starts a placement where the blocks were copied from, to nudge and build with Enter, instead of building at once.
+- Dragging a block to the Hand slot works in the editor, where the player is a spectator.
+- With the pipette, Ctrl + click adds the block to the palette and keeps the pipette in hand; a plain click still takes it as the foreground. The palette keeps 64 blocks.
+- A dragged block is carried the way the pipette shows one: the pointer is the crosshair and the block rides above and to the right of it.
+- Edits and selections go up to 1,048,576 blocks, and each shape's largest radius, up to 999, is worked out from the blocks it makes: a flat disk or a hollow ring can be far wider than a filled sphere. The radius slider names the limit when a shape has one, and sizes shrink to stay within it. The undo history budget, the clipboard limit and the packet sizes grew with the limit.
+- Undo normal building is a preference, on by default: off, the blocks you place and break by hand stay out of the undo history. A held place button is one undo step, as a held break already was.
+- Builder follows Editor magic select is a preference, on by default. Off, the Builder matches by the block comparison chosen next to it (the same block unless changed), selects up to the largest selection, and uses the wand's plain defaults.
+
+### Reach
+- Clicks in the world (infinite reach breaks, Tinker, angel and fast placement, the delete key, the mirrors of a placement) ignore the tool masks unless Use in Builder tools is on.
+- Breaking with infinite reach or symmetry plays the game's break sound and particles again.
+- The click that changes the reach no longer breaks or places a block.
 
 ## 0.7.0-beta.1
 
