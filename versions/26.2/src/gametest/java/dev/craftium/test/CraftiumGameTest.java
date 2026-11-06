@@ -321,7 +321,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
     private void remainingTools(){
         options(o->{o.selectionPoints=new java.util.ArrayList<>(java.util.List.of(new Point(30,15,30),new Point(31,15,30),new Point(30,16,30)));o.mode=Selection.Mode.REPLACE;});request("lasso_select",null);
         require(ctx.computeOnClient(mc->SelectionCodec.decode(ClientState.status.selectionData()).size()==3),"Irregular selection data was not synchronized");
-        options(o->{o.tool=Tool.FLOODFILL;o.block="minecraft:gold_block";o.blockLimit=9;o.floodUp=false;o.floodDown=false;o.floodHorizontal=true;});request("use",new Point(40,15,30));checkBlock(new Point(40,15,30),Blocks.GOLD_BLOCK);request("undo",null);checkBlock(new Point(40,15,30),Blocks.AIR);
+        options(o->{o.tool=Tool.FLOODFILL;o.block="minecraft:gold_block";o.blockLimit=9;o.floodUp=false;o.floodDown=false;o.floodHorizontal=true;});request("use",new Point(40,15,30));checkBlock(new Point(40,15,30),Blocks.GOLD_BLOCK);request("undo",null);checkBlock(new Point(40,15,30),Blocks.AIR);options(o->o.blockLimit=Options.MAX_BLOCK_LIMIT);
         world.getServer().runOnServer(server->{for(int x=37;x<=43;x++)for(int z=27;z<=33;z++)server.overworld().setBlock(new BlockPos(x,9,z),Blocks.STONE.defaultBlockState(),2);});
         options(o->{o.tool=Tool.FLUID_BALL;o.fluidType=Options.FluidType.SNOW;o.radius=1;o.requireSupport=true;o.flowLength=3;});request("use",new Point(40,9,30));checkBlock(new Point(40,10,30),Blocks.SNOW);request("undo",null);checkBlock(new Point(40,10,30),Blocks.AIR);
         options(o->{o.position1=new Point(30,15,30);o.position2=o.position1;o.block="minecraft:gold_block";});request("select_box",null);request("fill",null);request("copy",null);
