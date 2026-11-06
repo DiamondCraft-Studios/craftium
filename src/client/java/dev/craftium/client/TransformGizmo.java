@@ -509,8 +509,9 @@ final class TransformGizmo {
     /** Move handles end in flat triangular arrowheads, rotate handles are rings, scale handles are squares, and the centre is a square of its own. */
     private static void render(Vec3 anchor,Options.GizmoMode currentMode,int active,Vec3 extent){
         Vec3[] directions=axesAt(anchor);double k=screenScale(anchor);
+        boolean held=dragging!=null&&active>=0; // while a handle is held, only that handle is drawn
         for(int i=0;i<3;i++){int color=active==i?brighten(COLORS[i]):COLORS[i];
-            if((axisMask>>i&1)!=0){
+            if((axisMask>>i&1)!=0&&!(held&&active!=i)){
             if(currentMode==Options.GizmoMode.ROTATE){
                 Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3];
                 // Three full rings make a sphere of wire that is hard to look through, so each axis shows a short arc to grab,
@@ -520,7 +521,7 @@ final class TransformGizmo {
             else if(currentMode==Options.GizmoMode.SCALE){Vec3 end=extent!=null?faceCenter(faceBase!=null?faceBase:anchor,directions,extent,i):anchor.add(directions[i].scale(5*k));if(extent==null)Overlay.line(anchor,end,color,active==i?4:2);Overlay.box(new AABB(end.add(-.2*k,-.2*k,-.2*k),end.add(.2*k,.2*k,.2*k)),color,active==i?2:1,color&0x99ffffff|0x66000000);}
             else{Vec3 tip=anchor.add(directions[i].scale(5.3*k)),base=anchor.add(directions[i].scale(4.5*k));Overlay.line(anchor,base,color,active==i?4:2);arrowhead(tip,base,color,active==i?3:2,k);}
             }
-            if(showFaces&&(currentMode==Options.GizmoMode.MOVE||currentMode==Options.GizmoMode.SCALE)&&(axisMask>>(i+1)%3&1)!=0&&(axisMask>>(i+2)%3&1)!=0){ // a square in each plane: moves, or scales, the two axes of that plane
+            if(showFaces&&(currentMode==Options.GizmoMode.MOVE||currentMode==Options.GizmoMode.SCALE)&&(axisMask>>(i+1)%3&1)!=0&&(axisMask>>(i+2)%3&1)!=0&&!(held&&active!=4+i)){ // a square in each plane: moves, or scales, the two axes of that plane
                 Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3],at=anchor.add(a.scale(1.4*k)).add(b.scale(1.4*k));boolean hot=active==4+i;
                 planeSquare(at,a,b,.2*k,hot?brighten(COLORS[i]):COLORS[i],hot);
             }
@@ -528,14 +529,14 @@ final class TransformGizmo {
         if(currentMode==Options.GizmoMode.ROTATE){
             // A ring that faces the camera turns about the view; hovering inside the sphere lights its outline, the trackball.
             Vec3[] cam=cameraAxes();
-            circle(anchor,cam[0],cam[1],4.4*k,active==7?0xffffffff:0x99c7d6e5,active==7?3:1.5f);
+            if(!held||active==7)circle(anchor,cam[0],cam[1],4.4*k,active==7?0xffffffff:0x99c7d6e5,active==7?3:1.5f);
             if(active==3)circle(anchor,cam[0],cam[1],3.5*k,CENTER_ACTIVE,2f);
         }
         if(dragging==null&&active>=0)label(anchor,directions,k,extent,currentMode,active);
-        if(currentMode==Options.GizmoMode.SCALE&&plainHandles){ // the Scale tool's circle in the middle scales every axis
+        if(currentMode==Options.GizmoMode.SCALE&&plainHandles&&!(held&&active!=3)){ // the Scale tool's circle in the middle scales every axis
             Vec3[] cam=cameraAxes();circle(anchor,cam[0],cam[1],.32*k,active==3?CENTER_ACTIVE:CENTER,active==3?3:2f);
         }
-        if(showFaces&&currentMode!=Options.GizmoMode.ROTATE&&!plainHandles&&axisMask==ALL_AXES){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
+        if(showFaces&&currentMode!=Options.GizmoMode.ROTATE&&!plainHandles&&axisMask==ALL_AXES&&!(held&&active!=3)){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
     }
     /** Names the handle under the pointer next to it. */
     private static void label(Vec3 anchor,Vec3[] directions,double k,Vec3 extent,Options.GizmoMode mode,int handle){
