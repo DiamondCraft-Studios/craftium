@@ -31,7 +31,7 @@ public final class ModifyMath {
     public static LinkedHashMap<Point,Point> plan(Options o,Collection<Point> sources,Point min,Point max,Point cursor){
         var out=new LinkedHashMap<Point,Point>();
         if(sources.isEmpty())return out;
-        var axis=o.modifyAxis;var translation=new Geometry.Vector(o.modifyTranslateX,o.modifyTranslateY,o.modifyTranslateZ);
+        var axis=o.modifyAxis;var translation=new Geometry.Vector(o.modifyTranslateX*o.modifyTranslateScale,o.modifyTranslateY*o.modifyTranslateScale,o.modifyTranslateZ*o.modifyTranslateScale);
         var middle=Geometry.vector(min).add(Geometry.vector(max)).scale(.5);
         switch(o.modifyMode){
             case TRANSLATE_COPIES -> {
