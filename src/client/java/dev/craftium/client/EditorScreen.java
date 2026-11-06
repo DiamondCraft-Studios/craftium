@@ -850,8 +850,10 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,x+10,y+24,19,19,"",o().maskInBuilder,()->o().maskInBuilder=!o().maskInBuilder,"Use in Builder tools · "+(o().maskInBuilder?"On: the tool masks also apply to the Builder tools":"Off: the Builder tools ignore the tool masks"));
         ToolIcons.hardHat(g,x+10,y+24,o().maskInBuilder?0xffffffff:0xffa9bccd);
         int share=(pw-20-23-4)/2;
-        button(g,x+33,y+24,share,19,"Include",!o().maskExclude,()->o().maskExclude=false,"");
-        button(g,x+37+share,y+24,share,19,"Exclude",o().maskExclude,()->o().maskExclude=true,"");
+        // Include and Exclude are never on together; clicking the one that is on turns both off, and the mask is ignored.
+        boolean include=!o().maskOff&&!o().maskExclude,exclude=!o().maskOff&&o().maskExclude;
+        button(g,x+33,y+24,share,19,"Include",include,()->{o().maskOff=include;o().maskExclude=false;ClientState.save();},"Only blocks in the mask may be changed · click again to ignore the mask");
+        button(g,x+37+share,y+24,share,19,"Exclude",exclude,()->{o().maskOff=exclude;o().maskExclude=true;ClientState.save();},"Blocks in the mask are kept out of every change · click again to ignore the mask");
         var cells=o().maskBlocks;int total=cells.size()+1,rows=(total+maskCols-1)/maskCols;maskScroll=Math.clamp(maskScroll,0,Math.max(0,rows-maskRows));
         for(int r=0;r<maskRows;r++)for(int c=0;c<maskCols;c++){
             int i=(maskScroll+r)*maskCols+c;if(i>=total)break;

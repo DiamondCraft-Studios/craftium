@@ -33,7 +33,7 @@ final class EditPlanner {
         this.level=level;this.session=session;this.o=options;
         material=parse(options.block); secondary=parse(options.secondary);
         mask=options.mask.isBlank()?null:parse(options.mask);
-        for(String entry:options.maskActive){blockMask.add(parse(entry));blockMaskExact.add(entry.contains("["));}
+        if(!options.maskOff)for(String entry:options.maskActive){blockMask.add(parse(entry));blockMaskExact.add(entry.contains("["));}
         noise=new NoiseField(options);
         materials=new ArrayList<>();for(String block:MaterialList.split(options.materials))materials.add(parse(block));
         if(materials.isEmpty())materials.add(material);
