@@ -54,6 +54,8 @@ final class ModifyPreview {
         if(o.tool!=Tool.MODIFY||selected.isEmpty()||mc.level==null)return;
         lastCursor=cursor;
         if(anchored())cursor=anchor();
+        var live=knob()?TransformGizmo.liveNode():null; // the knob while the gizmo carries it, so the preview moves with it
+        if(live!=null){double shift=TransformGizmo.nodeOffset();cursor=new Point((int)Math.round(live.x-shift),(int)Math.round(live.y-shift),(int)Math.round(live.z-shift));}
         if(ClientState.hasPending())return; // a waiting edit shows its own blocks
         var c=ModifyMath.usesCursor(o)?cursor:null;
         Object[] now={o.modifyMode,o.modifyAxis,o.modifyType,o.modifyAngle,o.modifyRelative,o.modifyTranslate,o.modifyTranslateX,o.modifyTranslateY,o.modifyTranslateZ,o.modifyTranslateScale,o.copies,o.offsetX,o.offsetY,o.offsetZ,o.pasteAir,c,selected};
