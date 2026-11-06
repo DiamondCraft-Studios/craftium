@@ -46,7 +46,7 @@ public final class ShapeSizes {
                 if (other == row) setSize(o, axis, s);
                 else if (o.sizeChain) setSize(o, axis, size(o, axis) * factor);
             }
-        fit(o, rows);
+        fit(o, rows);fitBlocks(o, rows);
     }
 
     /** Keeps the whole shape within the reach a shape may have, shrinking every used axis by the same factor. */
@@ -57,6 +57,26 @@ public final class ShapeSizes {
         if (largest <= allowed || largest == 0) return;
         double k = allowed / largest;
         for (Row row : rows) for (int axis : row.axes()) setSize(o, axis, size(o, axis) * k);
+    }
+
+    /** Whether the shape, as scaled, makes no more blocks than an edit may hold and is not too big to be looked at. */
+    private static boolean fitsBlocks(Options o, List<Row> rows) {
+        double largest = 0, volume = 1;
+        var seen = new boolean[3];
+        for (Row row : rows) for (int axis : row.axes()) if (!seen[axis]) { seen[axis] = true; largest = Math.max(largest, size(o, axis)); volume *= size(o, axis); }
+        if (o.sizeX == 1 && o.sizeY == 1 && o.sizeZ == 1) return true; // the radius alone was held to the limits already
+        int outer = o.outerRadius(), extent = (int) Math.ceil(outer * largest);
+        double cells = (2.0 * extent + 1) * (2.0 * extent + 1) * (2.0 * extent + 1);
+        // A wall's blocks grow with the surface, a solid's with the volume.
+        double base = ShapeLimits.blocks(o.shape, o.radius, o.hollow, o.outlineThickness, o.pixelPerfect, o.outlineShift(), o.polygonSides, o.outline);
+        double blocks = base * (o.hollow || o.outline ? Math.pow(volume, 2.0 / 3) : volume);
+        return cells <= ShapeLimits.SCAN_CELLS && blocks <= Selection.LIMIT;
+    }
+
+    /** Shrinks the sizes together, a little at a time, until the scaled shape stays within the limits on its blocks. */
+    public static void fitBlocks(Options o, List<Row> rows) {
+        for (int i = 0; i < 80 && !fitsBlocks(o, rows); i++)
+            for (Row row : rows) for (int axis : row.axes()) setSize(o, axis, size(o, axis) * .92);
     }
 
     public static void reset(Options o) { o.sizeX = o.sizeY = o.sizeZ = 1; }

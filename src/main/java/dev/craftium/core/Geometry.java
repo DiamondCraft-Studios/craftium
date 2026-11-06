@@ -44,7 +44,8 @@ public final class Geometry {
         double scaled=o.yaw==0&&o.pitch==0&&o.roll==0?Math.max(o.sizeX,Math.max(o.sizeY,o.sizeZ)):Math.sqrt(o.sizeX*o.sizeX+o.sizeY*o.sizeY+o.sizeZ*o.sizeZ);
         double outer=o.outerRadius();
         int extent=(int)Math.ceil(outer*scaled);
-        if(extent>BrushMath.MAX_REACH)throw new IllegalArgumentException("Scaled shape reaches "+extent+" blocks from its centre; the most is "+BrushMath.MAX_REACH);var result=new ArrayList<Point>();
+        if(extent>BrushMath.MAX_REACH)throw new IllegalArgumentException("Scaled shape reaches "+extent+" blocks from its centre; the most is "+BrushMath.MAX_REACH);
+        if((2L*extent+1)*(2L*extent+1)*(2L*extent+1)>ShapeLimits.SCAN_CELLS)throw new IllegalArgumentException("A scaled or turned shape this big cannot be built; make it smaller");var result=new ArrayList<Point>();
         // The turn is the same for every cell, so its sines and cosines are worked out once; this is inverseRotate unrolled.
         double ra=Math.toRadians(-o.yaw),rb=Math.toRadians(-o.pitch),rc=Math.toRadians(-o.roll);
         double ca=Math.cos(ra),sa=Math.sin(ra),cb=Math.cos(rb),sb=Math.sin(rb),cc=Math.cos(rc),sc=Math.sin(rc);
@@ -73,6 +74,7 @@ public final class Geometry {
         for(Point p:base){e=Math.max(e,Math.max(Math.abs(p.x()),Math.max(Math.abs(p.y()),Math.abs(p.z()))));far=Math.max(far,(double)p.x()*p.x()+(double)p.y()*p.y()+(double)p.z()*p.z());}
         int extent=(int)Math.ceil(Math.sqrt(far));
         if(extent>BrushMath.MAX_REACH)throw new IllegalArgumentException("Turned shape reaches "+extent+" blocks from its centre; the most is "+BrushMath.MAX_REACH);
+        if((2L*extent+1)*(2L*extent+1)*(2L*extent+1)>ShapeLimits.SCAN_CELLS||(2L*e+1)*(2L*e+1)*(2L*e+1)>ShapeLimits.SCAN_CELLS)throw new IllegalArgumentException("A scaled or turned shape this big cannot be built; make it smaller");
         int n=2*e+1;var grid=new boolean[n*n*n];
         for(Point p:base)grid[((p.x()+e)*n+p.y()+e)*n+p.z()+e]=true;
         double ra=Math.toRadians(-o.yaw),rb=Math.toRadians(-o.pitch),rc=Math.toRadians(-o.roll);

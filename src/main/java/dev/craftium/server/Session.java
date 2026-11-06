@@ -161,12 +161,12 @@ final class Session {
                 biomeMap.put(c.cell(),old==null?c:new BiomeChange(c.cell(),old.before(),c.after()));
             }
             var merged=new Edit(previous.name(),List.copyOf(combined.values()),List.copyOf(biomeMap.values()),edit.flags()).withBuilder(previous.builder());
-            if(merged.estimatedBytes()<=32*1024*1024 && merged.changes().size()+merged.biomes().size()<=Selection.LIMIT)edit=merged;
+            if(merged.estimatedBytes()<=Selection.HISTORY_BYTES && merged.changes().size()+merged.biomes().size()<=Selection.LIMIT)edit=merged;
             else undo.addFirst(previous);
         }
         lastStroke=stroke;
         redo.clear(); undo.addFirst(edit); recalculateBytes();
-        while (undo.size()>32 || (bytes>32*1024*1024 && undo.size()>1)) bytes-=undo.removeLast().estimatedBytes();
+        while (undo.size()>32 || (bytes>Selection.HISTORY_BYTES && undo.size()>1)) bytes-=undo.removeLast().estimatedBytes();
         event(edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())+" changes");
     }
     void recalculateBytes() {bytes=0;for(var e:undo)bytes+=e.estimatedBytes();for(var e:redo)bytes+=e.estimatedBytes();}

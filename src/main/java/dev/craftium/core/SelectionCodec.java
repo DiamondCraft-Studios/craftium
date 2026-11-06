@@ -12,7 +12,7 @@ public final class SelectionCodec {
         catch(IOException e){throw new IllegalArgumentException("Cannot encode selection",e);}
     }
     public static Set<Point> decode(String encoded){
-        if(encoded==null||encoded.isBlank())return Set.of();if(encoded.length()>3_000_000)throw new IllegalArgumentException("Selection packet too large");
+        if(encoded==null||encoded.isBlank())return Set.of();if(encoded.length()>16_000_000)throw new IllegalArgumentException("Selection packet too large");
         try(var in=new DataInputStream(new GZIPInputStream(new ByteArrayInputStream(Base64.getDecoder().decode(encoded))))){
             int size=in.readInt();if(size<0||size>Selection.LIMIT)throw new IllegalArgumentException("Invalid selection count");byte[] raw=in.readNBytes(size*12);if(raw.length!=size*12)throw new EOFException(); // one bulk read: an int at a time through the stream chain was most of the cost of a large selection
             var ints=java.nio.ByteBuffer.wrap(raw).asIntBuffer();var result=new LinkedHashSet<Point>((int)(size/.75f)+1);for(int i=0;i<size;i++)result.add(new Point(ints.get(),ints.get(),ints.get()));return result;

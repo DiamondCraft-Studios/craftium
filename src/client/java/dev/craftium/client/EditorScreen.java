@@ -395,7 +395,7 @@ public final class EditorScreen extends CraftiumScreen {
             var use=o().tool.brushUse();
             if(o().tool.picksShape())shapeSelector(g,305);
             // The track stops at 64 to stay usable; a bigger radius is typed in. Shapes are limited by their block count and reach, not by this.
-            if(use!=Tool.BrushUse.NONE)slider(g,10,347-lift(),pw-20,use==Tool.BrushUse.SMALL_SHAPE?"Radius (shape up to 4)":"Radius",o().radius,1,64,BrushMath.MAX_RADIUS,DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
+            if(use!=Tool.BrushUse.NONE)slider(g,10,347-lift(),pw-20,use==Tool.BrushUse.SMALL_SHAPE?"Radius (shape up to 4)":radiusLabel(),o().radius,1,Math.min(64,dev.craftium.core.ShapeLimits.maxRadius(o())),dev.craftium.core.ShapeLimits.maxRadius(o()),DEFAULTS.radius,v->o().radius=(int)Math.round(v),true);
             o().outlineThickness=Math.clamp(o().outlineThickness,1,o().radius); // a wall is never thicker than the radius
             // A polygon's sides take the row under the radius, and everything below moves down a row. The track stops at 64; more is typed.
             if(sidesShown())
@@ -1147,6 +1147,8 @@ public final class EditorScreen extends CraftiumScreen {
     /** The brush tools that paint along a stroke have a flow; a selection, or a shape that is put down and then built, does not. */
     private boolean flowShown(){return sizes()&&!o().tool.selection()&&o().tool!=Tool.SHAPE;}
     private int sizeHeight(){int n=dev.craftium.core.ShapeSizes.rows(o().shape).size();return n*28+(n>1?24:0)+(flowShown()?28:0);}
+    /** The radius slider's name, saying how far this shape can go when that is less than the largest radius there is. */
+    private String radiusLabel(){int most=dev.craftium.core.ShapeLimits.maxRadius(o());return most<BrushMath.MAX_RADIUS?"Radius (up to "+most+" for this shape)":"Radius";}
     private void sizeControls(Gfx g,int y){
         var o=o();var rows=dev.craftium.core.ShapeSizes.rows(o.shape);
         ShapeObject.syncOptions(); // a shape already put down shows the sizes its handles gave it
@@ -1558,7 +1560,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(cameraGesture!=CameraGesture.NONE){
             // A few pixels of wobble on a middle click is still a click, not a pan.
             if(pendingPick&&!middleDragged){if(Math.hypot(event.x()-gestureX,event.y()-gestureY)<=3)return true;middleDragged=true;}
-            if(cameraGesture==CameraGesture.RADIUS)o().radius=Math.clamp(initialRadius+(int)Math.round(((event.x()-gestureX)-(event.y()-gestureY))/8),1,BrushMath.MAX_RADIUS);
+            if(cameraGesture==CameraGesture.RADIUS)o().radius=Math.clamp(initialRadius+(int)Math.round(((event.x()-gestureX)-(event.y()-gestureY))/8),1,dev.craftium.core.ShapeLimits.maxRadius(o()));
             else if(cameraGesture==CameraGesture.ROTATE)minecraft.player.turn(dx*2,dy*2);
             else if(cameraGesture==CameraGesture.ORBIT){minecraft.player.turn(dx*2,dy*2);Vec3 eye=orbitPivot.subtract(minecraft.player.getLookAngle().scale(orbitDistance));minecraft.player.setPos(eye.x,eye.y-minecraft.player.getEyeHeight(),eye.z);}
             else{var camera=ClientCompat.camera(minecraft);var near=ClientCompat.nearPlane(camera);Vec3 center=near.getPointOnPlane(0,0),right=near.getPointOnPlane(1,0).subtract(center).normalize(),up=near.getPointOnPlane(0,1).subtract(center).normalize();double units=2*orbitDistance*Math.tan(Math.toRadians(ClientCompat.fov(minecraft,camera))/2)/height;minecraft.player.setPos(minecraft.player.position().add(right.scale(-dx*units)).add(up.scale(dy*units)));}
@@ -1603,7 +1605,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(builder){action(vertical>0?"hotbar_previous":"hotbar_next");return true;}
         if(EditorBindings.held(Action.ADJUST_SPEED)){o().flySpeed=Math.clamp(o().flySpeed+(float)vertical*.2f,.1f,10f);action("flight");return true;}
-        if(EditorBindings.held(Action.ADJUST_RADIUS)){o().radius=Math.clamp(o().radius+(int)Math.signum(vertical),1,BrushMath.MAX_RADIUS);return true;}
+        if(EditorBindings.held(Action.ADJUST_RADIUS)){o().radius=Math.clamp(o().radius+(int)Math.signum(vertical),1,dev.craftium.core.ShapeLimits.maxRadius(o()));return true;}
         if(!toolActive){zoomToCursor(x,y,vertical);return true;} // no tool chosen: the wheel is the camera's
         if(ShapeObject.active()&&vertical!=0){ShapeObject.adjustRadius((int)Math.signum(vertical));return true;} // the wheel sizes the shape that is down
         if(TransformGizmo.available(this)){TransformGizmo.nudge(this,EditorControls.nudge(vertical>0?Action.NUDGE_FORWARD:Action.NUDGE_BACK,minecraft.player.getYRot()));return true;}
@@ -1651,7 +1653,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(step!=0){o().polygonSides=Math.clamp(o().polygonSides+step,BrushMath.MIN_SIDES,BrushMath.MAX_SIDES);return true;}
         }
         if(toolActive&&ToolHints.brush(o().tool)&&(event.modifiers()&7)==0&&(event.key()==GLFW.GLFW_KEY_LEFT_BRACKET||event.key()==GLFW.GLFW_KEY_RIGHT_BRACKET)){ // [ and ] shrink and grow the brush
-            o().radius=Math.clamp(o().radius+(event.key()==GLFW.GLFW_KEY_RIGHT_BRACKET?1:-1),1,BrushMath.MAX_RADIUS);return true;
+            o().radius=Math.clamp(o().radius+(event.key()==GLFW.GLFW_KEY_RIGHT_BRACKET?1:-1),1,dev.craftium.core.ShapeLimits.maxRadius(o()));return true;
         }
         for(Action binding:Action.values())if(!EditorBindings.get(binding).mouse()&&EditorBindings.matches(binding,event)&&perform(binding))return true;
         if(event.key()==GLFW.GLFW_KEY_BACKSPACE&&(event.modifiers()&7)==0){perform(Action.DELETE);return true;}

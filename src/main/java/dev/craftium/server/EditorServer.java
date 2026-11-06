@@ -370,7 +370,7 @@ public final class EditorServer {
                     for(Point p:s.selection.points()){plan.validate(p);source.put(p,BlockSnapshot.capture(player.level(),EditPlanner.pos(p)));}
                     if(r.action().equals("move"))for(Point p:source.keySet())plan.put(p,Blocks.AIR.defaultBlockState());
                     int count=r.action().equals("stack")?o.copies:1;
-                    if((long)source.size()*count>Selection.LIMIT)throw new IllegalArgumentException("Stack exceeds 131,072 blocks");
+                    if((long)source.size()*count>Selection.LIMIT)throw new IllegalArgumentException("Stack exceeds "+String.format("%,d",Selection.LIMIT)+" blocks");
                     for(int i=1;i<=count;i++)for(var e:source.entrySet()) {
                         var p=e.getKey();if(e.getValue().state().isAir()&&!o.pasteAir)continue;
                         plan.put(p.add(o.offsetX*i,o.offsetY*i,o.offsetZ*i),e.getValue());
@@ -523,11 +523,11 @@ public final class EditorServer {
             BlockPos at=EditPlanner.pos(p);
             if(!player.level().hasChunk(p.x()>>4,p.z()>>4))throw new IllegalArgumentException("Selection reaches unloaded chunks");
             var snapshot=BlockSnapshot.capture(player.level(),at);bytes+=128+(snapshot.data()==null?0:snapshot.data().toString().length()*2);
-            if(bytes>32*1024*1024)throw new IllegalArgumentException("Clipboard exceeds 32 MiB; select a smaller area");
+            if(bytes>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Clipboard exceeds "+Selection.HISTORY_BYTES/1024/1024+" MiB; select a smaller area");
             next.put(p.subtract(min),snapshot);
         }
         var entities=o.copyEntities?ClipboardEntities.capture(player,s):new ClipboardEntities.Capture(List.of(),List.of());
-        for(var tag:entities.relative()){bytes+=tag.toString().length()*2;if(bytes>32*1024*1024)throw new IllegalArgumentException("Clipboard exceeds 32 MiB including entities");}
+        for(var tag:entities.relative()){bytes+=tag.toString().length()*2;if(bytes>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Clipboard exceeds "+Selection.HISTORY_BYTES/1024/1024+" MiB including entities");}
         s.clipboard.clear();s.clipboard.putAll(next);s.clipboardEntities.clear();s.clipboardEntities.addAll(entities.relative());
         s.clipboardOrigin=min;
         s.clipboardDirty=true;
@@ -571,7 +571,7 @@ public final class EditorServer {
                 ai.pendingEdit=null;ai.pendingDirty=true; // a new preview replaces the last, and stays gone if this one is refused
                 var edit=BuildPlanner.plan(player,ai,o);
                 if(edit.changes().isEmpty()){send(player,ai,"No matching blocks changed",false);return;}
-                if(edit.estimatedBytes()>32*1024*1024)throw new IllegalArgumentException("Edit exceeds the 32 MiB history budget; use a smaller build");
+                if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller build");
                 EditProtection.check(player,edit);
                 ai.pendingEdit=edit;
                 send(player,ai,"AI preview ready: "+edit.changes().size()+" blocks",false);
@@ -599,7 +599,7 @@ public final class EditorServer {
             edit=edit.withSelection(change.with(Map.of("shape",s.shapeAtRequest),Map.of("shape","none")));
         }
         if(edit.changes().isEmpty() && edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()){var why=s.nothingChangedBecause;s.nothingChangedBecause=null;send(player,s,why==null?"No matching blocks changed":"No matching blocks changed: "+why,false);return;}
-        if(edit.estimatedBytes()>32*1024*1024)throw new IllegalArgumentException("Edit exceeds the 32 MiB history budget; use a smaller region");
+        if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller region");
         EditProtection.check(player,edit);
         if(s.confirmEdits&&!s.bypassConfirm){stage(player,s,edit);return;}
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");

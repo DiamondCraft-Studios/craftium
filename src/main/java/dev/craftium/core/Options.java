@@ -28,7 +28,9 @@ public final class Options {
     /** INSIDE grows the wall inward from the shape's edge, OUTSIDE outward, and CENTER puts the edge in the middle of it. */
     public enum StrokeAlign { INSIDE, CENTER, OUTSIDE }
     /** How far past the radius a hollow shape reaches because of where its wall is aligned: nothing for inside, the wall's thickness for outside. */
-    public int outlineShift() {
+    public int outlineShift() { return outlineShift(radius); }
+    /** As {@link #outlineShift()}, for a radius other than the one set. */
+    public int outlineShift(int radius) {
         if (!hollow) return 0;
         int t = Math.clamp(outlineThickness, 1, Math.max(1, radius));
         return strokeAlign == StrokeAlign.OUTSIDE ? t : strokeAlign == StrokeAlign.CENTER ? t / 2 : 0;
@@ -134,7 +136,7 @@ public final class Options {
     public int brushFlow=FLOW_DEFAULT;
     public int hoverPreviewLimit=5000;
     /** The most blocks any one placing tool may change, 1 to {@link #MAX_BLOCK_LIMIT}; an edit that would change more is refused. */
-    public static final int MAX_BLOCK_LIMIT=100_000;
+    public static final int MAX_BLOCK_LIMIT=Selection.LIMIT;
     public int blockLimit=MAX_BLOCK_LIMIT;
     public boolean selectUp=true,selectDown=true,selectHorizontal=true,selectCorners,includeNonSolid;
     public Noise noise=Noise.SIMPLEX;
@@ -294,6 +296,8 @@ public final class Options {
         if(pinned==null)pinned=new java.util.ArrayList<>();
         if(pinned.size()>256||pinned.stream().anyMatch(name->name==null||name.length()>64))throw new IllegalArgumentException("Invalid pinned properties");
         radius = Math.clamp(radius,1,BrushMath.MAX_RADIUS);
+        radius = Math.min(radius,ShapeLimits.maxRadius(this)); // a shape that would pass the block limit is held to the size that does not
+        if(shape!=null&&(shapeKind==null||shapeKind==ShapeKind.BRUSH)){var rows=ShapeSizes.rows(shape);ShapeSizes.fit(this,rows);ShapeSizes.fitBlocks(this,rows);}
         strength = Double.isFinite(strength) ? Math.clamp(strength,0.1,5) : 1;
         noiseScale = Double.isFinite(noiseScale) ? Math.clamp(noiseScale,1,64) : 8;
         density = Double.isFinite(density) ? Math.clamp(density,0,1) : 0.5;
