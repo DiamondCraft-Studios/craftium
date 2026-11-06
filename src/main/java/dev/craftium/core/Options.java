@@ -48,8 +48,10 @@ public final class Options {
     /** False: edit only the toggled blocks. True: edit everything but them. With none toggled the block mask does nothing. */
     /** Whether the toggled blocks only let blocks through (include, the default) or keep them out (exclude). Neither applies while {@link #maskOff} is set. */
     public boolean maskExclude;
-    /** Include and Exclude both switched off: the block mask is ignored altogether, whatever blocks are toggled. */
-    public boolean maskOff;
+    /** Whether holding a gizmo handle hides the others, so only the one being dragged is drawn. */
+    public boolean gizmoHideOthers=true;
+    /** Include and Exclude both switched off, as they start: the block mask is ignored altogether, whatever blocks are toggled. */
+    public boolean maskOff=true;
     /** Whether the tool masks (block mask, mask block, rules, script, height range and restrict to selection) also apply to the builder tools. */
     public boolean maskInBuilder;
     public String biome = "minecraft:plains";
