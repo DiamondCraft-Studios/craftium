@@ -17,8 +17,9 @@ final class OutlineShape {
     /**
      * Beyond these the outline is too detailed to draw every frame, so the shape falls back to its bounding box. Measured with the
      * selection draw-cost game test: a 100,000-block selection with about 25,000 edges and 18,000 faces still draws at 70 frames a
-     * second or more, and each thousand adds roughly a quarter of a millisecond, so these leave the box for selections that are
-     * far busier than anything a person selects on purpose.
+     * second or more. A thousand edges cost about a tenth of a millisecond and a thousand filled faces about a quarter, so a shape
+     * at both caps still runs at about 50 frames a second. Past the face cap only the fill is dropped; the box is for selections
+     * that are far busier than anything a person selects on purpose.
      */
     static final int DEFAULT_MAX_EDGES=40_000,DEFAULT_MAX_FACES=30_000;
     static int maxEdges=DEFAULT_MAX_EDGES,maxFaces=DEFAULT_MAX_FACES; // not final only so the draw-cost game test can lift them; nothing else changes them

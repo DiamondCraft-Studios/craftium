@@ -54,7 +54,9 @@ public final class SelectionDrawCostGameTest {
             new Shape("sphere r=31",()->sphere(31,false)),
             new Shape("hollow sphere r=40",()->sphere(40,true)),
             new Shape("terrain 100x100",()->terrain(100,2)),
-            new Shape("scatter 50^3 @80%",()->scatter(50,.8,6)));
+            new Shape("scatter 50^3 @80%",()->scatter(50,.8,6)),
+            new Shape("scatter 36^3 @50% (at cap)",()->scatter(36,.5,8)),     // close to the default edge cap: the busiest shape still drawn in full
+            new Shape("scatter 100^3 @10% (box)",()->scatter(100,.1,7)));    // 650,000 edges: far past the caps, so the box is what is left
         var report=new StringBuilder();
         report.append(String.format(Locale.ROOT,"%-24s %8s %8s %8s | %-26s %8s %8s %8s %8s %8s%n","shape","blocks","edges","faces","mode","fps","med ms","p95 ms","heap MB","gc ms"));
         c.runOnClient(mc->{mc.options.enableVsync().set(false);mc.options.framerateLimit().set(260);mc.options.inactivityFpsLimit().set(net.minecraft.client.InactivityFpsLimit.MINIMIZED);}); // vsync would round every frame to a multiple of 16.7 ms, and the AFK limit drops the game to 30 fps after a minute without input
@@ -62,21 +64,31 @@ public final class SelectionDrawCostGameTest {
         report.append("options: ").append(settings).append("\n");
         // The order is the shapes, then the two small ones again: if the small ones come back slow too, it is the machine or the game's frame cap, not the shape.
         var order=new ArrayList<>(shapes);order.add(new Shape("CONTROL cube 16^3",()->scatter(16,1,0)));order.add(new Shape("CONTROL sphere r=10",()->sphere(10,false)));
+        String only=System.getenv("CRAFTIUM_PERF_ONLY"); // optional: only the shapes whose name contains this, to repeat one measurement
+        if(only!=null&&!only.isBlank())order.removeIf(sh->!sh.name().contains(only)&&!sh.name().startsWith("CONTROL"));
         for(var shape:order){
             var points=new ArrayList<Point>();
             for(Point p:shape.make().get())points.add(new Point(p.x()+ox,p.y()+oy,p.z()+oz));
             String encoded=SelectionCodec.encode(points);
-            int[] counts=new int[2];long[] update=new long[1];
+            var counted=SelectionOutline.of(points); // here, on the test thread, so it does not stall the client while frames are timed
+            int[] counts={counted.edges().size(),counted.faces().size()};long[] update=new long[1];
+            c.runOnClient(mc->{OutlineShape.maxEdges=OutlineShape.DEFAULT_MAX_EDGES;OutlineShape.maxFaces=OutlineShape.DEFAULT_MAX_FACES;});
+            // Selecting it: the frames over the next 30 ticks show whether building the outline freezes the game. Then wait for it to be ready.
+            STAMPS.clear();
             c.runOnClient(mc->{
                 long t=System.nanoTime();
                 SelectionOverlay.update(encoded);
                 update[0]=System.nanoTime()-t;
-                var result=SelectionOutline.of(points);counts[0]=result.edges().size();counts[1]=result.faces().size();
             });
-            for(String mode:new String[]{"as now (box past caps)","full outline, silhouette","full outline, all edges"}){
-                boolean lift=!mode.startsWith("as now");
+            c.waitTicks(30);
+            double worst=0;{var s=new ArrayList<>(STAMPS);for(int i=1;i<s.size();i++)worst=Math.max(worst,(s.get(i)-s.get(i-1))/1e6);}
+            c.waitFor(mc->!SelectionOverlay.building(),2400);
+            // A shape this far past the caps would only be drawn in full by lifting them, which would stall the game, so it is only shown as it is.
+            String[] modes=counts[0]>200_000?new String[]{"default caps"}:new String[]{"default caps","full outline, silhouette","full outline, all edges"};
+            for(String mode:modes){
+                boolean lift=!mode.startsWith("default");
                 c.runOnClient(mc->{
-                    OutlineShape.maxEdges=lift?Integer.MAX_VALUE:8192;OutlineShape.maxFaces=lift?Integer.MAX_VALUE:4096;
+                    OutlineShape.maxEdges=lift?Integer.MAX_VALUE:OutlineShape.DEFAULT_MAX_EDGES;OutlineShape.maxFaces=lift?Integer.MAX_VALUE:OutlineShape.DEFAULT_MAX_FACES;
                     ClientState.options.selectionStyle=mode.contains("all edges")?Options.SelectionStyle.ALL_EDGES:Options.SelectionStyle.SILHOUETTE;
                 });
                 c.waitTicks(SETTLE_TICKS);
@@ -92,9 +104,9 @@ public final class SelectionDrawCostGameTest {
                 double seconds=stamps.size()<2?1:(stamps.get(stamps.size()-1)-stamps.get(0))/1e9;
                 report.append(String.format(Locale.ROOT,"%-24s %8d %8d %8d | %-26s %8.1f %8.1f %8.1f %8d %8d%n",shape.name(),points.size(),counts[0],counts[1],mode,(stamps.size()-1)/seconds,median,p95,heap,gc));
             }
-            report.append(String.format(Locale.ROOT,"%-24s update() on the client thread: %.1f ms%n",shape.name(),update[0]/1e6));
+            report.append(String.format(Locale.ROOT,"%-24s update() on the client thread: %.1f ms, worst frame in the 30 ticks after selecting: %.1f ms%n",shape.name(),update[0]/1e6,worst));
         }
-        c.runOnClient(mc->{OutlineShape.maxEdges=8192;OutlineShape.maxFaces=4096;ClientState.options.selectionStyle=Options.SelectionStyle.SILHOUETTE;});
+        c.runOnClient(mc->{OutlineShape.maxEdges=OutlineShape.DEFAULT_MAX_EDGES;OutlineShape.maxFaces=OutlineShape.DEFAULT_MAX_FACES;ClientState.options.selectionStyle=Options.SelectionStyle.SILHOUETTE;});
         System.out.println("CRAFTIUM_SELECTION_DRAW_COST\n"+report);
         try{java.nio.file.Files.writeString(java.nio.file.Path.of("selection-draw-cost.txt"),report.toString());}catch(java.io.IOException e){System.out.println("could not write report: "+e);}
     }
