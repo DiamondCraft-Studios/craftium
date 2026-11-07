@@ -33,7 +33,7 @@ export const NOT_RUNNING =
  * A bridge file without a number comes from a mod before the check existed, which is protocol 1.
  */
 export const BRIDGE_PROTOCOL = 2;
-const NEEDED_MOD = "0.10.0-beta.1";
+const NEEDED_MOD = "1.2.0-beta.1";
 
 export class Bridge {
   /** @param {{files?: string[], fetchImpl?: typeof fetch, timeoutMs?: number}} options */

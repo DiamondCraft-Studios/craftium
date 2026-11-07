@@ -14,7 +14,7 @@ const ENTRY = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src
 const TOKEN = "t0ken";
 
 /** A stand-in for the game's bridge that records requests and answers from a table. */
-async function fakeBridge(replies, info = { protocol: BRIDGE_PROTOCOL, version: "0.10.0-beta.1" }) {
+async function fakeBridge(replies, info = { protocol: BRIDGE_PROTOCOL, version: "1.2.0-beta.1" }) {
   const seen = [];
   const server = http.createServer((req, res) => {
     let body = "";
@@ -246,7 +246,7 @@ test("a mod older than the plugin is refused before any call, with what to updat
     const client = await connect(bridge.file);
     const result = await client.callTool({ name: "get_state", arguments: {} });
     assert.equal(result.isError, true);
-    assert.match(text(result), /older than this Craftium plugin.*0\.10\.0-beta\.1/);
+    assert.match(text(result), /older than this Craftium plugin.*1\.2\.0-beta\.1/);
     if (info.version) assert.match(text(result), /0\.9\.1-beta\.1/);
     assert.equal(bridge.seen.length, 0);
     await bridge.close();
