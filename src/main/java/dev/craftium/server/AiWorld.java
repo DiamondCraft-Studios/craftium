@@ -241,9 +241,10 @@ final class AiWorld {
     static java.util.List<String> warnings(net.minecraft.server.level.ServerLevel level, Session.Edit whole, Session.Edit added) {
         var planned = new java.util.HashMap<Point, net.minecraft.world.level.block.state.BlockState>();
         for (var change : whole.changes()) planned.put(change.pos(), change.after().state());
+        // A block in a chunk that is not loaded is unknown, not air: a torch backed by one is not warned about.
         java.util.function.Function<Point, net.minecraft.world.level.block.state.BlockState> at = p -> {
             var s = planned.get(p);
-            return s != null ? s : level.hasChunk(p.x() >> 4, p.z() >> 4) ? level.getBlockState(new net.minecraft.core.BlockPos(p.x(), p.y(), p.z())) : net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
+            return s != null ? s : level.hasChunk(p.x() >> 4, p.z() >> 4) ? level.getBlockState(new net.minecraft.core.BlockPos(p.x(), p.y(), p.z())) : null;
         };
         var halves = new java.util.LinkedHashMap<String, int[]>();
         var loose = new java.util.LinkedHashMap<String, int[]>();
@@ -263,19 +264,28 @@ final class AiWorld {
             }
             if (other != null) {
                 var partner = at.apply(other);
-                if (!partner.is(state.getBlock()) || partner.equals(state)) note(halves, id, p);
+                if (partner != null && !isOtherHalf(state, partner)) note(halves, id, p);
                 continue;
             }
             Point support = support(state, id, p);
             if (support != null) {
                 var below = at.apply(support);
-                if (below.isAir() || !below.getFluidState().isEmpty()) note(loose, id, p);
+                if (below != null && (below.isAir() || !below.getFluidState().isEmpty())) note(loose, id, p);
             }
         }
         var out = new java.util.ArrayList<String>();
         halves.forEach((id, n) -> out.add(n[0] + " " + id + " " + (n[0] == 1 ? "has" : "have") + " no other half (first at " + n[1] + " " + n[2] + " " + n[3] + "): set both halves, such as half=lower and half=upper"));
         loose.forEach((id, n) -> out.add(n[0] + " " + id + " " + (n[0] == 1 ? "has" : "have") + " nothing to stand on or hang from (first at " + n[1] + " " + n[2] + " " + n[3] + "), so the game will drop " + (n[0] == 1 ? "it" : "them")));
         return out;
+    }
+
+    /** Whether {@code partner} is the other half of the door, tall plant or bed {@code state} is: the same block, with the opposite half or part. */
+    private static boolean isOtherHalf(net.minecraft.world.level.block.state.BlockState state, net.minecraft.world.level.block.state.BlockState partner) {
+        if (!partner.is(state.getBlock())) return false;
+        var half = net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF;
+        if (state.hasProperty(half)) return partner.getValue(half) != state.getValue(half);
+        var part = net.minecraft.world.level.block.state.properties.BlockStateProperties.BED_PART;
+        return partner.getValue(part) != state.getValue(part);
     }
 
     private static void note(java.util.Map<String, int[]> found, String id, Point p) {
@@ -285,6 +295,8 @@ final class AiWorld {
     /** Where a block that hangs on something gets its support, or null for one that needs none. */
     private static Point support(net.minecraft.world.level.block.state.BlockState state, String id, Point p) {
         var FACING = net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING;
+        // A grindstone is attached to a face as a button is, but the game keeps it wherever it is put.
+        if (id.equals("grindstone")) return null;
         if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.ATTACH_FACE) && state.hasProperty(FACING)) {
             var face = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.ATTACH_FACE);
             var facing = state.getValue(FACING);
