@@ -26,6 +26,12 @@ import java.util.concurrent.*;
  */
 public final class AiBridge {
     static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("craftium").resolve("bridge.json");
+    /**
+     * What the bridge's tools understand, written to the bridge file so the MCP server can tell a player to update the mod or the plugin
+     * instead of failing on a tool the other side does not have. Bump it when a tool gains something the MCP server relies on.
+     * 2: preview summaries, get_state's world, build spec v2 (materials, mixes, roof, stairs, group).
+     */
+    public static final int PROTOCOL = 2;
     private static final int BODY_LIMIT = 1_000_000, READ_BLOCKS = 32_768, WAIT_SECONDS = 20;
     private static final Gson GSON = new Gson();
     private static final Object LOCK = new Object();
@@ -143,6 +149,8 @@ public final class AiBridge {
                 info.addProperty("port", socket.getLocalPort());
                 info.addProperty("token", token);
                 info.addProperty("pid", ProcessHandle.current().pid());
+                info.addProperty("protocol", PROTOCOL);
+                info.addProperty("version", ClientHandshake.version());
                 Path temp = FILE.resolveSibling("bridge.json.tmp");
                 Files.writeString(temp, GSON.toJson(info));
                 Files.move(temp, FILE, StandardCopyOption.REPLACE_EXISTING);

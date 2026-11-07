@@ -8,13 +8,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { candidateFiles, NOT_RUNNING } from "../src/bridge.js";
+import { BRIDGE_PROTOCOL, candidateFiles, NOT_RUNNING } from "../src/bridge.js";
 
 const ENTRY = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "index.js");
 const TOKEN = "t0ken";
 
 /** A stand-in for the game's bridge that records requests and answers from a table. */
-async function fakeBridge(replies) {
+async function fakeBridge(replies, info = { protocol: BRIDGE_PROTOCOL, version: "0.10.0-beta.1" }) {
   const seen = [];
   const server = http.createServer((req, res) => {
     let body = "";
@@ -30,7 +30,7 @@ async function fakeBridge(replies) {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const dir = await mkdtemp(path.join(os.tmpdir(), "craftium-mcp-"));
   const file = path.join(dir, "bridge.json");
-  await writeFile(file, JSON.stringify({ port: server.address().port, token: TOKEN }));
+  await writeFile(file, JSON.stringify({ port: server.address().port, token: TOKEN, ...info }));
   return {
     seen,
     file,
@@ -207,7 +207,7 @@ test("without a bridge file the error says how to start it", async () => {
 test("a stale file with nothing listening reads as the game not running", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "craftium-mcp-"));
   const file = path.join(dir, "bridge.json");
-  await writeFile(file, JSON.stringify({ port: 1, token: TOKEN }));
+  await writeFile(file, JSON.stringify({ port: 1, token: TOKEN, protocol: BRIDGE_PROTOCOL }));
   const client = await connect(file);
   const result = await client.callTool({ name: "get_state", arguments: {} });
   assert.equal(result.isError, true);
@@ -218,11 +218,35 @@ test("a stale file with nothing listening reads as the game not running", async 
 test("a refused token tells the player to restart the bridge", async () => {
   const bridge = await fakeBridge({});
   const { port } = JSON.parse(await readFile(bridge.file, "utf8"));
-  await writeFile(bridge.file, JSON.stringify({ port, token: "wrong" }));
+  await writeFile(bridge.file, JSON.stringify({ port, token: "wrong", protocol: BRIDGE_PROTOCOL }));
   const client = await connect(bridge.file);
   const result = await client.callTool({ name: "get_state", arguments: {} });
   assert.equal(result.isError, true);
   assert.match(text(result), /refused/);
+  await bridge.close();
+});
+
+test("a mod older than the plugin is refused before any call, with what to update", async () => {
+  for (const info of [{}, { protocol: 1, version: "0.9.1-beta.1" }]) {
+    const bridge = await fakeBridge({ get_state: { ok: true } }, info);
+    const client = await connect(bridge.file);
+    const result = await client.callTool({ name: "get_state", arguments: {} });
+    assert.equal(result.isError, true);
+    assert.match(text(result), /older than this Craftium plugin.*0\.10\.0-beta\.1/);
+    if (info.version) assert.match(text(result), /0\.9\.1-beta\.1/);
+    assert.equal(bridge.seen.length, 0);
+    await bridge.close();
+  }
+});
+
+test("a mod newer than the plugin still works, and get_state says the plugin is behind", async () => {
+  const bridge = await fakeBridge({ get_state: { ok: true, inWorld: true }, undo: { ok: true } }, { protocol: BRIDGE_PROTOCOL + 1, version: "9.9.9" });
+  const client = await connect(bridge.file);
+  const state = await client.callTool({ name: "get_state", arguments: {} });
+  assert.equal(state.isError, undefined);
+  assert.match(JSON.parse(text(state)).pluginOutdated, /update the plugin/);
+  const undo = await client.callTool({ name: "undo", arguments: {} });
+  assert.equal(JSON.parse(text(undo)).pluginOutdated, undefined);
   await bridge.close();
 });
 
