@@ -31,6 +31,7 @@ public final class EditorScreen extends CraftiumScreen {
     private long lastUse;
     private double pointerX,pointerY;
     private BlockHitResult lastHit;
+    private double[] hitKey;
     private final List<LassoSelection.Pixel> lasso=new ArrayList<>();
     private static String drawingPanel="";
     private String draggedPanel="";
@@ -1360,7 +1361,14 @@ public final class EditorScreen extends CraftiumScreen {
     private void wrap(Gfx g,String text,int x,int y,int width,int color,int maxLines){int line=0;for(var row:font.split(Component.literal(text),width)){if(line>=maxLines)break;g.text(font,row,x,y+line*11,color,false);line++;}if(scrollActive)scrollContent=Math.max(scrollContent,y+line*11);}
     private String nice(String name){String s=name.toLowerCase(Locale.ROOT).replace('_',' ');return Character.toUpperCase(s.charAt(0))+s.substring(1);}
     public BlockHitResult target(){
-        if(inViewport(pointerX/scale,pointerY/scale))lastHit=CraftiumClient.raycast(pointerX,pointerY);
+        if(inViewport(pointerX/scale,pointerY/scale)){
+            // Called several times a frame (panels, previews, gizmos), each time for the same ray: cast it once per pointer, camera and game tick.
+            var level=minecraft.level;var camera=dev.craftium.client.compat.ClientCompat.camera(minecraft);
+            long tick=level==null?0:level.getGameTime();
+            var eye=camera.position();var look=dev.craftium.client.compat.ClientCompat.ray(camera,0,0);
+            var key=new double[]{pointerX,pointerY,eye.x,eye.y,eye.z,look.x,look.y,look.z,tick};
+            if(!java.util.Arrays.equals(key,hitKey)){hitKey=key;lastHit=CraftiumClient.raycast(pointerX,pointerY);}
+        }
         return lastHit;
     }
     /** Opens the named menu of the bar; the game tests use it to capture a dropdown. */

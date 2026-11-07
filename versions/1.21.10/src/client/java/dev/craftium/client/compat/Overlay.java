@@ -53,7 +53,7 @@ public final class Overlay {
     /** Registers the frame callback that draws the published batch, and clears it on disconnect. */
     public static void install(){
         WorldRenderEvents.END_MAIN.register(Overlay::draw);
-        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{building.clear();shown=List.of();pendingFrame=frame=null;});
+        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{building.clear();shown=List.of();pendingFrame=frame=null;LOOSE.clear();});
     }
 
     public static Scope begin(Minecraft mc){building.clear();pendingFrame=null;return ()->{shown=List.copyOf(building);frame=pendingFrame;};}
@@ -301,6 +301,23 @@ public final class Overlay {
         }
     }
 
+    /** The sides of the block at {@code pos} that show from a camera ({@code dx},{@code dy},{@code dz}) from its centre: facing it, not touching another ghost block and not covered as in the world. One bit per {@link Direction#ordinal()}. */
+    private static int visibleSides(net.minecraft.world.level.BlockGetter level,java.util.Set<BlockPos> placed,BlockPos pos,double dx,double dy,double dz){
+        int turned=facingMask(dx,dy,dz),mask=0;
+        if(turned==0)return 0;
+        for(Direction face:FACES)if((turned>>face.ordinal()&1)!=0&&!placed.contains(pos.relative(face))&&!hidden(level,pos,face))mask|=1<<face.ordinal();
+        return mask;
+    }
+    /** Whether a block state has quads that belong to no side (a flower, say). Worked out once per state, because it only depends on the model. */
+    private static final java.util.Map<net.minecraft.world.level.block.state.BlockState,Boolean> LOOSE=new java.util.IdentityHashMap<>();
+    private static boolean hasLooseQuads(Minecraft mc,net.minecraft.world.level.block.state.BlockState state,BlockPos pos){
+        var known=LOOSE.get(state);
+        if(known!=null)return known;
+        var random=RandomSource.create(state.getSeed(pos));
+        boolean loose=false;for(var part:mc.getBlockRenderer().getBlockModel(state).collectParts(random))if(!part.getQuads(null).isEmpty())loose=true;
+        LOOSE.put(state,loose);return loose;
+    }
+
     private static void blocks(WorldRenderContext context,Minecraft mc,View view,Blocks ghost){
         if(ghost.cached&&ghost.states!=null){cachedBlocks(context,mc,view,ghost);return;}
         var level=mc.level;
@@ -318,9 +335,12 @@ public final class Overlay {
                 if(tints[index]==-2){int t=ClientCompat.blockTint(mc,state,pos,index);tints[index]=t==-1?0xFFFFFF:t&0xFFFFFF;}
                 return tints[index];
             };
+            double dx=view.eye.x-pos.getX()-.5,dy=view.eye.y-pos.getY()-.5,dz=view.eye.z-pos.getZ()-.5;
+            // Most blocks of a big ghost are buried or turned away: decide that from the sides alone, before any model or transform is touched.
+            int visible=visibleSides(level,ghost.placed,pos,dx,dy,dz);
+            if(visible==0&&!hasLooseQuads(mc,state,pos))continue;
             random.setSeed(state.getSeed(pos));
             var parts=mc.getBlockRenderer().getBlockModel(state).collectParts(random);
-            double dx=view.eye.x-pos.getX()-.5,dy=view.eye.y-pos.getY()-.5,dz=view.eye.z-pos.getZ()-.5;
             stack.pushPose();
             stack.translate(pos.getX()+.5-view.eye.x,pos.getY()+.5-view.eye.y,pos.getZ()+.5-view.eye.z);
             float grow=ghostScale(dx,dy,dz);
@@ -330,8 +350,7 @@ public final class Overlay {
             for(var part:parts){
                 for(var quad:part.getQuads(null))if(facing(quad.direction(),dx,dy,dz,0)){int t=tintOf.applyAsInt(quad.tintIndex());consumer.putBulkData(pose,quad,r*(t>>16&255)/255f,g*(t>>8&255)/255f,b*(t&255)/255f,a,LightTexture.FULL_BRIGHT,OverlayTexture.NO_OVERLAY);}
                 for(Direction face:FACES){
-                    // Only the outer surface: not a side that touches another ghost, is covered as in the world, or faces away.
-                    if(ghost.placed.contains(pos.relative(face))||hidden(level,pos,face)||!facing(face,dx,dy,dz,.5))continue;
+                    if((visible>>face.ordinal()&1)==0)continue; // only the outer surface: not a side that touches another ghost, is covered as in the world, or faces away
                     for(var quad:part.getQuads(face)){int t=tintOf.applyAsInt(quad.tintIndex());consumer.putBulkData(pose,quad,r*(t>>16&255)/255f,g*(t>>8&255)/255f,b*(t&255)/255f,a,LightTexture.FULL_BRIGHT,OverlayTexture.NO_OVERLAY);}
                 }
             }
