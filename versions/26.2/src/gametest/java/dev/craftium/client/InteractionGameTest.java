@@ -144,6 +144,15 @@ public final class InteractionGameTest {
         all.add(new Scenario("stroke_smooth_builds_on_release", Tool.SMOOTH, o -> { o.confirmEdits = true; o.radius = 3; }, null, false, d -> d.drag(e, a, c), null));
         all.add(new Scenario("stroke_draw_builds_on_release_without_enter_to_build", Tool.FREEHAND_DRAW, o -> { o.confirmEdits = true; o.enterToBuild = false; o.radius = 2; o.block = "minecraft:andesite"; }, null, false, d -> d.drag(e, a, c), null));
         all.add(new Scenario("stroke_modify_drag_does_not_build", Tool.MODIFY, o -> { o.confirmEdits = true; o.modifyMode = Options.ModifyMode.TRANSLATE_COPIES; o.copies = 2; o.offsetX = -6; o.offsetY = 0; o.offsetZ = 5; }, null, true, d -> d.drag(structureTop, a), null));
+        // The click that asks first: Escape declines it, with the warnings off it builds at once, and a held button never repeats it.
+        all.add(new Scenario("extrude_large_click_declined", Tool.EXTRUDE, o -> { o.confirmEdits = false; o.extrudeCount = 2; o.block = "minecraft:andesite"; o.largeSelectionWarnings = true; o.hoverPreviewLimit = 1; }, slab, false,
+            d -> { d.click(top); d.key(GLFW_KEY_ESCAPE, 0); }, null));
+        all.add(new Scenario("extrude_large_click_without_warnings", Tool.EXTRUDE, o -> { o.confirmEdits = false; o.extrudeCount = 2; o.block = "minecraft:andesite"; o.largeSelectionWarnings = false; o.hoverPreviewLimit = 1; }, slab, false,
+            d -> d.click(top), "extrude_platform"));
+        all.add(new Scenario("extrude_drag_does_not_repeat", Tool.EXTRUDE, o -> { o.confirmEdits = false; o.extrudeCount = 1; o.block = "minecraft:andesite"; }, slab, false,
+            d -> d.drag(top, new Point(1, 13, 0), new Point(2, 13, 1)), null));
+        all.add(new Scenario("floodfill_drag_does_not_repeat", Tool.FLOODFILL, o -> { o.confirmEdits = false; o.blockLimit = 60; o.block = "minecraft:andesite"; o.floodUp = false; o.floodDown = false; o.floodHorizontal = true; }, slab, false,
+            d -> d.drag(top, new Point(1, 13, 0), new Point(2, 13, 1)), null));
         // A stroke, and undoing it.
         all.add(new Scenario("painter_stroke", Tool.PAINTER, o -> { o.confirmEdits = false; o.radius = 2; o.block = "minecraft:andesite"; }, null, false, d -> d.drag(e, a, c), null));
         all.add(new Scenario("painter_click_then_undo", Tool.PAINTER, o -> { o.confirmEdits = false; o.radius = 3; o.block = "minecraft:andesite"; }, null, false, d -> { d.click(a); d.key('Z', 2); }, null));
