@@ -337,12 +337,15 @@ public final class AiBridge {
     /** Sends one editor request from the game thread and waits for the server's reply to it. */
     private static JsonObject request(String name, Runnable send) throws Exception {
         var reply = new CompletableFuture<Packets.Status>();
+        // A new preview is described by the server just before its status (see AiWorld.previewSummary); a server from before that sends none.
+        var summary = name.equals("ai_build_preview") ? new CompletableFuture<String>() : null;
         pace();
         onClient(() -> {
             var mc = Minecraft.getInstance();
             if (mc.player == null || mc.level == null) throw new IllegalStateException("Not in a world");
             if (!CraftiumClient.supported()) throw new IllegalStateException("This world has no Craftium on the server; install it there to edit");
             awaiting = reply;
+            if (summary != null) awaitingData = summary;
             send.run();
             return null;
         });
@@ -353,13 +356,23 @@ public final class AiBridge {
                 var out = new JsonObject();
                 out.addProperty("ok", !status.error());
                 out.addProperty(status.error() ? "error" : "message", status.message());
-                out.add("state", state());
+                if (!status.error() && summary != null && summary.isDone() && !summary.isCompletedExceptionally()) {
+                    var preview = JsonParser.parseString(summary.join()).getAsJsonObject();
+                    preview.remove("ok");
+                    preview.remove("kind");
+                    out.add("preview", preview);
+                }
+                var state = state();
+                out.add("state", state);
+                if (status.error() && summary != null && state.has("previewBlocks") && state.get("previewBlocks").getAsInt() > 0)
+                    out.addProperty("previewKept", "The spec was refused, so nothing changed: your earlier preview (" + state.get("previewBlocks").getAsInt() + " blocks) is still waiting. Fix the spec and call preview_build again.");
                 return out;
             });
         } catch (ExecutionException e) {
             throw new IllegalStateException(e.getMessage());
         } finally {
             if (awaiting == reply) awaiting = null;
+            if (summary != null && awaitingData == summary) awaitingData = null;
         }
     }
 

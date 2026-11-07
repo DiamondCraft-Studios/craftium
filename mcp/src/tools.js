@@ -186,6 +186,8 @@ export const TOOLS = [
     title: "Preview a build",
     description:
       "Shows a build as a ghost preview at the world coordinates its spec names, without changing the world, replacing any earlier preview. Nothing needs to be selected, and the build can be anywhere in the world the player's dimension reaches. " +
+      'The reply\'s "preview" says what the spec made: blocks placed and cleared, the box they fill (min, max, size), the chunks it reaches, and the commonest blocks with how the ones that face a way are turned (a gable roof has two facings in equal numbers). Check it first: it often shows a mistake without a render. ' +
+      "If the spec is refused, the error names what to fix and your earlier preview stays waiting (previewKept). " +
       "The game draws only part of a very big preview. The reply's state says so (previewTruncated, previewWarning): the rest is still built when you apply it, so build in smaller stages if you need to see all of it. Describe the build as a spec of primitives.\n\n" + BUILD_SPEC_GUIDE,
     inputSchema: {
       type: "object",

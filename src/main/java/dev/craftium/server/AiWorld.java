@@ -189,6 +189,33 @@ final class AiWorld {
         return text;
     }
 
+    /**
+     * What a preview that was just made holds (see {@link dev.craftium.core.PreviewSummary}), sent with the reply to preview_build so the AI
+     * learns where the build went and what it is made of without another request. A change that keeps the block as it was is left out, as
+     * the ghost and get_preview_blocks leave it out.
+     */
+    static String previewSummary(Session.Edit edit) {
+        var summary = new dev.craftium.core.PreviewSummary();
+        var names = new java.util.IdentityHashMap<net.minecraft.world.level.block.Block, String>();
+        for (var change : edit.changes()) {
+            if (change.before().state() == change.after().state() && change.after().data() == null) continue;
+            var state = change.after().state();
+            var at = change.pos();
+            String facing = null;
+            for (var property : state.getProperties())
+                if (property.getName().equals("facing")) { facing = facing(state, property); break; }
+            summary.add(at.x(), at.y(), at.z(), names.computeIfAbsent(state.getBlock(), b -> net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(b).toString()), facing, state.isAir());
+        }
+        var out = summary.toJson();
+        out.addProperty("ok", true);
+        out.addProperty("kind", "previewSummary");
+        return out.toString();
+    }
+
+    private static <T extends Comparable<T>> String facing(net.minecraft.world.level.block.state.BlockState state, net.minecraft.world.level.block.state.properties.Property<T> property) {
+        return property.getName(state.getValue(property));
+    }
+
     /** Fills {@code ids} with the world's blocks in the box, chunk by chunk, the world border and height limits reading as outside the world. */
     private static void fillFromWorld(ServerLevel level, Palette palette, int[] ids, int x0, int y0, int z0, int x1, int y1, int z1) {
         int sx = x1 - x0 + 1, sz = z1 - z0 + 1, minY = level.getMinY(), maxY = minY + level.getHeight();
