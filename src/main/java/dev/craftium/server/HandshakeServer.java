@@ -10,7 +10,7 @@ public final class HandshakeServer {
     public static void received(ServerPlayer player,String json){
         var hello=Handshake.read(json);
         String problem=Handshake.problem(hello,false);
-        if(problem==null){Handshake.accept(player.getUUID());return;}
+        if(problem==null){Handshake.accept(player.getUUID(),hello);return;}
         Handshake.refuse(player.getUUID(),problem);
         player.sendSystemMessage(Component.literal("Craftium: "+problem));
         org.slf4j.LoggerFactory.getLogger("Craftium").warn("{} has Craftium {} (protocol {}), the server speaks protocol {}",player.getUUID(),hello.version(),hello.protocol(),Handshake.PROTOCOL);

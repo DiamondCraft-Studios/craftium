@@ -23,7 +23,12 @@ public final class ModifyMath {
         return switch(axis){case X->new Geometry.Vector(v.x(),v.y()*factor,v.z()*factor);case Y->new Geometry.Vector(v.x()*factor,v.y(),v.z()*factor);case Z->new Geometry.Vector(v.x()*factor,v.y()*factor,v.z());};
     }
     /** How far out the sweep ends, as a multiple of where it starts: 1 keeps the radius, 2 ends twice as far from the anchor. Only turning modes with Add Translation on use it. */
-    public static double expansion(Options o){return o.modifyTranslate?Math.clamp(o.modifyTranslateScale,MIN_EXPANSION,MAX_EXPANSION):1;}
+    public static double expansion(Options o){return o.modifyTranslate&&expansionSupported?Math.clamp(o.modifyTranslateScale,MIN_EXPANSION,MAX_EXPANSION):1;}
+    /**
+     * False in a client whose server does not list {@link Handshake#MODIFY_EXPANSION}: the server would not widen the sweep, so the preview
+     * does not either. Always true on a server.
+     */
+    public static volatile boolean expansionSupported=true;
     public static final double MIN_EXPANSION=.1,MAX_EXPANSION=8;
     private static double lerp(double a,double b,double t){return a+(b-a)*t;}
     /** Whether the mode turns around the block under the cursor, which is what the guide circles are drawn about. */

@@ -66,7 +66,7 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
     @EventHandler public void tickEnd(com.destroystokyo.paper.event.server.ServerTickEndEvent event){
         for(Player p:getServer().getOnlinePlayers()){var nms=((CraftPlayer)p).getHandle();if(EditorServer.noClip(nms))nms.noPhysics=true;}
     }
-    @EventHandler public void quit(PlayerQuitEvent event){connections.remove(event.getPlayer().getUniqueId());Handshake.accept(event.getPlayer().getUniqueId());EditorServer.disconnect(((CraftPlayer)event.getPlayer()).getHandle());}
+    @EventHandler public void quit(PlayerQuitEvent event){connections.remove(event.getPlayer().getUniqueId());Handshake.forget(event.getPlayer().getUniqueId());EditorServer.disconnect(((CraftPlayer)event.getPlayer()).getHandle());}
     private void hello(Player player){if(player.isOnline()&&player.getListeningPluginChannels().contains(BridgeCodec.CHANNEL)){connections.computeIfAbsent(player.getUniqueId(),id->new Connection());enqueue(player,"hello",Handshake.write(getPluginMeta().getVersion()));}}
     private void tick(){
         EditorServer.tick(nativeServer);
@@ -95,7 +95,7 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
     /** The client's own hello: a protocol this server cannot read is named to the player and its edits are refused until it reconnects updated. */
     private void clientHello(Player player,String data){
         var hello=Handshake.read(data);String problem=Handshake.problem(hello,false);
-        if(problem==null){Handshake.accept(player.getUniqueId());return;}
+        if(problem==null){Handshake.accept(player.getUniqueId(),hello);return;}
         Handshake.refuse(player.getUniqueId(),problem);error(player,problem);
         getLogger().warning(player.getName()+" has Craftium "+hello.version()+" (protocol "+hello.protocol()+"), this server speaks protocol "+Handshake.PROTOCOL);
     }

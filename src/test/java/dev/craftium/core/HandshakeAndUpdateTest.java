@@ -9,11 +9,11 @@ class HandshakeAndUpdateTest {
         assertNull(Handshake.problem(Handshake.read(Handshake.write("0.9.1-beta.1")),true));
     }
     @Test void aNewerServerAsksTheClientToUpdate(){
-        var problem=Handshake.problem(new Handshake.Hello(Handshake.PROTOCOL+1,"1.0.0"),true);
+        var problem=Handshake.problem(new Handshake.Hello(Handshake.PROTOCOL+1,"1.0.0",null),true);
         assertNotNull(problem);assertTrue(problem.contains("Update the client"),problem);
     }
     @Test void aNewerClientAsksTheServerToUpdate(){
-        var problem=Handshake.problem(new Handshake.Hello(Handshake.PROTOCOL+1,"1.0.0"),false);
+        var problem=Handshake.problem(new Handshake.Hello(Handshake.PROTOCOL+1,"1.0.0",null),false);
         assertTrue(problem.contains("Update the server"),problem);
     }
     @Test void anOlderBuildsPlainSentenceIsNotAHello(){
@@ -21,7 +21,29 @@ class HandshakeAndUpdateTest {
     }
     @Test void refusalIsRememberedUntilAccepted(){
         var id=UUID.randomUUID();Handshake.refuse(id,"no");assertEquals("no",Handshake.refused(id));
-        Handshake.accept(id);assertNull(Handshake.refused(id));
+        Handshake.accept(id,null);assertNull(Handshake.refused(id));
+    }
+
+    @Test void aHelloCarriesTheBuildsCapabilities(){
+        var hello=Handshake.read(Handshake.write("0.9.2-beta.1"));
+        assertTrue(hello.has(Handshake.MODIFY_EXPANSION));assertFalse(hello.has("something-newer"));
+        assertTrue(hello.missingFrom(Handshake.CAPABILITIES).isEmpty());
+    }
+    @Test void aHelloFromBeforeTheListHasNoCapabilities(){
+        var old=Handshake.read("{\"protocol\":1,\"version\":\"0.9.1-beta.1\"}");
+        assertNotNull(old);assertFalse(old.has(Handshake.MODIFY_EXPANSION));
+        assertEquals(Handshake.CAPABILITIES,old.missingFrom(Handshake.CAPABILITIES));
+        assertNull(Handshake.problem(old,true),"still compatible, only without the optional features");
+    }
+    @Test void unknownCapabilitiesFromANewerPeerAreIgnored(){
+        var newer=Handshake.read("{\"protocol\":1,\"version\":\"2.0.0\",\"capabilities\":[\"modify-expansion\",\"from-the-future\"]}");
+        assertTrue(newer.has(Handshake.MODIFY_EXPANSION));assertTrue(newer.missingFrom(Handshake.CAPABILITIES).isEmpty());assertNull(Handshake.problem(newer,true));
+    }
+    @Test void theServerRemembersWhatEachClientSupports(){
+        var id=UUID.randomUUID();
+        assertFalse(Handshake.clientHas(id,Handshake.MODIFY_EXPANSION),"no hello, no capabilities");
+        Handshake.accept(id,Handshake.read(Handshake.write("0.9.2-beta.1")));assertTrue(Handshake.clientHas(id,Handshake.MODIFY_EXPANSION));
+        Handshake.forget(id);assertFalse(Handshake.clientHas(id,Handshake.MODIFY_EXPANSION));
     }
 
     private static final String RELEASES="""

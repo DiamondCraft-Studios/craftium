@@ -27,12 +27,17 @@ final class ClientHandshake {
     static void receive(String json,boolean bridge){
         server=Handshake.read(json);
         problem=Handshake.problem(server,true);
+        ModifyMath.expansionSupported=serverHas(Handshake.MODIFY_EXPANSION);
         if(problem!=null)ClientState.notify(problem);
         String hello=Handshake.write(version());
         if(bridge){for(byte[] frame:BridgeCodec.encode(Packets.JSON.toJson(new BridgeCodec.Message("hello",hello))))ClientPlayNetworking.send(new Packets.Bridge(frame));}
         else if(ClientPlayNetworking.canSend(Packets.Hello.TYPE))ClientPlayNetworking.send(new Packets.Hello(hello));
     }
-    static void disconnected(){server=null;problem=null;}
+    static void disconnected(){server=null;problem=null;ModifyMath.expansionSupported=true;}
+    /** Whether the server listed the capability. A server with no hello (an older build) lists none. */
+    static boolean serverHas(String capability){var hello=server;return hello!=null&&hello.has(capability);}
+    /** What this client can do that the server cannot, for the player to read, or empty when the server has it all. */
+    static String missing(){var hello=server;if(hello==null)return "";var gone=hello.missingFrom(Handshake.CAPABILITIES);return gone.isEmpty()?"":"the server lacks: "+String.join(", ",gone);}
 
     /** Looks for a newer release once per game session, unless {@code force}. Never blocks the game; any failure is silence. */
     static void checkForUpdates(boolean force){

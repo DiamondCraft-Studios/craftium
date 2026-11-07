@@ -312,9 +312,11 @@ public final class CraftiumClient implements ClientModInitializer {
         var options=ClientState.options;boolean colours=action.equals("autoshade")&&options.shadeAutomatic||action.equals("use")&&(options.script.contains("getBlockRGB")||options.script.contains("findClosestBlockToRGB"))||options.maskScript.contains("getBlockRGB")||options.maskScript.contains("findClosestBlockToRGB");options.scriptColours=colours?new java.util.ArrayList<>(BlockColours.snapshot()):new java.util.ArrayList<>();
         ClientAssets.expect(action);
         if(action.equals("select_box")||action.equals("lasso_select")||action.equals("use")&&ClientState.options.tool.selection()){ClientState.selectionPending=true;ClientState.selectingSince=System.currentTimeMillis();ClientState.selectionSizeBefore=ClientState.status.selectionSize();}
+        double scale=options.modifyTranslateScale;
+        if(!ClientHandshake.serverHas(Handshake.MODIFY_EXPANSION))options.modifyTranslateScale=1; // an older server would stretch the offset by it instead of widening the sweep
         try{String request=Packets.JSON.toJson(new Packets.Request(action,target,normal,ClientState.options,action.equals("use")||action.equals("builder_break")||action.equals("builder_place")||action.equals("place_stroke")?ClientState.strokeId:0));
             if(ClientPlayNetworking.canSend(Packets.Edit.TYPE))ClientPlayNetworking.send(new Packets.Edit(request));
-            else for(byte[] frame:BridgeCodec.encode(Packets.JSON.toJson(new BridgeCodec.Message("edit",request))))ClientPlayNetworking.send(new Packets.Bridge(frame));}finally{options.scriptColours=new java.util.ArrayList<>();}
+            else for(byte[] frame:BridgeCodec.encode(Packets.JSON.toJson(new BridgeCodec.Message("edit",request))))ClientPlayNetworking.send(new Packets.Bridge(frame));}finally{options.scriptColours=new java.util.ArrayList<>();options.modifyTranslateScale=scale;}
     }
     public static Point point(net.minecraft.core.BlockPos p){return new Point(p.getX(),p.getY(),p.getZ());}
     public static Point normal(BlockHitResult hit){var d=hit.getDirection();return new Point(d.getStepX(),d.getStepY(),d.getStepZ());}
