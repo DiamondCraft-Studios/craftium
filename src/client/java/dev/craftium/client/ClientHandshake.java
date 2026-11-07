@@ -34,6 +34,10 @@ final class ClientHandshake {
         else if(ClientPlayNetworking.canSend(Packets.Hello.TYPE))ClientPlayNetworking.send(new Packets.Hello(hello));
     }
     static void disconnected(){server=null;problem=null;ModifyMath.expansionSupported=true;}
+    /** Whether the player may move at any speed: the server skips its movement check, or there is no other server than this game's own. Otherwise a long step in one tick throws the player back. */
+    static boolean fastMovement(){return net.minecraft.client.Minecraft.getInstance().hasSingleplayerServer()||serverHas(Handshake.FAST_MOVEMENT);}
+    /** The longest step, in blocks per tick, that a server which checks movement lets through with room to spare; its limit is about ten. */
+    static final double SAFE_STEP=9;
     /** Whether the server listed the capability. A server with no hello (an older build) lists none. */
     static boolean serverHas(String capability){var hello=server;return hello!=null&&hello.has(capability);}
     /** What this client can do that the server cannot, for the player to read, or empty when the server has it all. */

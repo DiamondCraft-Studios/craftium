@@ -47,8 +47,6 @@ public final class ClientState {
     public static final long SELECTING_DELAY=250;
     public static boolean selecting(){long since=selectingSince;return since!=0&&System.currentTimeMillis()-since>SELECTING_DELAY&&System.currentTimeMillis()-since<120_000;}
     public static int selectionSizeBefore;
-    /** A selection this many blocks bigger than before is confirmed with the player first. */
-    public static final int LARGE_SELECTION=1024;
     /** The measurements the Ruler tool has made, each with a knob at both ends. */
     public static final List<Ruler> rulers=new ArrayList<>();
     /** The ruler picked in the Rulers panel or in the world, or null. */
