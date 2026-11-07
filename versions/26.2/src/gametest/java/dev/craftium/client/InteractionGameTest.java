@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.core.BrushMath;
 import dev.craftium.core.EditorControls.Action;
 import dev.craftium.core.Options;
 import dev.craftium.core.Point;
@@ -104,6 +105,19 @@ public final class InteractionGameTest {
             d -> { d.click(top); d.key(GLFW_KEY_ENTER, 0); }, "extrude_platform"));
         all.add(new Scenario("floodfill_large_click_confirmed", Tool.FLOODFILL, o -> { o.confirmEdits = false; o.blockLimit = 200; o.block = "minecraft:andesite"; o.floodUp = false; o.floodDown = false; o.floodHorizontal = true; o.largeSelectionWarnings = true; o.hoverPreviewLimit = 1; }, slab, false,
             d -> { d.click(top); d.key(GLFW_KEY_ENTER, 0); }, "floodfill"));
+        // Input that falls between the families: a click past the last one a tool takes, keys that mean something to some tools only, and a drag that carries.
+        all.add(new Scenario("slope_three_clicks", Tool.SLOPE, o -> { o.confirmEdits = false; o.radius = 4; o.strength = 2; }, null, false, d -> { d.click(e); d.click(c); d.click(f); }, null));
+        all.add(new Scenario("path_e_without_points_selects_elevation", Tool.PATH, o -> o.confirmEdits = false, null, false, d -> d.key('E', 0), null));
+        all.add(new Scenario("box_select_three_clicks", Tool.BOX_SELECT, o -> o.confirmEdits = false, null, false, d -> { d.click(e); d.click(c); d.click(f); }, null));
+        all.add(new Scenario("ruler_three_clicks", Tool.RULER, o -> o.confirmEdits = false, null, false, d -> { d.click(e); d.click(c); d.click(f); }, null));
+        all.add(new Scenario("shape_drag_carries", Tool.SHAPE, o -> { o.confirmEdits = false; o.radius = 3; o.block = "minecraft:andesite"; }, null, false, d -> { d.drag(e, a, c); d.key(GLFW_KEY_ENTER, 0); }, null));
+        all.add(new Scenario("shape_tilt_then_enter", Tool.SHAPE, o -> { o.confirmEdits = false; o.radius = 3; o.block = "minecraft:andesite"; o.shape = BrushMath.Shape.CYLINDER; }, null, false,
+            d -> { d.click(c); d.key('T', 2); d.key(GLFW_KEY_ENTER, 0); }, null));
+        all.add(new Scenario("freehand_select_drag", Tool.FREEHAND_SELECT, o -> { o.confirmEdits = false; o.radius = 2; }, null, false, d -> d.drag(e, a, c), null));
+        all.add(new Scenario("polygon_sides_keys", Tool.FREEHAND_DRAW, o -> { o.confirmEdits = false; o.radius = 3; o.shape = BrushMath.Shape.POLYGON; o.polygonSides = 5; o.block = "minecraft:andesite"; }, null, false,
+            d -> { d.key(GLFW_KEY_EQUAL, 0); d.key(GLFW_KEY_EQUAL, 0); d.key(GLFW_KEY_MINUS, 0); d.click(a); }, null));
+        all.add(new Scenario("bracket_keys_resize_brush", Tool.PAINTER, o -> { o.confirmEdits = false; o.radius = 4; o.block = "minecraft:andesite"; }, null, false,
+            d -> { d.key(GLFW_KEY_RIGHT_BRACKET, 0); d.key(GLFW_KEY_RIGHT_BRACKET, 0); d.key(GLFW_KEY_LEFT_BRACKET, 0); d.click(a); }, null));
         // A stroke, and undoing it.
         all.add(new Scenario("painter_stroke", Tool.PAINTER, o -> { o.confirmEdits = false; o.radius = 2; o.block = "minecraft:andesite"; }, null, false, d -> d.drag(e, a, c), null));
         all.add(new Scenario("painter_click_then_undo", Tool.PAINTER, o -> { o.confirmEdits = false; o.radius = 3; o.block = "minecraft:andesite"; }, null, false, d -> { d.click(a); d.key('Z', 2); }, null));
@@ -233,7 +247,7 @@ public final class InteractionGameTest {
             var s = ClientState.status;
             // The numbers in a message are left out: a tool that builds past the box the test captures (text, copies) reports fewer changes the second
             // time, because what it built outside the box is still there. The blocks inside the box are what is compared.
-            return "tool=" + o.tool + " nodes=" + o.nodes + " box=" + ClientState.boxCorners + " rulerPoints=" + ClientState.rulerPoints + " rulers=" + ClientState.rulers.size() + " shape=" + ShapeObject.active()
+            return "tool=" + o.tool + " radius=" + o.radius + " sides=" + o.polygonSides + " nodes=" + o.nodes + " box=" + ClientState.boxCorners + " rulerPoints=" + ClientState.rulerPoints + " rulers=" + ClientState.rulers.size() + " shape=" + ShapeObject.active()
                 + " placement=" + PlacementPreview.active() + " modifyAnchored=" + ModifyPreview.anchored() + " pending=" + ClientState.hasPending() + " selection=" + s.selectionSize()
                 + " annotations=" + (s.annotations() == null ? 0 : s.annotations().size()) + " annotationPoints=" + o.annotationPoints.size()
                 + " pivot=" + o.pivotSet + "@" + o.pivotX + "," + o.pivotY + "," + o.pivotZ + " error=" + s.error() + " message=" + s.message().replaceAll("\\d+", "#");
