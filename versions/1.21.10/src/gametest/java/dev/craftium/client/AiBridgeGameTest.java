@@ -101,6 +101,13 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(keptText.contains("deepslate_tile_stairs[facing=east,half=bottom") && keptText.contains("deepslate_tile_stairs[facing=west,half=top"), "each stair should keep its facing and half: " + keptText);
             require(!keptText.contains("spruce_stairs"), "nothing should stay spruce: " + keptText);
             require(call("get_state", "{}").getAsJsonObject("selection").get("size").getAsInt() == 8, "replace_selection must not change the selection");
+            // A find that names only some properties matches on those: the west-facing stairs are top-half, which is not the default state.
+            var west = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"spruce_stairs[facing=west]\",\"block\":\"stone_stairs\"}]}}");
+            require(west.get("ok").getAsBoolean() && west.getAsJsonObject("state").get("previewBlocks").getAsInt() == 4, "find with facing=west should match the 4 west-facing top stairs: " + west);
+            var east = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"spruce_stairs[facing=east,half=bottom]\",\"block\":\"stone_stairs\"}]}}");
+            require(east.getAsJsonObject("state").get("previewBlocks").getAsInt() == 4, "find with facing=east,half=bottom should match the 4 east-facing stairs: " + east);
+            var neither = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"spruce_stairs[facing=north]\",\"block\":\"stone_stairs\"}]}}");
+            require(neither.get("message").getAsString().contains("No matching blocks"), "a facing nothing has should match nothing: " + neither);
             var nothingSelected = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"obsidian\",\"block\":\"stone\"}]}}");
             require(nothingSelected.get("ok").getAsBoolean() && nothingSelected.get("message").getAsString().contains("No matching blocks"), "a find that matches nothing should say so: " + nothingSelected);
             call("cancel_preview", "{}");
