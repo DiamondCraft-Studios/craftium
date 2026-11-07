@@ -50,4 +50,16 @@ class StatusFitTest {
         o.addProperty("selectionData", "s".repeat(50_000));
         assertEquals("note", JsonParser.parseString(StatusFit.fit(o.toString(), 1_000, "note")).getAsJsonObject().get("message").getAsString());
     }
+
+    @Test void aListOfSharedPreviewsCanBeLeftOutToo() {
+        var o = JsonParser.parseString(status(1000, 1000, 1000)).getAsJsonObject();
+        var list = new com.google.gson.JsonArray();
+        for (int n = 0; n < 4; n++) { var p = new JsonObject(); p.addProperty("owner", "p" + n); p.addProperty("data", "d".repeat(500_000)); list.add(p); }
+        o.add("sharedAi", list); // 2 MB of other players' previews
+        String fitted = StatusFit.fit(o.toString(), 1_500_000, "too big");
+        var out = JsonParser.parseString(fitted).getAsJsonObject();
+        assertTrue(out.get("sharedAi").isJsonArray() && out.getAsJsonArray("sharedAi").isEmpty(), "the list is emptied, not turned into text");
+        assertEquals(1000, out.get("selectionData").getAsString().length(), "the small pieces are kept");
+        assertEquals(java.util.List.of("sharedAi"), StatusFit.left(o.toString(), fitted));
+    }
 }

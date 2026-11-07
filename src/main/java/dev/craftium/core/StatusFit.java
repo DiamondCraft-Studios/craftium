@@ -1,5 +1,6 @@
 package dev.craftium.core;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.util.*;
@@ -12,7 +13,7 @@ import java.util.*;
  */
 public final class StatusFit {
     /** Fields that carry data to draw, biggest first when dropped. The rest of a status is small. */
-    static final List<String> DRAWN = List.of("selectionData", "clipboardData", "clipboardGhost", "pendingData", "aiPendingData", "pulse", "restore");
+    static final List<String> DRAWN = List.of("selectionData", "clipboardData", "clipboardGhost", "pendingData", "aiPendingData", "sharedAi", "pulse", "restore");
 
     private StatusFit() {}
 
@@ -31,11 +32,12 @@ public final class StatusFit {
             int size = 0;
             for (String name : DRAWN) {
                 var value = status.get(name);
-                int length = value != null && value.isJsonPrimitive() ? value.getAsString().length() : 0;
+                int length = value == null ? 0 : value.isJsonPrimitive() ? value.getAsString().length() : value.isJsonArray() ? value.toString().length() : 0;
                 if (length > size) { size = length; biggest = name; }
             }
             if (biggest == null) break; // nothing left to leave out: the rest is not ours to shrink
-            status.addProperty(biggest, "");
+            if (status.get(biggest).isJsonArray()) status.add(biggest, new JsonArray()); // a list of previews is left empty: none to show
+            else status.addProperty(biggest, "");
             dropped.add(biggest);
         }
         if (!dropped.isEmpty()) {
@@ -54,7 +56,9 @@ public final class StatusFit {
         for (String name : DRAWN) {
             var a = before.get(name);
             var b = after.get(name);
-            if (a != null && a.isJsonPrimitive() && !a.getAsString().isEmpty() && (b == null || b.getAsString().isEmpty())) out.add(name);
+            boolean had = a != null && (a.isJsonPrimitive() ? !a.getAsString().isEmpty() : a.isJsonArray() && !a.getAsJsonArray().isEmpty());
+            boolean has = b != null && (b.isJsonPrimitive() ? !b.getAsString().isEmpty() : b.isJsonArray() && !b.getAsJsonArray().isEmpty());
+            if (had && !has) out.add(name);
         }
         return out;
     }

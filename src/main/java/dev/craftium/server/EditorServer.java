@@ -80,7 +80,7 @@ public final class EditorServer {
         player.setGameMode(mode);
         if(player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}
     }
-    public static void disconnect(ServerPlayer player){var s=SESSIONS.get(player.getUUID());if(s!=null)restoreMode(player,s);disconnect(player.getUUID());}
+    public static void disconnect(ServerPlayer player){var s=SESSIONS.get(player.getUUID());if(s!=null)restoreMode(player,s);disconnect(player.getUUID());refreshShared(player.level().getServer());}
     public static void disconnect(UUID id) {var session=SESSIONS.get(id);if(session!=null)HistoryStore.save(session);if(AnimatedRebuild.owned(id)){AnimatedRebuild.cancel(id);return;}if(job==null || !job.owner.equals(id)){SESSIONS.remove(id);AI_SESSIONS.remove(id);}}
     public static void flushHistory(MinecraftServer server){
         AnimatedRebuild.finishOnStop(server);
@@ -143,6 +143,7 @@ public final class EditorServer {
 
     /** How many builder commits wait behind the edit being applied; past this the newest is turned down as before. */
     private static final int QUEUE_LIMIT=8;
+    private static long PREVIEW_IDS;
     /** The most characters of status a packet carries, with room to spare: a packet may be at most 2 MiB, and the string is limited to 2,000,000 characters. */
     private static final int STATUS_LIMIT=1_500_000;
     private static boolean replaying;
@@ -172,7 +173,7 @@ public final class EditorServer {
             // The builder and the clipboard placement preview have their own confirmation, and dropping a block in the world is one, so they apply straight away.
             s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("bucket_fill")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm")||r.action().equals("stroke_end")||r.action().equals("use")&&(o.tool==Tool.EXTRUDE||o.tool==Tool.FLOODFILL)
                 ||!o.enterToBuild&&!r.action().equals("use"); // with Enter to build off, a stroke is staged until the button is let go (stroke_end) and any other action is built at once
-            if(r.action().equals("status")) { send(player,s,"Ready",false);return; }
+            if(r.action().equals("status")) { s.sharedKey=null;send(player,s,"Ready",false);return; }
             if(r.action().equals("capabilities")){send(player,s,"Builder capabilities synchronized",false);return;}
             if(r.action().equals("place_stroke")||r.action().equals("place_stroke_end")){s.placeStroke=r.action().equals("place_stroke")?r.strokeId():0;return;} // the game's own placements while the button is held; never throttled or answered
             if(r.action().equals("gamemode_editor")){ // sent as the editor opens and closes: no status message, unlike the buttons, and never throttled
@@ -567,6 +568,49 @@ public final class EditorServer {
         s.clipboardDirty=true;
         send(player,s,rotate?"Clipboard rotated 90°":"Clipboard mirrored on "+"XYZ".charAt(axis),false);
     }
+    /** The ghost data of an AI workspace's waiting preview, worked out when it is first wanted after a change. */
+    private static String aiData(Session ai){
+        if(ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit);ai.pendingDirty=false;}
+        return ai.pendingData;
+    }
+
+    /**
+     * The other players' AI previews this player is to be shown: those of players in the same dimension who are still connected, if this player may
+     * use the editor at all. Only players with Craftium receive a status, so they are the ones who see them.
+     */
+    private static List<SharedPreviews.Shown> sharedNow(ServerPlayer viewer){
+        boolean allowed;try{allowed=ServerPlatform.permitted(viewer,"status");}catch(IllegalArgumentException e){allowed=false;}
+        if(!allowed)return List.of();
+        var server=viewer.level().getServer();var all=new ArrayList<SharedPreviews.Entry>();
+        for(var entry:AI_SESSIONS.entrySet()){
+            var ai=entry.getValue();if(ai.pendingEdit==null)continue;
+            var owner=server.getPlayerList().getPlayer(entry.getKey());
+            all.add(new SharedPreviews.Entry(entry.getKey(),owner==null?"":owner.getName().getString(),owner==null?null:owner.level(),owner!=null,aiData(ai),ai.previewId));
+        }
+        return SharedPreviews.select(viewer.getUUID(),viewer.level(),all);
+    }
+
+    /** What to put in this player's status: the other players' AI previews if they differ from what was last sent, else null (unchanged). */
+    private static List<Packets.SharedPreview> sharedFor(ServerPlayer viewer,Session s){
+        var shown=sharedNow(viewer);var key=SharedPreviews.key(shown);
+        if(key.equals(s.sharedKey))return null;
+        s.sharedKey=key;
+        return shown.stream().map(one->new Packets.SharedPreview(one.owner(),one.data())).toList();
+    }
+
+    /**
+     * Tells every player whose view of other players' AI previews has changed. Called when an AI preview is made, applied or discarded, when its
+     * owner leaves, and now and then, which catches an owner who changed dimension without doing anything. It sends a status of its own kind
+     * ({@link Packets#sharedOnly}) that the client does not take for the reply to anything it asked, and sends nothing when nothing changed.
+     */
+    static void refreshShared(MinecraftServer server){
+        for(var player:server.getPlayerList().getPlayers()){
+            var s=SESSIONS.get(player.getUUID());if(s==null||!ServerPlatform.canSend(player))continue;
+            var shared=sharedFor(player,s);if(shared==null)continue;
+            ServerPlatform.send(player,new Packets.Update(StatusFit.fit(Packets.JSON.toJson(Packets.sharedOnly(shared)),STATUS_LIMIT,"")));
+        }
+    }
+
     /** The AI's workspace for this player, made when it is first needed, and started afresh when the player has changed dimension. */
     private static Session aiSession(ServerPlayer player){
         var ai=AI_SESSIONS.get(player.getUUID());
@@ -582,6 +626,10 @@ public final class EditorServer {
      * it touches the player's selection, preview or undo history, and none of it needs the player nearby.
      */
     private static void aiAction(ServerPlayer player,String action,Options o){
+        try{aiActionNow(player,action,o);}
+        finally{refreshShared(player.level().getServer());} // a preview made, refused, applied or discarded changes what other players are shown
+    }
+    private static void aiActionNow(ServerPlayer player,String action,Options o){
         var ai=aiSession(player);
         switch(action){
             case "ai_build_preview" -> {
@@ -592,7 +640,7 @@ public final class EditorServer {
                 if(edit.changes().isEmpty()){send(player,ai,"No matching blocks changed",false);return;}
                 if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller build");
                 EditProtection.check(player,edit);
-                ai.pendingEdit=edit;
+                ai.pendingEdit=edit;ai.previewId=++PREVIEW_IDS;
                 send(player,ai,"AI preview ready: "+edit.changes().size()+" blocks",false);
             }
             case "ai_apply" -> {
@@ -690,6 +738,7 @@ public final class EditorServer {
         send(player,s,backwards?"Undoing…":"Redoing…",false);
     }
     public static void tick(MinecraftServer server) {
+        if(!AI_SESSIONS.isEmpty()&&server.getTickCount()%20==0)refreshShared(server); // an owner who changed dimension, or whose build has applied, without doing anything else
         AnimatedRebuild.tick(server);
         if(++historyTicks%100==0)for(var session:SESSIONS.values())HistoryStore.save(session);
         var reachId=dev.craftium.compat.Compat.id("craftium","builder_reach");
@@ -843,7 +892,7 @@ public final class EditorServer {
         if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
         if(ai!=null&&ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit);ai.pendingDirty=false;}
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin);s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
+        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin,sharedFor(player,s),false);s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
         // A status that is too long for a packet cannot be written and would drop the player's connection, so one that is too big is sent without the largest drawn data.
         ServerPlatform.send(player,new Packets.Update(StatusFit.fit(Packets.JSON.toJson(status),STATUS_LIMIT,"Too big to draw: the selection or preview is still there, but not shown")));
     }
