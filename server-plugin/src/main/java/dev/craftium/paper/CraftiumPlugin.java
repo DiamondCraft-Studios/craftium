@@ -41,7 +41,7 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
         getServer().getScheduler().runTaskTimer(this,this::tick,1,1);
         for(Player p:getServer().getOnlinePlayers())hello(p);
         if(getConfig().getBoolean("check-for-updates",true))UpdateChecker.check(getPluginMeta().getVersion(),Bukkit.getMinecraftVersion()).thenAccept(found->found.ifPresent(r->getLogger().info("Craftium "+r.version()+" is out (this is "+UpdateChecker.clean(getPluginMeta().getVersion())+"): "+r.url()+" . Set check-for-updates: false in config.yml to stop this check.")));
-        getLogger().info("Craftium "+getPluginMeta().getVersion()+" ready on "+getServer().getName()+" "+Bukkit.getMinecraftVersion()+". Clients need Craftium 0.3 or newer.");
+        getLogger().info("Craftium "+getPluginMeta().getVersion()+" ready on "+getServer().getName()+" "+Bukkit.getMinecraftVersion()+". Clients need protocol "+Handshake.PROTOCOL+" (Craftium "+getPluginMeta().getVersion()+" or a build with the same protocol).");
     }
     private void loadSettings(){
         allowedWorlds=Set.copyOf(getConfig().getStringList("allowed-worlds"));
