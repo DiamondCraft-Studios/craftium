@@ -22,6 +22,8 @@ Changes since 0.9.1-beta.1.
 - The reply to a preview warns about doors and beds missing a half, torches, lanterns, signs and the like with nothing to hold them, and operations hidden entirely by later ones.
 - The AI plugin tells you when it and the mod are out of step, and which to update; a server whose Craftium is older gets a clear message when it cannot read a build.
 - A build that the server cannot draw no longer stops the server: the request fails, or the preview is dropped and logged.
+- An AI script is cancelled for the memory it allocated itself, not for garbage or other threads' growth, so the same spec behaves the same on a busy server; getHighestBlockYAt in it sees what the build has planned, and setting one block twice counts once against its cap.
+- Adding to a preview with a spec that only carves (air through a wall in open air) is kept and reported instead of dropped; an AI preview that cannot be drawn is refused with the reason when it is made; the warnings no longer miss two stacked lower door halves or warn about blocks backed by unloaded chunks or a grindstone; a world read on an older server says it is the smaller, older read.
 - Build specs can hold a Lua script that places blocks inside a box, for natural ground, rocks and trees. It runs in the same sandbox as the Lua brushes, only places inside its box, and builds the same each time from its seed.
 - The AI tab has a Redo AI build button (and a menu item), and HOW IT WORKS describes installing the Claude plugin in Claude Code or Cowork.
 
