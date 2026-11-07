@@ -28,6 +28,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             if("gallery".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.GalleryCapture.run(ctx,world);return;}
             if("handshake".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.HandshakeGameTest.run(ctx,world);return;}
             if("keybinds".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.KeybindGameTest.run(ctx,world);return;}
+            if("replaceghost".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.ReplaceGhostGameTest.run(ctx,world);return;}
             if("prediction".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.PredictionGameTest.run(ctx,world);return;}
             if("queue".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.BuilderQueueGameTest.run(ctx,world);return;}
             if("selection".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.SelectionOutlineGameTest.run(ctx,world);return;}
