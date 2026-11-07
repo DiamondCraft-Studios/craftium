@@ -354,6 +354,33 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(afterNothing.get("ok").getAsBoolean() && afterNothing.has("format") && afterNothing.get("previewBlocks").getAsInt() == 0, "an after read with no preview should read the world: " + afterNothing);
             System.out.println("CRAFTIUM_AI spec_v2_ok");
 
+            // A script op: it runs after the shapes and sees their blocks, places only inside its box, and with a fixed seed builds the same twice.
+            int scy = gy + 16;
+            String scriptBox = "\"from\":[" + gx + "," + scy + "," + z + "],\"to\":[" + (gx + 4) + "," + (scy + 3) + "," + (z + 4) + "]";
+            String code = "for x = x0, x1 do for z = z0, z1 do if getBlock(x, y0, z) == blocks.stone then "
+                + "setBlock(x, y0 + 1, z, getSimplexNoise(x / 4, 0, z / 4, seed) > 0.5 and 'grass_block' or blocks.dirt) end end end "
+                + "setBlock(x0 + math.random(0, 4), y0 + 2, z0 + math.random(0, 4), 'minecraft:gold_block') setBlock(x1 + 6, y0, z0, 'stone')";
+            String scripted = "{\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + gx + "," + scy + "," + z + "],\"to\":[" + (gx + 4) + "," + scy + "," + (z + 4) + "],\"block\":\"stone\"},"
+                + "{\"op\":\"script\"," + scriptBox + ",\"seed\":3,\"code\":" + new com.google.gson.JsonPrimitive(code) + "}]}}";
+            var script = call("preview_build", scripted);
+            require(script.get("ok").getAsBoolean(), "a script preview: " + script);
+            require(script.getAsJsonObject("preview").get("placed").getAsInt() == 25 + 25 + 1, "25 stone, 25 blocks on them and one gold block: " + script.get("preview"));
+            String scriptWarnings = script.getAsJsonObject("preview").has("warnings") ? script.getAsJsonObject("preview").getAsJsonArray("warnings").toString() : "";
+            require(scriptWarnings.contains("ops[1] (script) set 1 blocks outside its box"), "the block set outside the box should be dropped and named: " + scriptWarnings);
+            String first = call("get_preview_blocks", "{" + scriptBox + ",\"view\":\"only\"}").get("palette").toString();
+            require(first.contains("gold_block") && (first.contains("dirt") || first.contains("grass_block")), "the script's blocks should be in the preview: " + first);
+            String firstRead = call("get_preview_blocks", "{" + scriptBox + ",\"view\":\"only\",\"format\":\"runs\"}").toString();
+            call("preview_build", scripted);
+            String secondRead = call("get_preview_blocks", "{" + scriptBox + ",\"view\":\"only\",\"format\":\"runs\"}").toString();
+            require(firstRead.equals(secondRead), "the same spec should build the same: " + firstRead + " then " + secondRead);
+            var luaFails = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"script\"," + scriptBox + ",\"code\":\"local a = nil\nsetBlock(a.b, 0, 0, 'stone')\"}]}}");
+            require(!luaFails.get("ok").getAsBoolean() && luaFails.get("error").getAsString().startsWith("ops[0] (script): Lua: script:2"), "a Lua error should name the op and the line: " + luaFails);
+            var spins = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"script\"," + scriptBox + ",\"code\":\"while true do end\"}]}}");
+            require(!spins.get("ok").getAsBoolean() && spins.get("error").getAsString().contains("budget"), "an endless script should run out of budget: " + spins);
+            require(call("get_state", "{}").get("previewBlocks").getAsInt() == 51, "a failed script leaves the waiting preview as it was");
+            call("cancel_preview", "{}");
+            System.out.println("CRAFTIUM_AI script_ok");
+
             // A build far from the player, in ground nobody has loaded: previewed, applied and undone without anyone going there.
             int fx = block.get(0).getAsInt() + 3000, fz = block.get(2).getAsInt() + 3000;
             require(!ctx.computeOnClient(mc -> mc.level.getChunkSource().hasChunk(fx >> 4, fz >> 4)), "the far build site should not be loaded on the client");
