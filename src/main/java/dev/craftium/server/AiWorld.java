@@ -240,26 +240,36 @@ final class AiWorld {
         return reply(out);
     }
 
-    /** Block ids in loaded chunks, found without allocating per block: the chunk is kept between lookups and each block's name is made once. */
+    /**
+     * Block ids in loaded chunks, found without allocating per block. Lookups arrive in no particular order (the clear space above a
+     * selection is checked column by column in hash order), so the chunks are kept in a small direct-mapped cache and not just the last
+     * one: a selection spanning up to a thousand chunks finds its chunk in the cache almost every time, instead of asking the world, and
+     * the border, for it on every lookup.
+     */
     private static final class LoadedBlocks implements dev.craftium.core.SelectionReport.World {
+        private static final int SLOTS = 1024;
         private final ServerLevel level;
         private final BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
         private final java.util.IdentityHashMap<net.minecraft.world.level.block.Block, String> names = new java.util.IdentityHashMap<>();
-        private long chunkKey = Long.MIN_VALUE;
-        private net.minecraft.world.level.chunk.LevelChunk chunk;
-        private boolean inBorder;
+        private final long[] keys = new long[SLOTS];
+        private final net.minecraft.world.level.chunk.LevelChunk[] chunks = new net.minecraft.world.level.chunk.LevelChunk[SLOTS];
+        private final boolean[] inBorder = new boolean[SLOTS], filled = new boolean[SLOTS];
 
         LoadedBlocks(ServerLevel level) { this.level = level; }
 
         @Override public String at(int x, int y, int z) {
             if (y < level.getMinY() || y >= level.getMinY() + level.getHeight()) return BlockRuns.OUTSIDE;
-            long key = ((long) (x >> 4) << 32) | ((z >> 4) & 0xffffffffL); // our own key: ChunkPos's differs between Minecraft versions
-            if (key != chunkKey) {
-                chunkKey = key;
-                chunk = level.getChunkSource().getChunkNow(x >> 4, z >> 4);
-                inBorder = level.getWorldBorder().isWithinBounds(new ChunkPos(x >> 4, z >> 4));
+            int cx = x >> 4, cz = z >> 4;
+            long key = ((long) cx << 32) | (cz & 0xffffffffL); // our own key: ChunkPos's differs between Minecraft versions
+            int slot = (int) ((key * 0x9E3779B97F4A7C15L) >>> 54) & (SLOTS - 1);
+            if (!filled[slot] || keys[slot] != key) {
+                filled[slot] = true;
+                keys[slot] = key;
+                chunks[slot] = level.getChunkSource().getChunkNow(cx, cz);
+                inBorder[slot] = level.getWorldBorder().isWithinBounds(new ChunkPos(cx, cz));
             }
-            if (!inBorder) return BlockRuns.OUTSIDE;
+            if (!inBorder[slot]) return BlockRuns.OUTSIDE;
+            var chunk = chunks[slot];
             if (chunk == null) return null;
             var block = chunk.getBlockState(at.set(x, y, z)).getBlock();
             return names.computeIfAbsent(block, b -> net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(b).toString());

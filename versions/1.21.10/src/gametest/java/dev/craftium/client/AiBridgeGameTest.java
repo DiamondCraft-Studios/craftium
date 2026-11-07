@@ -143,6 +143,12 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(drawn.get("previewTruncated").getAsBoolean() && drawn.get("previewBlocksDrawn").getAsInt() <= 8192, "only the start of it should be drawn, and the AI told: " + drawn);
             System.out.println("CRAFTIUM_AI selection_large_edit ms=" + millionMs + " heapMB_before=" + heapBefore + " heapMB_after=" + heapAfter + " maxHeapMB=" + (Runtime.getRuntime().maxMemory() >> 20));
             call("cancel_preview", "{}");
+            // Describing that selection: every column's clear space is checked, in hash order, across about forty chunks.
+            long describeStart = System.nanoTime();
+            var describedLarge = call("read_selection", "{}");
+            long describeMs = (System.nanoTime() - describeStart) / 1_000_000;
+            require(describedLarge.get("ok").getAsBoolean() && describedLarge.get("selected").getAsInt() == 26 * 384 * 52 && describedLarge.has("above"), "read_selection of the large selection: " + describedLarge);
+            System.out.println("CRAFTIUM_AI read_selection_large ms=" + describeMs + " " + describedLarge.get("summary").getAsString());
             // Back to the player's own small selection, which the rest of this test checks the AI never touches.
             ctx.waitTicks(10);
             ctx.runOnClient(mc -> {
