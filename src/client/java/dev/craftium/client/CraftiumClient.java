@@ -114,6 +114,7 @@ public final class CraftiumClient implements ClientModInitializer {
         if(!ClientState.selectionPending)return;
         if(next.error()){ClientState.selectionPending=false;ClientState.selectingSince=0;return;}
         String message=next.message();
+        if(message.startsWith("First corner"))ClientState.selectingSince=0; // the first click of a box selects nothing yet, so there is nothing to wait for
         if(!(message.startsWith("Selected ")||message.startsWith("Lasso selected ")||message.startsWith("Magic Wand: ")))return;
         ClientState.selectionPending=false;ClientState.selectingSince=0;
         int added=next.selectionSize()-ClientState.selectionSizeBefore;
