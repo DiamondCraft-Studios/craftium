@@ -31,6 +31,8 @@ final class LuaBrush {
         globals.set("x",p.x());globals.set("y",p.y());globals.set("z",p.z());if(api!=null)api.position(p);
         try{return function.call();}
         catch(BudgetExceeded e){throw new IllegalArgumentException("Lua instruction or memory budget exceeded; operation cancelled");}
+        // A script that calls itself without end overflows the Java stack. That is an Error, which the request handler does not catch, so it ended the server.
+        catch(StackOverflowError e){throw new IllegalArgumentException("Lua call depth exceeded; operation cancelled");}
         catch(LuaError e){throw new IllegalArgumentException("Lua: "+e.getMessage());}
     }
     void paint(Point p){LuaValue result=evaluate(p);if(!result.isnil())plan.put(p,api.state(result));}
