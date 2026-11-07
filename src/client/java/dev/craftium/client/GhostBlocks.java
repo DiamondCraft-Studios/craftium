@@ -95,6 +95,9 @@ final class GhostBlocks {
             for(Point p:relative)places.add(new BlockPos(p.x()+origin.x(),p.y()+origin.y(),p.z()+origin.z()));
             cachedPlaces=places;cachedOrigin=origin;
         }
-        Overlay.blockStates(states,cachedPlaces,ai?AI_TINT:ClientState.options.previewTint);
+        // An AI preview can hold far more blocks than a frame can draw as models; the server sends the visible ones first, so the first few are the ones that show.
+        int models=ai?Math.min(states.size(),ClientState.options.aiGhostDrawLimit):states.size();
+        if(models<states.size())Overlay.blockStates(states.subList(0,models),cachedPlaces.subList(0,models),AI_TINT);
+        else Overlay.blockStates(states,cachedPlaces,ai?AI_TINT:ClientState.options.previewTint);
     }
 }

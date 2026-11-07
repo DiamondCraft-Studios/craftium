@@ -14,23 +14,52 @@ import java.util.*;
 final class GhostCodec {
     /** More blocks than this are not drawn as models, because a frame would have to draw all of them. */
     static final int LIMIT=4096;
+    /**
+     * What an AI preview describes. The client draws only as many models as the player allows, but an outline of all of it, so the
+     * describing can go further than the drawing; the blocks that show come first, so a cut never leaves a hole in the outer surface.
+     */
+    static final int AI_LIMIT=32_768;
     record Ghost(List<String> states,int[] blocks,int[] removed,int total){}
 
     private GhostCodec(){}
 
     /** What an edit would place (as models) and remove (as positions). */
-    static String encodeEdit(Session.Edit edit){
+    static String encodeEdit(Session.Edit edit){return encodeEdit(edit,LIMIT);}
+
+    /** As {@link #encodeEdit(Session.Edit)}, describing up to {@code limit} placed blocks and as many removed ones. */
+    static String encodeEdit(Session.Edit edit,int limit){
         var palette=new LinkedHashMap<BlockState,Integer>();var blocks=new ArrayList<Integer>();var removed=new ArrayList<Integer>();
-        int total=0;
+        int total=0,placedCount=0;
+        for(var change:edit.changes()){
+            if(change.before().state()==change.after().state()&&change.after().data()==null)continue;
+            total++;if(!change.after().state().isAir())placedCount++;
+        }
+        // Only when the edit is cut does it matter which blocks are kept: then the ones with a face in the open go first.
+        boolean cut=placedCount>limit;
+        var placedAt=cut?new it.unimi.dsi.fastutil.longs.LongOpenHashSet(placedCount*2):null;
+        if(cut)for(var change:edit.changes())if(!change.after().state().isAir())placedAt.add(key(change.pos()));
+        var buried=new ArrayList<Session.Change>();
         for(var change:edit.changes()){
             var before=change.before().state();var after=change.after().state();
             if(before==after&&change.after().data()==null)continue;
-            total++;
-            boolean placed=!after.isAir();
-            if(placed&&blocks.size()/4<LIMIT){blocks.add(change.pos().x());blocks.add(change.pos().y());blocks.add(change.pos().z());blocks.add(palette.computeIfAbsent(after,k->palette.size()));}
-            else if(!placed&&removed.size()/3<LIMIT){removed.add(change.pos().x());removed.add(change.pos().y());removed.add(change.pos().z());}
+            if(after.isAir()){
+                if(removed.size()/3<limit){removed.add(change.pos().x());removed.add(change.pos().y());removed.add(change.pos().z());}
+            }else if(cut&&hidden(placedAt,change.pos())){buried.add(change);}
+            else if(blocks.size()/4<limit)place(blocks,palette,change);
         }
+        for(var change:buried){if(blocks.size()/4>=limit)break;place(blocks,palette,change);}
         return json(palette,blocks,removed,total);
+    }
+
+    private static void place(List<Integer> blocks,Map<BlockState,Integer> palette,Session.Change change){
+        blocks.add(change.pos().x());blocks.add(change.pos().y());blocks.add(change.pos().z());blocks.add(palette.computeIfAbsent(change.after().state(),k->palette.size()));
+    }
+    private static long key(Point p){return net.minecraft.core.BlockPos.asLong(p.x(),p.y(),p.z());}
+    /** Whether every neighbour is also placed by the edit, so none of the block's faces can be seen. */
+    private static boolean hidden(it.unimi.dsi.fastutil.longs.LongSet placedAt,Point p){
+        return placedAt.contains(key(new Point(p.x()+1,p.y(),p.z())))&&placedAt.contains(key(new Point(p.x()-1,p.y(),p.z())))
+            &&placedAt.contains(key(new Point(p.x(),p.y()+1,p.z())))&&placedAt.contains(key(new Point(p.x(),p.y()-1,p.z())))
+            &&placedAt.contains(key(new Point(p.x(),p.y(),p.z()+1)))&&placedAt.contains(key(new Point(p.x(),p.y(),p.z()-1)));
     }
 
     /** The clipboard's non-air blocks, positioned relative to where it will be pasted. */
