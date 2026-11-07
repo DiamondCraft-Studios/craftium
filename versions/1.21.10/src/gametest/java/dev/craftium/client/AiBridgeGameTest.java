@@ -178,6 +178,9 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(preview.get("ok").getAsBoolean(), "preview_build: " + preview);
             int ghost = preview.getAsJsonObject("state").get("previewBlocks").getAsInt();
             require(ghost > 100, "preview should hold blocks as a ghost, had " + ghost);
+            // A spec the server refuses leaves the waiting preview as it was, so a typo does not make the player's ghost vanish.
+            var typo = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + x + "," + y + "," + z + "],\"to\":[" + (x + 1) + "," + y + "," + z + "],\"block\":\"no_such_block\"}]}}");
+            require(!typo.get("ok").getAsBoolean() && typo.getAsJsonObject("state").get("previewBlocks").getAsInt() == ghost, "a refused spec must leave the waiting preview as it was: " + typo);
             ctx.waitTicks(5);
             ctx.takeScreenshot("ai-preview");
             require(ctx.computeOnClient(mc -> ClientState.hasAiPending() && ClientState.aiPending.ai), "the AI's preview should be held as the AI's own");
