@@ -34,10 +34,7 @@ public final class EditorControls {
         Action(String label,Binding defaults){this.label=label;this.defaults=defaults;}
     }
     private EditorControls(){}
-    public static int toolDefault(Tool tool){return switch(tool){
-        case MAGIC_SELECT->'M';case BOX_SELECT->'B';case FREEHAND_SELECT->'N';case LASSO_SELECT->'L';case PAINTER->'P';case NOISE_PAINTER->'O';
-        case FREEHAND_DRAW->'G';case MOVE->'V';case ROTATE->'R';case SCALE->'C';case PIVOT->'I';case ROCK->'H';case WELD->'J';case MELT->'K';case ELEVATION->'E';case SMOOTH->'U';case EXTRUDE->'Z';default->-1;
-    };}
+    public static int toolDefault(Tool tool){return ToolCatalog.of(tool).defaultKey();}
     /** Camera-relative horizontal nudges, independent of the gizmo's selected axis. */
     public static Point nudge(Action action,double yaw){
         int quadrant=Math.floorMod((int)Math.floor(yaw/90+.5),4);
