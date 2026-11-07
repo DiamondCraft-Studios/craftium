@@ -20,6 +20,13 @@ final class BlockDragCursor {
         BlockPickerScreen.icon(g,font,block,cx+7,cy+7);
         set(true);
     }
+    /** Over a window, a cell is dragged to another cell, so the block is carried in a cell centred on the ordinary pointer; only over the world does it get the crosshair of {@link #draw}. */
+    static void draw(Gfx g,Font font,String block,int mx,int my,int width,int height,int accent,boolean overWorld){
+        if(overWorld){draw(g,font,block,mx,my,width,height,accent);return;}
+        release();
+        g.fill(mx-13,my-13,mx+13,my+13,0xdd1b2838);g.outline(mx-13,my-13,26,26,accent);
+        BlockPickerScreen.icon(g,font,block,mx-8,my-8);
+    }
     /** Gives the pointer back. Safe to call whenever a drag ends or its screen closes. */
     static void release(){set(false);}
     private static void set(boolean want){

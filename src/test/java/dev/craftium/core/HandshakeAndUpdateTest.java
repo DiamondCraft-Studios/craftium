@@ -29,6 +29,12 @@ class HandshakeAndUpdateTest {
         assertTrue(hello.has(Handshake.MODIFY_EXPANSION));assertFalse(hello.has("something-newer"));
         assertTrue(hello.missingFrom(Handshake.CAPABILITIES).isEmpty());
     }
+    @Test void onlyTheFabricServerListsFastMovement(){
+        assertFalse(Handshake.read(Handshake.write("0.10.0-beta.1")).has(Handshake.FAST_MOVEMENT),"the default list, as Paper sends it, leaves it out");
+        var fabric=Handshake.read(Handshake.write("0.10.0-beta.1",Handshake.FABRIC_SERVER_CAPABILITIES));
+        assertTrue(fabric.has(Handshake.FAST_MOVEMENT));assertTrue(fabric.has(Handshake.MODIFY_EXPANSION));
+        assertTrue(fabric.missingFrom(Handshake.CAPABILITIES).isEmpty(),"a client that knows less loses nothing");
+    }
     @Test void aHelloFromBeforeTheListHasNoCapabilities(){
         var old=Handshake.read("{\"protocol\":1,\"version\":\"0.9.1-beta.1\"}");
         assertNotNull(old);assertFalse(old.has(Handshake.MODIFY_EXPANSION));

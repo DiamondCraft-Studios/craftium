@@ -54,6 +54,7 @@ abstract class FlightMixin {
         double kept=keep*o.flightMomentumLevel;
         craftium$velocity=craftium$velocity.scale(kept).add(wanted.scale(1-kept));
         if(focus<1){double allowed=top*focus,speed=craftium$velocity.length();if(speed>allowed)craftium$velocity=craftium$velocity.scale(allowed/speed);} // momentum may not carry past where the wall slows
+        double limit=CraftiumClient.stepLimit();if(craftium$velocity.length()>limit)craftium$velocity=craftium$velocity.scale(limit/craftium$velocity.length()); // a server that checks movement would put a faster player back
         if(craftium$velocity.lengthSqr()<1e-8)craftium$velocity=Vec3.ZERO;
         player.setDeltaMovement(craftium$velocity);player.move(MoverType.SELF,craftium$velocity);player.resetFallDistance();ci.cancel();
     }
