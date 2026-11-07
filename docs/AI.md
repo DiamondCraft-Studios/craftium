@@ -19,7 +19,7 @@ A preview made by an AI app is drawn in **violet**, so it is never mistaken for 
 
 While AI building is on, a small **AI** marker shows in the bottom right corner of the game: amber while it waits for the AI app, green once the app has connected, and blue while a request is being answered. The **AI** menu also has **Apply AI preview**, **Discard AI preview** and **Undo last AI build**, so you can approve a build without going back to the chat, and **AI status and setup…**, a page with the same status, the last request and the steps above.
 
-Then ask Claude for a build while the game is open. Claude works on the world itself: it does not need you to select anything, never moves or turns you, and can build anywhere in the world (see [Claude's workspace](#claudes-workspace)). If you have selected an area it takes that as a hint of where you want the build. Look at the ghost in the game, ask for changes, and say when to apply it.
+Then ask Claude for a build while the game is open. Claude works on the world itself: it does not need you to select anything, never moves or turns you, and can build anywhere in the world (see [Claude's workspace](#claudes-workspace)). If you have selected an area it takes that as a hint of where you want the build, and it can read exactly what you selected: say "I have selected a platform for you to build on" after picking one with the box, lasso or magic wand, and it sees the shape, what it is made of and the room above it instead of hunting for the spot. Nothing makes you do this; you can give coordinates or just describe where. Look at the ghost in the game, ask for changes, and say when to apply it.
 
 ## Getting the extension
 
@@ -49,7 +49,8 @@ The plugin needs Node.js 18 or newer on your PATH (an extension gets Node from C
 
 | Tool | Does |
 | --- | --- |
-| `get_state` | Your position and facing, the area you have selected (yours, and never changed by Claude), and whether Claude's preview is waiting |
+| `get_state` | Your position and facing, the box around the area you have selected (yours, and never changed by Claude), and whether Claude's preview is waiting |
+| `read_selection` | What you have selected, as it really is: how many blocks, whether it is a solid box or an irregular shape (lasso or magic wand), whether it is flat, what blocks it is made of, and how much clear space is above it. Read only; a selection too big to read says so and describes only its shape |
 | `get_blocks` | Reads the blocks in a box (up to 32,768 at a time), anywhere in the world: the server reads them, so ground your game has not loaded is real blocks and not air |
 | `get_surface` | The top block of every column in an area (up to 128 by 128), to find ground level |
 | `get_palette` | Your current block and recently used blocks |
@@ -63,7 +64,7 @@ Claude cannot do anything the editor cannot. Every request goes through the same
 
 ## Claude's workspace
 
-Claude has a workspace of its own, apart from yours. It never uses or changes your selection, your preview or your undo history, and it never moves or turns you.
+Claude has a workspace of its own, apart from yours. It never changes your selection, your preview or your undo history, and it never moves or turns you. It can read your selection (`read_selection`), but only to see where you want a build.
 
 - **Its preview** is held separately and drawn in violet. You apply or discard it from the **AI** menu (Enter and Esc still belong to your own edits).
 - **Its undo** only covers builds Claude applied. **Undo last AI build** and the `undo` tool undo those, and nothing else; your own Ctrl+Z is unchanged. This list is not saved: it is dropped when you leave the world, reconnect or change dimension.

@@ -74,6 +74,15 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             var mine = call("get_state", "{}").getAsJsonObject("selection");
             require(mine.get("size").getAsInt() == 8, "the player's own selection should be 8 blocks: " + mine);
 
+            // read_selection describes it as it really is, an exact 2 x 2 x 2 box read from the server, and reading it changes nothing.
+            var described = call("read_selection", "{}");
+            require(described.get("ok").getAsBoolean() && described.get("selected").getAsInt() == 8 && "box".equals(described.get("shape").getAsString()), "read_selection: " + described);
+            int counted = 0;
+            for (var entry : described.getAsJsonArray("blocks")) counted += entry.getAsJsonObject().get("count").getAsInt();
+            require(counted == 8 && described.has("above") && described.get("summary").getAsString().contains("8 blocks"), "read_selection should count its blocks and look above them: " + described);
+            require(call("get_state", "{}").getAsJsonObject("selection").get("size").getAsInt() == 8, "read_selection must not change the selection");
+            System.out.println("CRAFTIUM_AI read_selection_ok " + described.get("summary").getAsString());
+
             String spec = "{\"palette\":{\"sand\":\"minecraft:cut_sandstone\",\"cap\":\"minecraft:smooth_sandstone\"},\"ops\":["
                     + "{\"op\":\"cylinder\",\"base\":[" + (x + 2) + "," + y + "," + (z + 2) + "],\"radius\":2,\"height\":8,\"block\":\"sand\"},"
                     + "{\"op\":\"box\",\"from\":[" + x + "," + (y + 8) + "," + z + "],\"to\":[" + (x + 4) + "," + (y + 9) + "," + (z + 4) + "],\"block\":\"cap\"}]}";

@@ -27,7 +27,7 @@ export const INSTRUCTIONS = `You can build in the player's Minecraft world throu
 
 Workflow:
 1. Call get_state. It reports the player's position and facing, the area they have selected (if any: a hint of where they want a build, which you never change), and whether you have a preview waiting. If the game is not reachable, tell the player to open a world and turn on AI building (in the editor: AI menu, then Turn on AI building; or type /craftium ai on).
-2. Decide where to build: in the player's selection if they made one, otherwise near the player or where they asked. Look before you build: get_surface gives the ground height of an area and get_blocks reads blocks; both work anywhere in the world, not just near the player. Say where you chose to build.
+2. Decide where to build: in the player's selection if they made one (call read_selection to see what it is: its shape, its blocks and the space above it), otherwise near the player or where they asked. Look before you build: get_surface gives the ground height of an area and get_blocks reads blocks; both work anywhere in the world, not just near the player. Say where you chose to build.
 3. Call preview_build with a build spec in world coordinates. If it returns an error, fix the spec and try again; the error names the operation at fault. A new preview replaces the previous one.
 4. Tell the player to look at the ghost in the game (it is violet). You can look too, without touching the player's view: call render_view on the build's area from a couple of angles, for example se for a three-quarter view and top for the plan, and judge proportions, gaps and style yourself before showing the player. Your waiting preview is drawn tinted violet. If previewTruncated is true the game drew only part of the preview, so build in smaller stages to see all of it. Adjust with another preview_build if the result or the player wants changes.
 5. Call apply_preview only once the player is happy (or if they asked you to just build it). undo reverses the last build you applied, never the player's own edits. cancel_preview discards a preview.
@@ -66,7 +66,18 @@ export const TOOLS = [
   {
     name: "get_state",
     title: "Get Craftium state",
-    description: "Where the player is and which way they face, the area they have selected (corners and dimensions; theirs, and never changed by you), how many blocks your waiting preview holds (previewBlocks) and how many of them the game can draw (previewBlocksDrawn; previewTruncated and a previewWarning appear when a big preview is only partly drawn), and how many of your builds can be undone. Call this first.",
+    description: "Where the player is and which way they face, the area they have selected (corners and dimensions only, so call read_selection to see what is in it; theirs, and never changed by you), how many blocks your waiting preview holds (previewBlocks) and how many of them the game can draw (previewBlocksDrawn; previewTruncated and a previewWarning appear when a big preview is only partly drawn), and how many of your builds can be undone. Call this first.",
+    inputSchema: nothing,
+    annotations: READ,
+    args: () => ({}),
+  },
+  {
+    name: "read_selection",
+    title: "Read the player's selection",
+    description:
+      "Reads the area the player has selected, as it really is and not only the box around it: how many blocks, its exact bounds, whether it is a solid box or an irregular shape (a lasso or magic wand can select any shape, such as the top of a platform), whether it is flat, what blocks it is made of, and how much clear space there is above it with whatever is in the way. " +
+      'The reply has a one-sentence "summary". Use it when the player says they have selected a place for you to build on, or when get_state shows a selection, so you do not have to hunt for the spot with get_surface. ' +
+      "The selection is the player's: you never change it. They may not have one, and they may also just give you coordinates, so it is a help and never a requirement. A selection too big to read says so and describes only its shape.",
     inputSchema: nothing,
     annotations: READ,
     args: () => ({}),

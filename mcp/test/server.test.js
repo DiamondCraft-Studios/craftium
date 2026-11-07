@@ -54,7 +54,7 @@ test("lists every tool with its hints, and the server's instructions", async () 
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "get_blocks", "get_palette", "get_screenshot", "get_state", "get_surface", "preview_build", "render_view", "undo"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "get_blocks", "get_palette", "get_screenshot", "get_state", "get_surface", "preview_build", "read_selection", "render_view", "undo"]);
   assert.equal(tools.find((t) => t.name === "get_state").annotations.readOnlyHint, true);
   assert.equal(tools.find((t) => t.name === "apply_preview").annotations.destructiveHint, true);
   assert.match(tools.find((t) => t.name === "preview_build").description, /cylinder/);
@@ -128,7 +128,7 @@ test("get_surface passes its corners and kind to the bridge and nothing else", a
   await bridge.close();
 });
 
-test("preview_build passes the spec with its origin, and there are no selection tools", async () => {
+test("preview_build passes the spec with its origin, and the only selection tool only reads", async () => {
   const bridge = await fakeBridge({ preview_build: { ok: true, message: "AI preview ready: 4 blocks" } });
   const client = await connect(bridge.file);
   const spec = { origin: [100, 64, -20], palette: { s: "stone" }, ops: [{ op: "set", at: [0, 0, 0], block: "s" }] };
@@ -136,8 +136,21 @@ test("preview_build passes the spec with its origin, and there are no selection 
   assert.equal(result.isError, undefined);
   assert.deepEqual(bridge.seen[0].body, { spec });
   const { tools } = await client.listTools();
-  assert.equal(tools.some((t) => /selection/.test(t.name)), false);
+  // The AI works in its own workspace and never changes the player's selection: the one tool that mentions it only reads.
+  const selectionTools = tools.filter((t) => /selection/.test(t.name));
+  assert.deepEqual(selectionTools.map((t) => t.name), ["read_selection"]);
+  assert.equal(selectionTools[0].annotations.readOnlyHint, true);
   assert.match(tools.find((t) => t.name === "preview_build").description, /WORLD/);
+  await bridge.close();
+});
+
+test("read_selection asks the game for the selection and forwards nothing the model adds", async () => {
+  const bridge = await fakeBridge({ read_selection: { ok: true, selected: 4, summary: "4 blocks, flat" } });
+  const client = await connect(bridge.file);
+  const result = await client.callTool({ name: "read_selection", arguments: { sneaky: 1 } });
+  assert.equal(result.isError, undefined);
+  assert.equal(JSON.parse(text(result)).summary, "4 blocks, flat");
+  assert.deepEqual(bridge.seen[0].body, {});
   await bridge.close();
 });
 
