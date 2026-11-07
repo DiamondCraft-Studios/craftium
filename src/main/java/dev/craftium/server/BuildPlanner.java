@@ -34,13 +34,17 @@ final class BuildPlanner {
         var states = states(level, spec);
         var result = spec.build(place);
         var matches = new HashMap<String, Match>();
+        var turned = new HashMap<String, Map<Turn, BlockState>>();
         // The spec says exactly where blocks go, so the player's brush mask, symmetry and height settings do not apply.
         plan.exact = true;
         for (var entry : result.cells().entrySet()) {
             var at = min.add(entry.getKey().x(), entry.getKey().y(), entry.getKey().z());
             var cell = entry.getValue();
             if (cell.only() != null && !match(level, matches, cell.only()).matches(plan.state(at))) continue;
-            plan.put(at, states.get(cell.block()));
+            var state = states.get(cell.block());
+            if (!cell.turn().equals(Turn.NONE))
+                state = turned.computeIfAbsent(cell.block(), k -> new HashMap<>()).computeIfAbsent(cell.turn(), t -> turn(states.get(cell.block()), t));
+            plan.put(at, state);
         }
         if (!spec.selectionOps().isEmpty()) {
             if (selection.isEmpty()) throw new IllegalArgumentException("replace_selection works on the player's selection, and nothing is selected. Ask the player to select the blocks, or give coordinates and use replace with from and to");
@@ -58,17 +62,46 @@ final class BuildPlanner {
         var lookup = level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK);
         var states = new HashMap<String, BlockState>();
         for (String name : spec.blocks()) {
+            String real = concrete(name, spec);
             try {
-                states.put(name, net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(lookup, new com.mojang.brigadier.StringReader(name), false).blockState());
+                states.put(name, net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(lookup, new com.mojang.brigadier.StringReader(real), false).blockState());
             } catch (Exception e) {
-                throw new IllegalArgumentException(explain(lookup, spec, name, e));
+                throw new IllegalArgumentException(explain(lookup, spec, name, real, e));
             }
         }
         return states;
     }
 
-    private static String explain(net.minecraft.core.HolderLookup<net.minecraft.world.level.block.Block> lookup, BuildSpec spec, String name, Exception failure) {
+    /**
+     * The block a name stands for: itself, or for a material reference such as {@code spruce@stairs} the first of its spellings that is a
+     * block in this game ({@code spruce_stairs}), with any state written after it kept.
+     */
+    private static String concrete(String name, BuildSpec spec) {
+        if (!MaterialNames.isReference(name)) return name;
+        int bracket = name.indexOf('[');
+        String state = bracket < 0 ? "" : name.substring(bracket);
+        var known = blockIdSet();
+        var tried = MaterialNames.candidates(name);
+        for (String id : tried) if (known.contains(id)) return id + state;
+        String plain = bracket < 0 ? name : name.substring(0, bracket);
+        String material = plain.substring(0, plain.indexOf('@'));
+        var message = new StringBuilder(spec == null ? "" : String.join(", ", spec.usesOf(name)) + ": ")
+            .append('"').append(plain).append("\" is not a block in this game version (tried ").append(String.join(", ", tried)).append(')');
+        var near = BlockNames.suggest(tried.getFirst(), blockIds(), 5);
+        if (!near.isEmpty()) message.append(". Nearest: ").append(String.join(", ", near));
+        message.append(". Name the block itself, or check that ").append(material).append(" has that kind");
+        throw new IllegalArgumentException(message.toString());
+    }
+
+    /** A block state turned the way a group turned its cell: mirrored first, then rotated, as {@link Turn} reads. */
+    static BlockState turn(BlockState state, Turn turn) {
+        if (turn.mirrored()) state = state.mirror(net.minecraft.world.level.block.Mirror.FRONT_BACK);
+        return state.rotate(net.minecraft.world.level.block.Rotation.values()[turn.quarterTurns()]);
+    }
+
+    private static String explain(net.minecraft.core.HolderLookup<net.minecraft.world.level.block.Block> lookup, BuildSpec spec, String name, String real, Exception failure) {
         var message = new StringBuilder(String.join(", ", spec.usesOf(name))).append(": ");
+        name = real;
         String id = BlockNames.id(name);
         BlockState block = null;
         try { block = net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(lookup, new com.mojang.brigadier.StringReader(id), false).blockState(); }
@@ -104,6 +137,13 @@ final class BuildPlanner {
             blockIds = List.copyOf(ids);
         }
         return blockIds;
+    }
+
+    private static Set<String> blockIdSet;
+
+    private static synchronized Set<String> blockIdSet() {
+        if (blockIdSet == null) blockIdSet = Set.copyOf(blockIds());
+        return blockIdSet;
     }
 
     /** Makes sure the ground under a selection is loaded; it is normally the player's own, but may reach a few unvisited chunks. */
@@ -151,7 +191,7 @@ final class BuildPlanner {
     private static Match match(net.minecraft.server.level.ServerLevel level, Map<String, Match> cache, String name) {
         return cache.computeIfAbsent(name, n -> {
             try {
-                var parsed = net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK), new com.mojang.brigadier.StringReader(n), false);
+                var parsed = net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK), new com.mojang.brigadier.StringReader(concrete(n, null)), false);
                 return new Match(parsed.blockState().getBlock(), parsed.properties());
             } catch (Exception e) {
                 throw new IllegalArgumentException("Unknown block or state: " + n);
