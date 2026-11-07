@@ -24,12 +24,18 @@ public final class PlacementPreview {
         if(ClientState.status.clipboardSize()==0&&ClientState.status.clipboardEntityCount()==0){ClientState.notify("Copy a selection or load a blueprint first");return;}
         origin=at;axis=0;ClientState.notify("Placement ready · drag an axis · arrows / Page Up / Page Down · Enter to place · Esc to cancel");
     }
+    /** Starts a placement where the clipboard's blocks were copied from, ready to nudge and confirm; nothing is built until Enter. */
+    public static void beginInPlace(){
+        var from=ClientState.status.clipboardOrigin();
+        if(from==null){ClientState.notify("These blocks were not copied from the world, so there is no place to put them back to");return;}
+        begin(from);
+    }
     public static boolean active(){return origin!=null;}
     static void cancel(){origin=null;}
     static void nudge(int amount){if(origin!=null)origin=origin.add(axis==0?amount:0,axis==1?amount:0,axis==2?amount:0);}
-    public static void confirm(){if(origin!=null&&!ClientState.status.busy()){CraftiumClient.send("paste_at",origin,new Point(0,1,0));origin=null;}}
-    public static void pasteCopy(){if(origin!=null&&!ClientState.status.busy())CraftiumClient.send("paste_at",origin,new Point(0,1,0));}
-    public static void pasteAndSelect(){if(origin!=null&&!ClientState.status.busy()){CraftiumClient.send("paste_select",origin,new Point(0,1,0));origin=null;}}
+    public static void confirm(){if(origin!=null&&!ClientState.status.busy()){BuilderPrediction.paste(ClientState.options,origin,ghost.placed());CraftiumClient.send("paste_at",origin,new Point(0,1,0));origin=null;}}
+    public static void pasteCopy(){if(origin!=null&&!ClientState.status.busy()){BuilderPrediction.paste(ClientState.options,origin,ghost.placed());CraftiumClient.send("paste_at",origin,new Point(0,1,0));}}
+    public static void pasteAndSelect(){if(origin!=null&&!ClientState.status.busy()){BuilderPrediction.paste(ClientState.options,origin,ghost.placed());CraftiumClient.send("paste_select",origin,new Point(0,1,0));origin=null;}}
     public static void snapToGround(){
         var mc=net.minecraft.client.Minecraft.getInstance();if(origin==null||mc.level==null)return;var bottom=new HashMap<Long,Point>();
         for(Point p:SelectionCodec.decode(data)){long key=((long)p.x()<<32)|(p.z()&0xffffffffL);var old=bottom.get(key);if(old==null||p.y()<old.y())bottom.put(key,p);}

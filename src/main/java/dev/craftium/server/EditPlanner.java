@@ -33,7 +33,7 @@ final class EditPlanner {
         this.level=level;this.session=session;this.o=options;
         material=parse(options.block); secondary=parse(options.secondary);
         mask=options.mask.isBlank()?null:parse(options.mask);
-        for(String entry:options.maskActive){blockMask.add(parse(entry));blockMaskExact.add(entry.contains("["));}
+        if(!options.maskOff)for(String entry:options.maskActive){blockMask.add(parse(entry));blockMaskExact.add(entry.contains("["));}
         noise=new NoiseField(options);
         materials=new ArrayList<>();for(String block:MaterialList.split(options.materials))materials.add(parse(block));
         if(materials.isEmpty())materials.add(material);
@@ -135,7 +135,7 @@ final class EditPlanner {
         validate(p);
         var planned=changes.get(p);
         if(!exact&&!accepted(p)){skip(rejection(p));return;}
-        if(!exact && o.keepExisting && !value.state().isAir() && !state(p).isAir() && (planned==null||!planned.after().state().isAir())){skip(Skip.KEEP);return;}
+        if(!exact && o.keepExisting && !o.replaceMode && !value.state().isAir() && !state(p).isAir() && (planned==null||!planned.after().state().isAir())){skip(Skip.KEEP);return;}
         if(!exact && !o.forcePlace && !survives(value.state(),p)){skip(Skip.SURVIVE);return;}
         if(value.data()!=null) {
             var tag=value.data().copy();tag.putInt("x",p.x());tag.putInt("y",p.y());tag.putInt("z",p.z());

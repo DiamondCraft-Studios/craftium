@@ -40,7 +40,8 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
         Objects.requireNonNull(getCommand("craftiumserver")).setExecutor(this);
         getServer().getScheduler().runTaskTimer(this,this::tick,1,1);
         for(Player p:getServer().getOnlinePlayers())hello(p);
-        getLogger().info("Craftium "+getPluginMeta().getVersion()+" ready on "+getServer().getName()+" "+Bukkit.getMinecraftVersion()+". Clients need Craftium 0.3 or newer.");
+        if(getConfig().getBoolean("check-for-updates",true))UpdateChecker.check(getPluginMeta().getVersion(),Bukkit.getMinecraftVersion(),getDataFolder().toPath().resolve("update-check.json")).thenAccept(found->found.ifPresent(r->getLogger().info("Craftium "+r.version()+" is out (this is "+UpdateChecker.clean(getPluginMeta().getVersion())+"): "+r.url()+" . Set check-for-updates: false in config.yml to stop this check.")));
+        getLogger().info("Craftium "+getPluginMeta().getVersion()+" ready on "+getServer().getName()+" "+Bukkit.getMinecraftVersion()+". Clients need protocol "+Handshake.PROTOCOL+" (Craftium "+getPluginMeta().getVersion()+" or a build with the same protocol).");
     }
     private void loadSettings(){
         allowedWorlds=Set.copyOf(getConfig().getStringList("allowed-worlds"));
@@ -65,8 +66,8 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
     @EventHandler public void tickEnd(com.destroystokyo.paper.event.server.ServerTickEndEvent event){
         for(Player p:getServer().getOnlinePlayers()){var nms=((CraftPlayer)p).getHandle();if(EditorServer.noClip(nms))nms.noPhysics=true;}
     }
-    @EventHandler public void quit(PlayerQuitEvent event){connections.remove(event.getPlayer().getUniqueId());EditorServer.disconnect(((CraftPlayer)event.getPlayer()).getHandle());}
-    private void hello(Player player){if(player.isOnline()&&player.getListeningPluginChannels().contains(BridgeCodec.CHANNEL)){connections.computeIfAbsent(player.getUniqueId(),id->new Connection());enqueue(player,"hello","Craftium 0.3 / protocol "+BridgeCodec.VERSION);}}
+    @EventHandler public void quit(PlayerQuitEvent event){connections.remove(event.getPlayer().getUniqueId());Handshake.forget(event.getPlayer().getUniqueId());EditorServer.disconnect(((CraftPlayer)event.getPlayer()).getHandle());}
+    private void hello(Player player){if(player.isOnline()&&player.getListeningPluginChannels().contains(BridgeCodec.CHANNEL)){connections.computeIfAbsent(player.getUniqueId(),id->new Connection());enqueue(player,"hello",Handshake.write(getPluginMeta().getVersion()));}}
     private void tick(){
         EditorServer.tick(nativeServer);
         for(var entry:connections.entrySet()){
@@ -84,11 +85,19 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
             c.incoming.accept(data).ifPresent(json->{
                 if(++c.requests>20)throw new IllegalArgumentException("Craftium request rate exceeded");
                 var message=Packets.JSON.fromJson(json,BridgeCodec.Message.class);
+                if(message!=null&&message.version()==BridgeCodec.VERSION&&"hello".equals(message.kind())&&message.data()!=null){clientHello(player,message.data());return;}
                 if(message==null||message.version()!=BridgeCodec.VERSION||!"edit".equals(message.kind())||message.data()==null)throw new IllegalArgumentException("Update both Craftium client and server to matching versions");
                 c.ready=true;
                 EditorServer.handle(((CraftPlayer)player).getHandle(),message.data());
             });
         }catch(RuntimeException e){c.incoming.clear();error(player,e.getMessage()==null?"Invalid Craftium request":e.getMessage());}
+    }
+    /** The client's own hello: a protocol this server cannot read is named to the player and its edits are refused until it reconnects updated. */
+    private void clientHello(Player player,String data){
+        var hello=Handshake.read(data);String problem=Handshake.problem(hello,false);
+        if(problem==null){Handshake.accept(player.getUniqueId(),hello);return;}
+        Handshake.refuse(player.getUniqueId(),problem);error(player,problem);
+        getLogger().warning(player.getName()+" has Craftium "+hello.version()+" (protocol "+hello.protocol()+"), this server speaks protocol "+Handshake.PROTOCOL);
     }
     private void error(Player player,String message){enqueue(player,"status",Packets.JSON.toJson(new Packets.Status(message,true,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0)));}
     private void enqueue(Player player,String kind,String data){

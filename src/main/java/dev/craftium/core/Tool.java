@@ -55,22 +55,16 @@ public enum Tool {
      * NONE has no brush at all, working on the clicked face, block, selection or its own points.
      */
     public enum BrushUse { SHAPE, SMALL_SHAPE, DISC, SPHERE, NONE }
-    public BrushUse brushUse() {
-        return switch (this) {
-            case FREEHAND_SELECT, PAINTER, NOISE_PAINTER, BIOME_PAINTER, CLENTAMINATOR, FREEHAND_DRAW, SHAPE, ERASE, SCULPT_DRAW, WELD, MELT, SMOOTH, DISTORT, ROUGHEN, SHATTER, GRADIENT_PAINTER, SCRIPT_BRUSH -> BrushUse.SHAPE;
-            case LINE, PATH -> BrushUse.SMALL_SHAPE;
-            case ELEVATION, FLATTEN, SLOPE, STAMP -> BrushUse.DISC;
-            case ROCK, FLUID_BALL -> BrushUse.SPHERE;
-            default -> BrushUse.NONE;
-        };
-    }
+    /** This tool's facts, kept in {@link ToolCatalog}: the methods below read them so the callers that ask a {@code Tool} keep working. */
+    public ToolSpec spec() { return ToolCatalog.of(this); }
+    public BrushUse brushUse() { return spec().brushUse(); }
     /** Whether the shape picker means anything for this tool. */
-    public boolean picksShape() { BrushUse use = brushUse(); return use == BrushUse.SHAPE || use == BrushUse.SMALL_SHAPE; }
+    public boolean picksShape() { return spec().picksShape(); }
     /** The tools that move, rotate or scale the selected blocks around a pivot. */
-    public boolean transform() { return this == MOVE || this == ROTATE || this == SCALE || this == PIVOT; }
+    public boolean transform() { return spec().transform(); }
     /** Whether the tool builds, removes or moves blocks, so the block limit applies to it: not the selecting, measuring, annotating or single-block Tinker tools. */
-    public boolean placesBlocks() { return !selection() && this != RULER && this != ANNOTATION && this != TINKER && this != PIVOT; }
-    public boolean selection() { return this == MAGIC_SELECT || this == BOX_SELECT || this == FREEHAND_SELECT || this == LASSO_SELECT; }
+    public boolean placesBlocks() { return spec().placesBlocks(); }
+    public boolean selection() { return spec().selection(); }
 
     /**
      * The sections of the Tools panel in display order, each with its tools in the order they are shown: by workflow, then by how

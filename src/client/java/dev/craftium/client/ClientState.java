@@ -24,6 +24,17 @@ public final class ClientState {
     /** The build an AI app is holding as a preview, kept apart from the player's own: drawn in violet, and applied or discarded from the AI menu. */
     public static GhostBlocks aiPending=GhostBlocks.EMPTY;
     public static boolean hasAiPending(){return aiPending.total()>0;}
+    /** Another player's AI preview, drawn beside the player's own in a colour of its own, with their name. */
+    public record SharedAi(String owner,GhostBlocks ghost){}
+    /** The AI previews other players in this dimension are holding, as the server last said. */
+    public static List<SharedAi> sharedAi=List.of();
+    /** Takes in the list a status brings of other players' AI previews; a status without one leaves it as it was. */
+    static void updateShared(dev.craftium.net.Packets.Status status){
+        var list=status.sharedAi();if(list==null)return;
+        var next=new ArrayList<SharedAi>(list.size());
+        for(var one:list){var ghost=GhostBlocks.parse(one.data());if(ghost.total()>0){ghost.shared=true;next.add(new SharedAi(one.owner(),ghost));}}
+        sharedAi=List.copyOf(next);
+    }
     /** The corners of the box being selected, which stay as handles the player can drag to resize it. At most two. */
     public static final List<Point> boxCorners=new ArrayList<>();
     /** When above zero, the editor shows a small popup asking whether this many selected blocks was meant. */
@@ -84,7 +95,7 @@ public final class ClientState {
     public static boolean symmetry(){return options.symmetryX||options.symmetryY||options.symmetryZ||options.symmetryRotations>1;}
     public static void load() {
         if(!Files.exists(CONFIG))return;
-        try {Options saved=Packets.JSON.fromJson(Files.readString(CONFIG),Options.class);saved.validate();options=saved;}
+        try {Options saved=Packets.JSON.fromJson(Files.readString(CONFIG),Options.class);saved.validate();saved.invert=false;options=saved;}
         catch(Exception e){Craftium.LOG.warn("Could not read craftium.json; using defaults",e);}
     }
     public static void save() {
@@ -97,6 +108,13 @@ public final class ClientState {
     public static void notify(String message) {notice=message;noticeUntil=System.currentTimeMillis()+4500;}
     public static void pick(String block) {
         // A block already in the palette keeps its cell; only a new one is added, at the front.
-        options.block=block;if(!palette.contains(block)){palette.addFirst(block);while(palette.size()>18)palette.removeLast();}
+        options.block=block;addToPalette(block);
+    }
+    /** The most blocks the palette keeps; the oldest fall off the end. */
+    public static final int PALETTE_LIMIT=64;
+    /** Adds a block to the front of the palette without making it the foreground. A block already there keeps its cell. */
+    public static boolean addToPalette(String block) {
+        if(palette.contains(block))return false;
+        palette.addFirst(block);while(palette.size()>PALETTE_LIMIT)palette.removeLast();return true;
     }
 }

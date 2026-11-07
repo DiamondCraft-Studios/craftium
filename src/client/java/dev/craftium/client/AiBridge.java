@@ -265,6 +265,14 @@ public final class AiBridge {
     private static JsonObject call(String tool, JsonObject args) throws Exception {
         return switch (tool) {
             case "get_state" -> onClient(AiBridge::state);
+            case "read_selection" -> read("ai_selection", null, null);
+            case "get_preview_blocks" -> {
+                var from = point(args, "from"); var to = point(args, "to");
+                String view = args.has("view") ? args.get("view").getAsString() : "after";
+                String format = args.has("format") ? args.get("format").getAsString() : "auto";
+                // The two settings travel in the action itself, so nothing is put in the shared options and nothing has to be put back.
+                yield read("ai_preview_blocks:" + view + ":" + format, from, to);
+            }
             case "get_blocks" -> { var from = point(args, "from"); var to = point(args, "to"); yield serverSupported() ? read("ai_blocks", from, to) : onClient(() -> blocks(from, to)); }
             case "get_surface" -> {
                 var from = point(args, "from"); var to = point(args, "to");
@@ -372,6 +380,18 @@ public final class AiBridge {
         finally { o.buildSpec = ""; }
     }
 
+    /**
+     * How big the waiting preview is and how much of it is drawn. The game draws only the first blocks of a big preview, in the
+     * game and in render_view, so the AI is told outright when that happened: the rest is still built when applied.
+     */
+    static void previewReport(JsonObject out, GhostBlocks preview) {
+        out.addProperty("previewBlocks", preview.total());
+        out.addProperty("previewBlocksDrawn", preview.described());
+        out.addProperty("previewTruncated", preview.truncated());
+        if (preview.truncated()) out.addProperty("previewWarning", "Only " + preview.described() + " of " + preview.total()
+            + " preview blocks are described to the game, which is all render_view and the ghost can show. The rest are still in the preview and will be built when it is applied, so do not judge the build from the picture. Build it in smaller stages to see all of it, or read it with get_preview_blocks.");
+    }
+
     private static JsonObject state() {
         var mc = Minecraft.getInstance();
         var out = new JsonObject();
@@ -394,7 +414,7 @@ public final class AiBridge {
             selection.add("dimensions", array(status.max().x() - status.min().x() + 1, status.max().y() - status.min().y() + 1, status.max().z() - status.min().z() + 1));
         }
         out.add("selection", selection);
-        out.addProperty("previewBlocks", ClientState.aiPending.total());
+        previewReport(out, ClientState.aiPending);
         out.addProperty("undoSteps", status.aiUndo());
         out.addProperty("busy", status.busy());
         out.addProperty("lastMessage", status.message());

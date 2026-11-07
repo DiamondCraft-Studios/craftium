@@ -44,11 +44,15 @@ final class ShapeObject {
 
     /** Puts the shape down at {@code at}; if it is already down, moves it there and keeps its turn and size. */
     static void place(Point at){
-        if(pose==null){pose=new Pose(at,hover,1,1,1);ClientState.notify("Shape ready · Move, Rotate and Scale change it · Enter to build · Esc to cancel");}
+        if(pose==null){var o=ClientState.options;pose=new Pose(at,hover,o.sizeX,o.sizeY,o.sizeZ);ClientState.notify("Shape ready · Move, Rotate and Scale change it · Enter to build · Esc to cancel");}
         else pose=pose.withOrigin(at);
     }
     /** The hover preview's pose when it is turned, or null when it is not and the plain brush shape is the preview. */
-    static Pose hoverPose(){return hover==IDENTITY?null:new Pose(new Point(0,0,0),hover,1,1,1);}
+    static Pose hoverPose(){var o=ClientState.options;return hover==IDENTITY&&dev.craftium.core.ShapeSizes.isDefault(o)?null:new Pose(new Point(0,0,0),hover,o.sizeX,o.sizeY,o.sizeZ);}
+    /** The sizes chosen in the shape's size controls go to a shape already put down. */
+    static void adoptSizes(){var o=ClientState.options;if(pose!=null)pose=fit(new Pose(pose.origin(),pose.rotation(),o.sizeX,o.sizeY,o.sizeZ),o.outerRadius());}
+    /** The size controls show the sizes a shape put down has, which its handles may have changed. */
+    static void syncOptions(){var o=ClientState.options;if(pose!=null){o.sizeX=pose.sizeX();o.sizeY=pose.sizeY();o.sizeZ=pose.sizeZ();}}
     /** Turns the shape, or the hover preview before it is down, by {@code degrees} about a world axis (right-handed). */
     static void turnAbout(Vec3 axis,double degrees){
         double length=axis.length();if(length==0)return;
@@ -79,7 +83,7 @@ final class ShapeObject {
     /** Grows or shrinks the shape's radius by {@code step}; the sizes are kept within reach of the new radius. */
     static void adjustRadius(int step){
         var o=ClientState.options;
-        o.radius=Math.clamp(o.radius+step,1,BrushMath.MAX_RADIUS);
+        o.radius=Math.clamp(o.radius+step,1,dev.craftium.core.ShapeLimits.maxRadius(o));
         o.outlineThickness=Math.clamp(o.outlineThickness,1,o.radius);
         if(pose!=null)pose=fit(pose,o.outerRadius());
     }

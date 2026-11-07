@@ -54,7 +54,7 @@ test("lists every tool with its hints, and the server's instructions", async () 
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "get_blocks", "get_palette", "get_screenshot", "get_state", "get_surface", "preview_build", "render_view", "undo"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "get_blocks", "get_palette", "get_preview_blocks", "get_screenshot", "get_state", "get_surface", "preview_build", "read_selection", "render_view", "undo"]);
   assert.equal(tools.find((t) => t.name === "get_state").annotations.readOnlyHint, true);
   assert.equal(tools.find((t) => t.name === "apply_preview").annotations.destructiveHint, true);
   assert.match(tools.find((t) => t.name === "preview_build").description, /cylinder/);
@@ -128,7 +128,7 @@ test("get_surface passes its corners and kind to the bridge and nothing else", a
   await bridge.close();
 });
 
-test("preview_build passes the spec with its origin, and there are no selection tools", async () => {
+test("preview_build passes the spec with its origin, and the only selection tool only reads", async () => {
   const bridge = await fakeBridge({ preview_build: { ok: true, message: "AI preview ready: 4 blocks" } });
   const client = await connect(bridge.file);
   const spec = { origin: [100, 64, -20], palette: { s: "stone" }, ops: [{ op: "set", at: [0, 0, 0], block: "s" }] };
@@ -136,8 +136,41 @@ test("preview_build passes the spec with its origin, and there are no selection 
   assert.equal(result.isError, undefined);
   assert.deepEqual(bridge.seen[0].body, { spec });
   const { tools } = await client.listTools();
-  assert.equal(tools.some((t) => /selection/.test(t.name)), false);
+  // The AI works in its own workspace and never changes the player's selection: the one tool that mentions it only reads.
+  const selectionTools = tools.filter((t) => /selection/.test(t.name));
+  assert.deepEqual(selectionTools.map((t) => t.name), ["read_selection"]);
+  assert.equal(selectionTools[0].annotations.readOnlyHint, true);
   assert.match(tools.find((t) => t.name === "preview_build").description, /WORLD/);
+  await bridge.close();
+});
+
+test("get_preview_blocks passes its box, view and format, and rejects bad ones before the game", async () => {
+  const bridge = await fakeBridge({ get_preview_blocks: { ok: true, format: "boxes", summary: "1,000 blocks in 1 boxes: 1000 oak_log" } });
+  const client = await connect(bridge.file);
+  const result = await client.callTool({ name: "get_preview_blocks", arguments: { from: [0, 0, 0], to: [9, 9, 9], view: "only", format: "boxes", sneaky: 1 } });
+  assert.equal(result.isError, undefined);
+  assert.equal(JSON.parse(text(result)).format, "boxes");
+  assert.deepEqual(bridge.seen[0].body, { from: [0, 0, 0], to: [9, 9, 9], view: "only", format: "boxes" });
+  const plain = await client.callTool({ name: "get_preview_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1] } });
+  assert.equal(plain.isError, undefined);
+  assert.deepEqual(bridge.seen[1].body, { from: [0, 0, 0], to: [1, 1, 1] }); // defaults are the game's to apply
+  const badView = await client.callTool({ name: "get_preview_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], view: "before" } });
+  assert.equal(badView.isError, true);
+  const badFormat = await client.callTool({ name: "get_preview_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], format: "pretty" } });
+  assert.equal(badFormat.isError, true);
+  assert.equal(bridge.seen.length, 2, "bad arguments must not reach the game");
+  const tool = (await client.listTools()).tools.find((t) => t.name === "get_preview_blocks");
+  assert.equal(tool.annotations.readOnlyHint, true);
+  await bridge.close();
+});
+
+test("read_selection asks the game for the selection and forwards nothing the model adds", async () => {
+  const bridge = await fakeBridge({ read_selection: { ok: true, selected: 4, summary: "4 blocks, flat" } });
+  const client = await connect(bridge.file);
+  const result = await client.callTool({ name: "read_selection", arguments: { sneaky: 1 } });
+  assert.equal(result.isError, undefined);
+  assert.equal(JSON.parse(text(result)).summary, "4 blocks, flat");
+  assert.deepEqual(bridge.seen[0].body, {});
   await bridge.close();
 });
 

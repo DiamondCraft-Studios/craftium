@@ -33,10 +33,11 @@ final class AdvancedTools {
             }
             case EXTRUDE -> {
                 // The whole face the click lands on, from the same search the hover preview outlines. Expand adds layers in front of it, contract takes them off.
-                var base=p.state(center);
+                // With a selection under the click, the face is found among the selected blocks only.
+                var base=p.state(center);var within=p.builder?null:p.session.selection;if(within!=null&&!within.contains(center))within=null;var chosen=within;
                 var face=SurfaceFill.face(new SurfaceFill.Cells(){
                     public boolean air(Point a){var s=p.state(a);return s.isAir()||o.extrudeReplaceable&&s.canBeReplaced();}
-                    public boolean matches(Point a){return AdvancedTools.matches(p,base,a);}
+                    public boolean matches(Point a){return (chosen==null||chosen.contains(a))&&(o.smartExtrude?sameFamily(base,p.state(a)):AdvancedTools.matches(p,base,a));}
                 },center,normal,o.selectLimit);
                 int count=Math.max(1,o.extrudeCount);
                 for(Point at:face)for(int step=1;step<=count;step++){int s=o.invert?1-step:step;p.put(at.add(normal.x()*s,normal.y()*s,normal.z()*s),o.invert?Blocks.AIR.defaultBlockState():p.state(at));}
@@ -59,10 +60,13 @@ final class AdvancedTools {
             }
             case FLOODFILL -> {
                 Point start=p.state(center).isAir()?center:center.add(normal.x(),normal.y(),normal.z());var matching=p.state(start);
+                // With the start inside the selection, the fill spreads through selected cells only.
+                var within=p.builder||!p.session.selection.contains(start)?null:p.session.selection;
                 for(Point at:SurfaceFill.flood(new SurfaceFill.Cells(){
                     public boolean air(Point a){return p.state(a).isAir();}
-                    public boolean matches(Point a){return p.state(a)==matching;}
-                },start,o.floodLimit,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners))p.put(at,p.material);
+                    public boolean matches(Point a){return (within==null||within.contains(a))&&p.state(a)==matching;}
+                    public boolean solid(Point a){var s=p.state(a);return !s.isAir()&&s!=matching;}
+                },start,Math.clamp(o.blockLimit,1,Selection.LIMIT),Selection.LIMIT*8,o.floodGap,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners))p.put(at,p.material);
             }
             case FLUID_BALL -> fluid(p,center,normal);
             case SMEAR -> {
@@ -154,6 +158,8 @@ final class AdvancedTools {
             Point at=Math.abs(normal.x())==1?c.add(v.z(),v.y(),-v.x()*normal.x()):c.add(v.x(),v.y(),v.z());p.put(at,p.material);
         }
     }
+    static String family(BlockState state){return BlockFamily.of(state);}
+    static boolean sameFamily(BlockState original,BlockState other){return BlockFamily.same(original,other);}
     static BlockState typeReplace(EditPlanner p,BlockState old,BlockState target){
         String from=BuiltInRegistries.BLOCK.getKey(old.getBlock()).getPath(),to=BuiltInRegistries.BLOCK.getKey(target.getBlock()).getPath();
         for(String suffix:new String[]{"_stairs","_slab","_wall","_fence","_fence_gate","_button","_pressure_plate","_door","_trapdoor"})if(from.endsWith(suffix)){

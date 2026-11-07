@@ -28,6 +28,10 @@ final class Session {
     Point clipboardOrigin;
     /** An edit worked out but not yet applied, waiting for the player to confirm it. Null when there is none. */
     Edit pendingEdit;
+    /** Which preview this AI workspace is holding, numbered as each is made, so another player's client can tell it changed. */
+    long previewId;
+    /** What this player was last shown of other players' AI previews, so only a change is sent. Null makes the next status carry them again. */
+    String sharedKey;
     String pendingData="";boolean pendingDirty;
     /** The clipboard's blocks as a ghost for the placement preview, and whether it needs encoding again. */
     String clipboardGhost="";boolean clipboardGhostDirty=true;
@@ -60,7 +64,13 @@ final class Session {
      */
     ModelTransform.Chain pendingChain;Edit pendingChainBase,pendingChainEdit;
     long requestStroke, lastStroke;
+    /** The stroke the game's own placements belong to while the place button is held, so they undo as one; 0 when no stroke is open. */
+    long placeStroke;
+    /** Whether the edit this request starts goes into the undo history. */
+    boolean requestRecord=true;
     boolean busy;
+    /** Builder commits that arrived while an edit was being applied, as the requests were sent; each is planned when its turn comes, against the world as the earlier ones left it. */
+    final ArrayDeque<String> queued=new ArrayDeque<>();
     /** A pulse for the client to show with the next status, as "undo|redo:milliseconds:points"; empty when there is none. */
     String pulse="";
     UUID selectedEntity;
@@ -155,12 +165,12 @@ final class Session {
                 biomeMap.put(c.cell(),old==null?c:new BiomeChange(c.cell(),old.before(),c.after()));
             }
             var merged=new Edit(previous.name(),List.copyOf(combined.values()),List.copyOf(biomeMap.values()),edit.flags()).withBuilder(previous.builder());
-            if(merged.estimatedBytes()<=32*1024*1024 && merged.changes().size()+merged.biomes().size()<=Selection.LIMIT)edit=merged;
+            if(merged.estimatedBytes()<=Selection.HISTORY_BYTES && merged.changes().size()+merged.biomes().size()<=Selection.LIMIT)edit=merged;
             else undo.addFirst(previous);
         }
         lastStroke=stroke;
         redo.clear(); undo.addFirst(edit); recalculateBytes();
-        while (undo.size()>32 || (bytes>32*1024*1024 && undo.size()>1)) bytes-=undo.removeLast().estimatedBytes();
+        while (undo.size()>32 || (bytes>Selection.HISTORY_BYTES && undo.size()>1)) bytes-=undo.removeLast().estimatedBytes();
         event(edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())+" changes");
     }
     void recalculateBytes() {bytes=0;for(var e:undo)bytes+=e.estimatedBytes();for(var e:redo)bytes+=e.estimatedBytes();}

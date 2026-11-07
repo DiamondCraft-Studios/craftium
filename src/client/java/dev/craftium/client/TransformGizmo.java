@@ -179,6 +179,7 @@ final class TransformGizmo {
             else if(t.kind==Kind.MODEL){
                 if(request.offsetX==0&&request.offsetY==0&&request.offsetZ==0&&angles.equals(Vec3.ZERO)&&size.equals(new Vec3(1,1,1)))return true; // nothing was changed
                 Vec3 about=mode==Options.GizmoMode.SCALE?aboutPoint():t.anchor;
+                request.turnBlocks=true; // stairs and other oriented blocks turn with the selection
                 request.aboutSet=true;request.aboutX=about.x;request.aboutY=about.y;request.aboutZ=about.z;
                 CraftiumClient.send("selection_transform",null,null);
                 // The pivot goes with the blocks when they are moved.
@@ -208,9 +209,23 @@ final class TransformGizmo {
         return com.mojang.blaze3d.platform.InputConstants.isKeyDown(window,org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_ALT)||com.mojang.blaze3d.platform.InputConstants.isKeyDown(window,org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_ALT);
     }
     private static Vec3 transformed(Vec3 world){if(dragging==null)return world;if(dragging.kind==Kind.MODEL)return rawTransform(world).add(delta);if(normalizationDirty){normalization=Vec3.ZERO;if(dragging.kind==Kind.PLACEMENT||dragging.kind==Kind.SELECTION){AABB bounds;if(dragging.kind==Kind.PLACEMENT){Point p=PlacementPreview.origin;bounds=bounds().move(p.x(),p.y(),p.z());}else{var status=ClientState.status;Point min=status.min(),max=status.max();bounds=new AABB(min.x(),min.y(),min.z(),max.x()+1,max.y()+1,max.z()+1);}double x=Double.POSITIVE_INFINITY,y=x,z=x;for(int i=0;i<8;i++){Vec3 corner=rawTransform(new Vec3((i&1)==0?bounds.minX:bounds.maxX,(i&2)==0?bounds.minY:bounds.maxY,(i&4)==0?bounds.minZ:bounds.maxZ));x=Math.min(x,corner.x);y=Math.min(y,corner.y);z=Math.min(z,corner.z);}normalization=new Vec3(bounds.minX-x,bounds.minY-y,bounds.minZ-z);}normalizationDirty=false;}return rawTransform(world).add(normalization).add(delta);}
+    /**
+     * Where {@code eye} is relative to the selection as it was before the drag: the point the drag's transform sends to it. The outline is drawn
+     * unmoved and then moved by the transform, so the silhouette the camera sees of the moved shape is the silhouette of the unmoved one seen
+     * from here. An affine transform keeps straight lines straight, so this is exact for moves, turns and scales alike. The camera itself when
+     * nothing is dragged or the transform cannot be undone.
+     */
+    static Vec3 eyeInShape(Vec3 eye){
+        if(dragging==null)return eye;
+        Vec3 about=aboutPoint(),moved=transformed(Vec3.ZERO).subtract(rawTransform(Vec3.ZERO)); // the part of the transform that is not the scale and turn: the move
+        var back=Geometry.untransform(new Geometry.Vector(eye.x,eye.y,eye.z),new Geometry.Vector(about.x,about.y,about.z),new Geometry.Vector(size.x,size.y,size.z),angles.y,angles.x,angles.z,new Geometry.Vector(moved.x,moved.y,moved.z));
+        return back==null?eye:new Vec3(back.x(),back.y(),back.z());
+    }
     /** One outline segment of a selection being transformed, moved by the transform in progress. */
     static void line(Vec3 from,Vec3 to){Overlay.line(transformed(from),transformed(to),ClientState.options.previewColor,1.5f);}
     static boolean dragging(){return dragging!=null;}
+    /** The mode of the handle being dragged, or null when none is held. */
+    static Options.GizmoMode draggingMode(){return dragging==null?null:mode;}
     /** How far the selected blocks are being dragged by the Move tool, in whole blocks; null when no such drag is under way. */
     static Point moveDelta(){
         if(dragging==null||dragging.kind!=Kind.MODEL||mode!=Options.GizmoMode.MOVE)return null;
@@ -262,7 +277,7 @@ final class TransformGizmo {
         return 0xff000000|Math.min(255,r+70)<<16|Math.min(255,g+70)<<8|Math.min(255,b+70);
     }
     /** How far a handle point sits from its block's corner: a ruler's ends are drawn at the middle of their blocks, so the gizmo is too. */
-    static double nodeOffset(){return dev.craftium.client.compat.ClientCompat.screen(net.minecraft.client.Minecraft.getInstance()) instanceof EditorScreen editor&&!editor.toolActive()?.5:0;}
+    static double nodeOffset(){return dev.craftium.client.compat.ClientCompat.screen(net.minecraft.client.Minecraft.getInstance()) instanceof EditorScreen editor&&(!editor.toolActive()||ClientState.options.tool==Tool.MODIFY)?.5:0;}
     /** Where the handle being dragged is right now, or null when no handle point is being dragged. */
     static Vec3 liveNode(){return dragging!=null&&dragging.kind==Kind.NODE?dragging.anchor.add(delta):null;}
     static boolean selectionPreview(){return dragging!=null&&(dragging.kind==Kind.SELECTION||dragging.kind==Kind.MODEL);}
@@ -317,6 +332,13 @@ final class TransformGizmo {
                 Overlay.sceneLine(new Vec3(a[0],a[1],a[2]),new Vec3(b[0],b[1],b[2]),RULER_COLORS[axis],1);
             }
         }
+    }
+    /** A line from one point to another, as thin as the ruler: white, or in the colour of the axis when it runs along exactly one world axis. */
+    static void guideLine(Vec3 from,Vec3 to){
+        int along=-1,differing=0;double[] a={from.x,from.y,from.z},b={to.x,to.y,to.z};
+        for(int axis=0;axis<3;axis++)if(Math.abs(a[axis]-b[axis])>1e-6){differing++;along=axis;}
+        if(differing==0)return;
+        Overlay.sceneLine(from,to,differing==1?RULER_COLORS[along]:0xaaffffff,1);
     }
     /** The handles at {@code anchor} for show only, as in builder mode where they can't be dragged. */
     static void display(Vec3 anchor){show(anchor,ALL_AXES,true);}
@@ -499,8 +521,9 @@ final class TransformGizmo {
     /** Move handles end in flat triangular arrowheads, rotate handles are rings, scale handles are squares, and the centre is a square of its own. */
     private static void render(Vec3 anchor,Options.GizmoMode currentMode,int active,Vec3 extent){
         Vec3[] directions=axesAt(anchor);double k=screenScale(anchor);
+        boolean held=ClientState.options.gizmoHideOthers&&dragging!=null&&active>=0; // while a handle is held, only that handle is drawn
         for(int i=0;i<3;i++){int color=active==i?brighten(COLORS[i]):COLORS[i];
-            if((axisMask>>i&1)!=0){
+            if((axisMask>>i&1)!=0&&!(held&&active!=i)){
             if(currentMode==Options.GizmoMode.ROTATE){
                 Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3];
                 // Three full rings make a sphere of wire that is hard to look through, so each axis shows a short arc to grab,
@@ -510,7 +533,7 @@ final class TransformGizmo {
             else if(currentMode==Options.GizmoMode.SCALE){Vec3 end=extent!=null?faceCenter(faceBase!=null?faceBase:anchor,directions,extent,i):anchor.add(directions[i].scale(5*k));if(extent==null)Overlay.line(anchor,end,color,active==i?4:2);Overlay.box(new AABB(end.add(-.2*k,-.2*k,-.2*k),end.add(.2*k,.2*k,.2*k)),color,active==i?2:1,color&0x99ffffff|0x66000000);}
             else{Vec3 tip=anchor.add(directions[i].scale(5.3*k)),base=anchor.add(directions[i].scale(4.5*k));Overlay.line(anchor,base,color,active==i?4:2);arrowhead(tip,base,color,active==i?3:2,k);}
             }
-            if(showFaces&&(currentMode==Options.GizmoMode.MOVE||currentMode==Options.GizmoMode.SCALE)&&(axisMask>>(i+1)%3&1)!=0&&(axisMask>>(i+2)%3&1)!=0){ // a square in each plane: moves, or scales, the two axes of that plane
+            if(showFaces&&(currentMode==Options.GizmoMode.MOVE||currentMode==Options.GizmoMode.SCALE)&&(axisMask>>(i+1)%3&1)!=0&&(axisMask>>(i+2)%3&1)!=0&&!(held&&active!=4+i)){ // a square in each plane: moves, or scales, the two axes of that plane
                 Vec3 a=directions[(i+1)%3],b=directions[(i+2)%3],at=anchor.add(a.scale(1.4*k)).add(b.scale(1.4*k));boolean hot=active==4+i;
                 planeSquare(at,a,b,.2*k,hot?brighten(COLORS[i]):COLORS[i],hot);
             }
@@ -518,14 +541,14 @@ final class TransformGizmo {
         if(currentMode==Options.GizmoMode.ROTATE){
             // A ring that faces the camera turns about the view; hovering inside the sphere lights its outline, the trackball.
             Vec3[] cam=cameraAxes();
-            circle(anchor,cam[0],cam[1],4.4*k,active==7?0xffffffff:0x99c7d6e5,active==7?3:1.5f);
+            if(!held||active==7)circle(anchor,cam[0],cam[1],4.4*k,active==7?0xffffffff:0x99c7d6e5,active==7?3:1.5f);
             if(active==3)circle(anchor,cam[0],cam[1],3.5*k,CENTER_ACTIVE,2f);
         }
         if(dragging==null&&active>=0)label(anchor,directions,k,extent,currentMode,active);
-        if(currentMode==Options.GizmoMode.SCALE&&plainHandles){ // the Scale tool's circle in the middle scales every axis
+        if(currentMode==Options.GizmoMode.SCALE&&plainHandles&&!(held&&active!=3)){ // the Scale tool's circle in the middle scales every axis
             Vec3[] cam=cameraAxes();circle(anchor,cam[0],cam[1],.32*k,active==3?CENTER_ACTIVE:CENTER,active==3?3:2f);
         }
-        if(showFaces&&currentMode!=Options.GizmoMode.ROTATE&&!plainHandles&&axisMask==ALL_AXES){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
+        if(showFaces&&currentMode!=Options.GizmoMode.ROTATE&&!plainHandles&&axisMask==ALL_AXES&&!(held&&active!=3)){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
     }
     /** Names the handle under the pointer next to it. */
     private static void label(Vec3 anchor,Vec3[] directions,double k,Vec3 extent,Options.GizmoMode mode,int handle){

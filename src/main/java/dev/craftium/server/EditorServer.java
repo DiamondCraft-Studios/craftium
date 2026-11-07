@@ -23,17 +23,64 @@ public final class EditorServer {
     private static Job job;
     /** Keeps the chunks the running edit touches loaded until it is done, however far they are from every player. */
     private static ChunkLease jobLease=ChunkLease.NONE;
+    /** How long one tick may spend writing an edit's blocks: 20 of its 50 ms, which leaves the rest of the tick its time and still finishes a large undo in a few ticks. */
+    private static final long APPLY_BUDGET_NANOS=20_000_000L;
     private static int historyTicks;
     private record Job(UUID owner, ServerLevel level, Session session, Session.Edit edit,
-                       boolean backwards, boolean history, int[] cursor, List<Session.Change> applied, long strokeId, boolean load) {}
+                       boolean backwards, boolean history, int[] cursor, List<Session.Change> applied, long strokeId, boolean load, List<Session.Change> order, boolean record) {}
+    /** How many blocks are checked and then written together; a tick looks at the clock between slices. */
+    private static final int SLICE=1024;
+    /** An edit's blocks grouped by chunk, each chunk's in the order the edit has them, so a chunk can be written in one pass (see {@link BulkPlace}). */
+    private static List<Session.Change> byChunk(List<Session.Change> changes){
+        var grouped=new ArrayList<>(changes);
+        grouped.sort(Comparator.comparingLong((Session.Change c)->((long)(c.pos().x()>>4)<<32)|((c.pos().z()>>4)&0xffffffffL)));
+        return grouped;
+    }
+    /** Checks which of these blocks the edit may still change, then writes them, a chunk at a time. */
+    private static void applySlice(Job j,List<Session.Change> slice){
+        var due=new ArrayList<Session.Change>(slice.size());
+        for(var c:slice){
+            BlockPos at=EditPlanner.pos(c.pos());var expected=j.backwards?c.after():c.before();
+            if((j.load||j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) && expected.matches(j.level,at)) {
+                if(!ServerPlatform.canChange(j.owner,j.level,c.pos()))throw new IllegalArgumentException("Edit permission or region access changed");
+                due.add(c);
+            } else if(j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) {
+                // Skipped: resend the block as it is, so a client that predicted this edit puts it back.
+                var now=j.level.getBlockState(at);j.level.sendBlockUpdated(at,now,now,2);
+            }
+        }
+        j.applied.addAll(due); // recorded before they are written: undoing a block that was not written is a no-op, losing one that was is not
+        int flags=j.edit.flags();
+        for(int from=0;from<due.size();){
+            int cx=due.get(from).pos().x()>>4,cz=due.get(from).pos().z()>>4,to=from;
+            while(to<due.size()&&due.get(to).pos().x()>>4==cx&&due.get(to).pos().z()>>4==cz)to++;
+            var run=due.subList(from,to);
+            if(BulkPlace.applies(run.size(),flags))BulkPlace.place(j.level,j.level.getChunk(cx,cz),run,j.backwards,flags);
+            else for(var c:run)(j.backwards?c.before():c.after()).place(j.level,EditPlanner.pos(c.pos()),flags);
+            from=to;
+        }
+        if(!j.backwards&&!j.history&&j.edit.name().equals(IN_WORLD_BREAK))breakEffects(j.level,due);
+    }
+    /** The name of the edit a left click in the world makes while the break is the editor's, not the game's: infinite reach or symmetry. */
+    static final String IN_WORLD_BREAK="Bulldozer";
+    /** Most blocks that play the game's break effect for one edit, so a long held break does not flood clients with particles. */
+    private static final int BREAK_EFFECTS=16;
+    /** The sound and particles the game plays when a player breaks a block, which the editor's own break would otherwise skip. */
+    private static void breakEffects(net.minecraft.server.level.ServerLevel level,List<Session.Change> broken){
+        int played=0;
+        for(var c:broken){
+            var old=c.before().state();if(old.isAir()||played++>=BREAK_EFFECTS)continue;
+            level.levelEvent(2001,EditPlanner.pos(c.pos()),net.minecraft.world.level.block.Block.getId(old)); // 2001 is the game's block break event
+        }
+    }
     private EditorServer() {}
     /** Starts applying an edit, first leasing every chunk it reaches so that a far-away one is loaded for as long as the edit needs it. */
-    private static void begin(ServerPlayer player,Session s,Session.Edit edit,boolean backwards,boolean history,long stroke,boolean load){
+    private static void begin(ServerPlayer player,Session s,Session.Edit edit,boolean backwards,boolean history,long stroke,boolean load,boolean record){
         var area=ChunkLease.area();
         for(var c:edit.changes())area.block(c.pos().x(),c.pos().z());
         for(var c:edit.biomes())area.box(c.cell().x()*4,c.cell().z()*4,c.cell().x()*4+3,c.cell().z()*4+3);
         jobLease=area.lease(player.level());
-        s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,backwards,history,new int[]{0},new ArrayList<>(),stroke,load);
+        s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,backwards,history,new int[]{0},new ArrayList<>(),stroke,load,byChunk(edit.changes()),record);
     }
     /** Ends the running edit and lets its chunks go. */
     private static void endJob(){job=null;jobLease.close();jobLease=ChunkLease.NONE;}
@@ -45,7 +92,7 @@ public final class EditorServer {
         player.setGameMode(mode);
         if(player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}
     }
-    public static void disconnect(ServerPlayer player){var s=SESSIONS.get(player.getUUID());if(s!=null)restoreMode(player,s);disconnect(player.getUUID());}
+    public static void disconnect(ServerPlayer player){var s=SESSIONS.get(player.getUUID());if(s!=null)restoreMode(player,s);disconnect(player.getUUID());refreshShared(player.level().getServer());}
     public static void disconnect(UUID id) {var session=SESSIONS.get(id);if(session!=null)HistoryStore.save(session);if(AnimatedRebuild.owned(id)){AnimatedRebuild.cancel(id);return;}if(job==null || !job.owner.equals(id)){SESSIONS.remove(id);AI_SESSIONS.remove(id);}}
     public static void flushHistory(MinecraftServer server){
         AnimatedRebuild.finishOnStop(server);
@@ -85,7 +132,7 @@ public final class EditorServer {
         var s=SESSIONS.get(player.getUUID());var o=capabilities(player);if(s==null||o==null)return;
         try{
             var level=player.level();Point p=EditPlanner.point(at);var near=(Map<BlockPos,BlockSnapshot>)snapshot;var before=near.get(at);var after=BlockSnapshot.capture(level,at);
-            var plan=new EditPlanner(level,s,o);plan.put(p,after); // the block is already there, so only its mirrors are left to change
+            var plan=new EditPlanner(level,s,o);plan.builder=true;plan.put(p,after); // the block is already there, so only its mirrors are left to change; masks apply as they do to the Builder tools
             var mirrors=plan.finish("Builder placement");
             if(!mirrors.changes().isEmpty())EditProtection.check(player,mirrors);
             var changes=new ArrayList<Session.Change>();
@@ -99,22 +146,33 @@ public final class EditorServer {
                 c.after().place(level,EditPlanner.pos(c.pos()),mirrors.flags());changes.add(c);
             }
             if(changes.isEmpty())return;
-            s.remember(new Session.Edit("Builder placement",changes,List.of(),mirrors.flags()).withBuilder(true));
+            if(!o.recordPlayerBuilding){send(player,s,"Placed "+changes.size()+(changes.size()==1?" block":" blocks"),false);return;} // by hand, and not kept in the history
+            s.remember(new Session.Edit("Builder placement",changes,List.of(),mirrors.flags()).withBuilder(true),s.placeStroke);
             send(player,s,"Placed "+changes.size()+(changes.size()==1?" block":" blocks"),false);
         }catch(IllegalArgumentException e){send(player,s,e.getMessage(),true);}
     }
     public static boolean noClip(ServerPlayer player){var s=SESSIONS.get(player.getUUID());return s!=null&&s.noClip&&player.isCreative()&&player.getAbilities().flying&&ServerPlatform.permitted(player,"capabilities");} // only while flying
 
+    /** How many builder commits wait behind the edit being applied; past this the newest is turned down as before. */
+    private static final int QUEUE_LIMIT=8;
+    private static long PREVIEW_IDS;
+    /** The most characters of status a packet carries, with room to spare: a packet may be at most 2 MiB, and the string is limited to 2,000,000 characters. */
+    private static final int STATUS_LIMIT=1_500_000;
+    private static boolean replaying;
     public static void handle(ServerPlayer player,String json) {
         var s=SESSIONS.computeIfAbsent(player.getUUID(),id->new Session());
         try {
             if(!ServerPlatform.permitted(player,"edit"))
                 throw new IllegalArgumentException("You do not have permission to use Craftium on this server");
+            var refusal=dev.craftium.core.Handshake.refused(player.getUUID());
+            if(refusal!=null)throw new IllegalArgumentException(refusal);
             var r=Packets.JSON.fromJson(json,Packets.Request.class);
             if(r==null || r.action()==null || r.options()==null)throw new IllegalArgumentException("Invalid editor request");
             if(!ServerPlatform.permitted(player,r.action()))throw new IllegalArgumentException("You do not have permission for this Craftium action");
             Options o=r.options();o.validate();
-            s.requestStroke=r.action().equals("use")||r.action().equals("builder_break")?r.strokeId():0;
+            boolean inWorld=r.action().equals("builder_place")||r.action().equals("builder_break");
+            s.requestRecord=o.recordPlayerBuilding||!inWorld; // a click in the world is the player building by hand; the editor's own tools always are recorded
+            s.requestStroke=r.action().equals("use")||inWorld?r.strokeId():0;
             if(s.dimension!=null && !s.dimension.equals(player.level().dimension())) {
                 if(s.busy)throw new IllegalArgumentException("Wait for the current operation to finish");
                 HistoryStore.save(s);
@@ -127,9 +185,11 @@ public final class EditorServer {
             s.confirmEdits=o.confirmEdits;
             s.currentAction=r.action();s.recordSelection=changesSelection(r.action(),o);
             // The builder and the clipboard placement preview have their own confirmation, and dropping a block in the world is one, so they apply straight away.
-            s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("bucket_fill")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm")||r.action().equals("stroke_end")||r.action().equals("use")&&(o.tool==Tool.EXTRUDE||o.tool==Tool.FLOODFILL);
-            if(r.action().equals("status")) { send(player,s,"Ready",false);return; }
+            s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("bucket_fill")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm")||r.action().equals("stroke_end")||r.action().equals("use")&&(o.tool==Tool.EXTRUDE||o.tool==Tool.FLOODFILL)
+                ||!o.enterToBuild&&!r.action().equals("use"); // with Enter to build off, a stroke is staged until the button is let go (stroke_end) and any other action is built at once
+            if(r.action().equals("status")) { s.sharedKey=null;send(player,s,"Ready",false);return; }
             if(r.action().equals("capabilities")){send(player,s,"Builder capabilities synchronized",false);return;}
+            if(r.action().equals("place_stroke")||r.action().equals("place_stroke_end")){s.placeStroke=r.action().equals("place_stroke")?r.strokeId():0;return;} // the game's own placements while the button is held; never throttled or answered
             if(r.action().equals("gamemode_editor")){ // sent as the editor opens and closes: no status message, unlike the buttons, and never throttled
                 if(!player.isSpectator()){s.previousMode=player.gameMode.getGameModeForPlayer();player.setGameMode(GameType.SPECTATOR);}
                 return;
@@ -154,15 +214,16 @@ public final class EditorServer {
                 return;
             }
             if(r.action().equals("editor_reset")){ // the way out of a stuck editor: forgets whatever is half done, but never an edit being applied
-                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingChain=null;s.pendingChainBase=s.pendingChainEdit=null;s.pendingDirty=true;s.selectionBefore=null;
+                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingChain=null;s.pendingChainBase=s.pendingChainEdit=null;s.pendingDirty=true;s.selectionBefore=null;s.queued.clear();
                 s.selection.clear();s.corner=s.ruler=s.line=null;s.selectedEntity=null;s.historyRemaining=0;s.pulse="";
                 if((job==null||!job.owner.equals(player.getUUID()))&&!AnimatedRebuild.owned(player.getUUID()))s.busy=false;
                 send(player,s,"Editor reset",false);return;
             }
             long now=System.nanoTime();
+            // A builder commit is a deliberate click, not a stream, so it is never dropped by the throttle below: a lost one would leave the selection placed on the client only.
             // The export pop-up asks for a new preview as fields change and must not lose one, or an export, to a request just before it.
             boolean popup=Set.of("structure_preview","structure_export_file","structure_import_file").contains(r.action());
-            if(now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
+            if(!replaying&&!r.action().equals("builder_commit")&&now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             if(!popup)s.lastRequest=now;
             if(r.action().equals("selection_restore")){
                 if(!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly())s.undo.removeFirst();
@@ -183,11 +244,29 @@ public final class EditorServer {
             }
             if(!player.isCreative()&&!player.isSpectator())throw new IllegalArgumentException("Switch to Creative or Spectator mode to edit");
             if((r.action().equals("undo")||r.action().equals("rebuild_cancel"))&&AnimatedRebuild.owned(player.getUUID())){AnimatedRebuild.cancel(player.getUUID());send(player,s,"Cancelling rebuild and restoring the original structure…",false);return;}
+            if(r.action().equals("hand_set")){ // a block dragged to the Hand slot: the editor's player is a spectator, which cannot use the creative menu, so the inventory is set here
+                if(!player.isCreative()&&!(player.isSpectator()&&s.previousMode==GameType.CREATIVE))throw new IllegalArgumentException("Only a creative player can hold it");
+                var name=o.block==null?"":o.block;int bracket=name.indexOf('[');var id=dev.craftium.compat.Compat.tryParse(bracket<0?name:name.substring(0,bracket));
+                var item=id==null?null:net.minecraft.core.registries.BuiltInRegistries.BLOCK.getOptional(id).map(b->b.asItem()).orElse(null);
+                if(item==null||item==net.minecraft.world.item.Items.AIR)throw new IllegalArgumentException("That block has no item to hold");
+                // What is in the hand is not thrown away: the block goes to the first empty hotbar slot, which is then the one held. Only a full hotbar replaces the held item.
+                var inventory=player.getInventory();int slot=inventory.getSelectedSlot();
+                if(!inventory.getItem(slot).isEmpty())for(int i=0;i<9;i++)if(inventory.getItem(i).isEmpty()){slot=i;break;}
+                inventory.setItem(slot,new net.minecraft.world.item.ItemStack(item));inventory.setSelectedSlot(slot);
+                player.inventoryMenu.broadcastChanges();return;
+            }
             if(r.action().equals("hotbar_next")||r.action().equals("hotbar_previous")){send(player,s,HotbarLibrary.cycle(player,s,o,r.action().equals("hotbar_next")?1:-1),false);return;}
             if(r.action().equals("hotbar_save")||r.action().equals("hotbar_load")||r.action().equals("hotbar_list")){
                 String result=HotbarLibrary.apply(r.action(),player,o);if(r.action().equals("hotbar_list"))ServerPlatform.send(player,new Packets.Report(result));send(player,s,r.action().equals("hotbar_list")?"Saved hotbars listed":result,false);return;
             }
-            if(s.busy)throw new IllegalArgumentException("Applying edit… please wait");
+            if(s.busy){
+                // A builder commit waits its turn instead of being lost; it is planned once the edit before it has landed.
+                if(r.action().equals("builder_commit")&&job!=null&&job.owner.equals(player.getUUID())&&!job.history){
+                    if(s.queued.size()>=QUEUE_LIMIT)throw new IllegalArgumentException("Too many edits waiting · let them finish");
+                    s.queued.addLast(json);return;
+                }
+                throw new IllegalArgumentException("Applying edit… please wait");
+            }
             if(r.action().startsWith("world_")||r.action().equals("view_save")||r.action().equals("view_load")){send(player,s,WorldControls.apply(r.action(),player,o),false);return;}
             if(r.action().equals("flight")) {
                 player.getAbilities().setFlyingSpeed(.05f*o.flySpeed);
@@ -205,8 +284,13 @@ public final class EditorServer {
             }
             // Reads for an AI client: the server's own view of the world, answered with a packet only the AI bridge looks at.
             // "target" and "normal" carry the two corners here, so this comes before "normal" is checked as a direction.
+            if(r.action().startsWith("ai_preview_blocks:")){ // "ai_preview_blocks:<view>:<format>": the two settings of the read are part of the action, not of the shared options
+                var part=r.action().split(":",3);if(part.length!=3)throw new IllegalArgumentException("Invalid preview read");
+                ServerPlatform.send(player,new Packets.AiReply(AiWorld.previewBlocks(player,aiSession(player),r.target(),r.normal(),part[1],part[2])));return;
+            }
             switch(r.action()){
                 case "ai_blocks" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.blocks(player,r.target(),r.normal())));return;}
+                case "ai_selection" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.selection(player,s)));return;}
                 case "ai_surface","ai_surface_floor" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.surface(player,r.target(),r.normal(),r.action().equals("ai_surface_floor"))));return;}
                 case "ai_build_preview","ai_apply","ai_cancel","ai_undo" -> {aiAction(player,r.action(),o);return;}
                 default -> {}
@@ -316,7 +400,7 @@ public final class EditorServer {
                     requireSelection(s);
                     if(o.offsetX==0&&o.offsetY==0&&o.offsetZ==0)throw new IllegalArgumentException("Set a non-zero offset for the selection");
                     int count=r.action().equals("stack")?o.copies:1;
-                    if((long)s.selection.points().size()*count>Selection.LIMIT)throw new IllegalArgumentException("Stack exceeds 131,072 blocks");
+                    if((long)s.selection.points().size()*count>Selection.LIMIT)throw new IllegalArgumentException("Stack exceeds "+String.format("%,d",Selection.LIMIT)+" blocks");
                     // The selection and where it lands may both be far from every player: lease their chunks while the edit is planned and applied.
                     var reach=ChunkLease.area().points(s.selection.points(),0,0);
                     for(int i=1;i<=count;i++)reach.points(s.selection.points(),o.offsetX*i,o.offsetZ*i);
@@ -366,6 +450,8 @@ public final class EditorServer {
                 case "use", "builder_place", "builder_break" -> {
                     if(target==null)throw new IllegalArgumentException("Point at a block within reach");
                     var plan=new EditPlanner(player.level(),s,o);
+                    // A click in the world is not a Builder tool, but it follows the same rule: the tool masks apply only where "Use in Builder tools" is on.
+                    if(!r.action().equals("use"))plan.builder=true;
                     if(r.action().equals("builder_place")) {
                         if(o.tinker && player.getMainHandItem().isEmpty()) {
                             var old=plan.state(target);
@@ -379,7 +465,7 @@ public final class EditorServer {
                         }
                         start(player,s,plan.finish("Builder placement"));
                     } else if(r.action().equals("builder_break")) {
-                        plan.put(target,Blocks.AIR.defaultBlockState());start(player,s,plan.finish("Bulldozer"));
+                        plan.put(target,Blocks.AIR.defaultBlockState());start(player,s,plan.finish(IN_WORLD_BREAK));
                     } else use(player,s,o,target,normal,plan);
                 }
                 case "bucket_fill" -> {
@@ -476,11 +562,11 @@ public final class EditorServer {
             BlockPos at=EditPlanner.pos(p);
             if(!player.level().hasChunk(p.x()>>4,p.z()>>4))throw new IllegalArgumentException("Selection reaches unloaded chunks");
             var snapshot=BlockSnapshot.capture(player.level(),at);bytes+=128+(snapshot.data()==null?0:snapshot.data().toString().length()*2);
-            if(bytes>32*1024*1024)throw new IllegalArgumentException("Clipboard exceeds 32 MiB; select a smaller area");
+            if(bytes>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Clipboard exceeds "+Selection.HISTORY_BYTES/1024/1024+" MiB; select a smaller area");
             next.put(p.subtract(min),snapshot);
         }
         var entities=o.copyEntities?ClipboardEntities.capture(player,s):new ClipboardEntities.Capture(List.of(),List.of());
-        for(var tag:entities.relative()){bytes+=tag.toString().length()*2;if(bytes>32*1024*1024)throw new IllegalArgumentException("Clipboard exceeds 32 MiB including entities");}
+        for(var tag:entities.relative()){bytes+=tag.toString().length()*2;if(bytes>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Clipboard exceeds "+Selection.HISTORY_BYTES/1024/1024+" MiB including entities");}
         s.clipboard.clear();s.clipboard.putAll(next);s.clipboardEntities.clear();s.clipboardEntities.addAll(entities.relative());
         s.clipboardOrigin=min;
         s.clipboardDirty=true;
@@ -502,6 +588,49 @@ public final class EditorServer {
         s.clipboardDirty=true;
         send(player,s,rotate?"Clipboard rotated 90°":"Clipboard mirrored on "+"XYZ".charAt(axis),false);
     }
+    /** The ghost data of an AI workspace's waiting preview, worked out when it is first wanted after a change. */
+    private static String aiData(Session ai){
+        if(ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit,GhostCodec.AI_LIMIT);ai.pendingDirty=false;} // an AI preview describes more than the player's own edits do
+        return ai.pendingData;
+    }
+
+    /**
+     * The other players' AI previews this player is to be shown: those of players in the same dimension who are still connected, if this player may
+     * use the editor at all. Only players with Craftium receive a status, so they are the ones who see them.
+     */
+    private static List<SharedPreviews.Shown> sharedNow(ServerPlayer viewer){
+        boolean allowed;try{allowed=ServerPlatform.permitted(viewer,"status");}catch(IllegalArgumentException e){allowed=false;}
+        if(!allowed)return List.of();
+        var server=viewer.level().getServer();var all=new ArrayList<SharedPreviews.Entry>();
+        for(var entry:AI_SESSIONS.entrySet()){
+            var ai=entry.getValue();if(ai.pendingEdit==null)continue;
+            var owner=server.getPlayerList().getPlayer(entry.getKey());
+            all.add(new SharedPreviews.Entry(entry.getKey(),owner==null?"":owner.getName().getString(),owner==null?null:owner.level(),owner!=null,aiData(ai),ai.previewId));
+        }
+        return SharedPreviews.select(viewer.getUUID(),viewer.level(),all);
+    }
+
+    /** What to put in this player's status: the other players' AI previews if they differ from what was last sent, else null (unchanged). */
+    private static List<Packets.SharedPreview> sharedFor(ServerPlayer viewer,Session s){
+        var shown=sharedNow(viewer);var key=SharedPreviews.key(shown);
+        if(key.equals(s.sharedKey))return null;
+        s.sharedKey=key;
+        return shown.stream().map(one->new Packets.SharedPreview(one.owner(),one.data())).toList();
+    }
+
+    /**
+     * Tells every player whose view of other players' AI previews has changed. Called when an AI preview is made, applied or discarded, when its
+     * owner leaves, and now and then, which catches an owner who changed dimension without doing anything. It sends a status of its own kind
+     * ({@link Packets#sharedOnly}) that the client does not take for the reply to anything it asked, and sends nothing when nothing changed.
+     */
+    static void refreshShared(MinecraftServer server){
+        for(var player:server.getPlayerList().getPlayers()){
+            var s=SESSIONS.get(player.getUUID());if(s==null||!ServerPlatform.canSend(player))continue;
+            var shared=sharedFor(player,s);if(shared==null)continue;
+            ServerPlatform.send(player,new Packets.Update(StatusFit.fit(Packets.JSON.toJson(Packets.sharedOnly(shared)),STATUS_LIMIT,"")));
+        }
+    }
+
     /** The AI's workspace for this player, made when it is first needed, and started afresh when the player has changed dimension. */
     private static Session aiSession(ServerPlayer player){
         var ai=AI_SESSIONS.get(player.getUUID());
@@ -517,16 +646,21 @@ public final class EditorServer {
      * it touches the player's selection, preview or undo history, and none of it needs the player nearby.
      */
     private static void aiAction(ServerPlayer player,String action,Options o){
+        try{aiActionNow(player,action,o);}
+        finally{refreshShared(player.level().getServer());} // a preview made, refused, applied or discarded changes what other players are shown
+    }
+    private static void aiActionNow(ServerPlayer player,String action,Options o){
         var ai=aiSession(player);
         switch(action){
             case "ai_build_preview" -> {
                 if(ai.busy)throw new IllegalArgumentException("Wait for the current AI build to finish");
                 ai.pendingEdit=null;ai.pendingDirty=true; // a new preview replaces the last, and stays gone if this one is refused
-                var edit=BuildPlanner.plan(player,ai,o);
+                var mine=SESSIONS.get(player.getUUID()); // the player's own selection, which operations on it read and never change
+                var edit=BuildPlanner.plan(player,ai,o,mine==null?Set.<Point>of():mine.selection.points());
                 if(edit.changes().isEmpty()){send(player,ai,"No matching blocks changed",false);return;}
-                if(edit.estimatedBytes()>32*1024*1024)throw new IllegalArgumentException("Edit exceeds the 32 MiB history budget; use a smaller build");
+                if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller build");
                 EditProtection.check(player,edit);
-                ai.pendingEdit=edit;
+                ai.pendingEdit=edit;ai.previewId=++PREVIEW_IDS;
                 send(player,ai,"AI preview ready: "+edit.changes().size()+" blocks",false);
             }
             case "ai_apply" -> {
@@ -535,7 +669,7 @@ public final class EditorServer {
                 if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
                 EditProtection.check(player,edit);
                 ai.pendingEdit=null;ai.pendingDirty=true;
-                begin(player,ai,edit,false,false,0,true);
+                begin(player,ai,edit,false,false,0,true,true);
                 send(player,ai,"Applying "+edit.name()+"…",false);
             }
             case "ai_cancel" -> {
@@ -552,11 +686,11 @@ public final class EditorServer {
             edit=edit.withSelection(change.with(Map.of("shape",s.shapeAtRequest),Map.of("shape","none")));
         }
         if(edit.changes().isEmpty() && edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()){var why=s.nothingChangedBecause;s.nothingChangedBecause=null;send(player,s,why==null?"No matching blocks changed":"No matching blocks changed: "+why,false);return;}
-        if(edit.estimatedBytes()>32*1024*1024)throw new IllegalArgumentException("Edit exceeds the 32 MiB history budget; use a smaller region");
+        if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller region");
         EditProtection.check(player,edit);
         if(s.confirmEdits&&!s.bypassConfirm){stage(player,s,edit);return;}
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
-        begin(player,s,edit,false,false,s.requestStroke,false);
+        begin(player,s,edit,false,false,s.requestStroke,false,s.requestRecord);
         send(player,s,"Applying "+edit.name()+"…",false);
     }
     /** Holds the edit as a ghost for the player to confirm; edits made while one is waiting are added to it. */
@@ -615,11 +749,12 @@ public final class EditorServer {
         }
         // Undoing a far-away edit loads the chunks it needs for as long as it takes, instead of asking the player to walk there.
         EditProtection.check(player,edit);
-        from.removeFirst();begin(player,s,edit,backwards,true,0,s.ai);
+        from.removeFirst();begin(player,s,edit,backwards,true,0,s.ai,true);
         s.lastStroke=0;
         send(player,s,backwards?"Undoing…":"Redoing…",false);
     }
     public static void tick(MinecraftServer server) {
+        if(!AI_SESSIONS.isEmpty()&&server.getTickCount()%20==0)refreshShared(server); // an owner who changed dimension, or whose build has applied, without doing anything else
         AnimatedRebuild.tick(server);
         if(++historyTicks%100==0)for(var session:SESSIONS.values())HistoryStore.save(session);
         var reachId=dev.craftium.compat.Compat.id("craftium","builder_reach");
@@ -646,14 +781,11 @@ public final class EditorServer {
         }
         if(job==null)return;var j=job;
         try {
-            var list=j.edit.changes();long deadline=System.nanoTime()+8_000_000L;int count=0;
-            while(j.cursor[0]<list.size() && count++<2048 && System.nanoTime()<deadline) {
-                var c=list.get(j.cursor[0]++);BlockPos at=EditPlanner.pos(c.pos());
-                var expected=j.backwards?c.after():c.before();var desired=j.backwards?c.before():c.after();
-                if((j.load||j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) && expected.matches(j.level,at)) {
-                    if(!ServerPlatform.canChange(j.owner,j.level,c.pos()))throw new IllegalArgumentException("Edit permission or region access changed");
-                    desired.place(j.level,at,j.edit.flags());j.applied.add(c);
-                }
+            var list=j.order();long deadline=System.nanoTime()+APPLY_BUDGET_NANOS;
+            // Only the time budget limits a tick: a fixed block cap left most of it unused.
+            while(j.cursor[0]<list.size() && System.nanoTime()<deadline) {
+                int from=j.cursor[0],to=Math.min(list.size(),from+SLICE);j.cursor[0]=to;
+                applySlice(j,list.subList(from,to));
             }
             if(j.cursor[0]<list.size())return;
             if(!EditProtection.allowed(j.owner,j.level,new Session.Edit(j.edit.name(),List.of(),List.of(),j.edit.flags(),j.edit.entities(),j.edit.annotations())))throw new IllegalArgumentException("Entity or annotation access changed");
@@ -672,7 +804,7 @@ public final class EditorServer {
                 j.session.recalculateBytes();
                 j.session.historyDirty=true;
                 j.session.event((j.backwards?"Undo ":"Redo ")+j.edit.name());
-            } else j.session.remember(actual,j.strokeId);
+            } else if(j.record)j.session.remember(actual,j.strokeId);
             j.session.busy=false;endJob();
             if(j.history&&!j.backwards&&j.session.historyRemaining==0&&!j.applied.isEmpty()&&j.session.options!=null&&j.session.options.historyPulse)j.session.pulse="redo:700:"+SelectionCodec.encode(pulsePoints(j.applied.stream().map(Session.Change::pos).toList()));
             var player=server.getPlayerList().getPlayer(j.owner);
@@ -680,12 +812,21 @@ public final class EditorServer {
             else release(j);
             if(!appliedAnnotations.isEmpty())for(var other:server.getPlayerList().getPlayers())if(!other.getUUID().equals(j.owner)&&other.level()==j.level){var session=SESSIONS.get(other.getUUID());if(session!=null)send(other,session,"Annotations updated",false);}
             if(player!=null&&j.history&&j.session.historyRemaining!=0){boolean backwards=j.session.historyRemaining>0;j.session.historyRemaining+=backwards?-1:1;try{history(player,j.session,backwards);}catch(IllegalArgumentException e){j.session.historyRemaining=0;send(player,j.session,e.getMessage(),true);}}
+            if(player!=null)drain(player,j.session);else j.session.queued.clear();
         } catch(Exception e) {
+            j.session.queued.clear();
             ServerPlatform.LOG.error("Craftium edit interrupted",e);
             rememberInterrupted(j);
             j.session.busy=false;endJob();var player=server.getPlayerList().getPlayer(j.owner);
             if(player!=null)send(player,j.session,"Edit interrupted. Applied changes remain in history.",true);
             else release(j);
+        }
+    }
+    /** Runs the next waiting builder commit, if the edit before it is done. A queued request that fails is reported like any other, and the ones behind it still run. */
+    private static void drain(ServerPlayer player,Session s){
+        while(!s.busy&&!s.queued.isEmpty()){
+            replaying=true;
+            try{handle(player,s.queued.removeFirst());}finally{replaying=false;}
         }
     }
     /** Lets go of a finished job's session when its player has left: the player's is saved and dropped, the AI's is just dropped. */
@@ -765,9 +906,10 @@ public final class EditorServer {
         if(s.selectionRevision!=s.selection.revision()){s.selectionRevision=s.selection.revision();s.selectionData=SelectionCodec.encode(s.selection.points());}
         if(s.clipboardDirty){s.clipboardGhostDirty=true;s.clipboardData=SelectionCodec.encode(s.clipboard.entrySet().stream().filter(e->!e.getValue().state().isAir()).map(Map.Entry::getKey).toList());s.clipboardDirty=false;}
         if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
-        if(ai!=null&&ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit);ai.pendingDirty=false;}
+        if(ai!=null)aiData(ai); // one place makes the AI preview's data, so the owner and the players who see it always get the same
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate);s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
-        ServerPlatform.send(player,new Packets.Update(Packets.JSON.toJson(status)));
+        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin,sharedFor(player,s),false);s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
+        // A status that is too long for a packet cannot be written and would drop the player's connection, so one that is too big is sent without the largest drawn data.
+        ServerPlatform.send(player,new Packets.Update(StatusFit.fit(Packets.JSON.toJson(status),STATUS_LIMIT,"Too big to draw: the selection or preview is still there, but not shown")));
     }
 }

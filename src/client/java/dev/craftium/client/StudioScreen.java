@@ -23,7 +23,7 @@ public final class StudioScreen extends CraftiumScreen {
     static {
         GROUPS.put("Selection",List.of("compare","selectLimit","selectRange","selectUp","selectDown","selectHorizontal","selectCorners","includeNonSolid","position1","position2","lassoDepth","mode"));
         GROUPS.put("Brush",List.of("radius","strength","extrudeCount","shape","invert","hollow","outline","outlineThickness","pixelPerfect","strokeAlign","surfaceOnly","keepExisting","pasteAir","smoothing","smoothRatio","smoothMode","smoothFixEdges","distortDistance","distortSeparate","distortX","distortY","distortZ","distortSmoothEdges","roughenRatio","shatterWidth","shatterAxis","threshold","meldStrength","denoise","maskY","fractureMaterial","exposedFaces","property"));
-        GROUPS.put("Geometry",List.of("shapeKind","sizeX","sizeY","sizeZ","yaw","pitch","roll","exponent","innerRadius","polygonSides","pathMode","slack","looped","extendToGround","useStairsAndSlabs","modelMode","modelColumns","nodes","modifyMode","modifyAxis","modifyType","modifyAngle","modifyRelative","modifyTranslate","modifyTranslateX","modifyTranslateY","modifyTranslateZ","copies","offsetX","offsetY","offsetZ"));
+        GROUPS.put("Geometry",List.of("shapeKind","sizeX","sizeY","sizeZ","yaw","pitch","roll","exponent","innerRadius","polygonSides","pathMode","slack","looped","extendToGround","useStairsAndSlabs","modelMode","modelColumns","nodes","modifyMode","modifyAxis","modifyType","modifyAngle","modifyRelative","modifyTranslate","modifyTranslateX","modifyTranslateY","modifyTranslateZ","modifyTranslateScale","copies","offsetX","offsetY","offsetZ"));
         GROUPS.put("Paint",List.of("block","secondary","materials","copyProperties","typeReplace","noise","noise3D","noiseScale","seed","octaves","lacunarity","gain","jitter","scaleX","scaleY","scaleZ","density","biome","fillVertically","visualizeBiome","baseChance","minSpacing","randomYaw","randomFlip"));
         GROUPS.put("Masks",List.of("mask","maskExpression","maskScript","inSelection","minY","maxY","symmetryX","symmetryY","symmetryZ","symmetryOrigin"));
         GROUPS.put("Script",List.of("script","maskScript"));
@@ -34,7 +34,7 @@ public final class StudioScreen extends CraftiumScreen {
         GROUPS.put("World",List.of("worldTime","randomTickSpeed","worldToggle","name"));
         GROUPS.put("Annotations",List.of("annotationMode","text","annotationColor","annotationWidth","position1","position2","annotationId","annotationImageScale","annotationNormal"));
         GROUPS.put("Style",List.of("uiBackground","uiPanel","uiAccent","uiText","uiMuted","uiBorder"));
-        GROUPS.put("Fluids",List.of("floodLimit","floodUp","floodDown","floodHorizontal","floodCorners","fluidType","flowLength","fluidQuality","requireSupport","infiniteSources","fillEdges","removeFluidsWithoutSources"));
+        GROUPS.put("Fluids",List.of("floodGap","floodUp","floodDown","floodHorizontal","floodCorners","fluidType","flowLength","fluidQuality","requireSupport","infiniteSources","fillEdges","removeFluidsWithoutSources"));
         GROUPS.put("Capabilities",List.of("cameraFlight","flightMomentumLevel","stickyFlight","blockStep","liquidOpacity","minimumBrightness","showKeyHints","showMarkerGizmos","showDisplayGizmos","showAnnotations","bulldozer","replaceMode","forcePlace","noUpdates","tinker","fastPlace","angelPlacement","reach","farReach","noClip","showCollisionMesh","showLightBlocks","showStructureVoid","expandHitboxes","solidFluids","preventInteractions","autoSwapToCreative"));
         GROUPS.put("Ruler",List.of("rulerMode","rulerSplit"));
         GROUPS.put("Placement",List.of("keepExisting","pasteAir","copyEntities","pasteEntities","mergeBlocks","unlockRotation","gizmoMode","gizmoTarget","gizmoLocal","yaw","pitch","roll","sizeX","sizeY","sizeZ"));
@@ -140,7 +140,9 @@ public final class StudioScreen extends CraftiumScreen {
         button("Apply preview",left+216,y,130,24,()->send("ai_apply"));
         button("Discard preview",left+352,y,130,24,()->send("ai_cancel"));
         button("Undo AI build",left+488,y,128,24,()->send("ai_undo"));
-        int steps=top+70+128;
+        // Other players' AI previews are drawn in teal with their name; this hides them, and is remembered like the other settings.
+        addRenderableWidget(new FlatCheckbox(left,top+70+108,616,20,"Show AI previews from other players",ClientState.options.showSharedAiPreviews,()->{ClientState.options.showSharedAiPreviews=!ClientState.options.showSharedAiPreviews;init();}));
+        int steps=top+70+152;
         labels.add(new Label("HOW IT WORKS",left,steps));
         labels.add(new Label("1.  Install the Craftium extension (craftium.mcpb) in Claude Desktop, once.",left,steps+15));
         labels.add(new Label("2.  Turn on AI building above. Craftium remembers it.",left,steps+29));

@@ -70,8 +70,11 @@ class OutlineMathTest {
         assertEquals(aligned(3, 3, Options.StrokeAlign.INSIDE, false), aligned(3, 50, Options.StrokeAlign.INSIDE, false));
         var o = new Options(); o.radius = 5; o.outlineThickness = 99; o.validate();
         assertEquals(5, o.outlineThickness);
-        o.radius = 500; o.validate();
-        assertEquals(BrushMath.MAX_RADIUS, o.radius);
+        o.radius = 5000; o.validate();
+        assertEquals(ShapeLimits.maxRadius(o), o.radius); // held to what the shape can be, never past the largest radius
+        assertTrue(o.radius <= BrushMath.MAX_RADIUS);
+        var flat = new Options(); flat.shape = BrushMath.Shape.DISK; flat.hollow = true; flat.radius = 5000; flat.validate();
+        assertEquals(BrushMath.MAX_RADIUS, flat.radius); // a hollow ring is few blocks, so it may be as wide as can be set
     }
 
     @Test void theWallSitsInsideOnOrOutsideTheEdgeTheRadiusGives() {
@@ -94,7 +97,7 @@ class OutlineMathTest {
     }
 
     @Test void bigShapesAreRefusedAtTheBlockLimitAndHollowOnesAreNot() {
-        assertThrows(IllegalArgumentException.class, () -> BrushMath.brush(new Point(0,0,0), 50, BrushMath.Shape.SPHERE, false));
+        assertThrows(IllegalArgumentException.class, () -> BrushMath.brush(new Point(0,0,0), 70, BrushMath.Shape.SPHERE, false));
         assertThrows(IllegalArgumentException.class, () -> BrushMath.brush(new Point(0,0,0), BrushMath.MAX_RADIUS + 1, BrushMath.Shape.SPHERE, true));
         assertTrue(BrushMath.brush(new Point(0,0,0), 60, BrushMath.Shape.SPHERE, true).size() < Selection.LIMIT);
     }

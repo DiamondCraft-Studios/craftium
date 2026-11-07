@@ -15,7 +15,7 @@ public final class EditorControls {
         ARCBALL("Arcball camera",Binding.mouse(0,CONTROL)),PAN_CAMERA("Pan camera",Binding.mouse(1,CONTROL)),ADJUST_RADIUS("Adjust tool radius",Binding.mouse(2,CONTROL)),
         CROSSHAIR("Crosshair",Binding.mouse(1,0)),ADJUST_SPEED("Adjust flight speed"),
         CONFIRM("Confirm / clear selection",257,0),UNDO("Undo",'Z',CONTROL),REDO("Redo",'Y',CONTROL),COPY("Copy",'C',CONTROL),COPY_AIR("Copy with air"),
-        PASTE("Paste",'V',CONTROL),DELETE("Delete",261,0),CUT("Cut",'X',CONTROL),DUPLICATE("Duplicate",'J',CONTROL),
+        PASTE("Paste",'V',CONTROL),PASTE_IN_PLACE("Paste in place",'V',CONTROL|SHIFT),DELETE("Delete",261,0),CUT("Cut",'X',CONTROL),DUPLICATE("Duplicate",'J',CONTROL),
         SWAP_BLOCKS("Swap foreground / background block",'X',0),EXTRUDE_POINT("Extrude point",'E',0),SAVE_BLUEPRINT("Save blueprint",'P',CONTROL),
         SHOW_SELECTION("Show selections"),CYCLE_SELECTION_STYLE("Cycle selection display",';',0),SHOW_BIOMES("Show biomes",'B',CONTROL),SHOW_ANNOTATIONS("Show annotations"),
         SHOW_DISPLAYS("Show display gizmos"),SHOW_MARKERS("Show marker gizmos"),SHOW_COLLISION("Show collision mesh"),SHOW_LIGHTS("Show light blocks"),SHOW_VOID("Show structure void"),
@@ -34,10 +34,7 @@ public final class EditorControls {
         Action(String label,Binding defaults){this.label=label;this.defaults=defaults;}
     }
     private EditorControls(){}
-    public static int toolDefault(Tool tool){return switch(tool){
-        case MAGIC_SELECT->'M';case BOX_SELECT->'B';case FREEHAND_SELECT->'N';case LASSO_SELECT->'L';case PAINTER->'P';case NOISE_PAINTER->'O';
-        case FREEHAND_DRAW->'G';case MOVE->'V';case ROTATE->'R';case SCALE->'C';case PIVOT->'I';case ROCK->'H';case WELD->'J';case MELT->'K';case ELEVATION->'E';case SMOOTH->'U';case EXTRUDE->'Z';default->-1;
-    };}
+    public static int toolDefault(Tool tool){return ToolCatalog.of(tool).defaultKey();}
     /** Camera-relative horizontal nudges, independent of the gizmo's selected axis. */
     public static Point nudge(Action action,double yaw){
         int quadrant=Math.floorMod((int)Math.floor(yaw/90+.5),4);

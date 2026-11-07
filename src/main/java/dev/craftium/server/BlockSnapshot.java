@@ -30,8 +30,9 @@ public record BlockSnapshot(BlockState state, CompoundTag data) {
         if (data != null) {
             var entity = BlockEntity.loadStatic(pos,state,data.copy(),level.registryAccess());
             if (entity != null) { level.setBlockEntity(entity); entity.setChanged(); }
+            // setBlock already told clients about the state; the block entity arrived after it, so only now is there more to send.
+            level.sendBlockUpdated(pos,state,state,2);
         }
-        level.sendBlockUpdated(pos,state,state,2);
     }
     public boolean matches(ServerLevel level, BlockPos pos) {
         if (level.getBlockState(pos) != state) return false;

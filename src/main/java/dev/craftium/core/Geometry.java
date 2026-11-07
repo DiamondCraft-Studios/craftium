@@ -27,6 +27,16 @@ public final class Geometry {
         double yy=y*Math.cos(b)-z*Math.sin(b);z=y*Math.sin(b)+z*Math.cos(b);y=yy;
         return new Vector(x*Math.cos(a)-z*Math.sin(a),y,x*Math.sin(a)+z*Math.cos(a));
     }
+    /**
+     * The point that a drag's transform sends to {@code image}. The transform scales a point by {@code size} about {@code about}, turns it
+     * by yaw, pitch and roll (as {@link #rotate} does), puts it back about the same point and then adds {@code offset}. Null when the
+     * transform squashes the shape flat along some axis, so there is no way back.
+     */
+    public static Vector untransform(Vector image,Vector about,Vector size,double yaw,double pitch,double roll,Vector offset){
+        if(Math.abs(size.x)<1e-9||Math.abs(size.y)<1e-9||Math.abs(size.z)<1e-9)return null;
+        var turned=inverseRotate(image.subtract(offset).subtract(about),yaw,pitch,roll);
+        return new Vector(about.x+turned.x/size.x,about.y+turned.y/size.y,about.z+turned.z/size.z);
+    }
     public static List<Point> shape(Point center,Options o) {
         if(o.shapeKind==Options.ShapeKind.BRUSH&&o.yaw==0&&o.pitch==0&&o.roll==0&&o.sizeX==1&&o.sizeY==1&&o.sizeZ==1)
             return BrushMath.brush(center,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline);
@@ -34,7 +44,8 @@ public final class Geometry {
         double scaled=o.yaw==0&&o.pitch==0&&o.roll==0?Math.max(o.sizeX,Math.max(o.sizeY,o.sizeZ)):Math.sqrt(o.sizeX*o.sizeX+o.sizeY*o.sizeY+o.sizeZ*o.sizeZ);
         double outer=o.outerRadius();
         int extent=(int)Math.ceil(outer*scaled);
-        if(extent>BrushMath.MAX_REACH)throw new IllegalArgumentException("Scaled shape reaches "+extent+" blocks from its centre; the most is "+BrushMath.MAX_REACH);var result=new ArrayList<Point>();
+        if(extent>BrushMath.MAX_REACH)throw new IllegalArgumentException("Scaled shape reaches "+extent+" blocks from its centre; the most is "+BrushMath.MAX_REACH);
+        if((2L*extent+1)*(2L*extent+1)*(2L*extent+1)>ShapeLimits.SCAN_CELLS)throw new IllegalArgumentException("A scaled or turned shape this big cannot be built; make it smaller");var result=new ArrayList<Point>();
         // The turn is the same for every cell, so its sines and cosines are worked out once; this is inverseRotate unrolled.
         double ra=Math.toRadians(-o.yaw),rb=Math.toRadians(-o.pitch),rc=Math.toRadians(-o.roll);
         double ca=Math.cos(ra),sa=Math.sin(ra),cb=Math.cos(rb),sb=Math.sin(rb),cc=Math.cos(rc),sc=Math.sin(rc);
@@ -63,6 +74,7 @@ public final class Geometry {
         for(Point p:base){e=Math.max(e,Math.max(Math.abs(p.x()),Math.max(Math.abs(p.y()),Math.abs(p.z()))));far=Math.max(far,(double)p.x()*p.x()+(double)p.y()*p.y()+(double)p.z()*p.z());}
         int extent=(int)Math.ceil(Math.sqrt(far));
         if(extent>BrushMath.MAX_REACH)throw new IllegalArgumentException("Turned shape reaches "+extent+" blocks from its centre; the most is "+BrushMath.MAX_REACH);
+        if((2L*extent+1)*(2L*extent+1)*(2L*extent+1)>ShapeLimits.SCAN_CELLS||(2L*e+1)*(2L*e+1)*(2L*e+1)>ShapeLimits.SCAN_CELLS)throw new IllegalArgumentException("A scaled or turned shape this big cannot be built; make it smaller");
         int n=2*e+1;var grid=new boolean[n*n*n];
         for(Point p:base)grid[((p.x()+e)*n+p.y()+e)*n+p.z()+e]=true;
         double ra=Math.toRadians(-o.yaw),rb=Math.toRadians(-o.pitch),rc=Math.toRadians(-o.roll);

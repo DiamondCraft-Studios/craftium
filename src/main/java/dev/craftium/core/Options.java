@@ -28,7 +28,9 @@ public final class Options {
     /** INSIDE grows the wall inward from the shape's edge, OUTSIDE outward, and CENTER puts the edge in the middle of it. */
     public enum StrokeAlign { INSIDE, CENTER, OUTSIDE }
     /** How far past the radius a hollow shape reaches because of where its wall is aligned: nothing for inside, the wall's thickness for outside. */
-    public int outlineShift() {
+    public int outlineShift() { return outlineShift(radius); }
+    /** As {@link #outlineShift()}, for a radius other than the one set. */
+    public int outlineShift(int radius) {
         if (!hollow) return 0;
         int t = Math.clamp(outlineThickness, 1, Math.max(1, radius));
         return strokeAlign == StrokeAlign.OUTSIDE ? t : strokeAlign == StrokeAlign.CENTER ? t / 2 : 0;
@@ -46,9 +48,19 @@ public final class Options {
     /** The blocks shown as cells in the mask palette, and which of them are toggled on. A cell with a state ("[") matches that exact state; without one, any state of the block. */
     public java.util.List<String> maskBlocks = new java.util.ArrayList<>(), maskActive = new java.util.ArrayList<>();
     /** False: edit only the toggled blocks. True: edit everything but them. With none toggled the block mask does nothing. */
+    /** Whether the toggled blocks only let blocks through (include, the default) or keep them out (exclude). Neither applies while {@link #maskOff} is set. */
     public boolean maskExclude;
+    /** Whether holding a gizmo handle hides the others, so only the one being dragged is drawn. */
+    public boolean gizmoHideOthers=true;
+    /** Include and Exclude both switched off, as they start: the block mask is ignored altogether, whatever blocks are toggled. */
+    public boolean maskOff=true;
     /** Whether the tool masks (block mask, mask block, rules, script, height range and restrict to selection) also apply to the builder tools. */
     public boolean maskInBuilder;
+    /** Whether the blocks you place and break by hand, with the game's own clicks, go into the undo history. */
+    public boolean recordPlayerBuilding=true;
+    /** Whether the Builder's magic select uses the editor's Magic Wand settings; when off it matches by {@link #builderMagicCompare}, with the widest limit and the wand's plain defaults. */
+    public boolean builderFollowsMagic=true;
+    public Compare builderMagicCompare=Compare.BLOCK;
     public String biome = "minecraft:plains";
     public String text = "CRAFTIUM";
     public int minY = -64, maxY = 319;
@@ -65,14 +77,20 @@ public final class Options {
     /** How many blocks the Select menu's Expand and Shrink move the selection's surface. */
     /** Edits that place or remove blocks are shown as a ghost first and only applied when confirmed with Enter. */
     public boolean confirmEdits=true;
+    /** Whether an edit waits for Enter before it is built. Off, a stroke is built when the button is let go and every other action is built at once. */
+    public boolean enterToBuild=true;
     /** The point the Rotate and Scale tools work around. When not set it is the centre of the selection. */
     /** How much of a selection's outline is drawn: every edge, the creases on the camera's side, or only the contour of what it covers on the screen. */
     public enum SelectionStyle { ALL_EDGES("All edges"),OUTLINE("Outline"),SILHOUETTE("Silhouette");public final String label;SelectionStyle(String label){this.label=label;} }
     public SelectionStyle selectionStyle=SelectionStyle.SILHOUETTE;
     /** Colours (ARGB) of the selection and of the previews that go with it. The tints multiply the block's own texture, so they are lighter than they look. */
+    /** The fill of the selection's faces as seen from inside it, so standing in a selection reads differently from looking at one. */
+    public int selectionInsideFill=0x40ffa63d;
+    /** A wash over the whole screen while the camera is inside the selection; alpha 0 turns it off. */
+    public int selectionInsideTint=0x18ffa63d;
     public int selectionFill=0x225d91ff,selectionTint=0x9046B4EE,
         previewColor=0xff8be3b5,previewFill=0x2247d29b,previewTint=0x9046B4EE,
-        removedColor=0xffff7777,removedFill=0x22ff5555,removedTint=0x90EE4646,
+        removedFill=0x22ff5555,removedTint=0x90EE4646,
         hoverColor=0xff7fd8ff,hoverFill=0x2240c0ff;
     /** The colour (ARGB) and width, in pixels from 0.1 to 10, of the selection's outline. */
     public int selectionColor=0xff2389c6;
@@ -82,12 +100,11 @@ public final class Options {
     public boolean showSelectionContact=true;
     public double selectionWidth=1;
     /** How the builder tools draw their selection and where it would land, set apart from the editor's selection: colours (ARGB) and line widths. */
-    public int builderSelectionColor=0xff2389c6,builderSelectionFill=0x302389c6,
-        builderPreviewColor=0xff8be3b5,builderPreviewFill=0x2247d29b,builderPreviewTint=0x9046B4EE,builderMovingTint=0x90EE4646;
+    public int builderSelectionColor=0xff2389c6,builderSelectionFill=0x302389c6;
     public double builderSelectionWidth=1,builderPreviewWidth=1;
     /** The point one transform request works about, which can differ from the player's pivot, as when scaling from the far side. */
     public boolean aboutSet;
-    /** A selection transform that also turns and mirrors the blocks' states, as the Edit menu's Rotate and Flip do; the gizmo only moves them. */
+    /** A selection transform that also turns and mirrors the blocks' states, as the Edit menu's Rotate and Flip and the gizmo do. */
     public boolean turnBlocks;
     public double aboutX,aboutY,aboutZ;
     public boolean pivotSet;
@@ -99,14 +116,32 @@ public final class Options {
     public boolean magicPreview=true;
     /** Whether a big selection waits to be confirmed before it is kept. */
     public boolean largeSelectionWarnings=true;
+    /** Looks at the project's GitHub releases once per game session and says so when a newer build exists. Nothing is downloaded. */
+    public boolean checkForUpdates=true;
     /** Extrude: how many layers one click adds or removes, from 1 to {@link #MAX_EXTRUDE_COUNT}. */
     public static final int MAX_EXTRUDE_COUNT=64;
+    /** The widest gap, in blocks, a Floodfill can be told to close. */
+    public static final int MAX_FLOOD_GAP=16;
     public int extrudeCount=1;
     /** Extrude: whether replaceable blocks, such as grass and water, count as open space that a face grows into, and are replaced by it. */
     public boolean extrudeReplaceable=true;
+    /** Builder extrude with Ctrl held: the face takes in the whole family of the clicked block (stairs, slabs, walls and the like), each block keeping its own shape. Set by the client for the one click. */
+    public boolean smartExtrude;
+    /** Builder tools: after the first click, the gizmo's ruler follows the block being aimed at, with a line back to the first block. */
+    public boolean builderRuler=true;
+    /** Builder tools: after the first click, the box between that block and the one aimed at is drawn, and follows the aim. */
+    public boolean builderLiveBox=true;
+    /** Builder tools: blocks already where the selection lands are not overwritten. Apart from the editor's Keep existing, which the Builder does not follow. */
+    public boolean builderKeepExisting;
+    /** Brush flow, 1 to 100: how often a stroke applies the brush. 100 is as often as the server allows (about 30 times a second), 25 the usual rate (about 7 a second), less leaves wider gaps along the stroke. */
+    public static final int FLOW_MIN=3,FLOW_MAX=100,FLOW_DEFAULT=25;
+    public int brushFlow=FLOW_DEFAULT;
     public int hoverPreviewLimit=5000;
+    /** How many block models an AI preview ghost draws, 1,024 to 32,768. A bigger preview is still described and outlined in full; the models are the part that costs a frame. */
+    public static final int AI_GHOST_DRAW_MIN=1024,AI_GHOST_DRAW_MAX=32_768,AI_GHOST_DRAW_DEFAULT=8192;
+    public int aiGhostDrawLimit=AI_GHOST_DRAW_DEFAULT;
     /** The most blocks any one placing tool may change, 1 to {@link #MAX_BLOCK_LIMIT}; an edit that would change more is refused. */
-    public static final int MAX_BLOCK_LIMIT=100_000;
+    public static final int MAX_BLOCK_LIMIT=Selection.LIMIT;
     public int blockLimit=MAX_BLOCK_LIMIT;
     public boolean selectUp=true,selectDown=true,selectHorizontal=true,selectCorners,includeNonSolid;
     public Noise noise=Noise.SIMPLEX;
@@ -136,7 +171,11 @@ public final class Options {
     /** Modify: Add Translation, which offsets where a revolve or the last rotated copy ends up. */
     public boolean modifyTranslate;
     public double modifyTranslateX,modifyTranslateY,modifyTranslateZ;
+    /** Modify: with Add Translation on, how far from the anchor the sweep ends as a multiple of where it starts (1 keeps the radius). Saved as modifyTranslateScale. */
+    public double modifyTranslateScale=1;
     public ShapeKind shapeKind=ShapeKind.BRUSH;
+    /** Whether changing one size control of a shape changes the others by the same factor, so its proportions stay (see {@link ShapeSizes}). */
+    public boolean sizeChain=true;
     public java.util.List<Point> nodes=new java.util.ArrayList<>();
     public java.util.List<Point> selectionPoints=new java.util.ArrayList<>();
     public Point position1=new Point(0,0,0),position2=new Point(0,0,0),symmetryOrigin=new Point(0,0,0);
@@ -148,6 +187,8 @@ public final class Options {
     public String buildSpec="";
     /** Whether the client listens on this computer for an AI client (the craftium-mcp shim) to drive the editor. Off until the player turns it on. */
     public boolean aiBridge;
+    /** Whether to draw the AI previews other players are holding, in a colour of their own with the owner's name. */
+    public boolean showSharedAiPreviews=true;
     public String fontName="SansSerif",fontFile="",heightmap="",name="Untitled",entityType="block_display",entityNbt="{}",property="";
     public boolean useBuiltinFont=true,textShadow,fullBlocks=true,denoise=true,maskY,fastPlace,angelPlacement,noClip,blockStep;
     /** Flying slows to a stop as a wall comes close, like a camera focusing in, the first time a movement key is held toward it. */
@@ -191,7 +232,7 @@ public final class Options {
     public int uiBackground=0xf510141a,uiPanel=0xff10151c,uiAccent=0xff5b9fdb,uiText=0xffdce6ef,uiMuted=0xff8595a8,uiBorder=0xff303b49;
     public enum FluidType { WATER,LAVA,SNOW }
     public FluidType fluidType=FluidType.WATER;
-    public int floodLimit=1000,flowLength=7,fluidQuality=1;
+    public int floodGap,flowLength=7,fluidQuality=1;
     public boolean floodUp,floodDown=true,floodHorizontal=true,floodCorners,requireSupport,infiniteSources,fillEdges=true,removeFluidsWithoutSources;
     public enum RulerMode { LINE,CIRCLE }
     public RulerMode rulerMode=RulerMode.LINE;
@@ -262,16 +303,19 @@ public final class Options {
         if(pinned==null)pinned=new java.util.ArrayList<>();
         if(pinned.size()>256||pinned.stream().anyMatch(name->name==null||name.length()>64))throw new IllegalArgumentException("Invalid pinned properties");
         radius = Math.clamp(radius,1,BrushMath.MAX_RADIUS);
+        radius = Math.min(radius,ShapeLimits.maxRadius(this)); // a shape that would pass the block limit is held to the size that does not
+        if(shape!=null&&(shapeKind==null||shapeKind==ShapeKind.BRUSH)){var rows=ShapeSizes.rows(shape);ShapeSizes.fit(this,rows);ShapeSizes.fitBlocks(this,rows);}
         strength = Double.isFinite(strength) ? Math.clamp(strength,0.1,5) : 1;
         noiseScale = Double.isFinite(noiseScale) ? Math.clamp(noiseScale,1,64) : 8;
         density = Double.isFinite(density) ? Math.clamp(density,0,1) : 0.5;
         farReach = Math.clamp(farReach,6,64);
         flySpeed = Float.isFinite(flySpeed) ? Math.clamp(flySpeed,0.1f,10f) : 1;
         copies=Math.max(1,copies); // offsets and copies have no upper limit
+        if(builderMagicCompare==null)builderMagicCompare=Compare.BLOCK;
         if(compare==null)compare=Compare.ANY; // Gson reads a constant that no longer exists, the old SOLID, as null
         if(noise==null||pathMode==null||modelMode==null||modifyMode==null||shapeKind==null||rulerMode==null)throw new IllegalArgumentException("Missing advanced options");
         if(modifyAxis==null||modifyType==null)throw new IllegalArgumentException("Missing advanced options");
-        modifyAngle=finite(modifyAngle);modifyTranslateX=finite(modifyTranslateX);modifyTranslateY=finite(modifyTranslateY);modifyTranslateZ=finite(modifyTranslateZ);
+        modifyAngle=finite(modifyAngle);modifyTranslateX=Math.clamp(finite(modifyTranslateX),-64,64);modifyTranslateY=Math.clamp(finite(modifyTranslateY),-64,64);modifyTranslateZ=Math.clamp(finite(modifyTranslateZ),-64,64);modifyTranslateScale=Math.clamp(finite(modifyTranslateScale),ModifyMath.MIN_EXPANSION,ModifyMath.MAX_EXPANSION);
         rulerSplit=Math.clamp(rulerSplit,2,16);
         rulerLabelSize=bounded(rulerLabelSize,RULER_LABEL_MIN,RULER_LABEL_MAX);
         // The colours the ruler first had, kept in saved settings, give way to the ones it has now; any colour that was changed is left alone.
@@ -295,8 +339,8 @@ public final class Options {
         smoothRatio=Double.isFinite(smoothRatio)?Math.max(0,smoothRatio):100;distortDistance=Double.isFinite(distortDistance)?Math.max(0,distortDistance):2;
         distortX=Double.isFinite(distortX)?Math.max(0,distortX):2;distortY=Double.isFinite(distortY)?Math.max(0,distortY):2;distortZ=Double.isFinite(distortZ)?Math.max(0,distortZ):2;
         roughenRatio=Double.isFinite(roughenRatio)?Math.clamp(roughenRatio,0,1):.2;shatterWidth=Double.isFinite(shatterWidth)?Math.max(0,shatterWidth):1;
-        extrudeCount=Math.clamp(extrudeCount,1,MAX_EXTRUDE_COUNT);
-        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);blockLimit=Math.clamp(blockLimit,1,MAX_BLOCK_LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;builderSelectionWidth=Double.isFinite(builderSelectionWidth)?Math.clamp(builderSelectionWidth,.1,10):1;builderPreviewWidth=Double.isFinite(builderPreviewWidth)?Math.clamp(builderPreviewWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
+        extrudeCount=Math.clamp(extrudeCount,1,MAX_EXTRUDE_COUNT);brushFlow=Math.clamp(brushFlow,FLOW_MIN,FLOW_MAX);
+        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);blockLimit=Math.clamp(blockLimit,1,MAX_BLOCK_LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);aiGhostDrawLimit=Math.clamp(aiGhostDrawLimit,AI_GHOST_DRAW_MIN,AI_GHOST_DRAW_MAX);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;builderSelectionWidth=Double.isFinite(builderSelectionWidth)?Math.clamp(builderSelectionWidth,.1,10):1;builderPreviewWidth=Double.isFinite(builderPreviewWidth)?Math.clamp(builderPreviewWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
         octaves=Math.clamp(octaves,1,8);lacunarity=bounded(lacunarity,1,4);gain=bounded(gain,.01,1);jitter=bounded(jitter,0,1);
         scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);
         sizeX=Math.copySign(bounded(Math.abs(sizeX),.1,8),sizeX);sizeY=Math.copySign(bounded(Math.abs(sizeY),.1,8),sizeY);sizeZ=Math.copySign(bounded(Math.abs(sizeZ),.1,8),sizeZ); // negative flips
@@ -318,7 +362,7 @@ public final class Options {
         if(annotationId==null||annotationId.length()>64)throw new IllegalArgumentException("Invalid annotation identifier");
         worldTime=Math.clamp(worldTime,0,2_000_000_000);randomTickSpeed=Math.clamp(randomTickSpeed,0,4096);
         exposedFaces=Math.clamp(exposedFaces,1,6);
-        if(fluidType==null)throw new IllegalArgumentException("Choose a fluid");floodLimit=Math.clamp(floodLimit,1,Selection.LIMIT);flowLength=Math.clamp(flowLength,1,32);fluidQuality=Math.clamp(fluidQuality,1,4);
+        if(fluidType==null)throw new IllegalArgumentException("Choose a fluid");floodGap=Math.clamp(floodGap,0,MAX_FLOOD_GAP);flowLength=Math.clamp(flowLength,1,32);fluidQuality=Math.clamp(fluidQuality,1,4);
         if (maskBlocks==null || maskActive==null || maskBlocks.size()>64 || maskActive.size()>64) throw new IllegalArgumentException("Block mask limit: 64 blocks");
         for (var list : java.util.List.of(maskBlocks, maskActive)) for (String entry : list) if (entry==null || entry.length()>256) throw new IllegalArgumentException("Invalid block mask entry");
         if (block == null || secondary == null || mask == null || biome == null || text == null)

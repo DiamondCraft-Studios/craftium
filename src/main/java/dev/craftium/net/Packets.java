@@ -19,10 +19,27 @@ public final class Packets {
                          /** The AI's own workspace: its waiting preview (as ghost data), and how many builds it can undo, and the name of the last. */
                          String aiPendingData,int aiUndo,String aiUndoName,
                          /** Client-side state to put back after an undo or redo, as {@link dev.craftium.core.Restore} text; empty when there is none. */
-                         String restore) {
-        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo,String entityUuid,String entityNbt,List<dev.craftium.core.Annotation> annotations,String selectionData,String clipboardData,List<dev.craftium.core.BlueprintInfo> blueprints,int clipboardEntityCount,String pendingData,String clipboardGhost,String pivotUpdate,long undoAge,long redoAge,String undoName,String redoName,String pulse,String aiPendingData,int aiUndo,String aiUndoName){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,entityUuid,entityNbt,annotations,selectionData,clipboardData,blueprints,clipboardEntityCount,pendingData,clipboardGhost,pivotUpdate,undoAge,redoAge,undoName,redoName,pulse,aiPendingData,aiUndo,aiUndoName,"");}
+                         String restore,
+                         /** Where the clipboard's blocks were copied from, or null when they did not come from the world (a blueprint or structure). */
+                         Point clipboardOrigin,
+                         /**
+                          * Other players' AI previews in this player's dimension, to be drawn beside the player's own. Null means the same as last time, and an empty
+                          * list means there are none now. They are all there is in a {@code background} status.
+                          */
+                         List<SharedPreview> sharedAi,
+                         /** A status that only brings {@code sharedAi}: something somebody else did, not a reply to anything this player asked, so the client does not take it as one. */
+                         boolean background) {
+        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo,String entityUuid,String entityNbt,List<dev.craftium.core.Annotation> annotations,String selectionData,String clipboardData,List<dev.craftium.core.BlueprintInfo> blueprints,int clipboardEntityCount,String pendingData,String clipboardGhost,String pivotUpdate,long undoAge,long redoAge,String undoName,String redoName,String pulse,String aiPendingData,int aiUndo,String aiUndoName){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,entityUuid,entityNbt,annotations,selectionData,clipboardData,blueprints,clipboardEntityCount,pendingData,clipboardGhost,pivotUpdate,undoAge,redoAge,undoName,redoName,pulse,aiPendingData,aiUndo,aiUndoName,"",null,null,false);}
         /** {@code undoAge} and {@code redoAge} are how many milliseconds ago the next edit to undo or redo was made, or -1 when there is none. */
-        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","");}
+        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,false);}
+    }
+
+    /** One player's waiting AI preview, as ghost data, and whose it is. */
+    public record SharedPreview(String owner, String data) {}
+
+    /** A status that carries only the other players' AI previews, sent when one of them changes. */
+    public static Status sharedOnly(List<SharedPreview> shared) {
+        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,shared,true);
     }
 
     public record Bridge(byte[] bytes) implements CustomPacketPayload {
@@ -41,6 +58,12 @@ public final class Packets {
         public static final StreamCodec<RegistryFriendlyByteBuf, Update> CODEC = StreamCodec.of(
             (buf,p) -> buf.writeUtf(p.json, 2_000_000), buf -> new Update(buf.readUtf(2_000_000)));
         @Override public Type<Update> type() { return TYPE; }
+    }
+    /** What a client and a server tell each other as they meet: {@link dev.craftium.core.Handshake.Hello} as JSON. Sent both ways. */
+    public record Hello(String json) implements CustomPacketPayload {
+        public static final Type<Hello> TYPE=new Type<>(dev.craftium.compat.Compat.id("craftium","hello"));
+        public static final StreamCodec<RegistryFriendlyByteBuf,Hello> CODEC=StreamCodec.of((buf,p)->buf.writeUtf(p.json,512),buf->new Hello(buf.readUtf(512)));
+        @Override public Type<Hello> type(){return TYPE;}
     }
     public record Report(String text) implements CustomPacketPayload {
         public static final Type<Report> TYPE=new Type<>(dev.craftium.compat.Compat.id("craftium","report"));

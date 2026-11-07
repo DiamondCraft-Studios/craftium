@@ -1,13 +1,13 @@
-# Craftium server companion — 0.6.0-beta.1
+# Craftium server companion — 0.9.1-beta.1
 
 The companion runs Craftium's native editing engine on **Paper and Purpur**. There is one build per Minecraft version: **26.2** (Java 25) and **1.21.10** (Java 21). The player uses the Fabric Craftium client and the same editor, tools and shortcuts.
 
 ## Install
 
 1. Stop the server.
-2. Put the jar for your Minecraft version in the server's `plugins/` folder: `craftium-server-0.6.0-beta.1.jar` for 26.2, or `craftium-server-0.6.0-beta.1+mc1.21.10.jar` for 1.21.10. A build refuses to start on any other Minecraft version.
+2. Put the jar for your Minecraft version in the server's `plugins/` folder: `craftium-server-0.9.1-beta.1.jar` for 26.2, or `craftium-server-0.9.1-beta.1+mc1.21.10.jar` for 1.21.10. A build refuses to start on any other Minecraft version.
 3. Start Paper or Purpur. Craftium creates `plugins/Craftium/config.yml`.
-4. On a client for the same Minecraft version, install Fabric Loader, Fabric API and the matching Craftium mod jar in `mods/` (`craftium-0.6.0-beta.1.jar` for 26.2, `craftium-0.6.0-beta.1+mc1.21.10.jar` for 1.21.10).
+4. On a client for the same Minecraft version, install Fabric Loader, Fabric API and the matching Craftium mod jar in `mods/` (`craftium-0.9.1-beta.1.jar` for 26.2, `craftium-0.9.1-beta.1+mc1.21.10.jar` for 1.21.10).
 5. Join in Creative mode. Operators can edit immediately. Press **Right Shift** for the editor or **Left Alt** for builder controls.
 
 The plugin and client are different JARs. The server does not need Fabric or Fabric API. Older Craftium 0.2 clients do not support the Paper connection. Vanilla clients can join normally, but cannot use the Craftium editor.
@@ -41,6 +41,10 @@ Additional permissions require `craftium.edit`. No permission grants arbitrary s
 ## Configuration and storage
 
 `allowed-worlds: []` allows all worlds; otherwise list Bukkit world names. `/craftiumserver reload` reloads the file. `/craftiumserver status` reports connected clients and protection status. Outgoing messages are paced across ticks; byte and frame budgets are configurable with bounded values.
+
+`check-for-updates: true` looks at the project's GitHub releases once at startup and logs a line when a newer build exists for this Minecraft version; the answer is kept in `plugins/Craftium/update-check.json` for six hours. Nothing is downloaded. Set it to `false` to stop the check.
+
+Clients and the companion tell each other their version and a protocol number as a player joins. If a client speaks a different protocol, the player is told which side to update and their edits are refused until they reconnect updated; a client or companion with the same protocol works whatever its patch version.
 
 Shared assets live in `plugins/Craftium/blueprints`, `fonts`, `heightmaps` and `exports`. History and saved views live in the server world directory under `craftium/`. Client downloads go to the local `config/craftium` library when explicitly requested by that client. History is separated by player and dimension. Edits retain the existing 131,072-cell and 32 MiB history limits.
 

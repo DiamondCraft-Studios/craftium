@@ -3,7 +3,7 @@
 import { BridgeError } from "./bridge.js";
 import { ArgumentError, INSTRUCTIONS, TOOLS } from "./tools.js";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.4.0";
 const PROTOCOLS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
 const reply = (id, result) => ({ jsonrpc: "2.0", id, result });

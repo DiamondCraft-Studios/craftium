@@ -45,19 +45,20 @@ public final class CraftiumClient implements ClientModInitializer {
         swapKey=ClientCompat.registerKey(new KeyMapping("key.craftium.hotbar",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_UNKNOWN,category));
         replaceKey=ClientCompat.registerKey(new KeyMapping("key.craftium.replace",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_R,category));
         for(Tool tool:Tool.values()){
-            int key=EditorControls.toolDefault(tool);
-            toolKeys.put(tool,ClientCompat.registerKey(new KeyMapping("key.craftium.tool."+tool.name().toLowerCase(java.util.Locale.ROOT),InputConstants.Type.KEYSYM,key,category)));
+            var spec=tool.spec();
+            toolKeys.put(tool,ClientCompat.registerKey(new KeyMapping("key.craftium.tool."+spec.path(),InputConstants.Type.KEYSYM,spec.defaultKey(),category)));
         }
         ClientPlayNetworking.registerGlobalReceiver(Packets.Report.TYPE,(payload,context)->context.client().execute(()->ClientCompat.setScreen(context.client(),new ReportScreen(ClientCompat.screen(context.client()),payload.text()))));
         ClientPlayNetworking.registerGlobalReceiver(Packets.AiReply.TYPE,(payload,context)->AiBridge.dataReceived(payload.json()));
+        ClientPlayNetworking.registerGlobalReceiver(Packets.Hello.TYPE,(payload,context)->context.client().execute(()->ClientHandshake.receive(payload.json(),false)));
         ClientPlayNetworking.registerGlobalReceiver(Packets.Update.TYPE,(payload,context)->context.client().execute(()->{
             receiveStatus(payload.json());
         }));
         ClientPlayConnectionEvents.DISCONNECT.register((handler,client)-> {
             ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);
             ClientState.save();resetEditor();placementSynced="";
-            ClientCommands.reset();
-            ClientAssets.clear();bridge.clear();
+            ClientCommands.reset();ClientHandshake.disconnected();
+            ClientAssets.clear();bridge.clear();BlockSearch.clear(); // another world may have other data packs, so its tags and tabs are looked up again
             PlacementPreview.update("");
             ClientState.blueprints=List.of();ClientState.libraryVersion++;
         });
@@ -73,7 +74,7 @@ public final class CraftiumClient implements ClientModInitializer {
             boolean block=player.getMainHandItem().getItem() instanceof BlockItem;
             boolean tinker=player.getMainHandItem().isEmpty()&&o.tinker;
             if(!level.isClientSide() || !player.isCreative() || !supported() || ClientCompat.screen(Minecraft.getInstance())!=null)return InteractionResult.PASS;
-            if(block&&vanillaPlacement()){syncPlacement();return InteractionResult.PASS;} // the game places the block; the mod bends it from the server and the client alike
+            if(block&&vanillaPlacement()){syncPlacement();beginPlaceStroke();return InteractionResult.PASS;} // the game places the block; the mod bends it from the server and the client alike
             // Without the mod on the server, nothing there can bend vanilla placement, so the click is sent as an editor request instead.
             if(block&&o.placementCapabilities()||tinker)return InteractionResult.SUCCESS; // SUCCESS skips the server use, and the client swings the arm for it
             return InteractionResult.PASS;
@@ -83,6 +84,7 @@ public final class CraftiumClient implements ClientModInitializer {
         HudElementRegistry.addLast(dev.craftium.compat.Compat.id("craftium","builder"),(raw,delta)->{
             var mc=Minecraft.getInstance();if(mc.player==null || !mc.player.isCreative() || ClientCompat.screen(mc)!=null)return;
             var g=Gfx.of(raw);
+            SelectionOverlay.tint(g);
             ReferenceImages.draw(g,false,0,0);
             int h=g.guiHeight();
             if(System.currentTimeMillis()<ClientState.noticeUntil)g.text(mc.font,ClientState.notice,8,8,0xffffd891,false);
@@ -97,12 +99,15 @@ public final class CraftiumClient implements ClientModInitializer {
      */
     public static void resetEditor(){
         ClientState.selectionPending=false;ClientState.selectingSince=0;ClientState.selectionSizeBefore=0;ClientState.largeSelection=0;ClientState.heldSelection="";
-        ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.aiPending=GhostBlocks.EMPTY;ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
+        ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.aiPending=GhostBlocks.EMPTY;ClientState.sharedAi=List.of();ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
         ShapeObject.cancel();TransformGizmo.cancel();PlacementPreview.cancel();BuilderMode.reset();SelectionOverlay.update("");
     }
-    private static void receiveStatus(String json){
+    /** How far away another player's AI preview is still drawn, in blocks: past this it is out of sight, and drawing it costs a frame. */
+    private static final double SHARED_RANGE=192;
+    static void receiveStatus(String json){
             var next=Packets.JSON.fromJson(json,Packets.Status.class);
-            if(next!=null){ClientState.status=next;HistoryPulse.receive(next);checkLargeSelection(next);applyPivot(next.pivotUpdate());if(next.message().startsWith("Undid ")||next.message().startsWith("Redid "))ClientState.boxCorners.clear();ClientRestore.apply(next.restore());if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());ClientState.aiPending=GhostBlocks.parse(next.aiPendingData());if(ClientState.aiPending.total()>0)ClientState.aiPending.ai=true;if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());var mc=Minecraft.getInstance();if(ClientCompat.screen(mc) instanceof EditorScreen editor)editor.statusReceived();AiBridge.statusReceived(next);}
+            if(next!=null&&next.background()){ClientState.updateShared(next);return;} // somebody else's preview changed: not a reply to anything this client asked, and nothing else in it
+            if(next!=null){ClientState.updateShared(next);ClientState.status=next;if(next.error()){if(next.message().startsWith("Too many edits waiting"))BuilderPrediction.rejectedNewest();else BuilderPrediction.rejected();}else if(next.message().startsWith("Applied "))BuilderPrediction.confirmed(next.message());HistoryPulse.receive(next);checkLargeSelection(next);applyPivot(next.pivotUpdate());if(next.message().startsWith("Undid ")||next.message().startsWith("Redid "))ClientState.boxCorners.clear();ClientRestore.apply(next.restore());if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());ClientState.aiPending=GhostBlocks.parse(next.aiPendingData());if(ClientState.aiPending.total()>0)ClientState.aiPending.ai=true;if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());var mc=Minecraft.getInstance();if(ClientCompat.screen(mc) instanceof EditorScreen editor)editor.statusReceived();AiBridge.statusReceived(next);}
     }
     /** Opens the confirmation when a selection action has just selected a suspiciously large area. */
     private static void checkLargeSelection(Packets.Status next){
@@ -141,7 +146,7 @@ public final class CraftiumClient implements ClientModInitializer {
                 case "report" -> ClientCompat.setScreen(mc,new ReportScreen(ClientCompat.screen(mc),message.data()));
                 case "ai_reply" -> AiBridge.dataReceived(message.data());
                 case "download" -> ClientAssets.receive(Packets.JSON.fromJson(message.data(),Packets.Download.class));
-                case "hello" -> send("status",null,null);
+                case "hello" -> {ClientHandshake.receive(message.data(),true);if(ClientHandshake.problem()==null)send("status",null,null);}
                 default -> throw new IllegalArgumentException("Unknown Craftium server message");
             }
         });}catch(RuntimeException e){ClientState.notify("Craftium connection: "+e.getMessage());}
@@ -155,7 +160,8 @@ public final class CraftiumClient implements ClientModInitializer {
         if(BuilderMode.active()&&held(contextKey)||BuilderWidget.active()){if(!toolCursor){mc.mouseHandler.releaseMouse();toolCursor=true;}}
         else if(toolCursor){if(ClientCompat.screen(mc)==null)mc.mouseHandler.grabMouse();toolCursor=false;}
         if(lastLiquidOpacity!=ClientState.options.liquidOpacity){lastLiquidOpacity=ClientState.options.liquidOpacity;ClientCompat.rebuildChunks(mc);}
-        if(!hadWorld){hadWorld=true;if(supported())send("status",null,null);}
+        if(!hadWorld){hadWorld=true;ClientHandshake.checkForUpdates(false);if(supported()&&ClientHandshake.problem()==null)send("status",null,null);}
+        ClientHandshake.announce();
         while(editorKey.consumeClick()) {
             if(ClientCompat.screen(mc) instanceof EditorScreen)ClientCompat.setScreen(mc,null);
             else if(ClientCompat.screen(mc)==null)open(false);
@@ -167,13 +173,22 @@ public final class CraftiumClient implements ClientModInitializer {
         for(var entry:toolKeys.entrySet())while(entry.getValue().consumeClick()){}
         while(swapKey.consumeClick())if(!mc.hasControlDown())send("hotbar",null,null);
         while(replaceKey.consumeClick()) {ClientState.options.replaceMode=!ClientState.options.replaceMode;ClientCompat.overlayMessage(mc,"Replace mode "+(ClientState.options.replaceMode?"enabled":"disabled"));mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK,1.0F));ClientState.save();}
+        // Letting go of the place button closes the stroke the game's own placements belonged to.
+        if(placeStrokeOpen&&GLFW.glfwGetMouseButton(mc.getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_RIGHT)!=GLFW.GLFW_PRESS){placeStrokeOpen=false;if(supported())send("place_stroke_end",null,null);}
         if(!mc.player.isCreative() || !supported())return;
         if(BuilderMode.active())return;
         var o=ClientState.options;long now=System.currentTimeMillis();
         boolean left=GLFW.glfwGetMouseButton(mc.getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_LEFT)==GLFW.GLFW_PRESS;
         boolean right=GLFW.glfwGetMouseButton(mc.getWindow().handle(),GLFW.GLFW_MOUSE_BUTTON_RIGHT)==GLFW.GLFW_PRESS;
+        // The click that changed the reach is not a click on the world: it is ignored for a tick, and until the button is let go.
+        if(guardLeft&&!left)guardLeft=false;
+        if(guardRight&&!right)guardRight=false;
+        if(clickGuard>0||guardLeft)left=false;
+        if(clickGuard>0||guardRight)right=false;
+        if(clickGuard>0)clickGuard--;
         if(!left)breakingSince=0;else if(breakingSince==0){breakingSince=now;ClientState.strokeId=System.nanoTime();} // a symmetric stroke is one undo step
         if(right&&!rightWas&&o.tinker&&mc.player.getMainHandItem().isEmpty()&&mc.hitResult instanceof BlockHitResult th&&th.getType()==HitResult.Type.BLOCK){tinkerHit=th;tinkerAt=now;}
+        if(right&&!rightWas&&!placeStrokeOpen)ClientState.strokeId=System.nanoTime(); // placing, like breaking, is one undo step for as long as the button is held
         rightWas=right;
         if(tinkerHit!=null){ // one click is one change: held down it does not repeat; a click that lands during another edit waits briefly for it
             if(now-tinkerAt>500||!supported())tinkerHit=null;
@@ -225,6 +240,11 @@ public final class CraftiumClient implements ClientModInitializer {
     public static boolean held(KeyMapping mapping){
         if(mapping.isUnbound())return false;var key=InputConstants.getKey(mapping.saveString());long window=Minecraft.getInstance().getWindow().handle();return key.getType()==InputConstants.Type.MOUSE?GLFW.glfwGetMouseButton(window,key.getValue())==GLFW.GLFW_PRESS:InputConstants.isKeyDown(Minecraft.getInstance().getWindow(),key.getValue());
     }
+    /** Steps the selection's display to the next style (silhouette, outline, all edges) and says which. Used by the editor and the Builder alike. */
+    public static void cycleSelectionStyle(){
+        var o=ClientState.options;var all=Options.SelectionStyle.values();var next=all[(o.selectionStyle.ordinal()+1)%all.length];o.selectionStyle=next;
+        ClientState.notify("Selection display: "+next.label);ClientState.save();
+    }
     public static boolean ingameKey(net.minecraft.client.input.KeyEvent event,int action){
         var mc=Minecraft.getInstance();if(action!=GLFW.GLFW_PRESS||ClientCompat.screen(mc)!=null||mc.player==null||!mc.player.isCreative()||!supported())return false;
         if(EntityShortcuts.ingame(event))return true;
@@ -233,6 +253,7 @@ public final class CraftiumClient implements ClientModInitializer {
             boolean undo=EditorBindings.matches(EditorControls.Action.UNDO,event);
             if(undo||EditorBindings.matches(EditorControls.Action.REDO,event)){send(undo?"builder_undo":"builder_redo",null,null);return true;}
         }
+        if(BuilderMode.active()&&EditorBindings.matches(EditorControls.Action.CYCLE_SELECTION_STYLE,event)){cycleSelectionStyle();return true;} // the Builder has no screen open, so this key is read here
         if(EditorBindings.matches(EditorControls.Action.INGAME_COPY,event)){
             var hit=mc.hitResult instanceof BlockHitResult b&&b.getType()==HitResult.Type.BLOCK?b:null;
             if(hit!=null){send("pick_block",point(hit.getBlockPos()),normal(hit));return true;}
@@ -242,6 +263,20 @@ public final class CraftiumClient implements ClientModInitializer {
             if(hit!=null){send("builder_break",point(hit.getBlockPos()),normal(hit));return true;}
         }
         return false;
+    }
+    /** Whether the game's own placements are being grouped into a stroke: opened by the first placement of a held button, closed when it is let go. */
+    private static boolean placeStrokeOpen;
+    private static void beginPlaceStroke(){
+        if(placeStrokeOpen||!ClientState.options.recordPlayerBuilding)return;
+        placeStrokeOpen=true;ClientState.strokeId=System.nanoTime();send("place_stroke",null,null);
+    }
+    /** Ticks left in which a click is ignored, and the buttons that were down for the click that began it and must be let go first. */
+    private static int clickGuard;private static boolean guardLeft,guardRight;
+    /** How many ticks a click on the Builder's own controls is kept from reaching the world. */
+    private static final int CLICK_GUARD_TICKS=1;
+    /** Called when a click on the Builder's widget changes something the world click would act on, such as the reach: the click must not also break or place a block. */
+    public static void guardClick(int button){
+        clickGuard=CLICK_GUARD_TICKS;if(button==0)guardLeft=true;else if(button==1)guardRight=true;
     }
     public static void open(boolean builder){open(builder,false);}
     private static void open(boolean builder,boolean heldContext) {
@@ -276,12 +311,15 @@ public final class CraftiumClient implements ClientModInitializer {
     public static boolean supported() {return Minecraft.getInstance().getConnection()!=null && (ClientPlayNetworking.canSend(Packets.Edit.TYPE)||ClientPlayNetworking.canSend(Packets.Bridge.TYPE));}
     public static void send(String action,Point target,Point normal) {
         if(!supported()){ClientState.notify("Install Craftium on this server to edit worlds");return;}
+        if(ClientHandshake.problem()!=null){ClientState.notify(ClientHandshake.problem());return;}
         var options=ClientState.options;boolean colours=action.equals("autoshade")&&options.shadeAutomatic||action.equals("use")&&(options.script.contains("getBlockRGB")||options.script.contains("findClosestBlockToRGB"))||options.maskScript.contains("getBlockRGB")||options.maskScript.contains("findClosestBlockToRGB");options.scriptColours=colours?new java.util.ArrayList<>(BlockColours.snapshot()):new java.util.ArrayList<>();
         ClientAssets.expect(action);
         if(action.equals("select_box")||action.equals("lasso_select")||action.equals("use")&&ClientState.options.tool.selection()){ClientState.selectionPending=true;ClientState.selectingSince=System.currentTimeMillis();ClientState.selectionSizeBefore=ClientState.status.selectionSize();}
-        try{String request=Packets.JSON.toJson(new Packets.Request(action,target,normal,ClientState.options,action.equals("use")||action.equals("builder_break")?ClientState.strokeId:0));
+        double scale=options.modifyTranslateScale;
+        if(!ClientHandshake.serverHas(Handshake.MODIFY_EXPANSION))options.modifyTranslateScale=1; // an older server would stretch the offset by it instead of widening the sweep
+        try{String request=Packets.JSON.toJson(new Packets.Request(action,target,normal,ClientState.options,action.equals("use")||action.equals("builder_break")||action.equals("builder_place")||action.equals("place_stroke")?ClientState.strokeId:0));
             if(ClientPlayNetworking.canSend(Packets.Edit.TYPE))ClientPlayNetworking.send(new Packets.Edit(request));
-            else for(byte[] frame:BridgeCodec.encode(Packets.JSON.toJson(new BridgeCodec.Message("edit",request))))ClientPlayNetworking.send(new Packets.Bridge(frame));}finally{options.scriptColours=new java.util.ArrayList<>();}
+            else for(byte[] frame:BridgeCodec.encode(Packets.JSON.toJson(new BridgeCodec.Message("edit",request))))ClientPlayNetworking.send(new Packets.Bridge(frame));}finally{options.scriptColours=new java.util.ArrayList<>();options.modifyTranslateScale=scale;}
     }
     public static Point point(net.minecraft.core.BlockPos p){return new Point(p.getX(),p.getY(),p.getZ());}
     public static Point normal(BlockHitResult hit){var d=hit.getDirection();return new Point(d.getStepX(),d.getStepY(),d.getStepZ());}
@@ -312,6 +350,10 @@ public final class CraftiumClient implements ClientModInitializer {
                 // The block it will land on is outlined, as a single block of a selection is.
                 Overlay.box(new AABB(landing.x-.5,landing.y-.5,landing.z-.5,landing.x+.5,landing.y+.5,landing.z+.5),o.rulerKnobSelectedColor,2,o.rulerKnobSelectedColor&0xffffff|0x33000000);
             }
+            if(end!=null&&live!=null&&(picked==first||picked==second)){ // while an end is being moved: the first block the ruler runs into is marked with a white cube
+                var hit=firstBlockOnRuler(start,end);
+                if(hit!=null)Overlay.box(new AABB(hit.getX()-.01,hit.getY()-.01,hit.getZ()-.01,hit.getX()+1.01,hit.getY()+1.01,hit.getZ()+1.01),0xffffffff,2,0x55ffffff);
+            }
             if(end!=null){
                 double length=start.distanceTo(end);
                 double thickness=ruler==ClientState.selectedRuler()?RULER_LINE_HALF*1.6:RULER_LINE_HALF;
@@ -326,6 +368,20 @@ public final class CraftiumClient implements ClientModInitializer {
             if(end!=null)knob(end,picked==second?o.rulerKnobSelectedColor:o.rulerKnobColor,picked==second);
             index+=end==null?1:2;
         }
+    }
+    /**
+     * The first block along the ruler, walking from its start towards its end, that is not air. The block the walk begins in is skipped,
+     * since a ruler's ends sit on blocks. Null if the ruler runs through nothing.
+     */
+    private static net.minecraft.core.BlockPos firstBlockOnRuler(Vec3 start,Vec3 end){
+        var level=Minecraft.getInstance().level;if(level==null)return null;
+        Vec3 along=end.subtract(start);double length=along.length();if(length<1e-6)return null;
+        var origin=net.minecraft.core.BlockPos.containing(start);
+        for(double d=.05;d<=length;d+=.05){
+            var pos=net.minecraft.core.BlockPos.containing(start.add(along.scale(d/length)));
+            if(!pos.equals(origin)&&!level.getBlockState(pos).isAir())return pos;
+        }
+        return null;
     }
     /** The ruler is made of real size: its line is this thick and its knobs this big in blocks, so they grow and shrink with distance like the blocks around them. */
     private static final double RULER_LINE_HALF=.04,RULER_KNOB_HALF=.07,RULER_KNOB_SELECTED_HALF=.09;
@@ -384,6 +440,12 @@ public final class CraftiumClient implements ClientModInitializer {
             if(hit!=null&&screen!=null&&screen.toolActive()&&ClientState.options.tool==Tool.RULER){var o=ClientState.options;Overlay.box(new AABB(hit.getBlockPos()),o.selectionColor,(float)o.selectionWidth,o.selectionFill);}
             ClientState.pending.draw(new Point(0,0,0),true);
             ClientState.aiPending.draw(new Point(0,0,0),true);
+            // The AI previews other players are holding, in their own colour and with the owner's name, as far away as they are worth drawing.
+            if(ClientState.options.showSharedAiPreviews&&mc.player!=null)for(var other:ClientState.sharedAi)
+                if(other.ghost().within(mc.player.getX(),mc.player.getY(),mc.player.getZ(),SHARED_RANGE)){
+                    other.ghost().draw(new Point(0,0,0),true);
+                    var at=other.ghost().labelAt();if(at!=null)Overlay.text(other.owner()+"'s AI preview",at,0xff9ff0e4,0xbb151c26,.04f);
+                }
             if(ClientState.options.showMarkerGizmos||ClientState.options.showDisplayGizmos){int count=0;for(var entity:mc.level.entitiesForRendering()){boolean show=entity instanceof net.minecraft.world.entity.Marker&&ClientState.options.showMarkerGizmos||entity instanceof net.minecraft.world.entity.Display&&ClientState.options.showDisplayGizmos;if(!show||entity.distanceToSqr(mc.player)>128*128||++count>256)continue;Vec3 at=entity.position();int color=entity.getUUID().toString().equals(ClientState.options.entityUuid)?0xffffd66d:0xffe6edf7;Overlay.point(at,color,6);Overlay.box(new AABB(at.add(-.08,-.08,-.08),at.add(.08,.08,.08)),color,1,0);}}
             if(ClientState.options.showAnnotations&&ClientState.status.annotations()!=null)for(var note:ClientState.status.annotations()){
                 Point a=note.from(),b=note.to();Vec3 start=new Vec3(a.x()+.5,a.y()+.5,a.z()+.5),end=new Vec3(b.x()+.5,b.y()+.5,b.z()+.5);

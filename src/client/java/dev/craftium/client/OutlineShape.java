@@ -14,26 +14,64 @@ import java.util.*;
  */
 final class OutlineShape {
     static final OutlineShape EMPTY=new OutlineShape(SelectionOutline.Result.EMPTY,null);
-    /** Beyond these the outline is too detailed to draw every tick, so the shape falls back to its bounding box. */
-    private static final int MAX_EDGES=8192,MAX_FACES=4096;
+    /**
+     * Beyond these the outline is too detailed to draw every frame, so the shape falls back to its bounding box. Measured with the
+     * selection draw-cost game test: a 100,000-block selection with about 25,000 edges and 18,000 faces still draws at 70 frames a
+     * second or more. A thousand edges cost about a tenth of a millisecond and a thousand filled faces about a quarter, so a shape
+     * at both caps still runs at about 50 frames a second. Past the face cap only the fill is dropped; the box is for selections
+     * that are far busier than anything a person selects on purpose.
+     */
+    static final int DEFAULT_MAX_EDGES=40_000,DEFAULT_MAX_FACES=30_000;
+    static int maxEdges=DEFAULT_MAX_EDGES,maxFaces=DEFAULT_MAX_FACES; // not final only so the draw-cost game test can lift them; nothing else changes them
 
-    private final SelectionOutline.Result outline;
+    private volatile SelectionOutline.Result outline;
     private final AABB bounds;
+    /** False only for a shape made by {@link #ofLater}, until its outline has been worked out. */
+    private volatile boolean ready=true;
+    // The outline's corners as ready-made points, made on first use. Building a few of them per edge and face every frame was a large part of the
+    // cost of a big shape, and a shape that is drawn where it is never changes. A shape drawn moved by something still works them out each time.
+    private Vec3[] edgeEnds,creaseEnds;
+    private Vec3[][] quads;
 
     private OutlineShape(SelectionOutline.Result outline,AABB bounds){this.outline=outline;this.bounds=bounds;}
 
     static OutlineShape of(Collection<Point> points){
         if(points.isEmpty())return EMPTY;
+        return new OutlineShape(SelectionOutline.of(points),boundsOf(points));
+    }
+    private static AABB boundsOf(Collection<Point> points){
         AABB bounds=null;
         for(Point p:points){var cell=new AABB(p.x(),p.y(),p.z(),p.x()+1,p.y()+1,p.z()+1);bounds=bounds==null?cell:bounds.minmax(cell);}
-        return new OutlineShape(SelectionOutline.of(points),bounds);
+        return bounds;
     }
+    /** One thread works out every {@link #ofLater} outline, one after another. */
+    private static final java.util.concurrent.ExecutorService LATER=java.util.concurrent.Executors.newSingleThreadExecutor(task->{
+        var thread=new Thread(task,"Craftium outline");thread.setDaemon(true);thread.setPriority(Thread.NORM_PRIORITY-1);return thread;});
+    /**
+     * As {@link #of}, for a big set of blocks that is shown once, such as the blocks of an edit waiting to be confirmed: the outline takes a
+     * couple of hundred milliseconds for a hundred thousand blocks, which would freeze the game if it were worked out here. The shape draws
+     * nothing until it is ready. {@code points} must not change afterwards. Small sets are worked out at once, since that is quicker than the hand-over.
+     */
+    static OutlineShape ofLater(Collection<Point> points){
+        if(points.size()<=LATER_FROM)return of(points);
+        var shape=new OutlineShape(SelectionOutline.Result.EMPTY,boundsOf(points));
+        shape.ready=false;
+        LATER.execute(()->{shape.outline=SelectionOutline.of(points);shape.ready=true;});
+        return shape;
+    }
+    private static final int LATER_FROM=2000;
+    /** Whether the outline has been worked out; always true unless the shape came from {@link #ofLater}. */
+    boolean ready(){return ready;}
+    /** How many edges the outline has, for the draw-cost game test. */
+    int edgeCount(){return outline.edges().size();}
 
     /** A solid box from the block corner {@code lo} up to, not including, {@code hi}, drawn in the selection's style like any other shape. */
     static OutlineShape box(Point lo,Point hi){return new OutlineShape(SelectionOutline.box(lo,hi),new AABB(lo.x(),lo.y(),lo.z(),hi.x(),hi.y(),hi.z()));}
     /** The box around every block, or null when empty. */
     AABB bounds(){return bounds;}
     boolean isEmpty(){return bounds==null;}
+    /** Whether the shape has the contour of the screen to draw, and not just its creases. For the draw-cost game test. */
+    boolean hasContour(){return contourEnds!=null&&contourEnds.length>0;}
 
     /** Receives a line, after any transform the caller wants applied. */
     interface Lines{void line(Vec3 from,Vec3 to);}
@@ -48,11 +86,24 @@ final class OutlineShape {
      * The selection's style as it is: the silhouette (or the outline) at the plain line width, with no extra edges. All edges is always
      * depth-tested. With {@code scene} the other styles' lines are hidden by blocks in front of them too.
      */
-    void drawPlain(Vec3 at,int colour,float width,int fill,boolean withFill,boolean scene){
+    void drawPlain(Vec3 at,int colour,float width,int fill,boolean withFill,boolean scene){drawPlain(at,colour,width,fill,fill,withFill,scene);}
+    /** As above, with the faces that point away from the camera filled in {@code backFill}: with the camera inside the shape, those are the walls around it. */
+    void drawPlain(Vec3 at,int colour,float width,int fill,int backFill,boolean withFill,boolean scene){
         var style=ClientState.options.selectionStyle;
         Lines lines=scene||style==Options.SelectionStyle.ALL_EDGES?(a,b)->sceneLine(a,b,colour,width):(a,b)->Overlay.line(a,b,colour,width);
-        draw(at,lines,colour,fill,withFill,style);
+        draw(at,lines,colour,fill,backFill,withFill,style,null);
     }
+    /**
+     * As the first drawPlain, for a shape that is being changed as it is looked at, such as the blocks a drag will leave, which are worked out
+     * again at every step. Its silhouette is always found from this frame's camera, never from an earlier one.
+     */
+    void drawLive(Vec3 at,int colour,float width,int fill,boolean withFill){
+        var style=ClientState.options.selectionStyle;
+        Lines lines=style==Options.SelectionStyle.ALL_EDGES?(a,b)->sceneLine(a,b,colour,width):(a,b)->Overlay.line(a,b,colour,width);
+        draw(at,lines,colour,fill,fill,withFill,style,java.util.function.UnaryOperator.identity());
+    }
+    /** Only the fill of the exterior faces, with no outline: how blocks about to be removed are shown. */
+    void drawFill(Vec3 at,int fill){draw(at,(a,b)->{},0,fill,true,ClientState.options.selectionStyle);}
     /** A depth-tested line, drawn a little toward the camera: the outline lies in the surface of the blocks, so exactly there it would be cut away by them. */
     private static void sceneLine(Vec3 a,Vec3 b,int colour,float width){
         Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position(),mid=a.add(b).scale(.5),toEye=eye.subtract(mid);
@@ -61,51 +112,178 @@ final class OutlineShape {
         Overlay.sceneLine(a.add(nudge),b.add(nudge),colour,width);
     }
     /** As {@link #draw(Vec3,Lines,int,int,boolean)}, with the outline style chosen by the caller instead of the selection's. */
-    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style){
-        if(bounds==null)return;
-        if(outline.edges().size()>MAX_EDGES){
+    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style){draw(at,lines,stroke,fill,fill,withFill,style,null);}
+    /**
+     * As above, for a shape whose lines {@code lines} moves somewhere else, as a drag does. What the camera sees of the moved shape is not what it
+     * sees of the shape where it is, so the silhouette is worked out from where the camera is relative to the shape as it was before the move:
+     * {@code eyeInShape} turns the camera's position into that. The shape changes with every step of the drag, so only a silhouette that can be
+     * found within the frame is used, never a late one from another thread.
+     */
+    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape){draw(at,lines,stroke,fill,fill,withFill,style,eyeInShape);}
+    private void draw(Vec3 at,Lines lines,int stroke,int fill,int backFill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape){
+        if(bounds==null||!ready)return;
+        boxed=outline.edges().size()>maxEdges;
+        if(boxed){
             AABB box=bounds.move(at);
             if(withFill)Overlay.box(box,stroke,1,fill);else boxLines(box,lines);
             return;
         }
         // Only the outline as the camera sees it, unless every edge was asked for or the camera is inside the shape.
-        if(style==Options.SelectionStyle.ALL_EDGES||!(style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at))&&!silhouette(lines,at))
-            for(var s:outline.edges())lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
-        if(withFill&&outline.faces().size()<=MAX_FACES)for(var f:outline.faces())face(f,at,fill);
+        boolean contoured=style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at,eyeInShape);
+        if(style==Options.SelectionStyle.ALL_EDGES||!contoured&&!silhouette(lines,at,eyeInShape))
+            allEdges(lines,at);
+        if(style!=Options.SelectionStyle.SILHOUETTE||contoured)outlineSince=0;
+        else if(outlineSince==0)outlineSince=System.nanoTime();
+        if(withFill&&outline.faces().size()<=maxFaces){
+            // Only a camera inside the shape sees its walls from behind; from outside, every face keeps the one fill.
+            Vec3 eye=backFill==fill?null:ClientCompat.camera(Minecraft.getInstance()).position().subtract(at);
+            boolean inside=eye!=null&&inside(eye);
+            Vec3[][] ready=at.equals(Vec3.ZERO)?quads():null;int next=0;
+            for(var f:outline.faces()){
+                int colour=fill;
+                if(inside){double plane=switch(f.axis()){case 0->f.x0();case 1->f.y0();default->f.z0();},from=switch(f.axis()){case 0->eye.x;case 1->eye.y;default->eye.z;};
+                    if(f.sign()*(from-plane)<=0)colour=backFill;}
+                if(ready!=null){Vec3[] q=ready[next++];Overlay.face(q[0],q[1],q[2],q[3],colour);}else face(f,at,colour);
+            }
+        }
+    }
+    private void allEdges(Lines lines,Vec3 at){
+        if(at.equals(Vec3.ZERO)){var ends=edgeEnds;if(ends==null)edgeEnds=ends=ends(outline.edges());for(int i=0;i<ends.length;i+=2)lines.line(ends[i],ends[i+1]);return;}
+        for(var s:outline.edges())lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
+    }
+    private static Vec3[] ends(List<SelectionOutline.Segment> segments){
+        var ends=new Vec3[segments.size()*2];int i=0;
+        for(var s:segments){ends[i++]=new Vec3(s.x0(),s.y0(),s.z0());ends[i++]=new Vec3(s.x1(),s.y1(),s.z1());}
+        return ends;
+    }
+    /** Every exterior rectangle as four corners, already in the order the overlay wants them. */
+    private Vec3[][] quads(){
+        var made=quads;
+        if(made==null){
+            made=new Vec3[outline.faces().size()][];int i=0;
+            for(var f:outline.faces()){
+                int[] lo={f.x0(),f.y0(),f.z0()},hi={f.x1(),f.y1(),f.z1()};
+                int axis=f.axis(),u=(axis+1)%3,v=(axis+2)%3;
+                int[][] ring={{lo[u],lo[v]},{hi[u],lo[v]},{hi[u],hi[v]},{lo[u],hi[v]}};
+                Vec3[] c=new Vec3[4];
+                for(int k=0;k<4;k++){double[] p=new double[3];p[axis]=lo[axis];p[u]=ring[k][0];p[v]=ring[k][1];c[k]=new Vec3(p[0],p[1],p[2]);}
+                made[i++]=f.sign()>0?c:new Vec3[]{c[3],c[2],c[1],c[0]};
+            }
+            quads=made;
+        }
+        return made;
+    }
+    /** Whether the camera is inside the shape. Shapes with too many faces to be filled are not worked out, which keeps the frame cheap. */
+    boolean cameraInside(){
+        if(bounds==null||!ready||outline.faces().size()>maxFaces)return false;
+        return inside(ClientCompat.camera(Minecraft.getInstance()).position());
+    }
+    /** Whether {@code eye}, relative to the shape, is inside it: a ray along +x crosses an odd number of the closed surface's faces. */
+    private boolean inside(Vec3 eye){
+        if(bounds==null||!bounds.contains(eye))return false;
+        int crossed=0;
+        for(var f:outline.faces())if(f.axis()==0&&f.x0()>eye.x&&eye.y>=f.y0()&&eye.y<f.y1()&&eye.z>=f.z0()&&eye.z<f.z1())crossed++;
+        return (crossed&1)==1;
     }
 
     private Vec3 contourEye,contourAt;
-    private List<ScreenSilhouette.Line> contourLines;
+    private Vec3[] contourEnds;
+    /** Whether the camera is inside the shape, as last worked out; only worked out when the camera or the shape moves. */
+    private boolean eyeBuried;
+    /** When the last frames that wanted a silhouette began showing the outline instead, or 0 while they get one. */
+    private long outlineSince;
+    private boolean boxed;
+    /**
+     * Why the shape is not drawn the way it was asked for, in a word for the interface, or null when it is. The silhouette style shows the
+     * outline instead when there is no contour on the screen to draw, as when the camera is inside the shape; that is only reported once it
+     * has lasted a moment, so the first frames before a contour is ready do not flash it. A shape too detailed to draw is shown as its box.
+     */
+    String fallback(){
+        if(boxed)return "box view";
+        return outlineSince!=0&&System.nanoTime()-outlineSince>400_000_000L?"outline view":null;
+    }
+    /** The lines of a contour, ready to draw, and the offset of the shape they were worked out for. */
+    private record Contour(Vec3 at,Vec3[] ends){}
+    private static final Vec3[] NO_CONTOUR=new Vec3[0];
+    /** Past this many creases the contour takes long enough to work out that it is done off the game thread. */
+    private static final int ASYNC_CREASES=1500;
+    /** One thread does every shape's contour, one after another; a request replaced before its turn is skipped. */
+    private static final java.util.concurrent.ExecutorService CONTOUR_THREAD=java.util.concurrent.Executors.newSingleThreadExecutor(task->{
+        var thread=new Thread(task,"Craftium selection contour");thread.setDaemon(true);thread.setPriority(Thread.NORM_PRIORITY-1);return thread;});
+    private LatestResult<Contour> contourJob;
     /**
      * Draws only the contour of the shape on the screen. Worked out again only when the camera or the shape moves.
      * Returns false when there is none to draw, so the caller falls back to the creases.
+     * <p>
+     * A big shape's contour takes tens of milliseconds, which would stall the game every time the camera moved, so it is worked out on
+     * another thread. The game goes on drawing the last one that was finished, which a moving camera barely changes, and the creases
+     * until the first is ready. If the shape itself has moved the old one is dropped, because it would be drawn in the wrong place.
      */
-    private boolean contour(Lines lines,Vec3 at){
-        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
-        if(contourEye==null||contourEye.distanceToSqr(eye)>1e-8||!at.equals(contourAt)){
-            contourEye=eye;contourAt=at;
-            contourLines=ScreenSilhouette.of(outline,eye.x-at.x,eye.y-at.y,eye.z-at.z);
+    private boolean contour(Lines lines,Vec3 at,java.util.function.UnaryOperator<Vec3> eyeInShape){
+        Vec3 eye=eyeIn(eyeInShape);
+        boolean live=eyeInShape!=null;
+        boolean changed=contourEye==null||contourEye.distanceToSqr(eye)>1e-8||!at.equals(contourAt);
+        if(changed)eyeBuried=inside(eye.subtract(at));
+        if(eyeBuried){ // inside the solid there is no edge of the shape against the background, and the picture of what is around the camera is not one to outline
+            contourEye=eye;contourAt=at;contourEnds=null;
+            if(contourJob!=null)contourJob.cancel();
+            return false;
         }
-        if(contourLines==null||contourLines.isEmpty())return false;
-        for(var l:contourLines)lines.line(new Vec3(l.x0(),l.y0(),l.z0()).add(at),new Vec3(l.x1(),l.y1(),l.z1()).add(at));
+        if(live&&outline.creases().size()>ASYNC_CREASES)return false; // too much to find within the frame, and a late answer would be for an earlier step of the drag
+        if(outline.creases().size()<=ASYNC_CREASES){
+            if(changed){
+                contourEye=eye;contourAt=at;
+                contourEnds=ends(ScreenSilhouette.of(outline,eye.x-at.x,eye.y-at.y,eye.z-at.z),at);
+            }
+        }else{
+            if(contourJob==null)contourJob=new LatestResult<>(CONTOUR_THREAD,false);
+            if(changed){
+                if(!at.equals(contourAt))contourEnds=null;
+                contourEye=eye;contourAt=at;
+                double x=eye.x-at.x,y=eye.y-at.y,z=eye.z-at.z;
+                contourJob.submit(()->new Contour(at,ends(ScreenSilhouette.of(outline,x,y,z),at)));
+            }
+            var ready=contourJob.poll();
+            if(ready!=null&&ready.at().equals(at))contourEnds=ready.ends();
+        }
+        if(contourEnds==null||contourEnds.length==0)return false;
+        for(int i=0;i<contourEnds.length;i+=2)lines.line(contourEnds[i],contourEnds[i+1]);
         return true;
+    }
+    private static Vec3[] ends(List<ScreenSilhouette.Line> contour,Vec3 at){
+        if(contour==null||contour.isEmpty())return NO_CONTOUR;
+        var ends=new Vec3[contour.size()*2];int i=0;
+        for(var l:contour){ends[i++]=new Vec3(l.x0(),l.y0(),l.z0()).add(at);ends[i++]=new Vec3(l.x1(),l.y1(),l.z1()).add(at);}
+        return ends;
     }
 
     /**
      * Draws the creases where one of the two faces points toward the camera and the other away, which is the outline of
      * the shape on the screen. Returns false when there are none, as when the camera is inside the shape.
      */
-    private boolean silhouette(Lines lines,Vec3 at){
-        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
+    private boolean silhouette(Lines lines,Vec3 at,java.util.function.UnaryOperator<Vec3> eyeInShape){
+        Vec3 eye=eyeIn(eyeInShape);
         int drawn=0;
+        boolean here=at.equals(Vec3.ZERO);
+        Vec3[] ready=null;
+        if(here){ready=creaseEnds;if(ready==null)creaseEnds=ready=ends(outline.creases().stream().map(SelectionOutline.Crease::segment).toList());}
+        int index=0;
         for(var crease:outline.creases()){
             var s=crease.segment();
             double mx=(s.x0()+s.x1())/2d+at.x,my=(s.y0()+s.y1())/2d+at.y,mz=(s.z0()+s.z1())/2d+at.z;
             if(towards(crease.normalA(),eye,mx,my,mz)!=towards(crease.normalB(),eye,mx,my,mz)){
-                lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));drawn++;
+                if(here)lines.line(ready[index*2],ready[index*2+1]);
+                else lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
+                drawn++;
             }
+            index++;
         }
         return drawn>0;
+    }
+    /** The camera's position, or where it is relative to the shape if the shape is being moved by something. */
+    private static Vec3 eyeIn(java.util.function.UnaryOperator<Vec3> eyeInShape){
+        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
+        return eyeInShape==null?eye:eyeInShape.apply(eye);
     }
     /** True when the face with this direction, on a plane through the point, faces the eye. */
     private static boolean towards(int direction,Vec3 eye,double x,double y,double z){
