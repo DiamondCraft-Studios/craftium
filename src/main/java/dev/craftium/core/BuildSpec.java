@@ -20,7 +20,8 @@ import java.util.regex.Pattern;
  *
  * Operations: {@code box}, {@code sphere}, {@code cylinder}, {@code cone}, {@code pyramid}, {@code line}, {@code set} and
  * {@code replace}; {@code roof} and {@code stairs}, which set the facing of their stairs themselves (see {@link BuildShapes}); and
- * {@code group}, a list of operations turned, mirrored or moved as one. Every operation may carry {@code "hollow": true} (shapes only) and
+ * {@code group}, a list of operations turned, mirrored or moved as one; and {@code script}, Lua the server runs after the shapes to place
+ * blocks inside a box ({@link ScriptOp}). Every operation may carry {@code "hollow": true} (shapes only) and
  * {@code "repeat": {"count": n, "step": [x,y,z]}}. Later operations overwrite earlier ones; {@code minecraft:air} carves.
  * <p>
  * A block may be a mix, {@code {"mix": [["stone_bricks", 6], ["mossy_stone_bricks", 3]], "seed": 1}}, picked for each position from its
@@ -61,6 +62,16 @@ public final class BuildSpec {
     public record SelectionOp(String block, String find, List<String> keep) {}
 
     /**
+     * A Lua script that builds inside a box: {@code {"op":"script","from":[x,y,z],"to":[x,y,z],"code":"...","seed":n}}. The server runs it
+     * after the shapes, so it sees what they placed. {@code from} and {@code to} here are world positions (the spec's origin added), and
+     * {@code label} is how errors name the operation.
+     */
+    public record ScriptOp(String label, Point from, Point to, String code, int seed) {}
+
+    /** The longest script an operation may hold. */
+    public static final int MAX_SCRIPT = 20_000;
+
+    /**
      * One block to place. {@code only}, when set, limits the cell to positions currently holding that block (the replace operation).
      * {@code turn} is how a group turned or mirrored it, for the server to turn the block's state the same way (a stair's facing, a log's axis).
      */
@@ -85,6 +96,8 @@ public final class BuildSpec {
     private static final int COORDINATE_LIMIT = 30_000_000;
     private final List<JsonObject> ops = new ArrayList<>();
     private final List<SelectionOp> selectionOps = new ArrayList<>();
+    private final List<JsonObject> scripts = new ArrayList<>();
+    private final List<Integer> scriptIndex = new ArrayList<>();
     private final Map<String, Choice> palette = new LinkedHashMap<>();
     private final int[] origin = {0, 0, 0};
     /** The spec's material, for names written as "@kind"; an operation may name its own. */
@@ -129,8 +142,17 @@ public final class BuildSpec {
         for (int i = 0; i < list.size(); i++) {
             if (!list.get(i).isJsonObject()) throw new IllegalArgumentException("ops[" + i + "] must be an object");
             var op = list.get(i).getAsJsonObject();
-            if (op.has("op") && op.get("op").isJsonPrimitive() && "replace_selection".equals(op.get("op").getAsString())) spec.selectionOps.add(spec.selectionOp(op, i));
-            else {
+            String kind = op.has("op") && op.get("op").isJsonPrimitive() ? op.get("op").getAsString() : "?";
+            if (kind.equals("replace_selection")) spec.selectionOps.add(spec.selectionOp(op, i));
+            else if (kind.equals("script")) {
+                if (!spec.selectionOps.isEmpty()) throw fail(i, kind, "comes after a replace_selection. List scripts after the shapes and before replace_selection");
+                scriptOp(op, i);
+                spec.scripts.add(op);
+                spec.scriptIndex.add(i);
+            } else {
+                // Scripts run after every shape, so a shape listed after one would not run in the order it is written in.
+                if (!spec.scripts.isEmpty())
+                    throw fail(i, kind, "comes after a script. List scripts after all the shapes, because they run once the shapes are placed");
                 // Selection operations run after every shape, so one listed before a shape would not run in the order it is written in.
                 if (!spec.selectionOps.isEmpty())
                     throw fail(i, op.has("op") && op.get("op").isJsonPrimitive() ? op.get("op").getAsString() : "?", "comes after a replace_selection. List replace_selection after all the shapes, because it works on the blocks they leave in the selection");
@@ -163,6 +185,8 @@ public final class BuildSpec {
             var child = list.get(n).getAsJsonObject();
             if (child.has("op") && child.get("op").isJsonPrimitive() && "replace_selection".equals(child.get("op").getAsString()))
                 throw fail(i, "group", "replace_selection works on the player's selection and cannot be in a group");
+            if (child.has("op") && child.get("op").isJsonPrimitive() && "script".equals(child.get("op").getAsString()))
+                throw fail(i, "group", "a script cannot be in a group: it places blocks at world positions, which a group cannot turn. List it after the shapes");
             out.add(child);
         }
         return out;
@@ -187,11 +211,39 @@ public final class BuildSpec {
         return new SelectionOp(block, find, keep == null ? null : List.copyOf(keep));
     }
 
+    /** Checks a script operation's fields, so a spec that cannot run is refused before anything is planned. */
+    private static void scriptOp(JsonObject op, int i) {
+        String kind = "script";
+        if (op.has("repeat") || op.has("hollow") || op.has("block")) throw fail(i, kind, "\"repeat\", \"hollow\" and \"block\" do not apply: the code calls setBlock for each block it places");
+        vector(op, "from", i, kind);
+        vector(op, "to", i, kind);
+        if (!op.has("code") || !op.get("code").isJsonPrimitive() || !op.getAsJsonPrimitive("code").isString() || op.get("code").getAsString().isBlank())
+            throw fail(i, kind, "needs \"code\": Lua source that calls setBlock(x, y, z, block) for the blocks it places");
+        if (op.get("code").getAsString().length() > MAX_SCRIPT) throw fail(i, kind, "\"code\" is longer than " + MAX_SCRIPT + " characters");
+        if (op.has("seed")) integer(op, "seed", i, kind, Integer.MIN_VALUE, Integer.MAX_VALUE);
+    }
+
+    /** The spec's scripts, in order, with world positions; the server runs them after the shapes and before the operations on the selection. */
+    public List<ScriptOp> scripts() {
+        var out = new ArrayList<ScriptOp>();
+        for (int k = 0; k < scripts.size(); k++) {
+            var op = scripts.get(k);
+            int i = scriptIndex.get(k);
+            var a = vector(op, "from", i, "script");
+            var b = vector(op, "to", i, "script");
+            out.add(new ScriptOp("ops[" + i + "] (script)",
+                    new Point(Math.min(a[0], b[0]) + origin[0], Math.min(a[1], b[1]) + origin[1], Math.min(a[2], b[2]) + origin[2]),
+                    new Point(Math.max(a[0], b[0]) + origin[0], Math.max(a[1], b[1]) + origin[1], Math.max(a[2], b[2]) + origin[2]),
+                    op.get("code").getAsString(), op.has("seed") ? integer(op, "seed", i, "script", Integer.MIN_VALUE, Integer.MAX_VALUE) : 0));
+        }
+        return out;
+    }
+
     /** The operations on the player's selection, in order, which the server applies after the shapes. */
     public List<SelectionOp> selectionOps() { return List.copyOf(selectionOps); }
 
     /** Whether the spec has any shapes at all; a spec of selection operations alone has none, and so no area of its own. */
-    public boolean hasShapes() { return !ops.isEmpty(); }
+    public boolean hasShapes() { return !ops.isEmpty() || !scripts.isEmpty(); }
 
     /** Every distinct block name the spec can place, resolved through the palette, so the server can reject unknown ones up front. */
     public Set<String> blocks() {
@@ -212,7 +264,7 @@ public final class BuildSpec {
         names(ops, "", (label, each) -> { if (stateless(each).equals(wanted)) out.add(label); });
         for (int k = 0; k < selectionOps.size(); k++) {
             var op = selectionOps.get(k);
-            if (stateless(op.block()).equals(wanted) || op.find() != null && stateless(op.find()).equals(wanted)) out.add("ops[" + (ops.size() + k) + "] (replace_selection)");
+            if (stateless(op.block()).equals(wanted) || op.find() != null && stateless(op.find()).equals(wanted)) out.add("ops[" + (ops.size() + scripts.size() + k) + "] (replace_selection)");
         }
         return new ArrayList<>(out);
     }
@@ -241,8 +293,14 @@ public final class BuildSpec {
      * its numbers, repeats included, so a spec that reaches further than the build limits is refused here with a message.
      */
     public Placement place() {
-        if (ops.isEmpty()) throw new IllegalArgumentException("The spec has no shapes, only operations on the selection, so it has no area of its own");
+        if (!hasShapes()) throw new IllegalArgumentException("The spec has no shapes, only operations on the selection, so it has no area of its own");
         long[] span = span(ops);
+        // A script's box is part of the area, so its chunks are loaded and the build is held to the same size limits.
+        for (var script : scripts()) {
+            int[] lo = {script.from().x() - origin[0], script.from().y() - origin[1], script.from().z() - origin[2]};
+            int[] hi = {script.to().x() - origin[0], script.to().y() - origin[1], script.to().z() - origin[2]};
+            for (int axis = 0; axis < 3; axis++) { span[axis] = Math.min(span[axis], lo[axis]); span[axis + 3] = Math.max(span[axis + 3], hi[axis]); }
+        }
         long[] low = {span[0], span[1], span[2]}, high = {span[3], span[4], span[5]};
         String[] names = {"x", "y", "z"};
         for (int axis = 0; axis < 3; axis++)

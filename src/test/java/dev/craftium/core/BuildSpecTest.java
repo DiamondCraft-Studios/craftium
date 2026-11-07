@@ -358,4 +358,49 @@ class BuildSpecTest {
         e = refused("{\"ops\":[{\"op\":\"group\",\"ops\":[{\"op\":\"set\",\"at\":[0,0,0]}]}]}");
         assertTrue(e.getMessage().startsWith("ops[0] (group)"), e.getMessage());
     }
+
+    private static final String SCRIPT = "{\"op\":\"script\",\"from\":[0,0,0],\"to\":[4,2,4],\"seed\":7,\"code\":\"setBlock(x0, y0, z0, 'stone')\"}";
+
+    @Test void aScriptsBoxIsPartOfTheAreaAndItsPositionsAreInTheWorld() {
+        var spec = BuildSpec.parse("{\"origin\":[100,64,200],\"ops\":[{\"op\":\"box\",\"from\":[0,0,0],\"to\":[1,1,1],\"block\":\"stone\"}," + SCRIPT + "]}");
+        var place = spec.place();
+        assertEquals(new Point(100, 64, 200), place.min());
+        assertEquals(new BuildSpec.Bounds(5, 3, 5), place.bounds());
+        var script = spec.scripts().getFirst();
+        assertEquals("ops[1] (script)", script.label());
+        assertEquals(new Point(100, 64, 200), script.from());
+        assertEquals(new Point(104, 66, 204), script.to());
+        assertEquals(7, script.seed());
+        assertEquals(8, spec.build(place).cells().size(), "the script's blocks are placed by the server, not here");
+    }
+
+    @Test void aSpecOfOnlyAScriptHasAnArea() {
+        var spec = BuildSpec.parse("{\"ops\":[" + SCRIPT.replace(",\"seed\":7", "") + "]}");
+        assertTrue(spec.hasShapes());
+        assertEquals(new BuildSpec.Bounds(5, 3, 5), spec.place().bounds());
+        assertTrue(spec.build(spec.place()).cells().isEmpty());
+        assertEquals(0, spec.scripts().getFirst().seed(), "no seed is seed 0, so the same spec builds the same");
+    }
+
+    @Test void scriptsComeAfterTheShapesAndOutsideGroups() {
+        var e = refused("{\"ops\":[" + SCRIPT + ",{\"op\":\"box\",\"from\":[0,0,0],\"to\":[1,1,1],\"block\":\"stone\"}]}");
+        assertTrue(e.getMessage().startsWith("ops[1] (box): comes after a script"), e.getMessage());
+        e = refused("{\"ops\":[{\"op\":\"replace_selection\",\"block\":\"stone\"}," + SCRIPT + "]}");
+        assertTrue(e.getMessage().startsWith("ops[1] (script): comes after a replace_selection"), e.getMessage());
+        e = refused("{\"ops\":[{\"op\":\"group\",\"ops\":[" + SCRIPT + "]}]}");
+        assertTrue(e.getMessage().contains("cannot be in a group"), e.getMessage());
+        var spec = BuildSpec.parse("{\"ops\":[" + SCRIPT + ",{\"op\":\"replace_selection\",\"block\":\"oak_planks\"}]}");
+        assertEquals(java.util.List.of("ops[1] (replace_selection)"), spec.usesOf("minecraft:oak_planks"));
+    }
+
+    @Test void aScriptNeedsCodeAndABox() {
+        assertTrue(refused("{\"ops\":[{\"op\":\"script\",\"from\":[0,0,0],\"to\":[1,1,1]}]}").getMessage().contains("needs \"code\""));
+        assertTrue(refused("{\"ops\":[{\"op\":\"script\",\"from\":[0,0,0],\"code\":\"x = 1\"}]}").getMessage().contains("\"to\""));
+        assertTrue(refused("{\"ops\":[{\"op\":\"script\",\"from\":[0,0,0],\"to\":[1,1,1],\"code\":\"x = 1\",\"block\":\"stone\"}]}").getMessage().contains("do not apply"));
+        String longCode = "x = 1 ".repeat(BuildSpec.MAX_SCRIPT / 6 + 1);
+        assertTrue(refused("{\"ops\":[{\"op\":\"script\",\"from\":[0,0,0],\"to\":[1,1,1],\"code\":\"" + longCode + "\"}]}").getMessage().contains("longer than"));
+        var wide = BuildSpec.parse("{\"ops\":[{\"op\":\"script\",\"from\":[0,0,0],\"to\":[300,0,0],\"code\":\"x = 1\"}]}");
+        var e = assertThrows(IllegalArgumentException.class, wide::place);
+        assertTrue(e.getMessage().contains("at most " + BuildSpec.MAX_EXTENT), e.getMessage());
+    }
 }

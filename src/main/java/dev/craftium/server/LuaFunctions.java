@@ -19,14 +19,20 @@ final class LuaFunctions {
     private final Map<String,Integer> rgb=new HashMap<>();
     private final Map<Long,FastNoiseLite> noises=new HashMap<>();
     private final Map<Long,Integer> matches=new HashMap<>();
-    private final int randomSeed=java.util.concurrent.ThreadLocalRandom.current().nextInt();
+    private int randomSeed=java.util.concurrent.ThreadLocalRandom.current().nextInt();
+    /** Where setBlock may place; a block outside is counted in {@link #outside} and dropped. Everywhere unless an AI script sets its box. */
+    private java.util.function.Predicate<Point> inside=p->true;
+    /** Whether getBlock reads what this plan has placed so far before the world: an AI script sees the shapes listed before it. */
+    private boolean readPlanned;
+    private int limit=Integer.MAX_VALUE;
+    int placed,outside;
     private List<Colour> colours;
     private Point position=new Point(0,0,0);
     LuaFunctions(Globals globals,EditPlanner plan){
         this.plan=plan;var blocks=new LuaTable();var meta=new LuaTable();meta.set("__index",new TwoArgFunction(){public LuaValue call(LuaValue table,LuaValue key){String name=key.checkjstring();LuaValue value=id(parse(name.contains(":")?name:"minecraft:"+name));table.rawset(key,value);return value;}});blocks.setmetatable(meta);globals.set("blocks",blocks);
-        bind(globals,"getBlock",args->id(plan.state(at(args)).getBlock().defaultBlockState()));
-        bind(globals,"getBlockState",args->id(plan.state(at(args))));
-        bind(globals,"setBlock",args->{plan.put(at(args),state(args.arg(4)));return LuaValue.NIL;});
+        bind(globals,"getBlock",args->id(read(at(args)).getBlock().defaultBlockState()));
+        bind(globals,"getBlockState",args->id(read(at(args))));
+        bind(globals,"setBlock",args->{Point p=point(args);var block=state(args.arg(4));if(!inside.test(p)){outside++;return LuaValue.NIL;}plan.validate(p);if(++placed>limit)throw new LuaError("sets more than "+limit+" blocks");plan.put(p,block);return LuaValue.NIL;});
         bind(globals,"isSolid",args->LuaValue.valueOf(!state(args.arg1()).getCollisionShape(plan.level,EditPlanner.pos(position)).isEmpty()));
         bind(globals,"getHighestBlockYAt",args->{int x=args.arg(1).checkint(),z=args.arg(2).checkint();plan.validate(new Point(x,plan.level.getMinY(),z));return LuaValue.valueOf(plan.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE,x,z)-1);});
         bind(globals,"withBlockProperty",args->{BlockState current=state(args.arg1());for(String property:args.arg(2).checkjstring().split(",")){String[] pair=property.trim().split("=",2);if(pair.length!=2)throw new LuaError("Use property=value");Property<?> definition=current.getBlock().getStateDefinition().getProperty(pair[0]);if(definition==null)throw new LuaError("Unknown block property "+pair[0]);current=with(current,definition,pair[1]);}return id(current);});
@@ -39,7 +45,11 @@ final class LuaFunctions {
     private interface Function {LuaValue apply(Varargs args);}
     private static void bind(Globals globals,String name,Function function){globals.set(name,new VarArgFunction(){public Varargs invoke(Varargs args){return function.apply(args);}});}
     void position(Point at){position=at;}
-    private Point at(Varargs args){Point at=new Point(args.arg(1).checkint(),args.arg(2).checkint(),args.arg(3).checkint());plan.validate(at);return at;}
+    /** Limits this script to a box, with a fixed noise seed and a cap on blocks set, and lets it read what the plan has placed: an AI script. */
+    void confine(java.util.function.Predicate<Point> box,int seed,int maxBlocks){inside=box;randomSeed=seed;limit=maxBlocks;readPlanned=true;}
+    private BlockState read(Point p){if(readPlanned){var planned=plan.changes.get(p);if(planned!=null)return planned.after().state();}return plan.state(p);}
+    private static Point point(Varargs args){return new Point(args.arg(1).checkint(),args.arg(2).checkint(),args.arg(3).checkint());}
+    private Point at(Varargs args){Point at=point(args);plan.validate(at);return at;}
     private BlockState parse(String value){return states.computeIfAbsent(value,plan::parse);}
     BlockState state(LuaValue value){if(value.isnumber()){int id=value.checkint();var state=Block.stateById(id);if(id<0||Block.getId(state)!=id)throw new LuaError("Invalid block state ID");return state;}return parse(value.checkjstring());}
     private static LuaValue id(BlockState state){return LuaValue.valueOf(Block.getId(state));}

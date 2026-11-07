@@ -57,6 +57,12 @@ final class BuildPlanner {
             }
             plan.put(at, state);
         }
+        if (!spec.scripts().isEmpty()) {
+            // Scripts come after the shapes, and see what they placed.
+            var warnings = new ArrayList<>(ai.specWarnings);
+            AiScript.run(plan, spec.scripts(), warnings);
+            ai.specWarnings = List.copyOf(warnings);
+        }
         if (!spec.selectionOps().isEmpty()) {
             if (selection.isEmpty()) throw new IllegalArgumentException("replace_selection works on the player's selection, and nothing is selected. Ask the player to select the blocks, or give coordinates and use replace with from and to");
             loadAround(level, selection);

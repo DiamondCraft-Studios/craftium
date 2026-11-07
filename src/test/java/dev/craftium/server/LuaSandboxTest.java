@@ -105,4 +105,17 @@ class LuaSandboxTest {
     @Test void aScriptThatDoesNotParseIsRejectedWhenItIsLoaded() {
         assertThrows(LuaError.class, () -> new LuaSandbox().load("this is not lua", "test"));
     }
+
+    @Test void aSandboxCanBeGivenItsOwnBudget() {
+        var small = new LuaSandbox(1_000, LuaSandbox.MEMORY_BYTES);
+        assertThrows(IllegalArgumentException.class, () -> small.call(small.load("for i = 1, 10000 do end", "test")));
+        var large = new LuaSandbox(LuaSandbox.INSTRUCTIONS * 4, LuaSandbox.MEMORY_BYTES);
+        large.call(large.load("for i = 1, 600000 do end", "test"));
+        assertTrue(large.used() > LuaSandbox.INSTRUCTIONS, "ran past a brush's budget: " + large.used());
+    }
+
+    @Test void anAiScriptAsLongAsAllowedAndNestedAsDeepAsItCanIsAnErrorNotACrash() {
+        String nested = "return " + "(".repeat(9990) + "1" + ")".repeat(9990);
+        assertThrows(RuntimeException.class, () -> new LuaSandbox().load(nested, "test"));
+    }
 }

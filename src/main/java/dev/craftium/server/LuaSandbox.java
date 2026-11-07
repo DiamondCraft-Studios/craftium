@@ -19,15 +19,21 @@ final class LuaSandbox {
     private static final class BudgetExceeded extends Error {}
 
     private final Globals globals = new Globals();
-    private int remaining = INSTRUCTIONS;
+    private final int budget;
+    private final long memoryBytes;
+    private int remaining;
     private final long initialMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
 
-    LuaSandbox() {
+    LuaSandbox() { this(INSTRUCTIONS, MEMORY_BYTES); }
+
+    /** A sandbox with its own budget, for scripts that are meant to do more than a brush does for one block (an AI's build script). */
+    LuaSandbox(int instructions, long memoryBytes) {
+        this.budget = instructions; this.memoryBytes = memoryBytes; remaining = instructions;
         var packages = new LuaTable(); packages.set("loaded", new LuaTable()); globals.set("package", packages);
         globals.load(new BaseLib()); globals.load(new TableLib()); globals.load(new JseMathLib());
         globals.load(new DebugLib() {
             @Override public void onInstruction(int pc, Varargs values, int top) {
-                if (--remaining < 0 || Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory() - initialMemory > MEMORY_BYTES) throw new BudgetExceeded();
+                if (--remaining < 0 || Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory() - initialMemory > memoryBytes) throw new BudgetExceeded();
                 super.onInstruction(pc, values, top);
             }
         });
@@ -37,6 +43,9 @@ final class LuaSandbox {
 
     /** The script's global table: where the functions and values it may use are put. */
     Globals globals() { return globals; }
+
+    /** Instructions run so far, across every call. */
+    int used() { return budget - Math.max(remaining, 0); }
 
     /** Compiles {@code source}; a script that does not parse throws a {@link LuaError}. */
     LuaValue load(String source, String chunkName) { return globals.load(source, chunkName); }
