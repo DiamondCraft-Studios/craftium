@@ -54,7 +54,7 @@ test("lists every tool with its hints, and the server's instructions", async () 
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "get_blocks", "get_preview_blocks", "get_screenshot", "get_state", "get_surface", "preview_build", "read_selection", "render_view", "undo"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "get_screenshot", "get_state", "get_surface", "preview_build", "read_blocks", "read_selection", "render_view", "undo"]);
   assert.equal(tools.find((t) => t.name === "get_state").annotations.readOnlyHint, true);
   assert.equal(tools.find((t) => t.name === "apply_preview").annotations.destructiveHint, true);
   assert.match(tools.find((t) => t.name === "preview_build").description, /cylinder/);
@@ -64,9 +64,9 @@ test("lists every tool with its hints, and the server's instructions", async () 
 });
 
 test("a tool call reaches the bridge with the token and only its arguments", async () => {
-  const bridge = await fakeBridge({ get_blocks: { ok: true, palette: ["minecraft:air"], runs: [[0, 8]] } });
+  const bridge = await fakeBridge({ get_preview_blocks: { ok: true, palette: ["minecraft:air"], runs: [[0, 8]] } });
   const client = await connect(bridge.file);
-  const result = await client.callTool({ name: "get_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], sneaky: "ignored" } });
+  const result = await client.callTool({ name: "read_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], sneaky: "ignored" } });
   assert.equal(result.isError, undefined);
   assert.deepEqual(JSON.parse(text(result)), { palette: ["minecraft:air"], runs: [[0, 8]] });
   const [request] = bridge.seen;
@@ -156,22 +156,24 @@ test("preview_build passes the spec with its origin, and the only selection tool
   await bridge.close();
 });
 
-test("get_preview_blocks passes its box, view and format, and rejects bad ones before the game", async () => {
+test("read_blocks sends each source as the game's view, with its box and format, and rejects bad ones before the game", async () => {
   const bridge = await fakeBridge({ get_preview_blocks: { ok: true, format: "boxes", summary: "1,000 blocks in 1 boxes: 1000 oak_log" } });
   const client = await connect(bridge.file);
-  const result = await client.callTool({ name: "get_preview_blocks", arguments: { from: [0, 0, 0], to: [9, 9, 9], view: "only", format: "boxes", sneaky: 1 } });
+  const result = await client.callTool({ name: "read_blocks", arguments: { from: [0, 0, 0], to: [9, 9, 9], source: "preview", format: "boxes", sneaky: 1 } });
   assert.equal(result.isError, undefined);
   assert.equal(JSON.parse(text(result)).format, "boxes");
   assert.deepEqual(bridge.seen[0].body, { from: [0, 0, 0], to: [9, 9, 9], view: "only", format: "boxes" });
-  const plain = await client.callTool({ name: "get_preview_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1] } });
+  const plain = await client.callTool({ name: "read_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1] } });
   assert.equal(plain.isError, undefined);
   assert.deepEqual(bridge.seen[1].body, { from: [0, 0, 0], to: [1, 1, 1] }); // defaults are the game's to apply
-  const badView = await client.callTool({ name: "get_preview_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], view: "before" } });
-  assert.equal(badView.isError, true);
-  const badFormat = await client.callTool({ name: "get_preview_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], format: "pretty" } });
+  await client.callTool({ name: "read_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], source: "world" } });
+  assert.deepEqual(bridge.seen[2].body, { from: [0, 0, 0], to: [1, 1, 1], view: "world" });
+  const badSource = await client.callTool({ name: "read_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], source: "only" } });
+  assert.equal(badSource.isError, true);
+  const badFormat = await client.callTool({ name: "read_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], format: "pretty" } });
   assert.equal(badFormat.isError, true);
-  assert.equal(bridge.seen.length, 2, "bad arguments must not reach the game");
-  const tool = (await client.listTools()).tools.find((t) => t.name === "get_preview_blocks");
+  assert.equal(bridge.seen.length, 3, "bad arguments must not reach the game");
+  const tool = (await client.listTools()).tools.find((t) => t.name === "read_blocks");
   assert.equal(tool.annotations.readOnlyHint, true);
   await bridge.close();
 });
@@ -189,7 +191,7 @@ test("read_selection asks the game for the selection and forwards nothing the mo
 test("bad arguments are rejected before they reach the game", async () => {
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
-  for (const [name, args] of [["get_blocks", { from: [0, 0, 0] }], ["get_blocks", { from: [0, 0], to: [1, 1, 1] }], ["get_surface", { from: [0, 0, 0], to: [1, 1, 1], kind: "water" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], angle: "above" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], preview: "yes" }], ["get_blocks", { from: [0.5, 0, 0], to: [1, 1, 1] }], ["preview_build", { spec: { ops: [] } }], ["preview_build", { spec: { ops: [{ op: "set" }], origin: [0, 0] } }], ["preview_build", { spec: "not an object" }]]) {
+  for (const [name, args] of [["read_blocks", { from: [0, 0, 0] }], ["read_blocks", { from: [0, 0], to: [1, 1, 1] }], ["get_surface", { from: [0, 0, 0], to: [1, 1, 1], kind: "water" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], angle: "above" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], preview: "yes" }], ["read_blocks", { from: [0.5, 0, 0], to: [1, 1, 1] }], ["preview_build", { spec: { ops: [] } }], ["preview_build", { spec: { ops: [{ op: "set" }], origin: [0, 0] } }], ["preview_build", { spec: "not an object" }]]) {
     const result = await client.callTool({ name, arguments: args });
     assert.equal(result.isError, true, `${name} ${JSON.stringify(args)}`);
   }

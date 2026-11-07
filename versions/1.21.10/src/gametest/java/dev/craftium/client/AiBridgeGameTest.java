@@ -316,7 +316,13 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(v2Palette.contains("minecraft:stone\"") && v2Palette.contains("minecraft:andesite\""), "the mix should place both blocks: " + v2Palette);
             var noKind = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"set\",\"at\":[" + gx + "," + gy + "," + z + "],\"block\":\"glass@stairs\"}]}}");
             require(!noKind.get("ok").getAsBoolean() && noKind.get("error").getAsString().contains("ops[0] (set)") && noKind.get("error").getAsString().contains("tried"), "a material with no such kind should say what was tried: " + noKind);
+            // read_blocks' sources: the world leaves the waiting preview out but says it is there; "after" with nothing waiting is the world.
+            String v2Box = "\"from\":[" + gx + "," + gy + "," + z + "],\"to\":[" + (gx + 7) + "," + (gy + 5) + "," + (z + 7) + "]";
+            var worldRead = call("get_preview_blocks", "{" + v2Box + ",\"view\":\"world\"}");
+            require(worldRead.get("ok").getAsBoolean() && !worldRead.toString().contains("spruce_stairs") && worldRead.get("previewBlocks").getAsInt() > 0, "a world read should leave the preview out and count it: " + worldRead);
             call("cancel_preview", "{}");
+            var afterNothing = call("get_preview_blocks", "{" + v2Box + ",\"view\":\"after\"}");
+            require(afterNothing.get("ok").getAsBoolean() && afterNothing.has("format") && afterNothing.get("previewBlocks").getAsInt() == 0, "an after read with no preview should read the world: " + afterNothing);
             System.out.println("CRAFTIUM_AI spec_v2_ok");
 
             // A build far from the player, in ground nobody has loaded: previewed, applied and undone without anyone going there.

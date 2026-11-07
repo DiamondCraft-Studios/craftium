@@ -46,7 +46,7 @@ export function createHandler(bridge) {
       throw error;
     }
     try {
-      const answer = await bridge.call(tool.name, sent);
+      const answer = await bridge.call(tool.bridge ?? tool.name, sent);
       // A tool may reshape what the game sent (get_surface summarises it) from what the model asked; an error is passed on as it is.
       const shaped = tool.post && answer && answer.ok !== false ? tool.post(answer, given) : answer;
       return { result: toResult(shaped, tool.tooBig) };

@@ -1,6 +1,6 @@
 ---
 name: craftium-builder
-description: Build structures in a player's Minecraft world with the Craftium MCP tools (get_state, read_selection, get_surface, get_blocks, get_preview_blocks, render_view, preview_build, apply_preview). Use when the user asks to build, recreate from an image, extend or restyle something in their world. Teaches a builder's sequence (brief, site, blockout, shell, roof, openings, materials, detail, context, verify) and Minecraft-scale proportions, so builds come out proportioned, varied and correct on the first apply.
+description: Build structures in a player's Minecraft world with the Craftium MCP tools (get_state, read_selection, get_surface, read_blocks, render_view, preview_build, apply_preview). Use when the user asks to build, recreate from an image, extend or restyle something in their world. Teaches a builder's sequence (brief, site, blockout, shell, roof, openings, materials, detail, context, verify) and Minecraft-scale proportions, so builds come out proportioned, varied and correct on the first apply.
 ---
 
 # Building with Craftium
@@ -52,7 +52,7 @@ Say what you understood in one line ("changing the 48 spruce stairs you selected
   change only the kind they named.
 - If nothing is selected, don't guess: ask them to select it, or to give coordinates.
 - A selection is a help, not a rule. If they give coordinates or describe a place instead, use those.
-- Check it as you check any preview: `get_preview_blocks` shows each new block with its facing before you apply it.
+- Check it as you check any preview: `read_blocks` shows each new block with its facing before you apply it.
 
 ## Staying preview-only
 
@@ -65,7 +65,7 @@ any time ("looks good, build it"). If it is unclear which they want, ask once.
   new part. Write the cumulative spec each time.
 - A preview is shown up to 32,768 blocks (the game draws models for the first 8,192 and the rest as an outline). Check `previewTruncated`; if a big build can't be shown whole, say so and
   offer to apply in stages instead.
-- You can still check your work without applying anything: `get_preview_blocks` reads every block of the preview with
+- You can still check your work without applying anything: `read_blocks` reads every block of the preview with
   its state, drawn or not (`references/spec-pitfalls.md`).
 - When they say to build, apply what is waiting. A build too big to preview whole is applied in stages as usual.
 
@@ -96,7 +96,7 @@ any time ("looks good, build it"). If it is unclear which they want, ask once.
 - To find ground yourself, read the area with `get_surface`: a wide area comes back as a summary (height range,
   how level it is, what it is made of, a coarse map), which is enough to pick a spot. Then read the footprint you
   chose with `detail: "full"` for exact heights.
-- Decide the ground level and the footprint, then `get_blocks` the footprint to confirm it is clear, or note what
+- Decide the ground level and the footprint, then `read_blocks` the footprint (`source: "world"`) to confirm it is clear, or note what
   must be cleared or filled.
 - Write the build near [0,0,0] and set `origin`, so one number moves it.
 
@@ -133,8 +133,8 @@ The roof makes or breaks the silhouette. Check it twice.
 - Write stairs by hand only for what the op does not make (a dormer, a curved or flared roof). Then stair facing is
   the orientation trap: on a roof, every stair faces the ridge (the higher side), on both slopes. Renders cannot show
   it. The `preview_build` reply counts the stairs by facing: a gable needs two opposite facings in about equal
-  numbers. Read the roof with `get_preview_blocks` to check each facing is on the right side
-  (`references/spec-pitfalls.md`). `get_blocks` does the same on the world afterwards.
+  numbers. Read the roof with `read_blocks` to check each facing is on the right side
+  (`references/spec-pitfalls.md`); after applying, the same read shows the world.
 - Seal the roof to the walls with no sky gaps.
 
 ## Phase 5: Openings and circulation
@@ -182,7 +182,7 @@ hand-built one.
 ## Phase 9: Final check
 
 - Render from 2 corners, `top` and a side view of the finished area.
-- Read back a few critical blocks with `get_blocks` (ridge, door, a stair).
+- Read back a few critical blocks with `read_blocks` (ridge, door, a stair).
 - Tell the player what was built, where (coordinates), how many blocks, and that `undo` steps back one phase at a
   time.
 

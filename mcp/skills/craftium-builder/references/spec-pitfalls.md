@@ -39,7 +39,7 @@ Other cases:
 ### Check it by reading the blocks, not by looking
 
 A render can't show facing, but the block data can. As soon as you have previewed a roof, and before you apply it or
-show it as done, read it with `get_preview_blocks` over a box that wraps the roof. Leave `format` on `auto`: for a
+show it as done, read it with `read_blocks` over a box that wraps the roof. Leave `format` on `auto`: for a
 roof it answers as boxes, grouped by block, so each facing is its own entry with the boxes it fills. For a gable
 whose ridge runs along x at z=11, it looks like this (shortened):
 
@@ -57,7 +57,7 @@ Each box is `[x1, y1, z1, x2, y2, z2]`, both corners included. Confirm both thin
    `facing=north` at z above 11.
 2. Within a group the y rises as the boxes get closer to the ridge (z=7 at y=-52 up to z=10 at y=-49).
 
-If either is wrong, fix the spec and preview again; nothing has been built. After you apply, `get_blocks` reads the
+If either is wrong, fix the spec and preview again; nothing has been built. After you apply, `read_blocks` reads the
 same thing from the world, to confirm what was actually built.
 
 ### Other blocks

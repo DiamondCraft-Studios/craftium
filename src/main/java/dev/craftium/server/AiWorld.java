@@ -137,21 +137,21 @@ final class AiWorld {
     }
 
     /**
-     * The blocks of the AI's waiting preview in a box, so it can check its work before applying it: exact blocks and states (which way a
-     * stair faces, say), where a picture shows flat colour and the game draws only part of a big preview. "after" is the world as it would
-     * be once applied (the preview over what is there now); "only" is just what the preview places, and air where it clears. The answer is
-     * written as boxes or as runs, whichever is shorter (see {@link dev.craftium.core.BlockView}), and a box may hold a million cells.
+     * The blocks in a box, so the AI can check the ground or its work: exact blocks and states (which way a stair faces, say), where a picture
+     * shows flat colour and the game draws only part of a big preview. "world" is the world as it is; "after" is the world as it would be once
+     * the waiting preview is applied (the world itself when none is waiting); "only" is just what the preview places, and air where it clears.
+     * The answer is written as boxes or as runs, whichever is shorter (see {@link dev.craftium.core.BlockView}), and a box may hold a million cells.
      */
     static String previewBlocks(ServerPlayer player, Session ai, Point a, Point b, String view, String format) {
         require(a, b);
         if (view == null || view.isBlank()) view = "after";
-        if (!view.equals("after") && !view.equals("only")) throw new IllegalArgumentException("\"view\" must be \"after\" or \"only\"");
+        if (!view.equals("after") && !view.equals("only") && !view.equals("world")) throw new IllegalArgumentException("\"view\" must be \"world\", \"after\" or \"only\"");
         var edit = ai.pendingEdit;
-        if (edit == null) {
+        if (edit == null && view.equals("only")) {
             var none = new JsonObject();
             none.addProperty("ok", true);
             none.addProperty("previewBlocks", 0);
-            none.addProperty("message", "There is no waiting preview. Call preview_build first, or read the world with get_blocks.");
+            none.addProperty("message", "There is no waiting preview. Call preview_build first, or read the world with source \"world\".");
             return reply(none);
         }
         int x0 = Math.min(a.x(), b.x()), x1 = Math.max(a.x(), b.x()), y0 = Math.min(a.y(), b.y()), y1 = Math.max(a.y(), b.y()), z0 = Math.min(a.z(), b.z()), z1 = Math.max(a.z(), b.z());
@@ -159,30 +159,31 @@ final class AiWorld {
         long total = (long) sx * sy * sz;
         if (total > MAX_VIEW_CELLS) throw new IllegalArgumentException("Region has " + total + " blocks; read at most " + String.format(java.util.Locale.ROOT, "%,d", MAX_VIEW_CELLS) + " at a time");
         var level = (ServerLevel) player.level();
-        boolean after = view.equals("after");
-        var palette = new Palette(after);
+        boolean only = view.equals("only"), withPreview = !view.equals("world");
+        var palette = new Palette(!only);
         int[] ids = new int[(int) total];
         int fresh = 0;
-        if (after) {
+        if (!only) {
             fresh = unloaded(level, x0, z0, x1, z1);
             fillFromWorld(level, palette, ids, x0, y0, z0, x1, y1, z1);
         } else java.util.Arrays.fill(ids, -1);
         // The preview over it, in one pass over the edit's own changes: nothing is copied or indexed, so a read costs a walk of the list and
         // the box. It counts what the preview places the way the game's ghost does, leaving out a change that keeps the block as it was.
         int placed = 0;
-        for (var change : edit.changes()) {
+        if (edit != null) for (var change : edit.changes()) {
             if (change.before().state() == change.after().state() && change.after().data() == null) continue;
             placed++;
             var at = change.pos();
-            if (at.x() < x0 || at.x() > x1 || at.y() < y0 || at.y() > y1 || at.z() < z0 || at.z() > z1) continue;
+            if (!withPreview || at.x() < x0 || at.x() > x1 || at.y() < y0 || at.y() > y1 || at.z() < z0 || at.z() > z1) continue;
             ids[(at.x() - x0) + sx * ((at.z() - z0) + sz * (at.y() - y0))] = palette.of(change.after().state());
         }
         var out = dev.craftium.core.BlockView.describe(x0, y0, z0, sx, sy, sz, ids, palette.names, palette.omit, format,
-            after ? "Anything not listed is air." : "Anything not listed is not changed by the preview, and air means the preview clears that block.");
+            !only ? "Anything not listed is air." : "Anything not listed is not changed by the preview, and air means the preview clears that block.");
         out.addProperty("source", "server");
         out.addProperty("view", view);
+        // How much of a waiting preview there is, also on a world read, so a read that leaves it out says that one is waiting.
         out.addProperty("previewBlocks", placed);
-        if (after) out.addProperty("chunksLoadedForThisRead", fresh);
+        if (!only) out.addProperty("chunksLoadedForThisRead", fresh);
         String text = out.toString();
         if (text.length() > MAX_VIEW_REPLY)
             throw new IllegalArgumentException("The answer is " + text.length() / 1000 + " KB; the limit is " + MAX_VIEW_REPLY / 1000 + " KB. Read a smaller box, or part of the build at a time (the preview holds " + placed + " blocks in all)");
@@ -192,7 +193,7 @@ final class AiWorld {
     /**
      * What a preview that was just made holds (see {@link dev.craftium.core.PreviewSummary}), sent with the reply to preview_build so the AI
      * learns where the build went and what it is made of without another request. A change that keeps the block as it was is left out, as
-     * the ghost and get_preview_blocks leave it out.
+     * the ghost and read_blocks leave it out.
      */
     static String previewSummary(Session.Edit edit) {
         var summary = new dev.craftium.core.PreviewSummary();

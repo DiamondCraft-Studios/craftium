@@ -60,7 +60,7 @@ layers, which would put a ceiling at y = 4 and a plank floor at y = 1, leaving 2
   (the north slope's stairs face south, the south slope's face north), and puts a ridge of planks capped with slabs
   at z = 3.
 - Check the reply: `spruce_stairs` with `"facing": {"north": 44, "south": 44}`, 4 rows of 11 per slope. Two equal
-  facings is right for a gable. For stairs written by hand, check also with `get_preview_blocks` over the roof that
+  facings is right for a gable. For stairs written by hand, check also with `read_blocks` over the roof that
   the `facing=south` boxes are at z below the ridge and `facing=north` above it.
 
 ### Openings (apply)

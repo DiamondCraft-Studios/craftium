@@ -278,6 +278,8 @@ public final class AiBridge {
                 var from = point(args, "from"); var to = point(args, "to");
                 String view = args.has("view") ? args.get("view").getAsString() : "after";
                 String format = args.has("format") ? args.get("format").getAsString() : "auto";
+                // A server from before spec v2 reads the world only through the older, smaller read.
+                if (view.equals("world") && !ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SPEC_V2)) yield read("ai_blocks", from, to);
                 // The two settings travel in the action itself, so nothing is put in the shared options and nothing has to be put back.
                 yield read("ai_preview_blocks:" + view + ":" + format, from, to);
             }
