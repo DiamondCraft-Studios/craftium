@@ -106,6 +106,46 @@ final class AiWorld {
         for (int[] at : needed) level.getChunk(at[0], at[1]);
     }
 
+    /**
+     * The player's selection as it really is: its exact shape and what it is made of, with the clear space above it. Answered here, in one
+     * pass over the blocks, because the selection lives on the server and can hold a million blocks: the answer is a few lines whatever its
+     * size. It reads only chunks that are already loaded (a selection is made in loaded ground, and reading it must not make new ground).
+     */
+    static String selection(ServerPlayer player, Session s) {
+        var level = (ServerLevel) player.level();
+        var points = s.selection.points();
+        if (points.isEmpty()) return reply(dev.craftium.core.SelectionReport.describe(points, null, 0, null));
+        var out = dev.craftium.core.SelectionReport.describe(points, new LoadedBlocks(level), dev.craftium.core.SelectionReport.HEADROOM, null);
+        out.addProperty("source", "server");
+        return reply(out);
+    }
+
+    /** Block ids in loaded chunks, found without allocating per block: the chunk is kept between lookups and each block's name is made once. */
+    private static final class LoadedBlocks implements dev.craftium.core.SelectionReport.World {
+        private final ServerLevel level;
+        private final BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+        private final java.util.IdentityHashMap<net.minecraft.world.level.block.Block, String> names = new java.util.IdentityHashMap<>();
+        private long chunkKey = Long.MIN_VALUE;
+        private net.minecraft.world.level.chunk.LevelChunk chunk;
+        private boolean inBorder;
+
+        LoadedBlocks(ServerLevel level) { this.level = level; }
+
+        @Override public String at(int x, int y, int z) {
+            if (y < level.getMinY() || y >= level.getMinY() + level.getHeight()) return BlockRuns.OUTSIDE;
+            long key = ((long) (x >> 4) << 32) | ((z >> 4) & 0xffffffffL); // our own key: ChunkPos's differs between Minecraft versions
+            if (key != chunkKey) {
+                chunkKey = key;
+                chunk = level.getChunkSource().getChunkNow(x >> 4, z >> 4);
+                inBorder = level.getWorldBorder().isWithinBounds(new ChunkPos(x >> 4, z >> 4));
+            }
+            if (!inBorder) return BlockRuns.OUTSIDE;
+            if (chunk == null) return null;
+            var block = chunk.getBlockState(at.set(x, y, z)).getBlock();
+            return names.computeIfAbsent(block, b -> net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(b).toString());
+        }
+    }
+
     private static String name(ServerLevel level, BlockPos at) {
         if (!level.isInWorldBounds(at) || !level.getWorldBorder().isWithinBounds(at)) return BlockRuns.OUTSIDE;
         return BlockStateParser.serialize(level.getBlockState(at));

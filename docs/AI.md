@@ -50,7 +50,7 @@ The plugin needs Node.js 18 or newer on your PATH (an extension gets Node from C
 | Tool | Does |
 | --- | --- |
 | `get_state` | Your position and facing, the box around the area you have selected (yours, and never changed by Claude), and whether Claude's preview is waiting |
-| `read_selection` | What you have selected, as it really is: how many blocks, whether it is a solid box or an irregular shape (lasso or magic wand), whether it is flat, what blocks it is made of, and how much clear space is above it. Read only; a selection too big to read says so and describes only its shape |
+| `read_selection` | What you have selected, as it really is: how many blocks, whether it is a solid box or an irregular shape (lasso or magic wand), whether it is flat, what blocks it is made of, and how much clear space is above it. Read only. It works for any selection, up to 1,048,576 blocks, and the answer is a few lines whatever its size |
 | `get_blocks` | Reads the blocks in a box (up to 32,768 at a time), anywhere in the world: the server reads them, so ground your game has not loaded is real blocks and not air |
 | `get_surface` | The top block of every column in an area (up to 128 by 128), to find ground level |
 | `get_palette` | Your current block and recently used blocks |

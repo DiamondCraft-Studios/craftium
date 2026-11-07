@@ -77,7 +77,7 @@ export const TOOLS = [
     description:
       "Reads the area the player has selected, as it really is and not only the box around it: how many blocks, its exact bounds, whether it is a solid box or an irregular shape (a lasso or magic wand can select any shape, such as the top of a platform), whether it is flat, what blocks it is made of, and how much clear space there is above it with whatever is in the way. " +
       'The reply has a one-sentence "summary". Use it when the player says they have selected a place for you to build on, or when get_state shows a selection, so you do not have to hunt for the spot with get_surface. ' +
-      "The selection is the player's: you never change it. They may not have one, and they may also just give you coordinates, so it is a help and never a requirement. A selection too big to read says so and describes only its shape.",
+      "The selection is the player's: you never change it. They may not have one, and they may also just give you coordinates, so it is a help and never a requirement. It works for any selection the editor allows, up to 1,048,576 blocks, and answers in a few lines whatever its size.",
     inputSchema: nothing,
     annotations: READ,
     args: () => ({}),

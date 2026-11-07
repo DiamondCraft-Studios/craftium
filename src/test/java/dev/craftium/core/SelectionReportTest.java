@@ -90,6 +90,20 @@ class SelectionReportTest {
         assertEquals("(the world's height limit)", above.getAsJsonArray("obstructions").get(0).getAsJsonObject().get("block").getAsString());
     }
 
+    @Test void aMillionBlockSelectionIsDescribedQuicklyAndExactly() {
+        var points = new HashSet<Point>(1_400_000);
+        for (int x = 0; x < 1000; x++) for (int z = 0; z < 1000; z++) points.add(new Point(x, 64, z)); // the largest selection the editor allows
+        long start = System.nanoTime();
+        var report = SelectionReport.describe(points, world(64, Map.of(new Point(500, 66, 500), "minecraft:oak_log")), SelectionReport.HEADROOM, null);
+        long ms = (System.nanoTime() - start) / 1_000_000;
+        assertEquals(1_000_000, report.get("selected").getAsInt());
+        assertEquals(1_000_000, report.get("columns").getAsInt());
+        assertTrue(report.get("flat").getAsBoolean());
+        assertEquals(999_999, report.getAsJsonObject("above").get("clearColumns").getAsInt());
+        assertEquals(1, report.getAsJsonObject("above").get("minClear").getAsInt());
+        assertTrue(ms < 15_000, "describing a million blocks took " + ms + " ms");
+    }
+
     @Test void anEmptySelectionSaysSoAndHowToCarryOn() {
         JsonObject report = SelectionReport.describe(Set.of(), null, 0, null);
         assertEquals(0, report.get("selected").getAsInt());

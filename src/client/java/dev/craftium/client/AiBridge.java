@@ -265,7 +265,7 @@ public final class AiBridge {
     private static JsonObject call(String tool, JsonObject args) throws Exception {
         return switch (tool) {
             case "get_state" -> onClient(AiBridge::state);
-            case "read_selection" -> readSelection();
+            case "read_selection" -> read("ai_selection", null, null);
             case "get_blocks" -> { var from = point(args, "from"); var to = point(args, "to"); yield serverSupported() ? read("ai_blocks", from, to) : onClient(() -> blocks(from, to)); }
             case "get_surface" -> {
                 var from = point(args, "from"); var to = point(args, "to");
@@ -371,33 +371,6 @@ public final class AiBridge {
         // The spec rides along on this one request and is not kept in the saved settings.
         try { CraftiumClient.send("ai_build_preview", null, null); }
         finally { o.buildSpec = ""; }
-    }
-
-    /**
-     * The player's selection as it really is: its exact shape and contents, not only the box get_state reports. The blocks come from the
-     * server like any other read, for the selection and for a stretch of clear space above it; a selection too big to read says so.
-     */
-    private static JsonObject readSelection() throws Exception {
-        var points = onClient(() -> dev.craftium.core.SelectionCodec.decode(ClientState.status.selectionData()));
-        if (points.isEmpty()) return dev.craftium.core.SelectionReport.describe(points, null, 0, null);
-        int x0 = Integer.MAX_VALUE, y0 = Integer.MAX_VALUE, z0 = Integer.MAX_VALUE, x1 = Integer.MIN_VALUE, y1 = Integer.MIN_VALUE, z1 = Integer.MIN_VALUE;
-        for (Point p : points) {
-            x0 = Math.min(x0, p.x()); y0 = Math.min(y0, p.y()); z0 = Math.min(z0, p.z());
-            x1 = Math.max(x1, p.x()); y1 = Math.max(y1, p.y()); z1 = Math.max(z1, p.z());
-        }
-        long sx = x1 - x0 + 1L, sy = y1 - y0 + 1L, sz = z1 - z0 + 1L;
-        int head = dev.craftium.core.SelectionReport.HEADROOM;
-        String note = null;
-        if (sx * (sy + head) * sz > AiView.MAX_BLOCKS) {
-            note = "The selection is too big to check for clear space above it; only the blocks in it were read. Use get_blocks to look above.";
-            head = 0;
-        }
-        if (sx * (sy + head) * sz > AiView.MAX_BLOCKS) {
-            note = "The selection is too big to read its blocks (" + sx + " by " + sy + " by " + sz + "); only its shape is described. Read it in pieces with get_blocks.";
-            return dev.craftium.core.SelectionReport.describe(points, null, 0, note);
-        }
-        var region = AiRegion.read(x0, y0, z0, (int) sx, (int) (sy + head), (int) sz);
-        return dev.craftium.core.SelectionReport.describe(points, region::at, head, note);
     }
 
     /**
