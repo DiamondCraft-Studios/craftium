@@ -572,7 +572,7 @@ public final class EditorServer {
     }
     /** The ghost data of an AI workspace's waiting preview, worked out when it is first wanted after a change. */
     private static String aiData(Session ai){
-        if(ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit);ai.pendingDirty=false;}
+        if(ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit,GhostCodec.AI_LIMIT);ai.pendingDirty=false;} // an AI preview describes more than the player's own edits do
         return ai.pendingData;
     }
 
@@ -892,7 +892,7 @@ public final class EditorServer {
         if(s.selectionRevision!=s.selection.revision()){s.selectionRevision=s.selection.revision();s.selectionData=SelectionCodec.encode(s.selection.points());}
         if(s.clipboardDirty){s.clipboardGhostDirty=true;s.clipboardData=SelectionCodec.encode(s.clipboard.entrySet().stream().filter(e->!e.getValue().state().isAir()).map(Map.Entry::getKey).toList());s.clipboardDirty=false;}
         if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
-        if(ai!=null&&ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit,GhostCodec.AI_LIMIT);ai.pendingDirty=false;}
+        if(ai!=null)aiData(ai); // one place makes the AI preview's data, so the owner and the players who see it always get the same
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
         var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin,sharedFor(player,s),false);s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
         // A status that is too long for a packet cannot be written and would drop the player's connection, so one that is too big is sent without the largest drawn data.
