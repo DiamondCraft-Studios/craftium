@@ -151,7 +151,8 @@ public final class EditorScreen extends CraftiumScreen {
         ClientState.selectionPending=false;ClientState.selectingSince=0;
     }
     private void deselectTool(){cancelSelectionJobs();toolActive=false;selectedNode=-1;}
-    private void select(Tool tool){
+    /** Chooses a tool as a click in the tool list does. Not private, so the game tests can choose one the way a player does. */
+    void select(Tool tool){
         cancelSelectionJobs();
         if(tool.transform()&&tool!=Tool.PIVOT&&ClientState.status.selectionSize()==0&&!ShapeObject.active())ClientState.notify("Select blocks first, then use "+tool.label);
         if(tool!=Tool.MODIFY)ModifyPreview.edit();
