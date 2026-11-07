@@ -2,20 +2,21 @@
 
 ## The limit
 
-The game draws at most **4,096 blocks** of a preview, both as the ghost in the game and in `render_view`. Blocks
-beyond that are NOT shown but ARE in the preview and WILL be built when applied. A "missing" roof or wing is
-usually this, not a mistake in the spec.
+An AI preview is described to the game up to **32,768 blocks**, visible blocks first, and that is what `render_view`
+draws. The ghost in the game draws block models for the first 8,192 of them (the player's setting) and the rest of
+what is described as an outline. Blocks beyond 32,768 are NOT shown at all but ARE in the preview and WILL be built
+when applied. A "missing" roof or wing is usually this, not a mistake in the spec.
 
 The tools tell you when it happens. `get_state`, the `state` inside a `preview_build` reply, and `render_view` all
 carry:
 
 - `previewBlocks`: the true total in your waiting preview.
-- `previewBlocksDrawn`: how many of them the game describes and can draw.
-- `previewTruncated`: true when the preview is only partly drawn.
+- `previewBlocksDrawn`: how many of them are described to the game, which is what `render_view` draws.
+- `previewTruncated`: true when the preview is only partly described, so parts of it are not shown.
 - `previewWarning`: plain-language text, present only when it is truncated.
 
 If `previewTruncated` is true you are not seeing the whole build. Tell the player, and do not judge the build from
-that picture. To see what the game did not draw, read it: `get_preview_blocks` reads every block of the preview, drawn
+that picture. To see what the game did not describe, read it: `get_preview_blocks` reads every block of the preview, drawn
 or not, with its state. (`render_view` also reports `previewBlocksShown`, which counts only the blocks that fell inside the
 box you rendered, so it can be lower than `previewBlocksDrawn` without anything being cut.)
 
@@ -26,11 +27,11 @@ box you rendered, so it can be lower than `previewBlocksDrawn` without anything 
 - sphere: about 4/3 * pi * r^3
 - hollow shapes: about the surface area
 
-Add the ops up. Over about 4,000 means the preview will be cut short. Estimating first saves a preview.
+Add the ops up. Over about 32,000 means the preview will be cut short. Estimating first saves a preview.
 
 ## Build in stages
 
-Each phase of the build is its own preview, so each stays small. A phase that is still over about 4,000 blocks
+Each phase of the build is its own preview, so each stays small. A phase that is still over about 32,000 blocks
 splits by region (for example west half, then east half).
 
 - A new `preview_build` replaces the old preview, so the order is: preview part 1, check it, `apply_preview`, then
@@ -42,7 +43,7 @@ splits by region (for example west half, then east half).
   its look as it goes, which is the point. Only something tiny (a lamp post, a single pillar) is worth one preview
   and one apply.
 - If the player asked to stay preview-only, nothing is applied, so each preview holds the whole build so far (see
-  "Staying preview-only" in `SKILL.md`), and the 4,096 limit applies to the cumulative total.
+  "Staying preview-only" in `SKILL.md`), and the 32,768 limit applies to the cumulative total.
 
 ## The undo stack
 

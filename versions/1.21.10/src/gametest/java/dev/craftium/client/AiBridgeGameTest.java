@@ -148,7 +148,7 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             long heapAfter = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) >> 20;
             require(million.get("ok").getAsBoolean() && million.getAsJsonObject("state").get("previewBlocks").getAsInt() > 1_000_000, "a million-block selection edit (the air in it, not the ground) should be planned: " + million);
             var drawn = million.getAsJsonObject("state");
-            require(drawn.get("previewTruncated").getAsBoolean() && drawn.get("previewBlocksDrawn").getAsInt() <= 8192, "only the start of it should be drawn, and the AI told: " + drawn);
+            require(drawn.get("previewTruncated").getAsBoolean() && drawn.get("previewBlocksDrawn").getAsInt() <= 32_768, "only the start of it (an AI preview describes up to 32,768 blocks) should be shown, and the AI told: " + drawn);
             System.out.println("CRAFTIUM_AI selection_large_edit ms=" + millionMs + " heapMB_before=" + heapBefore + " heapMB_after=" + heapAfter + " maxHeapMB=" + (Runtime.getRuntime().maxMemory() >> 20));
             call("cancel_preview", "{}");
             // Describing that selection: every column's clear space is checked, in hash order, across about forty chunks.

@@ -53,7 +53,7 @@ any time ("looks good, build it"). If it is unclear which they want, ask once.
 
 - A new preview replaces the old one, so in this mode each phase's preview holds the whole build so far, not only the
   new part. Write the cumulative spec each time.
-- A preview draws at most 4,096 blocks. Check `previewTruncated`; if a big build can't be shown whole, say so and
+- A preview is shown up to 32,768 blocks (the game draws models for the first 8,192 and the rest as an outline). Check `previewTruncated`; if a big build can't be shown whole, say so and
   offer to apply in stages instead.
 - You can still check your work without applying anything: `get_preview_blocks` reads every block of the preview with
   its state, drawn or not (`references/spec-pitfalls.md`).

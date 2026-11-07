@@ -389,7 +389,7 @@ public final class AiBridge {
         out.addProperty("previewBlocksDrawn", preview.described());
         out.addProperty("previewTruncated", preview.truncated());
         if (preview.truncated()) out.addProperty("previewWarning", "Only " + preview.described() + " of " + preview.total()
-            + " preview blocks are drawn, in the game and in render_view. The rest are still in the preview and will be built when it is applied, so do not judge the build from the picture. Build it in smaller stages to see all of it.");
+            + " preview blocks are described to the game, which is all render_view and the ghost can show. The rest are still in the preview and will be built when it is applied, so do not judge the build from the picture. Build it in smaller stages to see all of it, or read it with get_preview_blocks.");
     }
 
     private static JsonObject state() {
