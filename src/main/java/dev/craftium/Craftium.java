@@ -44,7 +44,7 @@ public final class Craftium implements ModInitializer {
             if(stack.isEmpty())return net.minecraft.world.InteractionResult.FAIL;
             return stack.useOn(new net.minecraft.world.item.context.UseOnContext(player,hand,hit));
         });
-        ServerPlayConnectionEvents.DISCONNECT.register((handler,server) -> {dev.craftium.core.Handshake.accept(handler.player.getUUID());EditorServer.disconnect(handler.player);});
+        ServerPlayConnectionEvents.DISCONNECT.register((handler,server) -> {dev.craftium.core.Handshake.forget(handler.player.getUUID());EditorServer.disconnect(handler.player);});
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> EditorServer.clear());
         ServerLifecycleEvents.SERVER_STOPPING.register(EditorServer::flushHistory);
         LOG.info("Craftium building studio initialized for Minecraft 26.2");

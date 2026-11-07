@@ -64,4 +64,13 @@ class ModifyMathTest {
         // the last copy has turned 270 degrees and sits twice as far out: (0,0,5)*2
         assertTrue(out.keySet().stream().anyMatch(p->p.x()==0&&p.z()==10));
     }
+
+    @Test void aServerWithoutExpansionLeavesTheSweepAlone(){
+        var o=options(Options.ModifyMode.REVOLVE);o.modifyAxis=Options.ModifyAxis.Y;o.modifyAngle=360;o.modifyTranslate=true;o.modifyTranslateScale=4;
+        ModifyMath.expansionSupported=false;
+        try{
+            var out=ModifyMath.plan(o,List.of(new Point(4,0,0)),new Point(4,0,0),new Point(4,0,0),new Point(0,0,0));
+            assertTrue(out.keySet().stream().allMatch(p->Math.hypot(p.x(),p.z())<=4.5),"the preview matches a server that does not widen");
+        }finally{ModifyMath.expansionSupported=true;}
+    }
 }

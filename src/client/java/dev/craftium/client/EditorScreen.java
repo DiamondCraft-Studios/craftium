@@ -551,6 +551,7 @@ public final class EditorScreen extends CraftiumScreen {
         rows.add(sliderRow(w,"Translate X",o.modifyTranslateX,-64,64,64,0,v->o.modifyTranslateX=Math.round(v*100)/100d,false));
         rows.add(sliderRow(w,"Translate Y",o.modifyTranslateY,-64,64,64,0,v->o.modifyTranslateY=Math.round(v*100)/100d,false));
         rows.add(sliderRow(w,"Translate Z",o.modifyTranslateZ,-64,64,64,0,v->o.modifyTranslateZ=Math.round(v*100)/100d,false));
+        if(!ClientHandshake.serverHas(Handshake.MODIFY_EXPANSION)){rows.add(new ModifyRow(22,(g,y)->text(g,"Expansion needs a server update",10,y+4,MUTED)));return;}
         rows.add(sliderRow(w,"Expansion",o.modifyTranslateScale,ModifyMath.MIN_EXPANSION,ModifyMath.MAX_EXPANSION,ModifyMath.MAX_EXPANSION,1,v->o.modifyTranslateScale=Math.round(v*100)/100d,false));
     }
     private record PinnedRow(String name,OptionFields.Kind kind,int y){}
