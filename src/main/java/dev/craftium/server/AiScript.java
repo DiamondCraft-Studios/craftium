@@ -45,7 +45,7 @@ final class AiScript {
                 throw new IllegalArgumentException(script.label() + ": " + e.getMessage());
             }
             spent += sandbox.used();
-            if (api.placed == 0) warnings.add(script.label() + " placed no blocks: check that it calls setBlock with positions inside its box (x0..x1, y0..y1, z0..z1)");
+            if (api.placed() == 0) warnings.add(script.label() + " placed no blocks: check that it calls setBlock with positions inside its box (x0..x1, y0..y1, z0..z1)");
             if (api.outside > 0) warnings.add(script.label() + " set " + api.outside + " blocks outside its box (" + a.x() + " " + a.y() + " " + a.z() + " to " + b.x() + " " + b.y() + " " + b.z() + "); they were dropped. Widen \"from\" and \"to\" if they should show");
         }
     }

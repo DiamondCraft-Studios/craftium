@@ -25,14 +25,18 @@ final class LuaFunctions {
     /** Whether getBlock reads what this plan has placed so far before the world: an AI script sees the shapes listed before it. */
     private boolean readPlanned;
     private int limit=Integer.MAX_VALUE;
-    int placed,outside;
+    /** Positions an AI script has set, as {@link net.minecraft.core.BlockPos#asLong}: the cap counts different blocks, so setting one twice is one. */
+    private final java.util.Set<Long> set=new java.util.HashSet<>();
+    int outside;
+    /** How many different blocks the script has set. */
+    int placed(){return set.size();}
     private List<Colour> colours;
     private Point position=new Point(0,0,0);
     LuaFunctions(Globals globals,EditPlanner plan){
         this.plan=plan;var blocks=new LuaTable();var meta=new LuaTable();meta.set("__index",new TwoArgFunction(){public LuaValue call(LuaValue table,LuaValue key){String name=key.checkjstring();LuaValue value=id(parse(name.contains(":")?name:"minecraft:"+name));table.rawset(key,value);return value;}});blocks.setmetatable(meta);globals.set("blocks",blocks);
         bind(globals,"getBlock",args->id(read(at(args)).getBlock().defaultBlockState()));
         bind(globals,"getBlockState",args->id(read(at(args))));
-        bind(globals,"setBlock",args->{Point p=point(args);var block=state(args.arg(4));if(!inside.test(p)){outside++;return LuaValue.NIL;}plan.validate(p);if(++placed>limit)throw new LuaError("sets more than "+limit+" blocks");plan.put(p,block);return LuaValue.NIL;});
+        bind(globals,"setBlock",args->{Point p=point(args);var block=state(args.arg(4));if(!inside.test(p)){outside++;return LuaValue.NIL;}plan.validate(p);if(set.add(net.minecraft.core.BlockPos.asLong(p.x(),p.y(),p.z()))&&set.size()>limit)throw new LuaError("sets more than "+limit+" different blocks");plan.put(p,block);return LuaValue.NIL;});
         bind(globals,"isSolid",args->LuaValue.valueOf(!state(args.arg1()).getCollisionShape(plan.level,EditPlanner.pos(position)).isEmpty()));
         bind(globals,"getHighestBlockYAt",args->{int x=args.arg(1).checkint(),z=args.arg(2).checkint();plan.validate(new Point(x,plan.level.getMinY(),z));return LuaValue.valueOf(plan.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE,x,z)-1);});
         bind(globals,"withBlockProperty",args->{BlockState current=state(args.arg1());for(String property:args.arg(2).checkjstring().split(",")){String[] pair=property.trim().split("=",2);if(pair.length!=2)throw new LuaError("Use property=value");Property<?> definition=current.getBlock().getStateDefinition().getProperty(pair[0]);if(definition==null)throw new LuaError("Unknown block property "+pair[0]);current=with(current,definition,pair[1]);}return id(current);});
