@@ -116,6 +116,8 @@ public final class Options {
     public boolean magicPreview=true;
     /** Whether a big selection waits to be confirmed before it is kept. */
     public boolean largeSelectionWarnings=true;
+    /** Looks at the project's GitHub releases once per game session and says so when a newer build exists. Nothing is downloaded. */
+    public boolean checkForUpdates=true;
     /** Extrude: how many layers one click adds or removes, from 1 to {@link #MAX_EXTRUDE_COUNT}. */
     public static final int MAX_EXTRUDE_COUNT=64;
     /** The widest gap, in blocks, a Floodfill can be told to close. */

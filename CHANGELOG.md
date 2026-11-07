@@ -7,6 +7,10 @@ Changes since 0.9.0-beta.1.
 ### Editor
 - Modify's Translate Scale is now Expansion (0.1 to 8): with Add Translation on, a revolve widens its radius over the sweep and each rotated copy sits further out than the last, instead of the offset being stretched. This also stops a large scale from crashing the client.
 
+### Connection
+- The client and the server greet each other with their version and a protocol number, on both Fabric and Paper/Purpur. The protocol only goes up when the request format breaks, so a hotfix on one side keeps working with the other; a real mismatch is named to the player ("Update the client…") and edits are refused until they reconnect updated. `/craftium status` shows the server's version.
+- The client looks at the project's GitHub releases once per game session and shows a line when a newer build exists for its Minecraft version. `/craftium update` shows the link and `/craftium update off` stops the check. The Paper/Purpur companion logs the same at startup; `check-for-updates: false` in its config.yml turns that off. Nothing is downloaded.
+
 ## 0.9.0-beta.1
 
 Changes since 0.8.0-beta.1.

@@ -6,3 +6,5 @@ worldguard: true
 outgoing-budget-bytes: 8000000
 # Large blueprint transfers are paced across ticks.
 outgoing-frames-per-tick: 8
+# Look at the project's GitHub releases once at startup and log a line when a newer build exists. Nothing is downloaded.
+check-for-updates: true

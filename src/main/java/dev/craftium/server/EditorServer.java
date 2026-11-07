@@ -149,6 +149,8 @@ public final class EditorServer {
         try {
             if(!ServerPlatform.permitted(player,"edit"))
                 throw new IllegalArgumentException("You do not have permission to use Craftium on this server");
+            var refusal=dev.craftium.core.Handshake.refused(player.getUUID());
+            if(refusal!=null)throw new IllegalArgumentException(refusal);
             var r=Packets.JSON.fromJson(json,Packets.Request.class);
             if(r==null || r.action()==null || r.options()==null)throw new IllegalArgumentException("Invalid editor request");
             if(!ServerPlatform.permitted(player,r.action()))throw new IllegalArgumentException("You do not have permission for this Craftium action");

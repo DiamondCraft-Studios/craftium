@@ -50,13 +50,14 @@ public final class CraftiumClient implements ClientModInitializer {
         }
         ClientPlayNetworking.registerGlobalReceiver(Packets.Report.TYPE,(payload,context)->context.client().execute(()->ClientCompat.setScreen(context.client(),new ReportScreen(ClientCompat.screen(context.client()),payload.text()))));
         ClientPlayNetworking.registerGlobalReceiver(Packets.AiReply.TYPE,(payload,context)->AiBridge.dataReceived(payload.json()));
+        ClientPlayNetworking.registerGlobalReceiver(Packets.Hello.TYPE,(payload,context)->context.client().execute(()->ClientHandshake.receive(payload.json(),false)));
         ClientPlayNetworking.registerGlobalReceiver(Packets.Update.TYPE,(payload,context)->context.client().execute(()->{
             receiveStatus(payload.json());
         }));
         ClientPlayConnectionEvents.DISCONNECT.register((handler,client)-> {
             ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);
             ClientState.save();resetEditor();placementSynced="";
-            ClientCommands.reset();
+            ClientCommands.reset();ClientHandshake.disconnected();
             ClientAssets.clear();bridge.clear();BlockSearch.clear(); // another world may have other data packs, so its tags and tabs are looked up again
             PlacementPreview.update("");
             ClientState.blueprints=List.of();ClientState.libraryVersion++;
@@ -142,7 +143,7 @@ public final class CraftiumClient implements ClientModInitializer {
                 case "report" -> ClientCompat.setScreen(mc,new ReportScreen(ClientCompat.screen(mc),message.data()));
                 case "ai_reply" -> AiBridge.dataReceived(message.data());
                 case "download" -> ClientAssets.receive(Packets.JSON.fromJson(message.data(),Packets.Download.class));
-                case "hello" -> send("status",null,null);
+                case "hello" -> {ClientHandshake.receive(message.data(),true);if(ClientHandshake.problem()==null)send("status",null,null);}
                 default -> throw new IllegalArgumentException("Unknown Craftium server message");
             }
         });}catch(RuntimeException e){ClientState.notify("Craftium connection: "+e.getMessage());}
@@ -156,7 +157,8 @@ public final class CraftiumClient implements ClientModInitializer {
         if(BuilderMode.active()&&held(contextKey)||BuilderWidget.active()){if(!toolCursor){mc.mouseHandler.releaseMouse();toolCursor=true;}}
         else if(toolCursor){if(ClientCompat.screen(mc)==null)mc.mouseHandler.grabMouse();toolCursor=false;}
         if(lastLiquidOpacity!=ClientState.options.liquidOpacity){lastLiquidOpacity=ClientState.options.liquidOpacity;ClientCompat.rebuildChunks(mc);}
-        if(!hadWorld){hadWorld=true;if(supported())send("status",null,null);}
+        if(!hadWorld){hadWorld=true;ClientHandshake.checkForUpdates(false);if(supported()&&ClientHandshake.problem()==null)send("status",null,null);}
+        ClientHandshake.announce();
         while(editorKey.consumeClick()) {
             if(ClientCompat.screen(mc) instanceof EditorScreen)ClientCompat.setScreen(mc,null);
             else if(ClientCompat.screen(mc)==null)open(false);
@@ -306,6 +308,7 @@ public final class CraftiumClient implements ClientModInitializer {
     public static boolean supported() {return Minecraft.getInstance().getConnection()!=null && (ClientPlayNetworking.canSend(Packets.Edit.TYPE)||ClientPlayNetworking.canSend(Packets.Bridge.TYPE));}
     public static void send(String action,Point target,Point normal) {
         if(!supported()){ClientState.notify("Install Craftium on this server to edit worlds");return;}
+        if(ClientHandshake.problem()!=null){ClientState.notify(ClientHandshake.problem());return;}
         var options=ClientState.options;boolean colours=action.equals("autoshade")&&options.shadeAutomatic||action.equals("use")&&(options.script.contains("getBlockRGB")||options.script.contains("findClosestBlockToRGB"))||options.maskScript.contains("getBlockRGB")||options.maskScript.contains("findClosestBlockToRGB");options.scriptColours=colours?new java.util.ArrayList<>(BlockColours.snapshot()):new java.util.ArrayList<>();
         ClientAssets.expect(action);
         if(action.equals("select_box")||action.equals("lasso_select")||action.equals("use")&&ClientState.options.tool.selection()){ClientState.selectionPending=true;ClientState.selectingSince=System.currentTimeMillis();ClientState.selectionSizeBefore=ClientState.status.selectionSize();}
