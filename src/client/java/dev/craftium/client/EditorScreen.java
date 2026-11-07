@@ -84,6 +84,8 @@ public final class EditorScreen extends CraftiumScreen {
     private final boolean heldContext;
     private enum CameraGesture { NONE,ROTATE,ORBIT,PAN,RADIUS }
     private CameraGesture cameraGesture=CameraGesture.NONE;
+    /** Where the player was at the start of the current tick-long stretch of an arcball turn, and when that began; see the orbit gesture. */
+    private Vec3 orbitRef;private long orbitRefAt;
     private int cameraButton=-1,initialRadius;private double gestureX,gestureY,orbitDistance;private Vec3 orbitPivot;
     private Tool previousTool=Tool.BOX_SELECT;
     private boolean toolActive=true;
@@ -1596,7 +1598,14 @@ public final class EditorScreen extends CraftiumScreen {
             if(pendingPick&&!middleDragged){if(Math.hypot(event.x()-gestureX,event.y()-gestureY)<=3)return true;middleDragged=true;}
             if(cameraGesture==CameraGesture.RADIUS)o().radius=Math.clamp(initialRadius+(int)Math.round(((event.x()-gestureX)-(event.y()-gestureY))/8),1,dev.craftium.core.ShapeLimits.maxRadius(o()));
             else if(cameraGesture==CameraGesture.ROTATE)minecraft.player.turn(dx*2,dy*2);
-            else if(cameraGesture==CameraGesture.ORBIT){minecraft.player.turn(dx*2,dy*2);Vec3 eye=orbitPivot.subtract(minecraft.player.getLookAngle().scale(orbitDistance));minecraft.player.setPos(eye.x,eye.y-minecraft.player.getEyeHeight(),eye.z);}
+            else if(cameraGesture==CameraGesture.ORBIT){
+                minecraft.player.turn(dx*2,dy*2);Vec3 eye=orbitPivot.subtract(minecraft.player.getLookAngle().scale(orbitDistance));Vec3 to=new Vec3(eye.x,eye.y-minecraft.player.getEyeHeight(),eye.z);
+                // The player is moved a few times between two ticks, but the server only sees the position at each tick, so a whip of the mouse is spread over several ticks where the server would put the player back.
+                long now=System.nanoTime();if(orbitRef==null||now-orbitRefAt>=50_000_000L){orbitRef=minecraft.player.position();orbitRefAt=now;}
+                double limit=CraftiumClient.stepLimit(),away=to.distanceTo(orbitRef);
+                if(away>limit)to=orbitRef.add(to.subtract(orbitRef).scale(limit/away));
+                minecraft.player.setPos(to.x,to.y,to.z);
+            }
             else{var camera=ClientCompat.camera(minecraft);var near=ClientCompat.nearPlane(camera);Vec3 center=near.getPointOnPlane(0,0),right=near.getPointOnPlane(1,0).subtract(center).normalize(),up=near.getPointOnPlane(0,1).subtract(center).normalize();double units=2*orbitDistance*Math.tan(Math.toRadians(ClientCompat.fov(minecraft,camera))/2)/height;minecraft.player.setPos(minecraft.player.position().add(right.scale(-dx*units)).add(up.scale(dy*units)));}
             minecraft.player.setDeltaMovement(Vec3.ZERO);minecraft.player.setOldPosAndRot();return true;
         }

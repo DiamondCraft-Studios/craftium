@@ -308,6 +308,8 @@ public final class CraftiumClient implements ClientModInitializer {
         Vec3 at=mc.player.getEyePosition().add(mc.player.getLookAngle().scale(4));
         return new BlockHitResult(at,net.minecraft.core.Direction.UP,net.minecraft.core.BlockPos.containing(at),false);
     }
+    /** The longest step in blocks per tick this client may take, or infinity when the server does not mind. */
+    public static double stepLimit(){return ClientHandshake.fastMovement()?Double.POSITIVE_INFINITY:ClientHandshake.SAFE_STEP;}
     public static boolean supported() {return Minecraft.getInstance().getConnection()!=null && (ClientPlayNetworking.canSend(Packets.Edit.TYPE)||ClientPlayNetworking.canSend(Packets.Bridge.TYPE));}
     public static void send(String action,Point target,Point normal) {
         if(!supported()){ClientState.notify("Install Craftium on this server to edit worlds");return;}
