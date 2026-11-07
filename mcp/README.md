@@ -44,7 +44,7 @@ that contains `config` and `mods`.
 
 ## Then
 
-Open a world with AI building on, and ask Claude for a build. Look at the violet ghost in the game, ask for changes,
+Open a world with AI building on, and ask Claude for a build. Look at the ghost in the game (outlined in violet), ask for changes,
 and say when to apply it. You can also apply, discard or undo from the game's **AI** menu.
 
 ## For developers
