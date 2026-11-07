@@ -104,6 +104,27 @@ class SelectionReportTest {
         assertTrue(ms < 15_000, "describing a million blocks took " + ms + " ms");
     }
 
+    @Test void columnsWhoseSpaceAboveWasNotReadAreLeftOutOfTheFigures() {
+        var points = flat(0, 0, 3, 0, 5); // four columns at x = 0..3
+        SelectionReport.World world = (x, y, z) -> y <= 5 ? CONCRETE : (x >= 2 ? null : AIR); // the chunk over x >= 2 is not loaded
+        var above = SelectionReport.describe(points, world, 24, null).getAsJsonObject("above");
+        assertEquals(2, above.get("columns").getAsInt(), "only the two columns that could be read count");
+        assertEquals(2, above.get("clearColumns").getAsInt());
+        assertEquals(24, above.get("minClear").getAsInt(), "an unread column must not pull minClear down");
+        assertEquals(2, above.get("unreadColumns").getAsInt());
+        assertFalse(above.has("partlyUnread"));
+        var summary = SelectionReport.describe(points, world, 24, null).get("summary").getAsString();
+        assertTrue(summary.contains("nothing in the way") && summary.contains("2 of 4 columns could not be checked"), summary);
+    }
+
+    @Test void aSelectionWhoseSpaceAboveIsAllUnreadSaysSoInsteadOfClaimingObstructions() {
+        SelectionReport.World world = (x, y, z) -> y <= 5 ? CONCRETE : null;
+        var report = SelectionReport.describe(flat(0, 0, 2, 2, 5), world, 24, null);
+        assertEquals(0, report.getAsJsonObject("above").get("columns").getAsInt());
+        assertTrue(report.get("summary").getAsString().contains("could not be checked"), report.get("summary").getAsString());
+        assertFalse(report.get("summary").getAsString().contains("have something"));
+    }
+
     @Test void anEmptySelectionSaysSoAndHowToCarryOn() {
         JsonObject report = SelectionReport.describe(Set.of(), null, 0, null);
         assertEquals(0, report.get("selected").getAsInt());
