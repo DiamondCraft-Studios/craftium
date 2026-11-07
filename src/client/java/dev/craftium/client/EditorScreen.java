@@ -95,7 +95,8 @@ public final class EditorScreen extends CraftiumScreen {
     public boolean toolActive(){return toolActive;}
     private boolean showSelection=true;
     public EditorScreen(boolean builder){this(builder,false);}
-    public EditorScreen(boolean builder,boolean heldContext){super(Component.literal("Craftium Building Studio"));this.builder=builder;this.heldContext=heldContext;}
+    public EditorScreen(boolean builder,boolean heldContext){super(Component.literal("Craftium Building Studio"));this.builder=builder;this.heldContext=heldContext;
+        if(ClientState.options.tool==Tool.BOX_SELECT&&ClientState.boxCorners.size()==2)selectedNode=1;} // a box left from before: put the gizmo on a corner again, or the selection's own gizmo would stand beside both corner handles
     public boolean showSelection(){return showSelection;}
 
     private Options o(){return ClientState.options;}
