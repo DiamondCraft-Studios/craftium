@@ -118,11 +118,10 @@ public final class CraftiumClient implements ClientModInitializer {
         if(!(message.startsWith("Selected ")||message.startsWith("Lasso selected ")||message.startsWith("Magic Wand: ")))return;
         ClientState.selectionPending=false;ClientState.selectingSince=0;
         int added=next.selectionSize()-ClientState.selectionSizeBefore;
-        if(added<ClientState.LARGE_SELECTION)return;
+        if(added<ClientState.options.largeSelectionThreshold)return;
         // A Magic Wand click that had its outline under the cursor was seen before it was made, so it needs no warning; only a selection too big for that preview asks.
         var options=ClientState.options;
         if(!options.largeSelectionWarnings)return;
-        if(options.tool==Tool.MAGIC_SELECT&&options.magicPreview&&added<options.hoverPreviewLimit)return;
         var mc=Minecraft.getInstance();
         // Set at once, before this status is drawn, so the popup comes first and the selection is not built until it is confirmed.
         if(ClientCompat.screen(mc) instanceof EditorScreen)ClientState.largeSelection=next.selectionSize();
@@ -309,6 +308,8 @@ public final class CraftiumClient implements ClientModInitializer {
         Vec3 at=mc.player.getEyePosition().add(mc.player.getLookAngle().scale(4));
         return new BlockHitResult(at,net.minecraft.core.Direction.UP,net.minecraft.core.BlockPos.containing(at),false);
     }
+    /** The longest step in blocks per tick this client may take, or infinity when the server does not mind. */
+    public static double stepLimit(){return ClientHandshake.fastMovement()?Double.POSITIVE_INFINITY:ClientHandshake.SAFE_STEP;}
     public static boolean supported() {return Minecraft.getInstance().getConnection()!=null && (ClientPlayNetworking.canSend(Packets.Edit.TYPE)||ClientPlayNetworking.canSend(Packets.Bridge.TYPE));}
     public static void send(String action,Point target,Point normal) {
         if(!supported()){ClientState.notify("Install Craftium on this server to edit worlds");return;}
