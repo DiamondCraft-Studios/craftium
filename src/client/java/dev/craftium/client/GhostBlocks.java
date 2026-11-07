@@ -30,7 +30,32 @@ final class GhostBlocks {
 
     /** Set on a preview an AI app made, which is drawn in violet so it is never taken for one of the player's own edits. */
     boolean ai;
+    /** Set on another player's AI preview, which is drawn in teal so it is told apart from the player's own violet one. */
+    boolean shared;
     private static final int AI_OUTLINE=0xffc9a0ff,AI_FILL=0x22a070ff,AI_TINT=0x90b57cf0;
+    private static final int SHARED_OUTLINE=0xff7fe3d4,SHARED_FILL=0x2230d5c8,SHARED_TINT=0x9040c8b8;
+    private int[] box; // x0, y0, z0, x1, y1, z1 of the blocks it places, worked out when first asked for
+
+    private int[] box(){
+        if(box!=null)return box;
+        int[] b=data==null||data.blocks()==null?new int[0]:data.blocks();
+        int[] out={Integer.MAX_VALUE,Integer.MAX_VALUE,Integer.MAX_VALUE,Integer.MIN_VALUE,Integer.MIN_VALUE,Integer.MIN_VALUE};
+        for(int i=0;i+3<b.length;i+=4)for(int k=0;k<3;k++){out[k]=Math.min(out[k],b[i+k]);out[k+3]=Math.max(out[k+3],b[i+k]);}
+        return box=out;
+    }
+
+    /** Whether any block it places is within {@code range} blocks of the point: its box, a cheap test that never says no to something in range. */
+    boolean within(double x,double y,double z,double range){
+        int[] b=box();if(b.length==0||b[0]==Integer.MAX_VALUE)return false;
+        double dx=Math.max(Math.max(b[0]-x,0),x-(b[3]+1)),dy=Math.max(Math.max(b[1]-y,0),y-(b[4]+1)),dz=Math.max(Math.max(b[2]-z,0),z-(b[5]+1));
+        return dx*dx+dy*dy+dz*dz<=range*range;
+    }
+
+    /** Above the middle of what it places, for a name tag, or null when it places nothing. */
+    net.minecraft.world.phys.Vec3 labelAt(){
+        int[] b=box();if(b.length==0||b[0]==Integer.MAX_VALUE)return null;
+        return new net.minecraft.world.phys.Vec3((b[0]+b[3]+1)/2.0,b[4]+2.5,(b[2]+b[5]+1)/2.0);
+    }
 
     private GhostBlocks(Data data){this.data=data;}
 
@@ -90,7 +115,7 @@ final class GhostBlocks {
         if(data==null||!resolve())return;
         Vec3 at=new Vec3(origin.x(),origin.y(),origin.z());
         if(outline){
-            int line=ai?AI_OUTLINE:ClientState.options.hoverColor,fill=ai?AI_FILL:ClientState.options.hoverFill;
+            int line=shared?SHARED_OUTLINE:ai?AI_OUTLINE:ClientState.options.hoverColor,fill=shared?SHARED_FILL:ai?AI_FILL:ClientState.options.hoverFill;
             if(!placedShape.isEmpty())placedShape.drawPlain(at,line,(float)ClientState.options.selectionWidth,fill,true,false);
             if(!removedShape.isEmpty())removedShape.drawFill(at,ClientState.options.removedFill);
         }
@@ -101,6 +126,6 @@ final class GhostBlocks {
             for(Point p:relative)places.add(new BlockPos(p.x()+origin.x(),p.y()+origin.y(),p.z()+origin.z()));
             cachedPlaces=places;cachedOrigin=origin;
         }
-        Overlay.blockStates(states,cachedPlaces,ai?AI_TINT:ClientState.options.previewTint);
+        Overlay.blockStates(states,cachedPlaces,shared?SHARED_TINT:ai?AI_TINT:ClientState.options.previewTint);
     }
 }

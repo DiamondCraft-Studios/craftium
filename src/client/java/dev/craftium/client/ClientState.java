@@ -24,6 +24,17 @@ public final class ClientState {
     /** The build an AI app is holding as a preview, kept apart from the player's own: drawn in violet, and applied or discarded from the AI menu. */
     public static GhostBlocks aiPending=GhostBlocks.EMPTY;
     public static boolean hasAiPending(){return aiPending.total()>0;}
+    /** Another player's AI preview, drawn beside the player's own in a colour of its own, with their name. */
+    public record SharedAi(String owner,GhostBlocks ghost){}
+    /** The AI previews other players in this dimension are holding, as the server last said. */
+    public static List<SharedAi> sharedAi=List.of();
+    /** Takes in the list a status brings of other players' AI previews; a status without one leaves it as it was. */
+    static void updateShared(dev.craftium.net.Packets.Status status){
+        var list=status.sharedAi();if(list==null)return;
+        var next=new ArrayList<SharedAi>(list.size());
+        for(var one:list){var ghost=GhostBlocks.parse(one.data());if(ghost.total()>0){ghost.shared=true;next.add(new SharedAi(one.owner(),ghost));}}
+        sharedAi=List.copyOf(next);
+    }
     /** The corners of the box being selected, which stay as handles the player can drag to resize it. At most two. */
     public static final List<Point> boxCorners=new ArrayList<>();
     /** When above zero, the editor shows a small popup asking whether this many selected blocks was meant. */

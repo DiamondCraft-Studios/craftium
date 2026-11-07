@@ -346,6 +346,43 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             ctx.waitTicks(5);
             call("cancel_preview", "{}");
 
+            // Another player's AI preview. One client cannot be two players, so the status the server would send is delivered by hand.
+            require(ctx.computeOnClient(mc -> ClientState.sharedAi.isEmpty()), "a player's own preview must not come back as somebody else's");
+            var here = call("get_state", "{}").getAsJsonObject("player").getAsJsonArray("block");
+            int sx = here.get(0).getAsInt() - 1, sy = here.get(1).getAsInt(), sz = here.get(2).getAsInt() + 8;
+            var sharedCells = new StringBuilder();
+            for (int dx = 0; dx < 3; dx++) for (int dy = 0; dy < 3; dy++) for (int dz = 0; dz < 3; dz++) {
+                if (sharedCells.length() > 0) sharedCells.append(',');
+                sharedCells.append(sx + dx).append(',').append(sy + dy).append(',').append(sz + dz).append(",0");
+            }
+            String sharedGhost = "{\"states\":[\"minecraft:stone_bricks\"],\"blocks\":[" + sharedCells + "],\"removed\":[],\"total\":27}";
+            String withAlex = dev.craftium.net.Packets.JSON.toJson(dev.craftium.net.Packets.sharedOnly(java.util.List.of(new dev.craftium.net.Packets.SharedPreview("Alex", sharedGhost))));
+            var ownStatus = ctx.computeOnClient(mc -> ClientState.status);
+            ctx.runOnClient(mc -> { mc.setScreen(null); ClientState.options.showSharedAiPreviews = true; CraftiumClient.receiveStatus(withAlex); });
+            ctx.waitTicks(2);
+            require(ctx.computeOnClient(mc -> ClientState.sharedAi.size()) == 1, "Alex's preview should be held");
+            require("Alex".equals(ctx.computeOnClient(mc -> ClientState.sharedAi.get(0).owner())) && ctx.computeOnClient(mc -> ClientState.sharedAi.get(0).ghost().total()) == 27, "with his name and all 27 blocks");
+            require(ctx.computeOnClient(mc -> ClientState.sharedAi.get(0).ghost().within(mc.player.getX(), mc.player.getY(), mc.player.getZ(), 192)), "and be within drawing range");
+            require(ctx.computeOnClient(mc -> ClientState.status) == ownStatus, "a background status must not replace the player's own status");
+            ctx.runOnClient(mc -> { mc.player.setYRot(0f); mc.player.setXRot(-8f); mc.player.setOldPosAndRot(); });
+            ctx.waitTicks(20);
+            ctx.takeScreenshot("ai-shared-preview");
+
+            // A status that says nothing about other previews leaves them as they were; an empty list clears them; hiding them is a setting.
+            var plain = com.google.gson.JsonParser.parseString(dev.craftium.net.Packets.JSON.toJson(ownStatus)).getAsJsonObject();
+            plain.remove("sharedAi");
+            String plainJson = plain.toString();
+            ctx.runOnClient(mc -> CraftiumClient.receiveStatus(plainJson));
+            require(ctx.computeOnClient(mc -> ClientState.sharedAi.size()) == 1, "an ordinary status without a list must keep them");
+            ctx.runOnClient(mc -> ClientState.options.showSharedAiPreviews = false);
+            ctx.waitTicks(20);
+            ctx.takeScreenshot("ai-shared-preview-hidden");
+            ctx.runOnClient(mc -> ClientState.options.showSharedAiPreviews = true);
+            String none = dev.craftium.net.Packets.JSON.toJson(dev.craftium.net.Packets.sharedOnly(java.util.List.of()));
+            ctx.runOnClient(mc -> CraftiumClient.receiveStatus(none));
+            require(ctx.computeOnClient(mc -> ClientState.sharedAi.isEmpty()), "an empty list must clear them");
+            System.out.println("CRAFTIUM_AI shared_preview_ok");
+
             ctx.runOnClient(mc -> AiBridge.toggle());
             for (int i = 0; i < 100 && ctx.computeOnClient(mc -> AiBridge.running()); i++) ctx.waitTick();
             require(!ctx.computeOnClient(mc -> AiBridge.running()) && !Files.exists(AiBridge.FILE), "turning the bridge off should close it and remove its file");
