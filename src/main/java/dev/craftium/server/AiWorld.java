@@ -137,21 +137,21 @@ final class AiWorld {
     }
 
     /**
-     * The blocks of the AI's waiting preview in a box, so it can check its work before applying it: exact blocks and states (which way a
-     * stair faces, say), where a picture shows flat colour and the game draws only part of a big preview. "after" is the world as it would
-     * be once applied (the preview over what is there now); "only" is just what the preview places, and air where it clears. The answer is
-     * written as boxes or as runs, whichever is shorter (see {@link dev.craftium.core.BlockView}), and a box may hold a million cells.
+     * The blocks in a box, so the AI can check the ground or its work: exact blocks and states (which way a stair faces, say), where a picture
+     * shows flat colour and the game draws only part of a big preview. "world" is the world as it is; "after" is the world as it would be once
+     * the waiting preview is applied (the world itself when none is waiting); "only" is just what the preview places, and air where it clears.
+     * The answer is written as boxes or as runs, whichever is shorter (see {@link dev.craftium.core.BlockView}), and a box may hold a million cells.
      */
     static String previewBlocks(ServerPlayer player, Session ai, Point a, Point b, String view, String format) {
         require(a, b);
         if (view == null || view.isBlank()) view = "after";
-        if (!view.equals("after") && !view.equals("only")) throw new IllegalArgumentException("\"view\" must be \"after\" or \"only\"");
+        if (!view.equals("after") && !view.equals("only") && !view.equals("world")) throw new IllegalArgumentException("\"view\" must be \"world\", \"after\" or \"only\"");
         var edit = ai.pendingEdit;
-        if (edit == null) {
+        if (edit == null && view.equals("only")) {
             var none = new JsonObject();
             none.addProperty("ok", true);
             none.addProperty("previewBlocks", 0);
-            none.addProperty("message", "There is no waiting preview. Call preview_build first, or read the world with get_blocks.");
+            none.addProperty("message", "There is no waiting preview. Call preview_build first, or read the world with source \"world\".");
             return reply(none);
         }
         int x0 = Math.min(a.x(), b.x()), x1 = Math.max(a.x(), b.x()), y0 = Math.min(a.y(), b.y()), y1 = Math.max(a.y(), b.y()), z0 = Math.min(a.z(), b.z()), z1 = Math.max(a.z(), b.z());
@@ -159,30 +159,31 @@ final class AiWorld {
         long total = (long) sx * sy * sz;
         if (total > MAX_VIEW_CELLS) throw new IllegalArgumentException("Region has " + total + " blocks; read at most " + String.format(java.util.Locale.ROOT, "%,d", MAX_VIEW_CELLS) + " at a time");
         var level = (ServerLevel) player.level();
-        boolean after = view.equals("after");
-        var palette = new Palette(after);
+        boolean only = view.equals("only"), withPreview = !view.equals("world");
+        var palette = new Palette(!only);
         int[] ids = new int[(int) total];
         int fresh = 0;
-        if (after) {
+        if (!only) {
             fresh = unloaded(level, x0, z0, x1, z1);
             fillFromWorld(level, palette, ids, x0, y0, z0, x1, y1, z1);
         } else java.util.Arrays.fill(ids, -1);
         // The preview over it, in one pass over the edit's own changes: nothing is copied or indexed, so a read costs a walk of the list and
         // the box. It counts what the preview places the way the game's ghost does, leaving out a change that keeps the block as it was.
         int placed = 0;
-        for (var change : edit.changes()) {
+        if (edit != null) for (var change : edit.changes()) {
             if (change.before().state() == change.after().state() && change.after().data() == null) continue;
             placed++;
             var at = change.pos();
-            if (at.x() < x0 || at.x() > x1 || at.y() < y0 || at.y() > y1 || at.z() < z0 || at.z() > z1) continue;
+            if (!withPreview || at.x() < x0 || at.x() > x1 || at.y() < y0 || at.y() > y1 || at.z() < z0 || at.z() > z1) continue;
             ids[(at.x() - x0) + sx * ((at.z() - z0) + sz * (at.y() - y0))] = palette.of(change.after().state());
         }
         var out = dev.craftium.core.BlockView.describe(x0, y0, z0, sx, sy, sz, ids, palette.names, palette.omit, format,
-            after ? "Anything not listed is air." : "Anything not listed is not changed by the preview, and air means the preview clears that block.");
+            !only ? "Anything not listed is air." : "Anything not listed is not changed by the preview, and air means the preview clears that block.");
         out.addProperty("source", "server");
         out.addProperty("view", view);
+        // How much of a waiting preview there is, also on a world read, so a read that leaves it out says that one is waiting.
         out.addProperty("previewBlocks", placed);
-        if (after) out.addProperty("chunksLoadedForThisRead", fresh);
+        if (!only) out.addProperty("chunksLoadedForThisRead", fresh);
         String text = out.toString();
         if (text.length() > MAX_VIEW_REPLY)
             throw new IllegalArgumentException("The answer is " + text.length() / 1000 + " KB; the limit is " + MAX_VIEW_REPLY / 1000 + " KB. Read a smaller box, or part of the build at a time (the preview holds " + placed + " blocks in all)");
@@ -192,9 +193,11 @@ final class AiWorld {
     /**
      * What a preview that was just made holds (see {@link dev.craftium.core.PreviewSummary}), sent with the reply to preview_build so the AI
      * learns where the build went and what it is made of without another request. A change that keeps the block as it was is left out, as
-     * the ghost and get_preview_blocks leave it out.
+     * the ghost and read_blocks leave it out.
      */
-    static String previewSummary(Session.Edit edit) {
+    static String previewSummary(Session.Edit edit) { return summaryJson(edit).toString(); }
+
+    private static JsonObject summaryJson(Session.Edit edit) {
         var summary = new dev.craftium.core.PreviewSummary();
         var names = new java.util.IdentityHashMap<net.minecraft.world.level.block.Block, String>();
         for (var change : edit.changes()) {
@@ -209,7 +212,108 @@ final class AiWorld {
         var out = summary.toJson();
         out.addProperty("ok", true);
         out.addProperty("kind", "previewSummary");
+        return out;
+    }
+
+    /** {@link #previewSummary(Session.Edit)} with what looks wrong in it, if anything: see {@link #warnings}. */
+    static String previewSummary(Session.Edit added, net.minecraft.server.level.ServerLevel level, Session.Edit whole, java.util.List<String> specWarnings, int takenBack) {
+        var out = summaryJson(added);
+        if (takenBack > 0) out.addProperty("takenBack", takenBack);
+        var list = new java.util.ArrayList<>(specWarnings);
+        list.addAll(warnings(level, whole, added));
+        if (!list.isEmpty()) {
+            var array = new com.google.gson.JsonArray();
+            for (String w : list.subList(0, Math.min(MAX_WARNINGS, list.size()))) array.add(w);
+            if (list.size() > MAX_WARNINGS) array.add("and " + (list.size() - MAX_WARNINGS) + " more");
+            out.add("warnings", array);
+        }
         return out.toString();
+    }
+
+    private static final int MAX_WARNINGS = 5;
+
+    /**
+     * Blocks the AI placed that the game will not keep or that look broken: a door, bed or tall plant without its other half, and a torch,
+     * lantern, button, ladder, sign or the like with nothing to stand on or hang from (the build places them as written, but the first block
+     * update pops them off). Each kind is one line, with how many and where the first is. Only what {@code added} placed is checked, against
+     * the preview {@code whole} over the world.
+     */
+    static java.util.List<String> warnings(net.minecraft.server.level.ServerLevel level, Session.Edit whole, Session.Edit added) {
+        var planned = new java.util.HashMap<Point, net.minecraft.world.level.block.state.BlockState>();
+        for (var change : whole.changes()) planned.put(change.pos(), change.after().state());
+        // A block in a chunk that is not loaded is unknown, not air: a torch backed by one is not warned about.
+        java.util.function.Function<Point, net.minecraft.world.level.block.state.BlockState> at = p -> {
+            var s = planned.get(p);
+            return s != null ? s : level.hasChunk(p.x() >> 4, p.z() >> 4) ? level.getBlockState(new net.minecraft.core.BlockPos(p.x(), p.y(), p.z())) : null;
+        };
+        var halves = new java.util.LinkedHashMap<String, int[]>();
+        var loose = new java.util.LinkedHashMap<String, int[]>();
+        for (var change : added.changes()) {
+            var state = change.after().state();
+            if (state.isAir()) continue;
+            var p = change.pos();
+            String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
+            Point other = null;
+            if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)) {
+                boolean lower = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF) == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER;
+                other = p.add(0, lower ? 1 : -1, 0);
+            } else if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.BED_PART) && state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)) {
+                var facing = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING);
+                boolean foot = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.BED_PART) == net.minecraft.world.level.block.state.properties.BedPart.FOOT;
+                other = p.add(facing.getStepX() * (foot ? 1 : -1), 0, facing.getStepZ() * (foot ? 1 : -1));
+            }
+            if (other != null) {
+                var partner = at.apply(other);
+                if (partner != null && !isOtherHalf(state, partner)) note(halves, id, p);
+                continue;
+            }
+            Point support = support(state, id, p);
+            if (support != null) {
+                var below = at.apply(support);
+                if (below != null && (below.isAir() || !below.getFluidState().isEmpty())) note(loose, id, p);
+            }
+        }
+        var out = new java.util.ArrayList<String>();
+        halves.forEach((id, n) -> out.add(n[0] + " " + id + " " + (n[0] == 1 ? "has" : "have") + " no other half (first at " + n[1] + " " + n[2] + " " + n[3] + "): set both halves, such as half=lower and half=upper"));
+        loose.forEach((id, n) -> out.add(n[0] + " " + id + " " + (n[0] == 1 ? "has" : "have") + " nothing to stand on or hang from (first at " + n[1] + " " + n[2] + " " + n[3] + "), so the game will drop " + (n[0] == 1 ? "it" : "them")));
+        return out;
+    }
+
+    /** Whether {@code partner} is the other half of the door, tall plant or bed {@code state} is: the same block, with the opposite half or part. */
+    private static boolean isOtherHalf(net.minecraft.world.level.block.state.BlockState state, net.minecraft.world.level.block.state.BlockState partner) {
+        if (!partner.is(state.getBlock())) return false;
+        var half = net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF;
+        if (state.hasProperty(half)) return partner.getValue(half) != state.getValue(half);
+        var part = net.minecraft.world.level.block.state.properties.BlockStateProperties.BED_PART;
+        return partner.getValue(part) != state.getValue(part);
+    }
+
+    private static void note(java.util.Map<String, int[]> found, String id, Point p) {
+        found.computeIfAbsent(id, k -> new int[]{0, p.x(), p.y(), p.z()})[0]++;
+    }
+
+    /** Where a block that hangs on something gets its support, or null for one that needs none. */
+    private static Point support(net.minecraft.world.level.block.state.BlockState state, String id, Point p) {
+        var FACING = net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING;
+        // A grindstone is attached to a face as a button is, but the game keeps it wherever it is put.
+        if (id.equals("grindstone")) return null;
+        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.ATTACH_FACE) && state.hasProperty(FACING)) {
+            var face = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.ATTACH_FACE);
+            var facing = state.getValue(FACING);
+            return switch (face) {
+                case FLOOR -> p.add(0, -1, 0);
+                case CEILING -> p.add(0, 1, 0);
+                case WALL -> p.add(-facing.getStepX(), 0, -facing.getStepZ());
+            };
+        }
+        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HANGING) && (id.endsWith("lantern")))
+            return p.add(0, state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HANGING) ? 1 : -1, 0);
+        boolean wall = id.endsWith("wall_torch") || id.equals("ladder") || id.endsWith("wall_sign") || id.endsWith("wall_banner");
+        if (wall && state.hasProperty(FACING)) { var f = state.getValue(FACING); return p.add(-f.getStepX(), 0, -f.getStepZ()); }
+        if (id.equals("torch") || id.equals("soul_torch") || id.equals("redstone_torch") || id.equals("copper_torch") || (id.endsWith("_sign") && !id.endsWith("hanging_sign"))
+            || (id.endsWith("_banner") && !wall) || id.endsWith("pressure_plate") || id.endsWith("carpet") || id.endsWith("rail") || id.equals("flower_pot") || id.endsWith("candle"))
+            return p.add(0, -1, 0);
+        return null;
     }
 
     private static <T extends Comparable<T>> String facing(net.minecraft.world.level.block.state.BlockState state, net.minecraft.world.level.block.state.properties.Property<T> property) {

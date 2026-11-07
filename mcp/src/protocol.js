@@ -3,7 +3,7 @@
 import { BridgeError } from "./bridge.js";
 import { ArgumentError, INSTRUCTIONS, TOOLS } from "./tools.js";
 
-export const VERSION = "0.5.0";
+export const VERSION = "0.6.0";
 const PROTOCOLS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
 const reply = (id, result) => ({ jsonrpc: "2.0", id, result });
@@ -20,10 +20,20 @@ export const REPLY_LIMIT = 60_000;
 /** A bridge reply as a tool result: ok:false as an error the model can act on, a screenshot as an image beside its details. */
 export function toResult(bridgeReply, tooBig) {
   if (bridgeReply && bridgeReply.ok === false) return problem(String(bridgeReply.error ?? "Failed"));
-  const { ok, image, mime, ...rest } = bridgeReply ?? {};
+  const { ok, image, mime, images, ...rest } = bridgeReply ?? {};
   const text = JSON.stringify(rest);
   if (text.length > REPLY_LIMIT)
     return problem(`The answer is ${Math.round(text.length / 1000)} KB (about ${Math.round(text.length / 3000) * 1000} tokens), more than the ${REPLY_LIMIT / 1000} KB a reply is held to so it fits in your context. ${tooBig ?? "Ask for less at a time."}`);
+  if (Array.isArray(images)) {
+    // Several pictures of one box: each followed by its own details (angle, compass), then what they share.
+    const content = [];
+    for (const { image: data, mime: type, ...details } of images) {
+      if (typeof data === "string") content.push({ type: "image", data, mimeType: type ?? "image/png" });
+      content.push({ type: "text", text: JSON.stringify(details) });
+    }
+    content.push({ type: "text", text });
+    return { content };
+  }
   if (typeof image === "string") return { content: [{ type: "image", data: image, mimeType: mime ?? "image/jpeg" }, { type: "text", text }] };
   return { content: [{ type: "text", text }] };
 }
@@ -46,7 +56,7 @@ export function createHandler(bridge) {
       throw error;
     }
     try {
-      const answer = await bridge.call(tool.name, sent);
+      const answer = await bridge.call(tool.bridge ?? tool.name, sent);
       // A tool may reshape what the game sent (get_surface summarises it) from what the model asked; an error is passed on as it is.
       const shaped = tool.post && answer && answer.ok !== false ? tool.post(answer, given) : answer;
       return { result: toResult(shaped, tool.tooBig) };

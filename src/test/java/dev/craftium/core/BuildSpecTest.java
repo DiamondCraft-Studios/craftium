@@ -232,4 +232,175 @@ class BuildSpecTest {
         var e = assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[]}"));
         assertTrue(e.getMessage().contains("\"ops\" is empty"), e.getMessage());
     }
+
+    // ---- materials, mixes, roofs and groups ---------------------------------------------------------------------
+
+    private static IllegalArgumentException refused(String json) {
+        return assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse(json).build(AREA));
+    }
+
+    @Test void kindsAreFilledInFromTheMaterialOfTheSpecOrTheOperation() {
+        var cells = build("""
+            {"material":"spruce","ops":[
+              {"op":"set","at":[0,0,0],"block":"@stairs[facing=east]"},
+              {"op":"set","at":[1,0,0],"block":"@slab","material":"stone_bricks"},
+              {"op":"set","at":[2,0,0],"block":"oak@planks"}]}""").cells();
+        assertEquals("minecraft:spruce@stairs[facing=east]", cells.get(new Point(0, 0, 0)).block());
+        assertEquals("minecraft:stone_bricks@slab", cells.get(new Point(1, 0, 0)).block());
+        assertEquals("minecraft:oak@planks", cells.get(new Point(2, 0, 0)).block());
+    }
+
+    @Test void aKindWithoutAMaterialOrAnUnknownKindIsRefused() {
+        var e = refused("{\"ops\":[{\"op\":\"set\",\"at\":[0,0,0],\"block\":\"@stairs\"}]}");
+        assertTrue(e.getMessage().contains("ops[0] (set)") && e.getMessage().contains("material"), e.getMessage());
+        e = refused("{\"ops\":[{\"op\":\"set\",\"at\":[0,0,0],\"block\":\"spruce@stair\"}]}");
+        assertTrue(e.getMessage().contains("not a kind of block"), e.getMessage());
+    }
+
+    @Test void aMixIsTheSameEachBuildAndFollowsItsWeights() {
+        String json = """
+            {"palette":{"wall":{"mix":[["stone_bricks",3],["mossy_stone_bricks",1]]}},
+             "ops":[{"op":"box","from":[0,0,0],"to":[15,15,0],"block":"wall"}]}""";
+        var first = build(json).cells();
+        var again = build(json).cells();
+        long mossy = first.values().stream().filter(c -> c.block().equals("minecraft:mossy_stone_bricks")).count();
+        assertTrue(mossy > 30 && mossy < 100, "mossy " + mossy + " of 256");
+        for (var p : first.keySet()) assertEquals(first.get(p).block(), again.get(p).block());
+        // Another seed gives another pattern.
+        var other = build(json.replace("]]}}", "]],\"seed\":7}}")).cells();
+        assertTrue(first.keySet().stream().anyMatch(p -> !first.get(p).block().equals(other.get(p).block())));
+    }
+
+    @Test void aMixCanStandWhereOneBlockIsWantedOnlyWhereItMakesSense() {
+        var cells = build("{\"ops\":[{\"op\":\"box\",\"from\":[0,0,0],\"to\":[3,0,0],\"block\":{\"mix\":[\"stone\",\"andesite\"]}}]}").cells();
+        assertEquals(4, cells.size());
+        var e = refused("{\"palette\":{\"m\":{\"mix\":[\"stone\",\"andesite\"]}},\"ops\":[{\"op\":\"replace\",\"from\":[0,0,0],\"to\":[1,0,0],\"find\":\"m\",\"block\":\"dirt\"}]}");
+        assertTrue(e.getMessage().contains("one block"), e.getMessage());
+        e = refused("{\"ops\":[{\"op\":\"set\",\"at\":[0,0,0],\"block\":{\"mix\":[[\"stone\",0]]}}]}");
+        assertTrue(e.getMessage().contains("1 to 1000"), e.getMessage());
+    }
+
+    @Test void aRoofTakesItsBlocksFromItsMaterial() {
+        var spec = BuildSpec.parse("{\"ops\":[{\"op\":\"roof\",\"from\":[0,4,0],\"to\":[6,4,4],\"material\":\"spruce\"}]}");
+        var result = spec.build(spec.place());
+        assertEquals(0, result.clipped());
+        assertTrue(result.cells().values().stream().anyMatch(c -> c.block().equals("minecraft:spruce@stairs[facing=south,half=bottom,shape=straight]")));
+        assertTrue(result.cells().values().stream().anyMatch(c -> c.block().equals("minecraft:spruce@slab[type=bottom]")));
+        assertTrue(spec.blocks().contains("minecraft:spruce@block"));
+        assertEquals(java.util.List.of("ops[0] (roof)"), spec.usesOf("minecraft:spruce@stairs"));
+        var e = refused("{\"ops\":[{\"op\":\"roof\",\"from\":[0,4,0],\"to\":[6,5,4],\"material\":\"spruce\"}]}");
+        assertTrue(e.getMessage().contains("ops[0] (roof)") && e.getMessage().contains("same y"), e.getMessage());
+    }
+
+    @Test void aGroupTurnsItsBlocksAndTheirStates() {
+        var cells = build("""
+            {"ops":[{"op":"group","rotate":90,"ops":[
+              {"op":"set","at":[0,0,0],"block":"oak_stairs[facing=north]"},
+              {"op":"set","at":[2,0,0],"block":"stone"}]}]}""").cells();
+        assertEquals(2, cells.size());
+        assertEquals(Turn.CLOCKWISE, cells.get(new Point(0, 0, 0)).turn());
+        assertEquals("minecraft:stone", cells.get(new Point(0, 0, 2)).block());
+    }
+
+    @Test void aGroupMirrorsInPlaceOrMovesToAt() {
+        var cells = build("""
+            {"ops":[{"op":"group","mirror":"x","ops":[
+              {"op":"set","at":[3,0,0],"block":"stone"},
+              {"op":"set","at":[5,0,0],"block":"dirt"}]}]}""").cells();
+        assertEquals("minecraft:dirt", cells.get(new Point(3, 0, 0)).block());
+        assertEquals("minecraft:stone", cells.get(new Point(5, 0, 0)).block());
+        assertTrue(cells.get(new Point(3, 0, 0)).turn().mirrored());
+        var moved = BuildSpec.parse("{\"ops\":[{\"op\":\"group\",\"at\":[8,2,8],\"ops\":[{\"op\":\"box\",\"from\":[0,0,0],\"to\":[1,0,1],\"block\":\"stone\"}]}]}");
+        var placed = moved.place();
+        assertEquals(new Point(8, 2, 8), placed.min());
+        assertEquals(4, moved.build(placed).cells().size());
+    }
+
+    @Test void aRepeatedTurnedGroupFitsTheAreaItWorksOut() {
+        var spec = BuildSpec.parse("""
+            {"ops":[{"op":"group","rotate":90,"repeat":{"count":3,"step":[4,0,0]},"ops":[
+              {"op":"box","from":[0,0,0],"to":[2,0,0],"block":"stone"}]}]}""");
+        var result = spec.build(spec.place());
+        assertEquals(9, result.cells().size());
+        assertEquals(0, result.clipped());
+    }
+
+    @Test void anOperationWhoseBlocksAreAllReplacedIsNamed() {
+        var result = build("""
+            {"ops":[
+              {"op":"box","from":[1,1,1],"to":[2,2,2],"block":"glass"},
+              {"op":"box","from":[0,0,0],"to":[3,3,3],"block":"stone"},
+              {"op":"box","from":[1,1,1],"to":[2,2,2],"block":"air"}]}""");
+        assertEquals(1, result.warnings().size(), result.warnings().toString());
+        assertTrue(result.warnings().getFirst().startsWith("ops[0] (box)") && result.warnings().getFirst().contains("all 8"), result.warnings().toString());
+        // A carve inside a wall, a group and a repeat whose copies overlap are not mistakes.
+        assertEquals(java.util.List.of(), build("""
+            {"ops":[
+              {"op":"box","from":[0,0,0],"to":[3,3,3],"block":"stone"},
+              {"op":"box","from":[1,1,1],"to":[2,2,2],"block":"air"},
+              {"op":"group","rotate":90,"ops":[{"op":"set","at":[5,0,5],"block":"oak_stairs"}]},
+              {"op":"box","from":[0,5,0],"to":[1,5,0],"block":"dirt","repeat":{"count":3,"step":[1,0,0]}}]}""").warnings());
+    }
+
+    @Test void groupsAreCheckedForDepthSelectionOpsAndTheOperationCount() {
+        String deep = "{\"op\":\"set\",\"at\":[0,0,0],\"block\":\"stone\"}";
+        for (int n = 0; n < 4; n++) deep = "{\"op\":\"group\",\"ops\":[" + deep + "]}";
+        var e = refused("{\"ops\":[" + deep + "]}");
+        assertTrue(e.getMessage().contains("deep"), e.getMessage());
+        e = refused("{\"ops\":[{\"op\":\"group\",\"ops\":[{\"op\":\"replace_selection\",\"block\":\"stone\"}]}]}");
+        assertTrue(e.getMessage().contains("cannot be in a group"), e.getMessage());
+        // Two groups of 200 are within the limit at the top level and over it counted through.
+        var group = new StringBuilder("{\"op\":\"group\",\"ops\":[");
+        for (int n = 0; n < 200; n++) group.append(n == 0 ? "" : ",").append("{\"op\":\"set\",\"at\":[0,0,0],\"block\":\"stone\"}");
+        group.append("]}");
+        e = refused("{\"ops\":[" + group + "," + group + "]}");
+        assertTrue(e.getMessage().contains("inside groups"), e.getMessage());
+        e = refused("{\"ops\":[{\"op\":\"group\",\"ops\":[{\"op\":\"set\",\"at\":[0,0,0]}]}]}");
+        assertTrue(e.getMessage().startsWith("ops[0] (group)"), e.getMessage());
+    }
+
+    private static final String SCRIPT = "{\"op\":\"script\",\"from\":[0,0,0],\"to\":[4,2,4],\"seed\":7,\"code\":\"setBlock(x0, y0, z0, 'stone')\"}";
+
+    @Test void aScriptsBoxIsPartOfTheAreaAndItsPositionsAreInTheWorld() {
+        var spec = BuildSpec.parse("{\"origin\":[100,64,200],\"ops\":[{\"op\":\"box\",\"from\":[0,0,0],\"to\":[1,1,1],\"block\":\"stone\"}," + SCRIPT + "]}");
+        var place = spec.place();
+        assertEquals(new Point(100, 64, 200), place.min());
+        assertEquals(new BuildSpec.Bounds(5, 3, 5), place.bounds());
+        var script = spec.scripts().getFirst();
+        assertEquals("ops[1] (script)", script.label());
+        assertEquals(new Point(100, 64, 200), script.from());
+        assertEquals(new Point(104, 66, 204), script.to());
+        assertEquals(7, script.seed());
+        assertEquals(8, spec.build(place).cells().size(), "the script's blocks are placed by the server, not here");
+    }
+
+    @Test void aSpecOfOnlyAScriptHasAnArea() {
+        var spec = BuildSpec.parse("{\"ops\":[" + SCRIPT.replace(",\"seed\":7", "") + "]}");
+        assertTrue(spec.hasShapes());
+        assertEquals(new BuildSpec.Bounds(5, 3, 5), spec.place().bounds());
+        assertTrue(spec.build(spec.place()).cells().isEmpty());
+        assertEquals(0, spec.scripts().getFirst().seed(), "no seed is seed 0, so the same spec builds the same");
+    }
+
+    @Test void scriptsComeAfterTheShapesAndOutsideGroups() {
+        var e = refused("{\"ops\":[" + SCRIPT + ",{\"op\":\"box\",\"from\":[0,0,0],\"to\":[1,1,1],\"block\":\"stone\"}]}");
+        assertTrue(e.getMessage().startsWith("ops[1] (box): comes after a script"), e.getMessage());
+        e = refused("{\"ops\":[{\"op\":\"replace_selection\",\"block\":\"stone\"}," + SCRIPT + "]}");
+        assertTrue(e.getMessage().startsWith("ops[1] (script): comes after a replace_selection"), e.getMessage());
+        e = refused("{\"ops\":[{\"op\":\"group\",\"ops\":[" + SCRIPT + "]}]}");
+        assertTrue(e.getMessage().contains("cannot be in a group"), e.getMessage());
+        var spec = BuildSpec.parse("{\"ops\":[" + SCRIPT + ",{\"op\":\"replace_selection\",\"block\":\"oak_planks\"}]}");
+        assertEquals(java.util.List.of("ops[1] (replace_selection)"), spec.usesOf("minecraft:oak_planks"));
+    }
+
+    @Test void aScriptNeedsCodeAndABox() {
+        assertTrue(refused("{\"ops\":[{\"op\":\"script\",\"from\":[0,0,0],\"to\":[1,1,1]}]}").getMessage().contains("needs \"code\""));
+        assertTrue(refused("{\"ops\":[{\"op\":\"script\",\"from\":[0,0,0],\"code\":\"x = 1\"}]}").getMessage().contains("\"to\""));
+        assertTrue(refused("{\"ops\":[{\"op\":\"script\",\"from\":[0,0,0],\"to\":[1,1,1],\"code\":\"x = 1\",\"block\":\"stone\"}]}").getMessage().contains("do not apply"));
+        String longCode = "x = 1 ".repeat(BuildSpec.MAX_SCRIPT / 6 + 1);
+        assertTrue(refused("{\"ops\":[{\"op\":\"script\",\"from\":[0,0,0],\"to\":[1,1,1],\"code\":\"" + longCode + "\"}]}").getMessage().contains("longer than"));
+        var wide = BuildSpec.parse("{\"ops\":[{\"op\":\"script\",\"from\":[0,0,0],\"to\":[300,0,0],\"code\":\"x = 1\"}]}");
+        var e = assertThrows(IllegalArgumentException.class, wide::place);
+        assertTrue(e.getMessage().contains("at most " + BuildSpec.MAX_EXTENT), e.getMessage());
+    }
 }

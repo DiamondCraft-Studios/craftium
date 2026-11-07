@@ -222,6 +222,9 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(!tooBig.get("ok").getAsBoolean() && tooBig.get("error").getAsString().contains("128"), "an oversized box should be refused: " + tooBig);
             var badAngle = call("render_view", "{" + box + ",\"angle\":\"above\"}");
             require(!badAngle.get("ok").getAsBoolean(), "an unknown angle should be refused: " + badAngle);
+            var two = call("render_view", "{" + box + ",\"angles\":[\"se\",\"top\"]}");
+            require(two.get("ok").getAsBoolean() && two.getAsJsonArray("images").size() == 2 && two.get("reads").getAsInt() == view.get("reads").getAsInt()
+                && "top".equals(two.getAsJsonArray("images").get(1).getAsJsonObject().get("angle").getAsString()), "two angles should come from one read: " + two.keySet() + " reads=" + two.get("reads"));
             System.out.println("CRAFTIUM_AI render_view_ok " + view.get("width") + "x" + view.get("height") + " blocks=" + view.getAsJsonArray("blocks").size());
             require(ctx.computeOnClient(mc -> mc.level.getBlockState(new BlockPos(x + 2, y + 3, z + 2)).isAir()), "a preview must not touch the world");
             System.out.println("CRAFTIUM_AI preview_ok blocks=" + ghost);
@@ -297,6 +300,127 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(after.getAsJsonObject("selection").get("size").getAsInt() == 8 && after.get("undoSteps").getAsInt() == 0,
                     "the AI must leave the player's selection alone, and its undo list is empty again: " + after);
             System.out.println("CRAFTIUM_AI selection_untouched");
+
+            // Spec v2 in the real game: material names resolve to real ids, a turned or mirrored group turns its stairs the way the game
+            // does, a roof takes the blocks of its material, and a mix places both of its blocks.
+            int gx = x + 40, gy = y + 20;
+            String v2 = "{\"material\":\"spruce\",\"ops\":["
+                + "{\"op\":\"group\",\"rotate\":90,\"ops\":[{\"op\":\"set\",\"at\":[" + gx + "," + gy + "," + z + "],\"block\":\"@stairs[facing=north]\"}]},"
+                + "{\"op\":\"group\",\"mirror\":\"x\",\"ops\":[{\"op\":\"set\",\"at\":[" + (gx + 2) + "," + gy + "," + z + "],\"block\":\"oak_stairs[facing=east,shape=outer_left]\"}]},"
+                + "{\"op\":\"roof\",\"from\":[" + (gx + 4) + "," + gy + "," + z + "],\"to\":[" + (gx + 6) + "," + gy + "," + (z + 2) + "],\"material\":\"stone_bricks\",\"overhang\":0},"
+                + "{\"op\":\"box\",\"from\":[" + gx + "," + (gy + 5) + "," + z + "],\"to\":[" + (gx + 7) + "," + (gy + 5) + "," + (z + 7) + "],\"block\":{\"mix\":[[\"stone\",1],[\"andesite\",1]]}}]}";
+            var v2Preview = call("preview_build", "{\"spec\":" + v2 + "}");
+            require(v2Preview.get("ok").getAsBoolean(), "a spec v2 preview: " + v2Preview);
+            var v2Read = call("get_preview_blocks", "{\"from\":[" + gx + "," + gy + "," + z + "],\"to\":[" + (gx + 7) + "," + (gy + 5) + "," + (z + 7) + "],\"format\":\"runs\"}");
+            String v2Palette = v2Read.getAsJsonArray("palette").toString();
+            require(v2Palette.contains("minecraft:spruce_stairs[facing=east,"), "a stair turned a quarter clockwise should face east: " + v2Palette);
+            require(v2Palette.contains("minecraft:oak_stairs[facing=west,half=bottom,shape=outer_right"), "a stair mirrored along x should face west with its corner swapped: " + v2Palette);
+            require(v2Palette.contains("minecraft:stone_brick_stairs[") && v2Palette.contains("minecraft:stone_brick_slab[") && v2Palette.contains("minecraft:stone_bricks\""), "the roof should be stone bricks: " + v2Palette);
+            require(v2Palette.contains("minecraft:stone\"") && v2Palette.contains("minecraft:andesite\""), "the mix should place both blocks: " + v2Palette);
+            // Adding to the preview: the new spec sees the preview's blocks (the andesite of its mix), and the reply describes only what it added.
+            int before = v2Preview.getAsJsonObject("state").get("previewBlocks").getAsInt();
+            var addMix = call("preview_build", "{\"mode\":\"add\",\"spec\":{\"ops\":[{\"op\":\"replace\",\"from\":[" + gx + "," + (gy + 5) + "," + z + "],\"to\":[" + (gx + 7) + "," + (gy + 5) + "," + (z + 7) + "],\"find\":\"andesite\",\"block\":\"diorite\"},"
+                + "{\"op\":\"set\",\"at\":[" + gx + "," + (gy + 3) + "," + z + "],\"block\":\"gold_block\"}]}}");
+            require(addMix.get("ok").getAsBoolean() && addMix.get("message").getAsString().startsWith("Added "), "an addition should say what it added: " + addMix);
+            int addedPlaced = addMix.getAsJsonObject("preview").get("placed").getAsInt();
+            require(addedPlaced > 1 && addMix.getAsJsonObject("preview").toString().contains("diorite") && !addMix.getAsJsonObject("preview").toString().contains("spruce"),
+                "the addition's summary should cover only the diorite and the gold: " + addMix.get("preview"));
+            require(addMix.getAsJsonObject("state").get("previewBlocks").getAsInt() == before + 1, "replacing preview blocks adds none, the gold adds one: " + before + " then " + addMix.getAsJsonObject("state"));
+            String mixLayer = call("get_preview_blocks", "{\"from\":[" + gx + "," + (gy + 5) + "," + z + "],\"to\":[" + (gx + 7) + "," + (gy + 5) + "," + (z + 7) + "]}").toString();
+            require(mixLayer.contains("diorite") && !mixLayer.contains("andesite"), "the addition should have replaced the preview's andesite: " + mixLayer);
+            // Warnings: half a door, a torch in mid air, and a box the next one covers, each named once; a whole door and a lantern on a block are not.
+            int wy = gy + 10;
+            var odd = call("preview_build", "{\"spec\":{\"ops\":["
+                + "{\"op\":\"set\",\"at\":[" + gx + "," + wy + "," + z + "],\"block\":\"oak_door[half=lower,facing=north]\"},"
+                + "{\"op\":\"set\",\"at\":[" + (gx + 2) + "," + (wy + 2) + "," + z + "],\"block\":\"torch\"},"
+                + "{\"op\":\"set\",\"at\":[[" + (gx + 4) + "," + wy + "," + z + "],[" + (gx + 4) + "," + (wy + 1) + "," + z + "]],\"block\":\"stone\"},"
+                + "{\"op\":\"set\",\"at\":[" + (gx + 4) + "," + (wy + 2) + "," + z + "],\"block\":\"lantern[hanging=false]\"},"
+                + "{\"op\":\"set\",\"at\":[" + (gx + 6) + "," + wy + "," + z + "],\"block\":\"spruce_door[half=lower]\"},"
+                + "{\"op\":\"set\",\"at\":[" + (gx + 6) + "," + (wy + 1) + "," + z + "],\"block\":\"spruce_door[half=upper]\"},"
+                + "{\"op\":\"box\",\"from\":[" + gx + "," + (wy + 4) + "," + z + "],\"to\":[" + (gx + 1) + "," + (wy + 4) + "," + z + "],\"block\":\"glass\"},"
+                + "{\"op\":\"box\",\"from\":[" + gx + "," + (wy + 4) + "," + z + "],\"to\":[" + (gx + 2) + "," + (wy + 4) + "," + z + "],\"block\":\"stone\"}]}}");
+            require(odd.get("ok").getAsBoolean(), "a spec with warnings is still previewed: " + odd);
+            String warned = odd.getAsJsonObject("preview").getAsJsonArray("warnings").toString();
+            require(odd.getAsJsonObject("preview").getAsJsonArray("warnings").size() == 3 && warned.contains("oak_door") && warned.contains("torch") && warned.contains("ops[6] (box)")
+                && !warned.contains("spruce_door") && !warned.contains("lantern"), "three warnings, one for each mistake: " + warned);
+            var noKind = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"set\",\"at\":[" + gx + "," + gy + "," + z + "],\"block\":\"glass@stairs\"}]}}");
+            require(!noKind.get("ok").getAsBoolean() && noKind.get("error").getAsString().contains("ops[0] (set)") && noKind.get("error").getAsString().contains("tried"), "a material with no such kind should say what was tried: " + noKind);
+            // read_blocks' sources: the world leaves the waiting preview out but says it is there; "after" with nothing waiting is the world.
+            String v2Box = "\"from\":[" + gx + "," + gy + "," + z + "],\"to\":[" + (gx + 7) + "," + (gy + 5) + "," + (z + 7) + "]";
+            var worldRead = call("get_preview_blocks", "{" + v2Box + ",\"view\":\"world\"}");
+            require(worldRead.get("ok").getAsBoolean() && !worldRead.toString().contains("spruce_stairs") && worldRead.get("previewBlocks").getAsInt() > 0, "a world read should leave the preview out and count it: " + worldRead);
+            call("cancel_preview", "{}");
+            var afterNothing = call("get_preview_blocks", "{" + v2Box + ",\"view\":\"after\"}");
+            require(afterNothing.get("ok").getAsBoolean() && afterNothing.has("format") && afterNothing.get("previewBlocks").getAsInt() == 0, "an after read with no preview should read the world: " + afterNothing);
+            System.out.println("CRAFTIUM_AI spec_v2_ok");
+
+            // A script op: it runs after the shapes and sees their blocks, places only inside its box, and with a fixed seed builds the same twice.
+            int scy = gy + 16;
+            String scriptBox = "\"from\":[" + gx + "," + scy + "," + z + "],\"to\":[" + (gx + 4) + "," + (scy + 3) + "," + (z + 4) + "]";
+            String code = "for x = x0, x1 do for z = z0, z1 do if getBlock(x, y0, z) == blocks.stone then "
+                + "setBlock(x, y0 + 1, z, getSimplexNoise(x / 4, 0, z / 4, seed) > 0.5 and 'grass_block' or blocks.dirt) end end end "
+                + "setBlock(x0 + math.random(0, 4), y0 + 2, z0 + math.random(0, 4), 'minecraft:gold_block') setBlock(x1 + 6, y0, z0, 'stone')";
+            String scripted = "{\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + gx + "," + scy + "," + z + "],\"to\":[" + (gx + 4) + "," + scy + "," + (z + 4) + "],\"block\":\"stone\"},"
+                + "{\"op\":\"script\"," + scriptBox + ",\"seed\":3,\"code\":" + new com.google.gson.JsonPrimitive(code) + "}]}}";
+            var script = call("preview_build", scripted);
+            require(script.get("ok").getAsBoolean(), "a script preview: " + script);
+            require(script.getAsJsonObject("preview").get("placed").getAsInt() == 25 + 25 + 1, "25 stone, 25 blocks on them and one gold block: " + script.get("preview"));
+            String scriptWarnings = script.getAsJsonObject("preview").has("warnings") ? script.getAsJsonObject("preview").getAsJsonArray("warnings").toString() : "";
+            require(scriptWarnings.contains("ops[1] (script) set 1 blocks outside its box"), "the block set outside the box should be dropped and named: " + scriptWarnings);
+            String first = call("get_preview_blocks", "{" + scriptBox + ",\"view\":\"only\"}").get("palette").toString();
+            require(first.contains("gold_block") && (first.contains("dirt") || first.contains("grass_block")), "the script's blocks should be in the preview: " + first);
+            String firstRead = call("get_preview_blocks", "{" + scriptBox + ",\"view\":\"only\",\"format\":\"runs\"}").toString();
+            call("preview_build", scripted);
+            String secondRead = call("get_preview_blocks", "{" + scriptBox + ",\"view\":\"only\",\"format\":\"runs\"}").toString();
+            require(firstRead.equals(secondRead), "the same spec should build the same: " + firstRead + " then " + secondRead);
+            var luaFails = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"script\"," + scriptBox + ",\"code\":\"local a = nil\nsetBlock(a.b, 0, 0, 'stone')\"}]}}");
+            require(!luaFails.get("ok").getAsBoolean() && luaFails.get("error").getAsString().startsWith("ops[0] (script): Lua: script:2"), "a Lua error should name the op and the line: " + luaFails);
+            var spins = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"script\"," + scriptBox + ",\"code\":\"while true do end\"}]}}");
+            require(!spins.get("ok").getAsBoolean() && spins.get("error").getAsString().contains("budget"), "an endless script should run out of budget: " + spins);
+            require(call("get_state", "{}").get("previewBlocks").getAsInt() == 51, "a failed script leaves the waiting preview as it was");
+            call("cancel_preview", "{}");
+            System.out.println("CRAFTIUM_AI script_ok");
+
+            // Review fixes, all in open air high above the ground so nothing of the world is in the way.
+            int skyY = gy + 60, wallZ = z + 40;
+            // An addition that only carves: air through a preview wall in open air puts those blocks back as the world has them, which once
+            // made the addition look empty and dropped it.
+            var wallSpec = "{\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + gx + "," + skyY + "," + wallZ + "],\"to\":[" + (gx + 4) + "," + (skyY + 4) + "," + wallZ + "],\"block\":\"stone\"}]}}";
+            require(call("preview_build", wallSpec).get("ok").getAsBoolean(), "a wall in the sky");
+            var carved = call("preview_build", "{\"mode\":\"add\",\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + (gx + 1) + "," + (skyY + 1) + "," + wallZ + "],\"to\":[" + (gx + 3) + "," + (skyY + 3) + "," + wallZ + "],\"block\":\"air\"}]}}");
+            require(carved.get("ok").getAsBoolean() && carved.get("message").getAsString().contains("took back 9"), "a carve in add mode should be kept: " + carved);
+            require(carved.getAsJsonObject("preview").get("takenBack").getAsInt() == 9 && carved.getAsJsonObject("state").get("previewBlocks").getAsInt() == 16, "the doorway leaves 16 of the 25 blocks: " + carved);
+            // Two lower door halves stacked are not a door.
+            var stacked = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"set\",\"at\":[" + gx + "," + skyY + "," + wallZ + "],\"block\":\"oak_door[half=lower]\"},"
+                + "{\"op\":\"set\",\"at\":[" + gx + "," + (skyY + 1) + "," + wallZ + "],\"block\":\"oak_door[half=lower,hinge=right]\"}]}}");
+            require(stacked.get("ok").getAsBoolean() && stacked.getAsJsonObject("preview").getAsJsonArray("warnings").toString().contains("2 oak_door have no other half"), "two lower halves are no door: " + stacked);
+            // A grindstone is kept by the game wherever it is put, a button is not: ask the game itself, then check that the warnings agree.
+            var survives = world.getServer().computeOnServer(server -> {
+                var level = server.overworld();
+                var at = new net.minecraft.core.BlockPos(gx, skyY, wallZ + 10);
+                var face = net.minecraft.world.level.block.state.properties.BlockStateProperties.ATTACH_FACE;
+                var floor = net.minecraft.world.level.block.state.properties.AttachFace.FLOOR;
+                return new boolean[]{Blocks.GRINDSTONE.defaultBlockState().setValue(face, floor).canSurvive(level, at), Blocks.STONE_BUTTON.defaultBlockState().setValue(face, floor).canSurvive(level, at)};
+            });
+            require(survives[0] && !survives[1], "the game keeps a grindstone in the air and drops a button: " + java.util.Arrays.toString(survives));
+            var attached = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"set\",\"at\":[" + gx + "," + skyY + "," + (wallZ + 10) + "],\"block\":\"grindstone[face=floor]\"},"
+                + "{\"op\":\"set\",\"at\":[" + (gx + 2) + "," + skyY + "," + (wallZ + 10) + "],\"block\":\"stone_button[face=floor]\"}]}}");
+            String attachedWarnings = attached.getAsJsonObject("preview").getAsJsonArray("warnings").toString();
+            require(attachedWarnings.contains("stone_button") && !attachedWarnings.contains("grindstone"), "only the button should be warned about: " + attachedWarnings);
+            // A script may set a block as often as it likes: only different blocks count against the cap of 131,072.
+            var again = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"script\",\"from\":[" + gx + "," + skyY + "," + wallZ + "],\"to\":[" + (gx + 1) + "," + skyY + "," + wallZ + "],"
+                + "\"code\":\"for i = 1, 140000 do setBlock(x0, y0, z0, 'stone') end\"}]}}");
+            require(again.get("ok").getAsBoolean() && again.getAsJsonObject("preview").get("placed").getAsInt() == 1, "setting one block 140,000 times is one block: " + again);
+            // getHighestBlockYAt sees the platform the spec built, not only the ground far below it.
+            int platformY = skyY + 8, platformZ = wallZ + 20;
+            var onPlatform = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + gx + "," + platformY + "," + platformZ + "],\"to\":[" + (gx + 4) + "," + platformY + "," + (platformZ + 4) + "],\"block\":\"stone\"},"
+                + "{\"op\":\"script\",\"from\":[" + gx + "," + platformY + "," + platformZ + "],\"to\":[" + (gx + 4) + "," + (platformY + 3) + "," + (platformZ + 4) + "],"
+                + "\"code\":\"setBlock(x0, getHighestBlockYAt(x0, z0) + 1, z0, 'gold_block')\"}]}}");
+            require(onPlatform.get("ok").getAsBoolean() && !onPlatform.getAsJsonObject("preview").has("warnings"), "the block should land on the platform, inside the script's box: " + onPlatform);
+            String goldAt = call("get_preview_blocks", "{\"from\":[" + gx + "," + (platformY + 1) + "," + platformZ + "],\"to\":[" + gx + "," + (platformY + 1) + "," + platformZ + "],\"view\":\"only\"}").toString();
+            require(goldAt.contains("gold_block"), "the gold block should stand on the platform: " + goldAt);
+            call("cancel_preview", "{}");
+            System.out.println("CRAFTIUM_AI review_fixes_ok");
 
             // A build far from the player, in ground nobody has loaded: previewed, applied and undone without anyone going there.
             int fx = block.get(0).getAsInt() + 3000, fz = block.get(2).getAsInt() + 3000;

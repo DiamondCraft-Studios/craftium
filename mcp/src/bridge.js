@@ -27,6 +27,14 @@ export const NOT_RUNNING =
   "Craftium is not reachable. Start Minecraft with the Craftium mod, open a world, and turn on AI building (in the editor: AI menu, then Turn on AI building; or type /craftium ai on). " +
   "If Minecraft uses a separate profile folder, set the Minecraft folder in this extension's settings.";
 
+/**
+ * The bridge protocol these tools are written for: the mod writes its own into the bridge file. A mod below it lacks something a tool
+ * relies on, so every call is refused with what to update; a mod above it still works, and get_state says the plugin is behind.
+ * A bridge file without a number comes from a mod before the check existed, which is protocol 1.
+ */
+export const BRIDGE_PROTOCOL = 2;
+const NEEDED_MOD = "1.2.0-beta.1";
+
 export class Bridge {
   /** @param {{files?: string[], fetchImpl?: typeof fetch, timeoutMs?: number}} options */
   constructor({ files = candidateFiles(), fetchImpl = fetch, timeoutMs = 30000 } = {}) {
@@ -58,7 +66,10 @@ export class Bridge {
 
   /** Calls one bridge tool and returns its JSON reply. A reply with ok:false is returned, not thrown, for the caller to report. */
   async call(tool, args = {}) {
-    const { port, token } = await this.connection();
+    const { port, token, protocol: given, version } = await this.connection();
+    const protocol = Number.isInteger(given) ? given : 1;
+    if (protocol < BRIDGE_PROTOCOL)
+      throw new BridgeError(`The Craftium mod in Minecraft (${version ?? "an older version"}) is older than this Craftium plugin, which needs Craftium ${NEEDED_MOD} or newer. Update the mod, or use the plugin version that came with it.`);
     let response;
     try {
       response = await this.fetch(`http://127.0.0.1:${port}/${tool}`, {
@@ -80,6 +91,8 @@ export class Bridge {
     } catch {
       throw new BridgeError(`Craftium sent a reply that was not understood (HTTP ${response.status}).`);
     }
+    if (protocol > BRIDGE_PROTOCOL && tool === "get_state" && body && typeof body === "object")
+      body.pluginOutdated = `The Craftium mod (${version ?? "newer"}) has tools this Craftium plugin does not know yet. Tell the player to update the plugin.`;
     return body;
   }
 }

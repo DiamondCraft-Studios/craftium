@@ -15,6 +15,9 @@ North is -z, south is +z, east is +x, west is -x. Mix these up and every facing 
 model (the one that `facing=east` uses has its tall half on the east side, and the other directions are rotations
 of it). `half=top` turns the stair upside down and keeps the same `facing`.
 
+The `roof` and `stairs` ops and a turned or mirrored `group` set all of this for you, corner shapes included. The
+rules below are for stairs you write by hand.
+
 The error that keeps happening is naming the slope instead of the stair. Do not ask "which way does this roof slope
 face?" Ask "which side is higher?" On a roof, **every stair faces the ridge**, the higher side, for both slopes:
 
@@ -36,7 +39,7 @@ Other cases:
 ### Check it by reading the blocks, not by looking
 
 A render can't show facing, but the block data can. As soon as you have previewed a roof, and before you apply it or
-show it as done, read it with `get_preview_blocks` over a box that wraps the roof. Leave `format` on `auto`: for a
+show it as done, read it with `read_blocks` over a box that wraps the roof. Leave `format` on `auto`: for a
 roof it answers as boxes, grouped by block, so each facing is its own entry with the boxes it fills. For a gable
 whose ridge runs along x at z=11, it looks like this (shortened):
 
@@ -54,7 +57,7 @@ Each box is `[x1, y1, z1, x2, y2, z2]`, both corners included. Confirm both thin
    `facing=north` at z above 11.
 2. Within a group the y rises as the boxes get closer to the ridge (z=7 at y=-52 up to z=10 at y=-49).
 
-If either is wrong, fix the spec and preview again; nothing has been built. After you apply, `get_blocks` reads the
+If either is wrong, fix the spec and preview again; nothing has been built. After you apply, `read_blocks` reads the
 same thing from the world, to confirm what was actually built.
 
 ### Other blocks
@@ -79,7 +82,8 @@ These come from the build code (`BuildSpec.java`).
 
 - Water and lava flow is not simulated. Place liquids last and enclose them with solid blocks (or leave a clear rim)
   so they cannot spill when built.
-- Torches, signs, doors and similar blocks are not checked for support.
+- Torches, lanterns, signs, ladders, buttons, doors and beds are checked only by the preview reply's `warnings`
+  (a missing support or a missing half). Other blocks that need support, such as plants or pointed dripstone, are not checked.
 - Unknown block ids and bad specs are rejected with the operation named. Fix and retry. That error is reliable. A
   block that previews without error does exist in this game version.
 - Primitives suit pillars, walls, towers, domes and similar shapes. Organic shapes such as trees or terrain are
