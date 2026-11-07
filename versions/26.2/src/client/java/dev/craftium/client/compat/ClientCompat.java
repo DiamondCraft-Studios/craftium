@@ -15,6 +15,8 @@ public final class ClientCompat {
 
     /** The screen currently open, or null while playing. */
     public static Screen screen(Minecraft mc){return mc.gui.screen();}
+    /** A line in the player's chat that only they see. */
+    public static void chat(Minecraft mc,net.minecraft.network.chat.Component line){if(mc.player!=null)mc.player.sendSystemMessage(line);}
     /** Opens a screen, or returns to the game when {@code screen} is null. */
     public static void setScreen(Minecraft mc,Screen screen){mc.gui.setScreen(screen);}
     /** Shows a message above the hotbar, in the place the game puts its own action bar text. */

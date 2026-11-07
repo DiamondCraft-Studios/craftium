@@ -51,7 +51,10 @@ final class ClientHandshake {
         var found=latest;
         if(announced||found.isEmpty())return;
         announced=true;
-        ClientState.notify("Craftium "+found.get().version()+" is out (you have "+UpdateChecker.clean(version())+"). /craftium update");
+        String line="Craftium "+found.get().version()+" is out (you have "+UpdateChecker.clean(version())+"). /craftium update";
+        ClientState.notify(line);
+        // the HUD line is gone in a few seconds; the chat keeps it
+        dev.craftium.client.compat.ClientCompat.chat(net.minecraft.client.Minecraft.getInstance(),net.minecraft.network.chat.Component.literal(line+" shows the link."));
     }
     static String describe(){
         var found=latest;

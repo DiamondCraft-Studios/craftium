@@ -15,6 +15,8 @@ public final class ClientCompat {
     private ClientCompat(){}
 
     public static Screen screen(Minecraft mc){return mc.screen;}
+    /** A line in the player's chat that only they see. */
+    public static void chat(Minecraft mc,net.minecraft.network.chat.Component line){mc.gui.getChat().addMessage(line);}
     public static void setScreen(Minecraft mc,Screen screen){mc.setScreen(screen);}
     /** Shows a message above the hotbar, in the place the game puts its own action bar text. */
     public static void overlayMessage(Minecraft mc,String message){mc.gui.setOverlayMessage(net.minecraft.network.chat.Component.literal(message),false);}
