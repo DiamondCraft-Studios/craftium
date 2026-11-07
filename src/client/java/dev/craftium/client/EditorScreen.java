@@ -741,10 +741,17 @@ public final class EditorScreen extends CraftiumScreen {
         BlockPickerScreen.icon(g,font,pipetteBlock,cx+7,cy+7);
     }
     private long crosshairCursor;private boolean crosshairShown;
-    /** Over the world with the pipette in hand the pointer is a crosshair. */
+    /** Whether the chosen tool shows a preview where the pointer is: the selection picks, extrude and flood fill, and the brush tools. */
+    private boolean hoverPreviewTool(){
+        if(!toolActive)return false;
+        Tool t=o().tool;
+        return t==Tool.MAGIC_SELECT||t==Tool.BOX_SELECT||t==Tool.EXTRUDE||t==Tool.FLOODFILL||!t.selection()&&!t.transform()&&t.brushUse()!=Tool.BrushUse.NONE;
+    }
+    /** Over the world with the pipette in hand, or a tool that previews what is under the pointer, the pointer is a crosshair. */
     private void syncCrosshair(){
-        boolean want=pipetting&&!suspended&&menu<0&&!help&&!transform&&inViewport(pointerX/scale,pointerY/scale);
-        if(want==crosshairShown)return;
+        boolean want=(pipetting||hoverPreviewTool())&&!suspended&&menu<0&&!help&&!transform&&inViewport(pointerX/scale,pointerY/scale);
+        if(want&&ClientState.selecting())return; // the spinner has the cursor while a big selection is worked out
+        if(want==crosshairShown&&!want)return;
         crosshairShown=want;
         if(want&&crosshairCursor==0)crosshairCursor=GLFW.glfwCreateStandardCursor(GLFW.GLFW_CROSSHAIR_CURSOR);
         GLFW.glfwSetCursor(minecraft.getWindow().handle(),want?crosshairCursor:0L);
