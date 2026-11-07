@@ -62,7 +62,7 @@ final class TransformGizmo {
     }
     private static Target target(EditorScreen screen){
         if(PlacementPreview.active()){AABB bounds=bounds();Point p=PlacementPreview.origin;return new Target(Kind.PLACEMENT,new Vec3(p.x(),p.y(),p.z()).add(bounds.getCenter()),null);}
-        Point node=screen.handlePoint();double shift=nodeOffset();if(node!=null)return new Target(Kind.NODE,new Vec3(node.x()+shift,node.y()+shift,node.z()+shift),null);
+        Point node=screen.handlePoint();if(node!=null)return new Target(Kind.NODE,nodeAnchor(node,screen.handleIndex()),null);
         if(ShapeObject.gizmoOn())return new Target(Kind.SHAPE,ShapeObject.centre(),null);
         var status=ClientState.status;var o=ClientState.options;
         if(o.tool.transform()){
@@ -170,7 +170,7 @@ final class TransformGizmo {
     }
     static boolean release(EditorScreen screen){
         if(dragging==null)return false;Target t=dragging;Options original=ClientState.options,request=Packets.JSON.fromJson(Packets.JSON.toJson(original),Options.class);try{
-            if(t.kind==Kind.NODE){double shift=nodeOffset();Point p=new Point((int)Math.round(t.anchor.x+delta.x-shift),(int)Math.round(t.anchor.y+delta.y-shift),(int)Math.round(t.anchor.z+delta.z-shift));screen.moveHandle(p);screen.handlesMoved();return true;}
+            if(t.kind==Kind.NODE){double shift=nodeOffset();Point p=dragFlips!=null?cornerFrom(t.anchor.add(delta),dragFlips):new Point((int)Math.round(t.anchor.x+delta.x-shift),(int)Math.round(t.anchor.y+delta.y-shift),(int)Math.round(t.anchor.z+delta.z-shift));screen.moveHandle(p);screen.handlesMoved();return true;}
             if(t.kind==Kind.SHAPE){ShapeObject.set(ShapeObject.apply(ShapeObject.pose(),mode,delta,angles,size));return true;} // the shape is made again from its new pose
             if(t.kind==Kind.PIVOT){original.pivotSet=true;original.pivotX=t.anchor.x+delta.x;original.pivotY=t.anchor.y+delta.y;original.pivotZ=t.anchor.z+delta.z;return true;}
             request.yaw=angles.y;request.pitch=angles.x;request.roll=angles.z;request.sizeX=size.x;request.sizeY=size.y;request.sizeZ=size.z;request.offsetX=(int)Math.round(delta.x);request.offsetY=(int)Math.round(delta.y);request.offsetZ=(int)Math.round(delta.z);ClientState.options=request;
@@ -252,8 +252,8 @@ final class TransformGizmo {
         return landing;
     }
     /** True when the pointer is on one of the handles of a point gizmo at {@code at}, so a gizmo that is only shown can still be grabbed. */
-    static boolean hitsPointHandles(Point at,double x,double y){
-        return pick(new Target(Kind.NODE,new Vec3(at.x(),at.y(),at.z()),null),x,y)>=0;
+    static boolean hitsPointHandles(Vec3 at,double x,double y){
+        return pick(new Target(Kind.NODE,at,null),x,y)>=0;
     }
     /** The handle under the pointer, or -1; kept so the gizmo can light it up before it is clicked. */
     private static int hovered=-1;
@@ -453,18 +453,45 @@ final class TransformGizmo {
      * A corner on the low side of an axis points down it, one on the high side points up it. Null for any other handle.
      */
     private static double[] flipsFor(Vec3 anchor){
-        var corners=ClientState.boxCorners;
-        if(ClientState.options.tool!=Tool.BOX_SELECT||corners.size()!=2)return null;
-        for(int index=0;index<2;index++){
-            Point c=corners.get(index),other=corners.get(1-index);
-            if(Math.abs(c.x()-anchor.x)>.01||Math.abs(c.y()-anchor.y)>.01||Math.abs(c.z()-anchor.z)>.01)continue;
-            int[] mine={c.x(),c.y(),c.z()},theirs={other.x(),other.y(),other.z()};
-            double[] flips=new double[3];
-            for(int axis=0;axis<3;axis++)flips[axis]=mine[axis]<theirs[axis]?-1:mine[axis]>theirs[axis]?1:index==0?-1:1;
-            return flips;
+        for(int index=0;index<ClientState.boxCorners.size();index++){
+            double[] flips=cornerFlips(index);if(flips==null)return null;
+            if(cornerAnchor(index).distanceTo(anchor)<.01)return flips;
         }
         return null;
     }
+    /**
+     * Which side of its block each axis of a box corner's handle sits on: -1 the low face, 1 the high face. A corner below the other on
+     * an axis takes the low side, one above it the high side; a lone corner, or one level with the other, takes low (first) or high (second).
+     * Null when the tool is not Box select or there is no such corner.
+     */
+    static double[] cornerFlips(int index){
+        var corners=ClientState.boxCorners;
+        if(ClientState.options.tool!=Tool.BOX_SELECT||index<0||index>=corners.size())return null;
+        if(corners.size()==1)return new double[]{-1,-1,-1};
+        Point c=corners.get(index),other=corners.get(1-index);
+        int[] mine={c.x(),c.y(),c.z()},theirs={other.x(),other.y(),other.z()};
+        double[] flips=new double[3];
+        for(int axis=0;axis<3;axis++)flips[axis]=mine[axis]<theirs[axis]?-1:mine[axis]>theirs[axis]?1:index==0?-1:1;
+        return flips;
+    }
+    /** Where a box corner's handle sits: the very extremity of the bounds, the outer corner of its block. */
+    static Vec3 cornerAnchor(int index){
+        Point c=ClientState.boxCorners.get(index);double[] f=cornerFlips(index);
+        return f==null?new Vec3(c.x(),c.y(),c.z()):new Vec3(c.x()+(f[0]>0?1:0),c.y()+(f[1]>0?1:0),c.z()+(f[2]>0?1:0));
+    }
+    /** The block of a box corner for a handle put at {@code anchor}, given the sides the handle is on. */
+    private static Point cornerFrom(Vec3 anchor,double[] flips){
+        return new Point((int)Math.round(anchor.x-(flips[0]>0?1:0)),(int)Math.round(anchor.y-(flips[1]>0?1:0)),(int)Math.round(anchor.z-(flips[2]>0?1:0)));
+    }
+    /** The block of the corner being dragged, as it is now; null when no box corner is being dragged. */
+    static Point liveCorner(){return dragging!=null&&dragging.kind==Kind.NODE&&dragFlips!=null?cornerFrom(dragging.anchor.add(delta),dragFlips):null;}
+    /** Where the handle of a node is shown: a box corner at the extremity of the bounds, any other node at its block (or its centre). */
+    static Vec3 nodeAnchor(Point node,int index){
+        if(index>=0&&index<ClientState.boxCorners.size()&&ClientState.boxCorners.get(index).equals(node)&&cornerFlips(index)!=null)return cornerAnchor(index);
+        double shift=nodeOffset();return new Vec3(node.x()+shift,node.y()+shift,node.z()+shift);
+    }
+    /** A solid white cube on a box corner's handle, big enough to read from a distance. */
+    static void cornerCube(Vec3 anchor){double h=.13*screenScale(anchor);Overlay.box(new AABB(anchor.add(-h,-h,-h),anchor.add(h,h,h)),0xffffffff,2,0xffffffff);}
     /** The axes for a gizmo at {@code anchor}, turned to point away from the box when it is a box corner. */
     private static Vec3[] axesAt(Vec3 anchor){
         Vec3[] directions=axes();

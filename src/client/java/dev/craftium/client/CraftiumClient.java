@@ -424,7 +424,7 @@ public final class CraftiumClient implements ClientModInitializer {
         if(screen==null){var anchor=BuilderMode.gizmoAnchor();if(anchor!=null)TransformGizmo.display(anchor,BuilderMode.gizmoAxes());return;}
         if(ClientState.options.tool==Tool.BOX_SELECT)BoxHandles.draw(screen);
         TransformGizmo.draw(screen);
-        Point handle=screen.handlePoint();if(handle!=null){double shift=TransformGizmo.nodeOffset();Vec3 anchor=new Vec3(handle.x()+shift,handle.y()+shift,handle.z()+shift);int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Overlay.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2);}
+        Point handle=screen.handlePoint();if(handle!=null&&ClientState.options.tool!=Tool.BOX_SELECT){Vec3 anchor=TransformGizmo.nodeAnchor(handle,screen.handleIndex());int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Overlay.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2);}
     }
     private static void preview(Minecraft mc) {
         var screen=ClientCompat.screen(mc) instanceof EditorScreen editor?editor:ClientCompat.screen(mc) instanceof StudioScreen studio?studio.editor():null;

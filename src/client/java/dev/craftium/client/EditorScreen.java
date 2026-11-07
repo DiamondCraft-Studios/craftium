@@ -1508,11 +1508,11 @@ public final class EditorScreen extends CraftiumScreen {
         }
         // Both corners of a box selection show a gizmo; grabbing the one that is not selected selects it and starts the drag.
         if(event.button()==0&&o().tool==Tool.BOX_SELECT&&ClientState.boxCorners.size()==2){
-            for(int i=0;i<2;i++)if(i!=selectedNode&&TransformGizmo.hitsPointHandles(ClientState.boxCorners.get(i),event.x(),event.y())){selectedNode=i;break;}
+            for(int i=0;i<2;i++)if(i!=selectedNode&&TransformGizmo.hitsPointHandles(TransformGizmo.cornerAnchor(i),event.x(),event.y())){selectedNode=i;break;}
         }
         if(event.button()==0&&TransformGizmo.click(this,event.x(),event.y()))return true;
         if(event.button()==0&&!PlacementPreview.active()){
-            var points=handleNodes();double best=144;int index=-1;for(int i=0;i<points.size();i++){var pixel=project(points.get(i),TransformGizmo.nodeOffset());if(pixel==null)continue;double distance=Math.pow(event.x()-pixel[0],2)+Math.pow(event.y()-pixel[1],2);if(distance<best){best=distance;index=i;}}
+            var points=handleNodes();double best=144;int index=-1;for(int i=0;i<points.size();i++){var pixel=project(TransformGizmo.nodeAnchor(points.get(i),i));if(pixel==null)continue;double distance=Math.pow(event.x()-pixel[0],2)+Math.pow(event.y()-pixel[1],2);if(distance<best){best=distance;index=i;}}
             if(index>=0){selectedNode=index;if(!toolActive)ClientState.selectedRuler=rulerOfNode(index);draggingNode=true;placementDragOrigin=points.get(index);placementDragX=event.x();placementDragY=event.y();return true;}
             if(!toolActive){var line=rulerAt(event.x(),event.y());if(line!=null){ClientState.selectedRuler=line;selectedNode=-1;TransformGizmo.cancel();return true;}} // no tool chosen: a click on a ruler picks it, without choosing the Ruler tool
         }
@@ -1835,8 +1835,9 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     }
     public void moveHandle(Point point){if(selectedNode>=0&&selectedNode<handleNodes().size())handleNodes().set(selectedNode,point);}
     private double[] project(Point p){return project(p,0);}
-    private double[] project(Point p,double shift){
-        var camera=ClientCompat.camera(minecraft);Vec3 v=new Vec3(p.x()+shift,p.y()+shift,p.z()+shift).subtract(camera.position());
+    private double[] project(Point p,double shift){return project(new Vec3(p.x()+shift,p.y()+shift,p.z()+shift));}
+    private double[] project(Vec3 at){
+        var camera=ClientCompat.camera(minecraft);Vec3 v=at.subtract(camera.position());
         var plane=ClientCompat.nearPlane(camera);Vec3 center=plane.getPointOnPlane(0,0);
         Vec3 right=plane.getPointOnPlane(1,0).subtract(center).normalize(),up=plane.getPointOnPlane(0,1).subtract(center).normalize(),forward=center.normalize();
         double z=v.dot(forward);if(z<=.05)return null;
