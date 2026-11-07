@@ -151,6 +151,8 @@ public final class EditorServer {
             send(player,s,"Placed "+changes.size()+(changes.size()==1?" block":" blocks"),false);
         }catch(IllegalArgumentException e){send(player,s,e.getMessage(),true);}
     }
+    /** Whether the game's check on how far a player moves in a tick is skipped for them: Craftium players flying in creative or spectator who may use the capabilities. */
+    public static boolean fastMovement(ServerPlayer player){return (SESSIONS.containsKey(player.getUUID())||dev.craftium.core.Handshake.clientHas(player.getUUID(),dev.craftium.core.Handshake.MODIFY_EXPANSION))&&(player.isCreative()||player.isSpectator())&&player.getAbilities().flying&&ServerPlatform.permitted(player,"capabilities");}
     public static boolean noClip(ServerPlayer player){var s=SESSIONS.get(player.getUUID());return s!=null&&s.noClip&&player.isCreative()&&player.getAbilities().flying&&ServerPlatform.permitted(player,"capabilities");} // only while flying
 
     /** How many builder commits wait behind the edit being applied; past this the newest is turned down as before. */
