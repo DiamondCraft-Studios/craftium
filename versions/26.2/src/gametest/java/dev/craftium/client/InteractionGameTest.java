@@ -128,6 +128,16 @@ public final class InteractionGameTest {
         all.add(new Scenario("path_drag_adds_one_point", Tool.PATH, o -> o.confirmEdits = false, null, false, d -> d.drag(e, a, c), null));
         all.add(new Scenario("line_drag_sends_once", Tool.LINE, o -> { o.confirmEdits = false; o.radius = 1; }, null, false, d -> d.drag(e, a, c), null));
         all.add(new Scenario("ruler_drag_adds_one_point", Tool.RULER, o -> o.confirmEdits = false, null, false, d -> d.drag(e, a, c), null));
+        // Placement: the turn keys work before a shape is down and after another tool is chosen, a waiting Modify edit is applied by a second Enter, and Enter clears when there is nothing to build.
+        all.add(new Scenario("shape_cylinder_untilted", Tool.SHAPE, o -> { o.confirmEdits = false; o.radius = 3; o.block = "minecraft:andesite"; o.shape = BrushMath.Shape.CYLINDER; }, null, false,
+            d -> { d.click(c); d.key(GLFW_KEY_ENTER, 0); }, null)); // the baseline the tilted ones must differ from
+        all.add(new Scenario("shape_tilt_before_placing", Tool.SHAPE, o -> { o.confirmEdits = false; o.radius = 3; o.block = "minecraft:andesite"; o.shape = BrushMath.Shape.CYLINDER; }, null, false,
+            d -> { d.key('T', 2); d.click(c); d.key(GLFW_KEY_ENTER, 0); }, null));
+        all.add(new Scenario("shape_turn_with_move_tool", Tool.SHAPE, o -> { o.confirmEdits = false; o.radius = 3; o.block = "minecraft:andesite"; o.shape = BrushMath.Shape.CYLINDER; }, null, false,
+            d -> { d.click(c); d.key('1', 0); d.key('T', 2); d.key(GLFW_KEY_ENTER, 0); }, null));
+        all.add(new Scenario("modify_pending_confirm", Tool.MODIFY, o -> { o.confirmEdits = true; o.modifyMode = Options.ModifyMode.TRANSLATE_COPIES; o.copies = 2; o.offsetX = -6; o.offsetY = 0; o.offsetZ = 5; }, null, true,
+            d -> { d.click(structureTop); d.key(GLFW_KEY_ENTER, 0); d.key(GLFW_KEY_ENTER, 0); }, null));
+        all.add(new Scenario("box_select_then_enter_clears", Tool.BOX_SELECT, o -> o.confirmEdits = false, null, false, d -> { d.click(e); d.click(c); d.key(GLFW_KEY_ENTER, 0); }, null));
         // A stroke, and undoing it.
         all.add(new Scenario("painter_stroke", Tool.PAINTER, o -> { o.confirmEdits = false; o.radius = 2; o.block = "minecraft:andesite"; }, null, false, d -> d.drag(e, a, c), null));
         all.add(new Scenario("painter_click_then_undo", Tool.PAINTER, o -> { o.confirmEdits = false; o.radius = 3; o.block = "minecraft:andesite"; }, null, false, d -> { d.click(a); d.key('Z', 2); }, null));
@@ -185,7 +195,7 @@ public final class InteractionGameTest {
         c.runOnClient(mc -> {
             ClientState.options = new Options();
             ClientState.options.confirmEdits = false; // before anything is sent: a fresh Options stages every edit for Enter, and a staged one would wait for the scenario's own Enter
-            CraftiumClient.resetEditor(); ClientState.rulerPoints.clear(); ClientState.rulers.clear(); ModifyPreview.edit();
+            CraftiumClient.resetEditor(); ClientState.rulerPoints.clear(); ClientState.rulers.clear(); ModifyPreview.edit(); resetShapeHover();
         });
         // Annotations are kept by the server and "clear" does not remove them, so a scenario would otherwise start with the last one's.
         pause();
@@ -217,6 +227,20 @@ public final class InteractionGameTest {
             Files.write(out.resolve(s.name + fileSuffix + ".txt"), file, StandardCharsets.UTF_8);
         } catch (java.io.IOException e) { throw new AssertionError(e); }
         return lines.size() + " " + GoldenToolGameTest.hash(lines) + " client:" + GoldenToolGameTest.hash(trace);
+    }
+
+    /**
+     * The turn the Shape tool's hover preview has is kept after a shape is put down, so the next one starts turned the same way. That is the
+     * editor's choice, but a scenario must not inherit another's turn, and the field is private, so it is put back to the identity by reflection.
+     */
+    private static void resetShapeHover() {
+        try {
+            var hover = ShapeObject.class.getDeclaredField("hover");
+            var identity = ShapeObject.class.getDeclaredField("IDENTITY");
+            hover.setAccessible(true);
+            identity.setAccessible(true);
+            hover.set(null, identity.get(null));
+        } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
     }
 
     private static void writeExpected(Path out, java.util.Map<String, String> results) {
