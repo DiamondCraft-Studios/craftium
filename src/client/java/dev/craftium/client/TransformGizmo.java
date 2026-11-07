@@ -52,7 +52,7 @@ final class TransformGizmo {
     static boolean nudge(EditorScreen screen,Point step){
         if(ClientState.status.busy())return true;Target target=target(screen);if(target==null)return false;
         if(target.kind==Kind.PLACEMENT){PlacementPreview.origin=PlacementPreview.origin.add(step.x(),step.y(),step.z());return true;}
-        if(target.kind==Kind.NODE){screen.moveHandle(screen.handlePoint().add(step.x(),step.y(),step.z()));return true;}
+        if(target.kind==Kind.NODE){screen.moveHandle(screen.handlePoint().add(step.x(),step.y(),step.z()));screen.handlesMoved();return true;} // a box corner moved by a step reshapes the selection too
         if(target.kind==Kind.SHAPE){ShapeObject.move(step);return true;}
         Options original=ClientState.options,request=Packets.JSON.fromJson(Packets.JSON.toJson(original),Options.class);
         try{ClientState.options=request;request.yaw=request.pitch=request.roll=0;request.sizeX=request.sizeY=request.sizeZ=1;request.offsetX=step.x();request.offsetY=step.y();request.offsetZ=step.z();
