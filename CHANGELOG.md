@@ -22,6 +22,7 @@ Changes since 0.9.1-beta.1.
 - The reply to a preview warns about doors and beds missing a half, torches, lanterns, signs and the like with nothing to hold them, and operations hidden entirely by later ones.
 - The AI plugin tells you when it and the mod are out of step, and which to update; a server whose Craftium is older gets a clear message when it cannot read a build.
 - A build that the server cannot draw no longer stops the server: the request fails, or the preview is dropped and logged.
+- Build specs can hold a Lua script that places blocks inside a box, for natural ground, rocks and trees. It runs in the same sandbox as the Lua brushes, only places inside its box, and builds the same each time from its seed.
 
 ## 0.9.1-beta.1
 

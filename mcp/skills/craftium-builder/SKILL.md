@@ -179,6 +179,11 @@ hand-built one.
 - Blend the ground: a path to the door, a different ground block round the foundation, grass, flowers, bushes, a
   fence or hedge.
 - Terrain you reshape goes first (before the shell), never over a finished build.
+- Natural ground, rocks and trees read better from a `script` op than from shapes: Lua that loops over its box and
+  calls `setBlock`, with noise for the shape of the ground (see the build spec guide). Keep scripts for what shapes
+  cannot make; a wall, a floor or a roof is still a shape. Always give a script a `"seed"` and keep it when you
+  revise the spec, so the ground does not change under the player between previews. Read the reply's warnings: a
+  script that set nothing, or set blocks outside its box, says so.
 - Water and lava go in LAST and enclosed. Flow is not simulated.
 
 ## Phase 9: Final check
