@@ -1,6 +1,6 @@
 ---
 name: craftium-builder
-description: Build structures in a player's Minecraft world with the Craftium MCP tools (get_state, read_selection, get_surface, get_blocks, get_preview_blocks, render_view, preview_build, apply_preview). Use when the user asks to build, recreate from an image, extend or restyle something in their world. Teaches a builder's sequence (brief, site, blockout, shell, roof, openings, materials, detail, context, verify) and Minecraft-scale proportions, so builds come out proportioned, varied and correct on the first apply.
+description: Build structures in a player's Minecraft world with the Craftium MCP tools (get_state, read_selection, get_surface, read_blocks, render_view, preview_build, apply_preview). Use when the user asks to build, recreate from an image, extend or restyle something in their world. Teaches a builder's sequence (brief, site, blockout, shell, roof, openings, materials, detail, context, verify) and Minecraft-scale proportions, so builds come out proportioned, varied and correct on the first apply.
 ---
 
 # Building with Craftium
@@ -30,7 +30,7 @@ blocks and how the ones that face a way are turned. Check it every time: a build
 material or a roof with all its stairs facing one way shows there without a picture.
 
 Pictures cost the most, so render where the look is the question: the blockout, the roof and the final check (two
-or three angles each). For the phases in between, the reply is usually enough; render one angle if it raises a
+or three angles each, in one `render_view` call with `angles`). For the phases in between, the reply is usually enough; render one angle if it raises a
 doubt.
 
 By default each phase is applied as soon as it checks out, so the player watches the build grow in the world and can
@@ -52,7 +52,7 @@ Say what you understood in one line ("changing the 48 spruce stairs you selected
   change only the kind they named.
 - If nothing is selected, don't guess: ask them to select it, or to give coordinates.
 - A selection is a help, not a rule. If they give coordinates or describe a place instead, use those.
-- Check it as you check any preview: `get_preview_blocks` shows each new block with its facing before you apply it.
+- Check it as you check any preview: `read_blocks` shows each new block with its facing before you apply it.
 
 ## Staying preview-only
 
@@ -61,11 +61,12 @@ me", "don't build it yet", "let me see it first", "preview only", "I want to che
 and do not call `apply_preview` until they say to build. They don't have to name a mode, and they can switch back at
 any time ("looks good, build it"). If it is unclear which they want, ask once.
 
-- A new preview replaces the old one, so in this mode each phase's preview holds the whole build so far, not only the
-  new part. Write the cumulative spec each time.
+- Send each new phase with `"mode": "add"`: it goes on top of the waiting preview, so you send only the new part,
+  its `replace` ops see the preview's blocks, and the reply describes what the phase added. Everything waiting is
+  applied, and undone, as one build. To redo a phase, preview the whole build again without `mode`.
 - A preview is shown up to 32,768 blocks (the game draws models for the first 8,192 and the rest as an outline). Check `previewTruncated`; if a big build can't be shown whole, say so and
   offer to apply in stages instead.
-- You can still check your work without applying anything: `get_preview_blocks` reads every block of the preview with
+- You can still check your work without applying anything: `read_blocks` reads every block of the preview with
   its state, drawn or not (`references/spec-pitfalls.md`).
 - When they say to build, apply what is waiting. A build too big to preview whole is applied in stages as usual.
 
@@ -77,6 +78,9 @@ any time ("looks good, build it"). If it is unclear which they want, ask once.
   (windows, columns, steps), and the 3 or 4 dominant materials. Build to those numbers.
 - Palette: 3 materials plus 1 accent, put in the spec `palette`. `get_state` gives the player's recent blocks (a hint of their taste) and the biome (a hint
   of what fits the place).
+- Name shaped blocks by material where you can: `"material": "spruce"` on the spec, then `"@stairs"`, `"@slab"`,
+  `"@fence"` (or `"stone_bricks@wall"` written out). The server spells the id, and changing the material restyles the
+  whole build when the player asks for "the same in dark oak".
 - Read `references/proportions.md` now.
 
 ## Phase 1: Site
@@ -93,7 +97,7 @@ any time ("looks good, build it"). If it is unclear which they want, ask once.
 - To find ground yourself, read the area with `get_surface`: a wide area comes back as a summary (height range,
   how level it is, what it is made of, a coarse map), which is enough to pick a spot. Then read the footprint you
   chose with `detail: "full"` for exact heights.
-- Decide the ground level and the footprint, then `get_blocks` the footprint to confirm it is clear, or note what
+- Decide the ground level and the footprint, then `read_blocks` the footprint (`source: "world"`) to confirm it is clear, or note what
   must be cleared or filled.
 - Write the build near [0,0,0] and set `origin`, so one number moves it.
 
@@ -104,7 +108,7 @@ Purpose: get size, silhouette and placement right while it is cheap.
 - Plain solid boxes, cylinders and pyramids in ONE neutral material. No hollow, no windows, no detail. Usually 3 to
   10 ops.
 - Include every major mass: body, wings, tower, porch, roof volume.
-- Render `se`, `top` and a level side view. Compare proportions with the brief and with `references/proportions.md`,
+- Render `se`, `top` and a level side view in one call (`"angles": ["se", "top", "south"]`). Compare proportions with the brief and with `references/proportions.md`,
   and check how it sits on the ground.
 - Do NOT apply. Replace the preview until the player agrees.
 
@@ -119,14 +123,19 @@ Purpose: get size, silhouette and placement right while it is cheap.
 
 The roof makes or breaks the silhouette. Check it twice.
 
-- Overhang usually 1 block on eaves and gables.
-- Gable: two opposite-facing stair slopes meeting a ridge of full blocks or slabs. Hip: four slopes. Close the gable
-  ends with wall blocks.
-- Big or wide builds need several roof sections, not one slab.
-- Stair facing is the orientation trap: on a roof, every stair faces the ridge (the higher side), on both slopes.
-  Renders cannot show it. The `preview_build` reply counts the stairs by facing: a gable needs two opposite facings
-  in about equal numbers. Then read the roof with `get_preview_blocks` to check each facing is on the right side
-  (`references/spec-pitfalls.md`). `get_blocks` does the same on the world afterwards.
+- Use the `roof` op: one op per roof section, over the outer corners of the walls, at the height of the lowest
+  course (usually one above the wall top). It faces every stair, shapes the hip corners, fills the gable ends, caps
+  the ridge and builds the walls up under the overhang, so the orientation trap below is handled for you.
+- Overhang usually 1 block on eaves and gables (the op's default).
+- Gable: two slopes meeting a ridge, the usual cottage roof; the ridge runs along the longer side unless you set
+  `ridge`. Hip: four slopes, calmer and lower-looking. Shed: one slope, for lean-tos and porches.
+- A roof rises one block per block in, so its height is half the span. Big or wide builds need several roof
+  sections (a main roof and lower roofs over wings), not one huge one.
+- Write stairs by hand only for what the op does not make (a dormer, a curved or flared roof). Then stair facing is
+  the orientation trap: on a roof, every stair faces the ridge (the higher side), on both slopes. Renders cannot show
+  it. The `preview_build` reply counts the stairs by facing: a gable needs two opposite facings in about equal
+  numbers. Read the roof with `read_blocks` to check each facing is on the right side
+  (`references/spec-pitfalls.md`); after applying, the same read shows the world.
 - Seal the roof to the walls with no sky gaps.
 
 ## Phase 5: Openings and circulation
@@ -143,8 +152,10 @@ Flat single-block surfaces look machine-made. Break them up.
 
 - Vary within a family, for example stone bricks with mossy and cracked patches, denser near the base and corners,
   not uniform noise.
-- There is no random-mix primitive. Use `set` with chosen position lists (cap 4,096 positions), `replace` with
-  `find`, or a `repeat` pattern.
+- A mix scatters blocks by weight wherever a block goes: `{"mix": [["stone_bricks", 6], ["mossy_stone_bricks", 3],
+  ["cracked_stone_bricks", 1]]}`, usually as a palette entry. It is the same each time the spec is built. A mix
+  alone is uniform noise, so put a mossier mix on the lower courses and the corners and a cleaner one higher up
+  (separate ops for each band), or place patches with `set` lists.
 - Add depth: recess windows, set trim proud of the wall, alternate protruding and recessed sections. A wall wider
   than about 5 blocks with no relief looks flat at a distance.
 
@@ -157,19 +168,28 @@ hand-built one.
 - Stairs, slabs, walls, fences, trapdoors and buttons for trim, cornices, lintels, sills and shutters. Lanterns,
   chimneys, banners, flower boxes.
 - Detail follows the style from Phase 0. Don't sprinkle it everywhere.
-- Torches, signs and doors are not support-checked. Check each one stands on or against something.
+- Write a detail once and place it around the build with a `group`: a window with its sill, shutters and lintel,
+  written for the south wall, becomes the north wall's with `"rotate": 180` or the east wall's with `"rotate": 90`
+  and `"at"`. Stairs, trapdoors and logs inside turn with it. `repeat` on the group places a row of them.
+- The preview reply's `warnings` name torches, lanterns, signs, ladders and buttons with nothing to hold them and doors
+  or beds missing a half. Fix each before applying; it is the only support check there is.
 
 ## Phase 8: Context
 
 - Blend the ground: a path to the door, a different ground block round the foundation, grass, flowers, bushes, a
   fence or hedge.
 - Terrain you reshape goes first (before the shell), never over a finished build.
+- Natural ground, rocks and trees read better from a `script` op than from shapes: Lua that loops over its box and
+  calls `setBlock`, with noise for the shape of the ground (see the build spec guide). Keep scripts for what shapes
+  cannot make; a wall, a floor or a roof is still a shape. Always give a script a `"seed"` and keep it when you
+  revise the spec, so the ground does not change under the player between previews. Read the reply's warnings: a
+  script that set nothing, or set blocks outside its box, says so.
 - Water and lava go in LAST and enclosed. Flow is not simulated.
 
 ## Phase 9: Final check
 
 - Render from 2 corners, `top` and a side view of the finished area.
-- Read back a few critical blocks with `get_blocks` (ridge, door, a stair).
+- Read back a few critical blocks with `read_blocks` (ridge, door, a stair).
 - Tell the player what was built, where (coordinates), how many blocks, and that `undo` steps back one phase at a
   time.
 

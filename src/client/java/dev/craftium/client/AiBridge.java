@@ -26,6 +26,13 @@ import java.util.concurrent.*;
  */
 public final class AiBridge {
     static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("craftium").resolve("bridge.json");
+    /**
+     * What the bridge's tools understand, written to the bridge file so the MCP server can tell a player to update the mod or the plugin
+     * instead of failing on a tool the other side does not have. Bump it when a tool gains something the MCP server relies on.
+     * 2: preview summaries, get_state's world, build spec v2 (materials, mixes, roof, stairs, group), the "world" view of
+     * get_preview_blocks (read_blocks) and render_view's "angles".
+     */
+    public static final int PROTOCOL = 2;
     private static final int BODY_LIMIT = 1_000_000, READ_BLOCKS = 32_768, WAIT_SECONDS = 20;
     private static final Gson GSON = new Gson();
     private static final Object LOCK = new Object();
@@ -143,6 +150,8 @@ public final class AiBridge {
                 info.addProperty("port", socket.getLocalPort());
                 info.addProperty("token", token);
                 info.addProperty("pid", ProcessHandle.current().pid());
+                info.addProperty("protocol", PROTOCOL);
+                info.addProperty("version", ClientHandshake.version());
                 Path temp = FILE.resolveSibling("bridge.json.tmp");
                 Files.writeString(temp, GSON.toJson(info));
                 Files.move(temp, FILE, StandardCopyOption.REPLACE_EXISTING);
@@ -270,8 +279,14 @@ public final class AiBridge {
                 var from = point(args, "from"); var to = point(args, "to");
                 String view = args.has("view") ? args.get("view").getAsString() : "after";
                 String format = args.has("format") ? args.get("format").getAsString() : "auto";
+                boolean older = !ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SPEC_V2);
+                // A server from before spec v2 reads the world only through the older, smaller read.
+                if (older && view.equals("world")) yield olderWorldRead(from, to);
                 // The two settings travel in the action itself, so nothing is put in the shared options and nothing has to be put back.
-                yield read("ai_preview_blocks:" + view + ":" + format, from, to);
+                var answer = read("ai_preview_blocks:" + view + ":" + format, from, to);
+                // An older server answers "after" with no preview waiting by saying so, where this tool promises the world as it is.
+                if (older && view.equals("after") && answer.has("previewBlocks") && answer.get("previewBlocks").getAsInt() == 0 && answer.has("message")) yield olderWorldRead(from, to);
+                yield answer;
             }
             case "get_blocks" -> { var from = point(args, "from"); var to = point(args, "to"); yield serverSupported() ? read("ai_blocks", from, to) : onClient(() -> blocks(from, to)); }
             case "get_surface" -> {
@@ -287,7 +302,13 @@ public final class AiBridge {
                 if (!args.has("spec")) throw new IllegalArgumentException("Missing \"spec\"");
                 var element = args.get("spec");
                 String spec = element.isJsonPrimitive() ? element.getAsString() : GSON.toJson(element);
-                yield request("ai_build_preview", () -> previewBuild(spec));
+                String mode = args.has("mode") ? args.get("mode").getAsString() : "replace";
+                if (!mode.equals("replace") && !mode.equals("add")) throw new IllegalArgumentException("\"mode\" must be \"replace\" or \"add\"");
+                boolean add = mode.equals("add");
+                if (add && !ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SPEC_V2))
+                    throw new IllegalArgumentException("This server's Craftium cannot add to a preview; send the whole build without \"mode\": \"add\", and tell the player the server needs an update for it");
+                String action = add ? "ai_build_preview_add" : "ai_build_preview";
+                yield request(action, () -> previewBuild(spec, action));
             }
             case "apply_preview" -> request("ai_apply", () -> CraftiumClient.send("ai_apply", null, null));
             case "cancel_preview" -> request("ai_cancel", () -> CraftiumClient.send("ai_cancel", null, null));
@@ -309,6 +330,23 @@ public final class AiBridge {
     private static boolean serverSupported() {
         var mc = Minecraft.getInstance();
         return mc.player != null && mc.level != null && CraftiumClient.supported();
+    }
+
+    /** The most blocks of the world a server from before spec v2 reads at once. */
+    private static final long OLDER_SERVER_READ = 32_768;
+
+    /**
+     * read_blocks of the world on a server from before spec v2: the older read, which stops at {@link #OLDER_SERVER_READ} blocks, ignores the
+     * requested format and answers as runs. A box over the limit is refused with what to do about it, and the reply says it is the older kind.
+     */
+    private static JsonObject olderWorldRead(Point from, Point to) throws Exception {
+        long total = (long) (Math.abs(from.x() - to.x()) + 1) * (Math.abs(from.y() - to.y()) + 1) * (Math.abs(from.z() - to.z()) + 1);
+        if (total > OLDER_SERVER_READ)
+            throw new IllegalArgumentException("This server's Craftium is older than this plugin and reads at most " + String.format(java.util.Locale.ROOT, "%,d", OLDER_SERVER_READ) + " blocks of the world at a time (that box has "
+                + String.format(java.util.Locale.ROOT, "%,d", total) + "). Read it in smaller boxes, or ask the server owner to update Craftium");
+        var out = read("ai_blocks", from, to);
+        out.addProperty("serverOutdated", "This server's Craftium is older than this plugin, so this read answers as runs whatever \"format\" you asked for, and the world only (not your preview).");
+        return out;
     }
 
     /** Asks the server to read part of its world and waits for the data, which comes back as a packet of its own rather than as a status. */
@@ -338,7 +376,7 @@ public final class AiBridge {
     private static JsonObject request(String name, Runnable send) throws Exception {
         var reply = new CompletableFuture<Packets.Status>();
         // A new preview is described by the server just before its status (see AiWorld.previewSummary); a server from before that sends none.
-        var summary = name.equals("ai_build_preview") ? new CompletableFuture<String>() : null;
+        var summary = name.startsWith("ai_build_preview") ? new CompletableFuture<String>() : null;
         pace();
         onClient(() -> {
             var mc = Minecraft.getInstance();
@@ -366,6 +404,8 @@ public final class AiBridge {
                 out.add("state", state);
                 if (status.error() && summary != null && state.has("previewBlocks") && state.get("previewBlocks").getAsInt() > 0)
                     out.addProperty("previewKept", "The spec was refused, so nothing changed: your earlier preview (" + state.get("previewBlocks").getAsInt() + " blocks) is still waiting. Fix the spec and call preview_build again.");
+                if (status.error() && summary != null && !ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SPEC_V2))
+                    out.addProperty("serverOutdated", olderServer());
                 return out;
             });
         } catch (ExecutionException e) {
@@ -374,6 +414,16 @@ public final class AiBridge {
             if (awaiting == reply) awaiting = null;
             if (summary != null && awaitingData == summary) awaitingData = null;
         }
+    }
+
+    /**
+     * Why a spec may have been refused on this server: its Craftium predates spec v2, so roof, stairs, group, mixes and material@kind names
+     * are unknown there, though the plain shapes still work.
+     */
+    private static String olderServer() {
+        var server = ClientHandshake.server();
+        return "This server runs " + (server == null ? "an older Craftium" : "Craftium " + server.version()) + ", which does not know roof, stairs, group, "
+            + "{\"mix\": ...} or material@kind names. Build with the plain shapes and full block ids, and tell the player the server's Craftium needs an update for the rest.";
     }
 
     /** When the last request went to the server. The server silently drops a request that follows another within 65 ms, so they are kept further apart than that. */
@@ -385,11 +435,11 @@ public final class AiBridge {
         if (wait > 0) Thread.sleep(wait / 1_000_000L + 1);
     }
 
-    private static void previewBuild(String spec) {
+    private static void previewBuild(String spec, String action) {
         var o = ClientState.options;
         o.buildSpec = spec;
         // The spec rides along on this one request and is not kept in the saved settings.
-        try { CraftiumClient.send("ai_build_preview", null, null); }
+        try { CraftiumClient.send(action, null, null); }
         finally { o.buildSpec = ""; }
     }
 

@@ -294,7 +294,7 @@ public final class EditorServer {
                 case "ai_blocks" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.blocks(player,r.target(),r.normal())));return;}
                 case "ai_selection" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.selection(player,s)));return;}
                 case "ai_surface","ai_surface_floor" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.surface(player,r.target(),r.normal(),r.action().equals("ai_surface_floor"))));return;}
-                case "ai_build_preview","ai_apply","ai_cancel","ai_undo","ai_redo" -> {aiAction(player,r.action(),o);return;}
+                case "ai_build_preview","ai_build_preview_add","ai_apply","ai_cancel","ai_undo","ai_redo" -> {aiAction(player,r.action(),o);return;}
                 default -> {}
             }
             Point target=r.target(),normal=r.normal()==null?new Point(0,1,0):r.normal();
@@ -592,7 +592,15 @@ public final class EditorServer {
     }
     /** The ghost data of an AI workspace's waiting preview, worked out when it is first wanted after a change. */
     private static String aiData(Session ai){
-        if(ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit,GhostCodec.AI_LIMIT);ai.pendingDirty=false;} // an AI preview describes more than the player's own edits do
+        if(ai.pendingDirty){ // an AI preview describes more than the player's own edits do
+            try{ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit,GhostCodec.AI_LIMIT);}
+            catch(RuntimeException e){
+                // This runs in the server tick: a preview that cannot be drawn is dropped and logged, so it cannot stop the server.
+                ServerPlatform.LOG.error("Dropped an AI preview that could not be drawn",e);
+                ai.pendingEdit=null;ai.pendingData="";
+            }
+            ai.pendingDirty=false;
+        }
         return ai.pendingData;
     }
 
@@ -654,18 +662,29 @@ public final class EditorServer {
     private static void aiActionNow(ServerPlayer player,String action,Options o){
         var ai=aiSession(player);
         switch(action){
-            case "ai_build_preview" -> {
+            case "ai_build_preview","ai_build_preview_add" -> {
                 if(ai.busy)throw new IllegalArgumentException("Wait for the current AI build to finish");
                 // A new preview replaces the last only once it is accepted: a spec that is refused (a typo, a block that does not exist) leaves
                 // the waiting preview as it was, so the player's ghost does not vanish and the AI can fix the spec and try again.
+                // Added to the waiting preview, the spec is planned on top of it and the two become one edit, applied and undone as one.
+                var onto=action.equals("ai_build_preview_add")?ai.pendingEdit:null;
                 var mine=SESSIONS.get(player.getUUID()); // the player's own selection, which operations on it read and never change
-                var edit=BuildPlanner.plan(player,ai,o,mine==null?Set.<Point>of():mine.selection.points());
-                if(edit.changes().isEmpty()){send(player,ai,"No matching blocks changed"+(ai.pendingEdit==null?"":"; the earlier preview is still waiting"),false);return;}
+                var edit=BuildPlanner.plan(player,ai,o,mine==null?Set.<Point>of():mine.selection.points(),onto);
+                var added=onto==null?edit:addedTo(onto,edit);
+                // Blocks the new spec put back to what the world holds (a doorway carved through a preview wall in open air) leave the edit
+                // altogether, so they are not in "added": count them, or a spec that only carves would look like one that did nothing.
+                int takenBack=onto==null?0:takenBack(onto,edit);
+                if(added.changes().isEmpty()&&takenBack==0){send(player,ai,"No matching blocks changed"+(ai.pendingEdit==null?"":"; the earlier preview is still waiting"),false);return;}
                 if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller build");
                 EditProtection.check(player,edit);
-                ai.pendingEdit=edit;ai.pendingDirty=true;ai.previewId=++PREVIEW_IDS;
-                ServerPlatform.send(player,new Packets.AiReply(AiWorld.previewSummary(edit))); // before the status, which the AI client waits for, so it has arrived by then
-                send(player,ai,"AI preview ready: "+edit.changes().size()+" blocks",false);
+                // The ghost is worked out now, in the request, so a preview that cannot be drawn is refused here with the reason and the earlier
+                // preview stays. Left to the tick, it would vanish without a word, for the AI and for the players who watch it.
+                String ghost;
+                try{ghost=GhostCodec.encodeEdit(edit,GhostCodec.AI_LIMIT);}
+                catch(RuntimeException e){ServerPlatform.LOG.error("An AI preview could not be drawn",e);throw new IllegalArgumentException("The preview could not be drawn ("+e+"), so it was not kept"+(ai.pendingEdit==null?"":" and the earlier preview is still waiting")+". Please report this with the spec that caused it");}
+                ai.pendingEdit=edit;ai.pendingData=ghost;ai.pendingDirty=false;ai.previewId=++PREVIEW_IDS;
+                ServerPlatform.send(player,new Packets.AiReply(AiWorld.previewSummary(added,(net.minecraft.server.level.ServerLevel)player.level(),edit,ai.specWarnings,takenBack))); // before the status, which the AI client waits for, so it has arrived by then
+                send(player,ai,onto==null?"AI preview ready: "+edit.changes().size()+" blocks":"Added "+added.changes().size()+" blocks to the AI preview"+(takenBack>0?" and took back "+takenBack:"")+": "+edit.changes().size()+" blocks in all",false);
             }
             case "ai_apply" -> {
                 var edit=ai.pendingEdit;
@@ -683,6 +702,19 @@ public final class EditorServer {
             case "ai_redo" -> {ai.historyRemaining=0;history(player,ai,false);}
             default -> {ai.historyRemaining=0;history(player,ai,true);} // ai_undo
         }
+    }
+    /** The changes of {@code merged} that {@code earlier} did not already hold: what an addition to a preview changed. */
+    /** How many positions {@code earlier} changed that {@code merged} no longer does: preview blocks a later spec put back as the world has them. */
+    private static int takenBack(Session.Edit earlier,Session.Edit merged){
+        var kept=new HashSet<Point>();for(var c:merged.changes())kept.add(c.pos());
+        int gone=0;for(var c:earlier.changes())if(!kept.contains(c.pos()))gone++;
+        return gone;
+    }
+    private static Session.Edit addedTo(Session.Edit earlier,Session.Edit merged){
+        var before=new HashMap<Point,Session.Change>();for(var c:earlier.changes())before.put(c.pos(),c);
+        var out=new ArrayList<Session.Change>();
+        for(var c:merged.changes()){var old=before.get(c.pos());if(old==null||old.after().state()!=c.after().state()||!Objects.equals(old.after().data(),c.after().data()))out.add(c);}
+        return new Session.Edit(merged.name(),out,List.of(),merged.flags());
     }
     private static void start(ServerPlayer player,Session s,Session.Edit edit) {
         if(s.fromBuilder)edit=edit.withBuilder(true);

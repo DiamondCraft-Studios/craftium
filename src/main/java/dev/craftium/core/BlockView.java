@@ -9,7 +9,7 @@ import java.util.*;
  * <ul>
  *   <li><b>boxes</b>: for each block, the boxes it fills, as {@code [x1,y1,z1,x2,y2,z2]} in world coordinates. A wall or a roof is a few
  *       boxes, whatever its position in the box that was asked about, and the boxes are what a build is written in.</li>
- *   <li><b>runs</b>: a palette and run-length runs in reading order, as get_blocks answers. Better for noisy ground, where boxes stop
+ *   <li><b>runs</b>: a palette and run-length runs in reading order, as read_blocks answers. Better for noisy ground, where boxes stop
  *       helping.</li>
  * </ul>
  * Pure, so it needs no game.

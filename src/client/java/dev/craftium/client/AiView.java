@@ -13,7 +13,7 @@ import java.util.*;
 final class AiView {
     private AiView() {}
 
-    static final int MAX_SIDE = 128, MAX_BLOCKS = 262_144, TILE = 32, WIDTH = 1024, HEIGHT = 768;
+    static final int MAX_SIDE = 128, MAX_BLOCKS = 262_144, TILE = 32, WIDTH = 1024, HEIGHT = 768, MAX_ANGLES = 3;
     private static final int VIOLET = 0xb57cf0, LEGEND = 12;
     /** Blocks nothing is drawn for: air, and the ones that exist only to be placed or to mark something. */
     private static final Set<String> EMPTY = Set.of("minecraft:air", "minecraft:cave_air", "minecraft:void_air", "minecraft:light", "minecraft:structure_void", "minecraft:barrier", "craftium:outside_world");
@@ -23,7 +23,17 @@ final class AiView {
 
     static JsonObject render(JsonObject args) throws Exception {
         Point a = AiBridge.point(args, "from"), b = AiBridge.point(args, "to");
-        var angle = VoxelView.Angle.parse(args.has("angle") ? args.get("angle").getAsString() : "se");
+        // "angles" draws the box from up to three angles off one read of the world, where separate calls would read it once each.
+        var angles = new ArrayList<VoxelView.Angle>();
+        boolean several = args.has("angles");
+        if (several) {
+            if (!args.get("angles").isJsonArray() || args.getAsJsonArray("angles").isEmpty() || args.getAsJsonArray("angles").size() > MAX_ANGLES)
+                throw new IllegalArgumentException("\"angles\" must list 1 to " + MAX_ANGLES + " angles");
+            for (var each : args.getAsJsonArray("angles")) {
+                var parsed = VoxelView.Angle.parse(each.getAsString());
+                if (!angles.contains(parsed)) angles.add(parsed);
+            }
+        } else angles.add(VoxelView.Angle.parse(args.has("angle") ? args.get("angle").getAsString() : "se"));
         boolean preview = !args.has("preview") || args.get("preview").getAsBoolean();
         int x0 = Math.min(a.x(), b.x()), y0 = Math.min(a.y(), b.y()), z0 = Math.min(a.z(), b.z());
         int sx = Math.abs(a.x() - b.x()) + 1, sy = Math.abs(a.y() - b.y()) + 1, sz = Math.abs(a.z() - b.z()) + 1;
@@ -93,24 +103,29 @@ final class AiView {
             }
         }
 
-        var result = VoxelView.render(sx, sy, sz, colours, angle, WIDTH, HEIGHT);
-        var png = new ByteArrayOutputStream();
-        javax.imageio.ImageIO.write(result.image(), "png", png);
-
         var out = new JsonObject();
         out.addProperty("ok", true);
-        out.addProperty("image", Base64.getEncoder().encodeToString(png.toByteArray()));
-        out.addProperty("mime", "image/png");
-        out.addProperty("width", result.image().getWidth());
-        out.addProperty("height", result.image().getHeight());
-        out.addProperty("angle", angle.name().toLowerCase(Locale.ROOT));
+        var pictures = new JsonArray();
+        for (var angle : angles) {
+            var result = VoxelView.render(sx, sy, sz, colours, angle, WIDTH, HEIGHT);
+            var png = new ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(result.image(), "png", png);
+            var picture = several ? new JsonObject() : out;
+            picture.addProperty("image", Base64.getEncoder().encodeToString(png.toByteArray()));
+            picture.addProperty("mime", "image/png");
+            picture.addProperty("width", result.image().getWidth());
+            picture.addProperty("height", result.image().getHeight());
+            picture.addProperty("angle", angle.name().toLowerCase(Locale.ROOT));
+            picture.addProperty("pixelsPerBlock", Math.round(result.scale() * 10) / 10.0);
+            var compass = new JsonObject();
+            compass.addProperty("east", result.east());
+            compass.addProperty("north", result.north());
+            picture.add("compass", compass);
+            if (several) pictures.add(picture);
+        }
+        if (several) out.add("images", pictures);
         out.add("min", AiBridge.array(x0, y0, z0));
         out.add("size", AiBridge.array(sx, sy, sz));
-        out.addProperty("pixelsPerBlock", Math.round(result.scale() * 10) / 10.0);
-        var compass = new JsonObject();
-        compass.addProperty("east", result.east());
-        compass.addProperty("north", result.north());
-        out.add("compass", compass);
         out.addProperty("previewBlocksShown", shown);
         if (shown > 0) out.addProperty("previewLook", "blocks tinted violet are the preview, not yet built");
         if (preview) {

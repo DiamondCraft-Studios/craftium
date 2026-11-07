@@ -37,14 +37,21 @@ class SkillExamplesTest {
     @Test void everyExampleIsAcceptedAndMakesWhatItsTextSays() throws Exception {
         var specs = specs();
         assertEquals(5, specs.size(), "the cottage's four phases and the tower");
-        for (String json : specs) assertDoesNotThrow(() -> BuildSpec.parse(json).build(BuildSpec.parse(json).place()), json);
+        for (String json : specs) {
+            var spec = assertDoesNotThrow(() -> BuildSpec.parse(json), json);
+            // An example an AI copies must not draw a warning, or it learns to ignore them.
+            assertEquals(java.util.List.of(), spec.build(spec.place()).warnings(), json);
+        }
 
         var blockout = BuildSpec.parse(specs.get(0));
         assertEquals(new Point(99, 64, 199) + " 11x9x9", box(blockout.place()));
 
         var roof = counts(BuildSpec.parse(specs.get(2)));
-        assertEquals(44, roof.get("minecraft:spruce_stairs[facing=south,half=bottom]"));
-        assertEquals(44, roof.get("minecraft:spruce_stairs[facing=north,half=bottom]"));
+        assertEquals(44, roof.get("minecraft:spruce@stairs[facing=south,half=bottom,shape=straight]"));
+        assertEquals(44, roof.get("minecraft:spruce@stairs[facing=north,half=bottom,shape=straight]"));
+        assertEquals(11, roof.get("minecraft:spruce@slab[type=bottom]"), "the ridge cap, from x = -1 to 9");
+        // The long walls are topped (two rows of 9), each gable end is filled 5, 5 and 3 wide on the layers above, and the ridge is 11 long.
+        assertEquals(2 * 9 + 2 * (5 + 5 + 3) + 11, roof.get("minecraft:spruce@block"));
 
         var openings = counts(BuildSpec.parse(specs.get(3)));
         assertEquals(5 * 2, openings.get("minecraft:glass_pane"), "two windows to the south and three to the north, each 2 high");

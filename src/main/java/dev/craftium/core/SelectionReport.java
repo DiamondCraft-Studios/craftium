@@ -66,7 +66,7 @@ public final class SelectionReport {
         out.addProperty("ok", true);
         if (points.isEmpty()) {
             out.addProperty("selected", 0);
-            out.addProperty("message", "Nothing is selected. Ask the player to select the place, or to give you coordinates, or read the ground yourself with get_surface and get_blocks.");
+            out.addProperty("message", "Nothing is selected. Ask the player to select the place, or to give you coordinates, or read the ground yourself with get_surface and read_blocks.");
             return out;
         }
 

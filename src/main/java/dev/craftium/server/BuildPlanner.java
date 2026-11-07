@@ -13,11 +13,14 @@ final class BuildPlanner {
 
     /**
      * @param selection the player's own selection, for the operations that work on it; it is only read, never changed
+     * @param onto a waiting preview to build on top of (its changes are planned first, so the new operations see its blocks), or null
      */
-    static Session.Edit plan(net.minecraft.server.level.ServerPlayer player, Session ai, Options o, java.util.Set<Point> selection) {
+    static Session.Edit plan(net.minecraft.server.level.ServerPlayer player, Session ai, Options o, java.util.Set<Point> selection, Session.Edit onto) {
         var spec = BuildSpec.parse(o.buildSpec);
         var level = (net.minecraft.server.level.ServerLevel) player.level();
         var plan = new EditPlanner(level, ai, o);
+        ai.specWarnings = List.of();
+        if (onto != null) for (var change : onto.changes()) plan.changes.put(change.pos(), change);
         if (!spec.hasShapes()) {
             // Only operations on the selection: there is no area of its own, so the ground to load is the selection's.
             if (selection.isEmpty()) throw new IllegalArgumentException("replace_selection works on the player's selection, and nothing is selected. Ask the player to select the blocks, or give coordinates and use replace with from and to");
@@ -33,14 +36,32 @@ final class BuildPlanner {
         // Every block is looked up before anything is planned, so an unknown name fails the whole build and not half of it.
         var states = states(level, spec);
         var result = spec.build(place);
+        ai.specWarnings = result.warnings();
         var matches = new HashMap<String, Match>();
+        var turned = new HashMap<String, Map<Turn, BlockState>>();
         // The spec says exactly where blocks go, so the player's brush mask, symmetry and height settings do not apply.
         plan.exact = true;
         for (var entry : result.cells().entrySet()) {
             var at = min.add(entry.getKey().x(), entry.getKey().y(), entry.getKey().z());
             var cell = entry.getValue();
-            if (cell.only() != null && !match(level, matches, cell.only()).matches(plan.state(at))) continue;
-            plan.put(at, states.get(cell.block()));
+            // A replace looks at what is planned there, if anything (a preview it adds to), and otherwise at the world.
+            if (cell.only() != null) {
+                var planned = plan.changes.get(at);
+                if (!match(level, matches, cell.only()).matches(planned == null ? plan.state(at) : planned.after().state())) continue;
+            }
+            // A roof or a flight of stairs adds its own state to a block checked above, so those names are looked up when first met.
+            var state = states.computeIfAbsent(cell.block(), name -> state(level, spec, name));
+            if (!cell.turn().equals(Turn.NONE)) {
+                var plain = state;
+                state = turned.computeIfAbsent(cell.block(), k -> new HashMap<>()).computeIfAbsent(cell.turn(), t -> turn(plain, t));
+            }
+            plan.put(at, state);
+        }
+        if (!spec.scripts().isEmpty()) {
+            // Scripts come after the shapes, and see what they placed.
+            var warnings = new ArrayList<>(ai.specWarnings);
+            AiScript.run(plan, spec.scripts(), warnings);
+            ai.specWarnings = List.copyOf(warnings);
         }
         if (!spec.selectionOps().isEmpty()) {
             if (selection.isEmpty()) throw new IllegalArgumentException("replace_selection works on the player's selection, and nothing is selected. Ask the player to select the blocks, or give coordinates and use replace with from and to");
@@ -55,20 +76,50 @@ final class BuildPlanner {
      * needs to fix it in one go: the operations that use it, why it failed, and the nearest real ids or the properties the block does take.
      */
     private static Map<String, BlockState> states(net.minecraft.server.level.ServerLevel level, BuildSpec spec) {
-        var lookup = level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK);
         var states = new HashMap<String, BlockState>();
-        for (String name : spec.blocks()) {
-            try {
-                states.put(name, net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(lookup, new com.mojang.brigadier.StringReader(name), false).blockState());
-            } catch (Exception e) {
-                throw new IllegalArgumentException(explain(lookup, spec, name, e));
-            }
-        }
+        for (String name : spec.blocks()) states.put(name, state(level, spec, name));
         return states;
     }
 
-    private static String explain(net.minecraft.core.HolderLookup<net.minecraft.world.level.block.Block> lookup, BuildSpec spec, String name, Exception failure) {
+    private static BlockState state(net.minecraft.server.level.ServerLevel level, BuildSpec spec, String name) {
+        var lookup = level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK);
+        String real = concrete(name, spec);
+        try {
+            return net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(lookup, new com.mojang.brigadier.StringReader(real), false).blockState();
+        } catch (Exception e) {
+            throw new IllegalArgumentException(explain(lookup, spec, name, real, e));
+        }
+    }
+
+    /**
+     * The block a name stands for: itself, or for a material reference such as {@code spruce@stairs} the first of its spellings that is a
+     * block in this game ({@code spruce_stairs}), with any state written after it kept.
+     */
+    private static String concrete(String name, BuildSpec spec) {
+        if (!MaterialNames.isReference(name)) return name;
+        int bracket = name.indexOf('[');
+        String state = bracket < 0 ? "" : name.substring(bracket);
+        var tried = MaterialNames.candidates(name);
+        for (String id : tried) if (net.minecraft.core.registries.BuiltInRegistries.BLOCK.containsKey(dev.craftium.compat.Compat.parse(id))) return id + state;
+        String plain = bracket < 0 ? name : name.substring(0, bracket);
+        String material = plain.substring(0, plain.indexOf('@'));
+        var message = new StringBuilder(spec == null ? "" : String.join(", ", spec.usesOf(name)) + ": ")
+            .append('"').append(plain).append("\" is not a block in this game version (tried ").append(String.join(", ", tried)).append(')');
+        var near = BlockNames.suggest(tried.getFirst(), blockIds(), 5);
+        if (!near.isEmpty()) message.append(". Nearest: ").append(String.join(", ", near));
+        message.append(". Name the block itself, or check that ").append(material).append(" has that kind");
+        throw new IllegalArgumentException(message.toString());
+    }
+
+    /** A block state turned the way a group turned its cell: mirrored first, then rotated, as {@link Turn} reads. */
+    static BlockState turn(BlockState state, Turn turn) {
+        if (turn.mirrored()) state = state.mirror(net.minecraft.world.level.block.Mirror.FRONT_BACK);
+        return state.rotate(net.minecraft.world.level.block.Rotation.values()[turn.quarterTurns()]);
+    }
+
+    private static String explain(net.minecraft.core.HolderLookup<net.minecraft.world.level.block.Block> lookup, BuildSpec spec, String name, String real, Exception failure) {
         var message = new StringBuilder(String.join(", ", spec.usesOf(name))).append(": ");
+        name = real;
         String id = BlockNames.id(name);
         BlockState block = null;
         try { block = net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(lookup, new com.mojang.brigadier.StringReader(id), false).blockState(); }
@@ -151,7 +202,7 @@ final class BuildPlanner {
     private static Match match(net.minecraft.server.level.ServerLevel level, Map<String, Match> cache, String name) {
         return cache.computeIfAbsent(name, n -> {
             try {
-                var parsed = net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK), new com.mojang.brigadier.StringReader(n), false);
+                var parsed = net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK), new com.mojang.brigadier.StringReader(concrete(n, null)), false);
                 return new Match(parsed.blockState().getBlock(), parsed.properties());
             } catch (Exception e) {
                 throw new IllegalArgumentException("Unknown block or state: " + n);

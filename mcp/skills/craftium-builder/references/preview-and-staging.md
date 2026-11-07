@@ -16,7 +16,7 @@ carry:
 - `previewWarning`: plain-language text, present only when it is truncated.
 
 If `previewTruncated` is true you are not seeing the whole build. Tell the player, and do not judge the build from
-that picture. To see what the game did not describe, read it: `get_preview_blocks` reads every block of the preview, drawn
+that picture. To see what the game did not describe, read it: `read_blocks` reads every block of the preview, drawn
 or not, with its state. (`render_view` also reports `previewBlocksShown`, which counts only the blocks that fell inside the
 box you rendered, so it can be lower than `previewBlocksDrawn` without anything being cut.)
 
@@ -57,6 +57,6 @@ Each tool's description gives its own limits (box sizes, chunks, ops per spec), 
 with what to do instead, so they are not repeated here. Two shape a plan:
 
 - Every reply is held to about 60 KB, so read a big build or a wide area a part at a time. `get_surface` summarises a
-  wide area on its own, and `get_preview_blocks` answers in boxes, which are short.
+  wide area on its own, and `read_blocks` answers in boxes, which are short.
 - A build may reach at most 36 chunks nobody has loaded (a square about 96 blocks across). Build far-off things in
   pieces.

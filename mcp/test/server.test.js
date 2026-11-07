@@ -8,13 +8,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { candidateFiles, NOT_RUNNING } from "../src/bridge.js";
+import { BRIDGE_PROTOCOL, candidateFiles, NOT_RUNNING } from "../src/bridge.js";
 
 const ENTRY = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "index.js");
 const TOKEN = "t0ken";
 
 /** A stand-in for the game's bridge that records requests and answers from a table. */
-async function fakeBridge(replies) {
+async function fakeBridge(replies, info = { protocol: BRIDGE_PROTOCOL, version: "0.10.0-beta.1" }) {
   const seen = [];
   const server = http.createServer((req, res) => {
     let body = "";
@@ -30,7 +30,7 @@ async function fakeBridge(replies) {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const dir = await mkdtemp(path.join(os.tmpdir(), "craftium-mcp-"));
   const file = path.join(dir, "bridge.json");
-  await writeFile(file, JSON.stringify({ port: server.address().port, token: TOKEN }));
+  await writeFile(file, JSON.stringify({ port: server.address().port, token: TOKEN, ...info }));
   return {
     seen,
     file,
@@ -54,7 +54,7 @@ test("lists every tool with its hints, and the server's instructions", async () 
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "get_blocks", "get_preview_blocks", "get_screenshot", "get_state", "get_surface", "preview_build", "read_selection", "render_view", "undo"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "get_screenshot", "get_state", "get_surface", "preview_build", "read_blocks", "read_selection", "render_view", "undo"]);
   assert.equal(tools.find((t) => t.name === "get_state").annotations.readOnlyHint, true);
   assert.equal(tools.find((t) => t.name === "apply_preview").annotations.destructiveHint, true);
   assert.match(tools.find((t) => t.name === "preview_build").description, /cylinder/);
@@ -64,9 +64,9 @@ test("lists every tool with its hints, and the server's instructions", async () 
 });
 
 test("a tool call reaches the bridge with the token and only its arguments", async () => {
-  const bridge = await fakeBridge({ get_blocks: { ok: true, palette: ["minecraft:air"], runs: [[0, 8]] } });
+  const bridge = await fakeBridge({ get_preview_blocks: { ok: true, palette: ["minecraft:air"], runs: [[0, 8]] } });
   const client = await connect(bridge.file);
-  const result = await client.callTool({ name: "get_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], sneaky: "ignored" } });
+  const result = await client.callTool({ name: "read_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], sneaky: "ignored" } });
   assert.equal(result.isError, undefined);
   assert.deepEqual(JSON.parse(text(result)), { palette: ["minecraft:air"], runs: [[0, 8]] });
   const [request] = bridge.seen;
@@ -97,6 +97,13 @@ test("render_view passes its box, angle and preview flag through, and its pictur
   assert.deepEqual(bridge.seen[0].body, { from: [0, 0, 0], to: [9, 9, 9], angle: "top", preview: false });
   await client.callTool({ name: "render_view", arguments: { from: [0, 0, 0], to: [1, 1, 1] } });
   assert.deepEqual(bridge.seen[1].body, { from: [0, 0, 0], to: [1, 1, 1] });
+  await client.callTool({ name: "render_view", arguments: { from: [0, 0, 0], to: [1, 1, 1], angles: ["se", "top"] } });
+  assert.deepEqual(bridge.seen[2].body, { from: [0, 0, 0], to: [1, 1, 1], angles: ["se", "top"] });
+  for (const args of [{ angles: [] }, { angles: ["se", "sw", "ne", "nw"] }, { angles: ["above"] }, { angle: "se", angles: ["top"] }]) {
+    const bad = await client.callTool({ name: "render_view", arguments: { from: [0, 0, 0], to: [1, 1, 1], ...args } });
+    assert.equal(bad.isError, true, JSON.stringify(args));
+  }
+  assert.equal(bridge.seen.length, 3, "bad angles must not reach the game");
   await bridge.close();
 });
 
@@ -107,6 +114,23 @@ test("preview_build passes the spec through untouched", async () => {
   const result = await client.callTool({ name: "preview_build", arguments: { spec } });
   assert.equal(result.isError, undefined);
   assert.deepEqual(bridge.seen[0].body, { spec });
+  await bridge.close();
+});
+
+test("preview_build passes a spec's material and palette mixes through to the game", async () => {
+  const bridge = await fakeBridge({ preview_build: { ok: true, message: "AI preview ready: 9 blocks" } });
+  const client = await connect(bridge.file);
+  const spec = { material: "spruce", palette: { wall: { mix: [["stone_bricks", 3], ["mossy_stone_bricks", 1]] }, step: "@stairs" }, ops: [{ op: "roof", from: [0, 4, 0], to: [6, 4, 4] }] };
+  const result = await client.callTool({ name: "preview_build", arguments: { spec } });
+  assert.equal(result.isError, undefined, text(result));
+  assert.deepEqual(bridge.seen[0].body, { spec });
+  const bad = await client.callTool({ name: "preview_build", arguments: { spec: { ...spec, material: 3 } } });
+  assert.equal(bad.isError, true);
+  await client.callTool({ name: "preview_build", arguments: { spec, mode: "add" } });
+  assert.deepEqual(bridge.seen[1].body, { spec, mode: "add" });
+  const badMode = await client.callTool({ name: "preview_build", arguments: { spec, mode: "merge" } });
+  assert.equal(badMode.isError, true);
+  assert.equal(bridge.seen.length, 2);
   await bridge.close();
 });
 
@@ -144,22 +168,24 @@ test("preview_build passes the spec with its origin, and the only selection tool
   await bridge.close();
 });
 
-test("get_preview_blocks passes its box, view and format, and rejects bad ones before the game", async () => {
+test("read_blocks sends each source as the game's view, with its box and format, and rejects bad ones before the game", async () => {
   const bridge = await fakeBridge({ get_preview_blocks: { ok: true, format: "boxes", summary: "1,000 blocks in 1 boxes: 1000 oak_log" } });
   const client = await connect(bridge.file);
-  const result = await client.callTool({ name: "get_preview_blocks", arguments: { from: [0, 0, 0], to: [9, 9, 9], view: "only", format: "boxes", sneaky: 1 } });
+  const result = await client.callTool({ name: "read_blocks", arguments: { from: [0, 0, 0], to: [9, 9, 9], source: "preview", format: "boxes", sneaky: 1 } });
   assert.equal(result.isError, undefined);
   assert.equal(JSON.parse(text(result)).format, "boxes");
   assert.deepEqual(bridge.seen[0].body, { from: [0, 0, 0], to: [9, 9, 9], view: "only", format: "boxes" });
-  const plain = await client.callTool({ name: "get_preview_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1] } });
+  const plain = await client.callTool({ name: "read_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1] } });
   assert.equal(plain.isError, undefined);
   assert.deepEqual(bridge.seen[1].body, { from: [0, 0, 0], to: [1, 1, 1] }); // defaults are the game's to apply
-  const badView = await client.callTool({ name: "get_preview_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], view: "before" } });
-  assert.equal(badView.isError, true);
-  const badFormat = await client.callTool({ name: "get_preview_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], format: "pretty" } });
+  await client.callTool({ name: "read_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], source: "world" } });
+  assert.deepEqual(bridge.seen[2].body, { from: [0, 0, 0], to: [1, 1, 1], view: "world" });
+  const badSource = await client.callTool({ name: "read_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], source: "only" } });
+  assert.equal(badSource.isError, true);
+  const badFormat = await client.callTool({ name: "read_blocks", arguments: { from: [0, 0, 0], to: [1, 1, 1], format: "pretty" } });
   assert.equal(badFormat.isError, true);
-  assert.equal(bridge.seen.length, 2, "bad arguments must not reach the game");
-  const tool = (await client.listTools()).tools.find((t) => t.name === "get_preview_blocks");
+  assert.equal(bridge.seen.length, 3, "bad arguments must not reach the game");
+  const tool = (await client.listTools()).tools.find((t) => t.name === "read_blocks");
   assert.equal(tool.annotations.readOnlyHint, true);
   await bridge.close();
 });
@@ -177,7 +203,7 @@ test("read_selection asks the game for the selection and forwards nothing the mo
 test("bad arguments are rejected before they reach the game", async () => {
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
-  for (const [name, args] of [["get_blocks", { from: [0, 0, 0] }], ["get_blocks", { from: [0, 0], to: [1, 1, 1] }], ["get_surface", { from: [0, 0, 0], to: [1, 1, 1], kind: "water" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], angle: "above" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], preview: "yes" }], ["get_blocks", { from: [0.5, 0, 0], to: [1, 1, 1] }], ["preview_build", { spec: { ops: [] } }], ["preview_build", { spec: { ops: [{ op: "set" }], origin: [0, 0] } }], ["preview_build", { spec: "not an object" }]]) {
+  for (const [name, args] of [["read_blocks", { from: [0, 0, 0] }], ["read_blocks", { from: [0, 0], to: [1, 1, 1] }], ["get_surface", { from: [0, 0, 0], to: [1, 1, 1], kind: "water" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], angle: "above" }], ["render_view", { from: [0, 0, 0], to: [1, 1, 1], preview: "yes" }], ["read_blocks", { from: [0.5, 0, 0], to: [1, 1, 1] }], ["preview_build", { spec: { ops: [] } }], ["preview_build", { spec: { ops: [{ op: "set" }], origin: [0, 0] } }], ["preview_build", { spec: "not an object" }]]) {
     const result = await client.callTool({ name, arguments: args });
     assert.equal(result.isError, true, `${name} ${JSON.stringify(args)}`);
   }
@@ -195,7 +221,7 @@ test("without a bridge file the error says how to start it", async () => {
 test("a stale file with nothing listening reads as the game not running", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "craftium-mcp-"));
   const file = path.join(dir, "bridge.json");
-  await writeFile(file, JSON.stringify({ port: 1, token: TOKEN }));
+  await writeFile(file, JSON.stringify({ port: 1, token: TOKEN, protocol: BRIDGE_PROTOCOL }));
   const client = await connect(file);
   const result = await client.callTool({ name: "get_state", arguments: {} });
   assert.equal(result.isError, true);
@@ -206,11 +232,35 @@ test("a stale file with nothing listening reads as the game not running", async 
 test("a refused token tells the player to restart the bridge", async () => {
   const bridge = await fakeBridge({});
   const { port } = JSON.parse(await readFile(bridge.file, "utf8"));
-  await writeFile(bridge.file, JSON.stringify({ port, token: "wrong" }));
+  await writeFile(bridge.file, JSON.stringify({ port, token: "wrong", protocol: BRIDGE_PROTOCOL }));
   const client = await connect(bridge.file);
   const result = await client.callTool({ name: "get_state", arguments: {} });
   assert.equal(result.isError, true);
   assert.match(text(result), /refused/);
+  await bridge.close();
+});
+
+test("a mod older than the plugin is refused before any call, with what to update", async () => {
+  for (const info of [{}, { protocol: 1, version: "0.9.1-beta.1" }]) {
+    const bridge = await fakeBridge({ get_state: { ok: true } }, info);
+    const client = await connect(bridge.file);
+    const result = await client.callTool({ name: "get_state", arguments: {} });
+    assert.equal(result.isError, true);
+    assert.match(text(result), /older than this Craftium plugin.*0\.10\.0-beta\.1/);
+    if (info.version) assert.match(text(result), /0\.9\.1-beta\.1/);
+    assert.equal(bridge.seen.length, 0);
+    await bridge.close();
+  }
+});
+
+test("a mod newer than the plugin still works, and get_state says the plugin is behind", async () => {
+  const bridge = await fakeBridge({ get_state: { ok: true, inWorld: true }, undo: { ok: true } }, { protocol: BRIDGE_PROTOCOL + 1, version: "9.9.9" });
+  const client = await connect(bridge.file);
+  const state = await client.callTool({ name: "get_state", arguments: {} });
+  assert.equal(state.isError, undefined);
+  assert.match(JSON.parse(text(state)).pluginOutdated, /update the plugin/);
+  const undo = await client.callTool({ name: "undo", arguments: {} });
+  assert.equal(JSON.parse(text(undo)).pluginOutdated, undefined);
   await bridge.close();
 });
 
