@@ -590,7 +590,15 @@ public final class EditorServer {
     }
     /** The ghost data of an AI workspace's waiting preview, worked out when it is first wanted after a change. */
     private static String aiData(Session ai){
-        if(ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit,GhostCodec.AI_LIMIT);ai.pendingDirty=false;} // an AI preview describes more than the player's own edits do
+        if(ai.pendingDirty){ // an AI preview describes more than the player's own edits do
+            try{ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit,GhostCodec.AI_LIMIT);}
+            catch(RuntimeException e){
+                // This runs in the server tick: a preview that cannot be drawn is dropped and logged, so it cannot stop the server.
+                ServerPlatform.LOG.error("Dropped an AI preview that could not be drawn",e);
+                ai.pendingEdit=null;ai.pendingData="";
+            }
+            ai.pendingDirty=false;
+        }
         return ai.pendingData;
     }
 

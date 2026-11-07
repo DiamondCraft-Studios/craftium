@@ -98,6 +98,8 @@ final class EditPlanner {
      */
     boolean exact;
     void put(Point p, BlockSnapshot value) {
+        // A missing block is a bug in whatever planned it; refused here, it fails that one request instead of every tick that draws the edit.
+        if(value==null||value.state()==null)throw new IllegalArgumentException("Could not work out the block at "+p.x()+" "+p.y()+" "+p.z()+"; nothing was changed. Please report this with the request that caused it");
         putOne(p,value);
         if(exact)return;
         if(!o.symmetryX&&!o.symmetryY&&!o.symmetryZ&&o.symmetryRotations==1)return;
