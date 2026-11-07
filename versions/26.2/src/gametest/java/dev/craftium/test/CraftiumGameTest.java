@@ -33,6 +33,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             if("selectionperf".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.SelectionDrawCostGameTest.run(ctx,world);return;}
             if("structures".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.StructureGameTest.run(ctx,world);return;}
             if("viewport".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.ViewportGameTest.run(ctx,world);return;}
+            if("golden".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){GoldenToolGameTest.run(ctx,world);return;}
             if("branding".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){screenshot();return;}
             if("gizmos".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){gizmoControls();return;}
             if("builder".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){builderToolsAndLighting();return;}
