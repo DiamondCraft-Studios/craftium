@@ -6,17 +6,17 @@ The game draws at most **4,096 blocks** of a preview, both as the ghost in the g
 beyond that are NOT shown but ARE in the preview and WILL be built when applied. A "missing" roof or wing is
 usually this, not a mistake in the spec.
 
-Nothing in the `preview_build` reply says the picture is cut short today. The clues are:
+The tools tell you when it happens. `get_state`, the `state` inside a `preview_build` reply, and `render_view` all
+carry:
 
-- `get_state` reports `previewBlocks`, the true total in your waiting preview.
-- `render_view` reports `previewBlocksShown`, how many of them it actually drew.
+- `previewBlocks`: the true total in your waiting preview.
+- `previewBlocksDrawn`: how many of them the game describes and can draw.
+- `previewTruncated`: true when the preview is only partly drawn.
+- `previewWarning`: plain-language text, present only when it is truncated.
 
-If `previewBlocksShown` is lower than `previewBlocks`, you are not seeing the whole build. Tell the player, and
-do not judge the build from that picture.
-
-<!-- TODO(ai-skill): reword this section once preview_build, get_state and render_view report previewBlocksTotal,
-     previewBlocksShown and truncated directly (plan step 1). Until then the two-number comparison above is the only
-     signal. -->
+If `previewTruncated` is true you are not seeing the whole build. Tell the player, and do not judge the build from
+that picture. (`render_view` also reports `previewBlocksShown`, which counts only the blocks that fell inside the
+box you rendered, so it can be lower than `previewBlocksDrawn` without anything being cut.)
 
 ## Estimate before previewing
 
@@ -25,7 +25,7 @@ do not judge the build from that picture.
 - sphere: about 4/3 * pi * r^3
 - hollow shapes: about the surface area
 
-Add the ops up. Over about 4,000 means the preview will be cut short.
+Add the ops up. Over about 4,000 means the preview will be cut short. Estimating first saves a preview.
 
 ## Build in stages
 

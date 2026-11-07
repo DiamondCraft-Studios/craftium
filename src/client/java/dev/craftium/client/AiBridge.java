@@ -372,6 +372,18 @@ public final class AiBridge {
         finally { o.buildSpec = ""; }
     }
 
+    /**
+     * How big the waiting preview is and how much of it is drawn. The game draws only the first blocks of a big preview, in the
+     * game and in render_view, so the AI is told outright when that happened: the rest is still built when applied.
+     */
+    static void previewReport(JsonObject out, GhostBlocks preview) {
+        out.addProperty("previewBlocks", preview.total());
+        out.addProperty("previewBlocksDrawn", preview.described());
+        out.addProperty("previewTruncated", preview.truncated());
+        if (preview.truncated()) out.addProperty("previewWarning", "Only " + preview.described() + " of " + preview.total()
+            + " preview blocks are drawn, in the game and in render_view. The rest are still in the preview and will be built when it is applied, so do not judge the build from the picture. Build it in smaller stages to see all of it.");
+    }
+
     private static JsonObject state() {
         var mc = Minecraft.getInstance();
         var out = new JsonObject();
@@ -394,7 +406,7 @@ public final class AiBridge {
             selection.add("dimensions", array(status.max().x() - status.min().x() + 1, status.max().y() - status.min().y() + 1, status.max().z() - status.min().z() + 1));
         }
         out.add("selection", selection);
-        out.addProperty("previewBlocks", ClientState.aiPending.total());
+        previewReport(out, ClientState.aiPending);
         out.addProperty("undoSteps", status.aiUndo());
         out.addProperty("busy", status.busy());
         out.addProperty("lastMessage", status.message());

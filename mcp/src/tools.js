@@ -29,7 +29,7 @@ Workflow:
 1. Call get_state. It reports the player's position and facing, the area they have selected (if any: a hint of where they want a build, which you never change), and whether you have a preview waiting. If the game is not reachable, tell the player to open a world and turn on AI building (in the editor: AI menu, then Turn on AI building; or type /craftium ai on).
 2. Decide where to build: in the player's selection if they made one, otherwise near the player or where they asked. Look before you build: get_surface gives the ground height of an area and get_blocks reads blocks; both work anywhere in the world, not just near the player. Say where you chose to build.
 3. Call preview_build with a build spec in world coordinates. If it returns an error, fix the spec and try again; the error names the operation at fault. A new preview replaces the previous one.
-4. Tell the player to look at the ghost in the game (it is violet). You can look too, without touching the player's view: call render_view on the build's area from a couple of angles, for example se for a three-quarter view and top for the plan, and judge proportions, gaps and style yourself before showing the player. Your waiting preview is drawn tinted violet. Adjust with another preview_build if the result or the player wants changes.
+4. Tell the player to look at the ghost in the game (it is violet). You can look too, without touching the player's view: call render_view on the build's area from a couple of angles, for example se for a three-quarter view and top for the plan, and judge proportions, gaps and style yourself before showing the player. Your waiting preview is drawn tinted violet. If previewTruncated is true the game drew only part of the preview, so build in smaller stages to see all of it. Adjust with another preview_build if the result or the player wants changes.
 5. Call apply_preview only once the player is happy (or if they asked you to just build it). undo reverses the last build you applied, never the player's own edits. cancel_preview discards a preview.
 Reading ground nobody has visited generates it, so a single read may touch at most 16 chunks that are not already loaded: if one is refused for that reason, read a smaller area, or read it in pieces. A build may reach 36 such chunks. Reads and builds stay in the dimension the player is in. Prefer a few well-chosen operations over many small ones; Minecraft builds read best with layered shapes, varied blocks and details like slabs, stairs and walls.`;
 
@@ -66,7 +66,7 @@ export const TOOLS = [
   {
     name: "get_state",
     title: "Get Craftium state",
-    description: "Where the player is and which way they face, the area they have selected (corners and dimensions; theirs, and never changed by you), how many blocks your waiting preview holds, and how many of your builds can be undone. Call this first.",
+    description: "Where the player is and which way they face, the area they have selected (corners and dimensions; theirs, and never changed by you), how many blocks your waiting preview holds (previewBlocks) and how many of them the game can draw (previewBlocksDrawn; previewTruncated and a previewWarning appear when a big preview is only partly drawn), and how many of your builds can be undone. Call this first.",
     inputSchema: nothing,
     annotations: READ,
     args: () => ({}),
@@ -123,6 +123,7 @@ export const TOOLS = [
       "The picture is flat-shaded blocks in each block's average colour (no textures), with the box's edges drawn faintly; the player's waiting preview, if there is one, is drawn over the world tinted violet. " +
       "Angles: se, sw, ne, nw look down at the box from that corner (a three-quarter view); top looks straight down with north at the top; north, south, east, west look at that side of the box from level height, which is the way to judge heights and profiles. " +
       "The reply says which way east and north point in the picture and lists the commonest blocks with the colour each is drawn in, so you can tell materials apart. " +
+      "The game draws only part of a very big preview: when that happens the reply has previewTruncated and a previewWarning, and the picture is missing blocks that will still be built, so do not judge the build from it. " +
       "The box can be at most 128 blocks on a side and 262,144 blocks (64 by 64 by 64, for example); it is read from the server in pieces, like get_blocks.",
     inputSchema: {
       type: "object",
@@ -145,7 +146,8 @@ export const TOOLS = [
     name: "preview_build",
     title: "Preview a build",
     description:
-      "Shows a build as a ghost preview at the world coordinates its spec names, without changing the world, replacing any earlier preview. Nothing needs to be selected, and the build can be anywhere in the world the player's dimension reaches. Describe the build as a spec of primitives.\n\n" + BUILD_SPEC_GUIDE,
+      "Shows a build as a ghost preview at the world coordinates its spec names, without changing the world, replacing any earlier preview. Nothing needs to be selected, and the build can be anywhere in the world the player's dimension reaches. " +
+      "The game draws only part of a very big preview. The reply's state says so (previewTruncated, previewWarning): the rest is still built when you apply it, so build in smaller stages if you need to see all of it. Describe the build as a spec of primitives.\n\n" + BUILD_SPEC_GUIDE,
     inputSchema: {
       type: "object",
       properties: {

@@ -48,6 +48,12 @@ final class GhostBlocks {
     /** How many blocks the edit or clipboard really holds, which can be more than are drawn. */
     int total(){return data==null?0:data.total();}
 
+    /** How many of those blocks the server described, and so how many can be drawn. */
+    int described(){return data==null?0:(data.blocks()==null?0:data.blocks().length/4)+(data.removed()==null?0:data.removed().length/3);}
+
+    /** True when the server cut the list short, so some blocks of the edit are held but never drawn. */
+    boolean truncated(){return described()<total();}
+
     /** Parses the palette once there is a world to look block names up in. */
     private boolean resolve(){
         if(states!=null)return true;
