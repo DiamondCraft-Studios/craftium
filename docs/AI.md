@@ -67,7 +67,7 @@ Claude cannot do anything the editor cannot. Every request goes through the same
 
 Claude has a workspace of its own, apart from yours. It never changes your selection, your preview or your undo history, and it never moves or turns you. It can read your selection (`read_selection`), but only to see where you want a build.
 
-- **Its preview** is held separately and drawn in violet. You apply or discard it from the **AI** menu (Enter and Esc still belong to your own edits).
+- **Its preview** is held separately and drawn in violet. You apply or discard it from the **AI** menu (Enter and Esc still belong to your own edits). On a multiplayer server, other players who have Craftium and are in the same dimension see your AI preview too, in teal with your name above it, and you see theirs. They can only look: nobody else can apply or discard it. The **AI** tab has a **Show AI previews from other players** setting to hide them, and one is drawn only within 192 blocks of you. It is shown only while it is waiting: once applied or discarded, or when its owner leaves or changes dimension, it disappears.
 - **Its undo** only covers builds Claude applied. **Undo last AI build** and the `undo` tool undo those, and nothing else; your own Ctrl+Z is unchanged. This list is not saved: it is dropped when you leave the world, reconnect or change dimension.
 - **Building far away works.** A build is planned and applied by the server, so it can be anywhere in the dimension you are in, with nobody nearby. The ground it reaches is loaded for it, and ground nobody has visited is made (as flying there would). One build may reach at most **36 chunks that are not already loaded** (a square 96 blocks across); a larger one is refused with a message, so Claude builds closer to loaded ground or in pieces. Undoing a far build loads the ground again in the same way.
 - **You still decide.** A build is always shown as a preview first and applied as a separate step. It goes through the same checks as your own edits: permissions, protected areas, WorldGuard and the world border.
@@ -110,6 +110,7 @@ A build ignores your brush settings (mask, symmetry, height range) and places ex
 
 ## Safety
 
+- On a server, an AI preview is visible to the other players with Craftium in your dimension while it waits (see [Claude's workspace](#claudes-workspace)). Nothing else of yours is shared: not your selection, your own edits or your requests.
 - The bridge is **off until you turn it on**, and it listens on `127.0.0.1` only.
 - Each launch writes a new random token to `config/craftium/bridge.json`. Requests without it are refused, as are requests that come from a web page (they carry an `Origin`) or name another host.
 - `get_screenshot` sends a picture of your game window (at most 1024 pixels wide) to the AI app, so close anything private on screen first. It is only taken when the AI app asks, and the corner marker shows **AI working…** while it does. `render_view` does not use your screen at all: it draws from block data, so it shows nothing but blocks.
