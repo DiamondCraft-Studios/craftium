@@ -381,6 +381,47 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             call("cancel_preview", "{}");
             System.out.println("CRAFTIUM_AI script_ok");
 
+            // Review fixes, all in open air high above the ground so nothing of the world is in the way.
+            int skyY = gy + 60, wallZ = z + 40;
+            // An addition that only carves: air through a preview wall in open air puts those blocks back as the world has them, which once
+            // made the addition look empty and dropped it.
+            var wallSpec = "{\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + gx + "," + skyY + "," + wallZ + "],\"to\":[" + (gx + 4) + "," + (skyY + 4) + "," + wallZ + "],\"block\":\"stone\"}]}}";
+            require(call("preview_build", wallSpec).get("ok").getAsBoolean(), "a wall in the sky");
+            var carved = call("preview_build", "{\"mode\":\"add\",\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + (gx + 1) + "," + (skyY + 1) + "," + wallZ + "],\"to\":[" + (gx + 3) + "," + (skyY + 3) + "," + wallZ + "],\"block\":\"air\"}]}}");
+            require(carved.get("ok").getAsBoolean() && carved.get("message").getAsString().contains("took back 9"), "a carve in add mode should be kept: " + carved);
+            require(carved.getAsJsonObject("preview").get("takenBack").getAsInt() == 9 && carved.getAsJsonObject("state").get("previewBlocks").getAsInt() == 16, "the doorway leaves 16 of the 25 blocks: " + carved);
+            // Two lower door halves stacked are not a door.
+            var stacked = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"set\",\"at\":[" + gx + "," + skyY + "," + wallZ + "],\"block\":\"oak_door[half=lower]\"},"
+                + "{\"op\":\"set\",\"at\":[" + gx + "," + (skyY + 1) + "," + wallZ + "],\"block\":\"oak_door[half=lower,hinge=right]\"}]}}");
+            require(stacked.get("ok").getAsBoolean() && stacked.getAsJsonObject("preview").getAsJsonArray("warnings").toString().contains("2 oak_door have no other half"), "two lower halves are no door: " + stacked);
+            // A grindstone is kept by the game wherever it is put, a button is not: ask the game itself, then check that the warnings agree.
+            var survives = world.getServer().computeOnServer(server -> {
+                var level = server.overworld();
+                var at = new net.minecraft.core.BlockPos(gx, skyY, wallZ + 10);
+                var face = net.minecraft.world.level.block.state.properties.BlockStateProperties.ATTACH_FACE;
+                var floor = net.minecraft.world.level.block.state.properties.AttachFace.FLOOR;
+                return new boolean[]{Blocks.GRINDSTONE.defaultBlockState().setValue(face, floor).canSurvive(level, at), Blocks.STONE_BUTTON.defaultBlockState().setValue(face, floor).canSurvive(level, at)};
+            });
+            require(survives[0] && !survives[1], "the game keeps a grindstone in the air and drops a button: " + java.util.Arrays.toString(survives));
+            var attached = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"set\",\"at\":[" + gx + "," + skyY + "," + (wallZ + 10) + "],\"block\":\"grindstone[face=floor]\"},"
+                + "{\"op\":\"set\",\"at\":[" + (gx + 2) + "," + skyY + "," + (wallZ + 10) + "],\"block\":\"stone_button[face=floor]\"}]}}");
+            String attachedWarnings = attached.getAsJsonObject("preview").getAsJsonArray("warnings").toString();
+            require(attachedWarnings.contains("stone_button") && !attachedWarnings.contains("grindstone"), "only the button should be warned about: " + attachedWarnings);
+            // A script may set a block as often as it likes: only different blocks count against the cap of 131,072.
+            var again = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"script\",\"from\":[" + gx + "," + skyY + "," + wallZ + "],\"to\":[" + (gx + 1) + "," + skyY + "," + wallZ + "],"
+                + "\"code\":\"for i = 1, 140000 do setBlock(x0, y0, z0, 'stone') end\"}]}}");
+            require(again.get("ok").getAsBoolean() && again.getAsJsonObject("preview").get("placed").getAsInt() == 1, "setting one block 140,000 times is one block: " + again);
+            // getHighestBlockYAt sees the platform the spec built, not only the ground far below it.
+            int platformY = skyY + 8, platformZ = wallZ + 20;
+            var onPlatform = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + gx + "," + platformY + "," + platformZ + "],\"to\":[" + (gx + 4) + "," + platformY + "," + (platformZ + 4) + "],\"block\":\"stone\"},"
+                + "{\"op\":\"script\",\"from\":[" + gx + "," + platformY + "," + platformZ + "],\"to\":[" + (gx + 4) + "," + (platformY + 3) + "," + (platformZ + 4) + "],"
+                + "\"code\":\"setBlock(x0, getHighestBlockYAt(x0, z0) + 1, z0, 'gold_block')\"}]}}");
+            require(onPlatform.get("ok").getAsBoolean() && !onPlatform.getAsJsonObject("preview").has("warnings"), "the block should land on the platform, inside the script's box: " + onPlatform);
+            String goldAt = call("get_preview_blocks", "{\"from\":[" + gx + "," + (platformY + 1) + "," + platformZ + "],\"to\":[" + gx + "," + (platformY + 1) + "," + platformZ + "],\"view\":\"only\"}").toString();
+            require(goldAt.contains("gold_block"), "the gold block should stand on the platform: " + goldAt);
+            call("cancel_preview", "{}");
+            System.out.println("CRAFTIUM_AI review_fixes_ok");
+
             // A build far from the player, in ground nobody has loaded: previewed, applied and undone without anyone going there.
             int fx = block.get(0).getAsInt() + 3000, fz = block.get(2).getAsInt() + 3000;
             require(!ctx.computeOnClient(mc -> mc.level.getChunkSource().hasChunk(fx >> 4, fz >> 4)), "the far build site should not be loaded on the client");
