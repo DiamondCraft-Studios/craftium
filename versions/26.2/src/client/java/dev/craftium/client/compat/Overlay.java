@@ -48,7 +48,7 @@ public final class Overlay {
     /** Registers the per-frame submission of block models, and clears them on disconnect. Gizmos need no setup. */
     public static void install(){
         LevelRenderEvents.COLLECT_SUBMITS.register(Overlay::submitBlocks);
-        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{building.clear();shown=List.of();pendingFrame=frame=null;});
+        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{building.clear();shown=List.of();pendingFrame=frame=null;LOOSE.clear();});
     }
 
     public static Scope begin(Minecraft mc){
@@ -127,6 +127,23 @@ public final class Overlay {
         int r=(ghost>>16&255)*(tint>>16&255)/255,g=(ghost>>8&255)*(tint>>8&255)/255,b=(ghost&255)*(tint&255)/255;
         return ghost&0xFF000000|r<<16|g<<8|b;
     }
+    /** The sides of the block at {@code pos} that show from a camera ({@code dx},{@code dy},{@code dz}) from its centre: facing it, not touching another ghost block and not covered as in the world. One bit per {@link Direction#ordinal()}. */
+    private static int visibleSides(net.minecraft.world.level.BlockGetter level,java.util.Set<BlockPos> placed,BlockPos pos,double dx,double dy,double dz){
+        int turned=facingMask(dx,dy,dz),mask=0;
+        if(turned==0)return 0;
+        for(Direction face:FACES)if((turned>>face.ordinal()&1)!=0&&!placed.contains(pos.relative(face))&&!hidden(level,pos,face))mask|=1<<face.ordinal();
+        return mask;
+    }
+    /** Whether a block state has quads that belong to no side (a flower, say). Worked out once per state, because it only depends on the model. */
+    private static final java.util.Map<net.minecraft.world.level.block.state.BlockState,Boolean> LOOSE=new java.util.IdentityHashMap<>();
+    private static boolean hasLooseQuads(Minecraft mc,net.minecraft.world.level.block.state.BlockState state,BlockPos pos){
+        var known=LOOSE.get(state);
+        if(known!=null)return known;
+        var parts=new ArrayList<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart>();
+        mc.getModelManager().getBlockStateModelSet().get(state).collectParts(RandomSource.create(state.getSeed(pos)),parts);
+        boolean loose=false;for(var part:parts)if(!part.getQuads(null).isEmpty())loose=true;
+        LOOSE.put(state,loose);return loose;
+    }
     private static void submitBlocks(LevelRenderContext context){
         var ghosts=shown;
         var mc=Minecraft.getInstance();
@@ -148,6 +165,10 @@ public final class Overlay {
                 BlockPos pos=ghost.places().get(i);
                 var state=ghost.states()!=null?ghost.states().get(i):mc.level.getBlockState(ghost.models().get(i));
                 if(state.isAir()||state.getRenderShape()!=RenderShape.MODEL)continue; // fluids and block entities have no plain model
+                final double dx=eye.x-pos.getX()-.5,dy=eye.y-pos.getY()-.5,dz=eye.z-pos.getZ()-.5;
+                // Most blocks of a big ghost are buried or turned away: decide that from the sides alone, before any model or transform is touched.
+                final int visible=visibleSides(mc.level,ghost.placed(),pos,dx,dy,dz);
+                if(visible==0&&!hasLooseQuads(mc,state,pos))continue;
                 final var tints=new int[]{-2,-2,-2,-2};
                 final var tintOf=(java.util.function.IntUnaryOperator)index->{ // biome tints such as grass and leaves, looked up once per block
                     if(index<0||index>=tints.length)return 0xFFFFFF;
@@ -157,7 +178,6 @@ public final class Overlay {
                 random.setSeed(state.getSeed(pos));
                 var parts=new ArrayList<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart>();
                 mc.getModelManager().getBlockStateModelSet().get(state).collectParts(random,parts);
-                final double dx=eye.x-pos.getX()-.5,dy=eye.y-pos.getY()-.5,dz=eye.z-pos.getZ()-.5;
                 stack.pushPose();
                 stack.translate(pos.getX()+.5-eye.x,pos.getY()+.5-eye.y,pos.getZ()+.5-eye.z);
                 float grow=ghostScale(dx,dy,dz);
@@ -167,8 +187,7 @@ public final class Overlay {
                     for(var part:parts){
                         for(var q:part.getQuads(null))if(facing(q.direction(),dx,dy,dz,0)){quad.setColor(tinted(ghost.tint(),tintOf.applyAsInt(q.materialInfo().tintIndex())));consumer.putBakedQuad(pose,q,quad);}
                         for(Direction face:FACES){
-                            // Only the outer surface: not a side that touches another ghost, is covered as in the world, or faces away.
-                            if(ghost.placed().contains(pos.relative(face))||hidden(mc.level,pos,face)||!facing(face,dx,dy,dz,.5))continue;
+                            if((visible>>face.ordinal()&1)==0)continue; // only the outer surface: not a side that touches another ghost, is covered as in the world, or faces away
                             for(var q:part.getQuads(face)){quad.setColor(tinted(ghost.tint(),tintOf.applyAsInt(q.materialInfo().tintIndex())));consumer.putBakedQuad(pose,q,quad);}
                         }
                     }
