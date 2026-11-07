@@ -58,9 +58,11 @@ public final class Options {
     public boolean maskInBuilder;
     /** Whether the blocks you place and break by hand, with the game's own clicks, go into the undo history. */
     public boolean recordPlayerBuilding=true;
-    /** Whether the Builder's magic select uses the editor's Magic Wand settings; when off it matches by {@link #builderMagicCompare}, with the widest limit and the wand's plain defaults. */
+    /** Whether the Builder's magic select uses the editor's Magic Wand settings; when off it matches by {@link #builderMagicCompare}, up to {@link #builderMagicLimit} blocks, with the wand's plain defaults. */
     public boolean builderFollowsMagic=true;
     public Compare builderMagicCompare=Compare.BLOCK;
+    /** The most blocks the Builder's magic select looks for when it does not follow the editor. */
+    public int builderMagicLimit=1000;
     public String biome = "minecraft:plains";
     public String text = "CRAFTIUM";
     public int minY = -64, maxY = 319;
@@ -345,7 +347,7 @@ public final class Options {
         distortX=Double.isFinite(distortX)?Math.max(0,distortX):2;distortY=Double.isFinite(distortY)?Math.max(0,distortY):2;distortZ=Double.isFinite(distortZ)?Math.max(0,distortZ):2;
         roughenRatio=Double.isFinite(roughenRatio)?Math.clamp(roughenRatio,0,1):.2;shatterWidth=Double.isFinite(shatterWidth)?Math.max(0,shatterWidth):1;
         extrudeCount=Math.clamp(extrudeCount,1,MAX_EXTRUDE_COUNT);brushFlow=Math.clamp(brushFlow,FLOW_MIN,FLOW_MAX);
-        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);blockLimit=Math.clamp(blockLimit,1,MAX_BLOCK_LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);largeSelectionThreshold=Math.clamp(largeSelectionThreshold,1,Selection.LIMIT);aiGhostDrawLimit=Math.clamp(aiGhostDrawLimit,AI_GHOST_DRAW_MIN,AI_GHOST_DRAW_MAX);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;builderSelectionWidth=Double.isFinite(builderSelectionWidth)?Math.clamp(builderSelectionWidth,.1,10):1;builderPreviewWidth=Double.isFinite(builderPreviewWidth)?Math.clamp(builderPreviewWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
+        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);blockLimit=Math.clamp(blockLimit,1,MAX_BLOCK_LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);largeSelectionThreshold=Math.clamp(largeSelectionThreshold,1,Selection.LIMIT);builderMagicLimit=Math.clamp(builderMagicLimit,1,Selection.LIMIT);aiGhostDrawLimit=Math.clamp(aiGhostDrawLimit,AI_GHOST_DRAW_MIN,AI_GHOST_DRAW_MAX);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;builderSelectionWidth=Double.isFinite(builderSelectionWidth)?Math.clamp(builderSelectionWidth,.1,10):1;builderPreviewWidth=Double.isFinite(builderPreviewWidth)?Math.clamp(builderPreviewWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
         octaves=Math.clamp(octaves,1,8);lacunarity=bounded(lacunarity,1,4);gain=bounded(gain,.01,1);jitter=bounded(jitter,0,1);
         scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);
         sizeX=Math.copySign(bounded(Math.abs(sizeX),.1,8),sizeX);sizeY=Math.copySign(bounded(Math.abs(sizeY),.1,8),sizeY);sizeZ=Math.copySign(bounded(Math.abs(sizeZ),.1,8),sizeZ); // negative flips
