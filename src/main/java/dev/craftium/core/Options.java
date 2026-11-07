@@ -88,13 +88,13 @@ public final class Options {
     public int selectionInsideFill=0x40ffa63d;
     /** A wash over the whole screen while the camera is inside the selection; alpha 0 turns it off. */
     public int selectionInsideTint=0x18ffa63d;
-    public int selectionFill=0x225d91ff,selectionTint=0x9046B4EE,
-        previewColor=0xff8be3b5,previewFill=0x2247d29b,previewTint=0x9046B4EE,
-        removedFill=0x22ff5555,removedTint=0x90EE4646,
+    public int selectionFill=0x225d91ff,selectionTint=0x80ffffff,
+        previewColor=0xff8be3b5,previewFill=0x2247d29b,previewTint=0x80ffffff,
+        removedFill=0x22ff5555,removedTint=0x80ffffff,
         hoverColor=0xff7fd8ff,hoverFill=0x2240c0ff;
     /** Colours (ARGB) of the player's own AI preview (violet outline) and of other players' AI previews (teal). The player's own blocks are untinted (white) at 50% opacity so they stay readable. */
     public int aiColor=0xffc9a0ff,aiFill=0x22a070ff,aiTint=0x80ffffff,
-        sharedAiColor=0xff7fe3d4,sharedAiFill=0x2230d5c8,sharedAiTint=0x2240c8b8;
+        sharedAiColor=0xff7fe3d4,sharedAiFill=0x2230d5c8,sharedAiTint=0x80ffffff;
     /** The colour (ARGB) and width, in pixels from 0.1 to 10, of the selection's outline. */
     public int selectionColor=0xff2389c6;
     /** The colour (ARGB) of a selection's face that touches a solid block outside it. Fully transparent turns it off. */
