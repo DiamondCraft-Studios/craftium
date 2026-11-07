@@ -84,7 +84,7 @@ final class AiWorld {
         out.add("palette", strings(names.palette()));
         out.add("heights", heights);
         out.add("blocks", blocks);
-        out.addProperty("noColumn", "-2147483648 and -1 mark a column past the world border or with no block in it");
+        out.addProperty("noColumn", "A column past the world border or with no block in it has heights[i] = -2147483648 and blocks[i] = -1. A height of -1 is real: the top block is at y = -1 (as in a superflat world), not an empty column");
         out.addProperty("chunksLoadedForThisRead", fresh);
         return reply(out);
     }

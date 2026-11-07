@@ -73,7 +73,7 @@ The reads are plain reads: they change nothing, and they need the same permissio
 
 ## Build specs
 
-Claude describes a build as JSON primitives with positions in **world coordinates**, the same numbers `get_blocks` and `get_surface` report, so it builds at the heights it found. An optional `origin` is added to every coordinate, for a build written near zero and placed anywhere. Nothing is selected first: the area a build covers is worked out from its operations. The primitives are: `box`, `sphere` (or ellipsoid), `cylinder`, `cone`, `pyramid`, `line`, `set` and `replace`. Any operation can be `hollow` (shapes) or `repeat` with a step (a row of columns). A later operation overwrites an earlier one, and `minecraft:air` carves. A palette maps short names to block ids, including states such as `minecraft:sandstone_stairs[facing=north]`.
+Claude describes a build as JSON primitives with positions in **world coordinates**, the same numbers `get_blocks` and `get_surface` report, so it builds at the heights it found. An optional `origin` is added to every coordinate, for a build written near zero and placed anywhere. Nothing is selected first: the area a build covers is worked out from its operations. The primitives are: `box`, `sphere` (or ellipsoid), `cylinder`, `cone`, `pyramid`, `line`, `set` and `replace`. Any operation can be `hollow` (shapes) or `repeat` with a step (a row of columns). `hollow` keeps every outer cell, including the top and bottom layers of a box or cylinder, and leaves the inside as it was rather than clearing it. A later operation overwrites an earlier one, and `minecraft:air` carves. A palette maps short names to block ids, including states such as `minecraft:sandstone_stairs[facing=north]`.
 
 ```json
 {

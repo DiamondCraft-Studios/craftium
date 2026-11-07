@@ -19,7 +19,7 @@ ops run in order; a later op overwrites earlier ones. Use "minecraft:air" to car
   set:      {"op":"set","at":[x,y,z],"block":B}   ("at" may also be a list of positions)
   replace:  {"op":"replace","from":[x,y,z],"to":[x,y,z],"find":B,"block":B}   (only changes blocks that are "find")
 Any op may add "repeat": {"count": N, "step": [dx,dy,dz]} to place N copies, e.g. a row of columns.
-"hollow": true keeps only the outer shell (all shapes except line/set/replace).
+"hollow": true keeps only the outer shell (all shapes except line/set/replace). The shell includes the top and bottom layers of boxes and cylinders, and the inside is left as it was, not cleared: add an air op to empty it.
 Limits: at most 256 ops, 64 repeats, radius 128, a build that spans at most 256 blocks along each side, ~131k blocks in total. The ground a build reaches is loaded for it (at most 36 chunks that were not loaded already), so it can be far from the player.
 Orientation-sensitive blocks (stairs, doors, logs) take properties like "minecraft:sandstone_stairs[facing=north,half=bottom]".`;
 
@@ -88,7 +88,7 @@ export const TOOLS = [
     description:
       "The highest block of every column in a rectangle (corners [x, y, z]; y is ignored), up to 128 by 128 columns: heights[i] is the y of the top block and blocks[i] indexes the palette, x fastest then z from the rectangle's minimum corner. " +
       'Use it to find ground level before building on or into terrain. "top" (default) is the highest solid or liquid block ignoring leaves, so water counts and trunks and buildings count; "floor" looks under water. ' +
-      "In the Nether the surface is the ceiling; use get_blocks to look below it. Columns past the world border read as -2147483648.",
+      "In the Nether the surface is the ceiling; use get_blocks to look below it. A column past the world border, or with no block in it, has heights[i] = -2147483648 and blocks[i] = -1. A height of -1 is real ground at y = -1 (as in a superflat world), not an empty column.",
     inputSchema: { type: "object", properties: { ...box.properties, kind: { type: "string", enum: ["top", "floor"], description: '"top" (default) or "floor" (under water)' } }, required: ["from", "to"] },
     annotations: READ,
     args: (a) => {
