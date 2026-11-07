@@ -8,6 +8,13 @@ Changes since 0.9.1-beta.1.
 - Moving, cloning or stacking a selection or a Builder box between far-away chunks no longer asks you to walk there. Craftium loads the chunks at both ends for as long as the edit takes, then lets them go. Undo and redo of such an edit do the same.
 - Chunks nobody has visited are generated for the edit. An edit that needs more than 128 chunks that are not loaded is refused.
 
+### AI building
+- The reply to a preview tells the AI what it made: blocks placed and cleared, where they are, and the commonest blocks with how stairs and other facing blocks are turned, so a roof built the wrong way round is caught before it is drawn.
+- A build spec the server refuses no longer clears the preview that was waiting, so your ghost stays while the AI fixes its spec. The error names the operation that used a block the game does not have and the nearest real ones ("spruce_stair": minecraft:spruce_stairs), or the properties a block takes.
+- Replies to the AI are held to about 60 KB, which fits in what an AI app passes on. Reading a wide area of ground gives a summary (height range, how level it is, what it is made of, a coarse map) instead of every column.
+- get_state also gives the dimension, height limits, sea level, the biome you stand in and your recent blocks; get_palette is gone from the AI tools.
+- The building skill has worked examples (a gable cottage and a round tower) and renders only where the look matters, which saves time and tokens on every build.
+
 ## 0.9.1-beta.1
 
 Changes since 0.9.0-beta.1.
