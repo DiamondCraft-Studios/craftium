@@ -177,7 +177,7 @@ public final class BuilderMode {
         // Following the editor, the Magic Wand's own settings decide; otherwise the Builder matches by its own choice, up to the largest selection, with the wand's plain defaults.
         var world=o.builderFollowsMagic?MagicPreview.world(mc,at,o):MagicPreview.world(mc,at,o,o.builderMagicCompare,true);
         var params=o.builderFollowsMagic?new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,Integer.MAX_VALUE,Selection.LIMIT*4)
-            :new MagicWand.Params(Selection.LIMIT,1,false,true,true,true,true,Integer.MAX_VALUE,Selection.LIMIT*4);Point start=CraftiumClient.point(at);
+            :new MagicWand.Params(o.builderMagicLimit,1,false,true,true,true,true,Integer.MAX_VALUE,Selection.LIMIT*4);Point start=CraftiumClient.point(at);
         magicSince=System.currentTimeMillis();magicGrow=grow;magicSubtract=subtract;
         magic=java.util.concurrent.CompletableFuture.supplyAsync(()->MagicWand.select(start,world,params),search);
     }
@@ -222,7 +222,7 @@ public final class BuilderMode {
         int x0=Integer.MAX_VALUE,y0=x0,z0=x0,x1=Integer.MIN_VALUE,y1=x1,z1=x1;
         for(Point p:found){x0=Math.min(x0,p.x());y0=Math.min(y0,p.y());z0=Math.min(z0,p.z());x1=Math.max(x1,p.x());y1=Math.max(y1,p.y());z1=Math.max(z1,p.z());}
         Point low=new Point(x0,y0,z0),high=new Point(x1,y1,z1);
-        if(ClientState.options.largeSelectionWarnings&&found.size()>=ClientState.LARGE_SELECTION){ // the editor's large selection warning, and the switch that turns it off
+        if(ClientState.options.largeSelectionWarnings&&found.size()>=ClientState.options.largeSelectionThreshold){ // the editor's large selection warning, and the switch that turns it off
             heldFirst=low;heldSecond=high;heldCount=found.size();heldCells=List.copyOf(found);heldGrow=magicGrow;return;}
         selectBlocks(found,magicGrow);
     }
