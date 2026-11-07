@@ -671,12 +671,15 @@ public final class EditorServer {
                 var mine=SESSIONS.get(player.getUUID()); // the player's own selection, which operations on it read and never change
                 var edit=BuildPlanner.plan(player,ai,o,mine==null?Set.<Point>of():mine.selection.points(),onto);
                 var added=onto==null?edit:addedTo(onto,edit);
-                if(added.changes().isEmpty()){send(player,ai,"No matching blocks changed"+(ai.pendingEdit==null?"":"; the earlier preview is still waiting"),false);return;}
+                // Blocks the new spec put back to what the world holds (a doorway carved through a preview wall in open air) leave the edit
+                // altogether, so they are not in "added": count them, or a spec that only carves would look like one that did nothing.
+                int takenBack=onto==null?0:takenBack(onto,edit);
+                if(added.changes().isEmpty()&&takenBack==0){send(player,ai,"No matching blocks changed"+(ai.pendingEdit==null?"":"; the earlier preview is still waiting"),false);return;}
                 if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller build");
                 EditProtection.check(player,edit);
                 ai.pendingEdit=edit;ai.pendingDirty=true;ai.previewId=++PREVIEW_IDS;
-                ServerPlatform.send(player,new Packets.AiReply(AiWorld.previewSummary(added,(net.minecraft.server.level.ServerLevel)player.level(),edit,ai.specWarnings))); // before the status, which the AI client waits for, so it has arrived by then
-                send(player,ai,onto==null?"AI preview ready: "+edit.changes().size()+" blocks":"Added "+added.changes().size()+" blocks to the AI preview: "+edit.changes().size()+" blocks in all",false);
+                ServerPlatform.send(player,new Packets.AiReply(AiWorld.previewSummary(added,(net.minecraft.server.level.ServerLevel)player.level(),edit,ai.specWarnings,takenBack))); // before the status, which the AI client waits for, so it has arrived by then
+                send(player,ai,onto==null?"AI preview ready: "+edit.changes().size()+" blocks":"Added "+added.changes().size()+" blocks to the AI preview"+(takenBack>0?" and took back "+takenBack:"")+": "+edit.changes().size()+" blocks in all",false);
             }
             case "ai_apply" -> {
                 var edit=ai.pendingEdit;
@@ -696,6 +699,12 @@ public final class EditorServer {
         }
     }
     /** The changes of {@code merged} that {@code earlier} did not already hold: what an addition to a preview changed. */
+    /** How many positions {@code earlier} changed that {@code merged} no longer does: preview blocks a later spec put back as the world has them. */
+    private static int takenBack(Session.Edit earlier,Session.Edit merged){
+        var kept=new HashSet<Point>();for(var c:merged.changes())kept.add(c.pos());
+        int gone=0;for(var c:earlier.changes())if(!kept.contains(c.pos()))gone++;
+        return gone;
+    }
     private static Session.Edit addedTo(Session.Edit earlier,Session.Edit merged){
         var before=new HashMap<Point,Session.Change>();for(var c:earlier.changes())before.put(c.pos(),c);
         var out=new ArrayList<Session.Change>();

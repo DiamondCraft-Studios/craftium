@@ -216,8 +216,9 @@ final class AiWorld {
     }
 
     /** {@link #previewSummary(Session.Edit)} with what looks wrong in it, if anything: see {@link #warnings}. */
-    static String previewSummary(Session.Edit added, net.minecraft.server.level.ServerLevel level, Session.Edit whole, java.util.List<String> specWarnings) {
+    static String previewSummary(Session.Edit added, net.minecraft.server.level.ServerLevel level, Session.Edit whole, java.util.List<String> specWarnings, int takenBack) {
         var out = summaryJson(added);
+        if (takenBack > 0) out.addProperty("takenBack", takenBack);
         var list = new java.util.ArrayList<>(specWarnings);
         list.addAll(warnings(level, whole, added));
         if (!list.isEmpty()) {
