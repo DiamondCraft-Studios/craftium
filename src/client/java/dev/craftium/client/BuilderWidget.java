@@ -343,6 +343,7 @@ public final class BuilderWidget {
     public static boolean mouse(int button,int action){
         if(!active())return false;
         if(action!=GLFW.GLFW_PRESS||button>2)return true;
+        CraftiumClient.guardClick(button); // the widget takes this click, so it must not also break or place a block
         var mc=Minecraft.getInstance();var win=mc.getWindow();int w=win.getGuiScaledWidth(),h=win.getGuiScaledHeight();
         int x=left(w),y=top(h),mx=mouseX(mc),my=mouseY(mc);
         int[] slot=slotAt(w,h,mx,my);if(slot!=null){unfocus(mc);click(mc,slot[0],slot[1],button);return true;}
