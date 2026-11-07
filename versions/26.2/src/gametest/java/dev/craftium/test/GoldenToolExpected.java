@@ -3,9 +3,9 @@ package dev.craftium.test;
 import java.util.Map;
 
 /** Written by {@link GoldenToolGameTest} when run with CRAFTIUM_GOLDEN_UPDATE=1: "<blocks changed> <hash of the change list>" for each case. */
-final class GoldenToolExpected {
+public final class GoldenToolExpected {
     private GoldenToolExpected() {}
-    static final Map<String, String> CASES = Map.ofEntries(
+    public static final Map<String, String> CASES = Map.ofEntries(
         Map.entry("biome_painter", "18 4d3ffdfd066347ab"),
         Map.entry("clentaminator", "69 4b3965adca77d4ca"),
         Map.entry("distort", "100 533b6b0e51fbf18c"),
