@@ -15,7 +15,8 @@ carry:
 - `previewWarning`: plain-language text, present only when it is truncated.
 
 If `previewTruncated` is true you are not seeing the whole build. Tell the player, and do not judge the build from
-that picture. (`render_view` also reports `previewBlocksShown`, which counts only the blocks that fell inside the
+that picture. To see what the game did not draw, read it: `get_preview_blocks` reads every block of the preview, drawn
+or not, with its state. (`render_view` also reports `previewBlocksShown`, which counts only the blocks that fell inside the
 box you rendered, so it can be lower than `previewBlocksDrawn` without anything being cut.)
 
 ## Estimate before previewing
@@ -52,6 +53,9 @@ moving on. The undo list is dropped when the player leaves the world, reconnects
 ## Reading limits that also affect planning
 
 - `get_blocks`: at most 32,768 blocks per call.
+- `get_preview_blocks`: a box of up to 1,048,576 blocks per call, but the answer is held to about 100 KB. It is written
+  as boxes (a wall is a few entries) or runs, whichever is shorter. For a big build read it a part at a time.
+- `read_selection`: any selection the editor allows, up to 1,048,576 blocks, answered in a few lines.
 - `get_surface`: at most 128 by 128 columns.
 - Reading ground nobody has visited generates it, so one read may touch at most 16 chunks that are not already
   loaded. A build may reach 36 such chunks. If a call is refused for that reason, read a smaller area or read it in

@@ -1,6 +1,6 @@
 ---
 name: craftium-builder
-description: Build structures in a player's Minecraft world with the Craftium MCP tools (get_state, get_surface, get_blocks, render_view, preview_build, apply_preview). Use when the user asks to build, recreate from an image, extend or restyle something in their world. Teaches a builder's sequence (brief, site, blockout, shell, roof, openings, materials, detail, context, verify) and Minecraft-scale proportions, so builds come out proportioned, varied and correct on the first apply.
+description: Build structures in a player's Minecraft world with the Craftium MCP tools (get_state, read_selection, get_surface, get_blocks, get_preview_blocks, render_view, preview_build, apply_preview). Use when the user asks to build, recreate from an image, extend or restyle something in their world. Teaches a builder's sequence (brief, site, blockout, shell, roof, openings, materials, detail, context, verify) and Minecraft-scale proportions, so builds come out proportioned, varied and correct on the first apply.
 ---
 
 # Building with Craftium
@@ -41,6 +41,8 @@ any time ("looks good, build it"). If it is unclear which they want, ask once.
   new part. Write the cumulative spec each time.
 - A preview draws at most 4,096 blocks. Check `previewTruncated`; if a big build can't be shown whole, say so and
   offer to apply in stages instead.
+- You can still check your work without applying anything: `get_preview_blocks` reads every block of the preview with
+  its state, drawn or not (`references/spec-pitfalls.md`).
 - When they say to build, apply what is waiting. A build too big to preview whole is applied in stages as usual.
 
 ## Phase 0: Brief
@@ -59,7 +61,7 @@ any time ("looks good, build it"). If it is unclear which they want, ask once.
   selection, call `read_selection`. Its `summary` gives the shape, the material, whether it is flat and what is in the
   way above it, which usually settles the site at once. It reads the exact shape, so a lasso or magic-wand selection
   of a platform is the platform, not its bounding box. If something is in the way (trees, fences), say so and suggest
-  clearing it or building around it. If the selection is too big to read, it says so: read it in pieces.
+  clearing it or building around it. It works for any selection the editor allows, up to a million blocks.
 - A selection is a help, not a requirement. The player may give coordinates or describe the place instead; then find
   the site yourself. Build inside the selection unless they say otherwise, and if the build won't fit, say so and
   propose a size that does.
@@ -98,8 +100,8 @@ The roof makes or breaks the silhouette. Check it twice.
   ends with wall blocks.
 - Big or wide builds need several roof sections, not one slab.
 - Stair facing is the orientation trap: on a roof, every stair faces the ridge (the higher side), on both slopes.
-  Renders cannot show it, so after applying read a strip across the ridge with `get_blocks` and check the facings
-  (`references/spec-pitfalls.md`).
+  Renders cannot show it, so check the preview before you apply it: read the roof with `get_preview_blocks` and check
+  the facings (`references/spec-pitfalls.md`). `get_blocks` does the same on the world afterwards.
 - Seal the roof to the walls with no sky gaps.
 
 ## Phase 5: Openings and circulation
