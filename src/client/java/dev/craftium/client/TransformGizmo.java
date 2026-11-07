@@ -495,7 +495,8 @@ final class TransformGizmo {
     /** The axes for a gizmo at {@code anchor}, turned to point away from the box when it is a box corner. */
     private static Vec3[] axesAt(Vec3 anchor){
         Vec3[] directions=axes();
-        double[] flips=dragging!=null&&dragging.kind==Kind.NODE&&dragFlips!=null&&anchor.distanceTo(dragging.anchor.add(delta))<1e-6?dragFlips:flipsFor(anchor);
+        boolean dragged=dragging!=null&&dragging.kind==Kind.NODE&&dragFlips!=null&&(anchor.distanceTo(dragging.anchor.add(delta))<1e-6||anchor.distanceTo(dragging.anchor.add(smooth))<1e-6); // the gizmo is drawn at the smoothed position
+        double[] flips=dragged?dragFlips:flipsFor(anchor);
         if(flips!=null)for(int i=0;i<3;i++)directions[i]=directions[i].scale(flips[i]);
         return directions;
     }
