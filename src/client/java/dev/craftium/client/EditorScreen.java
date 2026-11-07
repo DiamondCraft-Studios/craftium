@@ -167,7 +167,6 @@ public final class EditorScreen extends CraftiumScreen {
     void select(Tool tool){
         cancelSelectionJobs();
         if(tool.transform()&&tool!=Tool.PIVOT&&ClientState.status.selectionSize()==0&&!ShapeObject.active())ClientState.notify("Select blocks first, then use "+tool.label);
-        if(tool!=Tool.MODIFY)ModifyPreview.edit();
         toolActive=true;previousTool=o().tool;selectedNode=-1;Interactions.of(tool).chosen(context);o().tool=tool;o().gizmoTarget=Options.GizmoTarget.AUTO;builder=false;ClientState.save();init();}
     /** Set while a pop-up such as the block picker draws this screen as its backdrop: no flight or cursor handling then. */
     boolean suspended;
@@ -1368,12 +1367,7 @@ public final class EditorScreen extends CraftiumScreen {
             else ClientState.notify("Point at a block to position the clipboard");
             return;
         }
-        if(action.equals("use")&&o().tool==Tool.MODIFY){
-            if(ClientState.hasPending()){CraftiumClient.send("pending_confirm",null,null);return;}
-            Point at=ModifyPreview.anchored()&&ModifyPreview.anchor()!=null?ModifyPreview.anchor():hit==null?null:CraftiumClient.point(hit.getBlockPos());
-            CraftiumClient.send(action,at,hit==null?new Point(0,1,0):CraftiumClient.normal(hit));
-            ModifyPreview.edit();return;
-        }
+        if(action.equals("use")&&Interactions.of(o().tool).sendUse(context))return; // a tool that sends its own request when it is applied
         CraftiumClient.send(action,hit==null?null:CraftiumClient.point(hit.getBlockPos()),hit==null?null:CraftiumClient.normal(hit));
     }
     private boolean inViewport(double x,double y){
@@ -1412,15 +1406,6 @@ public final class EditorScreen extends CraftiumScreen {
         if(Interactions.of(o().tool).beforeUse(context))return; // sees every click and every step of a drag, whatever the use interval says
         long now=System.currentTimeMillis();if((!o().tool.selection()&&now-lastUse<useInterval())||ClientState.status.busy())return;lastUse=now;awaitingReply=true;repliedSince=false;
         if(Interactions.of(o().tool).use(context))return; // what this kind of tool does with a click; false lets the click go on to the server as a plain request
-        if(o().tool==Tool.MODIFY){ // the first click anchors the preview where the cursor is; it is built with Apply or Enter
-            var hit=target();if(hit!=null)ModifyPreview.place(CraftiumClient.point(hit.getBlockPos()));
-            return;
-        }
-        if(o().tool==Tool.SHAPE){ // the shape is put down, not built: dragging with the button held carries it along
-            var hit=target();
-            if(hit!=null)ShapeObject.place(CraftiumClient.point(hit.getBlockPos()));
-            return;
-        }
         if((o().tool==Tool.EXTRUDE||o().tool==Tool.FLOODFILL)&&o().largeSelectionWarnings&&confirm==null){
             // A click that reaches more than a hover preview is made for asks first, because it cannot be looked over before it is built.
             var hit=target();int count=hit==null?0:ClickPreview.measure(minecraft,hit);
@@ -1628,7 +1613,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(EditorBindings.matches(Action.HELP,event)){perform(Action.HELP);return true;}
         if(help||transform)return true;
         // Shared chords are resolved by the active context, before ordinary tool letters.
-        if((o().tool==Tool.SHAPE||ShapeObject.active())&&!PlacementPreview.active()&&turnShape(event))return true;
+        if((Interactions.of(o().tool).turnsPlacement()||ShapeObject.active())&&!PlacementPreview.active()&&turnShape(event))return true;
         if(PlacementPreview.active()){
             if(EditorBindings.matches(Action.ROTATE_PLACEMENT,event)){action("rotate");return true;}
             if(EditorBindings.matches(Action.FLIP_PLACEMENT,event)){action("flip_facing");return true;}
@@ -1661,7 +1646,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private boolean perform(Action binding){
         switch(binding){
-            case CONFIRM -> {if(ClientState.hasPending())CraftiumClient.send("pending_confirm",null,null);else if(ShapeObject.active())ShapeObject.confirm();else if(PlacementPreview.active())PlacementPreview.confirm();else action(o().tool==Tool.PATH||o().tool==Tool.MODELLING||o().tool==Tool.MODIFY?"use":"clear");}
+            case CONFIRM -> {if(ClientState.hasPending())CraftiumClient.send("pending_confirm",null,null);else if(ShapeObject.active())ShapeObject.confirm();else if(PlacementPreview.active())PlacementPreview.confirm();else action(Interactions.of(o().tool).confirmAction());}
             case UNDO,UNDO_ALT -> action("undo");
             case DESELECT -> action("clear");
             case TOGGLE_MOVE -> toggleTool(Tool.MOVE);case TOGGLE_ROTATE -> toggleTool(Tool.ROTATE);case TOGGLE_SCALE -> toggleTool(Tool.SCALE);case TOGGLE_PIVOT -> toggleTool(Tool.PIVOT);
@@ -1749,7 +1734,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     private List<Point> handleNodes(){
         if(!toolActive)return ClientState.rulerPoints;
         var points=Interactions.of(o().tool).points(context);
-        return points!=null?points:o().tool==Tool.MODIFY?ModifyPreview.knobNodes():new ArrayList<>();
+        return points!=null?points:new ArrayList<>();
     }
     double pointerX(){return pointerX;}
     double pointerY(){return pointerY;}

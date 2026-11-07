@@ -19,6 +19,10 @@ public enum InteractionKind {
     PIVOT(false),
     /** A click notes the face it lands on; in Draw mode a held button collects the blocks it passes over and letting go sends them. Built in for Annotation. */
     ANNOTATION(false),
+    /** A click puts a shape down rather than building it, and Enter builds it. The turn keys work on it. Built in for the Shape tool. */
+    SHAPE_PLACEMENT(false),
+    /** The first click anchors a preview and Apply or Enter builds it. Built in for the Modify tool. */
+    MODIFY_ANCHOR(false),
     /** A click does nothing: the tool works through its handles on the selection. Built in for Move, Rotate and Scale. */
     TRANSFORM(false),
     /** Clicks work as {@link #CLICK} does, and a click with Shift held adds an anchor point instead. Built in for the Gradient Painter. */

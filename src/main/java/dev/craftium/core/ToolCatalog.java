@@ -47,6 +47,8 @@ public final class ToolCatalog {
         return switch (tool) {
             case PATH, MODELLING -> InteractionKind.POINTS;
             case BOX_SELECT -> InteractionKind.BOX;
+            case SHAPE -> InteractionKind.SHAPE_PLACEMENT;
+            case MODIFY -> InteractionKind.MODIFY_ANCHOR;
             case LINE -> InteractionKind.LINE;
             case RULER -> InteractionKind.RULER;
             case PIVOT -> InteractionKind.PIVOT;

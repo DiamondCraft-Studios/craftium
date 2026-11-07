@@ -2,6 +2,7 @@ package dev.craftium.client.interaction;
 
 import dev.craftium.client.ClientState;
 import dev.craftium.client.CraftiumClient;
+import dev.craftium.client.ModifyPreview;
 import dev.craftium.core.Point;
 
 import java.util.List;
@@ -44,5 +45,6 @@ final class BoxInteraction implements Interaction {
         CraftiumClient.send("select_box_adjust", null, null);
     }
 
-    @Override public void chosen(EditorContext editor) {}
+    /** Keeps its own corners, and drops a Modify anchor. */
+    @Override public void chosen(EditorContext editor) { ModifyPreview.edit(); }
 }

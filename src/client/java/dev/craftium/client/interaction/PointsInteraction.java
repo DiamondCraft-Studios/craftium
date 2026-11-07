@@ -24,6 +24,9 @@ final class PointsInteraction implements Interaction {
 
     @Override public boolean repeatsWhenDragged() { return false; }
 
+    /** Enter builds from the points that were added. */
+    @Override public String confirmAction() { return "use"; }
+
     @Override public List<Point> points(EditorContext editor) { return editor.options().nodes; }
 
     @Override public boolean extrudePoint(EditorContext editor) {

@@ -1,6 +1,7 @@
 package dev.craftium.client.interaction;
 
 import dev.craftium.client.ClientState;
+import dev.craftium.client.ModifyPreview;
 import dev.craftium.core.Point;
 
 import java.util.List;
@@ -43,6 +44,18 @@ public interface Interaction {
     /** A handle was let go of after being dragged, so the points have moved. */
     default void handlesMoved(EditorContext editor) {}
 
-    /** The tool was chosen from the tool list. By default a box selection that was half made is dropped; a tool that keeps it says so by overriding this. */
-    default void chosen(EditorContext editor) { ClientState.boxCorners.clear(); }
+    /**
+     * The tool was chosen from the tool list. Choosing a tool drops what another tool left half done: a box selection with corners but no box
+     * yet, and a Modify preview with its anchor. A tool that owns one of them keeps its own by overriding this.
+     */
+    default void chosen(EditorContext editor) { ClientState.boxCorners.clear(); ModifyPreview.edit(); }
+
+    /** Whether the turn keys (rotate, tilt, flip) turn this tool's hover preview before anything is put down. A shape that is down is turned by them whatever tool is chosen. */
+    default boolean turnsPlacement() { return false; }
+
+    /** What Enter does when nothing else is waiting: the request that builds what the tool has gathered, or "clear" for a tool that gathers nothing. */
+    default String confirmAction() { return "clear"; }
+
+    /** Sends the tool's own request when the editor asks for "use" (Enter, or an Apply button), instead of the plain one. Returns true when it did. */
+    default boolean sendUse(EditorContext editor) { return false; }
 }

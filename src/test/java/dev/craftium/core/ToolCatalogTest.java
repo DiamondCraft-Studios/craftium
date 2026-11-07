@@ -41,6 +41,8 @@ class ToolCatalogTest {
         special.put(Tool.PATH, InteractionKind.POINTS);
         special.put(Tool.MODELLING, InteractionKind.POINTS);
         special.put(Tool.BOX_SELECT, InteractionKind.BOX);
+        special.put(Tool.SHAPE, InteractionKind.SHAPE_PLACEMENT);
+        special.put(Tool.MODIFY, InteractionKind.MODIFY_ANCHOR);
         special.put(Tool.LINE, InteractionKind.LINE);
         special.put(Tool.RULER, InteractionKind.RULER);
         special.put(Tool.PIVOT, InteractionKind.PIVOT);
@@ -58,6 +60,8 @@ class ToolCatalogTest {
         assertTrue(InteractionKind.POINTS.forPlugins);
         assertTrue(InteractionKind.BOX.forPlugins);
         assertTrue(InteractionKind.LINE.forPlugins);
+        assertFalse(InteractionKind.SHAPE_PLACEMENT.forPlugins);
+        assertFalse(InteractionKind.MODIFY_ANCHOR.forPlugins);
         assertFalse(InteractionKind.RULER.forPlugins);
         assertFalse(InteractionKind.PIVOT.forPlugins);
         assertFalse(InteractionKind.ANNOTATION.forPlugins);

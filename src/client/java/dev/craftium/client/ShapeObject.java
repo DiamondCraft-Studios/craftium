@@ -15,7 +15,7 @@ import java.util.List;
  * The cells come from {@link Geometry#shape}, the same code the server runs when the shape is built, so what is
  * previewed is what is placed.
  */
-final class ShapeObject {
+public final class ShapeObject {
     /** Where the shape is, how it is turned (a rotation matrix, applied after the sizes), and its size along each of its own axes. */
     record Pose(Point origin,double[][] rotation,double sizeX,double sizeY,double sizeZ){
         Pose withOrigin(Point at){return new Pose(at,rotation,sizeX,sizeY,sizeZ);}
@@ -43,7 +43,7 @@ final class ShapeObject {
     private static double[][] hover=IDENTITY;
 
     /** Puts the shape down at {@code at}; if it is already down, moves it there and keeps its turn and size. */
-    static void place(Point at){
+    public static void place(Point at){
         if(pose==null){var o=ClientState.options;pose=new Pose(at,hover,o.sizeX,o.sizeY,o.sizeZ);ClientState.notify("Shape ready · Move, Rotate and Scale change it · Enter to build · Esc to cancel");}
         else pose=pose.withOrigin(at);
     }
