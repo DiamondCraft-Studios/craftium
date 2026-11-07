@@ -21,12 +21,11 @@
     }
   },
   "tools": [
-    { "name": "get_state", "description": "Player position, their selection and your preview status" },
+    { "name": "get_state", "description": "Player position, their selection, the world and biome, their blocks, and your preview status" },
     { "name": "read_selection", "description": "Read what the player has selected: its shape, blocks and the space above it" },
     { "name": "get_preview_blocks", "description": "Read the blocks of your waiting preview, as boxes or runs, to check it before applying" },
     { "name": "get_blocks", "description": "Read the blocks in a box of the world" },
     { "name": "get_surface", "description": "Read the ground height of an area" },
-    { "name": "get_palette", "description": "The player's block palette" },
     { "name": "get_screenshot", "description": "See what the player sees, including the preview" },
     { "name": "render_view", "description": "Draw a picture of a box of the world from any angle" },
     { "name": "preview_build", "description": "Show a build as a ghost preview" },

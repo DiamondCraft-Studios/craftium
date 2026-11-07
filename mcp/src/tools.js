@@ -70,7 +70,8 @@ export const TOOLS = [
   {
     name: "get_state",
     title: "Get Craftium state",
-    description: "Where the player is and which way they face, the area they have selected (corners and dimensions only, so call read_selection to see what is in it; theirs, and never changed by you), how many blocks your waiting preview holds (previewBlocks) and how many of them the game can draw (previewBlocksDrawn; previewTruncated and a previewWarning appear when a big preview is only partly drawn), and how many of your builds can be undone. Call this first.",
+    description: "Where the player is and which way they face, the area they have selected (corners and dimensions only, so call read_selection to see what is in it; theirs, and never changed by you), how many blocks your waiting preview holds (previewBlocks) and how many of them the game can draw (previewBlocksDrawn; previewTruncated and a previewWarning appear when a big preview is only partly drawn), and how many of your builds can be undone. " +
+      "It also gives the world: dimension, the lowest and highest y a block can be at (minY, maxY), sea level and the biome the player stands in, a hint of the style that fits; and the player's current block and recently used blocks (playerBlocks), a hint of their taste. Call this first.",
     inputSchema: nothing,
     annotations: READ,
     args: () => ({}),
@@ -157,14 +158,6 @@ export const TOOLS = [
       return summarizeSurface(reply);
     },
     tooBig: 'Ask for detail "summary", or read a smaller area: about 64 by 64 columns fit in full.',
-  },
-  {
-    name: "get_palette",
-    title: "Get block palette",
-    description: "The player's current block and their palette of recently used blocks, which hints at the style they want.",
-    inputSchema: nothing,
-    annotations: READ,
-    args: () => ({}),
   },
   {
     name: "get_screenshot",

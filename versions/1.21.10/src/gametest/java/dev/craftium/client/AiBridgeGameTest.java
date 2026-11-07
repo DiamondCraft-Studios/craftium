@@ -57,6 +57,10 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
 
             var state = call("get_state", "{}");
             require(state.get("ok").getAsBoolean() && state.get("inWorld").getAsBoolean() && state.get("craftiumOnServer").getAsBoolean(), "get_state: " + state);
+            // The world the AI builds in, and the player's blocks, come with get_state (they once took a get_palette call of their own).
+            var where = state.getAsJsonObject("world");
+            require(where != null && where.get("dimension").getAsString().equals("minecraft:overworld") && where.get("minY").getAsInt() == -64 && where.get("maxY").getAsInt() == 319
+                    && where.get("biome").getAsString().startsWith("minecraft:") && state.getAsJsonObject("playerBlocks").has("recent"), "get_state should describe the world and the player's blocks: " + state);
             var block = state.getAsJsonObject("player").getAsJsonArray("block");
             int x = block.get(0).getAsInt() + 3, y = block.get(1).getAsInt(), z = block.get(2).getAsInt() + 3;
             ctx.runOnClient(mc -> mc.getConnection().sendCommand("fill " + x + " " + y + " " + z + " " + (x + 6) + " " + (y + 12) + " " + (z + 6) + " air"));

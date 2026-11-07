@@ -49,12 +49,11 @@ The plugin needs Node.js 18 or newer on your PATH (an extension gets Node from C
 
 | Tool | Does |
 | --- | --- |
-| `get_state` | Your position and facing, the box around the area you have selected (yours, and never changed by Claude), and whether Claude's preview is waiting |
+| `get_state` | Your position and facing, the box around the area you have selected (yours, and never changed by Claude), whether Claude's preview is waiting, the world's height limits, sea level and the biome you stand in, and your current and recently used blocks |
 | `read_selection` | What you have selected, as it really is: how many blocks, whether it is a solid box or an irregular shape (lasso or magic wand), whether it is flat, what blocks it is made of, and how much clear space is above it. Read only. It works for any selection, up to 1,048,576 blocks, and the answer is a few lines whatever its size |
 | `get_preview_blocks` | Reads the blocks of Claude's own waiting preview in a box (up to 1,048,576 at a time), exactly, with their states, so it can check a roof or a wall before applying it. The answer is as boxes (`[x1,y1,z1,x2,y2,z2]` per block, so a wall is a few entries) or as runs, whichever is shorter, in at most about 100 KB |
 | `get_blocks` | Reads the blocks in a box (up to 32,768 at a time), anywhere in the world: the server reads them, so ground your game has not loaded is real blocks and not air |
 | `get_surface` | The top block of every column in an area (up to 128 by 128), to find ground level |
-| `get_palette` | Your current block and recently used blocks |
 | `get_screenshot` | A picture of what you see in the game, including the preview |
 | `render_view` | Claude's own camera: a picture of any box of the world from an angle it picks (see [Claude's own view](#claudes-own-view)), so it can check its work without touching your view |
 | `preview_build` | Shows a build as a ghost, replacing any earlier preview |

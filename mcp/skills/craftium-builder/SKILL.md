@@ -65,7 +65,8 @@ any time ("looks good, build it"). If it is unclear which they want, ask once.
   whole build (era, scale, placement). Otherwise choose defaults and say them.
 - From a reference image, write down the proportions before touching a tool: width : depth : height, repeating units
   (windows, columns, steps), and the 3 or 4 dominant materials. Build to those numbers.
-- Palette: 3 materials plus 1 accent, put in the spec `palette`. Use `get_palette` as a hint of the player's taste.
+- Palette: 3 materials plus 1 accent, put in the spec `palette`. `get_state` gives the player's recent blocks (a hint of their taste) and the biome (a hint
+  of what fits the place).
 - Read `references/proportions.md` now.
 
 ## Phase 1: Site
