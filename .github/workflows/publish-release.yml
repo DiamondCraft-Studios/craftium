@@ -1,0 +1,102 @@
+name: Publish an existing release
+
+# Manual run: sends the client JAR of a release that is already on GitHub to Modrinth and CurseForge.
+# Use it for versions released before release.yml published there, or to retry a failed upload.
+# Pick the tag (for example v1.1.0-beta.1-mc26.2) in the "Run workflow" dialog. Nothing is rebuilt.
+# Run it once per tag, oldest first, so the platforms list the versions in order.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, for example v1.1.0-beta.1-mc26.2
+        type: string
+        required: true
+      modrinth:
+        description: Publish to Modrinth
+        type: boolean
+        default: true
+      curseforge:
+        description: Publish to CurseForge
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Read the tag
+        id: tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [[ ! "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)-mc([0-9]+(\.[0-9]+)+)$ ]]; then
+            echo "::error::Tag '$TAG' must look like v<version>-mc<minecraft>, for example v1.1.0-beta.1-mc26.2"
+            exit 1
+          fi
+          echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          echo "mc=${BASH_REMATCH[3]}" >> "$GITHUB_OUTPUT"
+          if [[ "${BASH_REMATCH[1]}" == *-* ]]; then
+            echo "type=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=release" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download the client JAR and the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir dl
+          gh release download "$TAG" --repo "$REPO" --pattern 'craftium-*.jar' --dir dl
+          # The release holds the client JAR and craftium-server-*.jar (the Paper plugin); only the client goes out.
+          rm -f dl/craftium-server-*.jar
+          ls dl
+          if [ "$(ls dl | wc -l)" -ne 1 ]; then
+            echo "::error::Expected exactly one client JAR in release $TAG"
+            exit 1
+          fi
+          mv dl/*.jar client.jar
+          gh release view "$TAG" --repo "$REPO" --json body --jq .body > notes.md
+
+      - name: Publish to Modrinth
+        if: inputs.modrinth
+        uses: Kir-Antipov/mc-publish@c23376546a97f5ba7984e94445da359459b14419 # v3.3.2
+        with:
+          modrinth-id: ${{ vars.MODRINTH_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: client.jar
+          name: Craftium ${{ steps.tag.outputs.version }} for Minecraft ${{ steps.tag.outputs.mc }}
+          version: ${{ steps.tag.outputs.version }}+mc${{ steps.tag.outputs.mc }}
+          version-type: ${{ steps.tag.outputs.type }}
+          changelog-file: notes.md
+          loaders: fabric
+          game-versions: ${{ steps.tag.outputs.mc }}
+          dependencies: |
+            fabric-api(required){modrinth:P7dR8mSH}
+          fail-mode: fail
+
+      - name: Publish to CurseForge
+        if: inputs.curseforge
+        uses: Kir-Antipov/mc-publish@c23376546a97f5ba7984e94445da359459b14419 # v3.3.2
+        with:
+          curseforge-id: ${{ vars.CURSEFORGE_ID }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          files: client.jar
+          name: Craftium ${{ steps.tag.outputs.version }} for Minecraft ${{ steps.tag.outputs.mc }}
+          version: ${{ steps.tag.outputs.version }}+mc${{ steps.tag.outputs.mc }}
+          version-type: ${{ steps.tag.outputs.type }}
+          changelog-file: notes.md
+          loaders: fabric
+          game-versions: ${{ steps.tag.outputs.mc }}
+          dependencies: |
+            fabric-api(required){curseforge:306612}
+          fail-mode: fail
