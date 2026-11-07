@@ -740,7 +740,7 @@ public final class EditorScreen extends CraftiumScreen {
         g.fill(cx,cy,cx+30,cy+30,0xf01b2838);g.outline(cx,cy,30,30,ACCENT);
         BlockPickerScreen.icon(g,font,pipetteBlock,cx+7,cy+7);
     }
-    private long crosshairCursor;private boolean crosshairShown;
+    private long crosshairCursor,handCursor;private int cursorShown;
     /** Whether the chosen tool shows a preview where the pointer is: the selection picks, extrude and flood fill, and the brush tools. */
     private boolean hoverPreviewTool(){
         if(!toolActive)return false;
@@ -749,12 +749,22 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** Over the world with the pipette in hand, or a tool that previews what is under the pointer, the pointer is a crosshair. */
     private void syncCrosshair(){
-        boolean want=(pipetting||hoverPreviewTool())&&!suspended&&menu<0&&!help&&!transform&&inViewport(pointerX/scale,pointerY/scale);
-        if(want&&ClientState.selecting())return; // the spinner has the cursor while a big selection is worked out
-        if(want==crosshairShown&&!want)return;
-        crosshairShown=want;
-        if(want&&crosshairCursor==0)crosshairCursor=GLFW.glfwCreateStandardCursor(GLFW.GLFW_CROSSHAIR_CURSOR);
-        GLFW.glfwSetCursor(minecraft.getWindow().handle(),want?crosshairCursor:0L);
+        boolean over=!suspended&&menu<0&&!help&&!transform&&inViewport(pointerX/scale,pointerY/scale);
+        boolean grab=over&&gizmoHover(),want=over&&(pipetting||hoverPreviewTool());
+        if((want||grab)&&ClientState.selecting())return; // the spinner has the cursor while a big selection is worked out
+        int mode=grab?2:want?1:0; // a hand over a gizmo handle, a crosshair over the world for the tools that preview
+        if(mode==cursorShown&&mode==0)return;
+        cursorShown=mode;
+        if(mode==1&&crosshairCursor==0)crosshairCursor=GLFW.glfwCreateStandardCursor(GLFW.GLFW_CROSSHAIR_CURSOR);
+        if(mode==2&&handCursor==0)handCursor=GLFW.glfwCreateStandardCursor(GLFW.GLFW_HAND_CURSOR);
+        GLFW.glfwSetCursor(minecraft.getWindow().handle(),mode==2?handCursor:mode==1?crosshairCursor:0L);
+    }
+    /** Whether the pointer is over a handle of a gizmo: the one being worked on, or the other corner's of a box selection. */
+    private boolean gizmoHover(){
+        if(TransformGizmo.hovering())return true;
+        if(draggingNode||TransformGizmo.dragging()||o().tool!=Tool.BOX_SELECT||ClientState.boxCorners.size()!=2)return false;
+        for(int i=0;i<2;i++)if(i!=selectedNode&&TransformGizmo.hitsPointHandles(TransformGizmo.cornerAnchor(i),pointerX,pointerY))return true;
+        return false;
     }
     /** A 30px swatch for one of the two selected blocks; clicking it opens the block chooser to replace it. */
     /** The block in the player's main hand, as it changes; empty when the hand holds no block. Click to make it the foreground, or drag it into the world to bucket fill. */

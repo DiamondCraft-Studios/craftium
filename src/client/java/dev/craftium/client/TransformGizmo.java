@@ -257,6 +257,8 @@ final class TransformGizmo {
     }
     /** The handle under the pointer, or -1; kept so the gizmo can light it up before it is clicked. */
     private static int hovered=-1;
+    /** Whether the pointer is over a handle of the gizmo, and no handle is being held. */
+    static boolean hovering(){return dragging==null&&hovered>=0;}
     private static final String[] PLANES={"YZ","ZX","XY"};
     static void updateHover(EditorScreen screen){
         hovered=-1;
