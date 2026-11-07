@@ -72,4 +72,25 @@ class HandshakeAndUpdateTest {
         assertTrue(UpdateChecker.newer(RELEASES.replace("v1.0.0-mc26.2","v0.0.1-mc26.2"),"26.2","0.9.0").isEmpty());
     }
     @Test void garbageIsNoUpdate(){assertTrue(UpdateChecker.newer("not json","26.2","0.9.0").isEmpty());assertTrue(UpdateChecker.newer("{}","26.2","0.9.0").isEmpty());}
+
+    @Test void theCacheIsKeptForSixHoursAndSurvivesRestarts(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir){
+        var file=dir.resolve("deep/update-check.json");
+        assertNull(UpdateChecker.load(file));
+        UpdateChecker.store(file,new UpdateChecker.Cache(1_000,"\"abc\"",RELEASES));
+        var back=UpdateChecker.load(file);assertEquals("\"abc\"",back.etag());assertEquals(RELEASES,back.body());
+        assertTrue(UpdateChecker.fresh(back,1_000+UpdateChecker.TTL_MILLIS-1));
+        assertFalse(UpdateChecker.fresh(back,1_000+UpdateChecker.TTL_MILLIS));
+        assertFalse(UpdateChecker.fresh(back,500),"a clock that went back is not fresh");
+        assertFalse(UpdateChecker.fresh(null,1_000));
+    }
+    @Test void aDamagedCacheIsIgnored(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)throws Exception{
+        var file=dir.resolve("update-check.json");java.nio.file.Files.writeString(file,"{not json");assertNull(UpdateChecker.load(file));
+        java.nio.file.Files.writeString(file,"{}");assertNull(UpdateChecker.load(file));
+    }
+    @Test void aFreshCacheAnswersWithoutTheNetwork(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)throws Exception{
+        var file=dir.resolve("update-check.json");
+        UpdateChecker.store(file,new UpdateChecker.Cache(System.currentTimeMillis(),null,RELEASES));
+        var found=UpdateChecker.check("0.9.0-beta.1","26.2",file).get(1,java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals("1.0.0",found.orElseThrow().version());
+    }
 }
