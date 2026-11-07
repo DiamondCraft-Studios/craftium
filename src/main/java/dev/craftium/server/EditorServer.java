@@ -294,7 +294,7 @@ public final class EditorServer {
                 case "ai_blocks" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.blocks(player,r.target(),r.normal())));return;}
                 case "ai_selection" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.selection(player,s)));return;}
                 case "ai_surface","ai_surface_floor" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.surface(player,r.target(),r.normal(),r.action().equals("ai_surface_floor"))));return;}
-                case "ai_build_preview","ai_apply","ai_cancel","ai_undo" -> {aiAction(player,r.action(),o);return;}
+                case "ai_build_preview","ai_apply","ai_cancel","ai_undo","ai_redo" -> {aiAction(player,r.action(),o);return;}
                 default -> {}
             }
             Point target=r.target(),normal=r.normal()==null?new Point(0,1,0):r.normal();
@@ -678,6 +678,7 @@ public final class EditorServer {
                 if(ai.pendingEdit!=null){ai.pendingEdit=null;ai.pendingDirty=true;send(player,ai,"AI preview discarded",false);}
                 else send(player,ai,"No AI preview to discard",false);
             }
+            case "ai_redo" -> {ai.historyRemaining=0;history(player,ai,false);}
             default -> {ai.historyRemaining=0;history(player,ai,true);} // ai_undo
         }
     }

@@ -136,10 +136,11 @@ public final class StudioScreen extends CraftiumScreen {
     private void aiTab(){
         int y=top+70+62;
         boolean on=AiBridge.running();
-        button(on?"Turn off AI building":"Turn on AI building",left,y,200,24,()->{AiBridge.toggle();message=AiBridge.running()?"AI building is on":"AI building is off";init();}).lit(on);
-        button("Apply preview",left+216,y,130,24,()->send("ai_apply"));
-        button("Discard preview",left+352,y,130,24,()->send("ai_cancel"));
-        button("Undo AI build",left+488,y,128,24,()->send("ai_undo"));
+        button(on?"Turn off AI building":"Turn on AI building",left,y,160,24,()->{AiBridge.toggle();message=AiBridge.running()?"AI building is on":"AI building is off";init();}).lit(on);
+        button("Apply preview",left+166,y,100,24,()->send("ai_apply"));
+        button("Discard preview",left+272,y,100,24,()->send("ai_cancel"));
+        button("Undo AI build",left+378,y,115,24,()->send("ai_undo"));
+        button("Redo AI build",left+499,y,117,24,()->send("ai_redo"));
         // Other players' AI previews are drawn in teal with their name; this hides them, and is remembered like the other settings.
         addRenderableWidget(new FlatCheckbox(left,top+70+108,616,20,"Show AI previews from other players",ClientState.options.showSharedAiPreviews,()->{ClientState.options.showSharedAiPreviews=!ClientState.options.showSharedAiPreviews;init();}));
         int steps=top+70+152;
