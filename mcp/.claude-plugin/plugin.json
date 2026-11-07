@@ -4,5 +4,13 @@
   "description": "Build in Minecraft by chatting: Claude previews builds as a ghost in your game and applies them when you say so.",
   "author": { "name": "Craftium contributors" },
   "license": "MIT",
-  "keywords": ["minecraft", "craftium", "building"]
+  "keywords": ["minecraft", "craftium", "building"],
+  "userConfig": {
+    "minecraft_dir": {
+      "type": "directory",
+      "title": "Minecraft folder",
+      "description": "Only needed if your game does not use the default .minecraft folder (for example a Prism, Modrinth App or CurseForge profile). Choose the profile's game folder, the one that contains config and mods.",
+      "required": false
+    }
+  }
 }
