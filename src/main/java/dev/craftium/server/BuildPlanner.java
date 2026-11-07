@@ -99,9 +99,8 @@ final class BuildPlanner {
         if (!MaterialNames.isReference(name)) return name;
         int bracket = name.indexOf('[');
         String state = bracket < 0 ? "" : name.substring(bracket);
-        var known = blockIdSet();
         var tried = MaterialNames.candidates(name);
-        for (String id : tried) if (known.contains(id)) return id + state;
+        for (String id : tried) if (net.minecraft.core.registries.BuiltInRegistries.BLOCK.containsKey(dev.craftium.compat.Compat.parse(id))) return id + state;
         String plain = bracket < 0 ? name : name.substring(0, bracket);
         String material = plain.substring(0, plain.indexOf('@'));
         var message = new StringBuilder(spec == null ? "" : String.join(", ", spec.usesOf(name)) + ": ")
@@ -156,13 +155,6 @@ final class BuildPlanner {
             blockIds = List.copyOf(ids);
         }
         return blockIds;
-    }
-
-    private static Set<String> blockIdSet;
-
-    private static synchronized Set<String> blockIdSet() {
-        if (blockIdSet == null) blockIdSet = Set.copyOf(blockIds());
-        return blockIdSet;
     }
 
     /** Makes sure the ground under a selection is loaded; it is normally the player's own, but may reach a few unvisited chunks. */
