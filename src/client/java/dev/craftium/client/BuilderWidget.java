@@ -138,7 +138,7 @@ public final class BuilderWidget {
                 if(HotbarPages.empty(page,row))ClientState.notify(name+", hotbar "+(row+1)+" is empty: your hotbar is unchanged");
                 else{HotbarPages.apply(mc,page,row);ClientState.notify(name+", hotbar "+(row+1)+" copied to your hotbar");}
             }
-            chosen=false;dragging=false;
+            chosen=false;finishDrags();
         }
         wasActive=now;
     }
@@ -192,6 +192,12 @@ public final class BuilderWidget {
             put(mc,page,slot[0],slot[1],mine);HotbarPages.setHotbar(mc,digit-1,there);
         }
         return true;
+    }
+    /** Letting go of the left button ends a slider drag where the pointer is, even if the widget has closed since, so the last value is applied and saved. */
+    private static void finishDrags(){
+        var mc=Minecraft.getInstance();
+        if(dragging){dragging=false;setSpeed(mouseX(mc),left(mc.getWindow().getGuiScaledWidth()));commitSpeed();}
+        if(settingDrag>=0){var w=mc.getWindow().getGuiScaledWidth();dragSetting(settingDrag,mouseX(mc),w);settingDrag=-1;ClientState.save();}
     }
     private static void commitSpeed(){ClientState.save();if(CraftiumClient.supported())CraftiumClient.send("flight",null,null);}
 
@@ -341,6 +347,7 @@ public final class BuilderWidget {
 
     /** A click on the widget. True while it is showing, so the click does not reach the world. */
     public static boolean mouse(int button,int action){
+        if(action==GLFW.GLFW_RELEASE&&button==GLFW.GLFW_MOUSE_BUTTON_LEFT)finishDrags();
         if(!active())return false;
         if(action!=GLFW.GLFW_PRESS||button>2)return true;
         CraftiumClient.guardClick(button); // the widget takes this click, so it must not also break or place a block
