@@ -27,7 +27,7 @@ public final class EditorScreen extends CraftiumScreen {
     /** The menu bar in order; {@link #menuItems} numbers its cases the same way. */
     private static final String[] MENUS={"File","Edit","Select","View","Create","Structure","Operations","Masks","AI","Window","Help"};
     /** A menu's width in the bar: its name with padding, and room for the status square beside AI while its bridge is on. */
-    private int menuWidth(int index){return font.width(MENUS[index])+16+(MENUS[index].equals("AI")&&AiBridge.running()?12:0);}
+    private int menuWidth(int index){return TextCache.width(font,MENUS[index])+16+(MENUS[index].equals("AI")&&AiBridge.running()?12:0);}
     private long lastUse;
     private double pointerX,pointerY;
     private BlockHitResult lastHit;
@@ -198,21 +198,32 @@ public final class EditorScreen extends CraftiumScreen {
             String tooltip="";for(var c:controls)if(c.contains(mx,my)&&!c.tip.isEmpty())tooltip=c.tip;
             if(!tooltip.isEmpty()) {
                 // A new line starts a new paragraph; each is wrapped to the pane, and a pane with a title shows it brighter than what follows.
-                String[] paragraphs=tooltip.split("\n");var rows=new ArrayList<net.minecraft.util.FormattedCharSequence>();var firstRows=0;int widest=0;
-                for(int i=0;i<paragraphs.length;i++){
-                    var split=font.split(Component.literal(paragraphs[i]),306);
-                    if(i==0)firstRows=split.size();
-                    for(var row:split){rows.add(row);widest=Math.max(widest,font.width(row));}
-                }
-                int tw=Math.min(320,widest+14),th=rows.size()*10+12,tx=Math.min(mx+14,w-tw-4),ty=Math.min(my+18,h-th-12);
+                var pane=tooltipPane(tooltip);var rows=pane.rows();
+                int tw=Math.min(320,pane.widest()+14),th=rows.size()*10+12,tx=Math.min(mx+14,w-tw-4),ty=Math.min(my+18,h-th-12);
                 g.fill(tx,ty,tx+tw,ty+th,0xf5222d3b);g.outline(tx,ty,tw,th,LINE);
-                for(int i=0;i<rows.size();i++)g.text(font,rows.get(i),tx+6,ty+6+i*10,paragraphs.length>1&&i>=firstRows?MUTED:TEXT,false);
+                for(int i=0;i<rows.size();i++)g.text(font,rows.get(i),tx+6,ty+6+i*10,pane.paragraphs()>1&&i>=pane.firstRows()?MUTED:TEXT,false);
             }
         }
         if(dragBlock!=null&&dragMoved){
             for(int i=dropTargets.size()-1;i>=0;i--){var t=dropTargets.get(i).area();if(t.contains(mx,my)){g.pose().pushMatrix();WorkspaceLayout.apply(g,t.panel());g.outline(t.x(),t.y(),t.width(),t.height(),ACCENT);g.pose().popMatrix();break;}} // the cell the block would land in
             BlockDragCursor.draw(g,font,dragBlock,mx,my,w,h,ACCENT,inViewport(mx,my));}else BlockDragCursor.release();
         g.pose().popMatrix();ReferenceImages.draw(g,true,mouseX,mouseY);
+    }
+    /** A tooltip laid out: its wrapped rows, how many belong to the first paragraph, and the widest row. */
+    private record TooltipPane(String text,List<net.minecraft.util.FormattedCharSequence> rows,int firstRows,int paragraphs,int widest){}
+    private TooltipPane tooltipPane;
+    /** The pane for a tooltip, laid out once while the pointer stays on the same control rather than on every frame. */
+    private TooltipPane tooltipPane(String tooltip){
+        var pane=tooltipPane;
+        if(pane!=null&&pane.text().equals(tooltip))return pane;
+        // A new line starts a new paragraph; each is wrapped to the pane, and a pane with a title shows it brighter than what follows.
+        String[] paragraphs=tooltip.split("\n");var rows=new ArrayList<net.minecraft.util.FormattedCharSequence>();var firstRows=0;int widest=0;
+        for(int i=0;i<paragraphs.length;i++){
+            var split=TextCache.split(font,paragraphs[i],306);
+            if(i==0)firstRows=split.size();
+            for(var row:split){rows.add(row);widest=Math.max(widest,font.width(row));}
+        }
+        return tooltipPane=new TooltipPane(tooltip,List.copyOf(rows),firstRows,paragraphs.length,widest);
     }
     /** Whether the pointer is free to act on the controls, not held by a drag or covered by a pop-up. */
     private boolean pointerFree(){return ctxCell<0&&!shapeMenu&&dragging==null&&draggedPanel.isBlank()&&cameraGesture==CameraGesture.NONE&&!(dragBlock!=null&&dragMoved);}
@@ -1327,7 +1338,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void toggle(Gfx g,int x,int y,String label,boolean value,Runnable action) {toggle(g,x,y,label,value,action,"");}
     private void toggle(Gfx g,int x,int y,String label,boolean value,Runnable action,String tip) {
         FlatCheckbox.box(g,x,y,12,value,false);
-        text(g,label,x+19,y+3,TEXT);controls.add(new Control(x,y,Math.min(pw-20,font.width(label)+24),15,action,tip));
+        text(g,label,x+19,y+3,TEXT);controls.add(new Control(x,y,Math.min(pw-20,TextCache.width(font,label)+24),15,action,tip));
     }
     private void slider(Gfx g,int x,int y,int width,String label,double value,double min,double max,double def,DoubleConsumer set,boolean integer) {
         slider(g,x,y,width,label,value,min,max,max,def,set,integer);
@@ -1362,8 +1373,8 @@ public final class EditorScreen extends CraftiumScreen {
         String shortcut=key.isEmpty()?slot>0?String.valueOf(slot):"":slot>0?key+" / "+slot:key;
         return tool.label+(shortcut.isEmpty()?"":" ["+shortcut+"]")+"\n"+tool.description;
     }
-    private String shorten(String text,int pixels){if(font.width(text)<=pixels)return text;return font.plainSubstrByWidth(text,Math.max(0,pixels-9))+"…";}
-    private void wrap(Gfx g,String text,int x,int y,int width,int color,int maxLines){int line=0;for(var row:font.split(Component.literal(text),width)){if(line>=maxLines)break;g.text(font,row,x,y+line*11,color,false);line++;}if(scrollActive)scrollContent=Math.max(scrollContent,y+line*11);}
+    private String shorten(String text,int pixels){if(TextCache.width(font,text)<=pixels)return text;return TextCache.fit(font,text,Math.max(0,pixels-9))+"…";}
+    private void wrap(Gfx g,String text,int x,int y,int width,int color,int maxLines){int line=0;for(var row:TextCache.split(font,text,width)){if(line>=maxLines)break;g.text(font,row,x,y+line*11,color,false);line++;}if(scrollActive)scrollContent=Math.max(scrollContent,y+line*11);}
     private String nice(String name){String s=name.toLowerCase(Locale.ROOT).replace('_',' ');return Character.toUpperCase(s.charAt(0))+s.substring(1);}
     public BlockHitResult target(){
         if(inViewport(pointerX/scale,pointerY/scale)){
