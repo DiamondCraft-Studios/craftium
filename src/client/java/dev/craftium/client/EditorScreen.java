@@ -208,7 +208,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(dragBlock!=null&&dragMoved){
             for(int i=dropTargets.size()-1;i>=0;i--){var t=dropTargets.get(i).area();if(t.contains(mx,my)){g.pose().pushMatrix();WorkspaceLayout.apply(g,t.panel());g.outline(t.x(),t.y(),t.width(),t.height(),ACCENT);g.pose().popMatrix();break;}} // the cell the block would land in
-            BlockDragCursor.draw(g,font,dragBlock,mx,my,w,h,ACCENT);}else BlockDragCursor.release();
+            BlockDragCursor.draw(g,font,dragBlock,mx,my,w,h,ACCENT,inViewport(mx,my));}else BlockDragCursor.release();
         g.pose().popMatrix();ReferenceImages.draw(g,true,mouseX,mouseY);
     }
     /** Whether the pointer is free to act on the controls, not held by a drag or covered by a pop-up. */
