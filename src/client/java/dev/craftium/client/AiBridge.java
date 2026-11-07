@@ -29,7 +29,8 @@ public final class AiBridge {
     /**
      * What the bridge's tools understand, written to the bridge file so the MCP server can tell a player to update the mod or the plugin
      * instead of failing on a tool the other side does not have. Bump it when a tool gains something the MCP server relies on.
-     * 2: preview summaries, get_state's world, build spec v2 (materials, mixes, roof, stairs, group).
+     * 2: preview summaries, get_state's world, build spec v2 (materials, mixes, roof, stairs, group), the "world" view of
+     * get_preview_blocks (read_blocks) and render_view's "angles".
      */
     public static final int PROTOCOL = 2;
     private static final int BODY_LIMIT = 1_000_000, READ_BLOCKS = 32_768, WAIT_SECONDS = 20;

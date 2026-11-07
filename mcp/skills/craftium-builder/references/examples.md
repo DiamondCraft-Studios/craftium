@@ -25,7 +25,7 @@ the longer side, so the slopes face north and south and the gable ends are the w
 ```
 
 Check: the reply's `min` is [99, 64, 199] and `size` is [11, 9, 9] (the roof overhangs by 1). Render `se`, `top`
-and `south` and show the player.
+and `south` in one call (`"angles"`) and show the player.
 
 ### Shell (apply)
 

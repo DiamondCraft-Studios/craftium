@@ -30,7 +30,7 @@ blocks and how the ones that face a way are turned. Check it every time: a build
 material or a roof with all its stairs facing one way shows there without a picture.
 
 Pictures cost the most, so render where the look is the question: the blockout, the roof and the final check (two
-or three angles each). For the phases in between, the reply is usually enough; render one angle if it raises a
+or three angles each, in one `render_view` call with `angles`). For the phases in between, the reply is usually enough; render one angle if it raises a
 doubt.
 
 By default each phase is applied as soon as it checks out, so the player watches the build grow in the world and can
@@ -107,7 +107,7 @@ Purpose: get size, silhouette and placement right while it is cheap.
 - Plain solid boxes, cylinders and pyramids in ONE neutral material. No hollow, no windows, no detail. Usually 3 to
   10 ops.
 - Include every major mass: body, wings, tower, porch, roof volume.
-- Render `se`, `top` and a level side view. Compare proportions with the brief and with `references/proportions.md`,
+- Render `se`, `top` and a level side view in one call (`"angles": ["se", "top", "south"]`). Compare proportions with the brief and with `references/proportions.md`,
   and check how it sits on the ground.
 - Do NOT apply. Replace the preview until the player agrees.
 

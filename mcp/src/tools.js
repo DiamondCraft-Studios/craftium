@@ -42,7 +42,7 @@ Workflow:
 1. Call get_state. It reports the player's position and facing, the area they have selected (if any: a hint of where they want a build, which you never change), whether you have a preview waiting, and the world (height limits, sea level, biome). If the game is not reachable, tell the player to open a world and turn on AI building (in the editor: AI menu, then Turn on AI building; or type /craftium ai on).
 2. Decide where to build: in the player's selection if they made one (call read_selection to see what it is: its shape, its blocks and the space above it), otherwise near the player or where they asked. Look before you build: get_surface gives the ground of an area (a summary for a wide one) and read_blocks reads blocks; both work anywhere in the world, not just near the player. Say where you chose to build.
 3. Call preview_build with a build spec in world coordinates. Its reply says what the spec made (where, how many blocks, of what, and which way stairs face): check it. If the spec is refused, the error names the operation at fault and what to use instead; fix it and try again, and your earlier preview stays waiting meanwhile. A new preview replaces the previous one.
-4. Tell the player to look at the ghost in the game. You can look too, without touching the player's view: render_view draws the build's area from an angle you choose, with your waiting preview tinted violet. Render when the look matters (the first rough form, the roof, the finished build), from two angles such as se and top; for a small change the preview_build reply is usually enough. If previewTruncated is true the game drew only part of the preview, so build in smaller stages to see all of it. Adjust with another preview_build if the result or the player wants changes.
+4. Tell the player to look at the ghost in the game. You can look too, without touching the player's view: render_view draws the build's area from an angle you choose, with your waiting preview tinted violet. Render when the look matters (the first rough form, the roof, the finished build), from two angles in one call (angles: ["se", "top"]); for a small change the preview_build reply is usually enough. If previewTruncated is true the game drew only part of the preview, so build in smaller stages to see all of it. Adjust with another preview_build if the result or the player wants changes.
 5. Show the player the rough form (size, shape and place) and get a yes before anything is built. After that, a build made in stages applies each stage once it checks out, so the player watches it grow; if they want to see it first ("just show me", "don't build it yet"), keep it as a preview until they say to build. If they asked you to just build it, apply it. undo reverses the last build you applied, never the player's own edits. cancel_preview discards a preview.
 Each tool's description gives its limits, and a request that goes past one is refused with what to do instead. Reads and builds stay in the dimension the player is in. Prefer a few well-chosen operations over many small ones; Minecraft builds read best with layered shapes, varied blocks and details like slabs, stairs and walls.`;
 
@@ -182,6 +182,7 @@ export const TOOLS = [
       "Draws a picture of a box of the world from an angle you choose, without moving or turning the player and wherever the box is. " +
       "The picture is flat-shaded blocks in each block's average colour (no textures), with the box's edges drawn faintly; the player's waiting preview, if there is one, is drawn over the world tinted violet. " +
       "Angles: se, sw, ne, nw look down at the box from that corner (a three-quarter view); top looks straight down with north at the top; north, south, east, west look at that side of the box from level height, which is the way to judge heights and profiles. " +
+      'To see a build from more than one side, give "angles" (up to 3, such as ["se", "top"]) instead of "angle": the box is read once and drawn from each, which is faster than separate calls. Each picture costs as much of your context as one call, so ask only for the angles you will use. ' +
       "The reply says which way east and north point in the picture and lists the commonest blocks with the colour each is drawn in, so you can tell materials apart. " +
       "The game draws only part of a very big preview: when that happens the reply has previewTruncated and a previewWarning, and the picture is missing blocks that will still be built, so do not judge the build from it. " +
       "The box can be at most 128 blocks on a side and 262,144 blocks (64 by 64 by 64, for example); it is read from the server in pieces, like read_blocks.",
@@ -190,6 +191,7 @@ export const TOOLS = [
       properties: {
         ...box.properties,
         angle: { type: "string", enum: ["se", "sw", "ne", "nw", "top", "north", "south", "east", "west"], description: "Where the camera is (default se)" },
+        angles: { type: "array", items: { type: "string", enum: ["se", "sw", "ne", "nw", "top", "north", "south", "east", "west"] }, minItems: 1, maxItems: 3, description: "Up to 3 angles drawn from one read, in place of angle" },
         preview: { type: "boolean", description: "Draw the player's waiting preview over the world (default true)" },
       },
       required: ["from", "to"],
@@ -198,8 +200,17 @@ export const TOOLS = [
     args: (a) => {
       const angles = ["se", "sw", "ne", "nw", "top", "north", "south", "east", "west"];
       if (a.angle !== undefined && !angles.includes(a.angle)) throw new ArgumentError(`"angle" must be one of ${angles.join(", ")}`);
+      if (a.angles !== undefined) {
+        if (a.angle !== undefined) throw new ArgumentError('Give "angle" or "angles", not both');
+        if (!Array.isArray(a.angles) || a.angles.length < 1 || a.angles.length > 3 || !a.angles.every((x) => angles.includes(x)))
+          throw new ArgumentError(`"angles" must list 1 to 3 of ${angles.join(", ")}`);
+      }
       if (a.preview !== undefined && typeof a.preview !== "boolean") throw new ArgumentError('"preview" must be true or false');
-      return { from: whole(a.from, "from"), to: whole(a.to, "to"), ...(a.angle !== undefined ? { angle: a.angle } : {}), ...(a.preview !== undefined ? { preview: a.preview } : {}) };
+      return {
+        from: whole(a.from, "from"), to: whole(a.to, "to"),
+        ...(a.angle !== undefined ? { angle: a.angle } : {}), ...(a.angles !== undefined ? { angles: a.angles } : {}),
+        ...(a.preview !== undefined ? { preview: a.preview } : {}),
+      };
     },
   },
   {

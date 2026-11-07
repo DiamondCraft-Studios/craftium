@@ -77,6 +77,14 @@ test("toResult keeps ok:false as an error and splits a screenshot from its detai
   assert.deepEqual(JSON.parse(shot.content[1].text), { width: 2 });
 });
 
+test("several pictures each come with their own details, then what they share", () => {
+  const result = toResult({ ok: true, images: [{ image: "QQ", mime: "image/png", angle: "se" }, { image: "Qg", mime: "image/png", angle: "top" }], size: [3, 3, 3] });
+  assert.deepEqual(result.content.map((c) => c.type), ["image", "text", "image", "text", "text"]);
+  assert.equal(result.content[0].data, "QQ");
+  assert.deepEqual(JSON.parse(result.content[3].text), { angle: "top" });
+  assert.deepEqual(JSON.parse(result.content[4].text), { size: [3, 3, 3] });
+});
+
 test("a reply longer than the limit is refused with what to ask for instead, and a picture does not count", () => {
   const long = toResult({ ok: true, runs: "x".repeat(REPLY_LIMIT) }, "Read a smaller box.");
   assert.equal(long.isError, true);

@@ -97,6 +97,13 @@ test("render_view passes its box, angle and preview flag through, and its pictur
   assert.deepEqual(bridge.seen[0].body, { from: [0, 0, 0], to: [9, 9, 9], angle: "top", preview: false });
   await client.callTool({ name: "render_view", arguments: { from: [0, 0, 0], to: [1, 1, 1] } });
   assert.deepEqual(bridge.seen[1].body, { from: [0, 0, 0], to: [1, 1, 1] });
+  await client.callTool({ name: "render_view", arguments: { from: [0, 0, 0], to: [1, 1, 1], angles: ["se", "top"] } });
+  assert.deepEqual(bridge.seen[2].body, { from: [0, 0, 0], to: [1, 1, 1], angles: ["se", "top"] });
+  for (const args of [{ angles: [] }, { angles: ["se", "sw", "ne", "nw"] }, { angles: ["above"] }, { angle: "se", angles: ["top"] }]) {
+    const bad = await client.callTool({ name: "render_view", arguments: { from: [0, 0, 0], to: [1, 1, 1], ...args } });
+    assert.equal(bad.isError, true, JSON.stringify(args));
+  }
+  assert.equal(bridge.seen.length, 3, "bad angles must not reach the game");
   await bridge.close();
 });
 

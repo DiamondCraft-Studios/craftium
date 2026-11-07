@@ -222,6 +222,9 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(!tooBig.get("ok").getAsBoolean() && tooBig.get("error").getAsString().contains("128"), "an oversized box should be refused: " + tooBig);
             var badAngle = call("render_view", "{" + box + ",\"angle\":\"above\"}");
             require(!badAngle.get("ok").getAsBoolean(), "an unknown angle should be refused: " + badAngle);
+            var two = call("render_view", "{" + box + ",\"angles\":[\"se\",\"top\"]}");
+            require(two.get("ok").getAsBoolean() && two.getAsJsonArray("images").size() == 2 && two.get("reads").getAsInt() == view.get("reads").getAsInt()
+                && "top".equals(two.getAsJsonArray("images").get(1).getAsJsonObject().get("angle").getAsString()), "two angles should come from one read: " + two.keySet() + " reads=" + two.get("reads"));
             System.out.println("CRAFTIUM_AI render_view_ok " + view.get("width") + "x" + view.get("height") + " blocks=" + view.getAsJsonArray("blocks").size());
             require(ctx.computeOnClient(mc -> mc.level.getBlockState(new BlockPos(x + 2, y + 3, z + 2)).isAir()), "a preview must not touch the world");
             System.out.println("CRAFTIUM_AI preview_ok blocks=" + ghost);
