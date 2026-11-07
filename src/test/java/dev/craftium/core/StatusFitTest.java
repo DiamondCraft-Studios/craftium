@@ -62,4 +62,15 @@ class StatusFitTest {
         assertEquals(1000, out.get("selectionData").getAsString().length(), "the small pieces are kept");
         assertEquals(java.util.List.of("sharedAi"), StatusFit.left(o.toString(), fitted));
     }
+
+    @Test void otherPlayersPreviewsGoBeforeThePlayersOwnEvenWhenTheirsAreSmaller() {
+        var o = JsonParser.parseString(status(1000, 1000, 1000)).getAsJsonObject();
+        o.addProperty("aiPendingData", "a".repeat(1_400_000)); // the player's own big AI preview
+        var list = new com.google.gson.JsonArray();
+        var p = new JsonObject(); p.addProperty("owner", "Alex"); p.addProperty("data", "d".repeat(300_000)); list.add(p);
+        o.add("sharedAi", list); // somebody else's, smaller
+        var out = JsonParser.parseString(StatusFit.fit(o.toString(), 1_500_000, "too big")).getAsJsonObject();
+        assertTrue(out.getAsJsonArray("sharedAi").isEmpty(), "the other player's preview is what is left out");
+        assertEquals(1_400_000, out.get("aiPendingData").getAsString().length(), "the player's own preview is kept");
+    }
 }

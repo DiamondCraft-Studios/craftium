@@ -15,6 +15,9 @@ public final class StatusFit {
     /** Fields that carry data to draw, biggest first when dropped. The rest of a status is small. */
     static final List<String> DRAWN = List.of("selectionData", "clipboardData", "clipboardGhost", "pendingData", "aiPendingData", "sharedAi", "pulse", "restore");
 
+    /** The previews other players are holding: left out before anything of the player's own. */
+    static final String OTHERS = "sharedAi";
+
     private StatusFit() {}
 
     /**
@@ -30,7 +33,10 @@ public final class StatusFit {
         while (status.toString().length() > limit) {
             String biggest = null;
             int size = 0;
-            for (String name : DRAWN) {
+            // What other players are doing goes first: the player's own selection, clipboard and previews matter more to them than somebody else's.
+            var others = status.get(OTHERS);
+            if (others != null && others.isJsonArray() && !others.getAsJsonArray().isEmpty()) biggest = OTHERS;
+            else for (String name : DRAWN) {
                 var value = status.get(name);
                 int length = value == null ? 0 : value.isJsonPrimitive() ? value.getAsString().length() : value.isJsonArray() ? value.toString().length() : 0;
                 if (length > size) { size = length; biggest = name; }
