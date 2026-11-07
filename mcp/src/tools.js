@@ -1,6 +1,8 @@
 // The tools the server offers: their descriptions, the schemas clients see, and the checks arguments pass before anything
 // is sent to the game. Only the keys a tool names are forwarded, so nothing else a client sends reaches the bridge.
 
+import { FULL_COLUMNS, summarizeSurface } from "./surface.js";
+
 export class ArgumentError extends Error {}
 
 const coordinates = "Coordinates are [x, y, z] whole numbers in the WORLD (y is up), the same numbers get_blocks and get_surface use, so read the ground first and build at the heights you found. Nothing has to be selected: the area a build covers is worked out from its operations.";
@@ -93,7 +95,7 @@ export const TOOLS = [
       'view: "after" (default) is the world as it would be once applied, the preview over what is there now; "only" is just what the preview places, with air where it clears a block. ' +
       "The answer is written in the fewest words. format \"boxes\" lists, for each block, the boxes it fills as [x1, y1, z1, x2, y2, z2] (world coordinates, both corners included), so a wall or a roof is a few boxes wherever it sits in the box you asked about; " +
       "format \"runs\" is the palette and run-length runs get_blocks uses, which is shorter for noisy ground; \"auto\" (default) picks whichever is shorter and says which it chose. " +
-      "A box may hold up to 1,048,576 blocks, but the answer is at most about 100 KB, so for a big build read it a part at a time. With no waiting preview it says so.",
+      "A box may hold up to 1,048,576 blocks, but the answer is held to about 60 KB, so for a big build read it a part at a time. With no waiting preview it says so.",
     inputSchema: {
       type: "object",
       properties: {
@@ -109,6 +111,7 @@ export const TOOLS = [
       if (a.format !== undefined && !["auto", "boxes", "runs"].includes(a.format)) throw new ArgumentError('"format" must be "auto", "boxes" or "runs"');
       return { from: whole(a.from, "from"), to: whole(a.to, "to"), ...(a.view !== undefined ? { view: a.view } : {}), ...(a.format !== undefined ? { format: a.format } : {}) };
     },
+    tooBig: "Read a smaller box: part of the build at a time, such as one wall or the roof.",
   },
   {
     name: "get_blocks",
@@ -120,20 +123,40 @@ export const TOOLS = [
     inputSchema: box,
     annotations: READ,
     args: (a) => ({ from: whole(a.from, "from"), to: whole(a.to, "to") }),
+    tooBig: "Read a smaller box, a few layers at a time; to check your own build, get_preview_blocks answers as boxes, which is far shorter.",
   },
   {
     name: "get_surface",
     title: "Read the ground",
     description:
-      "The highest block of every column in a rectangle (corners [x, y, z]; y is ignored), up to 128 by 128 columns: heights[i] is the y of the top block and blocks[i] indexes the palette, x fastest then z from the rectangle's minimum corner. " +
-      'Use it to find ground level before building on or into terrain. "top" (default) is the highest solid or liquid block ignoring leaves, so water counts and trunks and buildings count; "floor" looks under water. ' +
+      "The ground of a rectangle (corners [x, y, z]; y is ignored), up to 128 by 128 columns. Use it to find ground level before building on or into terrain. " +
+      'detail "summary" gives the lowest, highest and median height, how much of the area is level with the median, what the ground is made of, and a coarse map of at most 16 by 16 cells: a few hundred words for any size, so start a wide search with it. ' +
+      'detail "full" gives every column: heights[i] is the y of the top block and blocks[i] indexes the palette, x fastest then z from the rectangle\'s minimum corner. "auto" (default) is full up to 256 columns (a 16 by 16 area, or a strip up to 128 long) and a summary beyond. ' +
+      '"top" (default) is the highest solid or liquid block ignoring leaves, so water counts and trunks and buildings count; "floor" looks under water. ' +
       "In the Nether the surface is the ceiling; use get_blocks to look below it. A column past the world border, or with no block in it, has heights[i] = -2147483648 and blocks[i] = -1. A height of -1 is real ground at y = -1 (as in a superflat world), not an empty column.",
-    inputSchema: { type: "object", properties: { ...box.properties, kind: { type: "string", enum: ["top", "floor"], description: '"top" (default) or "floor" (under water)' } }, required: ["from", "to"] },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...box.properties,
+        kind: { type: "string", enum: ["top", "floor"], description: '"top" (default) or "floor" (under water)' },
+        detail: { type: "string", enum: ["auto", "summary", "full"], description: '"auto" (default): every column up to 256 of them, else a summary' },
+      },
+      required: ["from", "to"],
+    },
     annotations: READ,
     args: (a) => {
       if (a.kind !== undefined && a.kind !== "top" && a.kind !== "floor") throw new ArgumentError('"kind" must be "top" or "floor"');
+      if (a.detail !== undefined && !["auto", "summary", "full"].includes(a.detail)) throw new ArgumentError('"detail" must be "auto", "summary" or "full"');
       return { from: whole(a.from, "from"), to: whole(a.to, "to"), ...(a.kind !== undefined ? { kind: a.kind } : {}) };
     },
+    // The game always sends every column; the summary is made here, so the game needs nothing new for it.
+    post: (reply, a) => {
+      const detail = a.detail ?? "auto";
+      if (!Array.isArray(reply.heights) || !Array.isArray(reply.size)) return reply;
+      if (detail === "full" || (detail === "auto" && reply.heights.length <= FULL_COLUMNS)) return reply;
+      return summarizeSurface(reply);
+    },
+    tooBig: 'Ask for detail "summary", or read a smaller area: about 64 by 64 columns fit in full.',
   },
   {
     name: "get_palette",
