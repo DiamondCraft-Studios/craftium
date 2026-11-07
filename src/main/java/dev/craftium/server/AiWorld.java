@@ -195,7 +195,9 @@ final class AiWorld {
      * learns where the build went and what it is made of without another request. A change that keeps the block as it was is left out, as
      * the ghost and read_blocks leave it out.
      */
-    static String previewSummary(Session.Edit edit) {
+    static String previewSummary(Session.Edit edit) { return summaryJson(edit).toString(); }
+
+    private static JsonObject summaryJson(Session.Edit edit) {
         var summary = new dev.craftium.core.PreviewSummary();
         var names = new java.util.IdentityHashMap<net.minecraft.world.level.block.Block, String>();
         for (var change : edit.changes()) {
@@ -210,12 +212,12 @@ final class AiWorld {
         var out = summary.toJson();
         out.addProperty("ok", true);
         out.addProperty("kind", "previewSummary");
-        return out.toString();
+        return out;
     }
 
     /** {@link #previewSummary(Session.Edit)} with what looks wrong in it, if anything: see {@link #warnings}. */
     static String previewSummary(Session.Edit added, net.minecraft.server.level.ServerLevel level, Session.Edit whole, java.util.List<String> specWarnings) {
-        var out = JsonParser.parseString(previewSummary(added)).getAsJsonObject();
+        var out = summaryJson(added);
         var list = new java.util.ArrayList<>(specWarnings);
         list.addAll(warnings(level, whole, added));
         if (!list.isEmpty()) {
