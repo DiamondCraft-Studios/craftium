@@ -27,7 +27,7 @@ import java.util.List;
  * block models have no gizmo, so they are queued here and submitted from the level render event each frame.
  */
 public final class Overlay {
-    private record Ghost(List<BlockPos> models,List<BlockPos> places,java.util.Set<BlockPos> placed,List<net.minecraft.world.level.block.state.BlockState> states,int tint){}
+    private record Ghost(List<BlockPos> models,List<BlockPos> places,java.util.Set<BlockPos> placed,List<net.minecraft.world.level.block.state.BlockState> states,int tint,boolean cached){}
     private static final List<Ghost> building=new ArrayList<>();
     private static List<Ghost> shown=List.of();
     private static Runnable pendingFrame,frame;
@@ -81,14 +81,21 @@ public final class Overlay {
      * Like {@link #blocks(List,int)}, but the model of {@code models.get(i)} is drawn at {@code places.get(i)}. This
      * previews blocks that are about to move. Both lists must have the same size and are not copied.
      */
-    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){building.add(new Ghost(models,places,new java.util.HashSet<>(places),null,tint));}
+    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){building.add(new Ghost(models,places,new java.util.HashSet<>(places),null,tint,false));}
     /**
      * Draws {@code states.get(i)} at {@code places.get(i)}, for blocks that are not in the world yet, such as an edit
      * waiting to be confirmed. Both lists must have the same size and are not copied.
      */
     public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){blockStates(states,places,new java.util.HashSet<>(places),tint);}
     /** As above, for a caller that keeps {@code placed} (the same positions as a set) between ticks instead of paying to rebuild it each time. */
-    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,java.util.Set<BlockPos> placed,int tint){building.add(new Ghost(places,places,placed,states,tint));}
+    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,java.util.Set<BlockPos> placed,int tint){building.add(new Ghost(places,places,placed,states,tint,false));}
+    /**
+     * As {@link #blockStates(List,List,int)}, for a ghost that stays the same from frame to frame: the same two list objects must be
+     * passed for as long as it does. What only depends on the blocks (which sides are on the outer surface, their models and tints)
+     * is worked out once, the first frame, and kept until a frame passes without the ghost. In exchange the ghost does not notice
+     * the world changing around it after that first frame.
+     */
+    public static void cachedBlockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){building.add(new Ghost(places,places,null,states,tint,true));}
     public static void point(Vec3 at,int color,float size){Gizmos.point(at,color,size).setAlwaysOnTop();}
     /**
      * A label that always faces the camera, floating over the block at {@code pos}. {@code scale} is world
@@ -125,12 +132,14 @@ public final class Overlay {
         var mc=Minecraft.getInstance();
         var hook=frame;
         if(hook!=null&&mc.level!=null)try(var collector=mc.levelRenderer.collectPerFrameRenderThreadGizmos()){hook.run();}
-        if(ghosts.isEmpty()||mc.level==null)return;
+        if(ghosts.isEmpty()||mc.level==null){PREPARED.clear();return;}
+        TOUCHED.clear();
         var eye=ClientCompat.camera(mc).position();
         var stack=context.poseStack();
         var type=RenderTypes.entityTranslucent(TextureAtlas.LOCATION_BLOCKS);
         var random=RandomSource.create();
         for(var ghost:ghosts){
+            if(ghost.cached()&&ghost.states()!=null){cachedBlocks(context,mc,eye,type,ghost);continue;}
             var quad=new QuadInstance();
             quad.setColor(ghost.tint());
             quad.setLightCoords(FULL_BRIGHT);
@@ -166,6 +175,86 @@ public final class Overlay {
                 });
                 stack.popPose();
             }
+        }
+        PREPARED.keySet().retainAll(TOUCHED); // a ghost that was not drawn this frame is gone
+    }
+
+    /** What a cached ghost needs for every block that has anything to show, worked out once: see {@link #cachedBlockStates}. */
+    private static final class Prepared {
+        final List<BlockPos> pos=new ArrayList<>();
+        final List<net.minecraft.world.level.block.state.BlockState> states=new ArrayList<>();
+        /** For each block the sides of it on the outer surface, one bit per {@link Direction#ordinal()}. */
+        final List<Integer> outer=new ArrayList<>();
+        /** Whether the block has quads that belong to no side (a flower, say), which are drawn whenever they face the camera. */
+        final List<Boolean> loose=new ArrayList<>();
+        final List<List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart>> parts=new ArrayList<>();
+        int[] tints;
+    }
+    private static final java.util.Map<List<BlockPos>,Prepared> PREPARED=new java.util.IdentityHashMap<>();
+    private static final java.util.Set<List<BlockPos>> TOUCHED=java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+
+    private static Prepared prepare(Minecraft mc,Ghost ghost){
+        var level=mc.level;var out=new Prepared();
+        var placed=ghost.placed()!=null?ghost.placed():new java.util.HashSet<>(ghost.places());
+        var random=RandomSource.create();
+        for(int i=0;i<ghost.places().size();i++){
+            BlockPos pos=ghost.places().get(i);var state=ghost.states().get(i);
+            if(state.isAir()||state.getRenderShape()!=RenderShape.MODEL)continue; // fluids and block entities have no plain model
+            random.setSeed(state.getSeed(pos));
+            var parts=new ArrayList<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart>();
+            mc.getModelManager().getBlockStateModelSet().get(state).collectParts(random,parts);
+            int mask=0;
+            for(Direction face:FACES)if(!placed.contains(pos.relative(face))&&!hidden(level,pos,face))mask|=1<<face.ordinal();
+            boolean loose=false;for(var part:parts)if(!part.getQuads(null).isEmpty())loose=true;
+            if(mask==0&&!loose)continue; // buried inside the ghost: nothing of it can ever be seen
+            out.pos.add(pos);out.states.add(state);out.outer.add(mask);out.loose.add(loose);out.parts.add(parts);
+        }
+        out.tints=new int[out.pos.size()*4];java.util.Arrays.fill(out.tints,-2);
+        return out;
+    }
+
+    /** The sides of a block facing a camera at ({@code dx},{@code dy},{@code dz}) from its centre, one bit per {@link Direction#ordinal()}, as {@link #facing} judges them. */
+    private static int facingMask(double dx,double dy,double dz){
+        return (-dy>.5?1:0)|(dy>.5?2:0)|(-dz>.5?4:0)|(dz>.5?8:0)|(-dx>.5?16:0)|(dx>.5?32:0);
+    }
+
+    private static void cachedBlocks(LevelRenderContext context,Minecraft mc,Vec3 eye,net.minecraft.client.renderer.rendertype.RenderType type,Ghost ghost){
+        TOUCHED.add(ghost.places());
+        var prepared=PREPARED.computeIfAbsent(ghost.places(),k->prepare(mc,ghost));
+        var stack=context.poseStack();
+        var quad=new QuadInstance();
+        quad.setColor(ghost.tint());
+        quad.setLightCoords(FULL_BRIGHT);
+        quad.setOverlayCoords(OverlayTexture.NO_OVERLAY);
+        for(int i=0;i<prepared.pos.size();i++){
+            BlockPos pos=prepared.pos.get(i);
+            final double dx=eye.x-pos.getX()-.5,dy=eye.y-pos.getY()-.5,dz=eye.z-pos.getZ()-.5;
+            final int visible=prepared.outer.get(i)&facingMask(dx,dy,dz);
+            final boolean loose=prepared.loose.get(i);
+            if(visible==0&&!loose)continue; // every side that shows faces away: nothing to draw, so not even the transform is set up
+            var state=prepared.states.get(i);
+            final int base=i*4;final var tints=prepared.tints;
+            final var tintOf=(java.util.function.IntUnaryOperator)index->{ // biome tints such as grass and leaves, looked up once per block
+                if(index<0||index>=4)return 0xFFFFFF;
+                if(tints[base+index]==-2){int t=ClientCompat.blockTint(mc,state,pos,index);tints[base+index]=t==-1?0xFFFFFF:t&0xFFFFFF;}
+                return tints[base+index];
+            };
+            var parts=prepared.parts.get(i);
+            stack.pushPose();
+            stack.translate(pos.getX()+.5-eye.x,pos.getY()+.5-eye.y,pos.getZ()+.5-eye.z);
+            float grow=ghostScale(dx,dy,dz);
+            stack.scale(grow,grow,grow);
+            stack.translate(-.5,-.5,-.5);
+            context.submitNodeCollector().submitCustomGeometry(stack,type,(pose,consumer)->{
+                for(var part:parts){
+                    if(loose)for(var q:part.getQuads(null))if(facing(q.direction(),dx,dy,dz,0)){quad.setColor(tinted(ghost.tint(),tintOf.applyAsInt(q.materialInfo().tintIndex())));consumer.putBakedQuad(pose,q,quad);}
+                    if(visible!=0)for(Direction face:FACES){
+                        if((visible>>face.ordinal()&1)==0)continue;
+                        for(var q:part.getQuads(face)){quad.setColor(tinted(ghost.tint(),tintOf.applyAsInt(q.materialInfo().tintIndex())));consumer.putBakedQuad(pose,q,quad);}
+                    }
+                }
+            });
+            stack.popPose();
         }
     }
 }

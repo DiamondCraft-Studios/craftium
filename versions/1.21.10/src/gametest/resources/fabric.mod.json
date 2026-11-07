@@ -5,6 +5,6 @@
   "name": "Craftium 1.21.10 smoke test",
   "environment": "client",
   "entrypoints": {
-    "fabric-client-gametest": ["dev.craftium.client.SmokeGameTest", "dev.craftium.client.PaperLiveGameTest", "dev.craftium.client.ViewportGameTest", "dev.craftium.client.AiBridgeGameTest", "dev.craftium.client.PaperAiGameTest", "dev.craftium.client.StructureGameTest", "dev.craftium.client.SelectionDrawCostGameTest", "dev.craftium.client.DedicatedServerGameTest"]
+    "fabric-client-gametest": ["dev.craftium.client.SmokeGameTest", "dev.craftium.client.PaperLiveGameTest", "dev.craftium.client.ViewportGameTest", "dev.craftium.client.AiBridgeGameTest", "dev.craftium.client.PaperAiGameTest", "dev.craftium.client.StructureGameTest", "dev.craftium.client.SelectionDrawCostGameTest", "dev.craftium.client.GhostDrawCostGameTest", "dev.craftium.client.DedicatedServerGameTest"]
   }
 }

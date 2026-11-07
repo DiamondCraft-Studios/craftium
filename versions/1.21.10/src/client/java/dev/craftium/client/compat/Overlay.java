@@ -35,7 +35,7 @@ public final class Overlay {
     private record Point(Vec3 at,int color,float size) implements Prim {}
     private record Label(String text,Vec3 pos,int color,int background,float scale) implements Prim {}
     private record Quad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color,boolean scene) implements Prim {}
-    private record Blocks(List<BlockPos> models,List<BlockPos> places,java.util.Set<BlockPos> placed,List<net.minecraft.world.level.block.state.BlockState> states,int tint) implements Prim {}
+    private record Blocks(List<BlockPos> models,List<BlockPos> places,java.util.Set<BlockPos> placed,List<net.minecraft.world.level.block.state.BlockState> states,int tint,boolean cached) implements Prim {}
 
     private static final List<Prim> building=new ArrayList<>();
     private static List<Prim> shown=List.of();
@@ -83,14 +83,21 @@ public final class Overlay {
      * Like {@link #blocks(List,int)}, but the model of {@code models.get(i)} is drawn at {@code places.get(i)}. This
      * previews blocks that are about to move. Both lists must have the same size and are not copied.
      */
-    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){out.add(new Blocks(models,places,new java.util.HashSet<>(places),null,tint));}
+    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){out.add(new Blocks(models,places,new java.util.HashSet<>(places),null,tint,false));}
     /**
      * Draws {@code states.get(i)} at {@code places.get(i)}, for blocks that are not in the world yet, such as an edit
      * waiting to be confirmed. Both lists must have the same size and are not copied.
      */
     public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){blockStates(states,places,new java.util.HashSet<>(places),tint);}
     /** As above, for a caller that keeps {@code placed} (the same positions as a set) between ticks instead of paying to rebuild it each time. */
-    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,java.util.Set<BlockPos> placed,int tint){out.add(new Blocks(places,places,placed,states,tint));}
+    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,java.util.Set<BlockPos> placed,int tint){out.add(new Blocks(places,places,placed,states,tint,false));}
+    /**
+     * As {@link #blockStates(List,List,int)}, for a ghost that stays the same from frame to frame: the same two list objects must be
+     * passed for as long as it does. What only depends on the blocks (which sides are on the outer surface, their models and tints)
+     * is worked out once, the first frame, and kept until a frame passes without the ghost. In exchange the ghost does not notice
+     * the world changing around it after that first frame.
+     */
+    public static void cachedBlockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){out.add(new Blocks(places,places,null,states,tint,true));}
     public static void text(String text,BlockPos pos,int color,int background,float scale){text(text,new Vec3(pos.getX()+.5,pos.getY()+1.3,pos.getZ()+.5),color,background,scale);}
     /** A label centred on the point {@code at}. */
     public static void text(String text,Vec3 at,int color,int background,float scale){out.add(new Label(text,at,color,background,scale));}
@@ -105,12 +112,14 @@ public final class Overlay {
             try{frame.run();}finally{out=saved;}
             prims=extra;
         }
-        if(prims.isEmpty()||mc.level==null)return;
+        if(prims.isEmpty()||mc.level==null){PREPARED.clear();return;}
         var camera=ClientCompat.camera(mc);
         var view=new View(camera.position(),camera.getLeftVector(),camera.getUpVector(),
             2*Math.tan(Math.toRadians(ClientCompat.fov(mc,camera))/2)/Math.max(1,mc.getWindow().getHeight()));
         // Block ghosts go first, then the lines, boxes and points over them, so handles and outlines are never covered by a ghost.
+        TOUCHED.clear();
         for(var prim:prims)if(prim instanceof Blocks g)blocks(context,mc,view,g);
+        PREPARED.keySet().retainAll(TOUCHED); // a ghost that was not drawn this frame is gone
         var pose=context.matrices().last();
         var quads=context.consumers().getBuffer(RenderType.textBackgroundSeeThrough());
         for(var prim:prims)switch(prim){
@@ -218,7 +227,82 @@ public final class Overlay {
         return d.getStepX()*dx+d.getStepY()*dy+d.getStepZ()*dz>reach;
     }
 
+    /** What a cached ghost needs for every block that has anything to show, worked out once: see {@link #cachedBlockStates}. */
+    private static final class Prepared {
+        final List<BlockPos> pos=new ArrayList<>();
+        final List<net.minecraft.world.level.block.state.BlockState> states=new ArrayList<>();
+        /** For each block the sides of it on the outer surface, one bit per {@link Direction#ordinal()}. */
+        final List<Integer> outer=new ArrayList<>();
+        /** Whether the block has quads that belong to no side (a flower, say), which are drawn whenever they face the camera. */
+        final List<Boolean> loose=new ArrayList<>();
+        final List<List<net.minecraft.client.renderer.block.model.BlockModelPart>> parts=new ArrayList<>();
+        int[] tints;
+    }
+    private static final java.util.Map<List<BlockPos>,Prepared> PREPARED=new java.util.IdentityHashMap<>();
+    private static final java.util.Set<List<BlockPos>> TOUCHED=java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+
+    private static Prepared prepare(Minecraft mc,Blocks ghost){
+        var level=mc.level;var out=new Prepared();
+        var placed=ghost.placed!=null?ghost.placed:new java.util.HashSet<>(ghost.places);
+        var random=RandomSource.create();
+        for(int i=0;i<ghost.places.size();i++){
+            BlockPos pos=ghost.places.get(i);var state=ghost.states.get(i);
+            if(state.isAir()||state.getRenderShape()!=RenderShape.MODEL)continue; // fluids and block entities have no plain model
+            random.setSeed(state.getSeed(pos));
+            var parts=mc.getBlockRenderer().getBlockModel(state).collectParts(random);
+            int mask=0;
+            for(Direction face:FACES)if(!placed.contains(pos.relative(face))&&!hidden(level,pos,face))mask|=1<<face.ordinal();
+            boolean loose=false;for(var part:parts)if(!part.getQuads(null).isEmpty())loose=true;
+            if(mask==0&&!loose)continue; // buried inside the ghost: nothing of it can ever be seen
+            out.pos.add(pos);out.states.add(state);out.outer.add(mask);out.loose.add(loose);out.parts.add(parts);
+        }
+        out.tints=new int[out.pos.size()*4];java.util.Arrays.fill(out.tints,-2);
+        return out;
+    }
+
+    /** The sides of a block facing a camera at ({@code dx},{@code dy},{@code dz}) from its centre, one bit per {@link Direction#ordinal()}, as {@link #facing} judges them. */
+    private static int facingMask(double dx,double dy,double dz){
+        return (-dy>.5?1:0)|(dy>.5?2:0)|(-dz>.5?4:0)|(dz>.5?8:0)|(-dx>.5?16:0)|(dx>.5?32:0);
+    }
+
+    private static void cachedBlocks(WorldRenderContext context,Minecraft mc,View view,Blocks ghost){
+        TOUCHED.add(ghost.places);
+        var prepared=PREPARED.computeIfAbsent(ghost.places,k->prepare(mc,ghost));
+        var consumer=context.consumers().getBuffer(RenderType.entityTranslucent(TextureAtlas.LOCATION_BLOCKS));
+        var stack=context.matrices();
+        float a=(ghost.tint>>>24)/255f,r=(ghost.tint>>16&255)/255f,g=(ghost.tint>>8&255)/255f,b=(ghost.tint&255)/255f;
+        for(int i=0;i<prepared.pos.size();i++){
+            BlockPos pos=prepared.pos.get(i);
+            double dx=view.eye.x-pos.getX()-.5,dy=view.eye.y-pos.getY()-.5,dz=view.eye.z-pos.getZ()-.5;
+            int visible=prepared.outer.get(i)&facingMask(dx,dy,dz);
+            boolean loose=prepared.loose.get(i);
+            if(visible==0&&!loose)continue; // every side that shows faces away: nothing to draw, so not even the transform is set up
+            var state=prepared.states.get(i);
+            final int base=i*4;final var tints=prepared.tints;
+            final var tintOf=(java.util.function.IntUnaryOperator)index->{ // biome tints such as grass and leaves, looked up once per block
+                if(index<0||index>=4)return 0xFFFFFF;
+                if(tints[base+index]==-2){int t=ClientCompat.blockTint(mc,state,pos,index);tints[base+index]=t==-1?0xFFFFFF:t&0xFFFFFF;}
+                return tints[base+index];
+            };
+            stack.pushPose();
+            stack.translate(pos.getX()+.5-view.eye.x,pos.getY()+.5-view.eye.y,pos.getZ()+.5-view.eye.z);
+            float grow=ghostScale(dx,dy,dz);
+            stack.scale(grow,grow,grow);
+            stack.translate(-.5,-.5,-.5);
+            var pose=stack.last();
+            for(var part:prepared.parts.get(i)){
+                if(loose)for(var quad:part.getQuads(null))if(facing(quad.direction(),dx,dy,dz,0)){int t=tintOf.applyAsInt(quad.tintIndex());consumer.putBulkData(pose,quad,r*(t>>16&255)/255f,g*(t>>8&255)/255f,b*(t&255)/255f,a,LightTexture.FULL_BRIGHT,OverlayTexture.NO_OVERLAY);}
+                if(visible!=0)for(Direction face:FACES){
+                    if((visible>>face.ordinal()&1)==0)continue;
+                    for(var quad:part.getQuads(face)){int t=tintOf.applyAsInt(quad.tintIndex());consumer.putBulkData(pose,quad,r*(t>>16&255)/255f,g*(t>>8&255)/255f,b*(t&255)/255f,a,LightTexture.FULL_BRIGHT,OverlayTexture.NO_OVERLAY);}
+                }
+            }
+            stack.popPose();
+        }
+    }
+
     private static void blocks(WorldRenderContext context,Minecraft mc,View view,Blocks ghost){
+        if(ghost.cached&&ghost.states!=null){cachedBlocks(context,mc,view,ghost);return;}
         var level=mc.level;
         var consumer=context.consumers().getBuffer(RenderType.entityTranslucent(TextureAtlas.LOCATION_BLOCKS));
         var stack=context.matrices();
