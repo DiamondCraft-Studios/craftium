@@ -44,6 +44,12 @@ public final class Packets {
             (buf,p) -> buf.writeUtf(p.json, 2_000_000), buf -> new Update(buf.readUtf(2_000_000)));
         @Override public Type<Update> type() { return TYPE; }
     }
+    /** What a client and a server tell each other as they meet: {@link dev.craftium.core.Handshake.Hello} as JSON. Sent both ways. */
+    public record Hello(String json) implements CustomPacketPayload {
+        public static final Type<Hello> TYPE=new Type<>(dev.craftium.compat.Compat.id("craftium","hello"));
+        public static final StreamCodec<RegistryFriendlyByteBuf,Hello> CODEC=StreamCodec.of((buf,p)->buf.writeUtf(p.json,512),buf->new Hello(buf.readUtf(512)));
+        @Override public Type<Hello> type(){return TYPE;}
+    }
     public record Report(String text) implements CustomPacketPayload {
         public static final Type<Report> TYPE=new Type<>(dev.craftium.compat.Compat.id("craftium","report"));
         public static final StreamCodec<RegistryFriendlyByteBuf,Report> CODEC=StreamCodec.of((buf,p)->buf.writeUtf(p.text,100_000),buf->new Report(buf.readUtf(100_000)));
