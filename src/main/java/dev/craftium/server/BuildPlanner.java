@@ -21,8 +21,7 @@ final class BuildPlanner {
         if (!spec.hasShapes()) {
             // Only operations on the selection: there is no area of its own, so the ground to load is the selection's.
             if (selection.isEmpty()) throw new IllegalArgumentException("replace_selection works on the player's selection, and nothing is selected. Ask the player to select the blocks, or give coordinates and use replace with from and to");
-            var states = new HashMap<String, BlockState>();
-            for (String name : spec.blocks()) states.put(name, plan.parse(name));
+            var states = states(level, spec);
             plan.exact = true;
             loadAround(level, selection);
             applySelection(level, plan, spec, states, selection, new HashMap<>());
@@ -32,8 +31,7 @@ final class BuildPlanner {
         var min = place.min();
         AiWorld.load(level, min.x(), min.z(), min.x() + place.bounds().sx() - 1, min.z() + place.bounds().sz() - 1);
         // Every block is looked up before anything is planned, so an unknown name fails the whole build and not half of it.
-        var states = new HashMap<String, BlockState>();
-        for (String name : spec.blocks()) states.put(name, plan.parse(name));
+        var states = states(level, spec);
         var result = spec.build(place);
         var matches = new HashMap<String, Match>();
         // The spec says exactly where blocks go, so the player's brush mask, symmetry and height settings do not apply.
@@ -50,6 +48,62 @@ final class BuildPlanner {
             applySelection(level, plan, spec, states, selection, matches);
         }
         return plan.finish("AI build");
+    }
+
+    /**
+     * Every block name the spec uses, looked up. A name that is not a block, or a state the block does not have, is refused with what an AI
+     * needs to fix it in one go: the operations that use it, why it failed, and the nearest real ids or the properties the block does take.
+     */
+    private static Map<String, BlockState> states(net.minecraft.server.level.ServerLevel level, BuildSpec spec) {
+        var lookup = level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK);
+        var states = new HashMap<String, BlockState>();
+        for (String name : spec.blocks()) {
+            try {
+                states.put(name, net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(lookup, new com.mojang.brigadier.StringReader(name), false).blockState());
+            } catch (Exception e) {
+                throw new IllegalArgumentException(explain(lookup, spec, name, e));
+            }
+        }
+        return states;
+    }
+
+    private static String explain(net.minecraft.core.HolderLookup<net.minecraft.world.level.block.Block> lookup, BuildSpec spec, String name, Exception failure) {
+        var message = new StringBuilder(String.join(", ", spec.usesOf(name))).append(": ");
+        String id = BlockNames.id(name);
+        BlockState block = null;
+        try { block = net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(lookup, new com.mojang.brigadier.StringReader(id), false).blockState(); }
+        catch (Exception ignored) { /* the id itself is unknown */ }
+        if (block == null) {
+            message.append('"').append(id).append("\" is not a block in this game version");
+            var near = BlockNames.suggest(id, blockIds(), 5);
+            if (!near.isEmpty()) message.append(". Nearest: ").append(String.join(", ", near));
+            return message.toString();
+        }
+        message.append('"').append(name).append("\" is not a valid state");
+        if (failure.getMessage() != null) message.append(" (").append(failure.getMessage()).append(')');
+        var properties = new ArrayList<String>();
+        for (var property : block.getProperties()) properties.add(values(property));
+        message.append(properties.isEmpty() ? ". " + id + " takes no properties" : ". " + id + " takes " + String.join(", ", properties));
+        return message.toString();
+    }
+
+    /** "facing=north|east|south|west", the way a block state is written. */
+    private static <T extends Comparable<T>> String values(net.minecraft.world.level.block.state.properties.Property<T> property) {
+        var names = new ArrayList<String>();
+        for (T value : property.getPossibleValues()) names.add(property.getName(value));
+        return property.getName() + "=" + String.join("|", names);
+    }
+
+    private static List<String> blockIds;
+
+    /** Every block id there is, worked out once: the list is fixed when the game starts. */
+    private static synchronized List<String> blockIds() {
+        if (blockIds == null) {
+            var ids = new ArrayList<String>();
+            for (var key : net.minecraft.core.registries.BuiltInRegistries.BLOCK.keySet()) ids.add(key.toString());
+            blockIds = List.copyOf(ids);
+        }
+        return blockIds;
     }
 
     /** Makes sure the ground under a selection is loaded; it is normally the player's own, but may reach a few unvisited chunks. */

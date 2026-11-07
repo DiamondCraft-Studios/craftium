@@ -183,8 +183,12 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(made != null && made.get("placed").getAsInt() + made.get("cleared").getAsInt() == ghost && made.get("min").toString().equals("[" + x + "," + y + "," + z + "]")
                     && made.getAsJsonArray("blocks").toString().contains("minecraft:cut_sandstone"), "preview_build should describe what it made: " + made);
             // A spec the server refuses leaves the waiting preview as it was, so a typo does not make the player's ghost vanish.
-            var typo = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + x + "," + y + "," + z + "],\"to\":[" + (x + 1) + "," + y + "," + z + "],\"block\":\"no_such_block\"}]}}");
+            var typo = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + x + "," + y + "," + z + "],\"to\":[" + (x + 1) + "," + y + "," + z + "],\"block\":\"spruce_stair\"}]}}");
             require(!typo.get("ok").getAsBoolean() && typo.getAsJsonObject("state").get("previewBlocks").getAsInt() == ghost, "a refused spec must leave the waiting preview as it was: " + typo);
+            // The error says which op uses the name and what the nearest real block is, or which properties a block takes.
+            require(typo.get("error").getAsString().contains("ops[0] (box)") && typo.get("error").getAsString().contains("minecraft:spruce_stairs"), "an unknown block should name its op and the nearest id: " + typo);
+            var badState = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"set\",\"at\":[" + x + "," + y + "," + z + "],\"block\":\"oak_stairs[facing=up]\"}]}}");
+            require(!badState.get("ok").getAsBoolean() && badState.get("error").getAsString().contains("facing=north|"), "a bad state should list the values the block takes: " + badState);
             ctx.waitTicks(5);
             ctx.takeScreenshot("ai-preview");
             require(ctx.computeOnClient(mc -> ClientState.hasAiPending() && ClientState.aiPending.ai), "the AI's preview should be held as the AI's own");
