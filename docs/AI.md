@@ -55,7 +55,7 @@ The plugin needs Node.js 18 or newer on your PATH (an extension gets Node from C
 | `get_surface` | The ground of an area (up to 128 by 128 columns), to find ground level: every column for a small area or a strip, and for a wide one a summary (height range, how level it is, what it is made of, a coarse map) |
 | `get_screenshot` | A picture of what you see in the game, including the preview |
 | `render_view` | Claude's own camera: a picture of any box of the world from an angle it picks (see [Claude's own view](#claudes-own-view)), so it can check its work without touching your view |
-| `preview_build` | Shows a build as a ghost, replacing any earlier preview |
+| `preview_build` | Shows a build as a ghost, replacing any earlier preview, or adding to it (`mode: "add"`) so a build kept as a preview grows phase by phase and is still applied and undone as one |
 | `apply_preview` | Builds the preview, as one undoable step, loading the ground first if nobody is near it |
 | `cancel_preview`, `undo` | Discards the preview, or undoes the last build Claude applied (never your own edits) |
 

@@ -13,11 +13,13 @@ final class BuildPlanner {
 
     /**
      * @param selection the player's own selection, for the operations that work on it; it is only read, never changed
+     * @param onto a waiting preview to build on top of (its changes are planned first, so the new operations see its blocks), or null
      */
-    static Session.Edit plan(net.minecraft.server.level.ServerPlayer player, Session ai, Options o, java.util.Set<Point> selection) {
+    static Session.Edit plan(net.minecraft.server.level.ServerPlayer player, Session ai, Options o, java.util.Set<Point> selection, Session.Edit onto) {
         var spec = BuildSpec.parse(o.buildSpec);
         var level = (net.minecraft.server.level.ServerLevel) player.level();
         var plan = new EditPlanner(level, ai, o);
+        if (onto != null) for (var change : onto.changes()) plan.changes.put(change.pos(), change);
         if (!spec.hasShapes()) {
             // Only operations on the selection: there is no area of its own, so the ground to load is the selection's.
             if (selection.isEmpty()) throw new IllegalArgumentException("replace_selection works on the player's selection, and nothing is selected. Ask the player to select the blocks, or give coordinates and use replace with from and to");
@@ -40,7 +42,11 @@ final class BuildPlanner {
         for (var entry : result.cells().entrySet()) {
             var at = min.add(entry.getKey().x(), entry.getKey().y(), entry.getKey().z());
             var cell = entry.getValue();
-            if (cell.only() != null && !match(level, matches, cell.only()).matches(plan.state(at))) continue;
+            // A replace looks at what is planned there, if anything (a preview it adds to), and otherwise at the world.
+            if (cell.only() != null) {
+                var planned = plan.changes.get(at);
+                if (!match(level, matches, cell.only()).matches(planned == null ? plan.state(at) : planned.after().state())) continue;
+            }
             // A roof or a flight of stairs adds its own state to a block checked above, so those names are looked up when first met.
             var state = states.computeIfAbsent(cell.block(), name -> state(level, spec, name));
             if (!cell.turn().equals(Turn.NONE)) {

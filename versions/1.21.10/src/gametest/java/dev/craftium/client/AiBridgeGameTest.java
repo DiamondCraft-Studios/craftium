@@ -317,6 +317,17 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(v2Palette.contains("minecraft:oak_stairs[facing=west,half=bottom,shape=outer_right"), "a stair mirrored along x should face west with its corner swapped: " + v2Palette);
             require(v2Palette.contains("minecraft:stone_brick_stairs[") && v2Palette.contains("minecraft:stone_brick_slab[") && v2Palette.contains("minecraft:stone_bricks\""), "the roof should be stone bricks: " + v2Palette);
             require(v2Palette.contains("minecraft:stone\"") && v2Palette.contains("minecraft:andesite\""), "the mix should place both blocks: " + v2Palette);
+            // Adding to the preview: the new spec sees the preview's blocks (the andesite of its mix), and the reply describes only what it added.
+            int before = v2Preview.getAsJsonObject("state").get("previewBlocks").getAsInt();
+            var addMix = call("preview_build", "{\"mode\":\"add\",\"spec\":{\"ops\":[{\"op\":\"replace\",\"from\":[" + gx + "," + (gy + 5) + "," + z + "],\"to\":[" + (gx + 7) + "," + (gy + 5) + "," + (z + 7) + "],\"find\":\"andesite\",\"block\":\"diorite\"},"
+                + "{\"op\":\"set\",\"at\":[" + gx + "," + (gy + 3) + "," + z + "],\"block\":\"gold_block\"}]}}");
+            require(addMix.get("ok").getAsBoolean() && addMix.get("message").getAsString().startsWith("Added "), "an addition should say what it added: " + addMix);
+            int addedPlaced = addMix.getAsJsonObject("preview").get("placed").getAsInt();
+            require(addedPlaced > 1 && addMix.getAsJsonObject("preview").toString().contains("diorite") && !addMix.getAsJsonObject("preview").toString().contains("spruce"),
+                "the addition's summary should cover only the diorite and the gold: " + addMix.get("preview"));
+            require(addMix.getAsJsonObject("state").get("previewBlocks").getAsInt() == before + 1, "replacing preview blocks adds none, the gold adds one: " + before + " then " + addMix.getAsJsonObject("state"));
+            String mixLayer = call("get_preview_blocks", "{\"from\":[" + gx + "," + (gy + 5) + "," + z + "],\"to\":[" + (gx + 7) + "," + (gy + 5) + "," + (z + 7) + "]}").toString();
+            require(mixLayer.contains("diorite") && !mixLayer.contains("andesite"), "the addition should have replaced the preview's andesite: " + mixLayer);
             var noKind = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"set\",\"at\":[" + gx + "," + gy + "," + z + "],\"block\":\"glass@stairs\"}]}}");
             require(!noKind.get("ok").getAsBoolean() && noKind.get("error").getAsString().contains("ops[0] (set)") && noKind.get("error").getAsString().contains("tried"), "a material with no such kind should say what was tried: " + noKind);
             // read_blocks' sources: the world leaves the waiting preview out but says it is there; "after" with nothing waiting is the world.

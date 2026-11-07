@@ -292,7 +292,7 @@ public final class EditorServer {
                 case "ai_blocks" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.blocks(player,r.target(),r.normal())));return;}
                 case "ai_selection" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.selection(player,s)));return;}
                 case "ai_surface","ai_surface_floor" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.surface(player,r.target(),r.normal(),r.action().equals("ai_surface_floor"))));return;}
-                case "ai_build_preview","ai_apply","ai_cancel","ai_undo" -> {aiAction(player,r.action(),o);return;}
+                case "ai_build_preview","ai_build_preview_add","ai_apply","ai_cancel","ai_undo" -> {aiAction(player,r.action(),o);return;}
                 default -> {}
             }
             Point target=r.target(),normal=r.normal()==null?new Point(0,1,0):r.normal();
@@ -660,18 +660,21 @@ public final class EditorServer {
     private static void aiActionNow(ServerPlayer player,String action,Options o){
         var ai=aiSession(player);
         switch(action){
-            case "ai_build_preview" -> {
+            case "ai_build_preview","ai_build_preview_add" -> {
                 if(ai.busy)throw new IllegalArgumentException("Wait for the current AI build to finish");
                 // A new preview replaces the last only once it is accepted: a spec that is refused (a typo, a block that does not exist) leaves
                 // the waiting preview as it was, so the player's ghost does not vanish and the AI can fix the spec and try again.
+                // Added to the waiting preview, the spec is planned on top of it and the two become one edit, applied and undone as one.
+                var onto=action.equals("ai_build_preview_add")?ai.pendingEdit:null;
                 var mine=SESSIONS.get(player.getUUID()); // the player's own selection, which operations on it read and never change
-                var edit=BuildPlanner.plan(player,ai,o,mine==null?Set.<Point>of():mine.selection.points());
-                if(edit.changes().isEmpty()){send(player,ai,"No matching blocks changed"+(ai.pendingEdit==null?"":"; the earlier preview is still waiting"),false);return;}
+                var edit=BuildPlanner.plan(player,ai,o,mine==null?Set.<Point>of():mine.selection.points(),onto);
+                var added=onto==null?edit:addedTo(onto,edit);
+                if(added.changes().isEmpty()){send(player,ai,"No matching blocks changed"+(ai.pendingEdit==null?"":"; the earlier preview is still waiting"),false);return;}
                 if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller build");
                 EditProtection.check(player,edit);
                 ai.pendingEdit=edit;ai.pendingDirty=true;ai.previewId=++PREVIEW_IDS;
-                ServerPlatform.send(player,new Packets.AiReply(AiWorld.previewSummary(edit))); // before the status, which the AI client waits for, so it has arrived by then
-                send(player,ai,"AI preview ready: "+edit.changes().size()+" blocks",false);
+                ServerPlatform.send(player,new Packets.AiReply(AiWorld.previewSummary(added))); // before the status, which the AI client waits for, so it has arrived by then
+                send(player,ai,onto==null?"AI preview ready: "+edit.changes().size()+" blocks":"Added "+added.changes().size()+" blocks to the AI preview: "+edit.changes().size()+" blocks in all",false);
             }
             case "ai_apply" -> {
                 var edit=ai.pendingEdit;
@@ -688,6 +691,13 @@ public final class EditorServer {
             }
             default -> {ai.historyRemaining=0;history(player,ai,true);} // ai_undo
         }
+    }
+    /** The changes of {@code merged} that {@code earlier} did not already hold: what an addition to a preview changed. */
+    private static Session.Edit addedTo(Session.Edit earlier,Session.Edit merged){
+        var before=new HashMap<Point,Session.Change>();for(var c:earlier.changes())before.put(c.pos(),c);
+        var out=new ArrayList<Session.Change>();
+        for(var c:merged.changes()){var old=before.get(c.pos());if(old==null||old.after().state()!=c.after().state()||!Objects.equals(old.after().data(),c.after().data()))out.add(c);}
+        return new Session.Edit(merged.name(),out,List.of(),merged.flags());
     }
     private static void start(ServerPlayer player,Session s,Session.Edit edit) {
         if(s.fromBuilder)edit=edit.withBuilder(true);

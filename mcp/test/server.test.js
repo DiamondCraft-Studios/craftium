@@ -126,6 +126,11 @@ test("preview_build passes a spec's material and palette mixes through to the ga
   assert.deepEqual(bridge.seen[0].body, { spec });
   const bad = await client.callTool({ name: "preview_build", arguments: { spec: { ...spec, material: 3 } } });
   assert.equal(bad.isError, true);
+  await client.callTool({ name: "preview_build", arguments: { spec, mode: "add" } });
+  assert.deepEqual(bridge.seen[1].body, { spec, mode: "add" });
+  const badMode = await client.callTool({ name: "preview_build", arguments: { spec, mode: "merge" } });
+  assert.equal(badMode.isError, true);
+  assert.equal(bridge.seen.length, 2);
   await bridge.close();
 });
 

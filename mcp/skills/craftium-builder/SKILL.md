@@ -61,8 +61,9 @@ me", "don't build it yet", "let me see it first", "preview only", "I want to che
 and do not call `apply_preview` until they say to build. They don't have to name a mode, and they can switch back at
 any time ("looks good, build it"). If it is unclear which they want, ask once.
 
-- A new preview replaces the old one, so in this mode each phase's preview holds the whole build so far, not only the
-  new part. Write the cumulative spec each time.
+- Send each new phase with `"mode": "add"`: it goes on top of the waiting preview, so you send only the new part,
+  its `replace` ops see the preview's blocks, and the reply describes what the phase added. Everything waiting is
+  applied, and undone, as one build. To redo a phase, preview the whole build again without `mode`.
 - A preview is shown up to 32,768 blocks (the game draws models for the first 8,192 and the rest as an outline). Check `previewTruncated`; if a big build can't be shown whole, say so and
   offer to apply in stages instead.
 - You can still check your work without applying anything: `read_blocks` reads every block of the preview with

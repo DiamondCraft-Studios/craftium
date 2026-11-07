@@ -298,7 +298,13 @@ public final class AiBridge {
                 if (!args.has("spec")) throw new IllegalArgumentException("Missing \"spec\"");
                 var element = args.get("spec");
                 String spec = element.isJsonPrimitive() ? element.getAsString() : GSON.toJson(element);
-                yield request("ai_build_preview", () -> previewBuild(spec));
+                String mode = args.has("mode") ? args.get("mode").getAsString() : "replace";
+                if (!mode.equals("replace") && !mode.equals("add")) throw new IllegalArgumentException("\"mode\" must be \"replace\" or \"add\"");
+                boolean add = mode.equals("add");
+                if (add && !ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SPEC_V2))
+                    throw new IllegalArgumentException("This server's Craftium cannot add to a preview; send the whole build without \"mode\": \"add\", and tell the player the server needs an update for it");
+                String action = add ? "ai_build_preview_add" : "ai_build_preview";
+                yield request(action, () -> previewBuild(spec, action));
             }
             case "apply_preview" -> request("ai_apply", () -> CraftiumClient.send("ai_apply", null, null));
             case "cancel_preview" -> request("ai_cancel", () -> CraftiumClient.send("ai_cancel", null, null));
@@ -349,7 +355,7 @@ public final class AiBridge {
     private static JsonObject request(String name, Runnable send) throws Exception {
         var reply = new CompletableFuture<Packets.Status>();
         // A new preview is described by the server just before its status (see AiWorld.previewSummary); a server from before that sends none.
-        var summary = name.equals("ai_build_preview") ? new CompletableFuture<String>() : null;
+        var summary = name.startsWith("ai_build_preview") ? new CompletableFuture<String>() : null;
         pace();
         onClient(() -> {
             var mc = Minecraft.getInstance();
@@ -408,11 +414,11 @@ public final class AiBridge {
         if (wait > 0) Thread.sleep(wait / 1_000_000L + 1);
     }
 
-    private static void previewBuild(String spec) {
+    private static void previewBuild(String spec, String action) {
         var o = ClientState.options;
         o.buildSpec = spec;
         // The spec rides along on this one request and is not kept in the saved settings.
-        try { CraftiumClient.send("ai_build_preview", null, null); }
+        try { CraftiumClient.send(action, null, null); }
         finally { o.buildSpec = ""; }
     }
 

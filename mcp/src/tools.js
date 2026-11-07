@@ -217,9 +217,10 @@ export const TOOLS = [
     name: "preview_build",
     title: "Preview a build",
     description:
-      "Shows a build as a ghost preview at the world coordinates its spec names, without changing the world, replacing any earlier preview. Nothing needs to be selected, and the build can be anywhere in the world the player's dimension reaches. " +
+      "Shows a build as a ghost preview at the world coordinates its spec names, without changing the world, replacing any earlier preview (or adding to it, with mode add). Nothing needs to be selected, and the build can be anywhere in the world the player's dimension reaches. " +
       'The reply\'s "preview" says what the spec made: blocks placed and cleared, the box they fill (min, max, size), the chunks it reaches, and the commonest blocks with how the ones that face a way are turned (a gable roof has two facings in equal numbers). Check it first: it often shows a mistake without a render. ' +
       "If the spec is refused, the error names what to fix and your earlier preview stays waiting (previewKept). " +
+      'With "mode": "add" the spec goes on top of the waiting preview instead of replacing it, so a detail pass sends only the new operations: its replace and find see the preview\'s blocks, the reply\'s "preview" describes only what was added, and the two are applied and undone as one build. ' +
       "The game draws only part of a very big preview. The reply's state says so (previewTruncated, previewWarning): the rest is still built when you apply it, so build in smaller stages if you need to see all of it. Describe the build as a spec of primitives.\n\n" + BUILD_SPEC_GUIDE,
     inputSchema: {
       type: "object",
@@ -235,11 +236,15 @@ export const TOOLS = [
           },
           required: ["ops"],
         },
+        mode: { type: "string", enum: ["replace", "add"], description: '"replace" (default): this spec is the whole preview. "add": its blocks go on top of the waiting preview' },
       },
       required: ["spec"],
     },
     annotations: CHANGE,
-    args: (a) => ({ spec: spec(a.spec) }),
+    args: (a) => {
+      if (a.mode !== undefined && a.mode !== "replace" && a.mode !== "add") throw new ArgumentError('"mode" must be "replace" or "add"');
+      return { spec: spec(a.spec), ...(a.mode !== undefined ? { mode: a.mode } : {}) };
+    },
   },
   {
     name: "apply_preview",
