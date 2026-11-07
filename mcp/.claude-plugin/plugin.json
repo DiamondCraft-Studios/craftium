@@ -1,10 +1,17 @@
 {
   "name": "craftium",
+  "displayName": "Craftium",
   "version": "0.1.0",
-  "description": "Build in Minecraft by chatting: Claude previews builds as a ghost in your game and applies them when you say so.",
-  "author": { "name": "Craftium contributors" },
-  "license": "MIT",
-  "keywords": ["minecraft", "craftium", "building"],
+  "description": "Build in Minecraft by chatting: Claude previews builds as a ghost in your game and applies them when you say so. Includes a builder skill for well-proportioned builds.",
+  "author": { "name": "Craftium contributors", "url": "https://github.com/DiamondCraft-Studios/craftium" },
+  "homepage": "https://github.com/DiamondCraft-Studios/craftium",
+  "repository": "https://github.com/DiamondCraft-Studios/craftium",
+  "license": "GPL-3.0-only",
+  "keywords": ["minecraft", "craftium", "building", "mcp"],
+  "icon": "./icon.png",
+  "documentationUrl": "https://github.com/DiamondCraft-Studios/craftium/blob/main/docs/AI.md",
+  "supportUrl": "https://github.com/DiamondCraft-Studios/craftium/issues",
+  "privacyPolicyUrl": "https://github.com/DiamondCraft-Studios/craftium/blob/main/mcp/PRIVACY.md",
   "userConfig": {
     "minecraft_dir": {
       "type": "directory",
