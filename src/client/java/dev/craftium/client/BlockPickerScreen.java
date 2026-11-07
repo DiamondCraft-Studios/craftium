@@ -56,15 +56,41 @@ public final class BlockPickerScreen extends CraftiumScreen {
     }
     /** An item icon for the block; Air has none, so it is drawn as a label. */
     static void icon(Gfx g,Font font,String block,int x,int y){
-        var id=dev.craftium.compat.Compat.tryParse(block.split("\\[",2)[0]);if(id==null)return;
-        if(id.getPath().equals("air")){g.text(font,"Air",x+8-font.width("Air")/2,y+4,0xff9db5cb,false);return;}
-        BuiltInRegistries.BLOCK.getOptional(id).ifPresent(b->{
-            var stack=b.asItem().getDefaultInstance();
-            if(!stack.isEmpty())g.item(stack,x,y);
-            else if(b==net.minecraft.world.level.block.Blocks.WATER)liquid(g,x,y,0xff3f76e4); // no item of its own: a liquid is drawn as its block
-            else if(b==net.minecraft.world.level.block.Blocks.LAVA)liquid(g,x,y,0xffe4660f);
-            else{String tag=b.getName().getString();tag=tag.substring(0,Math.min(2,tag.length()));g.text(font,tag,x+8-font.width(tag)/2,y+4,0xff9db5cb,false);}
-        });
+        var look=looks(block);
+        if(look==null)return;
+        if(look.stack!=null)g.item(look.stack,x,y);
+        else if(look.liquid!=0)liquid(g,x,y,look.liquid); // no item of its own: a liquid is drawn as its block
+        else g.text(font,look.label,x+8-look.labelWidth(font)/2,y+4,0xff9db5cb,false);
+    }
+    /**
+     * What a block's icon is made of, worked out once per block string: icons are drawn for every palette, history and picker cell on
+     * every frame, and parsing the id, looking the block up and building its item stack each time was a large part of the editor's frame.
+     * Exactly one of {@code stack}, {@code liquid} and {@code label} applies. Names depend on the language, so a language change starts afresh.
+     */
+    private static final class Look {
+        final net.minecraft.world.item.ItemStack stack;final int liquid;final String label;private int width=-1;private Font measured;
+        Look(net.minecraft.world.item.ItemStack stack,int liquid,String label){this.stack=stack;this.liquid=liquid;this.label=label;}
+        int labelWidth(Font font){if(measured!=font){measured=font;width=font.width(label);}return width;}
+    }
+    private static final Look NO_LOOK=new Look(null,0,"");
+    private static final Map<String,Look> LOOKS=new HashMap<>();
+    private static String looksLanguage="";
+    private static Look looks(String block){
+        String language=net.minecraft.client.Minecraft.getInstance().getLanguageManager().getSelected();
+        if(!language.equals(looksLanguage)){LOOKS.clear();looksLanguage=language;}
+        var cached=LOOKS.get(block);
+        if(cached==null){cached=makeLook(block);LOOKS.put(block,cached);}
+        return cached==NO_LOOK?null:cached;
+    }
+    private static Look makeLook(String block){
+        var id=dev.craftium.compat.Compat.tryParse(block.split("\\[",2)[0]);if(id==null)return NO_LOOK;
+        if(id.getPath().equals("air"))return new Look(null,0,"Air");
+        var found=BuiltInRegistries.BLOCK.getOptional(id);if(found.isEmpty())return NO_LOOK;
+        var b=found.get();var stack=b.asItem().getDefaultInstance();
+        if(!stack.isEmpty())return new Look(stack,0,"");
+        if(b==net.minecraft.world.level.block.Blocks.WATER)return new Look(null,0xff3f76e4,"");
+        if(b==net.minecraft.world.level.block.Blocks.LAVA)return new Look(null,0xffe4660f,"");
+        String tag=b.getName().getString();return new Look(null,0,tag.substring(0,Math.min(2,tag.length())));
     }
     /**
      * A liquid block drawn like the blocks in item slots: a cube seen from a corner, 16 by 16, with a lit top and a left and a right side

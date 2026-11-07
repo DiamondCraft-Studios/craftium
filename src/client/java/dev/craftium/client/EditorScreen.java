@@ -27,7 +27,7 @@ public final class EditorScreen extends CraftiumScreen {
     /** The menu bar in order; {@link #menuItems} numbers its cases the same way. */
     private static final String[] MENUS={"File","Edit","Select","View","Create","Structure","Operations","Masks","AI","Window","Help"};
     /** A menu's width in the bar: its name with padding, and room for the status square beside AI while its bridge is on. */
-    private int menuWidth(int index){return font.width(MENUS[index])+16+(MENUS[index].equals("AI")&&AiBridge.running()?12:0);}
+    private int menuWidth(int index){return TextCache.width(font,MENUS[index])+16+(MENUS[index].equals("AI")&&AiBridge.running()?12:0);}
     private long lastUse;
     private double pointerX,pointerY;
     private BlockHitResult lastHit;
@@ -58,6 +58,8 @@ public final class EditorScreen extends CraftiumScreen {
     private static boolean scrollActive;
     private static int scrollShift,scrollContent,scrollClipTop=Integer.MIN_VALUE,scrollClipBottom=Integer.MAX_VALUE;
     /** Where a control drawn at {@code y} really is, noting how far down the scrolling contents reach. */
+    /** Whether a row at {@code y} of the scrolling area lies wholly outside what is showing: it is not drawn, but still takes its place in the layout and its controls. */
+    private static boolean culled(int y,int height){return scrollActive&&(y+height+scrollShift<=scrollClipTop||y+scrollShift>=scrollClipBottom);}
     private static int placed(int y,int height){if(scrollActive)scrollContent=Math.max(scrollContent,y+height);return y+scrollShift;}
     /** {@code typedMax} is how far a typed value may go; the track itself stops at {@code max}. */
     private record Slider(int x,int width,double min,double max,double typedMax,double def,DoubleConsumer set,boolean unbounded) {
@@ -93,7 +95,8 @@ public final class EditorScreen extends CraftiumScreen {
     public boolean toolActive(){return toolActive;}
     private boolean showSelection=true;
     public EditorScreen(boolean builder){this(builder,false);}
-    public EditorScreen(boolean builder,boolean heldContext){super(Component.literal("Craftium Building Studio"));this.builder=builder;this.heldContext=heldContext;}
+    public EditorScreen(boolean builder,boolean heldContext){super(Component.literal("Craftium Building Studio"));this.builder=builder;this.heldContext=heldContext;
+        if(ClientState.options.tool==Tool.BOX_SELECT&&ClientState.boxCorners.size()==2)selectedNode=1;} // a box left from before: put the gizmo on a corner again, or the selection's own gizmo would stand beside both corner handles
     public boolean showSelection(){return showSelection;}
 
     private Options o(){return ClientState.options;}
@@ -177,6 +180,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);}
         finishPanel(g);
         viewport(g);
+        axisGizmo(g);
         for(int i=1;i<lasso.size();i++)ToolIcons.line(g,(int)(lasso.get(i-1).x()/scale),(int)(lasso.get(i-1).y()/scale),(int)(lasso.get(i).x()/scale),(int)(lasso.get(i).y()/scale),0xffffd66d);
         statusbar(g);
         if(menu>=0)dropdown(g);
@@ -198,21 +202,32 @@ public final class EditorScreen extends CraftiumScreen {
             String tooltip="";for(var c:controls)if(c.contains(mx,my)&&!c.tip.isEmpty())tooltip=c.tip;
             if(!tooltip.isEmpty()) {
                 // A new line starts a new paragraph; each is wrapped to the pane, and a pane with a title shows it brighter than what follows.
-                String[] paragraphs=tooltip.split("\n");var rows=new ArrayList<net.minecraft.util.FormattedCharSequence>();var firstRows=0;int widest=0;
-                for(int i=0;i<paragraphs.length;i++){
-                    var split=font.split(Component.literal(paragraphs[i]),306);
-                    if(i==0)firstRows=split.size();
-                    for(var row:split){rows.add(row);widest=Math.max(widest,font.width(row));}
-                }
-                int tw=Math.min(320,widest+14),th=rows.size()*10+12,tx=Math.min(mx+14,w-tw-4),ty=Math.min(my+18,h-th-12);
+                var pane=tooltipPane(tooltip);var rows=pane.rows();
+                int tw=Math.min(320,pane.widest()+14),th=rows.size()*10+12,tx=Math.min(mx+14,w-tw-4),ty=Math.min(my+18,h-th-12);
                 g.fill(tx,ty,tx+tw,ty+th,0xf5222d3b);g.outline(tx,ty,tw,th,LINE);
-                for(int i=0;i<rows.size();i++)g.text(font,rows.get(i),tx+6,ty+6+i*10,paragraphs.length>1&&i>=firstRows?MUTED:TEXT,false);
+                for(int i=0;i<rows.size();i++)g.text(font,rows.get(i),tx+6,ty+6+i*10,pane.paragraphs()>1&&i>=pane.firstRows()?MUTED:TEXT,false);
             }
         }
         if(dragBlock!=null&&dragMoved){
             for(int i=dropTargets.size()-1;i>=0;i--){var t=dropTargets.get(i).area();if(t.contains(mx,my)){g.pose().pushMatrix();WorkspaceLayout.apply(g,t.panel());g.outline(t.x(),t.y(),t.width(),t.height(),ACCENT);g.pose().popMatrix();break;}} // the cell the block would land in
             BlockDragCursor.draw(g,font,dragBlock,mx,my,w,h,ACCENT,inViewport(mx,my));}else BlockDragCursor.release();
         g.pose().popMatrix();ReferenceImages.draw(g,true,mouseX,mouseY);
+    }
+    /** A tooltip laid out: its wrapped rows, how many belong to the first paragraph, and the widest row. */
+    private record TooltipPane(String text,List<net.minecraft.util.FormattedCharSequence> rows,int firstRows,int paragraphs,int widest){}
+    private TooltipPane tooltipPane;
+    /** The pane for a tooltip, laid out once while the pointer stays on the same control rather than on every frame. */
+    private TooltipPane tooltipPane(String tooltip){
+        var pane=tooltipPane;
+        if(pane!=null&&pane.text().equals(tooltip))return pane;
+        // A new line starts a new paragraph; each is wrapped to the pane, and a pane with a title shows it brighter than what follows.
+        String[] paragraphs=tooltip.split("\n");var rows=new ArrayList<net.minecraft.util.FormattedCharSequence>();var firstRows=0;int widest=0;
+        for(int i=0;i<paragraphs.length;i++){
+            var split=TextCache.split(font,paragraphs[i],306);
+            if(i==0)firstRows=split.size();
+            for(var row:split){rows.add(row);widest=Math.max(widest,font.width(row));}
+        }
+        return tooltipPane=new TooltipPane(tooltip,List.copyOf(rows),firstRows,paragraphs.length,widest);
     }
     /** Whether the pointer is free to act on the controls, not held by a drag or covered by a pop-up. */
     private boolean pointerFree(){return ctxCell<0&&!shapeMenu&&dragging==null&&draggedPanel.isBlank()&&cameraGesture==CameraGesture.NONE&&!(dragBlock!=null&&dragMoved);}
@@ -975,6 +990,95 @@ public final class EditorScreen extends CraftiumScreen {
         largeSelectionPopup(g);
         if(minecraft.level==null){g.fill(l,80,r,h-28,0xff14202e);text(g,"Open a Creative world to start building",l+30,105,TEXT);}
     }
+    private static final int AXIS_SIZE=45,AXIS_TOP=29,AXIS_GAP=6;
+    /** Sizes of the gizmo's parts: how far an end sits from the centre, and the radii of the positive and negative end circles. */
+    private static final double AXIS_REACH=16.1,AXIS_PLUS=4.2,AXIS_MINUS=2.8;
+    /**
+     * Where the world axes gizmo sits: against the right edge, pushed left past any shown window that is in its way, so it
+     * follows the Target info panel (or whatever is there) and falls back to the edge when nothing is.
+     */
+    private int axisGizmoX(){
+        int x=w-AXIS_SIZE-AXIS_GAP;
+        if(!panels)return x;
+        for(int pass=0;pass<8;pass++){
+            boolean moved=false;
+            for(var r:WorkspaceLayout.windows.values()){
+                if(!r.visible||r.y>=AXIS_TOP+AXIS_SIZE||r.y+r.h<=AXIS_TOP||r.x>=x+AXIS_SIZE+AXIS_GAP||r.x+r.w<=x-AXIS_GAP)continue;
+                int next=r.x-AXIS_SIZE-AXIS_GAP;
+                if(next<x){x=next;moved=true;}
+            }
+            if(!moved)break;
+        }
+        return Math.max(AXIS_GAP,x);
+    }
+    private static final String[] AXIS_NAMES={"X","Y","Z"};
+    private static final int[] AXIS_COLOURS={0xffe8574f,0xff6fcf5a,0xff4f8fe8};
+    /**
+     * The world's X, Y and Z axes turning with the camera, as in a 3D editor. The end circles are handles: clicking one turns the
+     * camera to look along that axis from that side, and the dim circle at the other end looks from the opposite side.
+     */
+    private void axisGizmo(Gfx g){
+        if(!o().showAxisGizmo||minecraft.player==null||minecraft.level==null)return;
+        int left=axisGizmoX(),cx=left+AXIS_SIZE/2,cy=AXIS_TOP+AXIS_SIZE/2;final double reach=AXIS_REACH;
+        Vec3[] cam=TransformGizmo.cameraAxes();
+        // Six ends: axis*2 is the positive end, axis*2+1 the negative. The farthest are drawn first, so the near ones cover them.
+        double[][] ends=new double[6][];
+        for(int axis=0;axis<3;axis++){
+            double[] unit={axis==0?1:0,axis==1?1:0,axis==2?1:0};
+            Vec3 a=new Vec3(unit[0],unit[1],unit[2]);
+            double sx=a.dot(cam[0]),sy=-a.dot(cam[1]),depth=a.dot(cam[2]);
+            for(int side=0;side<2;side++){
+                double sign=side==0?1:-1,z=depth*sign;
+                // Orthographic, like other editors' orientation gizmos; only the circle size hints at which end is nearer.
+                ends[axis*2+side]=new double[]{sx*sign,sy*sign,z,1-z*.1};
+            }
+        }
+        Integer[] order={0,1,2,3,4,5};
+        java.util.Arrays.sort(order,(p,q)->Double.compare(ends[q][2],ends[p][2]));
+        // Drawn at eight times the resolution through the pose, so the lines and discs are not snapped to whole interface pixels.
+        final int S=8;
+        g.pose().pushMatrix();g.pose().scale(1f/S,1f/S);
+        for(int e:order)if(e%2==0){
+            double dx=ends[e][0]*reach*S,dy=ends[e][1]*reach*S,length=Math.hypot(dx,dy);
+            if(length<1)continue;
+            g.pose().pushMatrix();g.pose().translate((float)(cx*S),(float)(cy*S));g.pose().rotate((float)Math.atan2(dy,dx));
+            g.fill(0,-3,(int)Math.round(length),3,axisShade(AXIS_COLOURS[e/2],ends[e][2],false));
+            g.pose().popMatrix();
+        }
+        for(int e:order){
+            boolean positive=e%2==0;double[] end=ends[e];
+            double ex=(cx+end[0]*reach)*S,ey=(cy+end[1]*reach)*S;int radius=(int)Math.round((positive?AXIS_PLUS:AXIS_MINUS)*S*end[3]);
+            int colour=axisShade(AXIS_COLOURS[e/2],end[2],!positive);
+            int step=3;
+            for(int dy=-radius;dy<radius;dy+=step){
+                double mid=dy+step/2.0,half=Math.sqrt(Math.max(0,radius*radius-mid*mid));
+                g.fill((int)Math.round(ex-half),(int)Math.round(ey+dy),(int)Math.round(ex+half),(int)Math.round(ey+dy)+step,colour);
+            }
+        }
+        g.pose().popMatrix();
+        for(int e:order){
+            int axis=e/2;boolean positive=e%2==0;double[] end=ends[e];
+            int ex=cx+(int)Math.round(end[0]*reach),ey=cy+(int)Math.round(end[1]*reach),radius=positive?5:4;
+            if(positive){g.pose().pushMatrix();g.pose().translate(ex,ey);g.pose().scale(.7f,.7f);g.centeredText(font,AXIS_NAMES[axis],0,-4,0xffffffff);g.pose().popMatrix();}
+            final int fa=axis;final boolean fp=positive;
+            controls.add(new Control(ex-radius-1,ey-radius-1,radius*2+3,radius*2+3,()->faceAxis(fa,fp),""));
+        }
+    }
+    /** An axis colour darker the farther that end points from the camera, and dimmer still for the negative end. */
+    private static int axisShade(int colour,double depth,boolean negative){
+        double k=Math.clamp(.8-depth*.25,.45,1)*(negative?.6:1);
+        int r=(int)(((colour>>16)&255)*k),gr=(int)(((colour>>8)&255)*k),b=(int)((colour&255)*k);
+        return 0xff000000|r<<16|gr<<8|b;
+    }
+    /** Turns the camera, in place, to look along an axis from its positive or negative side. Straight up or down keeps the heading. */
+    private void faceAxis(int axis,boolean positive){
+        var player=minecraft.player;if(player==null)return;
+        double look=positive?-1:1; // viewing from the +X side means looking toward -X
+        double fx=axis==0?look:0,fy=axis==1?look:0,fz=axis==2?look:0;
+        if(axis!=1)player.setYRot((float)Math.toDegrees(Math.atan2(-fx,fz)));
+        player.setXRot((float)Math.toDegrees(-Math.asin(fy)));
+        player.setDeltaMovement(Vec3.ZERO);player.setOldPosAndRot();
+    }
     /** Where the large-selection popup is, or null when it is not showing. It sits in the middle of the viewport. */
     private int[] popupBounds(){
         if(ClientState.largeSelection<=0&&confirm==null)return null;
@@ -1321,13 +1425,13 @@ public final class EditorScreen extends CraftiumScreen {
     private void button(Gfx g,int x,int y,int width,int height,String label,boolean active,Runnable action,String tip){button(g,x,y,width,height,label,active,action,null,tip);}
     /** A button that cycles through values: a click goes to the next one and a right click back to the one before. */
     private void button(Gfx g,int x,int y,int width,int height,String label,boolean active,Runnable action,Runnable back,String tip) {
-        FlatButton.face(g,x,y,width,height,label,active,true,false,menuAlign);
+        if(!culled(y,height))FlatButton.face(g,x,y,width,height,label,active,true,false,menuAlign);
         controls.add(new Control(x,y,width,height,action,back,back==null||tip.isEmpty()?tip:tip+" · Right-click goes back"));
     }
     private void toggle(Gfx g,int x,int y,String label,boolean value,Runnable action) {toggle(g,x,y,label,value,action,"");}
     private void toggle(Gfx g,int x,int y,String label,boolean value,Runnable action,String tip) {
-        FlatCheckbox.box(g,x,y,12,value,false);
-        text(g,label,x+19,y+3,TEXT);controls.add(new Control(x,y,Math.min(pw-20,font.width(label)+24),15,action,tip));
+        if(!culled(y,12))FlatCheckbox.box(g,x,y,12,value,false);
+        text(g,label,x+19,y+3,TEXT);controls.add(new Control(x,y,Math.min(pw-20,TextCache.width(font,label)+24),15,action,tip));
     }
     private void slider(Gfx g,int x,int y,int width,String label,double value,double min,double max,double def,DoubleConsumer set,boolean integer) {
         slider(g,x,y,width,label,value,min,max,max,def,set,integer);
@@ -1339,8 +1443,10 @@ public final class EditorScreen extends CraftiumScreen {
         var slider=new Slider(x,width,min,max,typedMax,def,set,unbounded);String panel=drawingPanel,key=panel+"/"+label;
         boolean editing=typing!=null&&typing.key().equals(key);
         String display=integer?Integer.toString((int)value):String.format(Locale.ROOT,"%.2f",value);
-        FlatSlider.track(g,x,y,width,17,(value-min)/(max-min),editing?Component.empty():Component.literal(display),editing,false,editing);
-        if(editing)entry.paint(g,x,y,width,17);
+        if(!culled(y,17)){
+            FlatSlider.track(g,x,y,width,17,(value-min)/(max-min),editing?Component.empty():Component.literal(display),editing,false,editing);
+            if(editing)entry.paint(g,x,y,width,17);
+        }
         var control=new Control(x,y,width,17,()->{
             if(minecraft.hasControlDown()){typing=new SliderArea(null,slider,key,integer);entry.start(display);selectingText=false;return;}
             dragging=slider;draggingSliderPanel=panel;
@@ -1354,7 +1460,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(!apply||area==null)return;
         try{double v=Double.parseDouble(text.trim());if(!Double.isFinite(v))return;if(area.slider().typedMax()!=Double.POSITIVE_INFINITY)v=Math.clamp(v,area.slider().min(),area.slider().typedMax());area.slider().set.accept(area.integer()?Math.round(v):v);}catch(NumberFormatException ignored){}
     }
-    private void text(Gfx g,String text,int x,int y,int color){if(scrollActive)scrollContent=Math.max(scrollContent,y+9);g.text(font,text,x,y,color,false);}
+    private void text(Gfx g,String text,int x,int y,int color){if(scrollActive)scrollContent=Math.max(scrollContent,y+9);if(culled(y,9))return;g.text(font,text,x,y,color,false);}
     /** A tool's tooltip: its name and the key it is on (and the hotbar slot, when it has one) on the first line, its description below. */
     private static String toolTip(Tool tool,int slot){
         var mapping=CraftiumClient.toolKeys.get(tool);
@@ -1362,8 +1468,8 @@ public final class EditorScreen extends CraftiumScreen {
         String shortcut=key.isEmpty()?slot>0?String.valueOf(slot):"":slot>0?key+" / "+slot:key;
         return tool.label+(shortcut.isEmpty()?"":" ["+shortcut+"]")+"\n"+tool.description;
     }
-    private String shorten(String text,int pixels){if(font.width(text)<=pixels)return text;return font.plainSubstrByWidth(text,Math.max(0,pixels-9))+"…";}
-    private void wrap(Gfx g,String text,int x,int y,int width,int color,int maxLines){int line=0;for(var row:font.split(Component.literal(text),width)){if(line>=maxLines)break;g.text(font,row,x,y+line*11,color,false);line++;}if(scrollActive)scrollContent=Math.max(scrollContent,y+line*11);}
+    private String shorten(String text,int pixels){if(TextCache.width(font,text)<=pixels)return text;return TextCache.fit(font,text,Math.max(0,pixels-9))+"…";}
+    private void wrap(Gfx g,String text,int x,int y,int width,int color,int maxLines){int line=0;for(var row:TextCache.split(font,text,width)){if(line>=maxLines)break;g.text(font,row,x,y+line*11,color,false);line++;}if(scrollActive)scrollContent=Math.max(scrollContent,y+line*11);}
     private String nice(String name){String s=name.toLowerCase(Locale.ROOT).replace('_',' ');return Character.toUpperCase(s.charAt(0))+s.substring(1);}
     public BlockHitResult target(){
         if(inViewport(pointerX/scale,pointerY/scale)){

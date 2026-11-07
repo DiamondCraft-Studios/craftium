@@ -8,7 +8,15 @@ import dev.craftium.client.compat.Gfx;
 /** Small original line icons, drawn at UI resolution without Axiom assets. */
 final class ToolIcons {
     private ToolIcons() {}
-    static void draw(Gfx g,Tool tool,int x,int y,int color) {
+    /** The icon for a tool, on the 24 pixel grid at {@code x},{@code y}. */
+    static void draw(Gfx g,Tool tool,int x,int y,int color){IconBake.draw(g,tool,color,x,y,24,c->paintDraw(c,tool,0,0,color));}
+    /** The Magic Wand's comparison choices, on the same grid. */
+    static void compare(Gfx g,Options.Compare compare,int x,int y,int color){IconBake.draw(g,compare,color,x,y,24,c->paintCompare(c,compare,0,0,color));}
+    /** A brush shape, on the same grid. */
+    static void shape(Gfx g,BrushMath.Shape shape,int x,int y,int color){IconBake.draw(g,shape,color,x,y,24,c->paintShape(c,shape,0,0,color));}
+    static void hardHat(Gfx g,int x,int y,int c){IconBake.draw(g,"hat",c,x,y,24,k->paintHardHat(k,0,0,c));}
+    static void chain(Gfx g,int x,int y,int color,boolean linked){IconBake.draw(g,linked?"chain-linked":"chain",color,x,y,24,c->paintChain(c,0,0,color,linked));}
+    private static void paintDraw(Canvas g,Tool tool,int x,int y,int color) {
         switch(tool) {
             case LASSO_SELECT -> {line(g,x+3,y+7,x+11,y+3,color);line(g,x+11,y+3,x+21,y+9,color);line(g,x+21,y+9,x+17,y+18,color);line(g,x+17,y+18,x+5,y+18,color);line(g,x+5,y+18,x+3,y+7,color);line(g,x+11,y+18,x+7,y+23,color);}
             case PATH,MODELLING -> {line(g,x+3,y+19,x+9,y+5,color);line(g,x+9,y+5,x+20,y+17,color);for(int[] p:new int[][]{{3,19},{9,5},{20,17}})g.fill(x+p[0]-2,y+p[1]-2,x+p[0]+3,y+p[1]+3,color);}
@@ -56,7 +64,7 @@ final class ToolIcons {
         }
     }
     /** The Magic Wand's comparison choices, on the same 24 pixel grid as the tool icons. */
-    static void compare(Gfx g,Options.Compare compare,int x,int y,int color) {
+    private static void paintCompare(Canvas g,Options.Compare compare,int x,int y,int color) {
         switch(compare) {
             case ANY -> {for(int i=0;i<4;i++)g.outline(x+3+(i%2)*10,y+3+(i/2)*10,8,8,color);g.fill(x+5,y+5,x+9,y+9,color);g.fill(x+15,y+15,x+19,y+19,color&0xffffff|0x80000000);}
             case BLOCK -> {g.outline(x+4,y+4,16,16,color);g.fill(x+8,y+8,x+16,y+16,color);}
@@ -67,7 +75,7 @@ final class ToolIcons {
         }
     }
     /** The Shape tool's solids, on the same 24 pixel grid as the tool icons. */
-    static void shape(Gfx g,BrushMath.Shape shape,int x,int y,int color) {
+    private static void paintShape(Canvas g,BrushMath.Shape shape,int x,int y,int color) {
         switch(shape) {
             case SPHERE -> {ring(g,x+12,y+12,9,9,color);ring(g,x+12,y+12,9,3,color);line(g,x+12,y+3,x+12,y+21,color);}
             case CUBE -> {line(g,x+12,y+2,x+21,y+7,color);line(g,x+21,y+7,x+21,y+17,color);line(g,x+21,y+17,x+12,y+22,color);line(g,x+12,y+22,x+3,y+17,color);line(g,x+3,y+17,x+3,y+7,color);line(g,x+3,y+7,x+12,y+2,color);line(g,x+3,y+7,x+12,y+12,color);line(g,x+21,y+7,x+12,y+12,color);line(g,x+12,y+12,x+12,y+22,color);}
@@ -84,19 +92,19 @@ final class ToolIcons {
         }
     }
     /** A hard hat in a 19 by 19 button at {@code x}, {@code y}: a dome with a ridge, over a brim. */
-    static void hardHat(Gfx g,int x,int y,int c){
+    private static void paintHardHat(Canvas g,int x,int y,int c){
         arc(g,x+9,y+12,6,7,Math.PI,Math.PI*2,c);
         g.fill(x+8,y+4,x+10,y+11,c);
         g.fill(x+2,y+12,x+17,y+14,c);
     }
-    private static void ring(Gfx g,int cx,int cy,int rx,int ry,int c){arc(g,cx,cy,rx,ry,0,Math.PI*2,c);}
+    private static void ring(Canvas g,int cx,int cy,int rx,int ry,int c){arc(g,cx,cy,rx,ry,0,Math.PI*2,c);}
     /** The part of an ellipse from angle {@code from} to {@code to} (radians, y grows downward), as dots two pixels wide. */
-    private static void arc(Gfx g,int cx,int cy,int rx,int ry,double from,double to,int c){
+    private static void arc(Canvas g,int cx,int cy,int rx,int ry,double from,double to,int c){
         int steps=Math.max(16,(int)((to-from)/(Math.PI*2)*40));
         for(int i=0;i<=steps;i++){double a=from+(to-from)*i/steps;int px=cx+(int)Math.round(Math.cos(a)*rx),py=cy+(int)Math.round(Math.sin(a)*ry);g.fill(px,py,px+2,py+2,c);}
     }
     /** A filled four-sided shape, row by row; the corners go round the shape in order. */
-    static void fillQuad(Gfx g,int x1,int y1,int x2,int y2,int x3,int y3,int x4,int y4,int color){
+    static void fillQuad(Canvas g,int x1,int y1,int x2,int y2,int x3,int y3,int x4,int y4,int color){
         int[] xs={x1,x2,x3,x4},ys={y1,y2,y3,y4};
         int top=Math.min(Math.min(y1,y2),Math.min(y3,y4)),bottom=Math.max(Math.max(y1,y2),Math.max(y3,y4));
         for(int y=top;y<bottom;y++){
@@ -109,16 +117,16 @@ final class ToolIcons {
         }
     }
     /** Two links of a chain, 17 by 9 pixels. Joined when {@code linked}; apart, with a gap between them, when not. */
-    static void chain(Gfx g,int x,int y,int color,boolean linked){
+    private static void paintChain(Canvas g,int x,int y,int color,boolean linked){
         int gap=linked?0:3;
         g.outline(x,y+1,9,7,color);g.outline(x+8+gap,y+1,9,7,color); // the two links
         if(linked)g.fill(x+5,y+3,x+12,y+6,color); // the bar through both, where they overlap
         else{line(g,x+5,y+8,x+7,y+5,color);line(g,x+10,y+4,x+12,y+1,color);} // a break between them
     }
-    static void line(Gfx g,int x1,int y1,int x2,int y2,int c) {
+    static void line(Canvas g,int x1,int y1,int x2,int y2,int c) {
         int steps=Math.max(Math.abs(x2-x1),Math.abs(y2-y1));
         for(int i=0;i<=steps;i++){float t=steps==0?0:(float)i/steps;int x=Math.round(x1+(x2-x1)*t),y=Math.round(y1+(y2-y1)*t);g.fill(x,y,x+2,y+2,c);}
     }
-    private static void star(Gfx g,int x,int y,int c){g.fill(x-3,y,x+4,y+1,c);g.fill(x,y-3,x+1,y+4,c);}
-    private static void dotted(Gfx g,int x,int y,int w,int h,int c){for(int i=0;i<w;i+=3){g.fill(x+i,y,x+i+2,y+1,c);g.fill(x+i,y+h,x+i+2,y+h+1,c);}for(int i=0;i<h;i+=3){g.fill(x,y+i,x+1,y+i+2,c);g.fill(x+w,y+i,x+w+1,y+i+2,c);}}
+    private static void star(Canvas g,int x,int y,int c){g.fill(x-3,y,x+4,y+1,c);g.fill(x,y-3,x+1,y+4,c);}
+    private static void dotted(Canvas g,int x,int y,int w,int h,int c){for(int i=0;i<w;i+=3){g.fill(x+i,y,x+i+2,y+1,c);g.fill(x+i,y+h,x+i+2,y+h+1,c);}for(int i=0;i<h;i+=3){g.fill(x,y+i,x+1,y+i+2,c);g.fill(x+w,y+i,x+w+1,y+i+2,c);}}
 }
