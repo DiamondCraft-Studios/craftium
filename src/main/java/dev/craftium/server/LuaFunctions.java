@@ -28,6 +28,8 @@ final class LuaFunctions {
     /** Positions an AI script has set, as {@link net.minecraft.core.BlockPos#asLong}: the cap counts different blocks, so setting one twice is one. */
     private final java.util.Set<Long> set=new java.util.HashSet<>();
     int outside;
+    /** The highest block an AI script may have planned in each column (key: x and z), for getHighestBlockYAt; null for a brush. */
+    private java.util.Map<Long,Integer> plannedTop;
     /** How many different blocks the script has set. */
     int placed(){return set.size();}
     private List<Colour> colours;
@@ -36,9 +38,9 @@ final class LuaFunctions {
         this.plan=plan;var blocks=new LuaTable();var meta=new LuaTable();meta.set("__index",new TwoArgFunction(){public LuaValue call(LuaValue table,LuaValue key){String name=key.checkjstring();LuaValue value=id(parse(name.contains(":")?name:"minecraft:"+name));table.rawset(key,value);return value;}});blocks.setmetatable(meta);globals.set("blocks",blocks);
         bind(globals,"getBlock",args->id(read(at(args)).getBlock().defaultBlockState()));
         bind(globals,"getBlockState",args->id(read(at(args))));
-        bind(globals,"setBlock",args->{Point p=point(args);var block=state(args.arg(4));if(!inside.test(p)){outside++;return LuaValue.NIL;}plan.validate(p);if(set.add(net.minecraft.core.BlockPos.asLong(p.x(),p.y(),p.z()))&&set.size()>limit)throw new LuaError("sets more than "+limit+" different blocks");plan.put(p,block);return LuaValue.NIL;});
+        bind(globals,"setBlock",args->{Point p=point(args);var block=state(args.arg(4));if(!inside.test(p)){outside++;return LuaValue.NIL;}plan.validate(p);if(set.add(net.minecraft.core.BlockPos.asLong(p.x(),p.y(),p.z()))&&set.size()>limit)throw new LuaError("sets more than "+limit+" different blocks");plan.put(p,block);if(plannedTop!=null&&!block.isAir())plannedTop.merge(column(p.x(),p.z()),p.y(),Math::max);return LuaValue.NIL;});
         bind(globals,"isSolid",args->LuaValue.valueOf(!state(args.arg1()).getCollisionShape(plan.level,EditPlanner.pos(position)).isEmpty()));
-        bind(globals,"getHighestBlockYAt",args->{int x=args.arg(1).checkint(),z=args.arg(2).checkint();plan.validate(new Point(x,plan.level.getMinY(),z));return LuaValue.valueOf(plan.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE,x,z)-1);});
+        bind(globals,"getHighestBlockYAt",args->{int x=args.arg(1).checkint(),z=args.arg(2).checkint();plan.validate(new Point(x,plan.level.getMinY(),z));int ground=plan.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE,x,z)-1;return LuaValue.valueOf(plannedTop==null?ground:highest(x,z,ground));});
         bind(globals,"withBlockProperty",args->{BlockState current=state(args.arg1());for(String property:args.arg(2).checkjstring().split(",")){String[] pair=property.trim().split("=",2);if(pair.length!=2)throw new LuaError("Use property=value");Property<?> definition=current.getBlock().getStateDefinition().getProperty(pair[0]);if(definition==null)throw new LuaError("Unknown block property "+pair[0]);current=with(current,definition,pair[1]);}return id(current);});
         bind(globals,"getBlockProperty",args->{var current=state(args.arg1());var property=current.getBlock().getStateDefinition().getProperty(args.arg(2).checkjstring());return property==null?LuaValue.NIL:LuaValue.valueOf(property(current,property));});
         bind(globals,"isBlockTagged",args->{String tag=args.arg(2).checkjstring().replaceFirst("^#","");return LuaValue.valueOf(state(args.arg1()).is(TagKey.create(Registries.BLOCK,dev.craftium.compat.Compat.parse(tag))));});
@@ -50,7 +52,18 @@ final class LuaFunctions {
     private static void bind(Globals globals,String name,Function function){globals.set(name,new VarArgFunction(){public Varargs invoke(Varargs args){return function.apply(args);}});}
     void position(Point at){position=at;}
     /** Limits this script to a box, with a fixed noise seed and a cap on blocks set, and lets it read what the plan has placed: an AI script. */
-    void confine(java.util.function.Predicate<Point> box,int seed,int maxBlocks){inside=box;randomSeed=seed;limit=maxBlocks;readPlanned=true;}
+    void confine(java.util.function.Predicate<Point> box,int seed,int maxBlocks){
+        inside=box;randomSeed=seed;limit=maxBlocks;readPlanned=true;
+        plannedTop=new java.util.HashMap<>();
+        for(var change:plan.changes.values())if(!change.after().state().isAir())plannedTop.merge(column(change.pos().x(),change.pos().z()),change.pos().y(),Math::max);
+    }
+    private static long column(int x,int z){return ((long)x<<32)|(z&0xffffffffL);}
+    /** The highest block in a column of an AI script's world: what the build has planned there if that stands above the ground, else the ground. Planned air (a carve) is passed over. */
+    private int highest(int x,int z,int ground){
+        Integer top=plannedTop.get(column(x,z));if(top==null)return ground;
+        for(int y=top;y>ground;y--)if(!read(new Point(x,y,z)).isAir())return y;
+        return ground;
+    }
     private BlockState read(Point p){if(readPlanned){var planned=plan.changes.get(p);if(planned!=null)return planned.after().state();}return plan.state(p);}
     private static Point point(Varargs args){return new Point(args.arg(1).checkint(),args.arg(2).checkint(),args.arg(3).checkint());}
     private Point at(Varargs args){Point at=point(args);plan.validate(at);return at;}
