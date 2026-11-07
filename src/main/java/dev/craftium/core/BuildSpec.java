@@ -29,6 +29,13 @@ public final class BuildSpec {
     private static final Pattern BLOCK = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+(\\[[a-z0-9_=,]*])?|[a-z0-9_./-]+(\\[[a-z0-9_=,]*])?");
     private static final Pattern ALIAS = Pattern.compile("[A-Za-z0-9_-]{1,32}");
 
+    /**
+     * An edit of the player's selection: every block in it (or every block that is {@code find}) becomes {@code block}, keeping the
+     * properties named in {@code keep} (facing, half, shape...) so stairs stay the way they face. {@code keep} null keeps every property
+     * both blocks have. Applied by the server after the shapes, to a selection this class knows nothing about.
+     */
+    public record SelectionOp(String block, String find, List<String> keep) {}
+
     /** One block to place. {@code only}, when set, limits the cell to positions currently holding that block (the replace operation). */
     public record Cell(String block, String only) {}
     /** The size of the area in blocks: relative positions from 0 to size-1 on each axis are inside it. */
@@ -46,6 +53,7 @@ public final class BuildSpec {
     /** The most a coordinate can be: the edge of the world. */
     private static final int COORDINATE_LIMIT = 30_000_000;
     private final List<JsonObject> ops = new ArrayList<>();
+    private final List<SelectionOp> selectionOps = new ArrayList<>();
     private final Map<String, String> palette = new LinkedHashMap<>();
     private final int[] origin = {0, 0, 0};
 
@@ -85,10 +93,42 @@ public final class BuildSpec {
         if (list.size() > MAX_OPS) throw new IllegalArgumentException("Build spec has more than " + MAX_OPS + " operations");
         for (int i = 0; i < list.size(); i++) {
             if (!list.get(i).isJsonObject()) throw new IllegalArgumentException("ops[" + i + "] must be an object");
-            spec.ops.add(list.get(i).getAsJsonObject());
+            var op = list.get(i).getAsJsonObject();
+            if (op.has("op") && op.get("op").isJsonPrimitive() && "replace_selection".equals(op.get("op").getAsString())) spec.selectionOps.add(spec.selectionOp(op, i));
+            else {
+                // Selection operations run after every shape, so one listed before a shape would not run in the order it is written in.
+                if (!spec.selectionOps.isEmpty())
+                    throw fail(i, op.has("op") && op.get("op").isJsonPrimitive() ? op.get("op").getAsString() : "?", "comes after a replace_selection. List replace_selection after all the shapes, because it works on the blocks they leave in the selection");
+                spec.ops.add(op);
+            }
         }
         return spec;
     }
+
+    /** Reads a replace_selection operation: {"op":"replace_selection","block":B,"find":B (optional),"keep":["facing","half"] (optional)}. */
+    private SelectionOp selectionOp(JsonObject op, int i) {
+        String kind = "replace_selection";
+        if (op.has("repeat") || op.has("hollow")) throw fail(i, kind, "\"repeat\" and \"hollow\" do not apply: it works on the player's selection");
+        String block = resolve(op, "block", i);
+        String find = op.has("find") ? resolve(op, "find", i) : null;
+        List<String> keep = null;
+        if (op.has("keep")) {
+            if (!op.get("keep").isJsonArray() || op.getAsJsonArray("keep").size() > 16) throw fail(i, kind, "\"keep\" must be a list of property names such as [\"facing\", \"half\", \"shape\"]");
+            keep = new ArrayList<>();
+            for (var each : op.getAsJsonArray("keep")) {
+                if (!each.isJsonPrimitive() || !each.getAsJsonPrimitive().isString() || !each.getAsString().matches("[a-z_]{1,32}"))
+                    throw fail(i, kind, "\"keep\" must be a list of property names such as [\"facing\", \"half\", \"shape\"]");
+                keep.add(each.getAsString());
+            }
+        }
+        return new SelectionOp(block, find, keep == null ? null : List.copyOf(keep));
+    }
+
+    /** The operations on the player's selection, in order, which the server applies after the shapes. */
+    public List<SelectionOp> selectionOps() { return List.copyOf(selectionOps); }
+
+    /** Whether the spec has any shapes at all; a spec of selection operations alone has none, and so no area of its own. */
+    public boolean hasShapes() { return !ops.isEmpty(); }
 
     /** Every distinct block name the spec can place, resolved through the palette, so the server can reject unknown ones up front. */
     public Set<String> blocks() {
@@ -98,6 +138,7 @@ public final class BuildSpec {
             if (op.has("block")) names.add(resolve(op, "block", i));
             if (op.has("find")) names.add(resolve(op, "find", i));
         }
+        for (var op : selectionOps) { names.add(op.block()); if (op.find() != null) names.add(op.find()); }
         return names;
     }
 
@@ -106,6 +147,7 @@ public final class BuildSpec {
      * its numbers, repeats included, so a spec that reaches further than the build limits is refused here with a message.
      */
     public Placement place() {
+        if (ops.isEmpty()) throw new IllegalArgumentException("The spec has no shapes, only operations on the selection, so it has no area of its own");
         long[] low = {Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE}, high = {Long.MIN_VALUE, Long.MIN_VALUE, Long.MIN_VALUE};
         for (int i = 0; i < ops.size(); i++) {
             var op = ops.get(i);

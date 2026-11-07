@@ -19,7 +19,7 @@ A preview made by an AI app is drawn in **violet**, so it is never mistaken for 
 
 While AI building is on, a small **AI** marker shows in the bottom right corner of the game: amber while it waits for the AI app, green once the app has connected, and blue while a request is being answered. The **AI** menu also has **Apply AI preview**, **Discard AI preview** and **Undo last AI build**, so you can approve a build without going back to the chat, and **AI status and setup…**, a page with the same status, the last request and the steps above.
 
-Then ask Claude for a build while the game is open. Claude works on the world itself: it does not need you to select anything, never moves or turns you, and can build anywhere in the world (see [Claude's workspace](#claudes-workspace)). If you have selected an area it takes that as a hint of where you want the build. Look at the ghost in the game, ask for changes, and say when to apply it.
+Then ask Claude for a build while the game is open. Claude works on the world itself: it does not need you to select anything, never moves or turns you, and can build anywhere in the world (see [Claude's workspace](#claudes-workspace)). If you have selected an area it takes that as a hint of where you want the build, and it can read exactly what you selected: say "I have selected a platform for you to build on" after picking one with the box, lasso or magic wand, and it sees the shape, what it is made of and the room above it instead of hunting for the spot. Nothing makes you do this; you can give coordinates or just describe where. Look at the ghost in the game, ask for changes, and say when to apply it.
 
 ## Getting the extension
 
@@ -34,11 +34,24 @@ Then ask Claude for a build while the game is open. Claude works on the world it
   ```
   This writes `mcp/craftium.mcpb`. The `mcp` folder pins Node 24 in `.nvmrc` (run `nvm use` or `fnm use` there if your tool does not switch on its own). If `npx` stops with "Yallist is not a constructor", your npm is too old for your Node version (npm 10.8 with Node 25, for example): use Node 24, or update npm with `npm install -g npm@latest`.
 
+## As a Claude plugin (Claude Code and Cowork)
+
+The [mcp](../mcp) folder is also a Claude plugin: the same server plus the **craftium-builder** skill, which teaches Claude to build the way a person does (brief, site, an approved blockout, then shell, roof, openings, materials, detail), at Minecraft's scale rather than real-world scale, in stages that stay under the preview limit, and with stairs the right way round. In Claude Code:
+
+```
+/plugin marketplace add DiamondCraft-Studios/craftium
+/plugin install craftium@craftium
+```
+
+The plugin needs Node.js 18 or newer on your PATH (an extension gets Node from Claude Desktop, a plugin does not), and asks for a **Minecraft folder** when you enable it if your game uses a launcher profile. Claude Desktop's Chat tab does not run a plugin's local server, so use the extension there; install one or the other, not both. Steps 2 and 3 of [Set up](#set-up) apply either way.
+
 ## What Claude can do
 
 | Tool | Does |
 | --- | --- |
-| `get_state` | Your position and facing, the area you have selected (yours, and never changed by Claude), and whether Claude's preview is waiting |
+| `get_state` | Your position and facing, the box around the area you have selected (yours, and never changed by Claude), and whether Claude's preview is waiting |
+| `read_selection` | What you have selected, as it really is: how many blocks, whether it is a solid box or an irregular shape (lasso or magic wand), whether it is flat, what blocks it is made of, and how much clear space is above it. Read only. It works for any selection, up to 1,048,576 blocks, and the answer is a few lines whatever its size |
+| `get_preview_blocks` | Reads the blocks of Claude's own waiting preview in a box (up to 1,048,576 at a time), exactly, with their states, so it can check a roof or a wall before applying it. The answer is as boxes (`[x1,y1,z1,x2,y2,z2]` per block, so a wall is a few entries) or as runs, whichever is shorter, in at most about 100 KB |
 | `get_blocks` | Reads the blocks in a box (up to 32,768 at a time), anywhere in the world: the server reads them, so ground your game has not loaded is real blocks and not air |
 | `get_surface` | The top block of every column in an area (up to 128 by 128), to find ground level |
 | `get_palette` | Your current block and recently used blocks |
@@ -52,9 +65,9 @@ Claude cannot do anything the editor cannot. Every request goes through the same
 
 ## Claude's workspace
 
-Claude has a workspace of its own, apart from yours. It never uses or changes your selection, your preview or your undo history, and it never moves or turns you.
+Claude has a workspace of its own, apart from yours. It never changes your selection, your preview or your undo history, and it never moves or turns you. It can read your selection (`read_selection`), but only to see where you want a build.
 
-- **Its preview** is held separately and drawn in violet. You apply or discard it from the **AI** menu (Enter and Esc still belong to your own edits).
+- **Its preview** is held separately and drawn in violet. You apply or discard it from the **AI** menu (Enter and Esc still belong to your own edits). On a multiplayer server, other players who have Craftium and are in the same dimension see your AI preview too, in teal with your name above it, and you see theirs. They can only look: nobody else can apply or discard it. The **AI** tab has a **Show AI previews from other players** setting to hide them, and one is drawn only within 192 blocks of you. It is shown only while it is waiting: once applied or discarded, or when its owner leaves or changes dimension, it disappears.
 - **Its undo** only covers builds Claude applied. **Undo last AI build** and the `undo` tool undo those, and nothing else; your own Ctrl+Z is unchanged. This list is not saved: it is dropped when you leave the world, reconnect or change dimension.
 - **Building far away works.** A build is planned and applied by the server, so it can be anywhere in the dimension you are in, with nobody nearby. The ground it reaches is loaded for it, and ground nobody has visited is made (as flying there would). One build may reach at most **36 chunks that are not already loaded** (a square 96 blocks across); a larger one is refused with a message, so Claude builds closer to loaded ground or in pieces. Undoing a far build loads the ground again in the same way.
 - **You still decide.** A build is always shown as a preview first and applied as a separate step. It goes through the same checks as your own edits: permissions, protected areas, WorldGuard and the world border.
@@ -63,7 +76,11 @@ Claude has a workspace of its own, apart from yours. It never uses or changes yo
 
 `render_view` draws a box of the world as flat-shaded blocks, each in the average colour of its texture (so resource packs show), seen from an angle Claude chooses: four isometric corners (`se`, `sw`, `ne`, `nw`), straight down (`top`, north at the top), or level with one side (`north`, `south`, `east`, `west`, for judging heights). It never turns or moves you and does not need the box to be near you. Your waiting preview is drawn over the world tinted violet, so Claude sees what you see. The picture is for Claude only; you keep looking at the violet ghost in the game.
 
-It has no textures, shadows or transparency (water and glass draw as solid colour), so it is for shape, proportion and layout, not for fine detail. A box can be up to 128 blocks a side and 262,144 blocks (for example 64 by 64 by 64); it is read from the server in 32-block pieces, each within the chunk limit below.
+It has no textures, shadows or transparency (water and glass draw as solid colour), so it is for shape, proportion and layout, not for fine detail. The game describes an AI preview up to 32,768 blocks, the blocks that show first, and this picture draws all of those. The ghost in the game draws block models for the first 8,192 of them (the **AI preview models** setting in Preferences) and the rest as an outline. When a preview is bigger than 32,768 blocks, `get_state`, `preview_build` and `render_view` all say so (`previewTruncated`, with how many blocks are described and a warning), so Claude does not mistake the missing blocks for a mistake in the build; the whole preview is still built when it is applied. A box can be up to 128 blocks a side and 262,144 blocks (for example 64 by 64 by 64); it is read from the server in 32-block pieces, each within the chunk limit below.
+
+## Reading the preview
+
+`get_blocks` reads the world, so it never shows Claude's waiting preview, and `render_view` draws it in flat colour (it cannot show which way a stair faces) and, for a very big preview, only the part the game draws. `get_preview_blocks` reads the preview itself. It answers in the fewest words: for each block, the boxes it fills, so a 10 x 10 x 10 block of wood is one entry wherever it sits in the box that was asked about, where run-length runs would need a run per row. Where boxes stop helping (noisy ground) it answers with runs instead, and says which. `view: "after"` shows the world as it would be once the preview is applied; `view: "only"` shows just what the preview places and clears. The server reads the preview in one pass over the edit it already holds, copying and indexing nothing, so a read costs a walk of the build and the box, and a box may hold up to 1,048,576 blocks. The answer is held to about 100 KB, since more than that is more than a model can use at once; for a big build it reads it a part at a time.
 
 ## Reading the world
 
@@ -73,7 +90,7 @@ The reads are plain reads: they change nothing, and they need the same permissio
 
 ## Build specs
 
-Claude describes a build as JSON primitives with positions in **world coordinates**, the same numbers `get_blocks` and `get_surface` report, so it builds at the heights it found. An optional `origin` is added to every coordinate, for a build written near zero and placed anywhere. Nothing is selected first: the area a build covers is worked out from its operations. The primitives are: `box`, `sphere` (or ellipsoid), `cylinder`, `cone`, `pyramid`, `line`, `set` and `replace`. Any operation can be `hollow` (shapes) or `repeat` with a step (a row of columns). A later operation overwrites an earlier one, and `minecraft:air` carves. A palette maps short names to block ids, including states such as `minecraft:sandstone_stairs[facing=north]`.
+Claude describes a build as JSON primitives with positions in **world coordinates**, the same numbers `get_blocks` and `get_surface` report, so it builds at the heights it found. An optional `origin` is added to every coordinate, for a build written near zero and placed anywhere. Nothing is selected first: the area a build covers is worked out from its operations. The primitives are: `box`, `sphere` (or ellipsoid), `cylinder`, `cone`, `pyramid`, `line`, `set` and `replace`. Any operation can be `hollow` (shapes) or `repeat` with a step (a row of columns). `hollow` keeps every outer cell, including the top and bottom layers of a box or cylinder, and leaves the inside as it was rather than clearing it. A later operation overwrites an earlier one, and `minecraft:air` carves. A palette maps short names to block ids, including states such as `minecraft:sandstone_stairs[facing=north]`.
 
 ```json
 {
@@ -87,10 +104,13 @@ Claude describes a build as JSON primitives with positions in **world coordinate
 
 Limits: 256 operations, 64 repeats, radius 128, a build that spans at most 256 blocks along each side, and 131,072 blocks in total; a spec that reaches further is refused with a message saying which side. The ground a build reaches is loaded for it (see [Claude's workspace](#claudes-workspace)). The server rejects unknown block ids, with a message naming the operation at fault, so Claude can correct itself.
 
+To change what you have selected, the build can include `replace_selection`: say you selected the stair part of a build and ask "can you change this to deepslate?". Claude reads your selection, then replaces every matching block in it (or every block, with no `find`), and each new block keeps the properties of the old one that both have, so stairs stay turned the way they were and slabs keep their half. It never changes your selection, can cover up to a million blocks, and is shown as a preview first like any build.
+
 A build ignores your brush settings (mask, symmetry, height range) and places exactly what the spec says. It does not check that blocks such as torches have support. Primitives suit pillars, walls, towers, domes and similar shapes; organic shapes such as trees or terrain are better done with the brush tools.
 
 ## Safety
 
+- On a server, an AI preview is visible to the other players with Craftium in your dimension while it waits (see [Claude's workspace](#claudes-workspace)). Nothing else of yours is shared: not your selection, your own edits or your requests.
 - The bridge is **off until you turn it on**, and it listens on `127.0.0.1` only.
 - Each launch writes a new random token to `config/craftium/bridge.json`. Requests without it are refused, as are requests that come from a web page (they carry an `Origin`) or name another host.
 - `get_screenshot` sends a picture of your game window (at most 1024 pixels wide) to the AI app, so close anything private on screen first. It is only taken when the AI app asks, and the corner marker shows **AI working…** while it does. `render_view` does not use your screen at all: it draws from block data, so it shows nothing but blocks.
@@ -102,7 +122,7 @@ A build ignores your brush settings (mask, symmetry, height range) and places ex
 
 Claude Desktop warns that installing an extension "will grant this extension access to everything on your computer". That is true of every extension: it runs as an ordinary program with your permissions, and Claude Desktop does not sandbox it. The warning is generic, so here is what this one actually does, and how that is enforced.
 
-- **It is tiny and has no dependencies.** The packed extension is 8 files and about 11 kB: four short scripts (`mcp/src`, around 375 lines), a manifest, an icon and a readme. It uses no npm packages at run time, so there is no supply chain behind it to audit. It speaks the small part of the MCP protocol it needs itself.
+- **It is tiny and has no dependencies.** The packed extension is 9 files and about 27 kB, most of it the licence text: four short scripts (`mcp/src`, around 390 lines), a package file, a manifest, an icon, a readme and the licence. It uses no npm packages at run time, so there is no supply chain behind it to audit. It speaks the small part of the MCP protocol it needs itself.
 - **It reads one file:** `config/craftium/bridge.json`, in the default Minecraft folder or the folder you choose in its settings. That file holds the port and token the game wrote for this launch.
 - **It talks to one place:** `127.0.0.1`, the game's bridge on your own computer. It has no code that contacts the internet, starts programs, evaluates text as code, opens listening sockets or writes files.
 - **It forwards only what each tool names.** A tool call is checked, and only the keys that tool defines are sent to the game, so extra data a model adds goes nowhere.

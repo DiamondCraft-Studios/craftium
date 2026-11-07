@@ -187,6 +187,8 @@ public final class Options {
     public String buildSpec="";
     /** Whether the client listens on this computer for an AI client (the craftium-mcp shim) to drive the editor. Off until the player turns it on. */
     public boolean aiBridge;
+    /** Whether to draw the AI previews other players are holding, in a colour of their own with the owner's name. */
+    public boolean showSharedAiPreviews=true;
     public String fontName="SansSerif",fontFile="",heightmap="",name="Untitled",entityType="block_display",entityNbt="{}",property="";
     public boolean useBuiltinFont=true,textShadow,fullBlocks=true,denoise=true,maskY,fastPlace,angelPlacement,noClip,blockStep;
     /** Flying slows to a stop as a wall comes close, like a camera focusing in, the first time a movement key is held toward it. */

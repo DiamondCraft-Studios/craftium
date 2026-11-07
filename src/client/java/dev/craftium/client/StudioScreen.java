@@ -140,7 +140,9 @@ public final class StudioScreen extends CraftiumScreen {
         button("Apply preview",left+216,y,130,24,()->send("ai_apply"));
         button("Discard preview",left+352,y,130,24,()->send("ai_cancel"));
         button("Undo AI build",left+488,y,128,24,()->send("ai_undo"));
-        int steps=top+70+128;
+        // Other players' AI previews are drawn in teal with their name; this hides them, and is remembered like the other settings.
+        addRenderableWidget(new FlatCheckbox(left,top+70+108,616,20,"Show AI previews from other players",ClientState.options.showSharedAiPreviews,()->{ClientState.options.showSharedAiPreviews=!ClientState.options.showSharedAiPreviews;init();}));
+        int steps=top+70+152;
         labels.add(new Label("HOW IT WORKS",left,steps));
         labels.add(new Label("1.  Install the Craftium extension (craftium.mcpb) in Claude Desktop, once.",left,steps+15));
         labels.add(new Label("2.  Turn on AI building above. Craftium remembers it.",left,steps+29));

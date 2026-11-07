@@ -113,6 +113,11 @@ final class AiView {
         out.add("compass", compass);
         out.addProperty("previewBlocksShown", shown);
         if (shown > 0) out.addProperty("previewLook", "blocks tinted violet are the preview, not yet built");
+        if (preview) {
+            // previewBlocksShown above counts only what fell inside this box; these say whether the preview was cut short as a whole.
+            var report = AiBridge.onClient(() -> { var r = new JsonObject(); AiBridge.previewReport(r, ClientState.aiPending); return r; });
+            for (var entry : report.entrySet()) out.add(entry.getKey(), entry.getValue());
+        }
         out.add("blocks", legend(names, counts, colourOf));
         out.addProperty("reads", reads);
         return out;

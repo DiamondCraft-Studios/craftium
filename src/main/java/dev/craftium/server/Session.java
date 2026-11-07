@@ -28,6 +28,10 @@ final class Session {
     Point clipboardOrigin;
     /** An edit worked out but not yet applied, waiting for the player to confirm it. Null when there is none. */
     Edit pendingEdit;
+    /** Which preview this AI workspace is holding, numbered as each is made, so another player's client can tell it changed. */
+    long previewId;
+    /** What this player was last shown of other players' AI previews, so only a change is sent. Null makes the next status carry them again. */
+    String sharedKey;
     String pendingData="";boolean pendingDirty;
     /** The clipboard's blocks as a ghost for the placement preview, and whether it needs encoding again. */
     String clipboardGhost="";boolean clipboardGhostDirty=true;

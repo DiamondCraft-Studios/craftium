@@ -186,4 +186,50 @@ class BuildSpecTest {
         var e = assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[{\"op\":\"set\",\"at\":[0,0,0],\"block\":\"stone\"},{\"op\":\"cylinder\",\"base\":[0,0,0],\"block\":\"stone\"}]}").place());
         assertTrue(e.getMessage().contains("ops[1]"), e.getMessage());
     }
+
+    @Test void replaceSelectionIsKeptApartFromTheShapesAndItsBlocksAreResolved() {
+        var spec = BuildSpec.parse("{\"palette\":{\"deep\":\"minecraft:deepslate_tile_stairs\"},\"ops\":["
+            + "{\"op\":\"set\",\"at\":[0,0,0],\"block\":\"stone\"},"
+            + "{\"op\":\"replace_selection\",\"find\":\"spruce_stairs\",\"block\":\"deep\",\"keep\":[\"facing\",\"half\"]}]}");
+        assertTrue(spec.hasShapes());
+        assertEquals(1, build("{\"ops\":[{\"op\":\"set\",\"at\":[0,0,0],\"block\":\"stone\"}]}").cells().size());
+        assertEquals(1, spec.build(AREA).cells().size(), "the selection operation places nothing by itself");
+        var op = spec.selectionOps().get(0);
+        assertEquals("minecraft:deepslate_tile_stairs", op.block());
+        assertEquals("minecraft:spruce_stairs", op.find());
+        assertEquals(java.util.List.of("facing", "half"), op.keep());
+        assertTrue(spec.blocks().containsAll(java.util.Set.of("minecraft:stone", "minecraft:deepslate_tile_stairs", "minecraft:spruce_stairs")));
+    }
+
+    @Test void aSpecOfSelectionOperationsAloneHasNoShapesAndNoAreaOfItsOwn() {
+        var spec = BuildSpec.parse("{\"ops\":[{\"op\":\"replace_selection\",\"block\":\"deepslate\"}]}");
+        assertFalse(spec.hasShapes());
+        assertNull(spec.selectionOps().get(0).find());
+        assertNull(spec.selectionOps().get(0).keep(), "no keep list means keep every property the two blocks share");
+        assertThrows(IllegalArgumentException.class, spec::place);
+    }
+
+    @Test void badSelectionOperationsNameTheOperationAtFault() {
+        var noBlock = assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[{\"op\":\"replace_selection\"}]}"));
+        assertTrue(noBlock.getMessage().contains("ops[0] (replace_selection)"), noBlock.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[{\"op\":\"replace_selection\",\"block\":\"stone\",\"keep\":\"facing\"}]}"));
+        assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[{\"op\":\"replace_selection\",\"block\":\"stone\",\"keep\":[\"Facing!\"]}]}"));
+        assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[{\"op\":\"replace_selection\",\"block\":\"stone\",\"repeat\":{\"count\":2,\"step\":[1,0,0]}}]}"));
+    }
+
+    @Test void aSelectionOperationListedBeforeAShapeIsRefusedInsteadOfRunningLast() {
+        var e = assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":["
+            + "{\"op\":\"replace_selection\",\"block\":\"deepslate\"},"
+            + "{\"op\":\"box\",\"from\":[0,0,0],\"to\":[1,1,1],\"block\":\"stone\"}]}"));
+        assertTrue(e.getMessage().contains("ops[1] (box)") && e.getMessage().contains("after all the shapes"), e.getMessage());
+        // After the shapes it is fine, and several selection operations may follow one another.
+        var ok = BuildSpec.parse("{\"ops\":[{\"op\":\"box\",\"from\":[0,0,0],\"to\":[1,1,1],\"block\":\"stone\"},"
+            + "{\"op\":\"replace_selection\",\"block\":\"deepslate\"},{\"op\":\"replace_selection\",\"block\":\"tuff\"}]}");
+        assertEquals(2, ok.selectionOps().size());
+    }
+
+    @Test void anEmptyOpsListIsRefusedBeforeAnythingElse() {
+        var e = assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[]}"));
+        assertTrue(e.getMessage().contains("\"ops\" is empty"), e.getMessage());
+    }
 }

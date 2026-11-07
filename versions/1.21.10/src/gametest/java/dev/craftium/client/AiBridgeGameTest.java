@@ -74,6 +74,101 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             var mine = call("get_state", "{}").getAsJsonObject("selection");
             require(mine.get("size").getAsInt() == 8, "the player's own selection should be 8 blocks: " + mine);
 
+            // read_selection describes it as it really is, an exact 2 x 2 x 2 box read from the server, and reading it changes nothing.
+            var described = call("read_selection", "{}");
+            require(described.get("ok").getAsBoolean() && described.get("selected").getAsInt() == 8 && "box".equals(described.get("shape").getAsString()), "read_selection: " + described);
+            int counted = 0;
+            for (var entry : described.getAsJsonArray("blocks")) counted += entry.getAsJsonObject().get("count").getAsInt();
+            require(counted == 8 && described.has("above") && described.get("summary").getAsString().contains("8 blocks"), "read_selection should count its blocks and look above them: " + described);
+            require(call("get_state", "{}").getAsJsonObject("selection").get("size").getAsInt() == 8, "read_selection must not change the selection");
+            System.out.println("CRAFTIUM_AI read_selection_ok " + described.get("summary").getAsString());
+
+            // "Change this to deepslate": stairs in the player's selection facing different ways become another stair, each keeping its facing and half.
+            String selStairs = "minecraft:spruce_stairs";
+            ctx.runOnClient(mc -> {
+                var conn = mc.getConnection();
+                conn.sendCommand("fill " + (x + 20) + " " + y + " " + (z + 20) + " " + (x + 21) + " " + y + " " + (z + 21) + " " + selStairs + "[facing=east,half=bottom]");
+                conn.sendCommand("fill " + (x + 20) + " " + (y + 1) + " " + (z + 20) + " " + (x + 21) + " " + (y + 1) + " " + (z + 21) + " " + selStairs + "[facing=west,half=top]");
+            });
+            ctx.waitTicks(10);
+            String change = "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"spruce_stairs\",\"block\":\"deepslate_tile_stairs\"}]}}";
+            var changed = call("preview_build", change);
+            require(changed.get("ok").getAsBoolean() && changed.getAsJsonObject("state").get("previewBlocks").getAsInt() == 8, "replace_selection should plan the 8 selected stairs: " + changed);
+            String selBox = "\"from\":[" + (x + 20) + "," + y + "," + (z + 20) + "],\"to\":[" + (x + 21) + "," + (y + 1) + "," + (z + 21) + "],\"view\":\"only\",\"format\":\"boxes\"";
+            var kept = call("get_preview_blocks", "{" + selBox + "}");
+            require(kept.get("ok").getAsBoolean(), "get_preview_blocks: " + kept);
+            var keptText = kept.toString();
+            require(keptText.contains("deepslate_tile_stairs[facing=east,half=bottom") && keptText.contains("deepslate_tile_stairs[facing=west,half=top"), "each stair should keep its facing and half: " + keptText);
+            require(!keptText.contains("spruce_stairs"), "nothing should stay spruce: " + keptText);
+            require(call("get_state", "{}").getAsJsonObject("selection").get("size").getAsInt() == 8, "replace_selection must not change the selection");
+            // A find that names only some properties matches on those: the west-facing stairs are top-half, which is not the default state.
+            var west = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"spruce_stairs[facing=west]\",\"block\":\"stone_stairs\"}]}}");
+            require(west.get("ok").getAsBoolean() && west.getAsJsonObject("state").get("previewBlocks").getAsInt() == 4, "find with facing=west should match the 4 west-facing top stairs: " + west);
+            var east = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"spruce_stairs[facing=east,half=bottom]\",\"block\":\"stone_stairs\"}]}}");
+            require(east.getAsJsonObject("state").get("previewBlocks").getAsInt() == 4, "find with facing=east,half=bottom should match the 4 east-facing stairs: " + east);
+            var neither = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"spruce_stairs[facing=north]\",\"block\":\"stone_stairs\"}]}}");
+            require(neither.get("message").getAsString().contains("No matching blocks"), "a facing nothing has should match nothing: " + neither);
+            // A build that overlaps blocks which are already there: every way of counting the preview must give the same number.
+            ctx.runOnClient(mc -> mc.getConnection().sendCommand("fill " + (x + 30) + " " + y + " " + z + " " + (x + 32) + " " + y + " " + z + " minecraft:stone"));
+            ctx.waitTicks(10);
+            var overlap = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + (x + 30) + "," + y + "," + z + "],\"to\":[" + (x + 35) + "," + y + "," + z + "],\"block\":\"stone\"}]}}");
+            int overlapCount = overlap.getAsJsonObject("state").get("previewBlocks").getAsInt();
+            var overlapRead = call("get_preview_blocks", "{\"from\":[" + (x + 28) + "," + y + "," + (z - 1) + "],\"to\":[" + (x + 37) + "," + y + "," + (z + 1) + "]}");
+            require(overlapRead.get("previewBlocks").getAsInt() == overlapCount, "get_preview_blocks and get_state must count the preview alike: " + overlapRead.get("previewBlocks") + " against " + overlapCount);
+            System.out.println("CRAFTIUM_AI preview_count_agrees " + overlapCount);
+            var nothingSelected = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"obsidian\",\"block\":\"stone\"}]}}");
+            require(nothingSelected.get("ok").getAsBoolean() && nothingSelected.get("message").getAsString().contains("No matching blocks"), "a find that matches nothing should say so: " + nothingSelected);
+            call("cancel_preview", "{}");
+            System.out.println("CRAFTIUM_AI selection_edit_ok");
+
+            ctx.waitTicks(10); // the server drops a request that follows another within 65 ms, and cancel_preview was the last one
+            // The largest box the editor will select (52 x 384 x 52 = 1,038,336 blocks, mostly air), all planned as one edit. As raw coordinates this made the status packet too big and dropped the connection.
+            ctx.runOnClient(mc -> {
+                var o = ClientState.options;
+                o.position1 = new dev.craftium.core.Point(x - 26, -64, z - 26); // the whole height of the world, in a column near the player so its chunks are loaded
+                o.position2 = new dev.craftium.core.Point(x + 25, 319, z + 25);
+                o.mode = dev.craftium.core.Selection.Mode.REPLACE;
+                CraftiumClient.send("select_box", o.position1, null);
+            });
+            long selStart = System.nanoTime();
+            JsonObject bigSel = null;
+            for (int tries = 0; tries < 120; tries++) { // a million blocks take the server a while to select
+                ctx.waitTicks(10);
+                var polled = call("get_state", "{}");
+                bigSel = polled.getAsJsonObject("selection");
+                if (bigSel.get("size").getAsInt() != 8) break;
+            }
+            System.out.println("CRAFTIUM_AI selection_large_made ms=" + (System.nanoTime() - selStart) / 1_000_000 + " " + bigSel);
+            require(bigSel.get("size").getAsInt() == 52 * 384 * 52, "the million-block selection should be made: " + bigSel + " / " + call("get_state", "{}").get("lastMessage"));
+            System.gc();
+            long heapBefore = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) >> 20;
+            long millionStart = System.nanoTime();
+            var million = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"air\",\"block\":\"glass\"}]}}");
+            long millionMs = (System.nanoTime() - millionStart) / 1_000_000;
+            long heapAfter = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) >> 20;
+            require(million.get("ok").getAsBoolean() && million.getAsJsonObject("state").get("previewBlocks").getAsInt() > 1_000_000, "a million-block selection edit (the air in it, not the ground) should be planned: " + million);
+            var drawn = million.getAsJsonObject("state");
+            require(drawn.get("previewTruncated").getAsBoolean() && drawn.get("previewBlocksDrawn").getAsInt() <= 32_768, "only the start of it (an AI preview describes up to 32,768 blocks) should be shown, and the AI told: " + drawn);
+            System.out.println("CRAFTIUM_AI selection_large_edit ms=" + millionMs + " heapMB_before=" + heapBefore + " heapMB_after=" + heapAfter + " maxHeapMB=" + (Runtime.getRuntime().maxMemory() >> 20));
+            call("cancel_preview", "{}");
+            // Describing that selection: every column's clear space is checked, in hash order, across about forty chunks.
+            long describeStart = System.nanoTime();
+            var describedLarge = call("read_selection", "{}");
+            long describeMs = (System.nanoTime() - describeStart) / 1_000_000;
+            require(describedLarge.get("ok").getAsBoolean() && describedLarge.get("selected").getAsInt() == 52 * 384 * 52 && describedLarge.has("above"), "read_selection of the large selection: " + describedLarge);
+            System.out.println("CRAFTIUM_AI read_selection_large ms=" + describeMs + " " + describedLarge.get("summary").getAsString());
+            // Back to the player's own small selection, which the rest of this test checks the AI never touches.
+            ctx.waitTicks(10);
+            ctx.runOnClient(mc -> {
+                var o = ClientState.options;
+                o.position1 = new dev.craftium.core.Point(x + 20, y, z + 20);
+                o.position2 = new dev.craftium.core.Point(x + 21, y + 1, z + 21);
+                o.mode = dev.craftium.core.Selection.Mode.REPLACE;
+                CraftiumClient.send("select_box", o.position1, null);
+            });
+            ctx.waitTicks(20);
+            require(call("get_state", "{}").getAsJsonObject("selection").get("size").getAsInt() == 8, "the small selection should be back");
+
             String spec = "{\"palette\":{\"sand\":\"minecraft:cut_sandstone\",\"cap\":\"minecraft:smooth_sandstone\"},\"ops\":["
                     + "{\"op\":\"cylinder\",\"base\":[" + (x + 2) + "," + y + "," + (z + 2) + "],\"radius\":2,\"height\":8,\"block\":\"sand\"},"
                     + "{\"op\":\"box\",\"from\":[" + x + "," + (y + 8) + "," + z + "],\"to\":[" + (x + 4) + "," + (y + 9) + "," + (z + 4) + "],\"block\":\"cap\"}]}";
@@ -115,6 +210,32 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             System.out.println("CRAFTIUM_AI render_view_ok " + view.get("width") + "x" + view.get("height") + " blocks=" + view.getAsJsonArray("blocks").size());
             require(ctx.computeOnClient(mc -> mc.level.getBlockState(new BlockPos(x + 2, y + 3, z + 2)).isAir()), "a preview must not touch the world");
             System.out.println("CRAFTIUM_AI preview_ok blocks=" + ghost);
+
+            // get_preview_blocks reads the waiting preview itself, exactly, and as boxes the AI can read at a glance.
+            String previewBox = "\"from\":[" + x + "," + y + "," + z + "],\"to\":[" + (x + 4) + "," + (y + 9) + "," + (z + 4) + "]";
+            var seen = call("get_preview_blocks", "{" + previewBox + "}");
+            require(seen.get("ok").getAsBoolean() && "boxes".equals(seen.get("format").getAsString()), "get_preview_blocks should answer as boxes for a build: " + seen);
+            long listed = 0;
+            var kinds = new java.util.HashSet<String>();
+            for (var entry : seen.getAsJsonArray("blocks")) { listed += entry.getAsJsonObject().get("count").getAsLong(); kinds.add(entry.getAsJsonObject().get("block").getAsString()); }
+            require(listed == ghost && kinds.contains("minecraft:cut_sandstone") && kinds.contains("minecraft:smooth_sandstone"), "every preview block should be listed once, by kind: " + seen);
+            require(seen.get("entries").getAsInt() < ghost / 4, "boxes should be far fewer than blocks: " + seen.get("entries") + " for " + ghost);
+            require(seen.get("previewBlocks").getAsInt() == ghost, "previewBlocks should be the preview's own total: " + seen);
+            var only = call("get_preview_blocks", "{" + previewBox + ",\"view\":\"only\",\"format\":\"runs\"}");
+            require(only.get("ok").getAsBoolean() && "runs".equals(only.get("format").getAsString()) && only.getAsJsonArray("palette").toString().contains("craftium:unchanged"), "view only as runs should mark what the preview leaves alone: " + only);
+            var badView = call("get_preview_blocks", "{" + previewBox + ",\"view\":\"before\"}");
+            require(!badView.get("ok").getAsBoolean(), "an unknown view should be refused: " + badView);
+            System.out.println("CRAFTIUM_AI preview_read_ok " + seen.get("summary").getAsString());
+
+            // The largest read there is: a box of about a million cells (100 x 104 x 100) over real ground, with the preview waiting in it.
+            String huge = "\"from\":[" + (x - 50) + ",-64," + (z - 50) + "],\"to\":[" + (x + 49) + ",39," + (z + 49) + "]";
+            long began = System.nanoTime();
+            var wide = call("get_preview_blocks", "{" + huge + "}");
+            long took = (System.nanoTime() - began) / 1_000_000;
+            require(wide.get("ok").getAsBoolean(), "a million-cell read should work: " + wide);
+            require(wide.get("summary").getAsString().contains("sandstone"), "the preview should be in the million-cell read: " + wide.get("summary"));
+            require(took < 10_000, "a million-cell read took " + took + " ms");
+            System.out.println("CRAFTIUM_AI preview_read_million cells=" + (100 * 104 * 100) + " ms=" + took + " reply_chars=" + wide.toString().length() + " " + wide.get("summary").getAsString());
 
             var applied = call("apply_preview", "{}");
             require(applied.get("ok").getAsBoolean(), "apply_preview: " + applied);
@@ -224,6 +345,43 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             ctx.runOnClient(mc -> { ClientCompat.screen(mc).onClose(); ClientCompat.screen(mc).onClose(); });
             ctx.waitTicks(5);
             call("cancel_preview", "{}");
+
+            // Another player's AI preview. One client cannot be two players, so the status the server would send is delivered by hand.
+            require(ctx.computeOnClient(mc -> ClientState.sharedAi.isEmpty()), "a player's own preview must not come back as somebody else's");
+            var here = call("get_state", "{}").getAsJsonObject("player").getAsJsonArray("block");
+            int sx = here.get(0).getAsInt() - 1, sy = here.get(1).getAsInt(), sz = here.get(2).getAsInt() + 8;
+            var sharedCells = new StringBuilder();
+            for (int dx = 0; dx < 3; dx++) for (int dy = 0; dy < 3; dy++) for (int dz = 0; dz < 3; dz++) {
+                if (sharedCells.length() > 0) sharedCells.append(',');
+                sharedCells.append(sx + dx).append(',').append(sy + dy).append(',').append(sz + dz).append(",0");
+            }
+            String sharedGhost = "{\"states\":[\"minecraft:stone_bricks\"],\"blocks\":[" + sharedCells + "],\"removed\":[],\"total\":27}";
+            String withAlex = dev.craftium.net.Packets.JSON.toJson(dev.craftium.net.Packets.sharedOnly(java.util.List.of(new dev.craftium.net.Packets.SharedPreview("Alex", sharedGhost))));
+            var ownStatus = ctx.computeOnClient(mc -> ClientState.status);
+            ctx.runOnClient(mc -> { mc.setScreen(null); ClientState.options.showSharedAiPreviews = true; CraftiumClient.receiveStatus(withAlex); });
+            ctx.waitTicks(2);
+            require(ctx.computeOnClient(mc -> ClientState.sharedAi.size()) == 1, "Alex's preview should be held");
+            require("Alex".equals(ctx.computeOnClient(mc -> ClientState.sharedAi.get(0).owner())) && ctx.computeOnClient(mc -> ClientState.sharedAi.get(0).ghost().total()) == 27, "with his name and all 27 blocks");
+            require(ctx.computeOnClient(mc -> ClientState.sharedAi.get(0).ghost().within(mc.player.getX(), mc.player.getY(), mc.player.getZ(), 192)), "and be within drawing range");
+            require(ctx.computeOnClient(mc -> ClientState.status) == ownStatus, "a background status must not replace the player's own status");
+            ctx.runOnClient(mc -> { mc.player.setYRot(0f); mc.player.setXRot(-8f); mc.player.setOldPosAndRot(); });
+            ctx.waitTicks(20);
+            ctx.takeScreenshot("ai-shared-preview");
+
+            // A status that says nothing about other previews leaves them as they were; an empty list clears them; hiding them is a setting.
+            var plain = com.google.gson.JsonParser.parseString(dev.craftium.net.Packets.JSON.toJson(ownStatus)).getAsJsonObject();
+            plain.remove("sharedAi");
+            String plainJson = plain.toString();
+            ctx.runOnClient(mc -> CraftiumClient.receiveStatus(plainJson));
+            require(ctx.computeOnClient(mc -> ClientState.sharedAi.size()) == 1, "an ordinary status without a list must keep them");
+            ctx.runOnClient(mc -> ClientState.options.showSharedAiPreviews = false);
+            ctx.waitTicks(20);
+            ctx.takeScreenshot("ai-shared-preview-hidden");
+            ctx.runOnClient(mc -> ClientState.options.showSharedAiPreviews = true);
+            String none = dev.craftium.net.Packets.JSON.toJson(dev.craftium.net.Packets.sharedOnly(java.util.List.of()));
+            ctx.runOnClient(mc -> CraftiumClient.receiveStatus(none));
+            require(ctx.computeOnClient(mc -> ClientState.sharedAi.isEmpty()), "an empty list must clear them");
+            System.out.println("CRAFTIUM_AI shared_preview_ok");
 
             ctx.runOnClient(mc -> AiBridge.toggle());
             for (int i = 0; i < 100 && ctx.computeOnClient(mc -> AiBridge.running()); i++) ctx.waitTick();
