@@ -582,7 +582,8 @@ public final class EditorServer {
             case "ai_build_preview" -> {
                 if(ai.busy)throw new IllegalArgumentException("Wait for the current AI build to finish");
                 ai.pendingEdit=null;ai.pendingDirty=true; // a new preview replaces the last, and stays gone if this one is refused
-                var edit=BuildPlanner.plan(player,ai,o);
+                var mine=SESSIONS.get(player.getUUID()); // the player's own selection, which operations on it read and never change
+                var edit=BuildPlanner.plan(player,ai,o,mine==null?Set.<Point>of():mine.selection.points());
                 if(edit.changes().isEmpty()){send(player,ai,"No matching blocks changed",false);return;}
                 if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller build");
                 EditProtection.check(player,edit);

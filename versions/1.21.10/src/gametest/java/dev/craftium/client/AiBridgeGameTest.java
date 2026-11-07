@@ -83,6 +83,71 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(call("get_state", "{}").getAsJsonObject("selection").get("size").getAsInt() == 8, "read_selection must not change the selection");
             System.out.println("CRAFTIUM_AI read_selection_ok " + described.get("summary").getAsString());
 
+            // "Change this to deepslate": stairs in the player's selection facing different ways become another stair, each keeping its facing and half.
+            String selStairs = "minecraft:spruce_stairs";
+            ctx.runOnClient(mc -> {
+                var conn = mc.getConnection();
+                conn.sendCommand("fill " + (x + 20) + " " + y + " " + (z + 20) + " " + (x + 21) + " " + y + " " + (z + 21) + " " + selStairs + "[facing=east,half=bottom]");
+                conn.sendCommand("fill " + (x + 20) + " " + (y + 1) + " " + (z + 20) + " " + (x + 21) + " " + (y + 1) + " " + (z + 21) + " " + selStairs + "[facing=west,half=top]");
+            });
+            ctx.waitTicks(10);
+            String change = "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"spruce_stairs\",\"block\":\"deepslate_tile_stairs\"}]}}";
+            var changed = call("preview_build", change);
+            require(changed.get("ok").getAsBoolean() && changed.getAsJsonObject("state").get("previewBlocks").getAsInt() == 8, "replace_selection should plan the 8 selected stairs: " + changed);
+            String selBox = "\"from\":[" + (x + 20) + "," + y + "," + (z + 20) + "],\"to\":[" + (x + 21) + "," + (y + 1) + "," + (z + 21) + "],\"view\":\"only\",\"format\":\"boxes\"";
+            var kept = call("get_preview_blocks", "{" + selBox + "}");
+            require(kept.get("ok").getAsBoolean(), "get_preview_blocks: " + kept);
+            var keptText = kept.toString();
+            require(keptText.contains("deepslate_tile_stairs[facing=east,half=bottom") && keptText.contains("deepslate_tile_stairs[facing=west,half=top"), "each stair should keep its facing and half: " + keptText);
+            require(!keptText.contains("spruce_stairs"), "nothing should stay spruce: " + keptText);
+            require(call("get_state", "{}").getAsJsonObject("selection").get("size").getAsInt() == 8, "replace_selection must not change the selection");
+            var nothingSelected = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"obsidian\",\"block\":\"stone\"}]}}");
+            require(nothingSelected.get("ok").getAsBoolean() && nothingSelected.get("message").getAsString().contains("No matching blocks"), "a find that matches nothing should say so: " + nothingSelected);
+            call("cancel_preview", "{}");
+            System.out.println("CRAFTIUM_AI selection_edit_ok");
+
+            ctx.waitTicks(10); // the server drops a request that follows another within 65 ms, and cancel_preview was the last one
+            // A very large selection (26 x 384 x 52 = 519,168 blocks, mostly air), all planned as one edit. Twice this size makes the status packet too big for the connection (see the commit message), so it is as big as a test can select today.
+            ctx.runOnClient(mc -> {
+                var o = ClientState.options;
+                o.position1 = new dev.craftium.core.Point(x - 13, -64, z - 26); // the whole height of the world, in a column near the player so its chunks are loaded
+                o.position2 = new dev.craftium.core.Point(x + 12, 319, z + 25);
+                o.mode = dev.craftium.core.Selection.Mode.REPLACE;
+                CraftiumClient.send("select_box", o.position1, null);
+            });
+            long selStart = System.nanoTime();
+            JsonObject bigSel = null;
+            for (int tries = 0; tries < 120; tries++) { // a million blocks take the server a while to select
+                ctx.waitTicks(10);
+                var polled = call("get_state", "{}");
+                bigSel = polled.getAsJsonObject("selection");
+                if (bigSel.get("size").getAsInt() != 8) break;
+            }
+            System.out.println("CRAFTIUM_AI selection_large_made ms=" + (System.nanoTime() - selStart) / 1_000_000 + " " + bigSel);
+            require(bigSel.get("size").getAsInt() == 26 * 384 * 52, "the large selection should be made: " + bigSel + " / " + call("get_state", "{}").get("lastMessage"));
+            System.gc();
+            long heapBefore = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) >> 20;
+            long millionStart = System.nanoTime();
+            var million = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"air\",\"block\":\"glass\"}]}}");
+            long millionMs = (System.nanoTime() - millionStart) / 1_000_000;
+            long heapAfter = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) >> 20;
+            require(million.get("ok").getAsBoolean() && million.getAsJsonObject("state").get("previewBlocks").getAsInt() > 500_000, "a half-million-block selection edit (the air in it, not the ground) should be planned: " + million);
+            var drawn = million.getAsJsonObject("state");
+            require(drawn.get("previewTruncated").getAsBoolean() && drawn.get("previewBlocksDrawn").getAsInt() <= 8192, "only the start of it should be drawn, and the AI told: " + drawn);
+            System.out.println("CRAFTIUM_AI selection_large_edit ms=" + millionMs + " heapMB_before=" + heapBefore + " heapMB_after=" + heapAfter + " maxHeapMB=" + (Runtime.getRuntime().maxMemory() >> 20));
+            call("cancel_preview", "{}");
+            // Back to the player's own small selection, which the rest of this test checks the AI never touches.
+            ctx.waitTicks(10);
+            ctx.runOnClient(mc -> {
+                var o = ClientState.options;
+                o.position1 = new dev.craftium.core.Point(x + 20, y, z + 20);
+                o.position2 = new dev.craftium.core.Point(x + 21, y + 1, z + 21);
+                o.mode = dev.craftium.core.Selection.Mode.REPLACE;
+                CraftiumClient.send("select_box", o.position1, null);
+            });
+            ctx.waitTicks(20);
+            require(call("get_state", "{}").getAsJsonObject("selection").get("size").getAsInt() == 8, "the small selection should be back");
+
             String spec = "{\"palette\":{\"sand\":\"minecraft:cut_sandstone\",\"cap\":\"minecraft:smooth_sandstone\"},\"ops\":["
                     + "{\"op\":\"cylinder\",\"base\":[" + (x + 2) + "," + y + "," + (z + 2) + "],\"radius\":2,\"height\":8,\"block\":\"sand\"},"
                     + "{\"op\":\"box\",\"from\":[" + x + "," + (y + 8) + "," + z + "],\"to\":[" + (x + 4) + "," + (y + 9) + "," + (z + 4) + "],\"block\":\"cap\"}]}";
