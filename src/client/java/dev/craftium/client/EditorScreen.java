@@ -58,6 +58,8 @@ public final class EditorScreen extends CraftiumScreen {
     private static boolean scrollActive;
     private static int scrollShift,scrollContent,scrollClipTop=Integer.MIN_VALUE,scrollClipBottom=Integer.MAX_VALUE;
     /** Where a control drawn at {@code y} really is, noting how far down the scrolling contents reach. */
+    /** Whether a row at {@code y} of the scrolling area lies wholly outside what is showing: it is not drawn, but still takes its place in the layout and its controls. */
+    private static boolean culled(int y,int height){return scrollActive&&(y+height+scrollShift<=scrollClipTop||y+scrollShift>=scrollClipBottom);}
     private static int placed(int y,int height){if(scrollActive)scrollContent=Math.max(scrollContent,y+height);return y+scrollShift;}
     /** {@code typedMax} is how far a typed value may go; the track itself stops at {@code max}. */
     private record Slider(int x,int width,double min,double max,double typedMax,double def,DoubleConsumer set,boolean unbounded) {
@@ -1332,12 +1334,12 @@ public final class EditorScreen extends CraftiumScreen {
     private void button(Gfx g,int x,int y,int width,int height,String label,boolean active,Runnable action,String tip){button(g,x,y,width,height,label,active,action,null,tip);}
     /** A button that cycles through values: a click goes to the next one and a right click back to the one before. */
     private void button(Gfx g,int x,int y,int width,int height,String label,boolean active,Runnable action,Runnable back,String tip) {
-        FlatButton.face(g,x,y,width,height,label,active,true,false,menuAlign);
+        if(!culled(y,height))FlatButton.face(g,x,y,width,height,label,active,true,false,menuAlign);
         controls.add(new Control(x,y,width,height,action,back,back==null||tip.isEmpty()?tip:tip+" · Right-click goes back"));
     }
     private void toggle(Gfx g,int x,int y,String label,boolean value,Runnable action) {toggle(g,x,y,label,value,action,"");}
     private void toggle(Gfx g,int x,int y,String label,boolean value,Runnable action,String tip) {
-        FlatCheckbox.box(g,x,y,12,value,false);
+        if(!culled(y,12))FlatCheckbox.box(g,x,y,12,value,false);
         text(g,label,x+19,y+3,TEXT);controls.add(new Control(x,y,Math.min(pw-20,TextCache.width(font,label)+24),15,action,tip));
     }
     private void slider(Gfx g,int x,int y,int width,String label,double value,double min,double max,double def,DoubleConsumer set,boolean integer) {
@@ -1350,8 +1352,10 @@ public final class EditorScreen extends CraftiumScreen {
         var slider=new Slider(x,width,min,max,typedMax,def,set,unbounded);String panel=drawingPanel,key=panel+"/"+label;
         boolean editing=typing!=null&&typing.key().equals(key);
         String display=integer?Integer.toString((int)value):String.format(Locale.ROOT,"%.2f",value);
-        FlatSlider.track(g,x,y,width,17,(value-min)/(max-min),editing?Component.empty():Component.literal(display),editing,false,editing);
-        if(editing)entry.paint(g,x,y,width,17);
+        if(!culled(y,17)){
+            FlatSlider.track(g,x,y,width,17,(value-min)/(max-min),editing?Component.empty():Component.literal(display),editing,false,editing);
+            if(editing)entry.paint(g,x,y,width,17);
+        }
         var control=new Control(x,y,width,17,()->{
             if(minecraft.hasControlDown()){typing=new SliderArea(null,slider,key,integer);entry.start(display);selectingText=false;return;}
             dragging=slider;draggingSliderPanel=panel;
@@ -1365,7 +1369,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(!apply||area==null)return;
         try{double v=Double.parseDouble(text.trim());if(!Double.isFinite(v))return;if(area.slider().typedMax()!=Double.POSITIVE_INFINITY)v=Math.clamp(v,area.slider().min(),area.slider().typedMax());area.slider().set.accept(area.integer()?Math.round(v):v);}catch(NumberFormatException ignored){}
     }
-    private void text(Gfx g,String text,int x,int y,int color){if(scrollActive)scrollContent=Math.max(scrollContent,y+9);g.text(font,text,x,y,color,false);}
+    private void text(Gfx g,String text,int x,int y,int color){if(scrollActive)scrollContent=Math.max(scrollContent,y+9);if(culled(y,9))return;g.text(font,text,x,y,color,false);}
     /** A tool's tooltip: its name and the key it is on (and the hotbar slot, when it has one) on the first line, its description below. */
     private static String toolTip(Tool tool,int slot){
         var mapping=CraftiumClient.toolKeys.get(tool);
