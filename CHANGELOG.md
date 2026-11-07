@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Chunk leasing
+- Moving, cloning or stacking a selection or a Builder box between far-away chunks no longer asks you to walk there. Craftium loads the chunks at both ends for as long as the edit takes, then lets them go. Undo and redo of such an edit do the same.
+- Chunks nobody has visited are generated for the edit. An edit that needs more than 128 chunks that are not loaded is refused.
+
 ## 0.9.1-beta.1
 
 Changes since 0.9.0-beta.1.

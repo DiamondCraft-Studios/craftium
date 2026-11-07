@@ -21,6 +21,8 @@ public final class EditorServer {
     /** The AI's workspace of each player: the preview it is holding and the builds it can undo. Never saved, and dropped when the player leaves. */
     private static final Map<UUID,Session> AI_SESSIONS=new HashMap<>();
     private static Job job;
+    /** Keeps the chunks the running edit touches loaded until it is done, however far they are from every player. */
+    private static ChunkLease jobLease=ChunkLease.NONE;
     /** How long one tick may spend writing an edit's blocks: 20 of its 50 ms, which leaves the rest of the tick its time and still finishes a large undo in a few ticks. */
     private static final long APPLY_BUDGET_NANOS=20_000_000L;
     private static int historyTicks;
@@ -72,7 +74,17 @@ public final class EditorServer {
         }
     }
     private EditorServer() {}
-    public static void clear() { SESSIONS.clear();AI_SESSIONS.clear();job=null;AnnotationEdits.clear();AnimatedRebuild.clear(); }
+    /** Starts applying an edit, first leasing every chunk it reaches so that a far-away one is loaded for as long as the edit needs it. */
+    private static void begin(ServerPlayer player,Session s,Session.Edit edit,boolean backwards,boolean history,long stroke,boolean load,boolean record){
+        var area=ChunkLease.area();
+        for(var c:edit.changes())area.block(c.pos().x(),c.pos().z());
+        for(var c:edit.biomes())area.box(c.cell().x()*4,c.cell().z()*4,c.cell().x()*4+3,c.cell().z()*4+3);
+        jobLease=area.lease(player.level());
+        s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,backwards,history,new int[]{0},new ArrayList<>(),stroke,load,byChunk(edit.changes()),record);
+    }
+    /** Ends the running edit and lets its chunks go. */
+    private static void endJob(){job=null;jobLease.close();jobLease=ChunkLease.NONE;}
+    public static void clear() { SESSIONS.clear();AI_SESSIONS.clear();job=null;AnnotationEdits.clear();AnimatedRebuild.clear();ChunkLease.releaseAll();jobLease=ChunkLease.NONE; }
     /** Gives the player back the game mode the editor replaced, if it still has one to give back. */
     private static void restoreMode(ServerPlayer player,Session s){
         var mode=s.previousMode;s.previousMode=null;
@@ -86,7 +98,7 @@ public final class EditorServer {
         AnimatedRebuild.finishOnStop(server);
         // Players are saved as the server stops, before they are disconnected, so a player still in the editor would be saved as a spectator.
         for(var entry:SESSIONS.entrySet()){var player=server.getPlayerList().getPlayer(entry.getKey());if(player!=null)restoreMode(player,entry.getValue());}
-        if(job!=null){var j=job;rememberInterrupted(j);j.session.busy=false;job=null;}
+        if(job!=null){var j=job;rememberInterrupted(j);j.session.busy=false;endJob();}
         for(var session:SESSIONS.values())HistoryStore.save(session);try{HistoryStore.flush();}catch(java.util.concurrent.CompletionException e){ServerPlatform.LOG.error("Could not finish writing editor history during shutdown",e);}
     }
     private static void rememberInterrupted(Job j){rememberInterrupted(j.session,j.edit,j.applied,j.backwards,j.history);}
@@ -289,7 +301,8 @@ public final class EditorServer {
                 // The builder has no range limit; it still stops at the world's edge and at chunks that are not loaded.
                 if(!r.action().startsWith("builder_")&&target.distanceSquared(new Point((int)player.getX(),(int)player.getY(),(int)player.getZ()))>256*256)
                     throw new IllegalArgumentException("Move within 256 blocks of the target");
-                new EditPlanner(player.level(),s,o).validate(target);
+                // A builder commit sends its box's corner as the target, and the box may be far from every player: its chunks are leased while it is planned.
+                if(!r.action().equals("builder_commit"))new EditPlanner(player.level(),s,o).validate(target);
             }
             switch(r.action()) {
                 case "pick_block" -> {
@@ -386,12 +399,16 @@ public final class EditorServer {
                 case "move", "clone", "stack" -> {
                     requireSelection(s);
                     if(o.offsetX==0&&o.offsetY==0&&o.offsetZ==0)throw new IllegalArgumentException("Set a non-zero offset for the selection");
+                    int count=r.action().equals("stack")?o.copies:1;
+                    if((long)s.selection.points().size()*count>Selection.LIMIT)throw new IllegalArgumentException("Stack exceeds "+String.format("%,d",Selection.LIMIT)+" blocks");
+                    // The selection and where it lands may both be far from every player: lease their chunks while the edit is planned and applied.
+                    var reach=ChunkLease.area().points(s.selection.points(),0,0);
+                    for(int i=1;i<=count;i++)reach.points(s.selection.points(),o.offsetX*i,o.offsetZ*i);
+                    ChunkLease.planning(reach.lease(player.level()));
                     var plan=new EditPlanner(player.level(),s,o);
                     var source=new LinkedHashMap<Point,BlockSnapshot>();
                     for(Point p:s.selection.points()){plan.validate(p);source.put(p,BlockSnapshot.capture(player.level(),EditPlanner.pos(p)));}
                     if(r.action().equals("move"))for(Point p:source.keySet())plan.put(p,Blocks.AIR.defaultBlockState());
-                    int count=r.action().equals("stack")?o.copies:1;
-                    if((long)source.size()*count>Selection.LIMIT)throw new IllegalArgumentException("Stack exceeds "+String.format("%,d",Selection.LIMIT)+" blocks");
                     for(int i=1;i<=count;i++)for(var e:source.entrySet()) {
                         var p=e.getKey();if(e.getValue().state().isAir()&&!o.pasteAir)continue;
                         plan.put(p.add(o.offsetX*i,o.offsetY*i,o.offsetZ*i),e.getValue());
@@ -482,6 +499,7 @@ public final class EditorServer {
             }
         } catch(IllegalArgumentException e) {s.historyRemaining=0;send(player,s,e.getMessage(),true);}
         catch(Exception e) {ServerPlatform.LOG.error("Editor request failed",e);send(player,s,"Operation failed; see the Craftium log",true);}
+        finally {ChunkLease.endPlanning();}
     }
     /** The points a selection tool would add, less any the block mask rules out. */
     private static List<Point> masked(EditPlanner plan,Options o,Iterable<Point> points){
@@ -651,7 +669,7 @@ public final class EditorServer {
                 if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
                 EditProtection.check(player,edit);
                 ai.pendingEdit=null;ai.pendingDirty=true;
-                ai.busy=true;job=new Job(player.getUUID(),player.level(),ai,edit,false,false,new int[]{0},new ArrayList<>(),0,true,byChunk(edit.changes()),true);
+                begin(player,ai,edit,false,false,0,true,true);
                 send(player,ai,"Applying "+edit.name()+"…",false);
             }
             case "ai_cancel" -> {
@@ -672,7 +690,7 @@ public final class EditorServer {
         EditProtection.check(player,edit);
         if(s.confirmEdits&&!s.bypassConfirm){stage(player,s,edit);return;}
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
-        s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,false,false,new int[]{0},new ArrayList<>(),s.requestStroke,false,byChunk(edit.changes()),s.requestRecord);
+        begin(player,s,edit,false,false,s.requestStroke,false,s.requestRecord);
         send(player,s,"Applying "+edit.name()+"…",false);
     }
     /** Holds the edit as a ghost for the player to confirm; edits made while one is waiting are added to it. */
@@ -729,13 +747,9 @@ public final class EditorServer {
             s.recalculateBytes();s.historyDirty=true;s.event((backwards?"Undo ":"Redo ")+edit.name());
             send(player,s,(backwards?"Undid ":"Redid ")+edit.name(),false);return;
         }
-        // The AI's builds can be far from the player, so its undo loads the chunks it needs as it goes instead of asking the player to move.
-        if(!s.ai){
-            for(var c:edit.changes())if(!player.level().hasChunk(c.pos().x()>>4,c.pos().z()>>4))throw new IllegalArgumentException("Move closer to the edited chunks before undo/redo");
-            for(var c:edit.biomes())if(!player.level().hasChunk(c.cell().x()>>2,c.cell().z()>>2))throw new IllegalArgumentException("Move closer to the biome chunks before undo/redo");
-        }
+        // Undoing a far-away edit loads the chunks it needs for as long as it takes, instead of asking the player to walk there.
         EditProtection.check(player,edit);
-        from.removeFirst();s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,backwards,true,new int[]{0},new ArrayList<>(),0,s.ai,byChunk(edit.changes()),true);
+        from.removeFirst();begin(player,s,edit,backwards,true,0,s.ai,true);
         s.lastStroke=0;
         send(player,s,backwards?"Undoing…":"Redoing…",false);
     }
@@ -791,7 +805,7 @@ public final class EditorServer {
                 j.session.historyDirty=true;
                 j.session.event((j.backwards?"Undo ":"Redo ")+j.edit.name());
             } else if(j.record)j.session.remember(actual,j.strokeId);
-            j.session.busy=false;job=null;
+            j.session.busy=false;endJob();
             if(j.history&&!j.backwards&&j.session.historyRemaining==0&&!j.applied.isEmpty()&&j.session.options!=null&&j.session.options.historyPulse)j.session.pulse="redo:700:"+SelectionCodec.encode(pulsePoints(j.applied.stream().map(Session.Change::pos).toList()));
             var player=server.getPlayerList().getPlayer(j.owner);
             if(player!=null)send(player,j.session,(j.backwards?"Undid ":j.history?"Redid ":"Applied ")+j.edit.name()+" · "+(j.applied.size()+appliedBiomes.size()+appliedEntities.size()+appliedAnnotations.size())+" changes"+(skipped>0?" · "+skipped+" changed or unavailable cells skipped":""),false);
@@ -803,7 +817,7 @@ public final class EditorServer {
             j.session.queued.clear();
             ServerPlatform.LOG.error("Craftium edit interrupted",e);
             rememberInterrupted(j);
-            j.session.busy=false;job=null;var player=server.getPlayerList().getPlayer(j.owner);
+            j.session.busy=false;endJob();var player=server.getPlayerList().getPlayer(j.owner);
             if(player!=null)send(player,j.session,"Edit interrupted. Applied changes remain in history.",true);
             else release(j);
         }
