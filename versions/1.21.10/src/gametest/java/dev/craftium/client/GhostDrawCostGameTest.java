@@ -102,6 +102,9 @@ public final class GhostDrawCostGameTest implements FabricClientGameTest {
         }
         order.add(new Shape("none", List::of)); // control: the empty scene again, to see whether the machine drifted
 
+        for (int drawLimit : new int[]{8192, 32768}) { // the default draw limit, then the most a player can allow
+        c.runOnClient(mc -> ClientState.options.aiGhostDrawLimit = drawLimit);
+        report.append("-- AI preview models drawn: up to ").append(drawLimit).append('\n');
         for (var shape : order) {
             var cells = shape.cells().get();
             String json = ghostJson(cells, ox, oy, oz);
@@ -123,6 +126,7 @@ public final class GhostDrawCostGameTest implements FabricClientGameTest {
             double median = deltas.isEmpty() ? -1 : deltas.get(deltas.size() / 2), p95 = deltas.isEmpty() ? -1 : deltas.get((int) (deltas.size() * .95));
             double seconds = stamps.size() < 2 ? 1 : (stamps.get(stamps.size() - 1) - stamps.get(0)) / 1e9;
             report.append(String.format(Locale.ROOT, "%-9s %7d | %8.1f %8.1f %8.1f %8d %8d%n", shape.name(), cells.size(), (stamps.size() - 1) / seconds, median, p95, heap, gc));
+        }
         }
         c.runOnClient(mc -> ClientState.aiPending = GhostBlocks.EMPTY);
         System.out.println("CRAFTIUM_GHOST_DRAW_COST\n" + report);

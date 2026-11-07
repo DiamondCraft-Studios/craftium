@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.1-beta.1
+
+Changes since 0.9.0-beta.1.
+
+### Editor
+- Modify's Translate Scale is now Expansion (0.1 to 8): with Add Translation on, a revolve widens its radius over the sweep and each rotated copy sits further out than the last, instead of the offset being stretched. This also stops a large scale from crashing the client.
+- Replace mode shows a block smaller than the one it replaces: a slab, fence or pressure plate held against a full block used to show nothing, as its ghost was hidden inside the block. The part that is kept now gets a faint white tint.
+
+### Connection
+- The client and the server greet each other with their version and a protocol number, on both Fabric and Paper/Purpur. The protocol only goes up when the request format breaks, so a hotfix on one side keeps working with the other; a real mismatch is named to the player ("Update the client…") and edits are refused until they reconnect updated. `/craftium status` shows the server's version.
+- The client looks at the project's GitHub releases once per game session and shows a line when a newer build exists for its Minecraft version. `/craftium update` shows the link and `/craftium update off` stops the check. The Paper/Purpur companion logs the same at startup; `check-for-updates: false` in its config.yml turns that off. Nothing is downloaded.
+- The hello also lists the optional features each build supports (capabilities, starting with `modify-expansion`), so a client and a server on different patch versions use a feature only when both have it. Against a server without Expansion the slider says "Expansion needs a server update", and the preview and the request leave the sweep as the server would build it. `/craftium status` names what the server lacks.
+
 ## 0.9.0-beta.1
 
 Changes since 0.8.0-beta.1.

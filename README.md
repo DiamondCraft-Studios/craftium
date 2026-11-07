@@ -12,16 +12,16 @@ Craftium is an AI-assisted, independently implemented Fabric building studio wit
 
 [Gallery](docs/GALLERY.md) · [Controls](docs/KEYBINDS.md) · [Server companion](docs/SERVER-PLUGIN.md) · [AI building](docs/AI.md) · [Contributing](CONTRIBUTING.md) · [GPL-3.0 license](LICENSE)
 
-**0.9.0-beta.1 is a development preview and doesn't yet cover everything Axiom offers.** This release aligns controls with Axiom's documented defaults and adds configurable editor chords and mouse gestures. It includes the Paper/Purpur companion and a versioned client connection. The editor expands the original 26 tools to 37, adding tenth-slot building, persistent history, entity clipboards, animated rebuild, lighting, scripting, visual masks, weighted palettes and asset transfer. [Feature coverage](docs/FEATURES.md) and the [95-page documentation audit](docs/PARITY-AUDIT.md) identify remaining differences.
+**0.9.1-beta.1 is a development preview and doesn't yet cover everything Axiom offers.** This release aligns controls with Axiom's documented defaults and adds configurable editor chords and mouse gestures. It includes the Paper/Purpur companion and a versioned client connection. The editor expands the original 26 tools to 37, adding tenth-slot building, persistent history, entity clipboards, animated rebuild, lighting, scripting, visual masks, weighted palettes and asset transfer. [Feature coverage](docs/FEATURES.md) and the [95-page documentation audit](docs/PARITY-AUDIT.md) identify remaining differences.
 
 ## Install
 
 1. Install Fabric Loader for Minecraft **26.2** (tested with **0.20.1**), or for **1.21.10**.
-2. Put the matching jar and Fabric API in the instance's `mods` folder: `craftium-0.9.0-beta.1.jar` with **Fabric API 0.161.0+26.2**, or `craftium-0.9.0-beta.1+mc1.21.10.jar` with **Fabric API 0.138.4+1.21.10** or newer.
+2. Put the matching jar and Fabric API in the instance's `mods` folder: `craftium-0.9.1-beta.1.jar` with **Fabric API 0.161.0+26.2**, or `craftium-0.9.1-beta.1+mc1.21.10.jar` with **Fabric API 0.138.4+1.21.10** or newer.
 3. Run Minecraft with **Java 25** (26.2) or **Java 21** (1.21.10). Open a Creative world with cheats enabled.
 4. Press **Right Shift** to open Craftium; **View → Studio inspector** opens the detailed inspector.
 
-For multiplayer, choose a Fabric server with the same mod, or install the companion on **Paper/Purpur**: `craftium-server-0.9.0-beta.1.jar` for 26.2, or `craftium-server-0.9.0-beta.1+mc1.21.10.jar` for 1.21.10. Players use the updated Fabric client in both cases. The companion defaults to operators and supports permission grants, protected edits and large transfers. Read [Server installation and permissions](docs/SERVER-PLUGIN.md).
+For multiplayer, choose a Fabric server with the same mod, or install the companion on **Paper/Purpur**: `craftium-server-0.9.1-beta.1.jar` for 26.2, or `craftium-server-0.9.1-beta.1+mc1.21.10.jar` for 1.21.10. Players use the updated Fabric client in both cases. The companion defaults to operators and supports permission grants, protected edits and large transfers. Read [Server installation and permissions](docs/SERVER-PLUGIN.md).
 
 On Fabric servers, editing requires operator permission level 2 and Creative mode. On Paper/Purpur, grant `craftium.edit` and use Creative mode. Four custom Fabric world rules are currently unavailable on Paper/Purpur.
 
@@ -118,6 +118,6 @@ No Updates suppresses neighbour/shape updates during Craftium placement; it does
 
 ## Build and validation
 
-Requires JDK 25. Run `./gradlew.bat build`, or `./gradlew.bat :versions:mc-26.2:runClientGameTest` for the disposable Minecraft integration scenario. The 26.2 client jar goes to `versions/26.2/build/libs/`; server plugin output goes to `versions/26.2/server-plugin/build/libs/`. `scripts/package.ps1 -Version 0.9.0-beta.1` creates the distribution bundle.
+Requires JDK 25. Run `./gradlew.bat build`, or `./gradlew.bat :versions:mc-26.2:runClientGameTest` for the disposable Minecraft integration scenario. The 26.2 client jar goes to `versions/26.2/build/libs/`; server plugin output goes to `versions/26.2/server-plugin/build/libs/`. `scripts/package.ps1 -Version 0.9.1-beta.1` creates the distribution bundle.
 
 [Validation](docs/VALIDATION.md) records checks and practical limits. Screenshots in the bundle show the actual Minecraft mod. Craftium is licensed under the [GNU GPL v3](LICENSE) (GPL-3.0-only); bundled component notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Craftium is an independent project, unaffiliated with Axiom and its authors, and contains no Axiom code, textures or icons. If you can, support the original at [Axiom's site](https://axiomdocs.moulberry.com).

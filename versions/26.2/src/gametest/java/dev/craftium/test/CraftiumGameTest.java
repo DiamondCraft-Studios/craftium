@@ -26,13 +26,18 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             ctx.waitTicks(20);world.getConnection().waitForChunksDownload();
             require(ctx.computeOnClient(mc->CraftiumClient.supported()),"Craftium network channel was not negotiated");
             if("gallery".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.GalleryCapture.run(ctx,world);return;}
+            if("handshake".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.HandshakeGameTest.run(ctx,world);return;}
             if("keybinds".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.KeybindGameTest.run(ctx,world);return;}
+            if("replaceghost".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.ReplaceGhostGameTest.run(ctx,world);return;}
             if("prediction".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.PredictionGameTest.run(ctx,world);return;}
             if("queue".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.BuilderQueueGameTest.run(ctx,world);return;}
             if("selection".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.SelectionOutlineGameTest.run(ctx,world);return;}
             if("selectionperf".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.SelectionDrawCostGameTest.run(ctx,world);return;}
             if("structures".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.StructureGameTest.run(ctx,world);return;}
             if("viewport".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.ViewportGameTest.run(ctx,world);return;}
+            if("lua".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){luaLimits();return;}
+            if("golden".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){GoldenToolGameTest.run(ctx,world);return;}
+            if("toolhints".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.ToolHintsGameTest.run(ctx);return;}
             if("branding".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){screenshot();return;}
             if("gizmos".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){gizmoControls();return;}
             if("builder".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){builderToolsAndLighting();return;}
@@ -50,6 +55,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             animatedRebuild();
             entityClipboardAndSchematicData();
             documentedLua();
+            luaLimits();
             colourField();
             builderToolsAndLighting();
             librariesAndCommands();
@@ -340,6 +346,17 @@ public final class CraftiumGameTest implements FabricClientGameTest {
         System.out.println("CRAFTIUM_ENTITY_CLIPBOARD_PASS moving_undo passengers nbt schem legacy_inventory");
     }
     private int entityCount(int minX,int maxX){return world.getServer().computeOnServer(server->server.overworld().getEntities((net.minecraft.world.entity.Entity)null,new net.minecraft.world.phys.AABB(minX,18,40,maxX,24,46),e->!(e instanceof net.minecraft.world.entity.player.Player)).size());}
+    /** A script that never ends, or recurses without end, is stopped with a message for the player, and the server goes on taking edits. */
+    private void luaLimits(){
+        for(String script:new String[]{"while true do end","local function f(n) return 1+f(n+1) end return f(1)"}){
+            options(o->{o.tool=Tool.SCRIPT_BRUSH;o.radius=1;o.block="minecraft:gold_block";o.script=script;});
+            expectError("use",new Point(0,5,0));
+            require(ctx.computeOnClient(mc->ClientState.status.error()&&ClientState.status.message().startsWith("Lua")),"Script limit was not reported to the player for: "+script+" ("+ctx.computeOnClient(mc->ClientState.status.message())+")");
+            checkBlock(new Point(0,5,0),Blocks.AIR);
+        }
+        options(o->{o.tool=Tool.FREEHAND_DRAW;o.radius=1;o.block="minecraft:gold_block";});request("use",new Point(0,5,0));checkBlock(new Point(0,5,0),Blocks.GOLD_BLOCK);request("undo",null);
+        System.out.println("CRAFTIUM_LUA_LIMITS_PASS");
+    }
     private void documentedLua(){
         options(o->{o.tool=Tool.SCRIPT_BRUSH;o.radius=2;o.scriptVariables.put("Height","3");o.script="$once$ local h=$int(Height,2,1,5)$ assert(type(blocks.oak_log)=='number') for i=0,h-1 do setBlock(x,y+i,z,withBlockProperty(blocks.oak_log,'axis=x')) end";});request("use",new Point(110,20,44));
         for(int y=20;y<23;y++)checkBlock(new Point(110,y,44),Blocks.OAK_LOG);checkBlock(new Point(109,20,44),Blocks.AIR);
