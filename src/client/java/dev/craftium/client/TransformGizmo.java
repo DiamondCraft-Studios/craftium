@@ -396,7 +396,7 @@ final class TransformGizmo {
     private static boolean plainHandles;
     private static Vec3 pickExtent,pickReach;
     /** The camera's right, up and forward directions, for the handles that face the screen. */
-    private static Vec3[] cameraAxes(){
+    static Vec3[] cameraAxes(){
         var near=ClientCompat.nearPlane(ClientCompat.camera(Minecraft.getInstance()));
         Vec3 center=near.getPointOnPlane(0,0);
         return new Vec3[]{near.getPointOnPlane(1,0).subtract(center).normalize(),near.getPointOnPlane(0,1).subtract(center).normalize(),center.normalize()};

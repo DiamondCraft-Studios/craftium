@@ -54,6 +54,8 @@ public final class Options {
     public boolean maskExclude;
     /** Whether holding a gizmo handle hides the others, so only the one being dragged is drawn. */
     public boolean gizmoHideOthers=true;
+    /** Whether the editor draws the world axes gizmo, which turns with the camera, in the top right. */
+    public boolean showAxisGizmo=true;
     /** Include and Exclude both switched off, as they start: the block mask is ignored altogether, whatever blocks are toggled. */
     public boolean maskOff=true;
     /** Whether the tool masks (block mask, mask block, rules, script, height range and restrict to selection) also apply to the builder tools. */

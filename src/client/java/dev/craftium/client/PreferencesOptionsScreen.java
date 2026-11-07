@@ -52,6 +52,7 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
             new Toggle("Live Builder selection box","After the first Builder click, draw the box to the block you aim at and let it follow your aim",o->o.builderLiveBox,(o,v)->o.builderLiveBox=v),
             new Toggle("Bulldozer same blocks","On: a full Bulldozer sweep only breaks blocks like the first one it met, states included, and a different block stops it until you let go. Off: it breaks everything it passes over",o->o.bulldozerSameBlocks,(o,v)->o.bulldozerSameBlocks=v)));
         GROUPS.put("Gizmos & Rulers",List.of(
+            new Toggle("Show axis gizmo","Draw the X, Y and Z axes at the top right of the editor; click an end to look along that axis",o->o.showAxisGizmo,(o,v)->o.showAxisGizmo=v),
             new Toggle("Hide other gizmo handles","While a gizmo handle is held, draw only that handle",o->o.gizmoHideOthers,(o,v)->o.gizmoHideOthers=v),
             new Link("Ruler options","The colours of the ruler's line, its knobs and its span label",SelectionOptionsScreen::ruler)));
         GROUPS.put("AI",List.of(

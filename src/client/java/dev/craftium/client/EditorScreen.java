@@ -177,6 +177,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);}
         finishPanel(g);
         viewport(g);
+        axisGizmo(g);
         for(int i=1;i<lasso.size();i++)ToolIcons.line(g,(int)(lasso.get(i-1).x()/scale),(int)(lasso.get(i-1).y()/scale),(int)(lasso.get(i).x()/scale),(int)(lasso.get(i).y()/scale),0xffffd66d);
         statusbar(g);
         if(menu>=0)dropdown(g);
@@ -974,6 +975,93 @@ public final class EditorScreen extends CraftiumScreen {
         pinnedTools(g);
         largeSelectionPopup(g);
         if(minecraft.level==null){g.fill(l,80,r,h-28,0xff14202e);text(g,"Open a Creative world to start building",l+30,105,TEXT);}
+    }
+    private static final int AXIS_SIZE=64,AXIS_TOP=29,AXIS_GAP=6;
+    /**
+     * Where the world axes gizmo sits: against the right edge, pushed left past any shown window that is in its way, so it
+     * follows the Target info panel (or whatever is there) and falls back to the edge when nothing is.
+     */
+    private int axisGizmoX(){
+        int x=w-AXIS_SIZE-AXIS_GAP;
+        if(!panels)return x;
+        for(int pass=0;pass<8;pass++){
+            boolean moved=false;
+            for(var r:WorkspaceLayout.windows.values()){
+                if(!r.visible||r.y>=AXIS_TOP+AXIS_SIZE||r.y+r.h<=AXIS_TOP||r.x>=x+AXIS_SIZE+AXIS_GAP||r.x+r.w<=x-AXIS_GAP)continue;
+                int next=r.x-AXIS_SIZE-AXIS_GAP;
+                if(next<x){x=next;moved=true;}
+            }
+            if(!moved)break;
+        }
+        return Math.max(AXIS_GAP,x);
+    }
+    private static final String[] AXIS_NAMES={"X","Y","Z"};
+    private static final int[] AXIS_COLOURS={0xffe8574f,0xff6fcf5a,0xff4f8fe8};
+    /**
+     * The world's X, Y and Z axes turning with the camera, as in a 3D editor. The end circles are handles: clicking one turns the
+     * camera to look along that axis from that side, and the dim circle at the other end looks from the opposite side.
+     */
+    private void axisGizmo(Gfx g){
+        if(!o().showAxisGizmo||minecraft.player==null||minecraft.level==null)return;
+        int left=axisGizmoX(),cx=left+AXIS_SIZE/2,cy=AXIS_TOP+AXIS_SIZE/2,reach=AXIS_SIZE/2-9;
+        Vec3[] cam=TransformGizmo.cameraAxes();
+        // Six ends: axis*2 is the positive end, axis*2+1 the negative. The farthest are drawn first, so the near ones cover them.
+        double[][] ends=new double[6][];
+        for(int axis=0;axis<3;axis++){
+            double[] unit={axis==0?1:0,axis==1?1:0,axis==2?1:0};
+            Vec3 a=new Vec3(unit[0],unit[1],unit[2]);
+            double sx=a.dot(cam[0]),sy=-a.dot(cam[1]),depth=a.dot(cam[2]);
+            for(int side=0;side<2;side++){
+                double sign=side==0?1:-1,z=depth*sign;
+                // Orthographic, like other editors' orientation gizmos; only the circle size hints at which end is nearer.
+                ends[axis*2+side]=new double[]{sx*sign,sy*sign,z,1-z*.1};
+            }
+        }
+        Integer[] order={0,1,2,3,4,5};
+        java.util.Arrays.sort(order,(p,q)->Double.compare(ends[q][2],ends[p][2]));
+        // Drawn at eight times the resolution through the pose, so the lines and discs are not snapped to whole interface pixels.
+        final int S=8;
+        g.pose().pushMatrix();g.pose().scale(1f/S,1f/S);
+        for(int e:order)if(e%2==0){
+            double dx=ends[e][0]*reach*S,dy=ends[e][1]*reach*S,length=Math.hypot(dx,dy);
+            if(length<1)continue;
+            g.pose().pushMatrix();g.pose().translate((float)(cx*S),(float)(cy*S));g.pose().rotate((float)Math.atan2(dy,dx));
+            g.fill(0,-S/2,(int)Math.round(length),S/2,axisShade(AXIS_COLOURS[e/2],ends[e][2],false));
+            g.pose().popMatrix();
+        }
+        for(int e:order){
+            boolean positive=e%2==0;double[] end=ends[e];
+            double ex=(cx+end[0]*reach)*S,ey=(cy+end[1]*reach)*S;int radius=(int)Math.round((positive?6:4)*S*end[3]);
+            int colour=axisShade(AXIS_COLOURS[e/2],end[2],!positive);
+            int step=3;
+            for(int dy=-radius;dy<radius;dy+=step){
+                double mid=dy+step/2.0,half=Math.sqrt(Math.max(0,radius*radius-mid*mid));
+                g.fill((int)Math.round(ex-half),(int)Math.round(ey+dy),(int)Math.round(ex+half),(int)Math.round(ey+dy)+step,colour);
+            }
+        }
+        g.pose().popMatrix();
+        for(int e:order){
+            int axis=e/2;boolean positive=e%2==0;double[] end=ends[e];
+            int ex=cx+(int)Math.round(end[0]*reach),ey=cy+(int)Math.round(end[1]*reach),radius=positive?6:4;
+            if(positive){g.pose().pushMatrix();g.pose().translate(ex,ey);g.pose().scale(.7f,.7f);g.centeredText(font,AXIS_NAMES[axis],0,-4,0xffffffff);g.pose().popMatrix();}
+            final int fa=axis;final boolean fp=positive;
+            controls.add(new Control(ex-radius-1,ey-radius-1,radius*2+3,radius*2+3,()->faceAxis(fa,fp),""));
+        }
+    }
+    /** An axis colour darker the farther that end points from the camera, and dimmer still for the negative end. */
+    private static int axisShade(int colour,double depth,boolean negative){
+        double k=Math.clamp(.8-depth*.25,.45,1)*(negative?.6:1);
+        int r=(int)(((colour>>16)&255)*k),gr=(int)(((colour>>8)&255)*k),b=(int)((colour&255)*k);
+        return 0xff000000|r<<16|gr<<8|b;
+    }
+    /** Turns the camera, in place, to look along an axis from its positive or negative side. Straight up or down keeps the heading. */
+    private void faceAxis(int axis,boolean positive){
+        var player=minecraft.player;if(player==null)return;
+        double look=positive?-1:1; // viewing from the +X side means looking toward -X
+        double fx=axis==0?look:0,fy=axis==1?look:0,fz=axis==2?look:0;
+        if(axis!=1)player.setYRot((float)Math.toDegrees(Math.atan2(-fx,fz)));
+        player.setXRot((float)Math.toDegrees(-Math.asin(fy)));
+        player.setDeltaMovement(Vec3.ZERO);player.setOldPosAndRot();
     }
     /** Where the large-selection popup is, or null when it is not showing. It sits in the middle of the viewport. */
     private int[] popupBounds(){
