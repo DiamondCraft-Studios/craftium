@@ -328,6 +328,21 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(addMix.getAsJsonObject("state").get("previewBlocks").getAsInt() == before + 1, "replacing preview blocks adds none, the gold adds one: " + before + " then " + addMix.getAsJsonObject("state"));
             String mixLayer = call("get_preview_blocks", "{\"from\":[" + gx + "," + (gy + 5) + "," + z + "],\"to\":[" + (gx + 7) + "," + (gy + 5) + "," + (z + 7) + "]}").toString();
             require(mixLayer.contains("diorite") && !mixLayer.contains("andesite"), "the addition should have replaced the preview's andesite: " + mixLayer);
+            // Warnings: half a door, a torch in mid air, and a box the next one covers, each named once; a whole door and a lantern on a block are not.
+            int wy = gy + 10;
+            var odd = call("preview_build", "{\"spec\":{\"ops\":["
+                + "{\"op\":\"set\",\"at\":[" + gx + "," + wy + "," + z + "],\"block\":\"oak_door[half=lower,facing=north]\"},"
+                + "{\"op\":\"set\",\"at\":[" + (gx + 2) + "," + (wy + 2) + "," + z + "],\"block\":\"torch\"},"
+                + "{\"op\":\"set\",\"at\":[[" + (gx + 4) + "," + wy + "," + z + "],[" + (gx + 4) + "," + (wy + 1) + "," + z + "]],\"block\":\"stone\"},"
+                + "{\"op\":\"set\",\"at\":[" + (gx + 4) + "," + (wy + 2) + "," + z + "],\"block\":\"lantern[hanging=false]\"},"
+                + "{\"op\":\"set\",\"at\":[" + (gx + 6) + "," + wy + "," + z + "],\"block\":\"spruce_door[half=lower]\"},"
+                + "{\"op\":\"set\",\"at\":[" + (gx + 6) + "," + (wy + 1) + "," + z + "],\"block\":\"spruce_door[half=upper]\"},"
+                + "{\"op\":\"box\",\"from\":[" + gx + "," + (wy + 4) + "," + z + "],\"to\":[" + (gx + 1) + "," + (wy + 4) + "," + z + "],\"block\":\"glass\"},"
+                + "{\"op\":\"box\",\"from\":[" + gx + "," + (wy + 4) + "," + z + "],\"to\":[" + (gx + 2) + "," + (wy + 4) + "," + z + "],\"block\":\"stone\"}]}}");
+            require(odd.get("ok").getAsBoolean(), "a spec with warnings is still previewed: " + odd);
+            String warned = odd.getAsJsonObject("preview").getAsJsonArray("warnings").toString();
+            require(odd.getAsJsonObject("preview").getAsJsonArray("warnings").size() == 3 && warned.contains("oak_door") && warned.contains("torch") && warned.contains("ops[6] (box)")
+                && !warned.contains("spruce_door") && !warned.contains("lantern"), "three warnings, one for each mistake: " + warned);
             var noKind = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"set\",\"at\":[" + gx + "," + gy + "," + z + "],\"block\":\"glass@stairs\"}]}}");
             require(!noKind.get("ok").getAsBoolean() && noKind.get("error").getAsString().contains("ops[0] (set)") && noKind.get("error").getAsString().contains("tried"), "a material with no such kind should say what was tried: " + noKind);
             // read_blocks' sources: the world leaves the waiting preview out but says it is there; "after" with nothing waiting is the world.

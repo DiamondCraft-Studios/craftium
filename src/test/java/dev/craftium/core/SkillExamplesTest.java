@@ -37,7 +37,11 @@ class SkillExamplesTest {
     @Test void everyExampleIsAcceptedAndMakesWhatItsTextSays() throws Exception {
         var specs = specs();
         assertEquals(5, specs.size(), "the cottage's four phases and the tower");
-        for (String json : specs) assertDoesNotThrow(() -> BuildSpec.parse(json).build(BuildSpec.parse(json).place()), json);
+        for (String json : specs) {
+            var spec = assertDoesNotThrow(() -> BuildSpec.parse(json), json);
+            // An example an AI copies must not draw a warning, or it learns to ignore them.
+            assertEquals(java.util.List.of(), spec.build(spec.place()).warnings(), json);
+        }
 
         var blockout = BuildSpec.parse(specs.get(0));
         assertEquals(new Point(99, 64, 199) + " 11x9x9", box(blockout.place()));

@@ -213,6 +213,94 @@ final class AiWorld {
         return out.toString();
     }
 
+    /** {@link #previewSummary(Session.Edit)} with what looks wrong in it, if anything: see {@link #warnings}. */
+    static String previewSummary(Session.Edit added, net.minecraft.server.level.ServerLevel level, Session.Edit whole, java.util.List<String> specWarnings) {
+        var out = JsonParser.parseString(previewSummary(added)).getAsJsonObject();
+        var list = new java.util.ArrayList<>(specWarnings);
+        list.addAll(warnings(level, whole, added));
+        if (!list.isEmpty()) {
+            var array = new com.google.gson.JsonArray();
+            for (String w : list.subList(0, Math.min(MAX_WARNINGS, list.size()))) array.add(w);
+            if (list.size() > MAX_WARNINGS) array.add("and " + (list.size() - MAX_WARNINGS) + " more");
+            out.add("warnings", array);
+        }
+        return out.toString();
+    }
+
+    private static final int MAX_WARNINGS = 5;
+
+    /**
+     * Blocks the AI placed that the game will not keep or that look broken: a door, bed or tall plant without its other half, and a torch,
+     * lantern, button, ladder, sign or the like with nothing to stand on or hang from (the build places them as written, but the first block
+     * update pops them off). Each kind is one line, with how many and where the first is. Only what {@code added} placed is checked, against
+     * the preview {@code whole} over the world.
+     */
+    static java.util.List<String> warnings(net.minecraft.server.level.ServerLevel level, Session.Edit whole, Session.Edit added) {
+        var planned = new java.util.HashMap<Point, net.minecraft.world.level.block.state.BlockState>();
+        for (var change : whole.changes()) planned.put(change.pos(), change.after().state());
+        java.util.function.Function<Point, net.minecraft.world.level.block.state.BlockState> at = p -> {
+            var s = planned.get(p);
+            return s != null ? s : level.hasChunk(p.x() >> 4, p.z() >> 4) ? level.getBlockState(new net.minecraft.core.BlockPos(p.x(), p.y(), p.z())) : net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
+        };
+        var halves = new java.util.LinkedHashMap<String, int[]>();
+        var loose = new java.util.LinkedHashMap<String, int[]>();
+        for (var change : added.changes()) {
+            var state = change.after().state();
+            if (state.isAir()) continue;
+            var p = change.pos();
+            String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
+            Point other = null;
+            if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)) {
+                boolean lower = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF) == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER;
+                other = p.add(0, lower ? 1 : -1, 0);
+            } else if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.BED_PART) && state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)) {
+                var facing = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING);
+                boolean foot = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.BED_PART) == net.minecraft.world.level.block.state.properties.BedPart.FOOT;
+                other = p.add(facing.getStepX() * (foot ? 1 : -1), 0, facing.getStepZ() * (foot ? 1 : -1));
+            }
+            if (other != null) {
+                var partner = at.apply(other);
+                if (!partner.is(state.getBlock()) || partner.equals(state)) note(halves, id, p);
+                continue;
+            }
+            Point support = support(state, id, p);
+            if (support != null) {
+                var below = at.apply(support);
+                if (below.isAir() || !below.getFluidState().isEmpty()) note(loose, id, p);
+            }
+        }
+        var out = new java.util.ArrayList<String>();
+        halves.forEach((id, n) -> out.add(n[0] + " " + id + " " + (n[0] == 1 ? "has" : "have") + " no other half (first at " + n[1] + " " + n[2] + " " + n[3] + "): set both halves, such as half=lower and half=upper"));
+        loose.forEach((id, n) -> out.add(n[0] + " " + id + " " + (n[0] == 1 ? "has" : "have") + " nothing to stand on or hang from (first at " + n[1] + " " + n[2] + " " + n[3] + "), so the game will drop " + (n[0] == 1 ? "it" : "them")));
+        return out;
+    }
+
+    private static void note(java.util.Map<String, int[]> found, String id, Point p) {
+        found.computeIfAbsent(id, k -> new int[]{0, p.x(), p.y(), p.z()})[0]++;
+    }
+
+    /** Where a block that hangs on something gets its support, or null for one that needs none. */
+    private static Point support(net.minecraft.world.level.block.state.BlockState state, String id, Point p) {
+        var FACING = net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING;
+        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.ATTACH_FACE) && state.hasProperty(FACING)) {
+            var face = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.ATTACH_FACE);
+            var facing = state.getValue(FACING);
+            return switch (face) {
+                case FLOOR -> p.add(0, -1, 0);
+                case CEILING -> p.add(0, 1, 0);
+                case WALL -> p.add(-facing.getStepX(), 0, -facing.getStepZ());
+            };
+        }
+        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HANGING) && (id.endsWith("lantern")))
+            return p.add(0, state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HANGING) ? 1 : -1, 0);
+        boolean wall = id.endsWith("wall_torch") || id.equals("ladder") || id.endsWith("wall_sign") || id.endsWith("wall_banner");
+        if (wall && state.hasProperty(FACING)) { var f = state.getValue(FACING); return p.add(-f.getStepX(), 0, -f.getStepZ()); }
+        if (id.equals("torch") || id.equals("soul_torch") || id.equals("redstone_torch") || id.equals("copper_torch") || (id.endsWith("_sign") && !id.endsWith("hanging_sign"))
+            || (id.endsWith("_banner") && !wall) || id.endsWith("pressure_plate") || id.endsWith("carpet") || id.endsWith("rail") || id.equals("flower_pot") || id.endsWith("candle"))
+            return p.add(0, -1, 0);
+        return null;
+    }
+
     private static <T extends Comparable<T>> String facing(net.minecraft.world.level.block.state.BlockState state, net.minecraft.world.level.block.state.properties.Property<T> property) {
         return property.getName(state.getValue(property));
     }

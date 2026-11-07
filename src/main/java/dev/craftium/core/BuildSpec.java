@@ -77,7 +77,9 @@ public final class BuildSpec {
      */
     public record Placement(Point min, Bounds bounds, int[] shift) {}
     /** The cells to place, and how many generated cells fell outside the area and were dropped (shapes are only generated inside the area, so this undercounts them). */
-    public record Result(LinkedHashMap<Point, Cell> cells, int clipped, int operations) {}
+    public record Result(LinkedHashMap<Point, Cell> cells, int clipped, int operations, List<String> warnings) {
+        public Result(LinkedHashMap<Point, Cell> cells, int clipped, int operations) { this(cells, clipped, operations, List.of()); }
+    }
 
     /** The most a coordinate can be: the edge of the world. */
     private static final int COORDINATE_LIMIT = 30_000_000;
@@ -296,8 +298,29 @@ public final class BuildSpec {
         int[] clipped = {0};
         // A mix is picked from world positions, so the pattern stays put when other operations change the spec's area.
         int[] pattern = {origin[0] - shift[0], origin[1] - shift[1], origin[2] - shift[2]};
-        emit(ops, bounds, shift, pattern, budget, cells, clipped);
-        return new Result(cells, clipped[0], ops.size());
+        topCells = cells;
+        owner = new HashMap<>();
+        placedBy = new int[ops.size()];
+        try { emit(ops, bounds, shift, pattern, budget, cells, clipped); }
+        finally { topCells = null; top = -1; }
+        return new Result(cells, clipped[0], ops.size(), covered(cells));
+    }
+
+    // Which top-level operation placed each cell, while a build runs, so one whose blocks all ended under later ones can be named.
+    private Map<Point, Cell> topCells;
+    private Map<Point, Integer> owner;
+    private int[] placedBy;
+    private int top = -1;
+
+    /** Operations that placed blocks, every one of which a later operation then replaced: usually two operations written in the wrong order. */
+    private List<String> covered(Map<Point, Cell> cells) {
+        int[] left = new int[ops.size()];
+        for (var p : cells.keySet()) { Integer i = owner.get(p); if (i != null) left[i]++; }
+        var out = new ArrayList<String>();
+        for (int i = 0; i < ops.size(); i++)
+            if (placedBy[i] > 0 && left[i] == 0)
+                out.add("ops[" + i + "] (" + text(ops.get(i), "op", i, null) + ") places nothing that is left: the operations after it replace all " + placedBy[i] + " of its blocks. If it should show, move it after them");
+        return out;
     }
 
     /**
@@ -310,6 +333,7 @@ public final class BuildSpec {
             String kind = text(op, "op", i, null);
             int count = repeatCount(op, i, kind);
             int[] step = repeatStep(op, i, kind);
+            if (cells == topCells && list == ops) top = i;
             for (int n = 0; n < count; n++) {
                 int dx = step[0] * n + shift[0], dy = step[1] * n + shift[1], dz = step[2] * n + shift[2];
                 switch (kind) {
@@ -333,7 +357,7 @@ public final class BuildSpec {
     }
 
     /** Puts one cell over what the operations before it placed: a later operation goes last, as well as on top. */
-    private static void put(Map<Point, Cell> cells, Point p, Cell cell, Bounds bounds, int[] clipped) {
+    private void put(Map<Point, Cell> cells, Point p, Cell cell, Bounds bounds, int[] clipped) {
         if (!bounds.contains(p.x(), p.y(), p.z())) { clipped[0]++; return; }
         var earlier = cells.get(p);
         if (cell.only() != null && earlier != null) {
@@ -343,6 +367,7 @@ public final class BuildSpec {
         }
         cells.remove(p);
         cells.put(p, cell);
+        if (cells == topCells && top >= 0) { owner.put(p, top); placedBy[top]++; }
         if (cells.size() > MAX_BLOCKS) throw new IllegalArgumentException("Build places more than " + MAX_BLOCKS + " blocks");
     }
 

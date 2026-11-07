@@ -325,6 +325,23 @@ class BuildSpecTest {
         assertEquals(0, result.clipped());
     }
 
+    @Test void anOperationWhoseBlocksAreAllReplacedIsNamed() {
+        var result = build("""
+            {"ops":[
+              {"op":"box","from":[1,1,1],"to":[2,2,2],"block":"glass"},
+              {"op":"box","from":[0,0,0],"to":[3,3,3],"block":"stone"},
+              {"op":"box","from":[1,1,1],"to":[2,2,2],"block":"air"}]}""");
+        assertEquals(1, result.warnings().size(), result.warnings().toString());
+        assertTrue(result.warnings().getFirst().startsWith("ops[0] (box)") && result.warnings().getFirst().contains("all 8"), result.warnings().toString());
+        // A carve inside a wall, a group and a repeat whose copies overlap are not mistakes.
+        assertEquals(java.util.List.of(), build("""
+            {"ops":[
+              {"op":"box","from":[0,0,0],"to":[3,3,3],"block":"stone"},
+              {"op":"box","from":[1,1,1],"to":[2,2,2],"block":"air"},
+              {"op":"group","rotate":90,"ops":[{"op":"set","at":[5,0,5],"block":"oak_stairs"}]},
+              {"op":"box","from":[0,5,0],"to":[1,5,0],"block":"dirt","repeat":{"count":3,"step":[1,0,0]}}]}""").warnings());
+    }
+
     @Test void groupsAreCheckedForDepthSelectionOpsAndTheOperationCount() {
         String deep = "{\"op\":\"set\",\"at\":[0,0,0],\"block\":\"stone\"}";
         for (int n = 0; n < 4; n++) deep = "{\"op\":\"group\",\"ops\":[" + deep + "]}";

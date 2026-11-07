@@ -673,7 +673,7 @@ public final class EditorServer {
                 if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller build");
                 EditProtection.check(player,edit);
                 ai.pendingEdit=edit;ai.pendingDirty=true;ai.previewId=++PREVIEW_IDS;
-                ServerPlatform.send(player,new Packets.AiReply(AiWorld.previewSummary(added))); // before the status, which the AI client waits for, so it has arrived by then
+                ServerPlatform.send(player,new Packets.AiReply(AiWorld.previewSummary(added,(net.minecraft.server.level.ServerLevel)player.level(),edit,ai.specWarnings))); // before the status, which the AI client waits for, so it has arrived by then
                 send(player,ai,onto==null?"AI preview ready: "+edit.changes().size()+" blocks":"Added "+added.changes().size()+" blocks to the AI preview: "+edit.changes().size()+" blocks in all",false);
             }
             case "ai_apply" -> {

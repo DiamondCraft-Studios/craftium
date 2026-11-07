@@ -19,6 +19,7 @@ final class BuildPlanner {
         var spec = BuildSpec.parse(o.buildSpec);
         var level = (net.minecraft.server.level.ServerLevel) player.level();
         var plan = new EditPlanner(level, ai, o);
+        ai.specWarnings = List.of();
         if (onto != null) for (var change : onto.changes()) plan.changes.put(change.pos(), change);
         if (!spec.hasShapes()) {
             // Only operations on the selection: there is no area of its own, so the ground to load is the selection's.
@@ -35,6 +36,7 @@ final class BuildPlanner {
         // Every block is looked up before anything is planned, so an unknown name fails the whole build and not half of it.
         var states = states(level, spec);
         var result = spec.build(place);
+        ai.specWarnings = result.warnings();
         var matches = new HashMap<String, Match>();
         var turned = new HashMap<String, Map<Turn, BlockState>>();
         // The spec says exactly where blocks go, so the player's brush mask, symmetry and height settings do not apply.

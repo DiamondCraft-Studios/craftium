@@ -33,6 +33,8 @@ final class Session {
     /** What this player was last shown of other players' AI previews, so only a change is sent. Null makes the next status carry them again. */
     String sharedKey;
     String pendingData="";boolean pendingDirty;
+    /** What the last AI spec planned looked wrong in (see BuildSpec.Result#warnings), for the reply that describes its preview. */
+    List<String> specWarnings=List.of();
     /** The clipboard's blocks as a ghost for the placement preview, and whether it needs encoding again. */
     String clipboardGhost="";boolean clipboardGhostDirty=true;
     /** Copied from the player's options with each request: whether edits wait for confirmation, and whether this request is exempt. */
