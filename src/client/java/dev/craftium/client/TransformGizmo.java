@@ -82,18 +82,29 @@ final class TransformGizmo {
         int chosen=pick(t,x,y);
         if(chosen<0)return selectEntity(x,y);dragging=t;handle=chosen;startX=slowX=lastX=x;startY=slowY=lastY=y;if(chosen==3&&mode==Options.GizmoMode.MOVE)grabFree(t.anchor,x,y);dragFlips=t.kind==Kind.NODE?flipsFor(t.anchor):null;delta=smooth=angles=Vec3.ZERO;size=new Vec3(1,1,1);startAngle=mode==Options.GizmoMode.ROTATE?(chosen==7?screenAngle(x,y,t.anchor):chosen<3?angle(x,y,t.anchor,handle):0):0;return true;
     }
+    /** The axes the editor's X, Y and Z keys have locked the gizmo to (X is 1, Y is 2, Z is 4), or 0 when none is held. */
+    private static int lockedAxes;
+    static void lock(int axes){lockedAxes=axes;}
+    /** The axes the handles work on: the locked ones, or all three. */
+    private static int lockMask(){return lockedAxes==0?ALL_AXES:lockedAxes;}
+    /** Whether a click here would grab a handle of the gizmo, without grabbing it. */
+    static boolean hits(EditorScreen screen,double x,double y){
+        if(ClientState.status.busy())return false;Target t=target(screen);return t!=null&&pick(t,x,y)>=0;
+    }
     /** Which handle of the gizmo is under the pointer, or -1: 0 to 2 are the axes, 3 the centre, 4 to 6 the plane handles. */
     private static int pick(Target t,double x,double y){
+        int mask=lockMask();
         mode=effectiveMode(t);localBasis=t.kind==Kind.SHAPE&&mode==Options.GizmoMode.SCALE;basis=axesAt(t.anchor);pickScale=screenScale(t.anchor);pickExtent=extent(t);pickReach=reach(t,pickExtent);double best=100;int chosen=-1;double[] center=project(t.anchor);
         boolean plain=t.kind==Kind.MODEL||t.kind==Kind.PIVOT||t.kind==Kind.SHAPE&&ClientState.options.tool.transform(); // the transform tools show only their own handles
         // The centre: free move, even scaling for the Scale tool's circle; Rotate has the trackball instead, below.
-        if((!plain||mode==Options.GizmoMode.SCALE&&blocky(t.kind))&&mode!=Options.GizmoMode.ROTATE&&center!=null&&Math.pow(x-center[0],2)+Math.pow(y-center[1],2)<81)chosen=3;
+        if(mask==ALL_AXES&&(!plain||mode==Options.GizmoMode.SCALE&&blocky(t.kind))&&mode!=Options.GizmoMode.ROTATE&&center!=null&&Math.pow(x-center[0],2)+Math.pow(y-center[1],2)<81)chosen=3;
         if(chosen<0)for(int i=0;i<3;i++){
+            if((mask>>i&1)==0)continue; // a locked axis leaves the others out
             if(mode==Options.GizmoMode.ROTATE){Vec3 a=basis[(i+1)%3],b=basis[(i+2)%3];for(int j=0;j<96;j++){double v=j*Math.PI/48,w=(j+1)*Math.PI/48;double d=distance(x,y,project(t.anchor.add(a.scale(Math.cos(v)*3.5*pickScale)).add(b.scale(Math.sin(v)*3.5*pickScale))),project(t.anchor.add(a.scale(Math.cos(w)*3.5*pickScale)).add(b.scale(Math.sin(w)*3.5*pickScale))));if(d<best){best=d;chosen=i;}}}
             else if(mode==Options.GizmoMode.SCALE&&pickExtent!=null){var pixel=project(faceCenter(faceBase(t),basis,pickExtent,i));double d=pixel==null?Double.POSITIVE_INFINITY:Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2);if(d<144&&d<best){best=d;chosen=i;}}
             else{double d=distance(x,y,project(t.anchor.add(basis[i].scale((mode==Options.GizmoMode.SCALE?4.7:.5)*pickScale))),project(t.anchor.add(basis[i].scale(5*pickScale))));if(d<best){best=d;chosen=i;}}
         }
-        if(mode==Options.GizmoMode.ROTATE&&chosen<0&&center!=null){
+        if(mode==Options.GizmoMode.ROTATE&&chosen<0&&center!=null&&mask==ALL_AXES){
             // The ring that faces the camera turns about the view; inside the sphere is a trackball.
             Vec3[] cam=cameraAxes();
             var ring=project(t.anchor.add(cam[0].scale(4.4*pickScale)));var disc=project(t.anchor.add(cam[0].scale(3.5*pickScale)));
@@ -101,7 +112,7 @@ final class TransformGizmo {
             if(ring!=null&&Math.abs(d-Math.hypot(ring[0]-center[0],ring[1]-center[1]))<10)chosen=7;
             else if(disc!=null&&d<Math.hypot(disc[0]-center[0],disc[1]-center[1]))chosen=3;
         }
-        if((mode==Options.GizmoMode.MOVE||mode==Options.GizmoMode.SCALE)&&chosen<0)for(int i=0;i<3;i++){Vec3 p=t.anchor.add(basis[(i+1)%3].scale(1.4*pickScale)).add(basis[(i+2)%3].scale(1.4*pickScale));var pixel=project(p);if(pixel!=null&&Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2)<144){chosen=4+i;break;}}
+        if((mode==Options.GizmoMode.MOVE||mode==Options.GizmoMode.SCALE)&&chosen<0)for(int i=0;i<3;i++){if((mask>>(i+1)%3&1)==0||(mask>>(i+2)%3&1)==0)continue;Vec3 p=t.anchor.add(basis[(i+1)%3].scale(1.4*pickScale)).add(basis[(i+2)%3].scale(1.4*pickScale));var pixel=project(p);if(pixel!=null&&Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2)<144){chosen=4+i;break;}}
         return chosen;
     }
     private static boolean selectEntity(double x,double y){var mc=Minecraft.getInstance();if(mc.level==null)return false;Entity closest=null;double best=100;for(var e:mc.level.entitiesForRendering()){if(!(e instanceof Display)&&!(e instanceof Marker)||e.distanceToSqr(mc.player)>128*128)continue;if(e instanceof Display&&!ClientState.options.showDisplayGizmos||e instanceof Marker&&!ClientState.options.showMarkerGizmos)continue;var pixel=project(e.position());if(pixel==null)continue;double d=Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2);if(d<best){best=d;closest=e;}}if(closest==null)return false;ClientState.options.entityUuid=closest.getUUID().toString();ClientState.options.gizmoTarget=Options.GizmoTarget.ENTITY;CraftiumClient.send("entity_select_uuid",CraftiumClient.point(closest.blockPosition()),null);return true;}
@@ -285,11 +296,13 @@ final class TransformGizmo {
     static boolean selectionPreview(){return dragging!=null&&(dragging.kind==Kind.SELECTION||dragging.kind==Kind.MODEL);}
     static void box(AABB box){if(dragging==null){Overlay.box(box,ClientState.options.previewColor,1,ClientState.options.previewFill);return;}Vec3[] points=new Vec3[8];for(int i=0;i<8;i++)points[i]=transformed(new Vec3((i&1)==0?box.minX:box.maxX,(i&2)==0?box.minY:box.maxY,(i&4)==0?box.minZ:box.maxZ));for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)Overlay.line(points[i],points[i|bit],ClientState.options.previewColor,1.5f);}
     static void draw(EditorScreen screen){
+        lock(screen.axisLock());
         Target t=dragging==null?target(screen):dragging;if(t==null)return;
         if(dragging==null)updateHover(screen);else followCamera(screen);
         localBasis=t.kind==Kind.SHAPE&&effectiveMode(t)==Options.GizmoMode.SCALE;
         faceBase=faceBase(t).add(delta);plainHandles=t.kind==Kind.MODEL||t.kind==Kind.PIVOT||t.kind==Kind.SHAPE&&ClientState.options.tool.transform();
-        render(t.anchor.add(dragging!=null&&effectiveMode(t)==Options.GizmoMode.MOVE?smooth:delta),effectiveMode(t),dragging!=null?handle:hovered,extent(t));
+        axisMask=lockMask();
+        try{render(t.anchor.add(dragging!=null&&effectiveMode(t)==Options.GizmoMode.MOVE?smooth:delta),effectiveMode(t),dragging!=null?handle:hovered,extent(t));}finally{axisMask=ALL_AXES;}
         faceBase=null;plainHandles=false;localBasis=false;
         if(dragging!=null){ruler(t.anchor.add(effectiveMode(t)==Options.GizmoMode.MOVE?smooth:delta));readout(t);}
         if(t.kind==Kind.PIVOT)Overlay.point(t.anchor.add(delta),0xffffd66d,11); // the pivot
