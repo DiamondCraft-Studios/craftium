@@ -60,8 +60,12 @@ function plain(value) {
 function spec(value) {
   if (!plain(value)) throw new ArgumentError('"spec" must be an object with an "ops" list');
   if (!Array.isArray(value.ops) || value.ops.length === 0 || !value.ops.every(plain)) throw new ArgumentError('"spec.ops" must be a list of operation objects');
-  if (value.palette !== undefined && (!plain(value.palette) || !Object.values(value.palette).every((v) => typeof v === "string"))) throw new ArgumentError('"spec.palette" must map names to block ids');
+  // A palette entry is a block or a mix ({"mix": [...]}); the game checks what is inside.
+  if (value.palette !== undefined && (!plain(value.palette) || !Object.values(value.palette).every((v) => typeof v === "string" || plain(v))))
+    throw new ArgumentError('"spec.palette" must map names to blocks or mixes');
+  if (value.material !== undefined && typeof value.material !== "string") throw new ArgumentError('"spec.material" must be a material such as "spruce"');
   const out = { ops: value.ops };
+  if (value.material !== undefined) out.material = value.material;
   if (value.palette !== undefined) out.palette = value.palette;
   if (value.origin !== undefined) out.origin = whole(value.origin, "spec.origin");
   return out;
@@ -222,7 +226,8 @@ export const TOOLS = [
           type: "object",
           description: "The build spec",
           properties: {
-            palette: { type: "object", additionalProperties: { type: "string" }, description: "Short names for block ids" },
+            material: { type: "string", description: 'The build\'s material, for blocks written "@kind" (such as "@stairs"); optional' },
+            palette: { type: "object", additionalProperties: { anyOf: [{ type: "string" }, { type: "object" }] }, description: "Short names for blocks or mixes" },
             origin: coordinate("Added to every coordinate in the spec, [x, y, z]; optional"),
             ops: { type: "array", minItems: 1, items: { type: "object" }, description: "Operations, run in order, in world coordinates" },
           },

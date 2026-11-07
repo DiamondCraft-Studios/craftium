@@ -110,6 +110,18 @@ test("preview_build passes the spec through untouched", async () => {
   await bridge.close();
 });
 
+test("preview_build passes a spec's material and palette mixes through to the game", async () => {
+  const bridge = await fakeBridge({ preview_build: { ok: true, message: "AI preview ready: 9 blocks" } });
+  const client = await connect(bridge.file);
+  const spec = { material: "spruce", palette: { wall: { mix: [["stone_bricks", 3], ["mossy_stone_bricks", 1]] }, step: "@stairs" }, ops: [{ op: "roof", from: [0, 4, 0], to: [6, 4, 4] }] };
+  const result = await client.callTool({ name: "preview_build", arguments: { spec } });
+  assert.equal(result.isError, undefined, text(result));
+  assert.deepEqual(bridge.seen[0].body, { spec });
+  const bad = await client.callTool({ name: "preview_build", arguments: { spec: { ...spec, material: 3 } } });
+  assert.equal(bad.isError, true);
+  await bridge.close();
+});
+
 test("an ok:false reply becomes an error the model can read", async () => {
   const bridge = await fakeBridge({ preview_build: { ok: false, error: 'ops[0] (cylinder): missing number "radius"' } });
   const client = await connect(bridge.file);
