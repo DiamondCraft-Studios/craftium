@@ -1,0 +1,12 @@
+package dev.craftium.client.interaction;
+
+/** Clicks work as they do for any tool, and a click with Shift held adds an anchor point instead (Gradient Painter). */
+final class ShiftPointsInteraction implements Interaction {
+    @Override public boolean use(EditorContext editor) {
+        if (!editor.shiftDown()) return false;
+        PointsInteraction.addPoint(editor);
+        return true;
+    }
+
+    @Override public boolean usesPoints() { return true; }
+}

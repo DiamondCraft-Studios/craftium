@@ -5,6 +5,8 @@ import dev.craftium.core.*;
 import dev.craftium.core.EditorControls.Action;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
+import dev.craftium.client.interaction.EditorContext;
+import dev.craftium.client.interaction.Interactions;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.*;
@@ -94,6 +96,13 @@ public final class EditorScreen extends CraftiumScreen {
     public boolean showSelection(){return showSelection;}
 
     private Options o(){return ClientState.options;}
+    /** What the per-tool interactions may use of this screen: the options, the block under the cursor, Shift, and which control point is selected. */
+    private final EditorContext context=new EditorContext(){
+        @Override public Options options(){return o();}
+        @Override public BlockHitResult target(){return EditorScreen.this.target();}
+        @Override public boolean shiftDown(){return minecraft.hasShiftDown();}
+        @Override public void selectNode(int index){selectedNode=index;}
+    };
     @Override protected void init() {
         lastFlightNanos=0;
         if(!hudHidden){previousHideGui=ClientCompat.hudHidden(minecraft);hudHidden=true;if(!previousHideGui)ClientCompat.toggleHud(minecraft);}
@@ -1398,8 +1407,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void use(){
         if(o().tool==Tool.ANNOTATION){var hit=target();if(hit!=null){o().annotationNormal=CraftiumClient.normal(hit);if(o().annotationMode.equals("DRAW")){Point p=CraftiumClient.point(hit.getBlockPos());if(o().annotationPoints.size()<256&&(o().annotationPoints.isEmpty()||!o().annotationPoints.getLast().equals(p)))o().annotationPoints.add(p);return;}}}
         long now=System.currentTimeMillis();if((!o().tool.selection()&&now-lastUse<useInterval())||ClientState.status.busy())return;lastUse=now;awaitingReply=true;repliedSince=false;
-        if(o().tool==Tool.PATH||o().tool==Tool.MODELLING||(o().tool==Tool.GRADIENT_PAINTER&&minecraft.hasShiftDown())){var hit=target();if(hit!=null&&o().nodes.size()<64){o().nodes.add(CraftiumClient.point(hit.getBlockPos()));ClientState.notify("Added point "+o().nodes.size()+" · Enter to build · View → Studio inspector for settings");}return;}
-        if(o().tool==Tool.SLOPE){var hit=target();if(hit!=null){Point p=CraftiumClient.point(hit.getBlockPos());if(o().nodes.isEmpty()){o().nodes.add(p);ClientState.notify("Slope anchor set · drag from the second point");return;}if(o().nodes.size()==1)o().nodes.add(p);else o().nodes.set(1,p);}}
+        if(Interactions.of(o().tool).use(context))return; // what this kind of tool does with a click; false lets the click go on to the server as a plain request
         if(o().tool==Tool.RULER) {
             var hit=target();if(hit!=null) {
                 Point p=CraftiumClient.point(hit.getBlockPos());
@@ -1584,7 +1592,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(help||transform||menu>=0)return true;
         if(inViewport(event.x()/scale,event.y()/scale)) {
             if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&o().tool==Tool.LASSO_SELECT){if(lasso.size()<1024)lasso.add(new LassoSelection.Pixel(event.x(),event.y()));return true;}
-            if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&painting && o().tool!=Tool.BOX_SELECT&&o().tool!=Tool.RULER&&o().tool!=Tool.LINE&&o().tool!=Tool.PATH&&o().tool!=Tool.MODELLING)dragUse();
+            if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&painting && o().tool!=Tool.BOX_SELECT&&o().tool!=Tool.RULER&&o().tool!=Tool.LINE&&Interactions.of(o().tool).repeatsWhenDragged())dragUse();
         }
         return true;
     }
@@ -1649,9 +1657,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(EditorBindings.matches(Action.ROTATE_PLACEMENT,event)){action("rotate");return true;}
             if(EditorBindings.matches(Action.FLIP_PLACEMENT,event)){action("flip_facing");return true;}
         }
-        if((o().tool==Tool.PATH||o().tool==Tool.MODELLING)&&EditorBindings.matches(Action.EXTRUDE_POINT,event)&&!o().nodes.isEmpty()){
-            if(o().nodes.size()>=64){ClientState.notify("Maximum 64 control points");return true;}o().nodes.add(o().nodes.getLast());selectedNode=o().nodes.size()-1;return true;
-        }
+        if(EditorBindings.matches(Action.EXTRUDE_POINT,event)&&Interactions.of(o().tool).extrudePoint(context))return true;
         if(o().shape==BrushMath.Shape.POLYGON&&o().tool!=Tool.TEXT&&!o().tool.transform()){
             int step=event.key()==GLFW.GLFW_KEY_EQUAL||event.key()==GLFW.GLFW_KEY_KP_ADD?1:event.key()==GLFW.GLFW_KEY_MINUS||event.key()==GLFW.GLFW_KEY_KP_SUBTRACT?-1:0;
             if(step!=0){o().polygonSides=Math.clamp(o().polygonSides+step,BrushMath.MIN_SIDES,BrushMath.MAX_SIDES);return true;}
@@ -1690,7 +1696,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             case QUICK_FILL -> action("fill");case QUICK_REPLACE -> action("replace");
             case ROTATE_PLACEMENT -> {if(!PlacementPreview.active())return false;action("rotate");}
             case FLIP_PLACEMENT -> {if(!PlacementPreview.active())return false;action("flip_facing");}
-            case EXTRUDE_POINT -> {if((o().tool!=Tool.PATH&&o().tool!=Tool.MODELLING)||o().nodes.isEmpty())return false;if(o().nodes.size()>=64)ClientState.notify("Maximum 64 control points");else{o().nodes.add(o().nodes.getLast());selectedNode=o().nodes.size()-1;}}
+            case EXTRUDE_POINT -> {if(!Interactions.of(o().tool).extrudePoint(context))return false;}
             case SAVE_BLUEPRINT -> {if(ClientState.status.clipboardSize()==0&&ClientState.status.clipboardEntityCount()==0)ClientState.notify("Copy a selection first");else ClientCompat.setScreen(minecraft,new SaveBlueprintScreen(this));}
             case SHOW_BIOMES -> o().showBiomes=!o().showBiomes;
             case CYCLE_SELECTION_STYLE -> CraftiumClient.cycleSelectionStyle();
@@ -1764,7 +1770,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         player.setDeltaMovement(Vec3.ZERO);player.setPos(player.position().add(delta));
         player.setOldPosAndRot(); // the renderer interpolates from the previous position, so make it the current one
     }
-    private List<Point> handleNodes(){return !toolActive?ClientState.rulerPoints:o().tool==Tool.BOX_SELECT?ClientState.boxCorners:EnumSet.of(Tool.PATH,Tool.MODELLING,Tool.GRADIENT_PAINTER,Tool.SLOPE).contains(o().tool)?o().nodes:o().tool==Tool.MODIFY?ModifyPreview.knobNodes():new ArrayList<>();}
+    private List<Point> handleNodes(){return !toolActive?ClientState.rulerPoints:o().tool==Tool.BOX_SELECT?ClientState.boxCorners:Interactions.of(o().tool).usesPoints()?o().nodes:o().tool==Tool.MODIFY?ModifyPreview.knobNodes():new ArrayList<>();}
     double pointerX(){return pointerX;}
     double pointerY(){return pointerY;}
     boolean pointerInViewport(){return inViewport(pointerX/scale,pointerY/scale);}

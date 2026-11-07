@@ -25,7 +25,7 @@ public final class ToolCatalog {
         boolean selection = tool == Tool.MAGIC_SELECT || tool == Tool.BOX_SELECT || tool == Tool.FREEHAND_SELECT || tool == Tool.LASSO_SELECT;
         boolean transform = tool == Tool.MOVE || tool == Tool.ROTATE || tool == Tool.SCALE || tool == Tool.PIVOT;
         return new ToolSpec("craftium:" + tool.name().toLowerCase(Locale.ROOT), tool.label, tool.icon, IconCatalog.tool(tool), tool.group, tool.description,
-            brushUse(tool), defaultKey(tool), useHint(tool),
+            brushUse(tool), interaction(tool), defaultKey(tool), useHint(tool),
             transform && tool != Tool.PIVOT || tool == Tool.SHAPE,
             !selection && !transform && tool != Tool.RULER && tool != Tool.ANNOTATION && tool != Tool.MODIFY && tool != Tool.LINE && tool != Tool.PATH && tool != Tool.MODELLING && tool != Tool.SHAPE,
             !selection && tool != Tool.RULER && tool != Tool.ANNOTATION && tool != Tool.TINKER && tool != Tool.PIVOT,
@@ -39,6 +39,16 @@ public final class ToolCatalog {
             case ELEVATION, FLATTEN, SLOPE, STAMP -> Tool.BrushUse.DISC;
             case ROCK, FLUID_BALL -> Tool.BrushUse.SPHERE;
             default -> Tool.BrushUse.NONE;
+        };
+    }
+
+    /** How the tool takes input in the viewport. Every tool not named here is a plain click. */
+    private static InteractionKind interaction(Tool tool) {
+        return switch (tool) {
+            case PATH, MODELLING -> InteractionKind.POINTS;
+            case GRADIENT_PAINTER -> InteractionKind.SHIFT_POINTS;
+            case SLOPE -> InteractionKind.ANCHOR_PAIR;
+            default -> InteractionKind.CLICK;
         };
     }
 

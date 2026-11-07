@@ -35,6 +35,23 @@ class ToolCatalogTest {
         }
     }
 
+    @Test void everyToolTakesInputTheWayItAlwaysDid() {
+        // The tools whose use button does something other than send a request for the block under the cursor, and what each does.
+        var special = new EnumMap<Tool, InteractionKind>(Tool.class);
+        special.put(Tool.PATH, InteractionKind.POINTS);
+        special.put(Tool.MODELLING, InteractionKind.POINTS);
+        special.put(Tool.GRADIENT_PAINTER, InteractionKind.SHIFT_POINTS);
+        special.put(Tool.SLOPE, InteractionKind.ANCHOR_PAIR);
+        for (Tool tool : Tool.values()) assertEquals(special.getOrDefault(tool, InteractionKind.CLICK), tool.spec().interaction(), tool.name());
+    }
+
+    @Test void onlyTheGeneralInteractionKindsAreOpenToPlugins() {
+        assertTrue(InteractionKind.CLICK.forPlugins);
+        assertTrue(InteractionKind.POINTS.forPlugins);
+        assertFalse(InteractionKind.SHIFT_POINTS.forPlugins);
+        assertFalse(InteractionKind.ANCHOR_PAIR.forPlugins);
+    }
+
     @Test void theToolMethodsAnswerFromTheSpec() {
         for (Tool tool : Tool.values()) {
             var spec = tool.spec();

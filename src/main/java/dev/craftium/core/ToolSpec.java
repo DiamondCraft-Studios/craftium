@@ -11,7 +11,8 @@ package dev.craftium.core;
  * @param section       the group the tool is listed under
  * @param description    one line shown when the tool is hovered
  * @param brushUse       what the tool makes of the brush under the cursor
- * @param defaultKey     the key the tool starts on (an uppercase letter), or -1 when it starts unbound
+ * @param interaction    how the tool takes input in the viewport: what the use button and a held button do
+ * @param defaultKey    the key the tool starts on (an uppercase letter), or -1 when it starts unbound
  * @param useHint        what the use button does with this tool, for the hint bar
  * @param confirms       whether Enter applies the tool's work, so the hint bar says so
  * @param radiusShortcut whether the radius shortcuts apply to the tool
@@ -19,7 +20,7 @@ package dev.craftium.core;
  * @param selection      whether the tool selects blocks
  * @param transform      whether the tool moves, rotates or scales the selected blocks around a pivot
  */
-public record ToolSpec(String id, String label, String icon, String iconId, String section, String description, Tool.BrushUse brushUse, int defaultKey, String useHint,
+public record ToolSpec(String id, String label, String icon, String iconId, String section, String description, Tool.BrushUse brushUse, InteractionKind interaction, int defaultKey, String useHint,
                        boolean confirms, boolean radiusShortcut, boolean placesBlocks, boolean selection, boolean transform) {
     /** The part of the id after the namespace, for names that must be unique per tool, such as a key binding's. */
     public String path() { return id.substring(id.indexOf(':') + 1); }
