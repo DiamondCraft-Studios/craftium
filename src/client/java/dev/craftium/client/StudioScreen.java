@@ -143,26 +143,28 @@ public final class StudioScreen extends CraftiumScreen {
         button("Redo AI build",left+499,y,117,24,()->send("ai_redo"));
         // Other players' AI previews are drawn in teal with their name; this hides them, and is remembered like the other settings.
         addRenderableWidget(new FlatCheckbox(left,top+70+108,616,20,"Show AI previews from other players",ClientState.options.showSharedAiPreviews,()->{ClientState.options.showSharedAiPreviews=!ClientState.options.showSharedAiPreviews;init();}));
-        int steps=top+70+152;
+        int steps=top+70+138;
         labels.add(new Label("HOW IT WORKS",left,steps));
-        labels.add(new Label("1.  Install the Craftium extension (craftium.mcpb) in Claude Desktop, once.",left,steps+15));
-        labels.add(new Label("2.  Turn on AI building above. Craftium remembers it.",left,steps+29));
-        labels.add(new Label("3.  Ask Claude for a build, such as \"Build an Egyptian pillar in front of me\".",left,steps+43));
-        labels.add(new Label("4.  Look at the ghost in your world. Ask for changes, then say \"apply it\", or press Apply preview.",left,steps+57));
-        labels.add(new Label("Nothing is built until it is applied, and Undo takes a build back. Using a launcher profile?",left,steps+78));
-        labels.add(new Label("Choose the profile's game folder in the extension's settings. Details: docs/AI.md",left,steps+92));
-        // The folder this game keeps its settings in, which is what the extension's Minecraft folder has to be when it is not the default .minecraft.
+        labels.add(new Label("1.  In Claude Code or Cowork, add the plugin, once:  /plugin marketplace add DiamondCraft-Studios/craftium",left,steps+15));
+        labels.add(new Label("2.  Install it:  /plugin install craftium@craftium  (it needs Node.js 18 or newer on your PATH).",left,steps+28));
+        labels.add(new Label("3.  Turn on AI building above. Craftium remembers it.",left,steps+41));
+        labels.add(new Label("4.  Ask Claude for a build, such as \"Build an Egyptian pillar in front of me\".",left,steps+54));
+        labels.add(new Label("5.  Look at the ghost in your world. Ask for changes, then say \"apply it\", or press Apply preview.",left,steps+67));
+        labels.add(new Label("Nothing is built until it is applied. Undo takes a build back, and Redo brings it again.",left,steps+86));
+        labels.add(new Label("Using a launcher profile? Give the plugin this game's folder, below, as its Minecraft folder. The craftium.mcpb",left,steps+99));
+        labels.add(new Label("extension is for Claude Desktop's Chat tab, where plugins do not run; use one or the other. Details: docs/AI.md",left,steps+112));
+        // The folder this game keeps its settings in, which is what the plugin's Minecraft folder has to be when it is not the default .minecraft.
         String folder=AiBridge.gameFolder();
-        labels.add(new Label("This game's folder: "+(font.width(folder)>420?"…"+font.plainSubstrByWidth(folder,420,true):folder),left,steps+114));
-        button("Copy game folder",left,steps+128,150,20,()->{minecraft.keyboardHandler.setClipboard(folder);message="Game folder copied";});
+        labels.add(new Label("This game's folder: "+(font.width(folder)>420?"…"+font.plainSubstrByWidth(folder,420,true):folder),left,steps+130));
+        button("Copy game folder",left,steps+144,150,20,()->{minecraft.keyboardHandler.setClipboard(folder);message="Game folder copied";});
     }
     /** The live part of the AI tab: a status card for the bridge and a line about a preview that is waiting. */
     private void drawAi(Gfx g){
         var o=ClientState.options;var state=AiBridge.indicator();int x=left,y=top+70,width=616;
         String headline,detail;
         switch(state){
-            case OFF -> {headline="AI building is off";detail="Turn it on to let Claude Desktop, or another AI app on this computer, build in your world.";}
-            case WAITING -> {headline="On, waiting for the AI app";detail="Open Claude Desktop with the Craftium extension and ask for a build.";}
+            case OFF -> {headline="AI building is off";detail="Turn it on to let Claude, or another AI app on this computer, build in your world.";}
+            case WAITING -> {headline="On, waiting for the AI app";detail="Open Claude Code or Cowork with the Craftium plugin and ask for a build.";}
             case ACTIVE -> {headline="AI app connected";detail="Last request: "+AiBridge.lastActivity();}
             default -> {headline="AI is working…";detail="Request: "+AiBridge.lastActivity();}
         }
