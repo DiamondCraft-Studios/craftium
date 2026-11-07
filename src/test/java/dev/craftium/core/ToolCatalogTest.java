@@ -41,6 +41,13 @@ class ToolCatalogTest {
         special.put(Tool.PATH, InteractionKind.POINTS);
         special.put(Tool.MODELLING, InteractionKind.POINTS);
         special.put(Tool.BOX_SELECT, InteractionKind.BOX);
+        special.put(Tool.LINE, InteractionKind.LINE);
+        special.put(Tool.RULER, InteractionKind.RULER);
+        special.put(Tool.PIVOT, InteractionKind.PIVOT);
+        special.put(Tool.ANNOTATION, InteractionKind.ANNOTATION);
+        special.put(Tool.MOVE, InteractionKind.TRANSFORM);
+        special.put(Tool.ROTATE, InteractionKind.TRANSFORM);
+        special.put(Tool.SCALE, InteractionKind.TRANSFORM);
         special.put(Tool.GRADIENT_PAINTER, InteractionKind.SHIFT_POINTS);
         special.put(Tool.SLOPE, InteractionKind.ANCHOR_PAIR);
         for (Tool tool : Tool.values()) assertEquals(special.getOrDefault(tool, InteractionKind.CLICK), tool.spec().interaction(), tool.name());
@@ -50,6 +57,11 @@ class ToolCatalogTest {
         assertTrue(InteractionKind.CLICK.forPlugins);
         assertTrue(InteractionKind.POINTS.forPlugins);
         assertTrue(InteractionKind.BOX.forPlugins);
+        assertTrue(InteractionKind.LINE.forPlugins);
+        assertFalse(InteractionKind.RULER.forPlugins);
+        assertFalse(InteractionKind.PIVOT.forPlugins);
+        assertFalse(InteractionKind.ANNOTATION.forPlugins);
+        assertFalse(InteractionKind.TRANSFORM.forPlugins);
         assertFalse(InteractionKind.SHIFT_POINTS.forPlugins);
         assertFalse(InteractionKind.ANCHOR_PAIR.forPlugins);
     }

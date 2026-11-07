@@ -11,6 +11,18 @@ import java.util.List;
  */
 public interface Interaction {
     /**
+     * The use button went down on the world, or a held stroke is repeating, before the use interval and the busy check are applied: it sees every
+     * click and every step of a drag. Returns true when the interaction dealt with it and nothing more should happen.
+     */
+    default boolean beforeUse(EditorContext editor) { return false; }
+
+    /** The use button went down over the world: a stroke begins. */
+    default void strokeBegan(EditorContext editor) {}
+
+    /** The use button was let go after a stroke. */
+    default void strokeEnded(EditorContext editor) {}
+
+    /**
      * The use button went down on the world, or a held stroke is repeating. Returns true when the interaction dealt with it itself; false
      * lets the click go on to the server as a plain request for the block under the cursor.
      */

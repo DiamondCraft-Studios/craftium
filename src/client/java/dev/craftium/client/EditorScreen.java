@@ -101,6 +101,7 @@ public final class EditorScreen extends CraftiumScreen {
         @Override public Options options(){return o();}
         @Override public BlockHitResult target(){return EditorScreen.this.target();}
         @Override public boolean shiftDown(){return minecraft.hasShiftDown();}
+        @Override public void request(String action){action(action);}
         @Override public int selectedNode(){return selectedNode;}
         @Override public void selectNode(int index){selectedNode=index;}
         @Override public boolean hitsPointHandles(Point at,double x,double y){return TransformGizmo.hitsPointHandles(at,x,y);}
@@ -1407,22 +1408,9 @@ public final class EditorScreen extends CraftiumScreen {
         if(useQueued&&painting&&!ClientState.status.busy())dragUse();
     }
     private void use(){
-        if(o().tool==Tool.ANNOTATION){var hit=target();if(hit!=null){o().annotationNormal=CraftiumClient.normal(hit);if(o().annotationMode.equals("DRAW")){Point p=CraftiumClient.point(hit.getBlockPos());if(o().annotationPoints.size()<256&&(o().annotationPoints.isEmpty()||!o().annotationPoints.getLast().equals(p)))o().annotationPoints.add(p);return;}}}
+        if(Interactions.of(o().tool).beforeUse(context))return; // sees every click and every step of a drag, whatever the use interval says
         long now=System.currentTimeMillis();if((!o().tool.selection()&&now-lastUse<useInterval())||ClientState.status.busy())return;lastUse=now;awaitingReply=true;repliedSince=false;
         if(Interactions.of(o().tool).use(context))return; // what this kind of tool does with a click; false lets the click go on to the server as a plain request
-        if(o().tool==Tool.RULER) {
-            var hit=target();if(hit!=null) {
-                Point p=CraftiumClient.point(hit.getBlockPos());
-                try{ClientState.rulerPoints.add(p);}catch(IllegalArgumentException e){ClientState.notify(e.getMessage());} // the second click finishes a ruler, the next one starts another
-            }
-            return;
-        }
-        if(o().tool==Tool.PIVOT){
-            var hit=target();
-            if(hit!=null){var p=hit.getBlockPos();o().pivotSet=true;o().pivotX=p.getX()+.5;o().pivotY=p.getY()+.5;o().pivotZ=p.getZ()+.5;ClientState.notify("Pivot set");}
-            return;
-        }
-        if(o().tool.transform())return; // these work through their handles, not by clicking
         if(o().tool==Tool.MODIFY){ // the first click anchors the preview where the cursor is; it is built with Apply or Enter
             var hit=target();if(hit!=null)ModifyPreview.place(CraftiumClient.point(hit.getBlockPos()));
             return;
@@ -1514,7 +1502,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(!toolActive&&EditorBindings.matches(Action.CROSSHAIR,event)){cameraGesture=CameraGesture.ROTATE;cameraButton=event.button();return true;}
         if(EditorBindings.matches(Action.ROTATE_CAMERA,event)){cameraGesture=CameraGesture.ROTATE;cameraButton=event.button();return true;}
-        if(toolActive&&EditorBindings.matches(Action.USE_TOOL,event)){if(o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW"))o().annotationPoints.clear();painting=true;ClientState.strokeId=System.nanoTime();lastDragged=null;useQueued=false;if(o().tool==Tool.LASSO_SELECT){lasso.clear();lasso.add(new LassoSelection.Pixel(event.x(),event.y()));}else use();}
+        if(toolActive&&EditorBindings.matches(Action.USE_TOOL,event)){Interactions.of(o().tool).strokeBegan(context);painting=true;ClientState.strokeId=System.nanoTime();lastDragged=null;useQueued=false;if(o().tool==Tool.LASSO_SELECT){lasso.clear();lasso.add(new LassoSelection.Pixel(event.x(),event.y()));}else use();}
         if(EditorBindings.matches(Action.PICK_BLOCK,event)){
             // Dragging pans the camera; letting go without having dragged picks the block, as a click always did.
             var hit=target();pickedHit=hit;pendingPick=true;middleDragged=false;
@@ -1547,7 +1535,7 @@ public final class EditorScreen extends CraftiumScreen {
         String block=BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(hit.getBlockPos()).getBlock()).toString();
         ClientState.pick(block);
     }
-    @Override public boolean mouseReleased(MouseButtonEvent event){if(selectingText){selectingText=false;return true;}if(dragBlock!=null&&event.button()==0){finishBlockDrag(event);return true;}if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting&&o().tool==Tool.ANNOTATION&&o().annotationMode.equals("DRAW")&&o().annotationPoints.size()>1)action("annotation_create");if(painting&&sculpts(o().tool))CraftiumClient.send("stroke_end",null,null);painting=false;ClientState.strokeId=0;if(o().tool==Tool.LASSO_SELECT&&!lasso.isEmpty()){o().selectionPoints=new ArrayList<>(LassoSelection.project(lasso));action("lasso_select");o().selectionPoints.clear();lasso.clear();}}return true;}
+    @Override public boolean mouseReleased(MouseButtonEvent event){if(selectingText){selectingText=false;return true;}if(dragBlock!=null&&event.button()==0){finishBlockDrag(event);return true;}if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting)Interactions.of(o().tool).strokeEnded(context);if(painting&&sculpts(o().tool))CraftiumClient.send("stroke_end",null,null);painting=false;ClientState.strokeId=0;if(o().tool==Tool.LASSO_SELECT&&!lasso.isEmpty()){o().selectionPoints=new ArrayList<>(LassoSelection.project(lasso));action("lasso_select");o().selectionPoints.clear();lasso.clear();}}return true;}
     @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy) {
         if(dragBlock!=null){if(!dragMoved&&Math.hypot(event.x()-dragStartX,event.y()-dragStartY)>5)dragMoved=true;return true;}
         if(ReferenceImages.drag(event.x(),event.y()))return true;
@@ -1579,7 +1567,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(help||transform||menu>=0)return true;
         if(inViewport(event.x()/scale,event.y()/scale)) {
             if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&o().tool==Tool.LASSO_SELECT){if(lasso.size()<1024)lasso.add(new LassoSelection.Pixel(event.x(),event.y()));return true;}
-            if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&painting&&o().tool!=Tool.RULER&&o().tool!=Tool.LINE&&Interactions.of(o().tool).repeatsWhenDragged())dragUse();
+            if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&painting&&Interactions.of(o().tool).repeatsWhenDragged())dragUse();
         }
         return true;
     }

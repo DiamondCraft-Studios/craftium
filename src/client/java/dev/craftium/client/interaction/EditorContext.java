@@ -13,6 +13,8 @@ public interface EditorContext {
     /** The block face under the cursor, or null when the cursor is over sky or over a panel. */
     BlockHitResult target();
     boolean shiftDown();
+    /** Sends the editor's own request of that name for the block under the cursor, as a menu item or a shortcut would. */
+    void request(String action);
     /** The control point whose gizmo is shown, as an index into the tool's point list, or -1. */
     int selectedNode();
     /** Selects the control point at {@code index} of the tool's point list, so its gizmo is shown. */
