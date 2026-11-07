@@ -7,7 +7,7 @@
       "name": "craftium",
       "source": "./mcp",
       "description": "Build in Minecraft by chatting: Claude previews builds as a ghost in your game and applies them when you say so. Includes a builder skill for well-proportioned builds.",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "license": "GPL-3.0-only",
       "keywords": ["minecraft", "craftium", "building"]
     }

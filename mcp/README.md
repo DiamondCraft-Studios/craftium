@@ -19,7 +19,7 @@ Privacy: [PRIVACY.md](https://github.com/DiamondCraft-Studios/craftium/blob/main
 
 ## What's in it
 
-- **The tools Claude uses:** read the world (`get_state`, `read_selection`, `get_blocks`, `get_surface`, `get_palette`) and its own preview (`get_preview_blocks`), look at it
+- **The tools Claude uses:** read the world (`get_state`, `read_selection`, `get_blocks`, `get_surface`) and its own preview (`get_preview_blocks`), look at it
   (`render_view`, `get_screenshot`), and build (`preview_build`, `apply_preview`, `cancel_preview`, `undo`).
 - **The `craftium-builder` skill.** It teaches the order a builder works in (brief, site, an approved blockout, then
   shell, roof, openings, materials, detail and context), Minecraft-scale proportions, how to build in stages around
@@ -44,12 +44,12 @@ that contains `config` and `mods`.
 
 ## Then
 
-Open a world with AI building on, and ask Claude for a build. Look at the violet ghost in the game, ask for changes,
+Open a world with AI building on, and ask Claude for a build. Look at the ghost in the game (outlined in violet), ask for changes,
 and say when to apply it. You can also apply, discard or undo from the game's **AI** menu.
 
 ## For developers
 
-The server has **no run-time dependencies**: four small files in `src/` speak the part of MCP it needs. The official
+The server has **no run-time dependencies**: five small files in `src/` speak the part of MCP it needs. The official
 MCP SDK is a dev dependency used only by the tests, and the packed extension carries no `node_modules`. What the code
 may and may not do is pinned down in `test/contract.test.js`.
 
@@ -58,6 +58,7 @@ may and may not do is pinned down in `test/contract.test.js`.
 | `src/index.js` | Reads JSON-RPC lines from stdin, writes them to stdout |
 | `src/protocol.js` | `initialize`, `ping`, `tools/list`, `tools/call` |
 | `src/tools.js` | The tools, their schemas and argument checks, and the guidance given to the model |
+| `src/surface.js` | Summarises a wide `get_surface` read into a few hundred words |
 | `src/bridge.js` | Finds the bridge file and calls the game on `127.0.0.1` |
 | `skills/craftium-builder/` | The building skill and its reference files |
 

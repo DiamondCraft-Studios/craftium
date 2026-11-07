@@ -57,6 +57,10 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
 
             var state = call("get_state", "{}");
             require(state.get("ok").getAsBoolean() && state.get("inWorld").getAsBoolean() && state.get("craftiumOnServer").getAsBoolean(), "get_state: " + state);
+            // The world the AI builds in, and the player's blocks, come with get_state (they once took a get_palette call of their own).
+            var where = state.getAsJsonObject("world");
+            require(where != null && where.get("dimension").getAsString().equals("minecraft:overworld") && where.get("minY").getAsInt() == -64 && where.get("maxY").getAsInt() == 319
+                    && where.get("biome").getAsString().startsWith("minecraft:") && state.getAsJsonObject("playerBlocks").has("recent"), "get_state should describe the world and the player's blocks: " + state);
             var block = state.getAsJsonObject("player").getAsJsonArray("block");
             int x = block.get(0).getAsInt() + 3, y = block.get(1).getAsInt(), z = block.get(2).getAsInt() + 3;
             ctx.runOnClient(mc -> mc.getConnection().sendCommand("fill " + x + " " + y + " " + z + " " + (x + 6) + " " + (y + 12) + " " + (z + 6) + " air"));
@@ -178,6 +182,17 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(preview.get("ok").getAsBoolean(), "preview_build: " + preview);
             int ghost = preview.getAsJsonObject("state").get("previewBlocks").getAsInt();
             require(ghost > 100, "preview should hold blocks as a ghost, had " + ghost);
+            // The reply describes the preview: where it went and what it is made of, counted the way the ghost counts it.
+            var made = preview.getAsJsonObject("preview");
+            require(made != null && made.get("placed").getAsInt() + made.get("cleared").getAsInt() == ghost && made.get("min").toString().equals("[" + x + "," + y + "," + z + "]")
+                    && made.getAsJsonArray("blocks").toString().contains("minecraft:cut_sandstone"), "preview_build should describe what it made: " + made);
+            // A spec the server refuses leaves the waiting preview as it was, so a typo does not make the player's ghost vanish.
+            var typo = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + x + "," + y + "," + z + "],\"to\":[" + (x + 1) + "," + y + "," + z + "],\"block\":\"spruce_stair\"}]}}");
+            require(!typo.get("ok").getAsBoolean() && typo.getAsJsonObject("state").get("previewBlocks").getAsInt() == ghost, "a refused spec must leave the waiting preview as it was: " + typo);
+            // The error says which op uses the name and what the nearest real block is, or which properties a block takes.
+            require(typo.get("error").getAsString().contains("ops[0] (box)") && typo.get("error").getAsString().contains("minecraft:spruce_stairs"), "an unknown block should name its op and the nearest id: " + typo);
+            var badState = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"set\",\"at\":[" + x + "," + y + "," + z + "],\"block\":\"oak_stairs[facing=up]\"}]}}");
+            require(!badState.get("ok").getAsBoolean() && badState.get("error").getAsString().contains("facing=north|"), "a bad state should list the values the block takes: " + badState);
             ctx.waitTicks(5);
             ctx.takeScreenshot("ai-preview");
             require(ctx.computeOnClient(mc -> ClientState.hasAiPending() && ClientState.aiPending.ai), "the AI's preview should be held as the AI's own");

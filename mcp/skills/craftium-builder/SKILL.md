@@ -17,11 +17,21 @@ detail on a form nobody has approved.
   anything over about 1,000 blocks, and any time a render looks incomplete (a missing roof, for example).
 - [references/spec-pitfalls.md](references/spec-pitfalls.md): before roofs, doors, logs, water, or anything with a
   facing, and before using `hollow`.
+- [references/examples.md](references/examples.md): before your first spec. A gable cottage written phase by phase
+  and a round tower, each with what its `preview_build` reply should show.
 
 ## The loop
 
-Every phase: write the ops for that phase only, `preview_build`, `render_view`, judge, then fix or move on. Fix a
+Every phase: write the ops for that phase only, `preview_build`, read its reply, judge, then fix or move on. Fix a
 problem in the phase where it appears. Detail layered on a wrong shape is wasted work.
+
+The `preview_build` reply says what the spec made: placed and cleared blocks, the box they fill, the commonest
+blocks and how the ones that face a way are turned. Check it every time: a build in the wrong place, a missing
+material or a roof with all its stairs facing one way shows there without a picture.
+
+Pictures cost the most, so render where the look is the question: the blockout, the roof and the final check (two
+or three angles each). For the phases in between, the reply is usually enough; render one angle if it raises a
+doubt.
 
 By default each phase is applied as soon as it checks out, so the player watches the build grow in the world and can
 judge its look as it goes. Every applied phase is one undo step, and you can still change earlier phases afterwards
@@ -65,7 +75,8 @@ any time ("looks good, build it"). If it is unclear which they want, ask once.
   whole build (era, scale, placement). Otherwise choose defaults and say them.
 - From a reference image, write down the proportions before touching a tool: width : depth : height, repeating units
   (windows, columns, steps), and the 3 or 4 dominant materials. Build to those numbers.
-- Palette: 3 materials plus 1 accent, put in the spec `palette`. Use `get_palette` as a hint of the player's taste.
+- Palette: 3 materials plus 1 accent, put in the spec `palette`. `get_state` gives the player's recent blocks (a hint of their taste) and the biome (a hint
+  of what fits the place).
 - Read `references/proportions.md` now.
 
 ## Phase 1: Site
@@ -79,10 +90,9 @@ any time ("looks good, build it"). If it is unclear which they want, ask once.
 - A selection is a help, not a requirement. The player may give coordinates or describe the place instead; then find
   the site yourself. Build inside the selection unless they say otherwise, and if the build won't fit, say so and
   propose a size that does.
-- To find ground yourself, use thin `get_surface` strips (1 wide). A 128x128 read is about 16,000 numbers. Widen only
-  where the ground is interesting.
-- An empty column reads `heights = -2147483648`, `blocks = -1`. A height of -1 is real ground (superflat), not an
-  empty column.
+- To find ground yourself, read the area with `get_surface`: a wide area comes back as a summary (height range,
+  how level it is, what it is made of, a coarse map), which is enough to pick a spot. Then read the footprint you
+  chose with `detail: "full"` for exact heights.
 - Decide the ground level and the footprint, then `get_blocks` the footprint to confirm it is clear, or note what
   must be cleared or filled.
 - Write the build near [0,0,0] and set `origin`, so one number moves it.
@@ -114,8 +124,9 @@ The roof makes or breaks the silhouette. Check it twice.
   ends with wall blocks.
 - Big or wide builds need several roof sections, not one slab.
 - Stair facing is the orientation trap: on a roof, every stair faces the ridge (the higher side), on both slopes.
-  Renders cannot show it, so check the preview before you apply it: read the roof with `get_preview_blocks` and check
-  the facings (`references/spec-pitfalls.md`). `get_blocks` does the same on the world afterwards.
+  Renders cannot show it. The `preview_build` reply counts the stairs by facing: a gable needs two opposite facings
+  in about equal numbers. Then read the roof with `get_preview_blocks` to check each facing is on the right side
+  (`references/spec-pitfalls.md`). `get_blocks` does the same on the world afterwards.
 - Seal the roof to the walls with no sky gaps.
 
 ## Phase 5: Openings and circulation
@@ -164,7 +175,8 @@ hand-built one.
 
 ## Honest limits
 
-- Unknown block ids are rejected with the operation named. A block that previews without error exists in this game
-  version. Fix the spec and retry.
+- Unknown block ids are rejected with the operation named and the nearest real ids, and a wrong state with the
+  properties the block takes. A block that previews without error exists in this game version. Fix the spec and
+  retry; the earlier preview stays waiting meanwhile.
 - If something is a guess (a block state, flow, support, one of the "usual" numbers), say so rather than presenting
   it as checked.

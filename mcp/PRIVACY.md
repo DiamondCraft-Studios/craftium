@@ -15,7 +15,7 @@ When Claude calls a tool, the plugin asks your game and passes the answer to Cla
 on the tool, that can include:
 
 - Block data: the blocks in an area you or Claude chose, and the height of the ground there.
-- Your position and facing in the world, the area you have selected, and your recent block palette.
+- Your position and facing in the world, the dimension and biome you are in, the area you have selected, and your recent block palette.
 - A picture of your game window, only when Claude asks for one (`get_screenshot`). It is at most 1,024 pixels wide
   and includes whatever is on your screen in the game window, so close anything private first.
 - A picture of a box of the world drawn from block data (`render_view`). It shows only blocks, not your screen.

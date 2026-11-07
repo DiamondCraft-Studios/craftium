@@ -143,6 +143,24 @@ public final class BuildSpec {
     }
 
     /**
+     * The operations that use a block name (one of {@link #blocks()}), labelled the way errors label them ({@code ops[2] (box)}), so a
+     * message about the block can say where it is used. Palette names are resolved first, so a palette entry is found through the ops using it.
+     */
+    public List<String> usesOf(String name) {
+        var out = new ArrayList<String>();
+        for (int i = 0; i < ops.size(); i++) {
+            var op = ops.get(i);
+            if (op.has("block") && resolve(op, "block", i).equals(name) || op.has("find") && resolve(op, "find", i).equals(name))
+                out.add("ops[" + i + "] (" + text(op, "op", i, null) + ")");
+        }
+        for (int k = 0; k < selectionOps.size(); k++) {
+            var op = selectionOps.get(k);
+            if (op.block().equals(name) || name.equals(op.find())) out.add("ops[" + (ops.size() + k) + "] (replace_selection)");
+        }
+        return out;
+    }
+
+    /**
      * Where the spec's blocks go and how much room they need, from its operations alone. Each operation's extent is worked out from
      * its numbers, repeats included, so a spec that reaches further than the build limits is refused here with a message.
      */

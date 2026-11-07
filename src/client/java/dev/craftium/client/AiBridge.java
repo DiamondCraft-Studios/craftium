@@ -264,7 +264,7 @@ public final class AiBridge {
 
     private static JsonObject call(String tool, JsonObject args) throws Exception {
         return switch (tool) {
-            case "get_state" -> onClient(AiBridge::state);
+            case "get_state" -> onClient(() -> state(true));
             case "read_selection" -> read("ai_selection", null, null);
             case "get_preview_blocks" -> {
                 var from = point(args, "from"); var to = point(args, "to");
@@ -337,12 +337,15 @@ public final class AiBridge {
     /** Sends one editor request from the game thread and waits for the server's reply to it. */
     private static JsonObject request(String name, Runnable send) throws Exception {
         var reply = new CompletableFuture<Packets.Status>();
+        // A new preview is described by the server just before its status (see AiWorld.previewSummary); a server from before that sends none.
+        var summary = name.equals("ai_build_preview") ? new CompletableFuture<String>() : null;
         pace();
         onClient(() -> {
             var mc = Minecraft.getInstance();
             if (mc.player == null || mc.level == null) throw new IllegalStateException("Not in a world");
             if (!CraftiumClient.supported()) throw new IllegalStateException("This world has no Craftium on the server; install it there to edit");
             awaiting = reply;
+            if (summary != null) awaitingData = summary;
             send.run();
             return null;
         });
@@ -353,13 +356,23 @@ public final class AiBridge {
                 var out = new JsonObject();
                 out.addProperty("ok", !status.error());
                 out.addProperty(status.error() ? "error" : "message", status.message());
-                out.add("state", state());
+                if (!status.error() && summary != null && summary.isDone() && !summary.isCompletedExceptionally()) {
+                    var preview = JsonParser.parseString(summary.join()).getAsJsonObject();
+                    preview.remove("ok");
+                    preview.remove("kind");
+                    out.add("preview", preview);
+                }
+                var state = state(false);
+                out.add("state", state);
+                if (status.error() && summary != null && state.has("previewBlocks") && state.get("previewBlocks").getAsInt() > 0)
+                    out.addProperty("previewKept", "The spec was refused, so nothing changed: your earlier preview (" + state.get("previewBlocks").getAsInt() + " blocks) is still waiting. Fix the spec and call preview_build again.");
                 return out;
             });
         } catch (ExecutionException e) {
             throw new IllegalStateException(e.getMessage());
         } finally {
             if (awaiting == reply) awaiting = null;
+            if (summary != null && awaitingData == summary) awaitingData = null;
         }
     }
 
@@ -392,7 +405,12 @@ public final class AiBridge {
             + " preview blocks are described to the game, which is all render_view and the ghost can show. The rest are still in the preview and will be built when it is applied, so do not judge the build from the picture. Build it in smaller stages to see all of it, or read it with get_preview_blocks.");
     }
 
-    private static JsonObject state() {
+    /**
+     * The player, their selection, the AI's preview and undo list. {@code full} (get_state itself) adds what the AI needs once per task and
+     * not after every edit: the world's height limits, sea level and dimension, the biome the player stands in (a hint of the style that
+     * fits), and the player's current and recent blocks (a hint of their taste).
+     */
+    private static JsonObject state(boolean full) {
         var mc = Minecraft.getInstance();
         var out = new JsonObject();
         out.addProperty("ok", true);
@@ -418,6 +436,22 @@ public final class AiBridge {
         out.addProperty("undoSteps", status.aiUndo());
         out.addProperty("busy", status.busy());
         out.addProperty("lastMessage", status.message());
+        if (full && mc.level != null) {
+            var level = mc.level;
+            var world = new JsonObject();
+            world.addProperty("dimension", dev.craftium.compat.Compat.keyName(level.dimension()));
+            world.addProperty("minY", level.getMinY());
+            world.addProperty("maxY", level.getMinY() + level.getHeight() - 1);
+            world.addProperty("seaLevel", level.getSeaLevel());
+            world.addProperty("biome", level.getBiome(mc.player.blockPosition()).unwrapKey().map(dev.craftium.compat.Compat::keyName).orElse("unknown"));
+            out.add("world", world);
+            var blocks = new JsonObject();
+            blocks.addProperty("current", ClientState.options.block);
+            var recent = new JsonArray();
+            for (String block : ClientState.palette) recent.add(block);
+            blocks.add("recent", recent);
+            out.add("playerBlocks", blocks);
+        }
         return out;
     }
 

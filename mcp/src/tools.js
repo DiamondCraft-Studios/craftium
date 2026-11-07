@@ -1,6 +1,8 @@
 // The tools the server offers: their descriptions, the schemas clients see, and the checks arguments pass before anything
 // is sent to the game. Only the keys a tool names are forwarded, so nothing else a client sends reaches the bridge.
 
+import { FULL_COLUMNS, summarizeSurface } from "./surface.js";
+
 export class ArgumentError extends Error {}
 
 const coordinates = "Coordinates are [x, y, z] whole numbers in the WORLD (y is up), the same numbers get_blocks and get_surface use, so read the ground first and build at the heights you found. Nothing has to be selected: the area a build covers is worked out from its operations.";
@@ -28,12 +30,12 @@ Orientation-sensitive blocks (stairs, doors, logs) take properties like "minecra
 export const INSTRUCTIONS = `You can build in the player's Minecraft world through the Craftium mod. Builds are shown as a ghost preview in the game and only change the world when applied. You work on the world itself, in world coordinates: you never move, turn or select anything for the player.
 
 Workflow:
-1. Call get_state. It reports the player's position and facing, the area they have selected (if any: a hint of where they want a build, which you never change), and whether you have a preview waiting. If the game is not reachable, tell the player to open a world and turn on AI building (in the editor: AI menu, then Turn on AI building; or type /craftium ai on).
-2. Decide where to build: in the player's selection if they made one (call read_selection to see what it is: its shape, its blocks and the space above it), otherwise near the player or where they asked. Look before you build: get_surface gives the ground height of an area and get_blocks reads blocks; both work anywhere in the world, not just near the player. Say where you chose to build.
-3. Call preview_build with a build spec in world coordinates. If it returns an error, fix the spec and try again; the error names the operation at fault. A new preview replaces the previous one.
-4. Tell the player to look at the ghost in the game (it is violet). You can look too, without touching the player's view: call render_view on the build's area from a couple of angles, for example se for a three-quarter view and top for the plan, and judge proportions, gaps and style yourself before showing the player. Your waiting preview is drawn tinted violet. If previewTruncated is true the game drew only part of the preview, so build in smaller stages to see all of it. Adjust with another preview_build if the result or the player wants changes.
-5. Call apply_preview only once the player is happy (or if they asked you to just build it). undo reverses the last build you applied, never the player's own edits. cancel_preview discards a preview.
-Reading ground nobody has visited generates it, so a single read may touch at most 16 chunks that are not already loaded: if one is refused for that reason, read a smaller area, or read it in pieces. A build may reach 36 such chunks. Reads and builds stay in the dimension the player is in. Prefer a few well-chosen operations over many small ones; Minecraft builds read best with layered shapes, varied blocks and details like slabs, stairs and walls.`;
+1. Call get_state. It reports the player's position and facing, the area they have selected (if any: a hint of where they want a build, which you never change), whether you have a preview waiting, and the world (height limits, sea level, biome). If the game is not reachable, tell the player to open a world and turn on AI building (in the editor: AI menu, then Turn on AI building; or type /craftium ai on).
+2. Decide where to build: in the player's selection if they made one (call read_selection to see what it is: its shape, its blocks and the space above it), otherwise near the player or where they asked. Look before you build: get_surface gives the ground of an area (a summary for a wide one) and get_blocks reads blocks; both work anywhere in the world, not just near the player. Say where you chose to build.
+3. Call preview_build with a build spec in world coordinates. Its reply says what the spec made (where, how many blocks, of what, and which way stairs face): check it. If the spec is refused, the error names the operation at fault and what to use instead; fix it and try again, and your earlier preview stays waiting meanwhile. A new preview replaces the previous one.
+4. Tell the player to look at the ghost in the game. You can look too, without touching the player's view: render_view draws the build's area from an angle you choose, with your waiting preview tinted violet. Render when the look matters (the first rough form, the roof, the finished build), from two angles such as se and top; for a small change the preview_build reply is usually enough. If previewTruncated is true the game drew only part of the preview, so build in smaller stages to see all of it. Adjust with another preview_build if the result or the player wants changes.
+5. Show the player the rough form (size, shape and place) and get a yes before anything is built. After that, a build made in stages applies each stage once it checks out, so the player watches it grow; if they want to see it first ("just show me", "don't build it yet"), keep it as a preview until they say to build. If they asked you to just build it, apply it. undo reverses the last build you applied, never the player's own edits. cancel_preview discards a preview.
+Each tool's description gives its limits, and a request that goes past one is refused with what to do instead. Reads and builds stay in the dimension the player is in. Prefer a few well-chosen operations over many small ones; Minecraft builds read best with layered shapes, varied blocks and details like slabs, stairs and walls.`;
 
 // ---- argument checks ------------------------------------------------------------------------------------------------
 
@@ -68,7 +70,8 @@ export const TOOLS = [
   {
     name: "get_state",
     title: "Get Craftium state",
-    description: "Where the player is and which way they face, the area they have selected (corners and dimensions only, so call read_selection to see what is in it; theirs, and never changed by you), how many blocks your waiting preview holds (previewBlocks) and how many of them the game can draw (previewBlocksDrawn; previewTruncated and a previewWarning appear when a big preview is only partly drawn), and how many of your builds can be undone. Call this first.",
+    description: "Where the player is and which way they face, the area they have selected (corners and dimensions only, so call read_selection to see what is in it; theirs, and never changed by you), how many blocks your waiting preview holds (previewBlocks) and how many of them the game can draw (previewBlocksDrawn; previewTruncated and a previewWarning appear when a big preview is only partly drawn), and how many of your builds can be undone. " +
+      "It also gives the world: dimension, the lowest and highest y a block can be at (minY, maxY), sea level and the biome the player stands in, a hint of the style that fits; and the player's current block and recently used blocks (playerBlocks), a hint of their taste. Call this first.",
     inputSchema: nothing,
     annotations: READ,
     args: () => ({}),
@@ -93,7 +96,7 @@ export const TOOLS = [
       'view: "after" (default) is the world as it would be once applied, the preview over what is there now; "only" is just what the preview places, with air where it clears a block. ' +
       "The answer is written in the fewest words. format \"boxes\" lists, for each block, the boxes it fills as [x1, y1, z1, x2, y2, z2] (world coordinates, both corners included), so a wall or a roof is a few boxes wherever it sits in the box you asked about; " +
       "format \"runs\" is the palette and run-length runs get_blocks uses, which is shorter for noisy ground; \"auto\" (default) picks whichever is shorter and says which it chose. " +
-      "A box may hold up to 1,048,576 blocks, but the answer is at most about 100 KB, so for a big build read it a part at a time. With no waiting preview it says so.",
+      "A box may hold up to 1,048,576 blocks, but the answer is held to about 60 KB, so for a big build read it a part at a time. With no waiting preview it says so.",
     inputSchema: {
       type: "object",
       properties: {
@@ -109,6 +112,7 @@ export const TOOLS = [
       if (a.format !== undefined && !["auto", "boxes", "runs"].includes(a.format)) throw new ArgumentError('"format" must be "auto", "boxes" or "runs"');
       return { from: whole(a.from, "from"), to: whole(a.to, "to"), ...(a.view !== undefined ? { view: a.view } : {}), ...(a.format !== undefined ? { format: a.format } : {}) };
     },
+    tooBig: "Read a smaller box: part of the build at a time, such as one wall or the roof.",
   },
   {
     name: "get_blocks",
@@ -120,34 +124,47 @@ export const TOOLS = [
     inputSchema: box,
     annotations: READ,
     args: (a) => ({ from: whole(a.from, "from"), to: whole(a.to, "to") }),
+    tooBig: "Read a smaller box, a few layers at a time; to check your own build, get_preview_blocks answers as boxes, which is far shorter.",
   },
   {
     name: "get_surface",
     title: "Read the ground",
     description:
-      "The highest block of every column in a rectangle (corners [x, y, z]; y is ignored), up to 128 by 128 columns: heights[i] is the y of the top block and blocks[i] indexes the palette, x fastest then z from the rectangle's minimum corner. " +
-      'Use it to find ground level before building on or into terrain. "top" (default) is the highest solid or liquid block ignoring leaves, so water counts and trunks and buildings count; "floor" looks under water. ' +
+      "The ground of a rectangle (corners [x, y, z]; y is ignored), up to 128 by 128 columns. Use it to find ground level before building on or into terrain. " +
+      "Like get_blocks it reads the server's world anywhere, and reading ground nobody visited makes it, so one call touches at most 16 chunks that are not already loaded (16 chunks cover at most 64 by 64 blocks); if a call is refused for that, read a smaller area or read it in pieces. " +
+      'detail "summary" gives the lowest, highest and median height, how much of the area is level with the median, what the ground is made of, and a coarse map of at most 16 by 16 cells: a few hundred words for any size, so start a wide search with it. ' +
+      'detail "full" gives every column: heights[i] is the y of the top block and blocks[i] indexes the palette, x fastest then z from the rectangle\'s minimum corner. "auto" (default) is full up to 256 columns (a 16 by 16 area, or a strip up to 128 long) and a summary beyond. ' +
+      '"top" (default) is the highest solid or liquid block ignoring leaves, so water counts and trunks and buildings count; "floor" looks under water. ' +
       "In the Nether the surface is the ceiling; use get_blocks to look below it. A column past the world border, or with no block in it, has heights[i] = -2147483648 and blocks[i] = -1. A height of -1 is real ground at y = -1 (as in a superflat world), not an empty column.",
-    inputSchema: { type: "object", properties: { ...box.properties, kind: { type: "string", enum: ["top", "floor"], description: '"top" (default) or "floor" (under water)' } }, required: ["from", "to"] },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...box.properties,
+        kind: { type: "string", enum: ["top", "floor"], description: '"top" (default) or "floor" (under water)' },
+        detail: { type: "string", enum: ["auto", "summary", "full"], description: '"auto" (default): every column up to 256 of them, else a summary' },
+      },
+      required: ["from", "to"],
+    },
     annotations: READ,
     args: (a) => {
       if (a.kind !== undefined && a.kind !== "top" && a.kind !== "floor") throw new ArgumentError('"kind" must be "top" or "floor"');
+      if (a.detail !== undefined && !["auto", "summary", "full"].includes(a.detail)) throw new ArgumentError('"detail" must be "auto", "summary" or "full"');
       return { from: whole(a.from, "from"), to: whole(a.to, "to"), ...(a.kind !== undefined ? { kind: a.kind } : {}) };
     },
-  },
-  {
-    name: "get_palette",
-    title: "Get block palette",
-    description: "The player's current block and their palette of recently used blocks, which hints at the style they want.",
-    inputSchema: nothing,
-    annotations: READ,
-    args: () => ({}),
+    // The game always sends every column; the summary is made here, so the game needs nothing new for it.
+    post: (reply, a) => {
+      const detail = a.detail ?? "auto";
+      if (!Array.isArray(reply.heights) || !Array.isArray(reply.size)) return reply;
+      if (detail === "full" || (detail === "auto" && reply.heights.length <= FULL_COLUMNS)) return reply;
+      return summarizeSurface(reply);
+    },
+    tooBig: 'Ask for detail "summary", or read a smaller area: about 64 by 64 columns fit in full.',
   },
   {
     name: "get_screenshot",
     title: "See the game",
     description:
-      "A screenshot of what the player currently sees in Minecraft, including a ghost preview (shown in violet) and the game's interface. " +
+      "A screenshot of what the player currently sees in Minecraft, including your ghost preview (outlined in violet, its blocks at half opacity) and the game's interface. " +
       "Use it to check your own work after preview_build or apply_preview. It shows only what is in the player's view, so for your own look at a build use render_view, which needs no one's view. " +
       "The reply says if a menu is open (screenOpen), in which case the picture shows the menu and not the world.",
     inputSchema: nothing,
@@ -186,6 +203,8 @@ export const TOOLS = [
     title: "Preview a build",
     description:
       "Shows a build as a ghost preview at the world coordinates its spec names, without changing the world, replacing any earlier preview. Nothing needs to be selected, and the build can be anywhere in the world the player's dimension reaches. " +
+      'The reply\'s "preview" says what the spec made: blocks placed and cleared, the box they fill (min, max, size), the chunks it reaches, and the commonest blocks with how the ones that face a way are turned (a gable roof has two facings in equal numbers). Check it first: it often shows a mistake without a render. ' +
+      "If the spec is refused, the error names what to fix and your earlier preview stays waiting (previewKept). " +
       "The game draws only part of a very big preview. The reply's state says so (previewTruncated, previewWarning): the rest is still built when you apply it, so build in smaller stages if you need to see all of it. Describe the build as a spec of primitives.\n\n" + BUILD_SPEC_GUIDE,
     inputSchema: {
       type: "object",
