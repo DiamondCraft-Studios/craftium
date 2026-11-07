@@ -23,11 +23,25 @@ detail on a form nobody has approved.
 Every phase: write the ops for that phase only, `preview_build`, `render_view`, judge, then fix or move on. Fix a
 problem in the phase where it appears. Detail layered on a wrong shape is wasted work.
 
-Two commit points with the player:
-1. After the blockout. Always. Show it and get a yes on size, shape and position.
-2. Before the first apply of real blocks, unless they said "just build it".
+By default each phase is applied as soon as it checks out, so the player watches the build grow in the world and can
+judge its look as it goes. Every applied phase is one undo step, and you can still change earlier phases afterwards
+(`references/preview-and-staging.md`).
 
-Between those, don't interrupt for approval. Report what you did.
+There is one commit point: after the blockout, always. Show it and get a yes on size, shape and position. That yes
+also covers building the phases, so don't stop for approval between them. Report what you did.
+
+## Staying preview-only
+
+The player decides how much gets built. If they say or imply they want to look before anything is built ("just show
+me", "don't build it yet", "let me see it first", "preview only", "I want to check it"), keep every phase as a preview
+and do not call `apply_preview` until they say to build. They don't have to name a mode, and they can switch back at
+any time ("looks good, build it"). If it is unclear which they want, ask once.
+
+- A new preview replaces the old one, so in this mode each phase's preview holds the whole build so far, not only the
+  new part. Write the cumulative spec each time.
+- A preview draws at most 4,096 blocks. Check `previewTruncated`; if a big build can't be shown whole, say so and
+  offer to apply in stages instead.
+- When they say to build, apply what is waiting. A build too big to preview whole is applied in stages as usual.
 
 ## Phase 0: Brief
 
@@ -41,8 +55,16 @@ Between those, don't interrupt for approval. Report what you did.
 ## Phase 1: Site
 
 - `get_state` first. The selection is a hint, never modify it. `previewBlocks` is a waiting preview you will replace.
-- Find ground with thin `get_surface` strips (1 wide). A 128x128 read is about 16,000 numbers. Widen only where the
-  ground is interesting.
+- If the player says they selected a place ("I have selected a platform for you to build on"), or `get_state` shows a
+  selection, call `read_selection`. Its `summary` gives the shape, the material, whether it is flat and what is in the
+  way above it, which usually settles the site at once. It reads the exact shape, so a lasso or magic-wand selection
+  of a platform is the platform, not its bounding box. If something is in the way (trees, fences), say so and suggest
+  clearing it or building around it. If the selection is too big to read, it says so: read it in pieces.
+- A selection is a help, not a requirement. The player may give coordinates or describe the place instead; then find
+  the site yourself. Build inside the selection unless they say otherwise, and if the build won't fit, say so and
+  propose a size that does.
+- To find ground yourself, use thin `get_surface` strips (1 wide). A 128x128 read is about 16,000 numbers. Widen only
+  where the ground is interesting.
 - An empty column reads `heights = -2147483648`, `blocks = -1`. A height of -1 is real ground (superflat), not an
   empty column.
 - Decide the ground level and the footprint, then `get_blocks` the footprint to confirm it is clear, or note what

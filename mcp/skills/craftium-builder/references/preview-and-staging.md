@@ -37,7 +37,11 @@ splits by region (for example west half, then east half).
 - Order stages so later ones don't overwrite earlier ones by accident: terrain, then structure, then details.
 - Prefer `hollow` for large masses (hills, domes, towers) whose inside will never be seen. It is cheaper than
   staging. Remember `hollow` keeps the top and bottom layers too (see `spec-pitfalls.md`).
-- A small build (under about 4,000 blocks) keeps the phase ORDER as op order but uses one preview and one apply.
+- Apply phase by phase even when the build is small enough to preview whole: the player sees it grow and can judge
+  its look as it goes, which is the point. Only something tiny (a lamp post, a single pillar) is worth one preview
+  and one apply.
+- If the player asked to stay preview-only, nothing is applied, so each preview holds the whole build so far (see
+  "Staying preview-only" in `SKILL.md`), and the 4,096 limit applies to the cumulative total.
 
 ## The undo stack
 
