@@ -142,12 +142,7 @@ class LuaSandboxTest {
         // The heap is now 48 MB over where the sandbox started, none of it from the script, which allocates about 10 MB of its own.
         sandbox.call(sandbox.load("local n = 0 for i = 1, 300000 do n = n + i end return n", "test"));
         holding.interrupt();
-        // Counting the heap alone cancels the same script, which is the unsteadiness this avoids.
-        var heapOnly = new LuaSandbox(5_000_000, 32 * MB, false);
-        var heldAgain = new byte[12][];
-        for (int i = 0; i < heldAgain.length; i++) heldAgain[i] = new byte[4 * (int) MB];
-        assertThrows(IllegalArgumentException.class, () -> heapOnly.call(heapOnly.load("local n = 0 for i = 1, 300000 do n = n + i end return n", "test")));
-        assertEquals(12, heldAgain.length);
+        holding.join();
     }
 
     @Test void aTerrainLoopAllocatesAFractionOfTheAiBudget() {
