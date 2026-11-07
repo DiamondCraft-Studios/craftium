@@ -11,6 +11,8 @@ public enum InteractionKind {
     POINTS(true),
     /** Two clicks mark the opposite corners of a box and each corner can be dragged by its handle; a third click starts over. */
     BOX(true),
+    /** The held button draws an outline on the screen and letting go selects what it encloses as seen from the camera. Built in for Lasso Select. */
+    LASSO(false),
     /** Each click sends the request for the block under the cursor, which takes it as an end point; a held button does not send more. */
     LINE(true),
     /** Each click adds an end point to the rulers, and nothing is sent to the server. Built in for the Ruler. */

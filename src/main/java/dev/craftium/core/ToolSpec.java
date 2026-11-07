@@ -16,12 +16,13 @@ package dev.craftium.core;
  * @param useHint        what the use button does with this tool, for the hint bar
  * @param confirms       whether Enter applies the tool's work, so the hint bar says so
  * @param radiusShortcut whether the radius shortcuts apply to the tool
+ * @param buildsOnRelease whether what a stroke stages is built the moment the button is let go, without Enter (the Paint and Sculpt tools); any tool does when Enter to build is off
  * @param placesBlocks   whether the tool builds, removes or moves blocks, so the block limit applies to it
  * @param selection      whether the tool selects blocks
  * @param transform      whether the tool moves, rotates or scales the selected blocks around a pivot
  */
 public record ToolSpec(String id, String label, String icon, String iconId, String section, String description, Tool.BrushUse brushUse, InteractionKind interaction, int defaultKey, String useHint,
-                       boolean confirms, boolean radiusShortcut, boolean placesBlocks, boolean selection, boolean transform) {
+                       boolean confirms, boolean radiusShortcut, boolean buildsOnRelease, boolean placesBlocks, boolean selection, boolean transform) {
     /** The part of the id after the namespace, for names that must be unique per tool, such as a key binding's. */
     public String path() { return id.substring(id.indexOf(':') + 1); }
     /** Whether the shape picker means anything for this tool. */

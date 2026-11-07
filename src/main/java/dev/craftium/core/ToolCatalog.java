@@ -28,6 +28,7 @@ public final class ToolCatalog {
             brushUse(tool), interaction(tool), defaultKey(tool), useHint(tool),
             transform && tool != Tool.PIVOT || tool == Tool.SHAPE,
             !selection && !transform && tool != Tool.RULER && tool != Tool.ANNOTATION && tool != Tool.MODIFY && tool != Tool.LINE && tool != Tool.PATH && tool != Tool.MODELLING && tool != Tool.SHAPE,
+            tool.group.equals("Sculpt") && tool != Tool.MODIFY || tool.group.equals("Paint"),
             !selection && tool != Tool.RULER && tool != Tool.ANNOTATION && tool != Tool.TINKER && tool != Tool.PIVOT,
             selection, transform);
     }
@@ -47,6 +48,7 @@ public final class ToolCatalog {
         return switch (tool) {
             case PATH, MODELLING -> InteractionKind.POINTS;
             case BOX_SELECT -> InteractionKind.BOX;
+            case LASSO_SELECT -> InteractionKind.LASSO;
             case SHAPE -> InteractionKind.SHAPE_PLACEMENT;
             case MODIFY -> InteractionKind.MODIFY_ANCHOR;
             case LINE -> InteractionKind.LINE;

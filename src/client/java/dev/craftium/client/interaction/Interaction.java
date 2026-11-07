@@ -20,6 +20,18 @@ public interface Interaction {
     /** The use button went down over the world: a stroke begins. */
     default void strokeBegan(EditorContext editor) {}
 
+    /**
+     * The use button went down at {@code x}, {@code y} on the screen. Returns true when the interaction started a stroke of its own, so no
+     * request is sent for the click (a lasso starts an outline instead).
+     */
+    default boolean pressed(EditorContext editor, double x, double y) { return false; }
+
+    /** The pointer moved to {@code x}, {@code y} with the use button held. Returns true when the interaction took the movement and a held click is not repeated for it. */
+    default boolean dragged(EditorContext editor, double x, double y) { return false; }
+
+    /** The use button was let go, whether or not a stroke was running. */
+    default void released(EditorContext editor) {}
+
     /** The use button was let go after a stroke. */
     default void strokeEnded(EditorContext editor) {}
 

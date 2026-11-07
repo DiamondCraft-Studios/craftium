@@ -102,6 +102,7 @@ public final class EditorScreen extends CraftiumScreen {
         @Override public BlockHitResult target(){return EditorScreen.this.target();}
         @Override public boolean shiftDown(){return minecraft.hasShiftDown();}
         @Override public void request(String action){action(action);}
+        @Override public List<LassoSelection.Pixel> lasso(){return lasso;}
         @Override public int selectedNode(){return selectedNode;}
         @Override public void selectNode(int index){selectedNode=index;}
         @Override public boolean hitsPointHandles(Point at,double x,double y){return TransformGizmo.hitsPointHandles(at,x,y);}
@@ -1384,7 +1385,7 @@ public final class EditorScreen extends CraftiumScreen {
     private net.minecraft.core.BlockPos lastDragged;
     private boolean useQueued,awaitingReply,repliedSince;
     /** The Sculpt and Paint tools work by strokes: what a stroke stages is built the moment the button is released, without Enter. So does every tool when Enter to build is off in the preferences. Modify is built by its own Apply. */
-    private boolean sculpts(Tool tool){return !o().enterToBuild||(tool.group.equals("Sculpt")&&tool!=Tool.MODIFY)||tool.group.equals("Paint");}
+    private boolean sculpts(Tool tool){return !o().enterToBuild||tool.spec().buildsOnRelease();}
     private long lastUseSent;
     /** How long a stroke waits between one application of the brush and the next: 140 ms at the default flow of 25, longer for less, 35 ms at 100. */
     private long useInterval(){return flowShown()?Math.round(140.0*Options.FLOW_DEFAULT/Math.clamp(o().brushFlow,Options.FLOW_MIN,Options.FLOW_MAX)):140;}
@@ -1488,7 +1489,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(!toolActive&&EditorBindings.matches(Action.CROSSHAIR,event)){cameraGesture=CameraGesture.ROTATE;cameraButton=event.button();return true;}
         if(EditorBindings.matches(Action.ROTATE_CAMERA,event)){cameraGesture=CameraGesture.ROTATE;cameraButton=event.button();return true;}
-        if(toolActive&&EditorBindings.matches(Action.USE_TOOL,event)){Interactions.of(o().tool).strokeBegan(context);painting=true;ClientState.strokeId=System.nanoTime();lastDragged=null;useQueued=false;if(o().tool==Tool.LASSO_SELECT){lasso.clear();lasso.add(new LassoSelection.Pixel(event.x(),event.y()));}else use();}
+        if(toolActive&&EditorBindings.matches(Action.USE_TOOL,event)){Interactions.of(o().tool).strokeBegan(context);painting=true;ClientState.strokeId=System.nanoTime();lastDragged=null;useQueued=false;if(!Interactions.of(o().tool).pressed(context,event.x(),event.y()))use();}
         if(EditorBindings.matches(Action.PICK_BLOCK,event)){
             // Dragging pans the camera; letting go without having dragged picks the block, as a click always did.
             var hit=target();pickedHit=hit;pendingPick=true;middleDragged=false;
@@ -1521,7 +1522,7 @@ public final class EditorScreen extends CraftiumScreen {
         String block=BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(hit.getBlockPos()).getBlock()).toString();
         ClientState.pick(block);
     }
-    @Override public boolean mouseReleased(MouseButtonEvent event){if(selectingText){selectingText=false;return true;}if(dragBlock!=null&&event.button()==0){finishBlockDrag(event);return true;}if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting)Interactions.of(o().tool).strokeEnded(context);if(painting&&sculpts(o().tool))CraftiumClient.send("stroke_end",null,null);painting=false;ClientState.strokeId=0;if(o().tool==Tool.LASSO_SELECT&&!lasso.isEmpty()){o().selectionPoints=new ArrayList<>(LassoSelection.project(lasso));action("lasso_select");o().selectionPoints.clear();lasso.clear();}}return true;}
+    @Override public boolean mouseReleased(MouseButtonEvent event){if(selectingText){selectingText=false;return true;}if(dragBlock!=null&&event.button()==0){finishBlockDrag(event);return true;}if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting)Interactions.of(o().tool).strokeEnded(context);if(painting&&sculpts(o().tool))CraftiumClient.send("stroke_end",null,null);painting=false;ClientState.strokeId=0;Interactions.of(o().tool).released(context);}return true;}
     @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy) {
         if(dragBlock!=null){if(!dragMoved&&Math.hypot(event.x()-dragStartX,event.y()-dragStartY)>5)dragMoved=true;return true;}
         if(ReferenceImages.drag(event.x(),event.y()))return true;
@@ -1552,7 +1553,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(dragging!=null){double px=WorkspaceLayout.inverse(draggingSliderPanel,event.x()/scale,event.y()/scale)[0];if(dragging.unbounded())dragging.drag(px,sliderStartX,sliderStartValue,minecraft.hasControlDown(),minecraft.hasShiftDown());else dragging.update(px,minecraft.hasControlDown(),minecraft.hasShiftDown());return true;}
         if(help||transform||menu>=0)return true;
         if(inViewport(event.x()/scale,event.y()/scale)) {
-            if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&o().tool==Tool.LASSO_SELECT){if(lasso.size()<1024)lasso.add(new LassoSelection.Pixel(event.x(),event.y()));return true;}
+            if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&Interactions.of(o().tool).dragged(context,event.x(),event.y()))return true;
             if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&painting&&Interactions.of(o().tool).repeatsWhenDragged())dragUse();
         }
         return true;

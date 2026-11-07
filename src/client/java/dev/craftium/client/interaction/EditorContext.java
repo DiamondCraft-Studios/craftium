@@ -1,8 +1,11 @@
 package dev.craftium.client.interaction;
 
+import dev.craftium.client.LassoSelection;
 import dev.craftium.core.Options;
 import dev.craftium.core.Point;
 import net.minecraft.world.phys.BlockHitResult;
+
+import java.util.List;
 
 /**
  * What an {@link Interaction} may use of the editor: the options, the block under the cursor, whether Shift is down, and which control point
@@ -15,6 +18,8 @@ public interface EditorContext {
     boolean shiftDown();
     /** Sends the editor's own request of that name for the block under the cursor, as a menu item or a shortcut would. */
     void request(String action);
+    /** The outline a lasso is drawing on the screen, as the live list the screen also draws it from. */
+    List<LassoSelection.Pixel> lasso();
     /** The control point whose gizmo is shown, as an index into the tool's point list, or -1. */
     int selectedNode();
     /** Selects the control point at {@code index} of the tool's point list, so its gizmo is shown. */

@@ -41,6 +41,7 @@ class ToolCatalogTest {
         special.put(Tool.PATH, InteractionKind.POINTS);
         special.put(Tool.MODELLING, InteractionKind.POINTS);
         special.put(Tool.BOX_SELECT, InteractionKind.BOX);
+        special.put(Tool.LASSO_SELECT, InteractionKind.LASSO);
         special.put(Tool.SHAPE, InteractionKind.SHAPE_PLACEMENT);
         special.put(Tool.MODIFY, InteractionKind.MODIFY_ANCHOR);
         special.put(Tool.LINE, InteractionKind.LINE);
@@ -55,11 +56,23 @@ class ToolCatalogTest {
         for (Tool tool : Tool.values()) assertEquals(special.getOrDefault(tool, InteractionKind.CLICK), tool.spec().interaction(), tool.name());
     }
 
+    @Test void thePaintAndSculptToolsBuildWhenTheButtonIsLetGoExceptModify() {
+        for (Tool tool : Tool.values()) {
+            boolean expected = tool.group.equals("Paint") || tool.group.equals("Sculpt") && tool != Tool.MODIFY;
+            assertEquals(expected, tool.spec().buildsOnRelease(), tool.name());
+        }
+        assertTrue(Tool.PAINTER.spec().buildsOnRelease());
+        assertTrue(Tool.SMOOTH.spec().buildsOnRelease());
+        assertFalse(Tool.MODIFY.spec().buildsOnRelease());
+        assertFalse(Tool.FREEHAND_DRAW.spec().buildsOnRelease());
+    }
+
     @Test void onlyTheGeneralInteractionKindsAreOpenToPlugins() {
         assertTrue(InteractionKind.CLICK.forPlugins);
         assertTrue(InteractionKind.POINTS.forPlugins);
         assertTrue(InteractionKind.BOX.forPlugins);
         assertTrue(InteractionKind.LINE.forPlugins);
+        assertFalse(InteractionKind.LASSO.forPlugins);
         assertFalse(InteractionKind.SHAPE_PLACEMENT.forPlugins);
         assertFalse(InteractionKind.MODIFY_ANCHOR.forPlugins);
         assertFalse(InteractionKind.RULER.forPlugins);

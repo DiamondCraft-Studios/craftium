@@ -5,7 +5,7 @@ import dev.craftium.core.Tool;
 
 /** The interaction for each {@link InteractionKind}, and for each tool by way of the kind its spec names. */
 public final class Interactions {
-    private static final Interaction CLICK = new ClickInteraction(), POINTS = new PointsInteraction(), BOX = new BoxInteraction(), LINE = new LineInteraction(),
+    private static final Interaction CLICK = new ClickInteraction(), POINTS = new PointsInteraction(), BOX = new BoxInteraction(), LASSO = new LassoInteraction(), LINE = new LineInteraction(),
         SHAPE_PLACEMENT = new ShapeInteraction(), MODIFY_ANCHOR = new ModifyInteraction(), RULER = new RulerInteraction(), PIVOT = new PivotInteraction(), ANNOTATION = new AnnotationInteraction(), TRANSFORM = new TransformInteraction(),
         SHIFT_POINTS = new ShiftPointsInteraction(), ANCHOR_PAIR = new AnchorPairInteraction();
 
@@ -18,6 +18,7 @@ public final class Interactions {
             case CLICK -> CLICK;
             case POINTS -> POINTS;
             case BOX -> BOX;
+            case LASSO -> LASSO;
             case SHAPE_PLACEMENT -> SHAPE_PLACEMENT;
             case MODIFY_ANCHOR -> MODIFY_ANCHOR;
             case LINE -> LINE;
