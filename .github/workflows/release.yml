@@ -1,7 +1,8 @@
 name: Release
 
 # Pushing a tag named v<mod version>-mc<minecraft version> (for example v0.5.0-beta.2-mc26.2)
-# builds that Minecraft version and publishes a GitHub release with its JARs. The tagged commit must be on main;
+# builds that Minecraft version and publishes a GitHub release with its JARs, then the client JAR to Modrinth
+# and CurseForge when those are configured (see the last steps). The tagged commit must be on main;
 # a tag anywhere else fails the run before anything is built.
 on:
   push:
@@ -121,3 +122,59 @@ jobs:
             args+=(--prerelease)
           fi
           gh release create "$TAG" release-jars/*.jar "${args[@]}"
+
+      # Modrinth and CurseForge get the client mod JAR only (the Paper plugin is not a Fabric mod). Each
+      # platform is skipped until its project ID (repository variable) and token (secret) are both set,
+      # so the GitHub release above never depends on them.
+      - name: Check which platforms are configured
+        id: platforms
+        env:
+          MODRINTH_ID: ${{ vars.MODRINTH_ID }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          CURSEFORGE_ID: ${{ vars.CURSEFORGE_ID }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+        run: |
+          if [ -n "$MODRINTH_ID" ] && [ -n "$MODRINTH_TOKEN" ]; then
+            echo "modrinth=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Modrinth is not configured (variable MODRINTH_ID and secret MODRINTH_TOKEN), so nothing is published there."
+          fi
+          if [ -n "$CURSEFORGE_ID" ] && [ -n "$CURSEFORGE_TOKEN" ]; then
+            echo "curseforge=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::CurseForge is not configured (variable CURSEFORGE_ID and secret CURSEFORGE_TOKEN), so nothing is published there."
+          fi
+
+      - name: Publish to Modrinth
+        if: steps.platforms.outputs.modrinth == 'true'
+        uses: Kir-Antipov/mc-publish@c23376546a97f5ba7984e94445da359459b14419 # v3.3.2
+        with:
+          modrinth-id: ${{ vars.MODRINTH_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: release-jars/craftium-${{ steps.tag.outputs.version }}+mc${{ steps.tag.outputs.mc }}.jar
+          name: Craftium ${{ steps.tag.outputs.version }} for Minecraft ${{ steps.tag.outputs.mc }}
+          version: ${{ steps.tag.outputs.version }}+mc${{ steps.tag.outputs.mc }}
+          version-type: ${{ steps.tag.outputs.prerelease == 'true' && 'beta' || 'release' }}
+          changelog-file: notes.md
+          loaders: fabric
+          game-versions: ${{ steps.tag.outputs.mc }}
+          dependencies: |
+            fabric-api(required){modrinth:P7dR8mSH}
+          fail-mode: fail
+
+      - name: Publish to CurseForge
+        if: steps.platforms.outputs.curseforge == 'true'
+        uses: Kir-Antipov/mc-publish@c23376546a97f5ba7984e94445da359459b14419 # v3.3.2
+        with:
+          curseforge-id: ${{ vars.CURSEFORGE_ID }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          files: release-jars/craftium-${{ steps.tag.outputs.version }}+mc${{ steps.tag.outputs.mc }}.jar
+          name: Craftium ${{ steps.tag.outputs.version }} for Minecraft ${{ steps.tag.outputs.mc }}
+          version: ${{ steps.tag.outputs.version }}+mc${{ steps.tag.outputs.mc }}
+          version-type: ${{ steps.tag.outputs.prerelease == 'true' && 'beta' || 'release' }}
+          changelog-file: notes.md
+          loaders: fabric
+          game-versions: ${{ steps.tag.outputs.mc }}
+          dependencies: |
+            fabric-api(required){curseforge:306612}
+          fail-mode: fail
