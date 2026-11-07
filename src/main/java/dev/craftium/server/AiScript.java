@@ -16,14 +16,17 @@ final class AiScript {
      * thread, so this holds a script to about half a second.
      */
     static final int INSTRUCTIONS = 5_000_000;
-    /** Heap the scripts may grow by; more than a brush has, since a script that runs longer leaves more garbage before it is collected. */
+    /**
+     * What a script may allocate (and the heap grow by): more than a brush has, since a script that runs longer leaves more garbage before it
+     * is collected. Real scripts use a small fraction of it; what it stops is a script that builds ever larger strings or tables.
+     */
     static final long MEMORY_BYTES = 256L * 1024 * 1024;
 
     /** Runs the scripts in order, planning their blocks into {@code plan}, and adds what the AI should hear about them to {@code warnings}. */
     static void run(EditPlanner plan, List<BuildSpec.ScriptOp> scripts, List<String> warnings) {
         int spent = 0;
         for (var script : scripts) {
-            var sandbox = new LuaSandbox(INSTRUCTIONS - spent, MEMORY_BYTES);
+            var sandbox = new LuaSandbox(INSTRUCTIONS - spent, MEMORY_BYTES, true);
             var api = new LuaFunctions(sandbox.globals(), plan);
             Point a = script.from(), b = script.to();
             api.confine(p -> p.x() >= a.x() && p.x() <= b.x() && p.y() >= a.y() && p.y() <= b.y() && p.z() >= a.z() && p.z() <= b.z(), script.seed(), BuildSpec.MAX_BLOCKS);

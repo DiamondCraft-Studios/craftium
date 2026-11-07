@@ -118,4 +118,46 @@ class LuaSandboxTest {
         String nested = "return " + "(".repeat(9990) + "1" + ")".repeat(9990);
         assertThrows(RuntimeException.class, () -> new LuaSandbox().load(nested, "test"));
     }
+
+    private static final long MB = 1024 * 1024;
+
+    @Test void aMemoryBombIsStoppedWhetherOrNotTheSandboxCountsItsOwnAllocation() {
+        // Doubling a string 40 times asks for terabytes in a few hundred instructions.
+        String bomb = "local s = 'x' for i = 1, 40 do s = s .. s end return #s";
+        for (boolean own : new boolean[]{false, true}) {
+            var sandbox = new LuaSandbox(1_000_000, 16 * MB, own);
+            var error = assertThrows(IllegalArgumentException.class, () -> sandbox.call(sandbox.load(bomb, "test")), "own allocation " + own);
+            assertTrue(error.getMessage().contains("budget"), error.getMessage());
+        }
+    }
+
+    @Test void anotherThreadsHeapGrowthDoesNotCancelAScript() throws Exception {
+        var sandbox = new LuaSandbox(5_000_000, 32 * MB, true);
+        org.junit.jupiter.api.Assumptions.assumeTrue(sandbox.countsOwnAllocation(), "this JVM cannot count a thread's allocation");
+        var held = new java.util.ArrayList<byte[]>();
+        var go = new java.util.concurrent.CountDownLatch(1);
+        var holding = new Thread(() -> { for (int i = 0; i < 12; i++) held.add(new byte[4 * (int) MB]); go.countDown(); try { Thread.sleep(2000); } catch (InterruptedException ignored) { } });
+        holding.start();
+        go.await();
+        // The heap is now 48 MB over where the sandbox started, none of it from the script, which allocates about 10 MB of its own.
+        sandbox.call(sandbox.load("local n = 0 for i = 1, 300000 do n = n + i end return n", "test"));
+        holding.interrupt();
+        // Counting the heap alone cancels the same script, which is the unsteadiness this avoids.
+        var heapOnly = new LuaSandbox(5_000_000, 32 * MB, false);
+        var heldAgain = new byte[12][];
+        for (int i = 0; i < heldAgain.length; i++) heldAgain[i] = new byte[4 * (int) MB];
+        assertThrows(IllegalArgumentException.class, () -> heapOnly.call(heapOnly.load("local n = 0 for i = 1, 300000 do n = n + i end return n", "test")));
+        assertEquals(12, heldAgain.length);
+    }
+
+    @Test void aTerrainLoopAllocatesAFractionOfTheAiBudget() {
+        var sandbox = new LuaSandbox(AiScript.INSTRUCTIONS, AiScript.MEMORY_BYTES, true);
+        org.junit.jupiter.api.Assumptions.assumeTrue(sandbox.countsOwnAllocation(), "this JVM cannot count a thread's allocation");
+        var counter = java.lang.management.ManagementFactory.getThreadMXBean() instanceof com.sun.management.ThreadMXBean bean ? bean : null;
+        long id = Thread.currentThread().threadId(), before = counter.getThreadAllocatedBytes(id);
+        sandbox.call(sandbox.load("local s = 0 for x = 1, 64 do for z = 1, 64 do local h = math.floor(math.sin(x * 0.1) * math.cos(z * 0.1) * 8) for y = 1, h + 10 do s = s + y end end end return s", "test"));
+        long bytes = counter.getThreadAllocatedBytes(id) - before;
+        System.out.println("ALLOC terrain loop of 64 x 64 columns: " + bytes / 1024 + " KB in " + sandbox.used() + " instructions");
+        assertTrue(bytes < AiScript.MEMORY_BYTES / 4, "a terrain loop allocated " + bytes / MB + " MB of a " + AiScript.MEMORY_BYTES / MB + " MB budget");
+    }
 }
