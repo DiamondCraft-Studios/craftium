@@ -11,6 +11,11 @@ public enum InteractionKind {
     POINTS(true),
     /** Two clicks mark the opposite corners of a box and each corner can be dragged by its handle; a third click starts over. */
     BOX(true),
+    /**
+     * A click builds what is outlined under the cursor, and a held button does not repeat it; a click that would change as many blocks as a hover
+     * preview stops showing asks first, because it cannot be looked over before it is built. Built in for Extrude and Floodfill.
+     */
+    CONFIRMED_CLICK(false),
     /** The held button draws an outline on the screen and letting go selects what it encloses as seen from the camera. Built in for Lasso Select. */
     LASSO(false),
     /** Each click sends the request for the block under the cursor, which takes it as an end point; a held button does not send more. */

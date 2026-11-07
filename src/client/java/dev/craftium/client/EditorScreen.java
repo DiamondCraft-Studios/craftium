@@ -102,6 +102,8 @@ public final class EditorScreen extends CraftiumScreen {
         @Override public BlockHitResult target(){return EditorScreen.this.target();}
         @Override public boolean shiftDown(){return minecraft.hasShiftDown();}
         @Override public void request(String action){action(action);}
+        @Override public boolean asking(){return confirm!=null;}
+        @Override public void ask(String text,String hint,Runnable action){confirm=new Confirm(text,hint,action);}
         @Override public List<LassoSelection.Pixel> lasso(){return lasso;}
         @Override public int selectedNode(){return selectedNode;}
         @Override public void selectNode(int index){selectedNode=index;}
@@ -1390,7 +1392,6 @@ public final class EditorScreen extends CraftiumScreen {
     /** How long a stroke waits between one application of the brush and the next: 140 ms at the default flow of 25, longer for less, 35 ms at 100. */
     private long useInterval(){return flowShown()?Math.round(140.0*Options.FLOW_DEFAULT/Math.clamp(o().brushFlow,Options.FLOW_MIN,Options.FLOW_MAX)):140;}
     private void dragUse(){
-        if(o().tool==Tool.EXTRUDE||o().tool==Tool.FLOODFILL)return; // one build per click, of what is outlined under the cursor
         if(!o().tool.selection()){use();return;}
         var hit=target();if(hit==null||hit.getBlockPos().equals(lastDragged))return;
         long now=System.currentTimeMillis();
@@ -1407,15 +1408,6 @@ public final class EditorScreen extends CraftiumScreen {
         if(Interactions.of(o().tool).beforeUse(context))return; // sees every click and every step of a drag, whatever the use interval says
         long now=System.currentTimeMillis();if((!o().tool.selection()&&now-lastUse<useInterval())||ClientState.status.busy())return;lastUse=now;awaitingReply=true;repliedSince=false;
         if(Interactions.of(o().tool).use(context))return; // what this kind of tool does with a click; false lets the click go on to the server as a plain request
-        if((o().tool==Tool.EXTRUDE||o().tool==Tool.FLOODFILL)&&o().largeSelectionWarnings&&confirm==null){
-            // A click that reaches more than a hover preview is made for asks first, because it cannot be looked over before it is built.
-            var hit=target();int count=hit==null?0:ClickPreview.measure(minecraft,hit);
-            if(count>=o().hoverPreviewLimit){
-                Point at=CraftiumClient.point(hit.getBlockPos()),normal=CraftiumClient.normal(hit);
-                confirm=new Confirm("Change "+String.format(Locale.ROOT,"%,d",count)+(count>=ClickPreview.CAP?"+":"")+" blocks, confirm?","Build it",()->CraftiumClient.send("use",at,normal));
-                return;
-            }
-        }
         action("use");
     }
     /** Called when a handle has been let go of: the box follows the handles, replacing the box it made before. */

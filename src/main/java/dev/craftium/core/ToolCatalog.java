@@ -49,6 +49,7 @@ public final class ToolCatalog {
             case PATH, MODELLING -> InteractionKind.POINTS;
             case BOX_SELECT -> InteractionKind.BOX;
             case LASSO_SELECT -> InteractionKind.LASSO;
+            case EXTRUDE, FLOODFILL -> InteractionKind.CONFIRMED_CLICK;
             case SHAPE -> InteractionKind.SHAPE_PLACEMENT;
             case MODIFY -> InteractionKind.MODIFY_ANCHOR;
             case LINE -> InteractionKind.LINE;

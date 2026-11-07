@@ -18,6 +18,10 @@ public interface EditorContext {
     boolean shiftDown();
     /** Sends the editor's own request of that name for the block under the cursor, as a menu item or a shortcut would. */
     void request(String action);
+    /** Whether a question is already waiting for an answer. */
+    boolean asking();
+    /** Puts a question to the player: {@code text} is what is asked, {@code hint} what Confirm is for, and {@code action} what Confirm does. Escape or Cancel drops it. */
+    void ask(String text, String hint, Runnable action);
     /** The outline a lasso is drawing on the screen, as the live list the screen also draws it from. */
     List<LassoSelection.Pixel> lasso();
     /** The control point whose gizmo is shown, as an index into the tool's point list, or -1. */
