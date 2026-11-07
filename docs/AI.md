@@ -34,6 +34,17 @@ Then ask Claude for a build while the game is open. Claude works on the world it
   ```
   This writes `mcp/craftium.mcpb`. The `mcp` folder pins Node 24 in `.nvmrc` (run `nvm use` or `fnm use` there if your tool does not switch on its own). If `npx` stops with "Yallist is not a constructor", your npm is too old for your Node version (npm 10.8 with Node 25, for example): use Node 24, or update npm with `npm install -g npm@latest`.
 
+## As a Claude plugin (Claude Code and Cowork)
+
+The [mcp](../mcp) folder is also a Claude plugin: the same server plus the **craftium-builder** skill, which teaches Claude to build the way a person does (brief, site, an approved blockout, then shell, roof, openings, materials, detail), at Minecraft's scale rather than real-world scale, in stages that stay under the preview limit, and with stairs the right way round. In Claude Code:
+
+```
+/plugin marketplace add DiamondCraft-Studios/craftium
+/plugin install craftium@craftium
+```
+
+The plugin needs Node.js 18 or newer on your PATH (an extension gets Node from Claude Desktop, a plugin does not), and asks for a **Minecraft folder** when you enable it if your game uses a launcher profile. Claude Desktop's Chat tab does not run a plugin's local server, so use the extension there; install one or the other, not both. Steps 2 and 3 of [Set up](#set-up) apply either way.
+
 ## What Claude can do
 
 | Tool | Does |
@@ -102,7 +113,7 @@ A build ignores your brush settings (mask, symmetry, height range) and places ex
 
 Claude Desktop warns that installing an extension "will grant this extension access to everything on your computer". That is true of every extension: it runs as an ordinary program with your permissions, and Claude Desktop does not sandbox it. The warning is generic, so here is what this one actually does, and how that is enforced.
 
-- **It is tiny and has no dependencies.** The packed extension is 8 files and about 11 kB: four short scripts (`mcp/src`, around 375 lines), a manifest, an icon and a readme. It uses no npm packages at run time, so there is no supply chain behind it to audit. It speaks the small part of the MCP protocol it needs itself.
+- **It is tiny and has no dependencies.** The packed extension is 9 files and about 27 kB, most of it the licence text: four short scripts (`mcp/src`, around 390 lines), a package file, a manifest, an icon, a readme and the licence. It uses no npm packages at run time, so there is no supply chain behind it to audit. It speaks the small part of the MCP protocol it needs itself.
 - **It reads one file:** `config/craftium/bridge.json`, in the default Minecraft folder or the folder you choose in its settings. That file holds the port and token the game wrote for this launch.
 - **It talks to one place:** `127.0.0.1`, the game's bridge on your own computer. It has no code that contacts the internet, starts programs, evaluates text as code, opens listening sockets or writes files.
 - **It forwards only what each tool names.** A tool call is checked, and only the keys that tool defines are sent to the game, so extra data a model adds goes nowhere.
