@@ -298,6 +298,27 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
                     "the AI must leave the player's selection alone, and its undo list is empty again: " + after);
             System.out.println("CRAFTIUM_AI selection_untouched");
 
+            // Spec v2 in the real game: material names resolve to real ids, a turned or mirrored group turns its stairs the way the game
+            // does, a roof takes the blocks of its material, and a mix places both of its blocks.
+            int gx = x + 40, gy = y + 20;
+            String v2 = "{\"material\":\"spruce\",\"ops\":["
+                + "{\"op\":\"group\",\"rotate\":90,\"ops\":[{\"op\":\"set\",\"at\":[" + gx + "," + gy + "," + z + "],\"block\":\"@stairs[facing=north]\"}]},"
+                + "{\"op\":\"group\",\"mirror\":\"x\",\"ops\":[{\"op\":\"set\",\"at\":[" + (gx + 2) + "," + gy + "," + z + "],\"block\":\"oak_stairs[facing=east,shape=outer_left]\"}]},"
+                + "{\"op\":\"roof\",\"from\":[" + (gx + 4) + "," + gy + "," + z + "],\"to\":[" + (gx + 6) + "," + gy + "," + (z + 2) + "],\"material\":\"stone_bricks\",\"overhang\":0},"
+                + "{\"op\":\"box\",\"from\":[" + gx + "," + (gy + 5) + "," + z + "],\"to\":[" + (gx + 7) + "," + (gy + 5) + "," + (z + 7) + "],\"block\":{\"mix\":[[\"stone\",1],[\"andesite\",1]]}}]}";
+            var v2Preview = call("preview_build", "{\"spec\":" + v2 + "}");
+            require(v2Preview.get("ok").getAsBoolean(), "a spec v2 preview: " + v2Preview);
+            var v2Read = call("get_preview_blocks", "{\"from\":[" + gx + "," + gy + "," + z + "],\"to\":[" + (gx + 7) + "," + (gy + 5) + "," + (z + 7) + "],\"format\":\"runs\"}");
+            String v2Palette = v2Read.getAsJsonArray("palette").toString();
+            require(v2Palette.contains("minecraft:spruce_stairs[facing=east,"), "a stair turned a quarter clockwise should face east: " + v2Palette);
+            require(v2Palette.contains("minecraft:oak_stairs[facing=west,half=bottom,shape=outer_right"), "a stair mirrored along x should face west with its corner swapped: " + v2Palette);
+            require(v2Palette.contains("minecraft:stone_brick_stairs[") && v2Palette.contains("minecraft:stone_brick_slab[") && v2Palette.contains("minecraft:stone_bricks\""), "the roof should be stone bricks: " + v2Palette);
+            require(v2Palette.contains("minecraft:stone\"") && v2Palette.contains("minecraft:andesite\""), "the mix should place both blocks: " + v2Palette);
+            var noKind = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"set\",\"at\":[" + gx + "," + gy + "," + z + "],\"block\":\"glass@stairs\"}]}}");
+            require(!noKind.get("ok").getAsBoolean() && noKind.get("error").getAsString().contains("ops[0] (set)") && noKind.get("error").getAsString().contains("tried"), "a material with no such kind should say what was tried: " + noKind);
+            call("cancel_preview", "{}");
+            System.out.println("CRAFTIUM_AI spec_v2_ok");
+
             // A build far from the player, in ground nobody has loaded: previewed, applied and undone without anyone going there.
             int fx = block.get(0).getAsInt() + 3000, fz = block.get(2).getAsInt() + 3000;
             require(!ctx.computeOnClient(mc -> mc.level.getChunkSource().hasChunk(fx >> 4, fz >> 4)), "the far build site should not be loaded on the client");
