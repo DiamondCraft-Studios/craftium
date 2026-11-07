@@ -279,10 +279,14 @@ public final class AiBridge {
                 var from = point(args, "from"); var to = point(args, "to");
                 String view = args.has("view") ? args.get("view").getAsString() : "after";
                 String format = args.has("format") ? args.get("format").getAsString() : "auto";
+                boolean older = !ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SPEC_V2);
                 // A server from before spec v2 reads the world only through the older, smaller read.
-                if (view.equals("world") && !ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SPEC_V2)) yield read("ai_blocks", from, to);
+                if (older && view.equals("world")) yield olderWorldRead(from, to);
                 // The two settings travel in the action itself, so nothing is put in the shared options and nothing has to be put back.
-                yield read("ai_preview_blocks:" + view + ":" + format, from, to);
+                var answer = read("ai_preview_blocks:" + view + ":" + format, from, to);
+                // An older server answers "after" with no preview waiting by saying so, where this tool promises the world as it is.
+                if (older && view.equals("after") && answer.has("previewBlocks") && answer.get("previewBlocks").getAsInt() == 0 && answer.has("message")) yield olderWorldRead(from, to);
+                yield answer;
             }
             case "get_blocks" -> { var from = point(args, "from"); var to = point(args, "to"); yield serverSupported() ? read("ai_blocks", from, to) : onClient(() -> blocks(from, to)); }
             case "get_surface" -> {
@@ -326,6 +330,23 @@ public final class AiBridge {
     private static boolean serverSupported() {
         var mc = Minecraft.getInstance();
         return mc.player != null && mc.level != null && CraftiumClient.supported();
+    }
+
+    /** The most blocks of the world a server from before spec v2 reads at once. */
+    private static final long OLDER_SERVER_READ = 32_768;
+
+    /**
+     * read_blocks of the world on a server from before spec v2: the older read, which stops at {@link #OLDER_SERVER_READ} blocks, ignores the
+     * requested format and answers as runs. A box over the limit is refused with what to do about it, and the reply says it is the older kind.
+     */
+    private static JsonObject olderWorldRead(Point from, Point to) throws Exception {
+        long total = (long) (Math.abs(from.x() - to.x()) + 1) * (Math.abs(from.y() - to.y()) + 1) * (Math.abs(from.z() - to.z()) + 1);
+        if (total > OLDER_SERVER_READ)
+            throw new IllegalArgumentException("This server's Craftium is older than this plugin and reads at most " + String.format(java.util.Locale.ROOT, "%,d", OLDER_SERVER_READ) + " blocks of the world at a time (that box has "
+                + String.format(java.util.Locale.ROOT, "%,d", total) + "). Read it in smaller boxes, or ask the server owner to update Craftium");
+        var out = read("ai_blocks", from, to);
+        out.addProperty("serverOutdated", "This server's Craftium is older than this plugin, so this read answers as runs whatever \"format\" you asked for, and the world only (not your preview).");
+        return out;
     }
 
     /** Asks the server to read part of its world and waits for the data, which comes back as a packet of its own rather than as a status. */
