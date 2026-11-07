@@ -54,29 +54,7 @@ final class ToolHints {
         return "Wheel: Zoom";
     }
     /** Tools that act through a brush, so the radius shortcut applies. */
-    static boolean brush(Tool tool){return !tool.selection()&&!tool.transform()&&tool!=Tool.RULER&&tool!=Tool.ANNOTATION&&tool!=Tool.MODIFY&&tool!=Tool.LINE&&tool!=Tool.PATH&&tool!=Tool.MODELLING&&tool!=Tool.SHAPE;}
-    private static boolean confirms(Tool tool){return tool.transform()&&tool!=Tool.PIVOT||tool==Tool.SHAPE;}
-    private static String use(Tool tool){
-        return switch(tool){
-            case MAGIC_SELECT->"Select connected";
-            case BOX_SELECT->"Set corner";
-            case FREEHAND_SELECT->"Brush selection";
-            case LASSO_SELECT->"Draw lasso";
-            case RULER->"Add point";
-            case LINE,PATH,MODELLING->"Add point";
-            case SHAPE->"Put down shape";
-            case MOVE->"Drag arrows to move";
-            case ROTATE->"Drag rings to rotate";
-            case SCALE->"Drag squares to scale";
-            case PIVOT->"Set pivot";
-            case MODIFY->"Fix preview";
-            case ANNOTATION->"Annotate";
-            case TINKER->"Tinker with block";
-            case TEXT->"Place text";
-            case STAMP->"Stamp clipboard";
-            case ERASE->"Erase";
-            case PAINTER,NOISE_PAINTER,BIOME_PAINTER,CLENTAMINATOR,GRADIENT_PAINTER,SCRIPT_BRUSH->"Paint";
-            default->"Use "+tool.label;
-        };
-    }
+    static boolean brush(Tool tool){return tool.spec().radiusShortcut();}
+    private static boolean confirms(Tool tool){return tool.spec().confirms();}
+    private static String use(Tool tool){return tool.spec().useHint();}
 }
