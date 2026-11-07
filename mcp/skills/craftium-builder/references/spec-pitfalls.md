@@ -15,6 +15,9 @@ North is -z, south is +z, east is +x, west is -x. Mix these up and every facing 
 model (the one that `facing=east` uses has its tall half on the east side, and the other directions are rotations
 of it). `half=top` turns the stair upside down and keeps the same `facing`.
 
+The `roof` and `stairs` ops and a turned or mirrored `group` set all of this for you, corner shapes included. The
+rules below are for stairs you write by hand.
+
 The error that keeps happening is naming the slope instead of the stair. Do not ask "which way does this roof slope
 face?" Ask "which side is higher?" On a roof, **every stair faces the ridge**, the higher side, for both slopes:
 

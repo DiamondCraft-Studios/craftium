@@ -77,6 +77,9 @@ any time ("looks good, build it"). If it is unclear which they want, ask once.
   (windows, columns, steps), and the 3 or 4 dominant materials. Build to those numbers.
 - Palette: 3 materials plus 1 accent, put in the spec `palette`. `get_state` gives the player's recent blocks (a hint of their taste) and the biome (a hint
   of what fits the place).
+- Name shaped blocks by material where you can: `"material": "spruce"` on the spec, then `"@stairs"`, `"@slab"`,
+  `"@fence"` (or `"stone_bricks@wall"` written out). The server spells the id, and changing the material restyles the
+  whole build when the player asks for "the same in dark oak".
 - Read `references/proportions.md` now.
 
 ## Phase 1: Site
@@ -119,13 +122,18 @@ Purpose: get size, silhouette and placement right while it is cheap.
 
 The roof makes or breaks the silhouette. Check it twice.
 
-- Overhang usually 1 block on eaves and gables.
-- Gable: two opposite-facing stair slopes meeting a ridge of full blocks or slabs. Hip: four slopes. Close the gable
-  ends with wall blocks.
-- Big or wide builds need several roof sections, not one slab.
-- Stair facing is the orientation trap: on a roof, every stair faces the ridge (the higher side), on both slopes.
-  Renders cannot show it. The `preview_build` reply counts the stairs by facing: a gable needs two opposite facings
-  in about equal numbers. Then read the roof with `get_preview_blocks` to check each facing is on the right side
+- Use the `roof` op: one op per roof section, over the outer corners of the walls, at the height of the lowest
+  course (usually one above the wall top). It faces every stair, shapes the hip corners, fills the gable ends, caps
+  the ridge and builds the walls up under the overhang, so the orientation trap below is handled for you.
+- Overhang usually 1 block on eaves and gables (the op's default).
+- Gable: two slopes meeting a ridge, the usual cottage roof; the ridge runs along the longer side unless you set
+  `ridge`. Hip: four slopes, calmer and lower-looking. Shed: one slope, for lean-tos and porches.
+- A roof rises one block per block in, so its height is half the span. Big or wide builds need several roof
+  sections (a main roof and lower roofs over wings), not one huge one.
+- Write stairs by hand only for what the op does not make (a dormer, a curved or flared roof). Then stair facing is
+  the orientation trap: on a roof, every stair faces the ridge (the higher side), on both slopes. Renders cannot show
+  it. The `preview_build` reply counts the stairs by facing: a gable needs two opposite facings in about equal
+  numbers. Read the roof with `get_preview_blocks` to check each facing is on the right side
   (`references/spec-pitfalls.md`). `get_blocks` does the same on the world afterwards.
 - Seal the roof to the walls with no sky gaps.
 
@@ -143,8 +151,10 @@ Flat single-block surfaces look machine-made. Break them up.
 
 - Vary within a family, for example stone bricks with mossy and cracked patches, denser near the base and corners,
   not uniform noise.
-- There is no random-mix primitive. Use `set` with chosen position lists (cap 4,096 positions), `replace` with
-  `find`, or a `repeat` pattern.
+- A mix scatters blocks by weight wherever a block goes: `{"mix": [["stone_bricks", 6], ["mossy_stone_bricks", 3],
+  ["cracked_stone_bricks", 1]]}`, usually as a palette entry. It is the same each time the spec is built. A mix
+  alone is uniform noise, so put a mossier mix on the lower courses and the corners and a cleaner one higher up
+  (separate ops for each band), or place patches with `set` lists.
 - Add depth: recess windows, set trim proud of the wall, alternate protruding and recessed sections. A wall wider
   than about 5 blocks with no relief looks flat at a distance.
 
@@ -157,6 +167,9 @@ hand-built one.
 - Stairs, slabs, walls, fences, trapdoors and buttons for trim, cornices, lintels, sills and shutters. Lanterns,
   chimneys, banners, flower boxes.
 - Detail follows the style from Phase 0. Don't sprinkle it everywhere.
+- Write a detail once and place it around the build with a `group`: a window with its sill, shutters and lintel,
+  written for the south wall, becomes the north wall's with `"rotate": 180` or the east wall's with `"rotate": 90`
+  and `"at"`. Stairs, trapdoors and logs inside turn with it. `repeat` on the group places a row of them.
 - Torches, signs and doors are not support-checked. Check each one stands on or against something.
 
 ## Phase 8: Context
