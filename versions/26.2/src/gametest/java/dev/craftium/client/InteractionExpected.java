@@ -71,6 +71,11 @@ final class InteractionExpected {
         Map.entry("shape_turn_with_move_tool", "259 28f1a79caf5be0cb client:ab00ec30a4fb359d"),
         Map.entry("slope_three_clicks", "208 aff3b9e757e83e6b client:1324c4bbc146e424"),
         Map.entry("slope_two_clicks", "137 65571690faa01045 client:cedadbb9e6910632"),
-        Map.entry("smear_clipboard", "55 48e735b6da62e9c3 client:c750976c4c62bdb3")
+        Map.entry("smear_clipboard", "55 48e735b6da62e9c3 client:c750976c4c62bdb3"),
+        Map.entry("stroke_draw_builds_on_release_without_enter_to_build", "243 92db191b06673f3e client:fb8234d5a3d2b10d"),
+        Map.entry("stroke_freehand_draw_stays_pending", "0 e3b0c44298fc1c14 client:2738ab28b2820ce7"),
+        Map.entry("stroke_modify_drag_does_not_build", "0 e3b0c44298fc1c14 client:507da56ac4ffde67"),
+        Map.entry("stroke_painter_builds_on_release", "53 0fc8e34ad7f4b177 client:2c2e10b500733140"),
+        Map.entry("stroke_smooth_builds_on_release", "18 ed6b5ba83b73420a client:628b0812088cd1fd")
     );
 }

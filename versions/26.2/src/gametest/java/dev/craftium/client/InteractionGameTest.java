@@ -138,6 +138,12 @@ public final class InteractionGameTest {
         all.add(new Scenario("modify_pending_confirm", Tool.MODIFY, o -> { o.confirmEdits = true; o.modifyMode = Options.ModifyMode.TRANSLATE_COPIES; o.copies = 2; o.offsetX = -6; o.offsetY = 0; o.offsetZ = 5; }, null, true,
             d -> { d.click(structureTop); d.key(GLFW_KEY_ENTER, 0); d.key(GLFW_KEY_ENTER, 0); }, null));
         all.add(new Scenario("box_select_then_enter_clears", Tool.BOX_SELECT, o -> o.confirmEdits = false, null, false, d -> { d.click(e); d.click(c); d.key(GLFW_KEY_ENTER, 0); }, null));
+        // Which strokes build when the button is let go and which wait for Enter: the Paint and Sculpt tools build, a Draw tool waits unless Enter to build is off.
+        all.add(new Scenario("stroke_freehand_draw_stays_pending", Tool.FREEHAND_DRAW, o -> { o.confirmEdits = true; o.radius = 2; o.block = "minecraft:andesite"; }, null, false, d -> d.drag(e, a, c), null));
+        all.add(new Scenario("stroke_painter_builds_on_release", Tool.PAINTER, o -> { o.confirmEdits = true; o.radius = 2; o.block = "minecraft:andesite"; }, null, false, d -> d.drag(e, a, c), null));
+        all.add(new Scenario("stroke_smooth_builds_on_release", Tool.SMOOTH, o -> { o.confirmEdits = true; o.radius = 3; }, null, false, d -> d.drag(e, a, c), null));
+        all.add(new Scenario("stroke_draw_builds_on_release_without_enter_to_build", Tool.FREEHAND_DRAW, o -> { o.confirmEdits = true; o.enterToBuild = false; o.radius = 2; o.block = "minecraft:andesite"; }, null, false, d -> d.drag(e, a, c), null));
+        all.add(new Scenario("stroke_modify_drag_does_not_build", Tool.MODIFY, o -> { o.confirmEdits = true; o.modifyMode = Options.ModifyMode.TRANSLATE_COPIES; o.copies = 2; o.offsetX = -6; o.offsetY = 0; o.offsetZ = 5; }, null, true, d -> d.drag(structureTop, a), null));
         // A stroke, and undoing it.
         all.add(new Scenario("painter_stroke", Tool.PAINTER, o -> { o.confirmEdits = false; o.radius = 2; o.block = "minecraft:andesite"; }, null, false, d -> d.drag(e, a, c), null));
         all.add(new Scenario("painter_click_then_undo", Tool.PAINTER, o -> { o.confirmEdits = false; o.radius = 3; o.block = "minecraft:andesite"; }, null, false, d -> { d.click(a); d.key('Z', 2); }, null));
@@ -197,6 +203,10 @@ public final class InteractionGameTest {
             ClientState.options.confirmEdits = false; // before anything is sent: a fresh Options stages every edit for Enter, and a staged one would wait for the scenario's own Enter
             CraftiumClient.resetEditor(); ClientState.rulerPoints.clear(); ClientState.rulers.clear(); ModifyPreview.edit(); resetShapeHover();
         });
+        // A scenario can end with an edit staged for Enter, which the server keeps: the next one would apply it. Cancelling does nothing when none is waiting.
+        pause();
+        c.runOnClient(mc -> CraftiumClient.send("pending_cancel", null, new Point(0, 1, 0)));
+        settle();
         // Annotations are kept by the server and "clear" does not remove them, so a scenario would otherwise start with the last one's.
         pause();
         c.runOnClient(mc -> CraftiumClient.send("annotation_clear", GoldenToolGameTest.surface(0, 0), new Point(0, 1, 0)));
