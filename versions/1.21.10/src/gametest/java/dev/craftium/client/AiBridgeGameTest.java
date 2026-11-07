@@ -141,6 +141,16 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(!badView.get("ok").getAsBoolean(), "an unknown view should be refused: " + badView);
             System.out.println("CRAFTIUM_AI preview_read_ok " + seen.get("summary").getAsString());
 
+            // The largest read there is: a box of about a million cells (100 x 104 x 100) over real ground, with the preview waiting in it.
+            String huge = "\"from\":[" + (x - 50) + ",-64," + (z - 50) + "],\"to\":[" + (x + 49) + ",39," + (z + 49) + "]";
+            long began = System.nanoTime();
+            var wide = call("get_preview_blocks", "{" + huge + "}");
+            long took = (System.nanoTime() - began) / 1_000_000;
+            require(wide.get("ok").getAsBoolean(), "a million-cell read should work: " + wide);
+            require(wide.get("summary").getAsString().contains("sandstone"), "the preview should be in the million-cell read: " + wide.get("summary"));
+            require(took < 10_000, "a million-cell read took " + took + " ms");
+            System.out.println("CRAFTIUM_AI preview_read_million cells=" + (100 * 104 * 100) + " ms=" + took + " reply_chars=" + wide.toString().length() + " " + wide.get("summary").getAsString());
+
             var applied = call("apply_preview", "{}");
             require(applied.get("ok").getAsBoolean(), "apply_preview: " + applied);
             for (int i = 0; i < 200 && !ctx.computeOnClient(mc -> mc.level.getBlockState(new BlockPos(x + 2, y + 3, z + 2)).is(Blocks.CUT_SANDSTONE)); i++) ctx.waitTick();
