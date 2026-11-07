@@ -6,7 +6,14 @@ version = "${rootProject.mod_version}+mc${minecraft_version}"
 group = rootProject.maven_group
 base { archivesName = rootProject.archives_base_name }
 
-repositories { mavenCentral() }
+repositories {
+    mavenCentral()
+    // Modrinth maven, only for dev-environment mods (Sodium).
+    exclusiveContent {
+        forRepository { maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' } }
+        filter { includeGroup 'maven.modrinth' }
+    }
+}
 
 // Shared sources live in the repository root. A file under this module's own src/ replaces the
 // shared file with the same relative path, so version differences are explicit overrides.
@@ -64,6 +71,8 @@ dependencies {
     mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    // Sodium runs in the dev client only; it is not a compile or published dependency.
+    modLocalRuntime "maven.modrinth:sodium:${project.sodium_version}"
     implementation 'org.luaj:luaj-jse:3.0.1'
     include 'org.luaj:luaj-jse:3.0.1'
     testImplementation platform('org.junit:junit-bom:5.13.4')
