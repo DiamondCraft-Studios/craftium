@@ -740,14 +740,31 @@ public final class EditorScreen extends CraftiumScreen {
         g.fill(cx,cy,cx+30,cy+30,0xf01b2838);g.outline(cx,cy,30,30,ACCENT);
         BlockPickerScreen.icon(g,font,pipetteBlock,cx+7,cy+7);
     }
-    private long crosshairCursor;private boolean crosshairShown;
-    /** Over the world with the pipette in hand the pointer is a crosshair. */
+    private long crosshairCursor,handCursor;private int cursorShown;
+    /** Whether the chosen tool shows a preview where the pointer is: the selection picks, extrude and flood fill, and the brush tools. */
+    private boolean hoverPreviewTool(){
+        if(!toolActive)return false;
+        Tool t=o().tool;
+        return t==Tool.MAGIC_SELECT||t==Tool.BOX_SELECT||t==Tool.EXTRUDE||t==Tool.FLOODFILL||!t.selection()&&!t.transform()&&t.brushUse()!=Tool.BrushUse.NONE;
+    }
+    /** Over the world with the pipette in hand, or a tool that previews what is under the pointer, the pointer is a crosshair. */
     private void syncCrosshair(){
-        boolean want=pipetting&&!suspended&&menu<0&&!help&&!transform&&inViewport(pointerX/scale,pointerY/scale);
-        if(want==crosshairShown)return;
-        crosshairShown=want;
-        if(want&&crosshairCursor==0)crosshairCursor=GLFW.glfwCreateStandardCursor(GLFW.GLFW_CROSSHAIR_CURSOR);
-        GLFW.glfwSetCursor(minecraft.getWindow().handle(),want?crosshairCursor:0L);
+        boolean over=!suspended&&menu<0&&!help&&!transform&&inViewport(pointerX/scale,pointerY/scale);
+        boolean grab=over&&gizmoHover(),want=over&&(pipetting||hoverPreviewTool());
+        if((want||grab)&&ClientState.selecting())return; // the spinner has the cursor while a big selection is worked out
+        int mode=grab?2:want?1:0; // a hand over a gizmo handle, a crosshair over the world for the tools that preview
+        if(mode==cursorShown&&mode==0)return;
+        cursorShown=mode;
+        if(mode==1&&crosshairCursor==0)crosshairCursor=GLFW.glfwCreateStandardCursor(GLFW.GLFW_CROSSHAIR_CURSOR);
+        if(mode==2&&handCursor==0)handCursor=GLFW.glfwCreateStandardCursor(GLFW.GLFW_HAND_CURSOR);
+        GLFW.glfwSetCursor(minecraft.getWindow().handle(),mode==2?handCursor:mode==1?crosshairCursor:0L);
+    }
+    /** Whether the pointer is over a handle of a gizmo: the one being worked on, or the other corner's of a box selection. */
+    private boolean gizmoHover(){
+        if(TransformGizmo.hovering())return true;
+        if(draggingNode||TransformGizmo.dragging()||o().tool!=Tool.BOX_SELECT||ClientState.boxCorners.size()!=2)return false;
+        for(int i=0;i<2;i++)if(i!=selectedNode&&TransformGizmo.hitsPointHandles(TransformGizmo.cornerAnchor(i),pointerX,pointerY))return true;
+        return false;
     }
     /** A 30px swatch for one of the two selected blocks; clicking it opens the block chooser to replace it. */
     /** The block in the player's main hand, as it changes; empty when the hand holds no block. Click to make it the foreground, or drag it into the world to bucket fill. */
@@ -1508,11 +1525,11 @@ public final class EditorScreen extends CraftiumScreen {
         }
         // Both corners of a box selection show a gizmo; grabbing the one that is not selected selects it and starts the drag.
         if(event.button()==0&&o().tool==Tool.BOX_SELECT&&ClientState.boxCorners.size()==2){
-            for(int i=0;i<2;i++)if(i!=selectedNode&&TransformGizmo.hitsPointHandles(ClientState.boxCorners.get(i),event.x(),event.y())){selectedNode=i;break;}
+            for(int i=0;i<2;i++)if(i!=selectedNode&&TransformGizmo.hitsPointHandles(TransformGizmo.cornerAnchor(i),event.x(),event.y())){selectedNode=i;break;}
         }
         if(event.button()==0&&TransformGizmo.click(this,event.x(),event.y()))return true;
         if(event.button()==0&&!PlacementPreview.active()){
-            var points=handleNodes();double best=144;int index=-1;for(int i=0;i<points.size();i++){var pixel=project(points.get(i),TransformGizmo.nodeOffset());if(pixel==null)continue;double distance=Math.pow(event.x()-pixel[0],2)+Math.pow(event.y()-pixel[1],2);if(distance<best){best=distance;index=i;}}
+            var points=handleNodes();double best=144;int index=-1;for(int i=0;i<points.size();i++){var pixel=project(TransformGizmo.nodeAnchor(points.get(i),i));if(pixel==null)continue;double distance=Math.pow(event.x()-pixel[0],2)+Math.pow(event.y()-pixel[1],2);if(distance<best){best=distance;index=i;}}
             if(index>=0){selectedNode=index;if(!toolActive)ClientState.selectedRuler=rulerOfNode(index);draggingNode=true;placementDragOrigin=points.get(index);placementDragX=event.x();placementDragY=event.y();return true;}
             if(!toolActive){var line=rulerAt(event.x(),event.y());if(line!=null){ClientState.selectedRuler=line;selectedNode=-1;TransformGizmo.cancel();return true;}} // no tool chosen: a click on a ruler picks it, without choosing the Ruler tool
         }
@@ -1835,8 +1852,9 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     }
     public void moveHandle(Point point){if(selectedNode>=0&&selectedNode<handleNodes().size())handleNodes().set(selectedNode,point);}
     private double[] project(Point p){return project(p,0);}
-    private double[] project(Point p,double shift){
-        var camera=ClientCompat.camera(minecraft);Vec3 v=new Vec3(p.x()+shift,p.y()+shift,p.z()+shift).subtract(camera.position());
+    private double[] project(Point p,double shift){return project(new Vec3(p.x()+shift,p.y()+shift,p.z()+shift));}
+    private double[] project(Vec3 at){
+        var camera=ClientCompat.camera(minecraft);Vec3 v=at.subtract(camera.position());
         var plane=ClientCompat.nearPlane(camera);Vec3 center=plane.getPointOnPlane(0,0);
         Vec3 right=plane.getPointOnPlane(1,0).subtract(center).normalize(),up=plane.getPointOnPlane(0,1).subtract(center).normalize(),forward=center.normalize();
         double z=v.dot(forward);if(z<=.05)return null;
