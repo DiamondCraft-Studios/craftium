@@ -990,7 +990,9 @@ public final class EditorScreen extends CraftiumScreen {
         largeSelectionPopup(g);
         if(minecraft.level==null){g.fill(l,80,r,h-28,0xff14202e);text(g,"Open a Creative world to start building",l+30,105,TEXT);}
     }
-    private static final int AXIS_SIZE=64,AXIS_TOP=29,AXIS_GAP=6;
+    private static final int AXIS_SIZE=45,AXIS_TOP=29,AXIS_GAP=6;
+    /** Sizes of the gizmo's parts: how far an end sits from the centre, and the radii of the positive and negative end circles. */
+    private static final double AXIS_REACH=16.1,AXIS_PLUS=4.2,AXIS_MINUS=2.8;
     /**
      * Where the world axes gizmo sits: against the right edge, pushed left past any shown window that is in its way, so it
      * follows the Target info panel (or whatever is there) and falls back to the edge when nothing is.
@@ -1017,7 +1019,7 @@ public final class EditorScreen extends CraftiumScreen {
      */
     private void axisGizmo(Gfx g){
         if(!o().showAxisGizmo||minecraft.player==null||minecraft.level==null)return;
-        int left=axisGizmoX(),cx=left+AXIS_SIZE/2,cy=AXIS_TOP+AXIS_SIZE/2,reach=AXIS_SIZE/2-9;
+        int left=axisGizmoX(),cx=left+AXIS_SIZE/2,cy=AXIS_TOP+AXIS_SIZE/2;final double reach=AXIS_REACH;
         Vec3[] cam=TransformGizmo.cameraAxes();
         // Six ends: axis*2 is the positive end, axis*2+1 the negative. The farthest are drawn first, so the near ones cover them.
         double[][] ends=new double[6][];
@@ -1040,12 +1042,12 @@ public final class EditorScreen extends CraftiumScreen {
             double dx=ends[e][0]*reach*S,dy=ends[e][1]*reach*S,length=Math.hypot(dx,dy);
             if(length<1)continue;
             g.pose().pushMatrix();g.pose().translate((float)(cx*S),(float)(cy*S));g.pose().rotate((float)Math.atan2(dy,dx));
-            g.fill(0,-S/2,(int)Math.round(length),S/2,axisShade(AXIS_COLOURS[e/2],ends[e][2],false));
+            g.fill(0,-3,(int)Math.round(length),3,axisShade(AXIS_COLOURS[e/2],ends[e][2],false));
             g.pose().popMatrix();
         }
         for(int e:order){
             boolean positive=e%2==0;double[] end=ends[e];
-            double ex=(cx+end[0]*reach)*S,ey=(cy+end[1]*reach)*S;int radius=(int)Math.round((positive?6:4)*S*end[3]);
+            double ex=(cx+end[0]*reach)*S,ey=(cy+end[1]*reach)*S;int radius=(int)Math.round((positive?AXIS_PLUS:AXIS_MINUS)*S*end[3]);
             int colour=axisShade(AXIS_COLOURS[e/2],end[2],!positive);
             int step=3;
             for(int dy=-radius;dy<radius;dy+=step){
@@ -1056,7 +1058,7 @@ public final class EditorScreen extends CraftiumScreen {
         g.pose().popMatrix();
         for(int e:order){
             int axis=e/2;boolean positive=e%2==0;double[] end=ends[e];
-            int ex=cx+(int)Math.round(end[0]*reach),ey=cy+(int)Math.round(end[1]*reach),radius=positive?6:4;
+            int ex=cx+(int)Math.round(end[0]*reach),ey=cy+(int)Math.round(end[1]*reach),radius=positive?5:4;
             if(positive){g.pose().pushMatrix();g.pose().translate(ex,ey);g.pose().scale(.7f,.7f);g.centeredText(font,AXIS_NAMES[axis],0,-4,0xffffffff);g.pose().popMatrix();}
             final int fa=axis;final boolean fp=positive;
             controls.add(new Control(ex-radius-1,ey-radius-1,radius*2+3,radius*2+3,()->faceAxis(fa,fp),""));
