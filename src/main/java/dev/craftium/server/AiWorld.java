@@ -106,6 +106,126 @@ final class AiWorld {
         for (int[] at : needed) level.getChunk(at[0], at[1]);
     }
 
+    /** Cells a read of the preview may cover, and the longest reply worth sending: a model cannot use much more than this in one answer. */
+    static final int MAX_VIEW_CELLS = 1_048_576, MAX_VIEW_REPLY = 100_000;
+
+    /** The block kinds met while filling a box, numbered in the order they are first seen. */
+    private static final class Palette {
+        final java.util.List<String> names = new java.util.ArrayList<>();
+        final java.util.Set<Integer> omit = new java.util.HashSet<>();
+        private final java.util.IdentityHashMap<net.minecraft.world.level.block.state.BlockState, Integer> ids = new java.util.IdentityHashMap<>();
+        private final boolean hideAir;
+        private int outside = -1;
+
+        Palette(boolean hideAir) { this.hideAir = hideAir; }
+
+        int of(net.minecraft.world.level.block.state.BlockState state) {
+            Integer id = ids.get(state);
+            if (id == null) {
+                id = names.size();
+                names.add(BlockStateParser.serialize(state));
+                ids.put(state, id);
+                if (hideAir && state.isAir()) omit.add(id);
+            }
+            return id;
+        }
+
+        int outside() {
+            if (outside < 0) { outside = names.size(); names.add(BlockRuns.OUTSIDE); }
+            return outside;
+        }
+    }
+
+    /**
+     * The blocks of the AI's waiting preview in a box, so it can check its work before applying it: exact blocks and states (which way a
+     * stair faces, say), where a picture shows flat colour and the game draws only part of a big preview. "after" is the world as it would
+     * be once applied (the preview over what is there now); "only" is just what the preview places, and air where it clears. The answer is
+     * written as boxes or as runs, whichever is shorter (see {@link dev.craftium.core.BlockView}), and a box may hold a million cells.
+     */
+    static String previewBlocks(ServerPlayer player, Session ai, Point a, Point b, String view, String format) {
+        require(a, b);
+        if (view == null || view.isBlank()) view = "after";
+        if (!view.equals("after") && !view.equals("only")) throw new IllegalArgumentException("\"view\" must be \"after\" or \"only\"");
+        var edit = ai.pendingEdit;
+        if (edit == null) {
+            var none = new JsonObject();
+            none.addProperty("ok", true);
+            none.addProperty("previewBlocks", 0);
+            none.addProperty("message", "There is no waiting preview. Call preview_build first, or read the world with get_blocks.");
+            return reply(none);
+        }
+        int x0 = Math.min(a.x(), b.x()), x1 = Math.max(a.x(), b.x()), y0 = Math.min(a.y(), b.y()), y1 = Math.max(a.y(), b.y()), z0 = Math.min(a.z(), b.z()), z1 = Math.max(a.z(), b.z());
+        int sx = x1 - x0 + 1, sy = y1 - y0 + 1, sz = z1 - z0 + 1;
+        long total = (long) sx * sy * sz;
+        if (total > MAX_VIEW_CELLS) throw new IllegalArgumentException("Region has " + total + " blocks; read at most " + String.format(java.util.Locale.ROOT, "%,d", MAX_VIEW_CELLS) + " at a time");
+        var level = (ServerLevel) player.level();
+        boolean after = view.equals("after");
+        var palette = new Palette(after);
+        int[] ids = new int[(int) total];
+        int fresh = 0;
+        if (after) {
+            fresh = unloaded(level, x0, z0, x1, z1);
+            fillFromWorld(level, palette, ids, x0, y0, z0, x1, y1, z1);
+        } else java.util.Arrays.fill(ids, -1);
+        // The preview over it. The index is built once per preview, so a read costs the box and not the whole edit.
+        for (var entry : previewIndex(ai, edit).entrySet()) {
+            long key = entry.getKey();
+            int px = BlockPos.getX(key), py = BlockPos.getY(key), pz = BlockPos.getZ(key);
+            if (px < x0 || px > x1 || py < y0 || py > y1 || pz < z0 || pz > z1) continue;
+            ids[(px - x0) + sx * ((pz - z0) + sz * (py - y0))] = palette.of(entry.getValue());
+        }
+        var out = dev.craftium.core.BlockView.describe(x0, y0, z0, sx, sy, sz, ids, palette.names, palette.omit, format,
+            after ? "Anything not listed is air." : "Anything not listed is not changed by the preview, and air means the preview clears that block.");
+        out.addProperty("source", "server");
+        out.addProperty("view", view);
+        out.addProperty("previewBlocks", edit.changes().size());
+        if (after) out.addProperty("chunksLoadedForThisRead", fresh);
+        String text = out.toString();
+        if (text.length() > MAX_VIEW_REPLY)
+            throw new IllegalArgumentException("The answer is " + text.length() / 1000 + " KB; the limit is " + MAX_VIEW_REPLY / 1000 + " KB. Read a smaller box, or part of the build at a time (the preview holds " + edit.changes().size() + " blocks in all)");
+        return text;
+    }
+
+    /** The preview's blocks by position, built from the edit once and kept while it is the waiting preview. */
+    private static java.util.Map<Long, net.minecraft.world.level.block.state.BlockState> previewIndex(Session ai, Session.Edit edit) {
+        if (ai.indexedEdit != edit || ai.previewIndex == null) {
+            var index = new java.util.HashMap<Long, net.minecraft.world.level.block.state.BlockState>(Math.max(16, (int) (edit.changes().size() / .75f) + 1));
+            for (var change : edit.changes()) {
+                if (change.before().state() == change.after().state() && change.after().data() == null) continue; // a block the edit leaves as it is
+                index.put(BlockPos.asLong(change.pos().x(), change.pos().y(), change.pos().z()), change.after().state());
+            }
+            ai.indexedEdit = edit;
+            ai.previewIndex = index;
+        }
+        return ai.previewIndex;
+    }
+
+    /** Fills {@code ids} with the world's blocks in the box, chunk by chunk, the world border and height limits reading as outside the world. */
+    private static void fillFromWorld(ServerLevel level, Palette palette, int[] ids, int x0, int y0, int z0, int x1, int y1, int z1) {
+        int sx = x1 - x0 + 1, sz = z1 - z0 + 1, minY = level.getMinY(), maxY = minY + level.getHeight();
+        var at = new BlockPos.MutableBlockPos();
+        var border = level.getWorldBorder();
+        var inside = new boolean[sx * sz]; // per column, so the border is asked once for each and not for every block in it
+        for (int z = 0; z < sz; z++) for (int x = 0; x < sx; x++) inside[x + sx * z] = border.isWithinBounds(at.set(x0 + x, minY, z0 + z));
+        for (int cx = x0 >> 4; cx <= x1 >> 4; cx++)
+            for (int cz = z0 >> 4; cz <= z1 >> 4; cz++) {
+                net.minecraft.world.level.chunk.LevelChunk chunk = null;
+                int lx0 = Math.max(x0, cx << 4), lx1 = Math.min(x1, (cx << 4) + 15), lz0 = Math.max(z0, cz << 4), lz1 = Math.min(z1, (cz << 4) + 15);
+                for (int y = y0; y <= y1; y++) {
+                    boolean outsideY = y < minY || y >= maxY;
+                    for (int z = lz0; z <= lz1; z++) {
+                        int row = (lx0 - x0) + sx * ((z - z0) + sz * (y - y0));
+                        for (int x = lx0; x <= lx1; x++) {
+                            int i = row + (x - lx0);
+                            if (outsideY || !inside[(x - x0) + sx * (z - z0)]) { ids[i] = palette.outside(); continue; }
+                            if (chunk == null) chunk = level.getChunk(cx, cz);
+                            ids[i] = palette.of(chunk.getBlockState(at.set(x, y, z)));
+                        }
+                    }
+                }
+            }
+    }
+
     /**
      * The player's selection as it really is: its exact shape and what it is made of, with the clear space above it. Answered here, in one
      * pass over the blocks, because the selection lives on the server and can hold a million blocks: the answer is a few lines whatever its

@@ -125,6 +125,22 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(ctx.computeOnClient(mc -> mc.level.getBlockState(new BlockPos(x + 2, y + 3, z + 2)).isAir()), "a preview must not touch the world");
             System.out.println("CRAFTIUM_AI preview_ok blocks=" + ghost);
 
+            // get_preview_blocks reads the waiting preview itself, exactly, and as boxes the AI can read at a glance.
+            String previewBox = "\"from\":[" + x + "," + y + "," + z + "],\"to\":[" + (x + 4) + "," + (y + 9) + "," + (z + 4) + "]";
+            var seen = call("get_preview_blocks", "{" + previewBox + "}");
+            require(seen.get("ok").getAsBoolean() && "boxes".equals(seen.get("format").getAsString()), "get_preview_blocks should answer as boxes for a build: " + seen);
+            long listed = 0;
+            var kinds = new java.util.HashSet<String>();
+            for (var entry : seen.getAsJsonArray("blocks")) { listed += entry.getAsJsonObject().get("count").getAsLong(); kinds.add(entry.getAsJsonObject().get("block").getAsString()); }
+            require(listed == ghost && kinds.contains("minecraft:cut_sandstone") && kinds.contains("minecraft:smooth_sandstone"), "every preview block should be listed once, by kind: " + seen);
+            require(seen.get("entries").getAsInt() < ghost / 4, "boxes should be far fewer than blocks: " + seen.get("entries") + " for " + ghost);
+            require(seen.get("previewBlocks").getAsInt() == ghost, "previewBlocks should be the preview's own total: " + seen);
+            var only = call("get_preview_blocks", "{" + previewBox + ",\"view\":\"only\",\"format\":\"runs\"}");
+            require(only.get("ok").getAsBoolean() && "runs".equals(only.get("format").getAsString()) && only.getAsJsonArray("palette").toString().contains("craftium:unchanged"), "view only as runs should mark what the preview leaves alone: " + only);
+            var badView = call("get_preview_blocks", "{" + previewBox + ",\"view\":\"before\"}");
+            require(!badView.get("ok").getAsBoolean(), "an unknown view should be refused: " + badView);
+            System.out.println("CRAFTIUM_AI preview_read_ok " + seen.get("summary").getAsString());
+
             var applied = call("apply_preview", "{}");
             require(applied.get("ok").getAsBoolean(), "apply_preview: " + applied);
             for (int i = 0; i < 200 && !ctx.computeOnClient(mc -> mc.level.getBlockState(new BlockPos(x + 2, y + 3, z + 2)).is(Blocks.CUT_SANDSTONE)); i++) ctx.waitTick();

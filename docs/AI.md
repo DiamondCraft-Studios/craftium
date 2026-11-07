@@ -51,6 +51,7 @@ The plugin needs Node.js 18 or newer on your PATH (an extension gets Node from C
 | --- | --- |
 | `get_state` | Your position and facing, the box around the area you have selected (yours, and never changed by Claude), and whether Claude's preview is waiting |
 | `read_selection` | What you have selected, as it really is: how many blocks, whether it is a solid box or an irregular shape (lasso or magic wand), whether it is flat, what blocks it is made of, and how much clear space is above it. Read only. It works for any selection, up to 1,048,576 blocks, and the answer is a few lines whatever its size |
+| `get_preview_blocks` | Reads the blocks of Claude's own waiting preview in a box (up to 1,048,576 at a time), exactly, with their states, so it can check a roof or a wall before applying it. The answer is as boxes (`[x1,y1,z1,x2,y2,z2]` per block, so a wall is a few entries) or as runs, whichever is shorter, in at most about 100 KB |
 | `get_blocks` | Reads the blocks in a box (up to 32,768 at a time), anywhere in the world: the server reads them, so ground your game has not loaded is real blocks and not air |
 | `get_surface` | The top block of every column in an area (up to 128 by 128), to find ground level |
 | `get_palette` | Your current block and recently used blocks |
@@ -76,6 +77,10 @@ Claude has a workspace of its own, apart from yours. It never changes your selec
 `render_view` draws a box of the world as flat-shaded blocks, each in the average colour of its texture (so resource packs show), seen from an angle Claude chooses: four isometric corners (`se`, `sw`, `ne`, `nw`), straight down (`top`, north at the top), or level with one side (`north`, `south`, `east`, `west`, for judging heights). It never turns or moves you and does not need the box to be near you. Your waiting preview is drawn over the world tinted violet, so Claude sees what you see. The picture is for Claude only; you keep looking at the violet ghost in the game.
 
 It has no textures, shadows or transparency (water and glass draw as solid colour), so it is for shape, proportion and layout, not for fine detail. The game draws only the first 4,096 blocks of a preview, in the game and in this picture. When a preview is bigger than that, `get_state`, `preview_build` and `render_view` all say so (`previewTruncated`, with how many blocks are drawn and a warning), so Claude does not mistake the missing blocks for a mistake in the build; the whole preview is still built when it is applied. A box can be up to 128 blocks a side and 262,144 blocks (for example 64 by 64 by 64); it is read from the server in 32-block pieces, each within the chunk limit below.
+
+## Reading the preview
+
+`get_blocks` reads the world, so it never shows Claude's waiting preview, and `render_view` draws it in flat colour (it cannot show which way a stair faces) and, for a very big preview, only the part the game draws. `get_preview_blocks` reads the preview itself. It answers in the fewest words: for each block, the boxes it fills, so a 10 x 10 x 10 block of wood is one entry wherever it sits in the box that was asked about, where run-length runs would need a run per row. Where boxes stop helping (noisy ground) it answers with runs instead, and says which. `view: "after"` shows the world as it would be once the preview is applied; `view: "only"` shows just what the preview places and clears. The server keeps an index of the preview, so a read costs the box, not the whole build, and a box may hold up to 1,048,576 blocks. The answer is held to about 100 KB, since more than that is more than a model can use at once; for a big build it reads it a part at a time.
 
 ## Reading the world
 

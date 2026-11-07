@@ -83,6 +83,32 @@ export const TOOLS = [
     args: () => ({}),
   },
   {
+    name: "get_preview_blocks",
+    title: "Read your preview",
+    description:
+      "Reads the blocks of your waiting preview (what preview_build is showing) in a box of the world, so you can check your work before you apply it: exactly which blocks went where, with their states, such as which way each stair faces. " +
+      "A picture cannot show that, and the game draws only part of a very big preview, but this reads all of it. get_blocks reads the world and never your preview. " +
+      'view: "after" (default) is the world as it would be once applied, the preview over what is there now; "only" is just what the preview places, with air where it clears a block. ' +
+      "The answer is written in the fewest words. format \"boxes\" lists, for each block, the boxes it fills as [x1, y1, z1, x2, y2, z2] (world coordinates, both corners included), so a wall or a roof is a few boxes wherever it sits in the box you asked about; " +
+      "format \"runs\" is the palette and run-length runs get_blocks uses, which is shorter for noisy ground; \"auto\" (default) picks whichever is shorter and says which it chose. " +
+      "A box may hold up to 1,048,576 blocks, but the answer is at most about 100 KB, so for a big build read it a part at a time. With no waiting preview it says so.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...box.properties,
+        view: { type: "string", enum: ["after", "only"], description: '"after" (default): the world as it would be once applied. "only": just what the preview places' },
+        format: { type: "string", enum: ["auto", "boxes", "runs"], description: '"auto" (default): the shorter of boxes and runs' },
+      },
+      required: ["from", "to"],
+    },
+    annotations: READ,
+    args: (a) => {
+      if (a.view !== undefined && a.view !== "after" && a.view !== "only") throw new ArgumentError('"view" must be "after" or "only"');
+      if (a.format !== undefined && !["auto", "boxes", "runs"].includes(a.format)) throw new ArgumentError('"format" must be "auto", "boxes" or "runs"');
+      return { from: whole(a.from, "from"), to: whole(a.to, "to"), ...(a.view !== undefined ? { view: a.view } : {}), ...(a.format !== undefined ? { format: a.format } : {}) };
+    },
+  },
+  {
     name: "get_blocks",
     title: "Read blocks",
     description:

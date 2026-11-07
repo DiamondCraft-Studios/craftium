@@ -266,6 +266,13 @@ public final class AiBridge {
         return switch (tool) {
             case "get_state" -> onClient(AiBridge::state);
             case "read_selection" -> read("ai_selection", null, null);
+            case "get_preview_blocks" -> {
+                var from = point(args, "from"); var to = point(args, "to");
+                String view = args.has("view") ? args.get("view").getAsString() : "after";
+                String format = args.has("format") ? args.get("format").getAsString() : "auto";
+                // The two settings ride along on this one request and are not kept, as the build spec is not.
+                yield read("ai_preview_blocks", from, to, () -> { var o = ClientState.options; o.aiView = view; o.aiFormat = format; });
+            }
             case "get_blocks" -> { var from = point(args, "from"); var to = point(args, "to"); yield serverSupported() ? read("ai_blocks", from, to) : onClient(() -> blocks(from, to)); }
             case "get_surface" -> {
                 var from = point(args, "from"); var to = point(args, "to");
@@ -305,7 +312,10 @@ public final class AiBridge {
     }
 
     /** Asks the server to read part of its world and waits for the data, which comes back as a packet of its own rather than as a status. */
-    static JsonObject read(String action, Point from, Point to) throws Exception {
+    static JsonObject read(String action, Point from, Point to) throws Exception { return read(action, from, to, null); }
+
+    /** As above, with {@code attach} run on the game's thread just before the request is sent, to put settings on it that are cleared straight after. */
+    static JsonObject read(String action, Point from, Point to, Runnable attach) throws Exception {
         var data = new CompletableFuture<String>();
         pace();
         onClient(() -> {
@@ -313,7 +323,12 @@ public final class AiBridge {
             if (mc.player == null || mc.level == null) throw new IllegalStateException("Not in a world");
             if (!CraftiumClient.supported()) throw new IllegalStateException("This world has no Craftium on the server; install it there to read it");
             awaitingData = data;
-            CraftiumClient.send(action, from, to);
+            try {
+                if (attach != null) attach.run();
+                CraftiumClient.send(action, from, to);
+            } finally {
+                if (attach != null) { ClientState.options.aiView = ""; ClientState.options.aiFormat = ""; }
+            }
             return null;
         });
         lastSent = System.nanoTime();

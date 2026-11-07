@@ -269,6 +269,7 @@ public final class EditorServer {
             // "target" and "normal" carry the two corners here, so this comes before "normal" is checked as a direction.
             switch(r.action()){
                 case "ai_blocks" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.blocks(player,r.target(),r.normal())));return;}
+                case "ai_preview_blocks" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.previewBlocks(player,aiSession(player),r.target(),r.normal(),o.aiView,o.aiFormat)));return;}
                 case "ai_selection" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.selection(player,s)));return;}
                 case "ai_surface","ai_surface_floor" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.surface(player,r.target(),r.normal(),r.action().equals("ai_surface_floor"))));return;}
                 case "ai_build_preview","ai_apply","ai_cancel","ai_undo" -> {aiAction(player,r.action(),o);return;}

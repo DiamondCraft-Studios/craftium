@@ -23,6 +23,7 @@
   "tools": [
     { "name": "get_state", "description": "Player position, their selection and your preview status" },
     { "name": "read_selection", "description": "Read what the player has selected: its shape, blocks and the space above it" },
+    { "name": "get_preview_blocks", "description": "Read the blocks of your waiting preview, as boxes or runs, to check it before applying" },
     { "name": "get_blocks", "description": "Read the blocks in a box of the world" },
     { "name": "get_surface", "description": "Read the ground height of an area" },
     { "name": "get_palette", "description": "The player's block palette" },
