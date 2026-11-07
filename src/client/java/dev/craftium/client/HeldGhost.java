@@ -22,7 +22,13 @@ import java.util.List;
  */
 final class HeldGhost {
     private HeldGhost(){}
+    /** What a click would place: the states and where each lands. */
+    record Placement(List<BlockState> states,List<BlockPos> places){}
     static void draw(Minecraft mc,BlockItem item,BlockHitResult hit,int tint){
+        var placement=placement(mc,item,hit);
+        Overlay.blockStates(placement.states(),placement.places(),tint);
+    }
+    static Placement placement(Minecraft mc,BlockItem item,BlockHitResult hit){
         var context=new BlockPlaceContext(new UseOnContext(mc.player,InteractionHand.MAIN_HAND,hit));
         BlockPos pos=context.getClickedPos();
         BlockState state=item.getBlock().getStateForPlacement(context);
@@ -33,6 +39,6 @@ final class HeldGhost {
         }else if(state.getBlock() instanceof BedBlock&&state.hasProperty(BlockStateProperties.BED_PART)&&state.getValue(BlockStateProperties.BED_PART)==BedPart.FOOT){ // beds lie toward their head
             states.add(state.setValue(BlockStateProperties.BED_PART,BedPart.HEAD));places.add(pos.relative(state.getValue(BedBlock.FACING)));
         }
-        Overlay.blockStates(states,places,tint);
+        return new Placement(states,places);
     }
 }
