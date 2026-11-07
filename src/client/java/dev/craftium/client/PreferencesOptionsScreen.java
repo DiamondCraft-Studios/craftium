@@ -30,37 +30,49 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
     private record Field(String label,String about,int min,int max,Function<Options,Integer> get,java.util.function.BiConsumer<Options,Integer> set) implements Row {}
     private record Number(String label,String about,int min,int max,Function<Options,Integer> get,java.util.function.BiConsumer<Options,Integer> set) implements Row {}
 
-    private static final List<Row> ROWS=List.of(
-        new Toggle("Undo / redo pulse","Flash the changed blocks when you undo or redo",o->o.historyPulse,(o,v)->o.historyPulse=v),
-        new Toggle("Enter to build","On: an edit waits for Enter before it is built. Off: a stroke is built when you let go of the button, and any other edit is built at once",o->o.enterToBuild,(o,v)->o.enterToBuild=v),
-        new Toggle("Undo normal building","On: the blocks you place and break by hand go into the undo history, a held place button as one step. Off: only the editor and Builder tools can be undone",o->o.recordPlayerBuilding,(o,v)->o.recordPlayerBuilding=v),
-        new Toggle("Builder follows Editor magic select","On: the Builder's magic select uses the Magic Wand settings from the editor. Off: it uses its own, set by the block match and the limit below",o->o.builderFollowsMagic,(o,v)->o.builderFollowsMagic=v),
-        new Cycle("Builder magic select matches","What the Builder's magic select treats as connected when it does not follow the editor: any block, the same block, the same block state, a shared tag, or the same block entity data",o->o.builderMagicCompare.name().charAt(0)+o.builderMagicCompare.name().substring(1).toLowerCase(),o->o.builderMagicCompare=Options.Compare.values()[(o.builderMagicCompare.ordinal()+1)%Options.Compare.values().length],(o,d)->o.builderMagicCompare=d.builderMagicCompare),
-        new Field("Builder magic select limit","The most blocks the Builder's magic select looks for when it does not follow the editor. A bigger area is cut off at this many",1,dev.craftium.core.Selection.LIMIT,o->o.builderMagicLimit,(o,v)->o.builderMagicLimit=v),
-        new Toggle("Bulldozer same blocks","On: a full Bulldozer sweep only breaks blocks like the first one it met, states included, and a different block stops it until you let go. Off: it breaks everything it passes over",o->o.bulldozerSameBlocks,(o,v)->o.bulldozerSameBlocks=v),
-        new Toggle("Live Builder selection box","After the first Builder click, draw the box to the block you aim at and let it follow your aim",o->o.builderLiveBox,(o,v)->o.builderLiveBox=v),
-        new Toggle("Hide other gizmo handles","While a gizmo handle is held, draw only that handle",o->o.gizmoHideOthers,(o,v)->o.gizmoHideOthers=v),
-        new Toggle("Large selection warnings","Ask before keeping a big selection, in the editor and the Builder; a right click confirms it",o->o.largeSelectionWarnings,(o,v)->o.largeSelectionWarnings=v),
-        new Field("Warn at (blocks)","A selection this many blocks bigger than before is confirmed first. Used by the editor and the Builder",1,dev.craftium.core.Selection.LIMIT,o->o.largeSelectionThreshold,(o,v)->o.largeSelectionThreshold=v),
-        new Toggle("Check for updates","Once per game session, look at the project's GitHub releases and say when a newer build exists. Nothing is downloaded",o->o.checkForUpdates,(o,v)->o.checkForUpdates=v),
-        new Toggle("Magic Wand hover preview","Outline what a Magic Wand click would select",o->o.magicPreview,(o,v)->o.magicPreview=v),
-        new Toggle("Mark faces against solid blocks","Tint the selection's faces that touch a solid block outside it; the colour is in Selection options",o->o.showSelectionContact,(o,v)->o.showSelectionContact=v),
-        new Field("Hover preview limit","No outline when a click would select this many blocks or more, and Extrude and Flood fill ask first. Only about drawing cost",100,32_768,o->o.hoverPreviewLimit,(o,v)->o.hoverPreviewLimit=v),
-        new Number("AI preview models","How many block models an AI preview draws; the rest of a bigger preview shows as its outline. More looks fuller but costs frame rate",Options.AI_GHOST_DRAW_MIN,Options.AI_GHOST_DRAW_MAX,o->o.aiGhostDrawLimit,(o,v)->o.aiGhostDrawLimit=v),
-        new Link("Selection options","Every selection colour in one place, grouped by use: the editor and builder selections, destination and removed blocks, hover previews, and line widths",SelectionOptionsScreen::new),
-        new Link("Ruler options","The colours of the ruler's line, its knobs and its span label",SelectionOptionsScreen::ruler));
+    /** The preferences in groups, each shown on its own tab; the order here is the order on screen. */
+    private static final java.util.Map<String,List<Row>> GROUPS=new java.util.LinkedHashMap<>();
+    static{
+        GROUPS.put("General",List.of(
+            new Toggle("Check for updates","Once per game session, look at the project's GitHub releases and say when a newer build exists. Nothing is downloaded",o->o.checkForUpdates,(o,v)->o.checkForUpdates=v),
+            new Toggle("Enter to build","On: an edit waits for Enter before it is built. Off: a stroke is built when you let go of the button, and any other edit is built at once",o->o.enterToBuild,(o,v)->o.enterToBuild=v),
+            new Toggle("Undo normal building","On: the blocks you place and break by hand go into the undo history, a held place button as one step. Off: only the editor and Builder tools can be undone",o->o.recordPlayerBuilding,(o,v)->o.recordPlayerBuilding=v),
+            new Toggle("Undo / redo pulse","Flash the changed blocks when you undo or redo",o->o.historyPulse,(o,v)->o.historyPulse=v)));
+        GROUPS.put("Selection",List.of(
+            new Toggle("Large selection warnings","Ask before keeping a big selection, in the editor and the Builder; a right click confirms it",o->o.largeSelectionWarnings,(o,v)->o.largeSelectionWarnings=v),
+            new Field("Warn at (blocks)","A selection this many blocks bigger than before is confirmed first. Used by the editor and the Builder",1,dev.craftium.core.Selection.LIMIT,o->o.largeSelectionThreshold,(o,v)->o.largeSelectionThreshold=v),
+            new Toggle("Magic Wand hover preview","Outline what a Magic Wand click would select",o->o.magicPreview,(o,v)->o.magicPreview=v),
+            new Field("Hover preview limit","No outline when a click would select this many blocks or more, and Extrude and Flood fill ask first. Only about drawing cost",100,32_768,o->o.hoverPreviewLimit,(o,v)->o.hoverPreviewLimit=v),
+            new Toggle("Mark faces against solid blocks","Tint the selection's faces that touch a solid block outside it; the colour is in Selection options",o->o.showSelectionContact,(o,v)->o.showSelectionContact=v),
+            new Link("Selection options","Every selection colour in one place, grouped by use: the editor and builder selections, destination and removed blocks, hover previews, and line widths",SelectionOptionsScreen::new)));
+        GROUPS.put("Builder",List.of(
+            new Toggle("Builder follows Editor magic select","On: the Builder's magic select uses the Magic Wand settings from the editor. Off: it uses its own, set by the block match and the limit below",o->o.builderFollowsMagic,(o,v)->o.builderFollowsMagic=v),
+            new Cycle("Builder magic select matches","What the Builder's magic select treats as connected when it does not follow the editor: any block, the same block, the same block state, a shared tag, or the same block entity data",o->o.builderMagicCompare.name().charAt(0)+o.builderMagicCompare.name().substring(1).toLowerCase(),o->o.builderMagicCompare=Options.Compare.values()[(o.builderMagicCompare.ordinal()+1)%Options.Compare.values().length],(o,d)->o.builderMagicCompare=d.builderMagicCompare),
+            new Field("Builder magic select limit","The most blocks the Builder's magic select looks for when it does not follow the editor. A bigger area is cut off at this many",1,dev.craftium.core.Selection.LIMIT,o->o.builderMagicLimit,(o,v)->o.builderMagicLimit=v),
+            new Toggle("Live Builder selection box","After the first Builder click, draw the box to the block you aim at and let it follow your aim",o->o.builderLiveBox,(o,v)->o.builderLiveBox=v),
+            new Toggle("Bulldozer same blocks","On: a full Bulldozer sweep only breaks blocks like the first one it met, states included, and a different block stops it until you let go. Off: it breaks everything it passes over",o->o.bulldozerSameBlocks,(o,v)->o.bulldozerSameBlocks=v)));
+        GROUPS.put("Gizmos & Rulers",List.of(
+            new Toggle("Hide other gizmo handles","While a gizmo handle is held, draw only that handle",o->o.gizmoHideOthers,(o,v)->o.gizmoHideOthers=v),
+            new Link("Ruler options","The colours of the ruler's line, its knobs and its span label",SelectionOptionsScreen::ruler)));
+        GROUPS.put("AI",List.of(
+            new Number("AI preview models","How many block models an AI preview draws; the rest of a bigger preview shows as its outline. More looks fuller but costs frame rate",Options.AI_GHOST_DRAW_MIN,Options.AI_GHOST_DRAW_MAX,o->o.aiGhostDrawLimit,(o,v)->o.aiGhostDrawLimit=v)));
+    }
+    private static final List<String> TABS=List.copyOf(GROUPS.keySet());
 
     private final Screen parent;
-    private int page;
+    private int page,tab;
+    private List<Row> rows(){return GROUPS.get(TABS.get(tab));}
 
     PreferencesOptionsScreen(Screen parent){super(Component.literal("Options"));this.parent=parent;}
 
     private int rowsPerPage(){return Math.max(1,(height-LIST_TOP-80)/ROW);}
-    private int left(){return Math.max(12,(width-480)/2);}
+    private int left(){return Math.max(12,(width-600)/2)+120;}
+    private int tabsLeft(){return left()-120;}
 
     @Override protected void init(){
         clearWidgets();
-        var o=ClientState.options;int x=left(),per=rowsPerPage(),pages=Math.max(1,(ROWS.size()+per-1)/per);
+        var o=ClientState.options;int x=left(),per=rowsPerPage(),pages=Math.max(1,(rows().size()+per-1)/per);var ROWS=rows(); // the rows of the chosen tab
+        for(int t=0;t<TABS.size();t++){int index=t;addRenderableWidget(new FlatButton(tabsLeft(),LIST_TOP-6+t*ROW,110,20,TABS.get(t),()->{tab=index;page=0;init();}).lit(t==tab));}
         page=Math.clamp(page,0,pages-1);
         for(int i=page*per;i<Math.min(ROWS.size(),(page+1)*per);i++){
             int y=LIST_TOP-6+(i-page*per)*ROW;
@@ -97,7 +109,7 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
         }
         addRenderableWidget(new FlatButton(x,height-62,32,20,"‹",()->{page--;init();}));
         addRenderableWidget(new FlatButton(x+37,height-62,32,20,"›",()->{page++;init();}));
-        addRenderableWidget(new FlatButton(x+280,height-62,110,20,"Reset all",()->{for(Row r:ROWS)reset(r);init();}));
+        addRenderableWidget(new FlatButton(x+280,height-62,110,20,"Reset these",()->{for(Row r:rows())reset(r);init();}));
         addRenderableWidget(new FlatButton(x+395,height-62,85,20,"Done",this::onClose));
     }
     private static String labelOf(Row row){return switch(row){case Toggle t->t.label();case Number n->n.label();case Field f->f.label();case Link l->l.label();case Cycle c->c.label();};}
@@ -112,9 +124,9 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
 
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){
         g.fill(0,0,width,height,0xf510151c);
-        int x=left(),per=rowsPerPage();
-        g.text(font,"CRAFTIUM / OPTIONS",x,14,0xffdce6ef,false);
-        g.text(font,"General preferences. Ctrl-click a slider to type a value; middle-click resets it.",x,27,0xff8595a8,false);
+        int x=left(),per=rowsPerPage();var ROWS=rows(); // the rows of the chosen tab
+        g.text(font,"CRAFTIUM / OPTIONS",tabsLeft(),14,0xffdce6ef,false);
+        g.text(font,"Pick a category on the left. Ctrl-click a slider to type a value; middle-click resets it.",tabsLeft(),27,0xff8595a8,false);
         for(int i=page*per;i<Math.min(ROWS.size(),(page+1)*per);i++){
             int y=LIST_TOP-6+(i-page*per)*ROW;Row row=ROWS.get(i);
             String label=labelOf(row),about=aboutOf(row);
