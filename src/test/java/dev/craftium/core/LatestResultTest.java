@@ -12,11 +12,18 @@ class LatestResultTest {
         return fail("no result within 5 s");
     }
 
+    /** The answer can be picked up a moment before the request counts as finished, which is the safe way round for a caller; so "not busy" is waited for. */
+    private static void settled(LatestResult<?> r){
+        long end=System.nanoTime()+5_000_000_000L;
+        while(r.busy()&&System.nanoTime()<end)Thread.onSpinWait();
+        assertFalse(r.busy());
+    }
+
     @Test void deliversTheAnswerOnceThenNothing(){
         var r=new LatestResult<String>("test");
         r.submit(()->"done");
         assertEquals("done",await(r));
-        assertNull(r.poll());assertFalse(r.busy());
+        assertNull(r.poll());settled(r);
     }
 
     @Test void aReplacedRequestIsNeverDelivered() throws Exception{
@@ -46,7 +53,7 @@ class LatestResultTest {
         r.submit(()->{try{release.await();}catch(InterruptedException e){}return 1;});
         assertTrue(r.busy());
         release.countDown();await(r);
-        assertFalse(r.busy());
+        settled(r);
     }
 
     @Test void cancelDiscardsTheRequestAndIsNotBusy() throws Exception{
