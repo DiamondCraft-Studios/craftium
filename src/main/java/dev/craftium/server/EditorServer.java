@@ -677,7 +677,12 @@ public final class EditorServer {
                 if(added.changes().isEmpty()&&takenBack==0){send(player,ai,"No matching blocks changed"+(ai.pendingEdit==null?"":"; the earlier preview is still waiting"),false);return;}
                 if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller build");
                 EditProtection.check(player,edit);
-                ai.pendingEdit=edit;ai.pendingDirty=true;ai.previewId=++PREVIEW_IDS;
+                // The ghost is worked out now, in the request, so a preview that cannot be drawn is refused here with the reason and the earlier
+                // preview stays. Left to the tick, it would vanish without a word, for the AI and for the players who watch it.
+                String ghost;
+                try{ghost=GhostCodec.encodeEdit(edit,GhostCodec.AI_LIMIT);}
+                catch(RuntimeException e){ServerPlatform.LOG.error("An AI preview could not be drawn",e);throw new IllegalArgumentException("The preview could not be drawn ("+e+"), so it was not kept"+(ai.pendingEdit==null?"":" and the earlier preview is still waiting")+". Please report this with the spec that caused it");}
+                ai.pendingEdit=edit;ai.pendingData=ghost;ai.pendingDirty=false;ai.previewId=++PREVIEW_IDS;
                 ServerPlatform.send(player,new Packets.AiReply(AiWorld.previewSummary(added,(net.minecraft.server.level.ServerLevel)player.level(),edit,ai.specWarnings,takenBack))); // before the status, which the AI client waits for, so it has arrived by then
                 send(player,ai,onto==null?"AI preview ready: "+edit.changes().size()+" blocks":"Added "+added.changes().size()+" blocks to the AI preview"+(takenBack>0?" and took back "+takenBack:"")+": "+edit.changes().size()+" blocks in all",false);
             }
