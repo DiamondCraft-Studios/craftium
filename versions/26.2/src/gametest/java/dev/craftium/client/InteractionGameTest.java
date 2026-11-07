@@ -81,6 +81,9 @@ public final class InteractionGameTest {
         all.add(new Scenario("magic_select_then_delete", Tool.MAGIC_SELECT, o -> { o.confirmEdits = false; o.selectLimit = 40; }, null, false, d -> { d.click(a); d.key(GLFW_KEY_DELETE, 0); }, null));
         all.add(new Scenario("freehand_select", Tool.FREEHAND_SELECT, o -> { o.confirmEdits = false; o.radius = 3; }, null, false, d -> d.click(b), null));
         all.add(new Scenario("lasso_select", Tool.LASSO_SELECT, o -> o.confirmEdits = false, null, false, d -> d.lasso(a, new int[][]{{-60, -40}, {60, -40}, {60, 40}, {-60, 40}}), null));
+        // The handles of the box's two corners: the one that is not selected is grabbed by pressing on it, and either is moved by dragging an arrow.
+        all.add(new Scenario("box_handle_drag_first_corner", Tool.BOX_SELECT, o -> o.confirmEdits = false, null, false, d -> { d.click(e); d.click(c); d.dragHandle(e, 40); }, null));
+        all.add(new Scenario("box_handle_drag_selected_corner", Tool.BOX_SELECT, o -> o.confirmEdits = false, null, false, d -> { d.click(e); d.click(c); d.dragHandle(c, 40); }, null));
         // Measuring and marking.
         all.add(new Scenario("ruler_two_points", Tool.RULER, o -> o.confirmEdits = false, null, false, d -> { d.click(e); d.click(c); }, null));
         all.add(new Scenario("pivot_click", Tool.PIVOT, o -> o.confirmEdits = false, null, false, d -> d.click(b), null));
@@ -310,6 +313,48 @@ public final class InteractionGameTest {
             c.runOnClient(mc -> ((EditorScreen) mc.gui.screen()).mouseReleased(event(mc, corners[corners.length - 1][0], corners[corners.length - 1][1])));
             settle();
             note("lasso");
+        }
+
+        /**
+         * Presses on a handle of the point gizmo at {@code corner}, drags it {@code pixels} further out along the way it points, and lets go. The
+         * handle is found by asking the editor: the first pixel, going outward from where the corner is on screen, that is on one of its handles.
+         */
+        void dragHandle(Point corner, int pixels) {
+            pause();
+            aim(corner);
+            double[] anchor = c.computeOnClient(mc -> project(mc, new Vec3(corner.x(), corner.y(), corner.z())));
+            double[] press = c.computeOnClient(mc -> {
+                for (int radius = 6; radius <= 140; radius += 2)
+                    for (int degrees = 0; degrees < 360; degrees += 15) {
+                        double x = anchor[0] + radius * Math.cos(Math.toRadians(degrees)), y = anchor[1] + radius * Math.sin(Math.toRadians(degrees));
+                        if (TransformGizmo.hitsPointHandles(corner, x, y)) return new double[]{x, y};
+                    }
+                return null;
+            });
+            if (press == null) throw new AssertionError("No handle of the gizmo at " + corner + " is on the screen");
+            double length = Math.hypot(press[0] - anchor[0], press[1] - anchor[1]);
+            double toX = press[0] + (press[0] - anchor[0]) / length * pixels, toY = press[1] + (press[1] - anchor[1]) / length * pixels;
+            c.runOnClient(mc -> ((EditorScreen) mc.gui.screen()).mouseClicked(at(press[0], press[1]), false));
+            settle();
+            note("press handle at " + corner);
+            c.runOnClient(mc -> ((EditorScreen) mc.gui.screen()).mouseDragged(at(toX, toY), toX - press[0], toY - press[1]));
+            c.runOnClient(mc -> ((EditorScreen) mc.gui.screen()).mouseReleased(at(toX, toY)));
+            settle();
+            note("release handle");
+        }
+
+        /** A press, drag or release of the left button, which is the one that grabs a handle. */
+        private MouseButtonEvent at(double x, double y) { return new MouseButtonEvent(x, y, new MouseButtonInfo(0, 0)); }
+
+        /** Where a point of the world is on the screen, in GUI pixels. */
+        private double[] project(net.minecraft.client.Minecraft mc, Vec3 point) {
+            var camera = mc.gameRenderer.mainCamera();
+            var near = camera.getNearPlane(camera.getFov());
+            var center = near.getPointOnPlane(0, 0);
+            var offset = point.subtract(camera.position());
+            double depth = offset.dot(center.normalize()), focal = mc.getWindow().getGuiScaledHeight() / (2 * Math.tan(Math.toRadians(camera.getFov()) / 2));
+            return new double[]{mc.getWindow().getGuiScaledWidth() / 2d + offset.dot(near.getPointOnPlane(1, 0).subtract(center).normalize()) * focal / depth,
+                mc.getWindow().getGuiScaledHeight() / 2d - offset.dot(near.getPointOnPlane(0, 1).subtract(center).normalize()) * focal / depth};
         }
 
         /** A keystroke, pressed and let go. */

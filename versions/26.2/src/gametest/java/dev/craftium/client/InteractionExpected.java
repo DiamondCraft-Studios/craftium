@@ -8,6 +8,8 @@ final class InteractionExpected {
     static final Map<String, String> CASES = Map.ofEntries(
         Map.entry("annotation_draw", "0 e3b0c44298fc1c14 client:f67246540390b9e8"),
         Map.entry("annotation_text", "0 e3b0c44298fc1c14 client:0ccd56872bb8b48f"),
+        Map.entry("box_handle_drag_first_corner", "0 e3b0c44298fc1c14 client:eb4223eafb0fef31"),
+        Map.entry("box_handle_drag_selected_corner", "0 e3b0c44298fc1c14 client:f949ff3c891c9651"),
         Map.entry("box_select_then_delete", "217 6855adc00a877a6c client:5943c1d2c3348de7"),
         Map.entry("box_select_three_clicks", "0 e3b0c44298fc1c14 client:c6ecbd74b949be5f"),
         Map.entry("bracket_keys_resize_brush", "135 5551e8cd26a882ec client:f414afdd8809b2b7"),
