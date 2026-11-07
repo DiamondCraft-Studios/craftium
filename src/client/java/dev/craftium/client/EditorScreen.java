@@ -1383,6 +1383,15 @@ public final class EditorScreen extends CraftiumScreen {
         }
         CraftiumClient.send(action,hit==null?null:CraftiumClient.point(hit.getBlockPos()),hit==null?null:CraftiumClient.normal(hit));
     }
+    /** Whether a left press here lands on something that drags: a gizmo handle, either corner of a box selection, or a node. */
+    private boolean overHandle(MouseButtonEvent event){
+        if(event.button()!=0)return false;
+        if(o().tool==Tool.BOX_SELECT&&ClientState.boxCorners.size()==2)for(int i=0;i<2;i++)if(TransformGizmo.hitsPointHandles(TransformGizmo.cornerAnchor(i),event.x(),event.y()))return true;
+        if(TransformGizmo.hits(this,event.x(),event.y()))return true;
+        if(PlacementPreview.active())return false;
+        var points=handleNodes();for(int i=0;i<points.size();i++){var pixel=project(TransformGizmo.nodeAnchor(points.get(i),i));if(pixel!=null&&Math.pow(event.x()-pixel[0],2)+Math.pow(event.y()-pixel[1],2)<144)return true;}
+        return false;
+    }
     private boolean inViewport(double x,double y){
         int[] pin=pinnedBounds();
         if(x>=pin[0]&&x<pin[0]+pin[2]&&y>=pin[1]&&y<pin[1]+pin[3])return false; // the pinned tools are not the world
@@ -1519,7 +1528,8 @@ public final class EditorScreen extends CraftiumScreen {
         if(PlacementPreview.active()&&EditorBindings.matches(Action.FLIP_PLACEMENT,event)){perform(Action.FLIP_PLACEMENT);return true;}
         if(EditorBindings.matches(Action.EXTRUDE_POINT,event)&&perform(Action.EXTRUDE_POINT))return true;
         for(Action binding:Action.values())if(EditorBindings.get(binding).mouse()&&EditorBindings.matches(binding,event)&&perform(binding))return true;
-        if(EditorBindings.matches(Action.ARCBALL,event)||EditorBindings.matches(Action.PAN_CAMERA,event)||EditorBindings.matches(Action.ADJUST_RADIUS,event)){
+        // A press on a gizmo handle is the gizmo's, even with the camera's modifier already held: Ctrl then a drag moves the handle, it does not orbit.
+        if((EditorBindings.matches(Action.ARCBALL,event)||EditorBindings.matches(Action.PAN_CAMERA,event)||EditorBindings.matches(Action.ADJUST_RADIUS,event))&&!overHandle(event)){
             cameraGesture=EditorBindings.matches(Action.ARCBALL,event)?CameraGesture.ORBIT:EditorBindings.matches(Action.PAN_CAMERA,event)?CameraGesture.PAN:CameraGesture.RADIUS;cameraButton=event.button();gestureX=event.x();gestureY=event.y();initialRadius=o().radius;
             var hit=target();orbitPivot=hit==null?minecraft.player.getEyePosition().add(minecraft.player.getLookAngle().scale(12)):hit.getLocation();orbitDistance=Math.max(1,orbitPivot.distanceTo(minecraft.player.getEyePosition()));return true;
         }

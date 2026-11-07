@@ -82,6 +82,10 @@ final class TransformGizmo {
         int chosen=pick(t,x,y);
         if(chosen<0)return selectEntity(x,y);dragging=t;handle=chosen;startX=slowX=lastX=x;startY=slowY=lastY=y;if(chosen==3&&mode==Options.GizmoMode.MOVE)grabFree(t.anchor,x,y);dragFlips=t.kind==Kind.NODE?flipsFor(t.anchor):null;delta=smooth=angles=Vec3.ZERO;size=new Vec3(1,1,1);startAngle=mode==Options.GizmoMode.ROTATE?(chosen==7?screenAngle(x,y,t.anchor):chosen<3?angle(x,y,t.anchor,handle):0):0;return true;
     }
+    /** Whether a click here would grab a handle of the gizmo, without grabbing it. */
+    static boolean hits(EditorScreen screen,double x,double y){
+        if(ClientState.status.busy())return false;Target t=target(screen);return t!=null&&pick(t,x,y)>=0;
+    }
     /** Which handle of the gizmo is under the pointer, or -1: 0 to 2 are the axes, 3 the centre, 4 to 6 the plane handles. */
     private static int pick(Target t,double x,double y){
         mode=effectiveMode(t);localBasis=t.kind==Kind.SHAPE&&mode==Options.GizmoMode.SCALE;basis=axesAt(t.anchor);pickScale=screenScale(t.anchor);pickExtent=extent(t);pickReach=reach(t,pickExtent);double best=100;int chosen=-1;double[] center=project(t.anchor);
