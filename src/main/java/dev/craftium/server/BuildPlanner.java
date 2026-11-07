@@ -41,9 +41,12 @@ final class BuildPlanner {
             var at = min.add(entry.getKey().x(), entry.getKey().y(), entry.getKey().z());
             var cell = entry.getValue();
             if (cell.only() != null && !match(level, matches, cell.only()).matches(plan.state(at))) continue;
-            var state = states.get(cell.block());
-            if (!cell.turn().equals(Turn.NONE))
-                state = turned.computeIfAbsent(cell.block(), k -> new HashMap<>()).computeIfAbsent(cell.turn(), t -> turn(states.get(cell.block()), t));
+            // A roof or a flight of stairs adds its own state to a block checked above, so those names are looked up when first met.
+            var state = states.computeIfAbsent(cell.block(), name -> state(level, spec, name));
+            if (!cell.turn().equals(Turn.NONE)) {
+                var plain = state;
+                state = turned.computeIfAbsent(cell.block(), k -> new HashMap<>()).computeIfAbsent(cell.turn(), t -> turn(plain, t));
+            }
             plan.put(at, state);
         }
         if (!spec.selectionOps().isEmpty()) {
@@ -59,17 +62,19 @@ final class BuildPlanner {
      * needs to fix it in one go: the operations that use it, why it failed, and the nearest real ids or the properties the block does take.
      */
     private static Map<String, BlockState> states(net.minecraft.server.level.ServerLevel level, BuildSpec spec) {
-        var lookup = level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK);
         var states = new HashMap<String, BlockState>();
-        for (String name : spec.blocks()) {
-            String real = concrete(name, spec);
-            try {
-                states.put(name, net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(lookup, new com.mojang.brigadier.StringReader(real), false).blockState());
-            } catch (Exception e) {
-                throw new IllegalArgumentException(explain(lookup, spec, name, real, e));
-            }
-        }
+        for (String name : spec.blocks()) states.put(name, state(level, spec, name));
         return states;
+    }
+
+    private static BlockState state(net.minecraft.server.level.ServerLevel level, BuildSpec spec, String name) {
+        var lookup = level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK);
+        String real = concrete(name, spec);
+        try {
+            return net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(lookup, new com.mojang.brigadier.StringReader(real), false).blockState();
+        } catch (Exception e) {
+            throw new IllegalArgumentException(explain(lookup, spec, name, real, e));
+        }
     }
 
     /**
