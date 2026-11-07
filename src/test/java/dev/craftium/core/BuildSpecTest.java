@@ -216,4 +216,20 @@ class BuildSpecTest {
         assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[{\"op\":\"replace_selection\",\"block\":\"stone\",\"keep\":[\"Facing!\"]}]}"));
         assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[{\"op\":\"replace_selection\",\"block\":\"stone\",\"repeat\":{\"count\":2,\"step\":[1,0,0]}}]}"));
     }
+
+    @Test void aSelectionOperationListedBeforeAShapeIsRefusedInsteadOfRunningLast() {
+        var e = assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":["
+            + "{\"op\":\"replace_selection\",\"block\":\"deepslate\"},"
+            + "{\"op\":\"box\",\"from\":[0,0,0],\"to\":[1,1,1],\"block\":\"stone\"}]}"));
+        assertTrue(e.getMessage().contains("ops[1] (box)") && e.getMessage().contains("after all the shapes"), e.getMessage());
+        // After the shapes it is fine, and several selection operations may follow one another.
+        var ok = BuildSpec.parse("{\"ops\":[{\"op\":\"box\",\"from\":[0,0,0],\"to\":[1,1,1],\"block\":\"stone\"},"
+            + "{\"op\":\"replace_selection\",\"block\":\"deepslate\"},{\"op\":\"replace_selection\",\"block\":\"tuff\"}]}");
+        assertEquals(2, ok.selectionOps().size());
+    }
+
+    @Test void anEmptyOpsListIsRefusedBeforeAnythingElse() {
+        var e = assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[]}"));
+        assertTrue(e.getMessage().contains("\"ops\" is empty"), e.getMessage());
+    }
 }
