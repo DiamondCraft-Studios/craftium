@@ -17,6 +17,8 @@ detail on a form nobody has approved.
   anything over about 1,000 blocks, and any time a render looks incomplete (a missing roof, for example).
 - [references/spec-pitfalls.md](references/spec-pitfalls.md): before roofs, doors, logs, water, or anything with a
   facing, and before using `hollow`.
+- [references/examples.md](references/examples.md): before your first spec. A gable cottage written phase by phase
+  and a round tower, each with what its `preview_build` reply should show.
 
 ## The loop
 
