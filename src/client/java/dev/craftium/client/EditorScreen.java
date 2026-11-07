@@ -101,7 +101,9 @@ public final class EditorScreen extends CraftiumScreen {
         @Override public Options options(){return o();}
         @Override public BlockHitResult target(){return EditorScreen.this.target();}
         @Override public boolean shiftDown(){return minecraft.hasShiftDown();}
+        @Override public int selectedNode(){return selectedNode;}
         @Override public void selectNode(int index){selectedNode=index;}
+        @Override public boolean hitsPointHandles(Point at,double x,double y){return TransformGizmo.hitsPointHandles(at,x,y);}
     };
     @Override protected void init() {
         lastFlightNanos=0;
@@ -165,7 +167,7 @@ public final class EditorScreen extends CraftiumScreen {
         cancelSelectionJobs();
         if(tool.transform()&&tool!=Tool.PIVOT&&ClientState.status.selectionSize()==0&&!ShapeObject.active())ClientState.notify("Select blocks first, then use "+tool.label);
         if(tool!=Tool.MODIFY)ModifyPreview.edit();
-        toolActive=true;previousTool=o().tool;selectedNode=-1;if(tool!=Tool.BOX_SELECT)ClientState.boxCorners.clear();o().tool=tool;o().gizmoTarget=Options.GizmoTarget.AUTO;builder=false;ClientState.save();init();}
+        toolActive=true;previousTool=o().tool;selectedNode=-1;Interactions.of(tool).chosen(context);o().tool=tool;o().gizmoTarget=Options.GizmoTarget.AUTO;builder=false;ClientState.save();init();}
     /** Set while a pop-up such as the block picker draws this screen as its backdrop: no flight or cursor handling then. */
     boolean suspended;
     @Override public boolean isPauseScreen(){return false;}
@@ -1430,14 +1432,6 @@ public final class EditorScreen extends CraftiumScreen {
             if(hit!=null)ShapeObject.place(CraftiumClient.point(hit.getBlockPos()));
             return;
         }
-        if(o().tool==Tool.BOX_SELECT){
-            var hit=target();
-            if(hit!=null){
-                Point p=CraftiumClient.point(hit.getBlockPos());var corners=ClientState.boxCorners;
-                // The first click leaves one handle, the second a second one; each can be dragged afterwards.
-                if(corners.size()==1){corners.add(p);selectedNode=1;}else{corners.clear();corners.add(p);selectedNode=0;}
-            }
-        }
         if((o().tool==Tool.EXTRUDE||o().tool==Tool.FLOODFILL)&&o().largeSelectionWarnings&&confirm==null){
             // A click that reaches more than a hover preview is made for asks first, because it cannot be looked over before it is built.
             var hit=target();int count=hit==null?0:ClickPreview.measure(minecraft,hit);
@@ -1450,11 +1444,7 @@ public final class EditorScreen extends CraftiumScreen {
         action("use");
     }
     /** Called when a handle has been let go of: the box follows the handles, replacing the box it made before. */
-    void handlesMoved(){
-        if(o().tool!=Tool.BOX_SELECT||ClientState.boxCorners.size()!=2||ClientState.status.busy())return;
-        o().position1=ClientState.boxCorners.get(0);o().position2=ClientState.boxCorners.get(1);
-        CraftiumClient.send("select_box_adjust",null,null);
-    }
+    void handlesMoved(){Interactions.of(o().tool).handlesMoved(context);}
     @Override public boolean mouseClicked(MouseButtonEvent event,boolean doubleClick) {
         if(ReferenceImages.click(event.x(),event.y(),event.button()))return true;
         double x=event.x()/scale,y=event.y()/scale;mx=(int)x;my=(int)y;pointerX=event.x();pointerY=event.y();
@@ -1511,10 +1501,7 @@ public final class EditorScreen extends CraftiumScreen {
             cameraGesture=EditorBindings.matches(Action.ARCBALL,event)?CameraGesture.ORBIT:EditorBindings.matches(Action.PAN_CAMERA,event)?CameraGesture.PAN:CameraGesture.RADIUS;cameraButton=event.button();gestureX=event.x();gestureY=event.y();initialRadius=o().radius;
             var hit=target();orbitPivot=hit==null?minecraft.player.getEyePosition().add(minecraft.player.getLookAngle().scale(12)):hit.getLocation();orbitDistance=Math.max(1,orbitPivot.distanceTo(minecraft.player.getEyePosition()));return true;
         }
-        // Both corners of a box selection show a gizmo; grabbing the one that is not selected selects it and starts the drag.
-        if(event.button()==0&&o().tool==Tool.BOX_SELECT&&ClientState.boxCorners.size()==2){
-            for(int i=0;i<2;i++)if(i!=selectedNode&&TransformGizmo.hitsPointHandles(ClientState.boxCorners.get(i),event.x(),event.y())){selectedNode=i;break;}
-        }
+        if(event.button()==0)Interactions.of(o().tool).grabHandle(context,event.x(),event.y()); // a tool whose points all show a gizmo can select the one under the pointer
         if(event.button()==0&&TransformGizmo.click(this,event.x(),event.y()))return true;
         if(event.button()==0&&!PlacementPreview.active()){
             var points=handleNodes();double best=144;int index=-1;for(int i=0;i<points.size();i++){var pixel=project(points.get(i),TransformGizmo.nodeOffset());if(pixel==null)continue;double distance=Math.pow(event.x()-pixel[0],2)+Math.pow(event.y()-pixel[1],2);if(distance<best){best=distance;index=i;}}
@@ -1592,7 +1579,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(help||transform||menu>=0)return true;
         if(inViewport(event.x()/scale,event.y()/scale)) {
             if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&o().tool==Tool.LASSO_SELECT){if(lasso.size()<1024)lasso.add(new LassoSelection.Pixel(event.x(),event.y()));return true;}
-            if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&painting && o().tool!=Tool.BOX_SELECT&&o().tool!=Tool.RULER&&o().tool!=Tool.LINE&&Interactions.of(o().tool).repeatsWhenDragged())dragUse();
+            if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&painting&&o().tool!=Tool.RULER&&o().tool!=Tool.LINE&&Interactions.of(o().tool).repeatsWhenDragged())dragUse();
         }
         return true;
     }
@@ -1770,7 +1757,11 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         player.setDeltaMovement(Vec3.ZERO);player.setPos(player.position().add(delta));
         player.setOldPosAndRot(); // the renderer interpolates from the previous position, so make it the current one
     }
-    private List<Point> handleNodes(){return !toolActive?ClientState.rulerPoints:o().tool==Tool.BOX_SELECT?ClientState.boxCorners:Interactions.of(o().tool).usesPoints()?o().nodes:o().tool==Tool.MODIFY?ModifyPreview.knobNodes():new ArrayList<>();}
+    private List<Point> handleNodes(){
+        if(!toolActive)return ClientState.rulerPoints;
+        var points=Interactions.of(o().tool).points(context);
+        return points!=null?points:o().tool==Tool.MODIFY?ModifyPreview.knobNodes():new ArrayList<>();
+    }
     double pointerX(){return pointerX;}
     double pointerY(){return pointerY;}
     boolean pointerInViewport(){return inViewport(pointerX/scale,pointerY/scale);}

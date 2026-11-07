@@ -2,6 +2,9 @@ package dev.craftium.client.interaction;
 
 import dev.craftium.client.ClientState;
 import dev.craftium.client.CraftiumClient;
+import dev.craftium.core.Point;
+
+import java.util.List;
 
 /** The first click sets an anchor; each later click moves the second point and sends the request (Slope). */
 final class AnchorPairInteraction implements Interaction {
@@ -19,5 +22,5 @@ final class AnchorPairInteraction implements Interaction {
         return false;
     }
 
-    @Override public boolean usesPoints() { return true; }
+    @Override public List<Point> points(EditorContext editor) { return editor.options().nodes; }
 }

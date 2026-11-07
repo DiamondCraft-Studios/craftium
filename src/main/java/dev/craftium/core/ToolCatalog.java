@@ -46,6 +46,7 @@ public final class ToolCatalog {
     private static InteractionKind interaction(Tool tool) {
         return switch (tool) {
             case PATH, MODELLING -> InteractionKind.POINTS;
+            case BOX_SELECT -> InteractionKind.BOX;
             case GRADIENT_PAINTER -> InteractionKind.SHIFT_POINTS;
             case SLOPE -> InteractionKind.ANCHOR_PAIR;
             default -> InteractionKind.CLICK;

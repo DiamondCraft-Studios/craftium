@@ -2,6 +2,9 @@ package dev.craftium.client.interaction;
 
 import dev.craftium.client.ClientState;
 import dev.craftium.client.CraftiumClient;
+import dev.craftium.core.Point;
+
+import java.util.List;
 
 /** Each click adds a control point, and Enter builds from them (Path, Modelling). A held button does not add points as it moves. */
 final class PointsInteraction implements Interaction {
@@ -21,7 +24,7 @@ final class PointsInteraction implements Interaction {
 
     @Override public boolean repeatsWhenDragged() { return false; }
 
-    @Override public boolean usesPoints() { return true; }
+    @Override public List<Point> points(EditorContext editor) { return editor.options().nodes; }
 
     @Override public boolean extrudePoint(EditorContext editor) {
         var points = editor.options().nodes;

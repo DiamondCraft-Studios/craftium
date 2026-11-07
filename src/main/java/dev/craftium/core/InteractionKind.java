@@ -9,6 +9,8 @@ public enum InteractionKind {
     CLICK(true),
     /** Each click adds a control point (up to 64) and Enter builds from them; the extrude key adds a copy of the last point. */
     POINTS(true),
+    /** Two clicks mark the opposite corners of a box and each corner can be dragged by its handle; a third click starts over. */
+    BOX(true),
     /** Clicks work as {@link #CLICK} does, and a click with Shift held adds an anchor point instead. Built in for the Gradient Painter. */
     SHIFT_POINTS(false),
     /** The first click sets an anchor; the next ones move a second point and send the request. Built in for the Slope tool. */
