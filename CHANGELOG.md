@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.0-beta.1
+
+Changes since 1.1.0-beta.1.
+
+### AI building
+- Build specs can generate roofs (gable, hip or shed) and flights of stairs with every stair facing the right way, so the AI no longer writes roofs stair by stair.
+- Build specs can name blocks by material (`spruce@stairs`, or `@stairs` with a material set once), mix blocks by weight for weathered walls and paths, and group operations to rotate, mirror and move them, turning stairs and logs with them.
+- One read_blocks tool replaces get_blocks and get_preview_blocks: the world, the world with the AI's preview applied, or the preview alone, up to a million blocks at a time.
+- render_view can draw up to three angles from one read of the world, about half the time of separate calls.
+- The AI can add to its waiting preview instead of resending the whole build, and the result is still applied and undone as one build.
+- The reply to a preview warns about doors and beds missing a half, torches, lanterns, signs and the like with nothing to hold them, and operations hidden entirely by later ones.
+- The AI plugin tells you when it and the mod are out of step, and which to update; a server whose Craftium is older gets a clear message when it cannot read a build.
+- A build that the server cannot draw no longer stops the server: the request fails, or the preview is dropped and logged.
+- An AI script is cancelled for the memory it allocated itself, not for garbage or other threads' growth, so the same spec behaves the same on a busy server; getHighestBlockYAt in it sees what the build has planned, and setting one block twice counts once against its cap.
+- Adding to a preview with a spec that only carves (air through a wall in open air) is kept and reported instead of dropped; an AI preview that cannot be drawn is refused with the reason when it is made; the warnings no longer miss two stacked lower door halves or warn about blocks backed by unloaded chunks or a grindstone; a world read on an older server says it is the smaller, older read.
+- Build specs can hold a Lua script that places blocks inside a box, for natural ground, rocks and trees. It runs in the same sandbox as the Lua brushes, only places inside its box, and builds the same each time from its seed.
+
 ## 1.1.0-beta.1
 
 Changes since 1.0.0-beta.1.
@@ -21,17 +38,6 @@ Changes since 0.10.0-beta.1.
 - Replies to the AI are held to about 60 KB, which fits in what an AI app passes on. Reading a wide area of ground gives a summary (height range, how level it is, what it is made of, a coarse map) instead of every column.
 - get_state also gives the dimension, height limits, sea level, the biome you stand in and your recent blocks; get_palette is gone from the AI tools.
 - The building skill has worked examples (a gable cottage and a round tower) and renders only where the look matters, which saves time and tokens on every build.
-- Build specs can generate roofs (gable, hip or shed) and flights of stairs with every stair facing the right way, so the AI no longer writes roofs stair by stair.
-- Build specs can name blocks by material (`spruce@stairs`, or `@stairs` with a material set once), mix blocks by weight for weathered walls and paths, and group operations to rotate, mirror and move them, turning stairs and logs with them.
-- One read_blocks tool replaces get_blocks and get_preview_blocks: the world, the world with the AI's preview applied, or the preview alone, up to a million blocks at a time.
-- render_view can draw up to three angles from one read of the world, about half the time of separate calls.
-- The AI can add to its waiting preview instead of resending the whole build, and the result is still applied and undone as one build.
-- The reply to a preview warns about doors and beds missing a half, torches, lanterns, signs and the like with nothing to hold them, and operations hidden entirely by later ones.
-- The AI plugin tells you when it and the mod are out of step, and which to update; a server whose Craftium is older gets a clear message when it cannot read a build.
-- A build that the server cannot draw no longer stops the server: the request fails, or the preview is dropped and logged.
-- An AI script is cancelled for the memory it allocated itself, not for garbage or other threads' growth, so the same spec behaves the same on a busy server; getHighestBlockYAt in it sees what the build has planned, and setting one block twice counts once against its cap.
-- Adding to a preview with a spec that only carves (air through a wall in open air) is kept and reported instead of dropped; an AI preview that cannot be drawn is refused with the reason when it is made; the warnings no longer miss two stacked lower door halves or warn about blocks backed by unloaded chunks or a grindstone; a world read on an older server says it is the smaller, older read.
-- Build specs can hold a Lua script that places blocks inside a box, for natural ground, rocks and trees. It runs in the same sandbox as the Lua brushes, only places inside its box, and builds the same each time from its seed.
 - The AI tab has a Redo AI build button (and a menu item), and HOW IT WORKS describes installing the Claude plugin in Claude Code or Cowork.
 
 ### Preferences
