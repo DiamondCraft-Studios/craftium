@@ -311,7 +311,7 @@ public final class EditorScreen extends CraftiumScreen {
                 boolean selected=toolActive&&o().tool==tool;
                 g.fill(x,y,x+21,y+21,selected?0xff315b84:0xff223247);
                 if(selected){g.outline(x,y,21,21,0xff8bc7ff);g.fill(x,y+19,x+21,y+21,ACCENT);}
-                g.pose().pushMatrix();g.pose().translate(x,y);g.pose().scale(.82f,.82f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
+                g.pose().pushMatrix();g.pose().translate(x,y);g.pose().scale(.82f,.82f);Icons.draw(g,tool.spec().iconId(),0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
                 controls.add(new Control(x,y,21,21,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},toolTip(tool,0)));
             }
             y+=TOOL_PITCH;
@@ -722,10 +722,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void pipetteControls(Gfx g,int x,int y){
         FlatButton.face(g,x,y,30,30,"",pipetting,true,false);
         int color=pipetting?0xffffffff:0xffd0deeb;
-        g.fill(x+19,y+6,x+24,y+11,color); // the bulb
-        ToolIcons.line(g,x+16,y+10,x+21,y+15,color); // the collar
-        ToolIcons.line(g,x+8,y+22,x+18,y+12,color);ToolIcons.line(g,x+9,y+23,x+19,y+13,color); // the tube
-        g.fill(x+7,y+23,x+9,y+25,color); // the tip
+        Icons.draw(g,IconCatalog.PIPETTE,x,y,color);
         controls.add(new Control(x,y,30,30,()->pipetting=!pipetting,"Click a block in the world to take it as the foreground · Ctrl + click adds it to the palette and keeps the pipette · Esc cancels"));
     }
     /** While the pipette is in hand: finds the block under the pointer and shows its item in a cell above and to the right of the cursor. */
@@ -852,7 +849,7 @@ public final class EditorScreen extends CraftiumScreen {
         dropArea(x,y,RIGHT,masksHeight(),b->{if(!b.isEmpty()&&!b.equals("minecraft:air"))addMaskBlock(b);});
         maskCols=Math.max(1,(pw-19)/MASK_PITCH);maskRows=1;
         button(g,x+10,y+24,19,19,"",o().maskInBuilder,()->o().maskInBuilder=!o().maskInBuilder,"Use in Builder tools · "+(o().maskInBuilder?"On: the tool masks also apply to the Builder tools":"Off: the Builder tools ignore the tool masks"));
-        ToolIcons.hardHat(g,x+10,y+24,o().maskInBuilder?0xffffffff:0xffa9bccd);
+        Icons.draw(g,IconCatalog.HARD_HAT,x+10,y+24,o().maskInBuilder?0xffffffff:0xffa9bccd);
         int share=(pw-20-23-4)/2;
         // Include and Exclude are never on together; clicking the one that is on turns both off, and the mask is ignored.
         boolean include=!o().maskOff&&!o().maskExclude,exclude=!o().maskOff&&o().maskExclude;
@@ -997,7 +994,7 @@ public final class EditorScreen extends CraftiumScreen {
             boolean selected=toolActive&&o().tool==tool;
             g.fill(x,y,x+26,y+26,selected?0xff315b84:0xff223247);
             if(selected){g.outline(x,y,26,26,0xff8bc7ff);g.fill(x,y+24,x+26,y+26,ACCENT);}
-            g.pose().pushMatrix();g.pose().translate(x+1,y+1);g.pose().scale(1f,1f);ToolIcons.draw(g,tool,0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
+            g.pose().pushMatrix();g.pose().translate(x+1,y+1);g.pose().scale(1f,1f);Icons.draw(g,tool.spec().iconId(),0,0,selected?0xffffffff:0xffd0deeb);g.pose().popMatrix();
             int key=EditorControls.toolDefault(tool);
             controls.add(new Control(x,y,26,26,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},toolTip(tool,slot+1)));
         }
@@ -1117,7 +1114,7 @@ public final class EditorScreen extends CraftiumScreen {
         for(int i=0;i<kinds.length;i++){
             final var kind=kinds[i];int x=10+i*(width+4);boolean active=o().compare==kind;
             button(g,x,y,width,22,"",active,()->o().compare=kind,tips[i]);
-            g.pose().pushMatrix();g.pose().translate(x+(width-18)/2f,y+2);g.pose().scale(.75f,.75f);ToolIcons.compare(g,kind,0,0,active?0xffffffff:0xffd0deeb);g.pose().popMatrix();
+            g.pose().pushMatrix();g.pose().translate(x+(width-18)/2f,y+2);g.pose().scale(.75f,.75f);Icons.draw(g,IconCatalog.compare(kind),0,0,active?0xffffffff:0xffd0deeb);g.pose().popMatrix();
         }
     }
     /** Inside, Center and Outside: where a hollow shape's wall sits against the edge the radius gives it. */
@@ -1165,7 +1162,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(rows.size()>1){ // a button with a chain on it: linked when the sizes keep their proportions, broken when each is its own
             button(g,10,y,30,20,"",o.sizeChain,()->o().sizeChain=!o().sizeChain,"Chain · "+(o.sizeChain?"on: changing one size changes the others by the same factor":"off: each size changes on its own")+" · middle-click a size to reset it");
-            ToolIcons.chain(g,16,y+5,o.sizeChain?0xffffffff:0xff8a9bad,o.sizeChain);
+            Icons.draw(g,o.sizeChain?IconCatalog.CHAIN_LINKED:IconCatalog.CHAIN_BROKEN,16,y+5,o.sizeChain?0xffffffff:0xff8a9bad);
             text(g,o.sizeChain?"Proportions kept":"Sizes independent",46,y+6,MUTED);
         }
         if(flowShown())slider(g,10,y+(rows.size()>1?24:0)+10,pw-20,"Flow",o.brushFlow,Options.FLOW_MIN,Options.FLOW_MAX,Options.FLOW_DEFAULT,v->o().brushFlow=(int)Math.clamp(Math.round(v),Options.FLOW_MIN,Options.FLOW_MAX),true);
@@ -1188,7 +1185,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,10,y,pw-20,24,"",shapeMenu,()->{
             shapeMenu=!shapeMenu;shapeX=Math.clamp(mx-24,4,w-SHAPE_MENU_WIDTH-4);shapeY=Math.clamp(my+8,4,h-shapeMenuHeight()-4);
         },"Choose the shape: solids, curved forms and flat ones");
-        g.pose().pushMatrix();g.pose().translate(14,y+3);g.pose().scale(.75f,.75f);ToolIcons.shape(g,shape,0,0,0xffffffff);g.pose().popMatrix();
+        g.pose().pushMatrix();g.pose().translate(14,y+3);g.pose().scale(.75f,.75f);Icons.draw(g,IconCatalog.shape(shape),0,0,0xffffffff);g.pose().popMatrix();
         text(g,nice(shape.name())+"  ▾",36,y+8,TEXT);
     }
     private int shapeMenuHeight(){
@@ -1221,7 +1218,7 @@ public final class EditorScreen extends CraftiumScreen {
             boolean active=o().shape==cell.shape(),hover=mx>=cell.x()&&mx<cell.x()+SHAPE_CELL_W&&my>=cell.y()&&my<cell.y()+SHAPE_CELL_H;
             g.fill(cell.x()+1,cell.y()+1,cell.x()+SHAPE_CELL_W-1,cell.y()+SHAPE_CELL_H-1,active?0xff315b84:hover?0xff34485e:0xff243246);
             if(active)g.fill(cell.x()+1,cell.y()+SHAPE_CELL_H-3,cell.x()+SHAPE_CELL_W-1,cell.y()+SHAPE_CELL_H-1,ACCENT);
-            g.pose().pushMatrix();g.pose().translate(cell.x()+(SHAPE_CELL_W-24)/2f,cell.y()+3);g.pose().scale(1f,1f);ToolIcons.shape(g,cell.shape(),0,0,active?0xffffffff:0xffd0deeb);g.pose().popMatrix();
+            g.pose().pushMatrix();g.pose().translate(cell.x()+(SHAPE_CELL_W-24)/2f,cell.y()+3);g.pose().scale(1f,1f);Icons.draw(g,IconCatalog.shape(cell.shape()),0,0,active?0xffffffff:0xffd0deeb);g.pose().popMatrix();
             String label=nice(cell.shape().name());
             text(g,label,cell.x()+(SHAPE_CELL_W-font.width(label))/2,cell.y()+SHAPE_CELL_H-13,active?0xffffffff:TEXT);
         }

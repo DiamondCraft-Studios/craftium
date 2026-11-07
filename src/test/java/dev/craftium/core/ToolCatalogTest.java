@@ -26,6 +26,15 @@ class ToolCatalogTest {
         }
     }
 
+    @Test void everyToolsIconIsInTheIconCatalog() {
+        for (Tool tool : Tool.values()) {
+            var icon = IconCatalog.find(tool.spec().iconId());
+            assertTrue(icon.isPresent(), tool.name());
+            assertEquals(tool.label, icon.get().label(), tool.name());
+            assertEquals("Tools/" + tool.group, icon.get().category(), tool.name());
+        }
+    }
+
     @Test void theToolMethodsAnswerFromTheSpec() {
         for (Tool tool : Tool.values()) {
             var spec = tool.spec();

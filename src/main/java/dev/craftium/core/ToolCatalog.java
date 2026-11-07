@@ -24,7 +24,7 @@ public final class ToolCatalog {
     private static ToolSpec describe(Tool tool) {
         boolean selection = tool == Tool.MAGIC_SELECT || tool == Tool.BOX_SELECT || tool == Tool.FREEHAND_SELECT || tool == Tool.LASSO_SELECT;
         boolean transform = tool == Tool.MOVE || tool == Tool.ROTATE || tool == Tool.SCALE || tool == Tool.PIVOT;
-        return new ToolSpec("craftium:" + tool.name().toLowerCase(Locale.ROOT), tool.label, tool.icon, tool.group, tool.description,
+        return new ToolSpec("craftium:" + tool.name().toLowerCase(Locale.ROOT), tool.label, tool.icon, IconCatalog.tool(tool), tool.group, tool.description,
             brushUse(tool), defaultKey(tool), useHint(tool),
             transform && tool != Tool.PIVOT || tool == Tool.SHAPE,
             !selection && !transform && tool != Tool.RULER && tool != Tool.ANNOTATION && tool != Tool.MODIFY && tool != Tool.LINE && tool != Tool.PATH && tool != Tool.MODELLING && tool != Tool.SHAPE,

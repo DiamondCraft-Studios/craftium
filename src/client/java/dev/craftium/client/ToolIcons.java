@@ -89,6 +89,15 @@ final class ToolIcons {
         g.fill(x+8,y+4,x+10,y+11,c);
         g.fill(x+2,y+12,x+17,y+14,c);
     }
+    /** The pipette, drawn inside a 30 by 30 button whose top left corner is {@code x}, {@code y}: a bulb, a collar and a tube down to the tip. */
+    static void pipette(Gfx g,int x,int y,int color){
+        g.fill(x+19,y+6,x+24,y+11,color); // the bulb
+        line(g,x+16,y+10,x+21,y+15,color); // the collar
+        line(g,x+8,y+22,x+18,y+12,color);line(g,x+9,y+23,x+19,y+13,color); // the tube
+        g.fill(x+7,y+23,x+9,y+25,color); // the tip
+    }
+    /** A check mark in a 12 by 12 square at {@code x}, {@code y}. */
+    static void check(Gfx g,int x,int y,int color){line(g,x+2,y+6,x+5,y+9,color);line(g,x+5,y+9,x+10,y+3,color);}
     private static void ring(Gfx g,int cx,int cy,int rx,int ry,int c){arc(g,cx,cy,rx,ry,0,Math.PI*2,c);}
     /** The part of an ellipse from angle {@code from} to {@code to} (radians, y grows downward), as dots two pixels wide. */
     private static void arc(Gfx g,int cx,int cy,int rx,int ry,double from,double to,int c){
