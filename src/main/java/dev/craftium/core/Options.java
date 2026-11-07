@@ -39,6 +39,8 @@ public final class Options {
     public int outerRadius() { return Math.min(radius + outlineShift(), BrushMath.MAX_REACH); }
     /** Hand placement and breaking only; blocks the editor's tools write never update anything (see BlockSnapshot.NO_UPDATES). */
     public boolean noUpdates, forcePlace, replaceMode, bulldozer, tinker;
+    /** Whether a full Bulldozer sweep only breaks blocks that are the same, state included, as the first one it met; a different block ends it. */
+    public boolean bulldozerSameBlocks=true;
     public boolean inSelection;
     /** Whether undo and redo flash the blocks they change. */
     public boolean historyPulse = true;
