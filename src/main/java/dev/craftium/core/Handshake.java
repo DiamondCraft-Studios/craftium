@@ -21,8 +21,10 @@ public final class Handshake {
      * when the behaviour changes, add a new name and keep the old one.
      */
     public static final String MODIFY_EXPANSION="modify-expansion";
+    /** AI build specs with materials, mixes, roof, stairs and group, and the preview summary sent before the status. */
+    public static final String AI_SPEC_V2="ai-spec-v2";
     /** What this build supports. */
-    public static final Set<String> CAPABILITIES=Set.of(MODIFY_EXPANSION);
+    public static final Set<String> CAPABILITIES=Set.of(MODIFY_EXPANSION,AI_SPEC_V2);
     /** {@code version} is the mod or plugin version, such as 0.9.1-beta.1. {@code capabilities} is null from a build that predates the list, which means none. */
     public record Hello(int protocol,String version,Set<String> capabilities) {
         public boolean has(String capability){return capabilities!=null&&capabilities.contains(capability);}

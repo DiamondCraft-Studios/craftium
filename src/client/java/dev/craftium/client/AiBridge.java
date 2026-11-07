@@ -374,6 +374,8 @@ public final class AiBridge {
                 out.add("state", state);
                 if (status.error() && summary != null && state.has("previewBlocks") && state.get("previewBlocks").getAsInt() > 0)
                     out.addProperty("previewKept", "The spec was refused, so nothing changed: your earlier preview (" + state.get("previewBlocks").getAsInt() + " blocks) is still waiting. Fix the spec and call preview_build again.");
+                if (status.error() && summary != null && !ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SPEC_V2))
+                    out.addProperty("serverOutdated", olderServer());
                 return out;
             });
         } catch (ExecutionException e) {
@@ -382,6 +384,16 @@ public final class AiBridge {
             if (awaiting == reply) awaiting = null;
             if (summary != null && awaitingData == summary) awaitingData = null;
         }
+    }
+
+    /**
+     * Why a spec may have been refused on this server: its Craftium predates spec v2, so roof, stairs, group, mixes and material@kind names
+     * are unknown there, though the plain shapes still work.
+     */
+    private static String olderServer() {
+        var server = ClientHandshake.server();
+        return "This server runs " + (server == null ? "an older Craftium" : "Craftium " + server.version()) + ", which does not know roof, stairs, group, "
+            + "{\"mix\": ...} or material@kind names. Build with the plain shapes and full block ids, and tell the player the server's Craftium needs an update for the rest.";
     }
 
     /** When the last request went to the server. The server silently drops a request that follows another within 65 ms, so they are kept further apart than that. */
