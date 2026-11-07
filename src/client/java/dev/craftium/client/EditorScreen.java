@@ -1649,6 +1649,12 @@ public final class EditorScreen extends CraftiumScreen {
     /** Keys currently held, so a repeat of a key already down (a movement key held while Ctrl goes down) is not read as a fresh shortcut such as Ctrl+D. */
     private final java.util.Set<Integer> keysDown=new java.util.HashSet<>();
     @Override public boolean keyReleased(KeyEvent event){keysDown.remove(event.key());return super.keyReleased(event);}
+    /** The gizmo axes the held X, Y and Z keys lock, as a mask: none while typing or with a modifier held, as Ctrl+X is Cut. */
+    int axisLock(){
+        if(typing!=null||minecraft.hasControlDown()||minecraft.hasAltDown())return 0;
+        for(EditBox field:fields.values())if(field.isFocused())return 0;
+        return (keysDown.contains(GLFW.GLFW_KEY_X)?1:0)|(keysDown.contains(GLFW.GLFW_KEY_Y)?2:0)|(keysDown.contains(GLFW.GLFW_KEY_Z)?4:0);
+    }
     @Override public boolean keyPressed(KeyEvent event) {
         boolean repeat=!keysDown.add(event.key());
         if(typing!=null){
@@ -1673,6 +1679,8 @@ public final class EditorScreen extends CraftiumScreen {
         if(event.key()==GLFW.GLFW_KEY_ESCAPE){if(ClientState.hasPending())CraftiumClient.send("pending_cancel",null,null);else if(ShapeObject.active())ShapeObject.cancel();else if(PlacementPreview.active())PlacementPreview.cancel();else if(shapeMenu)shapeMenu=false;else if(ctxCell>=0)ctxCell=-1;else if(help)help=false;else if(transform){transform=false;init();}else if(menu>=0)menu=-1;else onClose();return true;}
         if(EditorBindings.matches(Action.HELP,event)){perform(Action.HELP);return true;}
         if(help||transform)return true;
+        // With a gizmo showing, plain X, Y and Z lock its axes, as in the Builder; they are not the editor's hotkeys then.
+        if((event.modifiers()&7)==0&&(event.key()==GLFW.GLFW_KEY_X||event.key()==GLFW.GLFW_KEY_Y||event.key()==GLFW.GLFW_KEY_Z)&&TransformGizmo.available(this))return true;
         // Shared chords are resolved by the active context, before ordinary tool letters.
         if((o().tool==Tool.SHAPE||ShapeObject.active())&&!PlacementPreview.active()&&turnShape(event))return true;
         if(PlacementPreview.active()){
