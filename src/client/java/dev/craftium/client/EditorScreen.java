@@ -551,7 +551,7 @@ public final class EditorScreen extends CraftiumScreen {
         rows.add(sliderRow(w,"Translate X",o.modifyTranslateX,-64,64,64,0,v->o.modifyTranslateX=Math.round(v*100)/100d,false));
         rows.add(sliderRow(w,"Translate Y",o.modifyTranslateY,-64,64,64,0,v->o.modifyTranslateY=Math.round(v*100)/100d,false));
         rows.add(sliderRow(w,"Translate Z",o.modifyTranslateZ,-64,64,64,0,v->o.modifyTranslateZ=Math.round(v*100)/100d,false));
-        rows.add(sliderRow(w,"Translate Scale",o.modifyTranslateScale,-64,64,64,1,v->o.modifyTranslateScale=Math.round(v*100)/100d,false));
+        rows.add(sliderRow(w,"Expansion",o.modifyTranslateScale,ModifyMath.MIN_EXPANSION,ModifyMath.MAX_EXPANSION,ModifyMath.MAX_EXPANSION,1,v->o.modifyTranslateScale=Math.round(v*100)/100d,false));
     }
     private record PinnedRow(String name,OptionFields.Kind kind,int y){}
     private final List<PinnedRow> pinnedRows=new ArrayList<>();
