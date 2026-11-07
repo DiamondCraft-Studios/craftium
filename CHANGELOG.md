@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1-beta.1
+
+Changes since 0.9.0-beta.1.
+
+### Editor
+- Modify's Translate Scale is now Expansion (0.1 to 8): with Add Translation on, a revolve widens its radius over the sweep and each rotated copy sits further out than the last, instead of the offset being stretched. This also stops a large scale from crashing the client.
+
 ## 0.9.0-beta.1
 
 Changes since 0.8.0-beta.1.

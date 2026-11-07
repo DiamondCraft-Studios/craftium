@@ -166,7 +166,7 @@ public final class Options {
     /** Modify: Add Translation, which offsets where a revolve or the last rotated copy ends up. */
     public boolean modifyTranslate;
     public double modifyTranslateX,modifyTranslateY,modifyTranslateZ;
-    /** Modify: a multiplier on the Add Translation offset, so one set of sliders can be stretched or shrunk. */
+    /** Modify: with Add Translation on, how far from the anchor the sweep ends as a multiple of where it starts (1 keeps the radius). Saved as modifyTranslateScale. */
     public double modifyTranslateScale=1;
     public ShapeKind shapeKind=ShapeKind.BRUSH;
     /** Whether changing one size control of a shape changes the others by the same factor, so its proportions stay (see {@link ShapeSizes}). */
@@ -308,7 +308,7 @@ public final class Options {
         if(compare==null)compare=Compare.ANY; // Gson reads a constant that no longer exists, the old SOLID, as null
         if(noise==null||pathMode==null||modelMode==null||modifyMode==null||shapeKind==null||rulerMode==null)throw new IllegalArgumentException("Missing advanced options");
         if(modifyAxis==null||modifyType==null)throw new IllegalArgumentException("Missing advanced options");
-        modifyAngle=finite(modifyAngle);modifyTranslateX=Math.clamp(finite(modifyTranslateX),-64,64);modifyTranslateY=Math.clamp(finite(modifyTranslateY),-64,64);modifyTranslateZ=Math.clamp(finite(modifyTranslateZ),-64,64);modifyTranslateScale=Math.clamp(finite(modifyTranslateScale),-64,64);
+        modifyAngle=finite(modifyAngle);modifyTranslateX=Math.clamp(finite(modifyTranslateX),-64,64);modifyTranslateY=Math.clamp(finite(modifyTranslateY),-64,64);modifyTranslateZ=Math.clamp(finite(modifyTranslateZ),-64,64);modifyTranslateScale=Math.clamp(finite(modifyTranslateScale),ModifyMath.MIN_EXPANSION,ModifyMath.MAX_EXPANSION);
         rulerSplit=Math.clamp(rulerSplit,2,16);
         rulerLabelSize=bounded(rulerLabelSize,RULER_LABEL_MIN,RULER_LABEL_MAX);
         // The colours the ruler first had, kept in saved settings, give way to the ones it has now; any colour that was changed is left alone.

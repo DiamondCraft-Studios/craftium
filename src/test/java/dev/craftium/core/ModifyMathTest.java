@@ -43,4 +43,25 @@ class ModifyMathTest {
         assertTrue(out.containsKey(new Point(2,0,0)));
         assertTrue(out.containsKey(new Point(0,4,2))||out.containsKey(new Point(0,4,-2)));
     }
+
+    @Test void revolveExpandsOutwardFromTheAnchor(){
+        var o=options(Options.ModifyMode.REVOLVE);o.modifyAxis=Options.ModifyAxis.Y;o.modifyAngle=90;o.modifyTranslate=true;o.modifyTranslateScale=2;
+        var out=ModifyMath.plan(o,List.of(new Point(4,0,0)),new Point(4,0,0),new Point(4,0,0),new Point(0,0,0));
+        assertTrue(out.containsKey(new Point(4,0,0)));
+        assertTrue(out.containsKey(new Point(0,0,-8))||out.containsKey(new Point(0,0,8)),"ends twice as far out");
+        assertTrue(out.keySet().stream().allMatch(p->p.y()==0),"nothing moves along the axis");
+    }
+
+    @Test void expansionIsIgnoredWithoutAddTranslation(){
+        var o=options(Options.ModifyMode.REVOLVE);o.modifyAxis=Options.ModifyAxis.Y;o.modifyAngle=360;o.modifyTranslateScale=4;
+        var out=ModifyMath.plan(o,List.of(new Point(4,0,0)),new Point(4,0,0),new Point(4,0,0),new Point(0,0,0));
+        assertTrue(out.keySet().stream().allMatch(p->Math.hypot(p.x(),p.z())<=4.5));
+    }
+
+    @Test void rotatedCopiesWidenWithEachCopy(){
+        var o=options(Options.ModifyMode.ROTATE_COPIES);o.copies=3;o.modifyAxis=Options.ModifyAxis.Y;o.modifyTranslate=true;o.modifyTranslateScale=2;
+        var out=ModifyMath.plan(o,List.of(new Point(5,0,0)),new Point(5,0,0),new Point(5,0,0),new Point(0,0,0));
+        // the last copy has turned 270 degrees and sits twice as far out: (0,0,5)*2
+        assertTrue(out.keySet().stream().anyMatch(p->p.x()==0&&p.z()==10));
+    }
 }
