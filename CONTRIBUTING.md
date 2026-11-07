@@ -27,6 +27,18 @@ When shared code needs a Minecraft API that differs between versions, call it th
 - Tag releases `v<mod version>-mc<version>`, for example `v0.8.0-beta.1-mc26.2`.
 - CI builds only the versions a change touches. Shared code, the root build files and the workflows build all of them.
 
+## Shipping a hotfix
+
+A client and a server meet with a hello: the build's version, a protocol number (`Handshake.PROTOCOL`) and a set of capability names. Only the protocol number can refuse a connection, so a fix that stays inside one side ships as a plain patch release and the other side does not have to update.
+
+- **Backend only, same wire format:** fix it, tag a patch release, update only the side that changed. Nothing else is needed.
+- **Adding a field, an option or an enum constant:** compatible, no protocol bump. Older peers ignore what they do not know and see the default for what they do not send.
+- **A feature that behaves differently with and without the other side:** give it a capability name in `Handshake.CAPABILITIES` and let the side that lacks it fall back. A name means one thing for good; when the behaviour changes, add a new name and keep the old one.
+- **Removing, renaming or retyping a field or enum constant, or changing what one means:** raise `Handshake.PROTOCOL`, then record the new wire shape (see below). Every client and server must now update together, so avoid this for a hotfix.
+- **Logic both sides run** (`ModifyMath` is one): the client's preview and the server's edit agree only when both have the change, so treat it as a change to both and say so in the release notes.
+
+`ProtocolCompatibilityTest` enforces the second and fourth rules: it fails when something recorded for the current protocol disappears or changes type. To record the shape for a new protocol number, run the tests with `CRAFTIUM_RECORD_PROTOCOL` set to a file path, then paste that file into `ProtocolSnapshot` as the next version.
+
 ## Commit messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org/) without a scope: `type: subject`, in the imperative, with the reason in the body. Types are `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci` and `chore`. Mark breaking changes with `!` after the type, for example `refactor!: rename the Gfx adapter`.
