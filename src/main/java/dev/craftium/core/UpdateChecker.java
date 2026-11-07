@@ -2,10 +2,13 @@ package dev.craftium.core;
 
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -60,12 +63,37 @@ public final class UpdateChecker {
     }
     private static long number(String text){try{return Long.parseLong(text);}catch(NumberFormatException e){return 0;}}
 
-    /** Looks once, off the calling thread. Any failure (offline, rate limited, a repository with no releases) is an empty answer. */
-    public static CompletableFuture<Optional<Release>> check(String current,String minecraft){
+    /** The answer GitHub last gave, kept so a busy network or a rate limit does not turn the check into silence. */
+    record Cache(long at,String etag,String body) {}
+    static final long TTL_MILLIS=6L*60*60*1000;
+    static Cache load(Path file){
+        try{if(file==null||!Files.isRegularFile(file))return null;var cache=GSON.fromJson(Files.readString(file),Cache.class);return cache==null||cache.body()==null?null:cache;}
+        catch(IOException|RuntimeException e){return null;}
+    }
+    static void store(Path file,Cache cache){
+        try{if(file==null)return;Files.createDirectories(file.toAbsolutePath().getParent());Files.writeString(file,GSON.toJson(cache));}catch(IOException|RuntimeException ignored){/* the cache is only a convenience */}
+    }
+    static boolean fresh(Cache cache,long now){return cache!=null&&now-cache.at()>=0&&now-cache.at()<TTL_MILLIS;}
+
+    public static CompletableFuture<Optional<Release>> check(String current,String minecraft){return check(current,minecraft,null);}
+    /**
+     * Looks off the calling thread, at most once every six hours when {@code cacheFile} is given: in between, and whenever GitHub cannot be
+     * reached or says to wait, the last answer is used, and a changed answer is asked for with its ETag so an unchanged one costs no quota.
+     * Any failure with nothing cached is an empty answer.
+     */
+    public static CompletableFuture<Optional<Release>> check(String current,String minecraft,Path cacheFile){
+        var cache=load(cacheFile);long now=System.currentTimeMillis();
+        if(fresh(cache,now))return CompletableFuture.completedFuture(newer(cache.body(),minecraft,current));
         var request=HttpRequest.newBuilder(URI.create("https://api.github.com/repos/"+REPO+"/releases?per_page=30")).timeout(Duration.ofSeconds(8))
-            .header("Accept","application/vnd.github+json").header("User-Agent","craftium/"+clean(current)).GET().build();
-        return HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build().sendAsync(request,HttpResponse.BodyHandlers.ofString())
-            .thenApply(response->response.statusCode()==200?newer(response.body(),minecraft,current):Optional.<Release>empty())
-            .exceptionally(e->Optional.empty());
+            .header("Accept","application/vnd.github+json").header("User-Agent","craftium/"+clean(current));
+        if(cache!=null&&cache.etag()!=null)request.header("If-None-Match",cache.etag());
+        return HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build().sendAsync(request.GET().build(),HttpResponse.BodyHandlers.ofString())
+            .thenApply(response->{
+                String body=cache==null?null:cache.body();
+                if(response.statusCode()==200){body=response.body();store(cacheFile,new Cache(now,response.headers().firstValue("etag").orElse(null),body));}
+                else if(response.statusCode()==304&&cache!=null)store(cacheFile,new Cache(now,cache.etag(),cache.body()));
+                return body==null?Optional.<Release>empty():newer(body,minecraft,current);
+            })
+            .exceptionally(e->cache==null?Optional.empty():newer(cache.body(),minecraft,current));
     }
 }

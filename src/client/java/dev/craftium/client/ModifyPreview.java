@@ -91,6 +91,9 @@ final class ModifyPreview {
             placed.forEach((dest,source)->{to.add(new BlockPos(dest.x(),dest.y(),dest.z()));from.add(new BlockPos(source.x(),source.y(),source.z()));});
             models=from;places=to;shape=OutlineShape.of(placed.keySet());
         }catch(IllegalArgumentException e){problem=e.getMessage();}
+        catch(RuntimeException e){ // the preview is drawn every frame, so a failure here must not reach the render loop; the edit itself is checked by the server
+            problem="Cannot preview this: "+e.getClass().getSimpleName();models=List.of();places=List.of();shape=OutlineShape.EMPTY;bounds=null;
+        }
     }
     /** Where a point lies on the circle about {@code centre} in the plane the axis is the normal of. */
     private static Vec3 around(Vec3 centre,Options.ModifyAxis axis,double radius,double angle){

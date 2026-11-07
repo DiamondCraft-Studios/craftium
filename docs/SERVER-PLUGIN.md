@@ -42,6 +42,10 @@ Additional permissions require `craftium.edit`. No permission grants arbitrary s
 
 `allowed-worlds: []` allows all worlds; otherwise list Bukkit world names. `/craftiumserver reload` reloads the file. `/craftiumserver status` reports connected clients and protection status. Outgoing messages are paced across ticks; byte and frame budgets are configurable with bounded values.
 
+`check-for-updates: true` looks at the project's GitHub releases once at startup and logs a line when a newer build exists for this Minecraft version; the answer is kept in `plugins/Craftium/update-check.json` for six hours. Nothing is downloaded. Set it to `false` to stop the check.
+
+Clients and the companion tell each other their version and a protocol number as a player joins. If a client speaks a different protocol, the player is told which side to update and their edits are refused until they reconnect updated; a client or companion with the same protocol works whatever its patch version.
+
 Shared assets live in `plugins/Craftium/blueprints`, `fonts`, `heightmaps` and `exports`. History and saved views live in the server world directory under `craftium/`. Client downloads go to the local `config/craftium` library when explicitly requested by that client. History is separated by player and dimension. Edits retain the existing 131,072-cell and 32 MiB history limits.
 
 ## Protection integration

@@ -44,14 +44,17 @@ final class ClientHandshake {
         if(!force&&(checked||!ClientState.options.checkForUpdates))return;
         if(minecraft().isEmpty())return; // a development build has no release to compare with
         checked=true;
-        UpdateChecker.check(version(),minecraft()).thenAccept(found->{latest=found;announced=false;});
+        UpdateChecker.check(version(),minecraft(),FabricLoader.getInstance().getConfigDir().resolve("craftium").resolve("update-check.json")).thenAccept(found->{latest=found;announced=false;});
     }
     /** Tells the player, once, about a newer release found by the check. Called from the client tick. */
     static void announce(){
         var found=latest;
         if(announced||found.isEmpty())return;
         announced=true;
-        ClientState.notify("Craftium "+found.get().version()+" is out (you have "+UpdateChecker.clean(version())+"). /craftium update");
+        String line="Craftium "+found.get().version()+" is out (you have "+UpdateChecker.clean(version())+"). /craftium update";
+        ClientState.notify(line);
+        // the HUD line is gone in a few seconds; the chat keeps it
+        dev.craftium.client.compat.ClientCompat.chat(net.minecraft.client.Minecraft.getInstance(),net.minecraft.network.chat.Component.literal(line+" shows the link."));
     }
     static String describe(){
         var found=latest;

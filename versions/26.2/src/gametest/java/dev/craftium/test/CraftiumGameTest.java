@@ -26,6 +26,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             ctx.waitTicks(20);world.getConnection().waitForChunksDownload();
             require(ctx.computeOnClient(mc->CraftiumClient.supported()),"Craftium network channel was not negotiated");
             if("gallery".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.GalleryCapture.run(ctx,world);return;}
+            if("handshake".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.HandshakeGameTest.run(ctx,world);return;}
             if("keybinds".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.KeybindGameTest.run(ctx,world);return;}
             if("prediction".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.PredictionGameTest.run(ctx,world);return;}
             if("queue".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.BuilderQueueGameTest.run(ctx,world);return;}
