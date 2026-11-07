@@ -1,12 +1,8 @@
 # Changelog
 
-## 0.10.0-beta.1
+## 1.0.0-beta.1
 
-Changes since 0.9.1-beta.1.
-
-### Chunk leasing
-- Moving, cloning or stacking a selection or a Builder box between far-away chunks no longer asks you to walk there. Craftium loads the chunks at both ends for as long as the edit takes, then lets them go. Undo and redo of such an edit do the same.
-- Chunks nobody has visited are generated for the edit. An edit that needs more than 128 chunks that are not loaded is refused.
+Changes since 0.10.0-beta.1.
 
 ### AI building
 - The reply to a preview tells the AI what it made: blocks placed and cleared, where they are, and the commonest blocks with how stairs and other facing blocks are turned, so a roof built the wrong way round is caught before it is drawn.
@@ -33,6 +29,14 @@ Changes since 0.9.1-beta.1.
 
 ### Connection
 - Flying fast, or turning the arcball quickly, no longer gets a player thrown back on a Fabric server: the server skips the game's "moved too quickly" check for a Craftium player who is flying, and lists a new `fast-movement` capability. Against a server without it (Paper/Purpur, older builds) the client keeps flight and the arcball under nine blocks a tick, so there is no rubber-banding, only a speed limit.
+
+## 0.10.0-beta.1
+
+Changes since 0.9.1-beta.1.
+
+### Chunk leasing
+- Moving, cloning or stacking a selection or a Builder box between far-away chunks no longer asks you to walk there. Craftium loads the chunks at both ends for as long as the edit takes, then lets them go. Undo and redo of such an edit do the same.
+- Chunks nobody has visited are generated for the edit. An edit that needs more than 128 chunks that are not loaded is refused.
 
 ## 0.9.1-beta.1
 

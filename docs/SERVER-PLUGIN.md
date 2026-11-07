@@ -1,13 +1,13 @@
-# Craftium server companion — 0.10.0-beta.1
+# Craftium server companion — 1.0.0-beta.1
 
 The companion runs Craftium's native editing engine on **Paper and Purpur**. There is one build per Minecraft version: **26.2** (Java 25) and **1.21.10** (Java 21). The player uses the Fabric Craftium client and the same editor, tools and shortcuts.
 
 ## Install
 
 1. Stop the server.
-2. Put the jar for your Minecraft version in the server's `plugins/` folder: `craftium-server-0.10.0-beta.1.jar` for 26.2, or `craftium-server-0.10.0-beta.1+mc1.21.10.jar` for 1.21.10. A build refuses to start on any other Minecraft version.
+2. Put the jar for your Minecraft version in the server's `plugins/` folder: `craftium-server-1.0.0-beta.1.jar` for 26.2, or `craftium-server-1.0.0-beta.1+mc1.21.10.jar` for 1.21.10. A build refuses to start on any other Minecraft version.
 3. Start Paper or Purpur. Craftium creates `plugins/Craftium/config.yml`.
-4. On a client for the same Minecraft version, install Fabric Loader, Fabric API and the matching Craftium mod jar in `mods/` (`craftium-0.10.0-beta.1.jar` for 26.2, `craftium-0.10.0-beta.1+mc1.21.10.jar` for 1.21.10).
+4. On a client for the same Minecraft version, install Fabric Loader, Fabric API and the matching Craftium mod jar in `mods/` (`craftium-1.0.0-beta.1.jar` for 26.2, `craftium-1.0.0-beta.1+mc1.21.10.jar` for 1.21.10).
 5. Join in Creative mode. Operators can edit immediately. Press **Right Shift** for the editor or **Left Alt** for builder controls.
 
 The plugin and client are different JARs. The server does not need Fabric or Fabric API. Older Craftium 0.2 clients do not support the Paper connection. Vanilla clients can join normally, but cannot use the Craftium editor.
