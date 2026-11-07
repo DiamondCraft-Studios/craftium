@@ -31,6 +31,8 @@ public final class IconSheetGameTest {
         System.out.println("CRAFTIUM_ICONS " + picture);
         BufferedImage image;
         try { image = javax.imageio.ImageIO.read(picture.toFile()); } catch (java.io.IOException e) { throw new AssertionError(e); }
+        // The sheet is put away before the test ends, so the game shuts down from a normal screen: once it was left open and the window hung after the check had passed.
+        c.runOnClient(mc -> ClientCompat.setScreen(mc, null));
         checkDrawings(image);
         System.out.println("CRAFTIUM_ICONS_PASS " + IconCatalog.all().size() + " icons in " + IconCatalog.categories().size() + " categories, each drawn and none alike");
     }
