@@ -122,11 +122,11 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             System.out.println("CRAFTIUM_AI selection_edit_ok");
 
             ctx.waitTicks(10); // the server drops a request that follows another within 65 ms, and cancel_preview was the last one
-            // A very large selection (26 x 384 x 52 = 519,168 blocks, mostly air), all planned as one edit. Twice this size makes the status packet too big for the connection (see the commit message), so it is as big as a test can select today.
+            // The largest box the editor will select (52 x 384 x 52 = 1,038,336 blocks, mostly air), all planned as one edit. As raw coordinates this made the status packet too big and dropped the connection.
             ctx.runOnClient(mc -> {
                 var o = ClientState.options;
-                o.position1 = new dev.craftium.core.Point(x - 13, -64, z - 26); // the whole height of the world, in a column near the player so its chunks are loaded
-                o.position2 = new dev.craftium.core.Point(x + 12, 319, z + 25);
+                o.position1 = new dev.craftium.core.Point(x - 26, -64, z - 26); // the whole height of the world, in a column near the player so its chunks are loaded
+                o.position2 = new dev.craftium.core.Point(x + 25, 319, z + 25);
                 o.mode = dev.craftium.core.Selection.Mode.REPLACE;
                 CraftiumClient.send("select_box", o.position1, null);
             });
@@ -139,14 +139,14 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
                 if (bigSel.get("size").getAsInt() != 8) break;
             }
             System.out.println("CRAFTIUM_AI selection_large_made ms=" + (System.nanoTime() - selStart) / 1_000_000 + " " + bigSel);
-            require(bigSel.get("size").getAsInt() == 26 * 384 * 52, "the large selection should be made: " + bigSel + " / " + call("get_state", "{}").get("lastMessage"));
+            require(bigSel.get("size").getAsInt() == 52 * 384 * 52, "the million-block selection should be made: " + bigSel + " / " + call("get_state", "{}").get("lastMessage"));
             System.gc();
             long heapBefore = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) >> 20;
             long millionStart = System.nanoTime();
             var million = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"air\",\"block\":\"glass\"}]}}");
             long millionMs = (System.nanoTime() - millionStart) / 1_000_000;
             long heapAfter = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) >> 20;
-            require(million.get("ok").getAsBoolean() && million.getAsJsonObject("state").get("previewBlocks").getAsInt() > 500_000, "a half-million-block selection edit (the air in it, not the ground) should be planned: " + million);
+            require(million.get("ok").getAsBoolean() && million.getAsJsonObject("state").get("previewBlocks").getAsInt() > 1_000_000, "a million-block selection edit (the air in it, not the ground) should be planned: " + million);
             var drawn = million.getAsJsonObject("state");
             require(drawn.get("previewTruncated").getAsBoolean() && drawn.get("previewBlocksDrawn").getAsInt() <= 8192, "only the start of it should be drawn, and the AI told: " + drawn);
             System.out.println("CRAFTIUM_AI selection_large_edit ms=" + millionMs + " heapMB_before=" + heapBefore + " heapMB_after=" + heapAfter + " maxHeapMB=" + (Runtime.getRuntime().maxMemory() >> 20));
@@ -155,7 +155,7 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             long describeStart = System.nanoTime();
             var describedLarge = call("read_selection", "{}");
             long describeMs = (System.nanoTime() - describeStart) / 1_000_000;
-            require(describedLarge.get("ok").getAsBoolean() && describedLarge.get("selected").getAsInt() == 26 * 384 * 52 && describedLarge.has("above"), "read_selection of the large selection: " + describedLarge);
+            require(describedLarge.get("ok").getAsBoolean() && describedLarge.get("selected").getAsInt() == 52 * 384 * 52 && describedLarge.has("above"), "read_selection of the large selection: " + describedLarge);
             System.out.println("CRAFTIUM_AI read_selection_large ms=" + describeMs + " " + describedLarge.get("summary").getAsString());
             // Back to the player's own small selection, which the rest of this test checks the AI never touches.
             ctx.waitTicks(10);

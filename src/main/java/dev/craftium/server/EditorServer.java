@@ -143,6 +143,8 @@ public final class EditorServer {
 
     /** How many builder commits wait behind the edit being applied; past this the newest is turned down as before. */
     private static final int QUEUE_LIMIT=8;
+    /** The most characters of status a packet carries, with room to spare: a packet may be at most 2 MiB, and the string is limited to 2,000,000 characters. */
+    private static final int STATUS_LIMIT=1_500_000;
     private static boolean replaying;
     public static void handle(ServerPlayer player,String json) {
         var s=SESSIONS.computeIfAbsent(player.getUUID(),id->new Session());
@@ -842,6 +844,7 @@ public final class EditorServer {
         if(ai!=null&&ai.pendingDirty){ai.pendingData=ai.pendingEdit==null?"":GhostCodec.encodeEdit(ai.pendingEdit);ai.pendingDirty=false;}
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
         var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin);s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
-        ServerPlatform.send(player,new Packets.Update(Packets.JSON.toJson(status)));
+        // A status that is too long for a packet cannot be written and would drop the player's connection, so one that is too big is sent without the largest drawn data.
+        ServerPlatform.send(player,new Packets.Update(StatusFit.fit(Packets.JSON.toJson(status),STATUS_LIMIT,"Too big to draw: the selection or preview is still there, but not shown")));
     }
 }
