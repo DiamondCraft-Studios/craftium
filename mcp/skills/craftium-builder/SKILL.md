@@ -171,7 +171,8 @@ hand-built one.
 - Write a detail once and place it around the build with a `group`: a window with its sill, shutters and lintel,
   written for the south wall, becomes the north wall's with `"rotate": 180` or the east wall's with `"rotate": 90`
   and `"at"`. Stairs, trapdoors and logs inside turn with it. `repeat` on the group places a row of them.
-- Torches, signs and doors are not support-checked. Check each one stands on or against something.
+- The preview reply's `warnings` name torches, lanterns, signs, ladders and buttons with nothing to hold them and doors
+  or beds missing a half. Fix each before applying; it is the only support check there is.
 
 ## Phase 8: Context
 

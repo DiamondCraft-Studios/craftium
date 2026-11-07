@@ -16,6 +16,12 @@ Changes since 0.9.1-beta.1.
 - The building skill has worked examples (a gable cottage and a round tower) and renders only where the look matters, which saves time and tokens on every build.
 - Build specs can generate roofs (gable, hip or shed) and flights of stairs with every stair facing the right way, so the AI no longer writes roofs stair by stair.
 - Build specs can name blocks by material (`spruce@stairs`, or `@stairs` with a material set once), mix blocks by weight for weathered walls and paths, and group operations to rotate, mirror and move them, turning stairs and logs with them.
+- One read_blocks tool replaces get_blocks and get_preview_blocks: the world, the world with the AI's preview applied, or the preview alone, up to a million blocks at a time.
+- render_view can draw up to three angles from one read of the world, about half the time of separate calls.
+- The AI can add to its waiting preview instead of resending the whole build, and the result is still applied and undone as one build.
+- The reply to a preview warns about doors and beds missing a half, torches, lanterns, signs and the like with nothing to hold them, and operations hidden entirely by later ones.
+- The AI plugin tells you when it and the mod are out of step, and which to update; a server whose Craftium is older gets a clear message when it cannot read a build.
+- A build that the server cannot draw no longer stops the server: the request fails, or the preview is dropped and logged.
 
 ## 0.9.1-beta.1
 

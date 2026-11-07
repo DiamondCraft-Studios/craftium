@@ -116,7 +116,7 @@ The reply to a preview says what it made: blocks placed and cleared, the box the
 
 To change what you have selected, the build can include `replace_selection`: say you selected the stair part of a build and ask "can you change this to deepslate?". Claude reads your selection, then replaces every matching block in it (or every block, with no `find`), and each new block keeps the properties of the old one that both have, so stairs stay turned the way they were and slabs keep their half. It never changes your selection, can cover up to a million blocks, and is shown as a preview first like any build.
 
-A build ignores your brush settings (mask, symmetry, height range) and places exactly what the spec says. It does not check that blocks such as torches have support. Primitives suit pillars, walls, towers, domes and similar shapes; organic shapes such as trees or terrain are better done with the brush tools.
+A build ignores your brush settings (mask, symmetry, height range) and places exactly what the spec says. It does not refuse a torch with nothing to hold it or half a door, but the reply to the preview warns Claude about them, and about an operation that later ones hide entirely. Primitives suit pillars, walls, towers, domes and similar shapes; organic shapes such as trees or terrain are better done with the brush tools.
 
 ## Safety
 
@@ -165,6 +165,8 @@ Under `--permission` the process can read only those two folders and cannot star
 ## Troubleshooting
 
 - **"Craftium is not reachable"**: open a world, turn on AI building (AI menu in the editor), and check the Minecraft folder setting in the extension if you use a launcher profile.
+- **"The Craftium mod in Minecraft is older than this Craftium plugin"**: the extension or plugin needs a newer mod. Update the mod, or install the extension that came with your mod. When the mod is the newer one, Claude is told to suggest updating the plugin, and everything still works.
+- **A build is refused with "This server runs Craftium …"**: the server's Craftium predates roofs, groups, mixes and material names. Claude can still build with the plain shapes; ask the server owner to update for the rest.
 - **Running the game from source (`gradlew runClient`) or from a launcher profile**: the game does not use your default `.minecraft` folder, so the extension cannot find it on its own. Open **AI menu → AI status and setup…**, press **Copy game folder**, and paste it into the extension's **Minecraft folder** setting. (For a source run that is `versions/<version>/run` in the checkout you launched from, so make sure you launched from the checkout that has the AI feature.)
 - **"Craftium refused the connection"**: Minecraft restarted and the token changed. Try again, or run `/craftium ai off` then `/craftium ai on`.
 - **"Craftium on the server"**: the world needs Craftium on the server too, as for the editor. In singleplayer this is automatic.

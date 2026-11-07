@@ -82,7 +82,8 @@ These come from the build code (`BuildSpec.java`).
 
 - Water and lava flow is not simulated. Place liquids last and enclose them with solid blocks (or leave a clear rim)
   so they cannot spill when built.
-- Torches, signs, doors and similar blocks are not checked for support.
+- Torches, lanterns, signs, ladders, buttons, doors and beds are checked only by the preview reply's `warnings`
+  (a missing support or a missing half). Other blocks that need support, such as plants or pointed dripstone, are not checked.
 - Unknown block ids and bad specs are rejected with the operation named. Fix and retry. That error is reliable. A
   block that previews without error does exist in this game version.
 - Primitives suit pillars, walls, towers, domes and similar shapes. Organic shapes such as trees or terrain are
