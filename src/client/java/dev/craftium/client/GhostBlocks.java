@@ -33,8 +33,6 @@ final class GhostBlocks {
     boolean ai;
     /** Set on another player's AI preview, which is drawn in teal so it is told apart from the player's own violet one. */
     boolean shared;
-    private static final int AI_OUTLINE=0xffc9a0ff,AI_FILL=0x22a070ff,AI_TINT=0x90b57cf0;
-    private static final int SHARED_OUTLINE=0xff7fe3d4,SHARED_FILL=0x2230d5c8,SHARED_TINT=0x9040c8b8;
     private int[] box; // x0, y0, z0, x1, y1, z1 of the blocks it places, worked out when first asked for
 
     private int[] box(){
@@ -116,7 +114,8 @@ final class GhostBlocks {
         if(data==null||!resolve())return;
         Vec3 at=new Vec3(origin.x(),origin.y(),origin.z());
         if(outline){
-            int line=shared?SHARED_OUTLINE:ai?AI_OUTLINE:ClientState.options.hoverColor,fill=shared?SHARED_FILL:ai?AI_FILL:ClientState.options.hoverFill;
+            var o=ClientState.options;
+            int line=shared?o.sharedAiColor:ai?o.aiColor:o.hoverColor,fill=shared?o.sharedAiFill:ai?o.aiFill:o.hoverFill;
             if(!placedShape.isEmpty())placedShape.drawPlain(at,line,(float)ClientState.options.selectionWidth,fill,true,false);
             if(!removedShape.isEmpty())removedShape.drawFill(at,ClientState.options.removedFill);
         }
@@ -134,6 +133,6 @@ final class GhostBlocks {
             drawnPlaces=models<states.size()?cachedPlaces.subList(0,models):cachedPlaces;
             drawnStates=models<states.size()?states.subList(0,models):states;drawnFor=cachedPlaces;
         }
-        Overlay.cachedBlockStates(drawnStates,drawnPlaces,shared?SHARED_TINT:ai?AI_TINT:ClientState.options.previewTint);
+        Overlay.cachedBlockStates(drawnStates,drawnPlaces,shared?ClientState.options.sharedAiTint:ai?ClientState.options.aiTint:ClientState.options.previewTint);
     }
 }

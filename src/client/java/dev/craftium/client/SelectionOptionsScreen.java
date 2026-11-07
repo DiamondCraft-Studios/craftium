@@ -46,7 +46,13 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
         entry("Remove blocks","Fill",o->o.removedFill,(o,c)->o.removedFill=c),
         entry("Remove blocks","Blocks tint",o->o.removedTint,(o,c)->o.removedTint=c),
         entry("Hover preview","Outline",o->o.hoverColor,(o,c)->o.hoverColor=c),
-        entry("Hover preview","Fill",o->o.hoverFill,(o,c)->o.hoverFill=c));
+        entry("Hover preview","Fill",o->o.hoverFill,(o,c)->o.hoverFill=c),
+        entry("AI preview","Outline",o->o.aiColor,(o,c)->o.aiColor=c),
+        entry("AI preview","Fill",o->o.aiFill,(o,c)->o.aiFill=c),
+        entry("AI preview","Blocks tint",o->o.aiTint,(o,c)->o.aiTint=c),
+        entry("Other players' AI preview","Outline",o->o.sharedAiColor,(o,c)->o.sharedAiColor=c),
+        entry("Other players' AI preview","Fill",o->o.sharedAiFill,(o,c)->o.sharedAiFill=c),
+        entry("Other players' AI preview","Blocks tint",o->o.sharedAiTint,(o,c)->o.sharedAiTint=c));
     private static final List<Width> WIDTHS=List.of(
         new Width("Selection line width",o->o.selectionWidth,(o,v)->o.selectionWidth=v),
         new Width("Builder selection line width",o->o.builderSelectionWidth,(o,v)->o.builderSelectionWidth=v),
