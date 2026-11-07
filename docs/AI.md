@@ -103,7 +103,15 @@ Claude describes a build as JSON primitives with positions in **world coordinate
 }
 ```
 
-Limits: 256 operations, 64 repeats, radius 128, a build that spans at most 256 blocks along each side, and 131,072 blocks in total; a spec that reaches further is refused with a message saying which side. The ground a build reaches is loaded for it (see [Claude's workspace](#claudes-workspace)). The server rejects unknown block ids with a message naming the operation at fault and the nearest real ids (`spruce_stair`: `minecraft:spruce_stairs`), and a state a block does not have with the properties it takes, so Claude can correct itself in one go. A refused spec leaves the preview that was waiting as it was.
+Beyond the primitives:
+
+- **Materials.** A block can be named by material and kind, such as `spruce@stairs` or `stone_bricks@wall`, and the server spells the real id (`spruce_stairs`, `stone_brick_wall`). With `"material": "spruce"` on the spec or an operation, `@stairs` alone means spruce stairs, so one word restyles a build.
+- **Mixes.** A block can be a weighted mix, such as `{"mix": [["stone_bricks", 6], ["mossy_stone_bricks", 3], ["cracked_stone_bricks", 1]]}`, scattered over the shape. The pick depends on the position and an optional `seed`, so the same spec always builds the same pattern.
+- **Roofs.** `roof` covers a footprint with a gable, hip or shed roof, every stair facing the right way and the hip corners shaped as the game shapes them, the gable ends filled and the ridge capped.
+- **Stairs.** `stairs` lays a straight 45° flight between two points, each step facing the way you climb, optionally on solid columns.
+- **Groups.** `group` holds operations and turns them as one: rotated by quarter turns, mirrored, or moved with `at`. Stairs, logs, doors and other blocks with a facing turn with it, the same way the game turns them in a structure.
+
+Limits: 256 operations (counting those inside groups, which go up to 4 deep), 64 palette entries, 16 blocks in a mix, 64 repeats, radius 128, a build that spans at most 256 blocks along each side, and 131,072 blocks in total; a spec that reaches further is refused with a message saying which side. The ground a build reaches is loaded for it (see [Claude's workspace](#claudes-workspace)). The server rejects unknown block ids with a message naming the operation at fault and the nearest real ids (`spruce_stair`: `minecraft:spruce_stairs`), and a state a block does not have with the properties it takes, so Claude can correct itself in one go. A refused spec leaves the preview that was waiting as it was.
 
 The reply to a preview says what it made: blocks placed and cleared, the box they fill, the chunks reached and the commonest blocks, with how the ones that face a way are turned. A gable roof has two facings in equal numbers, so a roof with its stairs the wrong way round shows there before anything is drawn.
 

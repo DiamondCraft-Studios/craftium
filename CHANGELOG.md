@@ -14,6 +14,8 @@ Changes since 0.9.1-beta.1.
 - Replies to the AI are held to about 60 KB, which fits in what an AI app passes on. Reading a wide area of ground gives a summary (height range, how level it is, what it is made of, a coarse map) instead of every column.
 - get_state also gives the dimension, height limits, sea level, the biome you stand in and your recent blocks; get_palette is gone from the AI tools.
 - The building skill has worked examples (a gable cottage and a round tower) and renders only where the look matters, which saves time and tokens on every build.
+- Build specs can generate roofs (gable, hip or shed) and flights of stairs with every stair facing the right way, so the AI no longer writes roofs stair by stair.
+- Build specs can name blocks by material (`spruce@stairs`, or `@stairs` with a material set once), mix blocks by weight for weathered walls and paths, and group operations to rotate, mirror and move them, turning stairs and logs with them.
 
 ## 0.9.1-beta.1
 
