@@ -26,6 +26,7 @@ final class GhostBlocks {
     private List<Point> relative;
     private OutlineShape placedShape,removedShape;
     private List<BlockPos> cachedPlaces,removedPlaces=List.of();private Point cachedOrigin;
+    private List<BlockPos> drawnPlaces,drawnFor;private List<BlockState> drawnStates;
     /** The tint of blocks an edit is about to remove, over the original blocks that are still in the world. */
 
     /** Set on a preview an AI app made, which is drawn in violet so it is never taken for one of the player's own edits. */
@@ -97,7 +98,10 @@ final class GhostBlocks {
         }
         // An AI preview can hold far more blocks than a frame can draw as models; the server sends the visible ones first, so the first few are the ones that show.
         int models=ai?Math.min(states.size(),ClientState.options.aiGhostDrawLimit):states.size();
-        if(models<states.size())Overlay.blockStates(states.subList(0,models),cachedPlaces.subList(0,models),AI_TINT);
-        else Overlay.blockStates(states,cachedPlaces,ai?AI_TINT:ClientState.options.previewTint);
+        if(drawnPlaces==null||drawnPlaces.size()!=models||drawnFor!=cachedPlaces){ // the same list objects every frame, so the renderer can keep what it worked out about them
+            drawnPlaces=models<states.size()?cachedPlaces.subList(0,models):cachedPlaces;
+            drawnStates=models<states.size()?states.subList(0,models):states;drawnFor=cachedPlaces;
+        }
+        Overlay.cachedBlockStates(drawnStates,drawnPlaces,ai?AI_TINT:ClientState.options.previewTint);
     }
 }
