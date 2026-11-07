@@ -16,7 +16,7 @@ import org.joml.Matrix3x2fStack;
  * each {@code versions/<mc>} module supplies the implementation for its release.
  * This is the 26.2 implementation, where every call maps straight onto {@link GuiGraphicsExtractor}.
  */
-public final class Gfx {
+public final class Gfx implements dev.craftium.client.Canvas {
     final GuiGraphicsExtractor raw;
     private Gfx(GuiGraphicsExtractor raw){this.raw=raw;}
 
