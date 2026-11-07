@@ -45,8 +45,8 @@ public final class CraftiumClient implements ClientModInitializer {
         swapKey=ClientCompat.registerKey(new KeyMapping("key.craftium.hotbar",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_UNKNOWN,category));
         replaceKey=ClientCompat.registerKey(new KeyMapping("key.craftium.replace",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_R,category));
         for(Tool tool:Tool.values()){
-            int key=EditorControls.toolDefault(tool);
-            toolKeys.put(tool,ClientCompat.registerKey(new KeyMapping("key.craftium.tool."+tool.name().toLowerCase(java.util.Locale.ROOT),InputConstants.Type.KEYSYM,key,category)));
+            var spec=tool.spec();
+            toolKeys.put(tool,ClientCompat.registerKey(new KeyMapping("key.craftium.tool."+spec.path(),InputConstants.Type.KEYSYM,spec.defaultKey(),category)));
         }
         ClientPlayNetworking.registerGlobalReceiver(Packets.Report.TYPE,(payload,context)->context.client().execute(()->ClientCompat.setScreen(context.client(),new ReportScreen(ClientCompat.screen(context.client()),payload.text()))));
         ClientPlayNetworking.registerGlobalReceiver(Packets.AiReply.TYPE,(payload,context)->AiBridge.dataReceived(payload.json()));
