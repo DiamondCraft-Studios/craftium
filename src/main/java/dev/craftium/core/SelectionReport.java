@@ -142,38 +142,42 @@ public final class SelectionReport {
 
             if (headroom > 0) {
                 var obstructions = new HashMap<String, int[]>();
-                int clear = 0, minClear = headroom;
-                boolean unknown = false;
+                int clear = 0, minClear = headroom, unreadColumns = 0;
                 for (int i = 0; i < columns.keys.length; i++) {
                     if (!columns.filled[i]) continue;
                     int x = (int) (columns.keys[i] >> 32), z = (int) columns.keys[i], from = columns.tops[i] + 1;
                     int h = 0;
-                    boolean blocked = false;
+                    boolean blocked = false, columnUnread = false;
                     while (h < headroom) {
                         String id = world.at(x, from + h, z);
-                        if (id == null) { unknown = true; break; }
+                        if (id == null) { columnUnread = true; break; }
                         if (AIR.contains(id)) { h++; continue; }
                         obstructions.computeIfAbsent(WORLD_TOP.equals(id) ? "(the world's height limit)" : id, k -> new int[1])[0]++;
                         blocked = true;
                         break;
                     }
-                    if (!blocked && h == headroom) clear++;
+                    // A column whose space above could not be read says nothing about what is in the way, so it is left out of the figures.
+                    if (columnUnread) { unreadColumns++; continue; }
+                    if (!blocked) clear++;
                     if (h < minClear) minClear = h;
                 }
+                int known = columns.size() - unreadColumns;
                 var report = new JsonObject();
                 report.addProperty("checked", headroom);
-                report.addProperty("columns", columns.size());
+                report.addProperty("columns", known);
                 report.addProperty("clearColumns", clear);
-                report.addProperty("minClear", minClear);
+                report.addProperty("minClear", known == 0 ? 0 : minClear);
+                if (unreadColumns > 0) report.addProperty("unreadColumns", unreadColumns);
                 var rank = ranked(obstructions);
                 var list = new JsonArray();
                 for (var e : rank.subList(0, Math.min(MAX_OBSTRUCTIONS, rank.size()))) list.add(entry("block", e.getKey(), "columns", e.getValue()));
                 report.add("obstructions", list);
-                if (unknown) report.addProperty("partlyUnread", true);
                 out.add("above", report);
-                above = clear == columns.size() ? "nothing in the way for the " + headroom + " blocks above it"
-                    : (columns.size() - clear) + " of " + columns.size() + " columns have something within " + headroom + " blocks above"
-                        + (rank.isEmpty() ? "" : " (mostly " + rank.get(0).getKey() + ")");
+                String unreadNote = unreadColumns == 0 ? "" : " (" + unreadColumns + " of " + columns.size() + " columns could not be checked: their chunks are not loaded)";
+                above = known == 0 ? "the space above it could not be checked: its chunks are not loaded"
+                    : (clear == known ? "nothing in the way for the " + headroom + " blocks above it"
+                        : (known - clear) + " of " + known + " columns have something within " + headroom + " blocks above"
+                            + (rank.isEmpty() ? "" : " (mostly " + rank.get(0).getKey() + ")")) + unreadNote;
             }
         }
         if (note != null) out.addProperty("note", note);

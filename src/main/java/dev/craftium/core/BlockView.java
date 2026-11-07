@@ -20,6 +20,8 @@ public final class BlockView {
     /** More boxes than this and runs are shorter, and the reply would be too long to be of use. */
     public static final int MAX_BOXES = 3_000;
     private static final int SUMMARY_BLOCKS = 6;
+    /** Numbers written per entry: a box is [x1,y1,z1,x2,y2,z2], a run is [paletteIndex,count]. */
+    private static final int BOX_COST = 6, RUN_COST = 2;
 
     private BlockView() {}
 
@@ -48,7 +50,8 @@ public final class BlockView {
         if (format.equals("boxes") && boxes == null)
             throw new IllegalArgumentException("That needs more than " + MAX_BOXES + " boxes, which is no shorter than the blocks themselves; use format \"runs\", or read a smaller box");
         int runCount = format.equals("boxes") ? Integer.MAX_VALUE : countRuns(ids);
-        boolean useBoxes = format.equals("boxes") || (format.equals("auto") && boxes != null && boxes.size() <= runCount);
+        // A box is six numbers and a run is two, so boxes are only the shorter reply when there are fewer than a third as many of them.
+        boolean useBoxes = format.equals("boxes") || (format.equals("auto") && boxes != null && (long) boxes.size() * BOX_COST <= (long) runCount * RUN_COST);
 
         var out = new JsonObject();
         out.addProperty("ok", true);

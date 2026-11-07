@@ -95,7 +95,12 @@ public final class BuildSpec {
             if (!list.get(i).isJsonObject()) throw new IllegalArgumentException("ops[" + i + "] must be an object");
             var op = list.get(i).getAsJsonObject();
             if (op.has("op") && op.get("op").isJsonPrimitive() && "replace_selection".equals(op.get("op").getAsString())) spec.selectionOps.add(spec.selectionOp(op, i));
-            else spec.ops.add(op);
+            else {
+                // Selection operations run after every shape, so one listed before a shape would not run in the order it is written in.
+                if (!spec.selectionOps.isEmpty())
+                    throw fail(i, op.has("op") && op.get("op").isJsonPrimitive() ? op.get("op").getAsString() : "?", "comes after a replace_selection. List replace_selection after all the shapes, because it works on the blocks they leave in the selection");
+                spec.ops.add(op);
+            }
         }
         return spec;
     }

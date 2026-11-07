@@ -180,8 +180,6 @@ public final class Options {
     public int polygonSides=6,fluidHeight=100,fontSize=16,textThickness=1,modelColumns=4;
     /** The build an AI client described, as a {@link BuildSpec}; read only by the ai_build_preview action. */
     public String buildSpec="";
-    /** How an AI client wants a read of its preview shown ("after" or "only", and "auto", "boxes" or "runs"); they ride on that one request and are not kept. */
-    public String aiView="",aiFormat="";
     /** Whether the client listens on this computer for an AI client (the craftium-mcp shim) to drive the editor. Off until the player turns it on. */
     public boolean aiBridge;
     public String fontName="SansSerif",fontFile="",heightmap="",name="Untitled",entityType="block_display",entityNbt="{}",property="";
@@ -295,7 +293,6 @@ public final class Options {
         for(int i=0;i<materialWeights.size();i++)materialWeights.set(i,bounded(materialWeights.get(i),.01,100));
         shadeAzimuth=bounded(shadeAzimuth,-360,360);shadeAltitude=bounded(shadeAltitude,-90,90);shadeAmbientOcclusion=bounded(shadeAmbientOcclusion,0,1);shadeDither=bounded(shadeDither,0,1);shadeExposure=bounded(shadeExposure,.1,4);shadeBounces=Math.clamp(shadeBounces,0,4);shadeSamples=Math.clamp(shadeSamples,1,8);shadeRayLength=Math.clamp(shadeRayLength,4,96);
         if(buildSpec==null)buildSpec="";if(buildSpec.length()>400_000)throw new IllegalArgumentException("Build spec exceeds 400 KB");
-        if(aiView==null)aiView="";if(aiFormat==null)aiFormat="";if(aiView.length()>16||aiFormat.length()>16)throw new IllegalArgumentException("Invalid preview read settings");
         if(pinned==null)pinned=new java.util.ArrayList<>();
         if(pinned.size()>256||pinned.stream().anyMatch(name->name==null||name.length()>64))throw new IllegalArgumentException("Invalid pinned properties");
         radius = Math.clamp(radius,1,BrushMath.MAX_RADIUS);

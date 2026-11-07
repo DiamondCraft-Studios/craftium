@@ -28,9 +28,6 @@ final class Session {
     Point clipboardOrigin;
     /** An edit worked out but not yet applied, waiting for the player to confirm it. Null when there is none. */
     Edit pendingEdit;
-    /** The blocks of {@link #pendingEdit} by position, for get_preview_blocks: built when first asked for, and rebuilt only when the preview is a different edit. */
-    Edit indexedEdit;
-    java.util.Map<Long,net.minecraft.world.level.block.state.BlockState> previewIndex;
     String pendingData="";boolean pendingDirty;
     /** The clipboard's blocks as a ghost for the placement preview, and whether it needs encoding again. */
     String clipboardGhost="";boolean clipboardGhostDirty=true;

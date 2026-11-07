@@ -267,9 +267,12 @@ public final class EditorServer {
             }
             // Reads for an AI client: the server's own view of the world, answered with a packet only the AI bridge looks at.
             // "target" and "normal" carry the two corners here, so this comes before "normal" is checked as a direction.
+            if(r.action().startsWith("ai_preview_blocks:")){ // "ai_preview_blocks:<view>:<format>": the two settings of the read are part of the action, not of the shared options
+                var part=r.action().split(":",3);if(part.length!=3)throw new IllegalArgumentException("Invalid preview read");
+                ServerPlatform.send(player,new Packets.AiReply(AiWorld.previewBlocks(player,aiSession(player),r.target(),r.normal(),part[1],part[2])));return;
+            }
             switch(r.action()){
                 case "ai_blocks" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.blocks(player,r.target(),r.normal())));return;}
-                case "ai_preview_blocks" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.previewBlocks(player,aiSession(player),r.target(),r.normal(),o.aiView,o.aiFormat)));return;}
                 case "ai_selection" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.selection(player,s)));return;}
                 case "ai_surface","ai_surface_floor" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.surface(player,r.target(),r.normal(),r.action().equals("ai_surface_floor"))));return;}
                 case "ai_build_preview","ai_apply","ai_cancel","ai_undo" -> {aiAction(player,r.action(),o);return;}

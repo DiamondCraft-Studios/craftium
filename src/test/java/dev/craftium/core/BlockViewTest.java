@@ -70,12 +70,33 @@ class BlockViewTest {
         var palette = List.of("minecraft:air", "minecraft:spruce_stairs[facing=north,half=bottom]", "minecraft:spruce_stairs[facing=south,half=bottom]");
         var ids = new int[10 * 2 * 1];
         for (int x = 0; x < 10; x++) { ids[x] = 1; ids[x + 10] = 2; } // two rows along x, one facing each way
-        var view = BlockView.describe(0, 0, 0, 10, 1, 2, ids, palette, Set.of(0), "auto", AFTER);
+        var view = BlockView.describe(0, 0, 0, 10, 1, 2, ids, palette, Set.of(0), "boxes", AFTER); // asked for boxes: two rows are two runs, which "auto" would prefer
         assertEquals(2, view.getAsJsonArray("blocks").size());
         assertTrue(view.toString().contains("facing=north") && view.toString().contains("facing=south"));
     }
 
     @Test void aBadFormatIsRefused() {
         assertThrows(IllegalArgumentException.class, () -> BlockView.describe(0, 0, 0, 1, 1, 1, new int[1], PALETTE, Set.of(), "pretty", AFTER));
+    }
+
+    @Test void autoPicksRunsWhenBoxesAreFewerButLonger() {
+        // 8 x 1 x 2 cells in stripes along z: 16 runs (two numbers each) but 8 boxes (six each), so boxes are fewer yet three times the words.
+        var ids = new int[8 * 2];
+        for (int i = 0; i < ids.length; i++) ids[i] = 1 + (i % 8) % 2;
+        var runs = BlockView.describe(0, 0, 0, 8, 1, 2, ids, PALETTE, Set.of(0), "runs", AFTER);
+        var boxes = BlockView.describe(0, 0, 0, 8, 1, 2, ids, PALETTE, Set.of(0), "boxes", AFTER);
+        assertEquals(16, runs.get("entries").getAsInt());
+        assertEquals(8, boxes.get("entries").getAsInt());
+        var auto = BlockView.describe(0, 0, 0, 8, 1, 2, ids, PALETTE, Set.of(0), "auto", AFTER);
+        assertEquals("runs", auto.get("format").getAsString(), "8 boxes cost 48 numbers and 16 runs cost 32");
+        assertTrue(auto.toString().length() < boxes.toString().length() * 2, "and the reply is not longer than the boxes would have been");
+    }
+
+    @Test void autoStillPicksBoxesWhenTheyAreFarFewer() {
+        // 3 boxes (18 numbers) against about 60 runs (120 numbers).
+        var ids = new int[10 * 10 * 1];
+        for (int z = 0; z < 10; z++) for (int x = 0; x < 10; x++) ids[x + 10 * z] = x < 5 ? 1 : 2;
+        var auto = BlockView.describe(0, 0, 0, 10, 1, 10, ids, PALETTE, Set.of(0), "auto", AFTER);
+        assertEquals("boxes", auto.get("format").getAsString());
     }
 }
