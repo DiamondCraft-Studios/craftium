@@ -1023,9 +1023,14 @@ public final class EditorScreen extends CraftiumScreen {
             controls.add(new Control(x,y,26,26,()->{if(toolActive&&o().tool==tool)deselectTool();else select(tool);},toolTip(tool,slot+1)));
         }
     }
+    /** The editor's own frame rate, counted over half a second of drawn frames. */
+    private int frameCount,fps;private long fpsSince=System.nanoTime();
     private void statusbar(Gfx g) {
         g.fill(0,h-20,w,h,0xff1b222c);g.fill(0,h-21,w,h-20,LINE);
-        text(g,ToolHints.line(toolActive?o().tool:null,TransformGizmo.available(this),ShapeObject.active(),TransformGizmo.draggingMode(),font::width,w-150),9,h-13,MUTED);
+        text(g,ToolHints.line(toolActive?o().tool:null,TransformGizmo.available(this),ShapeObject.active(),TransformGizmo.draggingMode(),font::width,w-210),9,h-13,MUTED);
+        frameCount++;long now=System.nanoTime();
+        if(now-fpsSince>=500_000_000L){fps=(int)Math.round(frameCount*1e9/(now-fpsSince));frameCount=0;fpsSince=now;}
+        text(g,fps+" FPS",w-190,h-13,fps<30?0xffffb6ae:MUTED);
         text(g,(ClientState.status.busy()?"APPLYING…":"● READY")+"   "+String.format(Locale.ROOT,"%.1f×",o().flySpeed),w-132,h-13,ClientState.status.busy()?0xffffd783:0xff89c9ac);
     }
     private void dropdown(Gfx g) {
