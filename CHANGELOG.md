@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.0-beta.1
+
+Changes since 1.0.0-beta.1.
+
+### Editor
+- A world axis gizmo shows in the editor, so you can see which way X, Y and Z point.
+- Reopening the editor on a box select puts the gizmo back on a corner of the box.
+
+### Performance
+- The editor draws faster: block icons are built once, line icons are baked into textures, measured and wrapped text is remembered between frames, and options rows scrolled out of view are skipped.
+
 ## 1.0.0-beta.1
 
 Changes since 0.10.0-beta.1.
