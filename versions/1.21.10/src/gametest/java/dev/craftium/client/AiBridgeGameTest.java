@@ -108,6 +108,14 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(east.getAsJsonObject("state").get("previewBlocks").getAsInt() == 4, "find with facing=east,half=bottom should match the 4 east-facing stairs: " + east);
             var neither = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"spruce_stairs[facing=north]\",\"block\":\"stone_stairs\"}]}}");
             require(neither.get("message").getAsString().contains("No matching blocks"), "a facing nothing has should match nothing: " + neither);
+            // A build that overlaps blocks which are already there: every way of counting the preview must give the same number.
+            ctx.runOnClient(mc -> mc.getConnection().sendCommand("fill " + (x + 30) + " " + y + " " + z + " " + (x + 32) + " " + y + " " + z + " minecraft:stone"));
+            ctx.waitTicks(10);
+            var overlap = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"box\",\"from\":[" + (x + 30) + "," + y + "," + z + "],\"to\":[" + (x + 35) + "," + y + "," + z + "],\"block\":\"stone\"}]}}");
+            int overlapCount = overlap.getAsJsonObject("state").get("previewBlocks").getAsInt();
+            var overlapRead = call("get_preview_blocks", "{\"from\":[" + (x + 28) + "," + y + "," + (z - 1) + "],\"to\":[" + (x + 37) + "," + y + "," + (z + 1) + "]}");
+            require(overlapRead.get("previewBlocks").getAsInt() == overlapCount, "get_preview_blocks and get_state must count the preview alike: " + overlapRead.get("previewBlocks") + " against " + overlapCount);
+            System.out.println("CRAFTIUM_AI preview_count_agrees " + overlapCount);
             var nothingSelected = call("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"find\":\"obsidian\",\"block\":\"stone\"}]}}");
             require(nothingSelected.get("ok").getAsBoolean() && nothingSelected.get("message").getAsString().contains("No matching blocks"), "a find that matches nothing should say so: " + nothingSelected);
             call("cancel_preview", "{}");

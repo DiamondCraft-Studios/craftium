@@ -167,37 +167,26 @@ final class AiWorld {
             fresh = unloaded(level, x0, z0, x1, z1);
             fillFromWorld(level, palette, ids, x0, y0, z0, x1, y1, z1);
         } else java.util.Arrays.fill(ids, -1);
-        // The preview over it. The index is built once per preview, so a read costs the box and not the whole edit.
-        for (var entry : previewIndex(ai, edit).entrySet()) {
-            long key = entry.getKey();
-            int px = BlockPos.getX(key), py = BlockPos.getY(key), pz = BlockPos.getZ(key);
-            if (px < x0 || px > x1 || py < y0 || py > y1 || pz < z0 || pz > z1) continue;
-            ids[(px - x0) + sx * ((pz - z0) + sz * (py - y0))] = palette.of(entry.getValue());
+        // The preview over it, in one pass over the edit's own changes: nothing is copied or indexed, so a read costs a walk of the list and
+        // the box. It counts what the preview places the way the game's ghost does, leaving out a change that keeps the block as it was.
+        int placed = 0;
+        for (var change : edit.changes()) {
+            if (change.before().state() == change.after().state() && change.after().data() == null) continue;
+            placed++;
+            var at = change.pos();
+            if (at.x() < x0 || at.x() > x1 || at.y() < y0 || at.y() > y1 || at.z() < z0 || at.z() > z1) continue;
+            ids[(at.x() - x0) + sx * ((at.z() - z0) + sz * (at.y() - y0))] = palette.of(change.after().state());
         }
         var out = dev.craftium.core.BlockView.describe(x0, y0, z0, sx, sy, sz, ids, palette.names, palette.omit, format,
             after ? "Anything not listed is air." : "Anything not listed is not changed by the preview, and air means the preview clears that block.");
         out.addProperty("source", "server");
         out.addProperty("view", view);
-        out.addProperty("previewBlocks", edit.changes().size());
+        out.addProperty("previewBlocks", placed);
         if (after) out.addProperty("chunksLoadedForThisRead", fresh);
         String text = out.toString();
         if (text.length() > MAX_VIEW_REPLY)
-            throw new IllegalArgumentException("The answer is " + text.length() / 1000 + " KB; the limit is " + MAX_VIEW_REPLY / 1000 + " KB. Read a smaller box, or part of the build at a time (the preview holds " + edit.changes().size() + " blocks in all)");
+            throw new IllegalArgumentException("The answer is " + text.length() / 1000 + " KB; the limit is " + MAX_VIEW_REPLY / 1000 + " KB. Read a smaller box, or part of the build at a time (the preview holds " + placed + " blocks in all)");
         return text;
-    }
-
-    /** The preview's blocks by position, built from the edit once and kept while it is the waiting preview. */
-    private static java.util.Map<Long, net.minecraft.world.level.block.state.BlockState> previewIndex(Session ai, Session.Edit edit) {
-        if (ai.indexedEdit != edit || ai.previewIndex == null) {
-            var index = new java.util.HashMap<Long, net.minecraft.world.level.block.state.BlockState>(Math.max(16, (int) (edit.changes().size() / .75f) + 1));
-            for (var change : edit.changes()) {
-                if (change.before().state() == change.after().state() && change.after().data() == null) continue; // a block the edit leaves as it is
-                index.put(BlockPos.asLong(change.pos().x(), change.pos().y(), change.pos().z()), change.after().state());
-            }
-            ai.indexedEdit = edit;
-            ai.previewIndex = index;
-        }
-        return ai.previewIndex;
     }
 
     /** Fills {@code ids} with the world's blocks in the box, chunk by chunk, the world border and height limits reading as outside the world. */
