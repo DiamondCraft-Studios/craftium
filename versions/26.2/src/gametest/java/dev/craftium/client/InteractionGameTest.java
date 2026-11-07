@@ -121,6 +121,13 @@ public final class InteractionGameTest {
             d -> { d.key(GLFW_KEY_EQUAL, 0); d.key(GLFW_KEY_EQUAL, 0); d.key(GLFW_KEY_MINUS, 0); d.click(a); }, null));
         all.add(new Scenario("bracket_keys_resize_brush", Tool.PAINTER, o -> { o.confirmEdits = false; o.radius = 4; o.block = "minecraft:andesite"; }, null, false,
             d -> { d.key(GLFW_KEY_RIGHT_BRACKET, 0); d.key(GLFW_KEY_RIGHT_BRACKET, 0); d.key(GLFW_KEY_LEFT_BRACKET, 0); d.click(a); }, null));
+        // Clicks that do nothing, and drags that must not repeat the click: the transform tools work through their handles, and a ruler, a line and a path take one point a click.
+        all.add(new Scenario("move_click_with_selection", Tool.MOVE, o -> o.confirmEdits = false, null, true, d -> d.click(a), null));
+        all.add(new Scenario("rotate_click_with_selection", Tool.ROTATE, o -> o.confirmEdits = false, null, true, d -> d.click(a), null));
+        all.add(new Scenario("scale_click_with_selection", Tool.SCALE, o -> o.confirmEdits = false, null, true, d -> d.click(a), null));
+        all.add(new Scenario("path_drag_adds_one_point", Tool.PATH, o -> o.confirmEdits = false, null, false, d -> d.drag(e, a, c), null));
+        all.add(new Scenario("line_drag_sends_once", Tool.LINE, o -> { o.confirmEdits = false; o.radius = 1; }, null, false, d -> d.drag(e, a, c), null));
+        all.add(new Scenario("ruler_drag_adds_one_point", Tool.RULER, o -> o.confirmEdits = false, null, false, d -> d.drag(e, a, c), null));
         // A stroke, and undoing it.
         all.add(new Scenario("painter_stroke", Tool.PAINTER, o -> { o.confirmEdits = false; o.radius = 2; o.block = "minecraft:andesite"; }, null, false, d -> d.drag(e, a, c), null));
         all.add(new Scenario("painter_click_then_undo", Tool.PAINTER, o -> { o.confirmEdits = false; o.radius = 3; o.block = "minecraft:andesite"; }, null, false, d -> { d.click(a); d.key('Z', 2); }, null));
@@ -139,10 +146,10 @@ public final class InteractionGameTest {
         w.getServer().runCommand("gamerule minecraft:random_tick_speed 0");
         c.runOnClient(mc -> CraftiumClient.open(false));
         c.waitTicks(10);
-        // For looking into one scenario: CRAFTIUM_INTERACTION_ONLY=<part of its name> runs only those, and then compares only those.
+        // For looking into some scenarios: CRAFTIUM_INTERACTION_ONLY=<part of a name>[,<part of another>] runs only those, and then compares only those.
         String only = System.getenv("CRAFTIUM_INTERACTION_ONLY");
         for (Scenario scenario : scenarios()) {
-            if (only != null && !scenario.name.contains(only)) continue;
+            if (only != null && java.util.Arrays.stream(only.split(",")).noneMatch(scenario.name::contains)) continue;
             String first = execute(scenario, out, "");
             if (update) {
                 String second = execute(scenario, out, ".run2");
