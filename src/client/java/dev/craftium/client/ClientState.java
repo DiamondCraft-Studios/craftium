@@ -28,7 +28,7 @@ public final class ClientState {
     public record AiSessionView(Packets.AiSession info,GhostBlocks ghost,int slot,long receivedNanos){
         public String id(){return info.id();}
         /** How long the session has been going, counted on from when the server said, so it ticks between statuses. */
-        public long ageMs(){return info.age()+(System.nanoTime()-receivedNanos)/1_000_000;}
+        public long ageMs(){return info.stopped()?info.age():info.age()+(System.nanoTime()-receivedNanos)/1_000_000;} // a stopped session's clock is stopped
         /** How long since the session last had a request. */
         public long idleMs(){return info.idle()+(System.nanoTime()-receivedNanos)/1_000_000;}
     }

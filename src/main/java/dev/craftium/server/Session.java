@@ -23,7 +23,7 @@ final class Session {
     /** For an AI workspace: whose it is, which of their AI sessions it is ("" for the default one), and the label its AI app gave the build. */
     UUID aiOwner;String aiId="",label="";
     /** For an AI workspace: when it began and when it last had a request (epoch milliseconds), the tool of that request, and whether the player stopped it. */
-    long createdAt,lastActive;String lastTool="";boolean stopped;
+    long createdAt,lastActive,stoppedAt;String lastTool="";boolean stopped;
     /** For an AI workspace: whether the player chose its label, so the AI app's own is no longer put over it. */
     boolean renamed;
     /**

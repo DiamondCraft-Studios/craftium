@@ -61,7 +61,8 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
     private static final List<String> TABS=List.copyOf(GROUPS.keySet());
 
     private final Screen parent;
-    private int page,tab;
+    private int offset,tab;
+    private boolean draggingBar;
     private List<Row> rows(){return GROUPS.get(TABS.get(tab));}
 
     PreferencesOptionsScreen(Screen parent){super(Component.literal("Options"));this.parent=parent;}
@@ -72,11 +73,11 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
 
     @Override protected void init(){
         clearWidgets();
-        var o=ClientState.options;int x=left(),per=rowsPerPage(),pages=Math.max(1,(rows().size()+per-1)/per);var ROWS=rows(); // the rows of the chosen tab
-        for(int t=0;t<TABS.size();t++){int index=t;addRenderableWidget(new FlatButton(tabsLeft(),LIST_TOP-6+t*ROW,110,20,TABS.get(t),()->{tab=index;page=0;init();}).lit(t==tab));}
-        page=Math.clamp(page,0,pages-1);
-        for(int i=page*per;i<Math.min(ROWS.size(),(page+1)*per);i++){
-            int y=LIST_TOP-6+(i-page*per)*ROW;
+        var o=ClientState.options;int x=left(),per=rowsPerPage();var ROWS=rows(); // the rows of the chosen tab
+        for(int t=0;t<TABS.size();t++){int index=t;addRenderableWidget(new FlatButton(tabsLeft(),LIST_TOP-6+t*ROW,110,20,TABS.get(t),()->{tab=index;offset=0;init();}).lit(t==tab));}
+        offset=Math.clamp(offset,0,Math.max(0,ROWS.size()-per));
+        for(int i=offset;i<Math.min(ROWS.size(),offset+per);i++){
+            int y=LIST_TOP-6+(i-offset)*ROW;
             if(ROWS.get(i) instanceof Toggle t){
                 addRenderableWidget(new FlatButton(x+245,y,180,20,t.get().apply(o)?"On":"Off",()->{t.set().accept(o,!t.get().apply(o));init();}));
                 addRenderableWidget(new FlatButton(x+430,y,50,20,"Reset",()->{t.set().accept(o,t.get().apply(DEFAULTS));init();}));
@@ -108,8 +109,8 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
                 addRenderableWidget(new FlatButton(x+430,y,50,20,"Reset",()->{n.set().accept(o,n.get().apply(DEFAULTS));init();}));
             }
         }
-        addRenderableWidget(new FlatButton(x,height-62,32,20,"‹",()->{page--;init();}));
-        addRenderableWidget(new FlatButton(x+37,height-62,32,20,"›",()->{page++;init();}));
+        addRenderableWidget(new FlatButton(x,height-62,32,20,"‹",()->{offset-=per;init();}));
+        addRenderableWidget(new FlatButton(x+37,height-62,32,20,"›",()->{offset+=per;init();}));
         addRenderableWidget(new FlatButton(x+280,height-62,110,20,"Reset these",()->{for(Row r:rows())reset(r);init();}));
         addRenderableWidget(new FlatButton(x+395,height-62,85,20,"Done",this::onClose));
     }
@@ -128,17 +129,46 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
         int x=left(),per=rowsPerPage();var ROWS=rows(); // the rows of the chosen tab
         g.text(font,"OPTIONS",tabsLeft(),14,0xffdce6ef,false);
         g.text(font,"Pick a category on the left. Ctrl-click a slider to type a value; middle-click resets it.",tabsLeft(),27,0xff8595a8,false);
-        for(int i=page*per;i<Math.min(ROWS.size(),(page+1)*per);i++){
-            int y=LIST_TOP-6+(i-page*per)*ROW;Row row=ROWS.get(i);
+        for(int i=offset;i<Math.min(ROWS.size(),offset+per);i++){
+            int y=LIST_TOP-6+(i-offset)*ROW;Row row=ROWS.get(i);
             String label=labelOf(row),about=aboutOf(row);
             g.text(font,label,x,y+6,0xffdce6ef,false);
             if(mouseX>=x&&mouseX<x+240&&mouseY>=y&&mouseY<y+20)g.text(font,font.plainSubstrByWidth(about,width-x*2),x,height-92,0xff8595a8,false);
         }
-        g.text(font,"Page "+(page+1)+" / "+Math.max(1,(ROWS.size()+per-1)/per),x+80,height-79,0xff8595a8,false);
+        g.text(font,"Rows "+(offset+1)+"–"+Math.min(ROWS.size(),offset+per)+" of "+ROWS.size(),x+80,height-79,0xff8595a8,false);
+        if(ROWS.size()>per){ // the scrollbar: its handle is as long as the part of the list that shows
+            int top=barTop(),track=barHeight(),thumb=thumbHeight(ROWS.size(),per),max=ROWS.size()-per,thumbY=top+(max==0?0:(track-thumb)*offset/max);
+            g.fill(barX(),top,barX()+BAR,top+track,0xff1b2838);
+            g.fill(barX(),thumbY,barX()+BAR,thumbY+thumb,draggingBar?0xff7cc4ff:0xff4a6585);
+        }
         drawWidgets(g,mouseX,mouseY,delta);
     }
 
-    @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){page+=vertical<0?1:-1;init();return true;}
+    private static final int BAR=6;
+    private int barX(){return left()+496;}
+    private int barTop(){return LIST_TOP-6;}
+    private int barHeight(){return rowsPerPage()*ROW-4;}
+    private int thumbHeight(int rows,int per){return Math.max(20,barHeight()*per/rows);}
+    /** Sets the first row shown from where the bar is held. */
+    private void dragTo(double y){
+        int rows=rows().size(),per=rowsPerPage(),max=Math.max(0,rows-per),travel=barHeight()-thumbHeight(rows,per);
+        if(travel<=0)return;
+        int next=(int)Math.clamp(Math.round((y-barTop()-thumbHeight(rows,per)/2.0)/travel*max),0,max);
+        if(next!=offset){offset=next;init();}
+    }
+    @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event,boolean twice){
+        if(event.button()==0&&rows().size()>rowsPerPage()&&event.x()>=barX()-3&&event.x()<barX()+BAR+4&&event.y()>=barTop()&&event.y()<barTop()+barHeight()){draggingBar=true;dragTo(event.y());return true;}
+        return super.mouseClicked(event,twice);
+    }
+    @Override public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event,double dx,double dy){
+        if(draggingBar){dragTo(event.y());return true;}
+        return super.mouseDragged(event,dx,dy);
+    }
+    @Override public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event){
+        if(draggingBar){draggingBar=false;return true;}
+        return super.mouseReleased(event);
+    }
+    @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){offset+=vertical<0?1:-1;init();return true;}
     @Override public boolean isPauseScreen(){return false;}
     @Override public void onClose(){ClientState.save();ClientCompat.setScreen(minecraft,parent);}
 }

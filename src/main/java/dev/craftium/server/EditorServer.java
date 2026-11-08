@@ -669,7 +669,7 @@ public final class EditorServer {
                 throw new IllegalArgumentException("This player already has "+AiSessions.MAX_SESSIONS+" AI build sessions. Tell the player to forget or stop one in Craftium's AI menu (Build sessions), or wait for one to expire after an hour without requests, then try again.");
             long now=System.currentTimeMillis();
             ai=new Session();ai.ai=true;ai.aiOwner=player.getUUID();ai.aiId=key.id();ai.dimension=player.level().dimension();ai.createdAt=now;ai.lastActive=now;
-            if(previous!=null){ai.label=previous.label;ai.renamed=previous.renamed;ai.createdAt=previous.createdAt;ai.stopped=previous.stopped;}
+            if(previous!=null){ai.label=previous.label;ai.renamed=previous.renamed;ai.createdAt=previous.createdAt;ai.stopped=previous.stopped;ai.stoppedAt=previous.stoppedAt;}
             AI_SESSIONS.put(key,ai);
         }
         return ai;
@@ -760,7 +760,7 @@ public final class EditorServer {
             out.add(new Packets.AiSession(a.aiId,a.label,state,preview?a.pendingEdit.changes().size():0,
                 box==null?null:new Point(box.minX(),box.minY(),box.minZ()),box==null?null:new Point(box.maxX(),box.maxY(),box.maxZ()),
                 a.dimension==null?"":a.dimension.toString(),a.undo.size(),a.undo.isEmpty()?"":a.undo.peekFirst().name(),
-                Math.max(0,now-a.createdAt),Math.max(0,now-a.lastActive),a.stopped,a.lastTool,a.previewId,data,
+                Math.max(0,(a.stopped?a.stoppedAt:now)-a.createdAt),Math.max(0,now-a.lastActive),a.stopped,a.lastTool,a.previewId,data,
                 pin==null?null:new Point(pin.minX(),pin.minY(),pin.minZ()),pin==null?null:new Point(pin.maxX(),pin.maxY(),pin.maxZ()),a.pinned==null?0:a.pinned.size(),pinChanged(player,a)));
         }
         viewer.sentAi.keySet().retainAll(live);
@@ -781,6 +781,7 @@ public final class EditorServer {
         String name=ai.label.isEmpty()?"":" \""+ai.label+"\"";
         switch(action){
             case "ai_session_stop" -> {
+                if(!ai.stopped)ai.stoppedAt=System.currentTimeMillis(); // its clock stops here
                 ai.stopped=true;ai.queued.clear();
                 if(ai.pendingEdit!=null){ai.pendingEdit=null;ai.pendingDirty=true;ai.region=null;}
                 var running=job;
@@ -789,7 +790,9 @@ public final class EditorServer {
                 }
                 send(player,playerSession(player),"Stopped AI session"+name,false);
             }
-            case "ai_session_resume" -> {ai.stopped=false;send(player,playerSession(player),"Resumed AI session"+name,false);}
+            case "ai_session_resume" -> {
+                if(ai.stopped)ai.createdAt+=System.currentTimeMillis()-ai.stoppedAt; // the time it was stopped does not count
+                ai.stopped=false;send(player,playerSession(player),"Resumed AI session"+name,false);}
             case "ai_session_rename" -> {
                 String label=AiSessions.cleanLabel(o.aiLabel);
                 ai.label=label;ai.renamed=!label.isEmpty(); // a name the player chose is not replaced by the AI app's own
