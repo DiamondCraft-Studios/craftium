@@ -73,4 +73,26 @@ class StatusFitTest {
         assertTrue(out.getAsJsonArray("sharedAi").isEmpty(), "the other player's preview is what is left out");
         assertEquals(1_400_000, out.get("aiPendingData").getAsString().length(), "the player's own preview is kept");
     }
+
+    @Test void theLargestAiSessionPreviewGoesFirstAndTheSessionStaysListed() {
+        var o = JsonParser.parseString(status(1000, 1000, 1000)).getAsJsonObject();
+        var list = new com.google.gson.JsonArray();
+        for (int n = 0; n < 3; n++) { var s = new JsonObject(); s.addProperty("id", "s" + n); s.addProperty("data", "d".repeat(n == 1 ? 900_000 : 400_000)); list.add(s); }
+        o.add("aiSessions", list); // 1.7 MB of previews
+        var out = JsonParser.parseString(StatusFit.fit(o.toString(), 1_500_000, "too big")).getAsJsonObject();
+        var sessions = out.getAsJsonArray("aiSessions");
+        assertEquals(3, sessions.size(), "every session is still listed");
+        assertEquals("", sessions.get(1).getAsJsonObject().get("data").getAsString(), "the biggest preview is what is left out");
+        assertEquals(400_000, sessions.get(0).getAsJsonObject().get("data").getAsString().length());
+        assertEquals(400_000, sessions.get(2).getAsJsonObject().get("data").getAsString().length());
+        assertTrue(out.get("message").getAsString().contains("too big"));
+    }
+
+    @Test void aSessionWithoutDataIsLeftAlone() {
+        var o = JsonParser.parseString(status(1000, 1000, 1000)).getAsJsonObject();
+        var list = new com.google.gson.JsonArray();
+        var s = new JsonObject(); s.addProperty("id", "s0"); list.add(s); // data omitted: unchanged since last sent
+        o.add("aiSessions", list);
+        assertEquals(o.toString(), StatusFit.fit(o.toString(), 1_500_000, "too big"));
+    }
 }
