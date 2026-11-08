@@ -146,7 +146,7 @@ public final class StudioScreen extends CraftiumScreen {
         addRenderableWidget(new FlatCheckbox(left,top+70+108,380,20,"Show AI previews from other players",ClientState.options.showSharedAiPreviews,()->{ClientState.options.showSharedAiPreviews=!ClientState.options.showSharedAiPreviews;init();}));
         int steps=top+70+138;
         labels.add(new Label("HOW IT WORKS",left,steps));
-        labels.add(new Label("1.  In Claude Code or Cowork, add the plugin, once:  /plugin marketplace add DiamondCraft-Studios/craftium",left,steps+15));
+        labels.add(new Label("1.  In Claude Code or Cowork, add it once:  /plugin marketplace add DiamondCraft-Studios/craftium  (or the repo's path)",left,steps+15));
         labels.add(new Label("2.  Install it:  /plugin install craftium@craftium  (it needs Node.js 18 or newer on your PATH).",left,steps+28));
         labels.add(new Label("3.  Turn on AI building above. Craftium remembers it.",left,steps+41));
         labels.add(new Label("4.  Ask Claude for a build, such as \"Build an Egyptian pillar in front of me\".",left,steps+54));

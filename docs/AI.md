@@ -43,6 +43,13 @@ The [mcp](../mcp) folder is also a Claude plugin: the same server plus the **cra
 /plugin install craftium@craftium
 ```
 
+`DiamondCraft-Studios/craftium` is the GitHub repository, so nothing needs downloading first: Claude Code fetches the plugin from there, and the plugin you get is the one published on GitHub. If you have a copy of the repository (to try a build that is not published yet, say), add that folder instead, with its full path, and install the same way:
+
+```
+/plugin marketplace add C:\Users\you\craftium
+/plugin install craftium@craftium
+```
+
 The plugin needs Node.js 18 or newer on your PATH (an extension gets Node from Claude Desktop, a plugin does not), and asks for a **Minecraft folder** when you enable it if your game uses a launcher profile. Claude Desktop's Chat tab does not run a plugin's local server, so use the extension there; install one or the other, not both. Steps 2 and 3 of [Set up](#set-up) apply either way.
 
 ## What Claude can do

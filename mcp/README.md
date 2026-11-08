@@ -34,6 +34,8 @@ Privacy: [PRIVACY.md](https://github.com/DiamondCraft-Studios/craftium/blob/main
 /plugin install craftium@craftium
 ```
 
+`DiamondCraft-Studios/craftium` is the GitHub repository, so there is nothing to download first, and you get the published plugin. With a copy of the repository (to try an unpublished build), add its folder by full path instead: `/plugin marketplace add C:\Users\you\craftium`, then install as above.
+
 **Cowork** runs plugins too. **Claude Desktop's Chat tab** does not run a plugin's local server, so use the Craftium
 extension there (`craftium.mcpb`, see the user guide). Install one or the other, not both, so the server is not
 registered twice.
