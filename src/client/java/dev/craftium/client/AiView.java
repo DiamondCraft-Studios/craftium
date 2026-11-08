@@ -166,7 +166,7 @@ final class AiView {
     }
 
     /** The colour a block state is drawn in, as 0xAARRGGBB, or 0 for the ones nothing is drawn for. */
-    private static int colour(String state, Map<String, Integer> cache) {
+    static int colour(String state, Map<String, Integer> cache) {
         String id = baseId(state);
         Integer known = cache.get(id);
         if (known != null) return known;

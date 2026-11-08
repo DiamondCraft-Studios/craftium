@@ -48,8 +48,12 @@ public final class ClientState {
     /** How many of the AI sessions hold a preview, and how many blocks those hold in all. */
     public static int aiPendingCount(){int n=0;for(var view:aiSessions)if(view.ghost().total()>0)n++;return n;}
     public static int aiPendingBlocks(){int n=0;for(var view:aiSessions)n+=view.ghost().total();return n;}
+    /** The AI sessions whose ghost the player chose to hide, and the one being flashed (until the time, in System.nanoTime). */
+    public static final java.util.Set<String> aiHidden=new java.util.HashSet<>();
+    public static String highlightId="";
+    public static long highlightUntil;
     /** Forgets every AI session, as when the player leaves the world. */
-    static void clearAi(){aiSessions=List.of();aiLegacy=false;aiSlots.clear();}
+    static void clearAi(){aiSessions=List.of();aiLegacy=false;aiSlots.clear();aiHidden.clear();highlightId="";AiThumbnails.releaseAll();}
     /** The colour slot of an AI session: the lowest not in use, kept for as long as the session is listed so its colour does not change. */
     private static int slotFor(String id){
         var own=aiSlots.get(id);if(own!=null)return own;
@@ -70,7 +74,7 @@ public final class ClientState {
             // A server from before AI sessions describes the one preview, which is the default session's.
             var old=GhostBlocks.parse(status.aiPendingData());
             if(old.total()==0&&status.aiUndo()==0){clearAi();return;}
-            aiLegacy=true;old.slot=slotFor("");if(old.total()>0)old.ai=true;
+            aiLegacy=true;AiThumbnails.keepOnly(java.util.Set.of(""));old.slot=slotFor("");if(old.total()>0)old.ai=true;
             var info=new Packets.AiSession("","",old.total()>0?"preview":"applied",old.total(),null,null,"",status.aiUndo(),status.aiUndoName(),0,0,false,"",0,"");
             aiSessions=List.of(new AiSessionView(info,old,old.slot,System.nanoTime()));
             return;
@@ -86,7 +90,7 @@ public final class ClientState {
             if(ghost.total()>0){ghost.ai=true;ghost.slot=slot;}
             next.add(new AiSessionView(info,ghost,slot,System.nanoTime()));
         }
-        aiSlots.keySet().retainAll(ids);
+        aiSlots.keySet().retainAll(ids);aiHidden.retainAll(ids);AiThumbnails.keepOnly(ids);
         aiSessions=List.copyOf(next);
     }
     /** Another player's AI preview, drawn beside the player's own in a colour of its own, with their name. */

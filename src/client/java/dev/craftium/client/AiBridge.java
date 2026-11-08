@@ -54,6 +54,8 @@ public final class AiBridge {
      */
     private static volatile String callSession = "", callLabel = "";
     static String session() { return callSession; }
+    /** Whether a call from this AI session is being answered right now. */
+    static boolean workingOn(String id) { return working.get() > 0 && callSession.equals(id); }
     private static final String STOPPED = "The player stopped this AI session. Do not retry or build anything else; tell the player what you were doing and wait for their instructions.";
     private AiBridge() {}
 
@@ -108,6 +110,7 @@ public final class AiBridge {
             if (ClientState.options.aiBridge != running()) {
                 if (ClientState.options.aiBridge) start(); else stop();
             }
+            AiSessionActions.tick();
         });
         Runtime.getRuntime().addShutdownHook(new Thread(AiBridge::stop, "craftium-ai-bridge-shutdown"));
     }

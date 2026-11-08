@@ -142,7 +142,8 @@ public final class StudioScreen extends CraftiumScreen {
         button("Undo AI build",left+378,y,115,24,()->CraftiumClient.sendAiToOnly("ai_undo"));
         button("Redo AI build",left+499,y,117,24,()->CraftiumClient.sendAiToOnly("ai_redo"));
         // Other players' AI previews are drawn in teal with their name; this hides them, and is remembered like the other settings.
-        addRenderableWidget(new FlatCheckbox(left,top+70+108,616,20,"Show AI previews from other players",ClientState.options.showSharedAiPreviews,()->{ClientState.options.showSharedAiPreviews=!ClientState.options.showSharedAiPreviews;init();}));
+        button("Build sessions… ("+ClientState.aiSessions.size()+")",left+390,top+70+108,226,20,()->ClientCompat.setScreen(minecraft,new AiSessionsScreen(this)));
+        addRenderableWidget(new FlatCheckbox(left,top+70+108,380,20,"Show AI previews from other players",ClientState.options.showSharedAiPreviews,()->{ClientState.options.showSharedAiPreviews=!ClientState.options.showSharedAiPreviews;init();}));
         int steps=top+70+138;
         labels.add(new Label("HOW IT WORKS",left,steps));
         labels.add(new Label("1.  In Claude Code or Cowork, add the plugin, once:  /plugin marketplace add DiamondCraft-Studios/craftium",left,steps+15));

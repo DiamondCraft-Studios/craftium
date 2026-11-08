@@ -317,7 +317,11 @@ public final class CraftiumClient implements ClientModInitializer {
     private static void drawAiSessions(Minecraft mc){
         var sessions=ClientState.aiSessions;
         for(var view:sessions){
-            var ghost=view.ghost();if(ghost.total()==0)continue;
+            var info=view.info();
+            if(view.id().equals(ClientState.highlightId)&&System.nanoTime()<ClientState.highlightUntil&&info.min()!=null&&info.max()!=null&&System.nanoTime()/250_000_000L%2==0){ // flashed for a few seconds when the player asks to see where it is
+                Overlay.box(new AABB(info.min().x(),info.min().y(),info.min().z(),info.max().x()+1,info.max().y()+1,info.max().z()+1),dev.craftium.core.AiSessions.shade(0xffc9a0ff,view.slot()),3f,0x30c9a0ff);
+            }
+            var ghost=view.ghost();if(ghost.total()==0||ClientState.aiHidden.contains(view.id()))continue;
             ghost.draw(new Point(0,0,0),true);
             String label=view.info().label();
             if(label.isEmpty()&&sessions.size()<2)continue;
