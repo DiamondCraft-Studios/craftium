@@ -49,6 +49,8 @@ final class Session {
     /** What this player was last shown of other players' AI previews, so only a change is sent. Null makes the next status carry them again. */
     String sharedKey;
     String pendingData="";boolean pendingDirty;
+    /** The ghost a plugin's tool is showing for this player, as an edit and as the data the client is sent. It is not an edit waiting to be built. */
+    Edit pluginPreview;String pluginPreviewData="";boolean pluginPreviewDirty;
     /** What the last AI spec planned looked wrong in (see BuildSpec.Result#warnings), for the reply that describes its preview. */
     List<String> specWarnings=List.of();
     /** The clipboard's blocks as a ghost for the placement preview, and whether it needs encoding again. */

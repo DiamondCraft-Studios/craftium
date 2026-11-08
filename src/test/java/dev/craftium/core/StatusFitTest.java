@@ -95,4 +95,13 @@ class StatusFitTest {
         o.add("aiSessions", list);
         assertEquals(o.toString(), StatusFit.fit(o.toString(), 1_500_000, "too big"));
     }
+
+    @Test void aPluginsGhostIsLeftOutWhenItIsTheLargestPieceAndTheRestIsKept() {
+        var o = JsonParser.parseString(status(1_000, 2_000, 3_000)).getAsJsonObject();
+        o.addProperty("pluginPreviewData", "g".repeat(2_000_000));
+        var fitted = JsonParser.parseString(StatusFit.fit(o.toString(), 1_500_000, "too big")).getAsJsonObject();
+        assertEquals("", fitted.get("pluginPreviewData").getAsString());
+        assertEquals(3_000, fitted.get("pendingData").getAsString().length());
+        assertEquals(1_000, fitted.get("selectionData").getAsString().length());
+    }
 }

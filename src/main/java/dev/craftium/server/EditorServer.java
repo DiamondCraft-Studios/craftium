@@ -174,6 +174,7 @@ public final class EditorServer {
             if(r==null || r.action()==null || r.options()==null)throw new IllegalArgumentException("Invalid editor request");
             if(!ServerPlatform.permitted(player,r.action()))throw new IllegalArgumentException("You do not have permission for this Craftium action");
             Options o=r.options();o.validate();
+            if(o.pluginTool!=null&&!ServerPlatform.permitted(player,o.pluginTool))throw new IllegalArgumentException("You do not have permission to use plugin tools on this server");
             boolean inWorld=r.action().equals("builder_place")||r.action().equals("builder_break");
             s.requestRecord=o.recordPlayerBuilding||!inWorld; // a click in the world is the player building by hand; the editor's own tools always are recorded
             s.requestStroke=r.action().equals("use")||inWorld?r.strokeId():0;
@@ -229,6 +230,7 @@ public final class EditorServer {
             boolean popup=Set.of("structure_preview","structure_export_file","structure_import_file").contains(r.action());
             if(!replaying&&!r.action().equals("builder_commit")&&now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             if(!popup)s.lastRequest=now;
+            if(r.action().equals("tool_preview")){toolPreview(player,s,o,r.target(),r.normal());return;} // the ghost of a plugin's tool, which is not an edit and answers with the ghost alone
             if(ActionRegistry.isNamespaced(r.action())){ // an action of a plugin's: only the registry answers, and a name nobody registered is an error, never one of the editor's
                 var handler=ActionRegistry.find(r.action());
                 if(handler==null)throw new IllegalArgumentException("Unknown action "+r.action());
@@ -525,7 +527,37 @@ public final class EditorServer {
     }
     /** What the player's tool does with a click on the world: whatever the tool's behaviour makes of it. */
     private static void use(ServerPlayer player,Session s,Options o,Point p,Point normal,EditPlanner plan) {
-        ToolBehaviours.of(o.tool).use(new ToolUse(player,s,o,p,normal,plan));
+        if(o.pluginTool==null){ToolBehaviours.of(o.tool).use(new ToolUse(player,s,o,p,normal,plan));return;}
+        var tool=pluginTool(o);
+        if(s.pluginPreview!=null){s.pluginPreview=null;s.pluginPreviewDirty=true;} // the click is what the ghost showed, so it has had its say
+        tool.behaviour().use(new ToolUse(player,s,o,p,normal,plan,true,tool.settings(o.toolSettings)));
+    }
+    private static PluginTools.Registered pluginTool(Options o){
+        var tool=PluginTools.find(o.pluginTool);
+        if(tool==null)throw new IllegalArgumentException("Unknown tool "+o.pluginTool);
+        return tool;
+    }
+    /**
+     * Asks the plugin's tool what it would make for the block the cursor is over, and keeps that as the ghost the player is shown. The reply carries the ghost and
+     * nothing else, so moving the cursor never changes the status line. A tool that shows nothing, or whose plan is past the block limit, shows no ghost.
+     */
+    private static void toolPreview(ServerPlayer player,Session s,Options o,Point target,Point normal){
+        Session.Edit edit=null;
+        if(o.pluginTool!=null&&target!=null){
+            var tool=pluginTool(o);
+            try{
+                edit=tool.behaviour().preview(new ToolUse(player,s,o,target,normal,new EditPlanner(player.level(),s,o),true,tool.settings(o.toolSettings)));
+                if(edit!=null)EditGate.checkLimit(edit,EditGate.limit(o));
+            }catch(IllegalArgumentException e){edit=null;}
+        }
+        if(edit==null&&s.pluginPreview==null)return;
+        s.pluginPreview=edit;s.pluginPreviewDirty=true;
+        sendPluginPreview(player,s);
+    }
+    private static void sendPluginPreview(ServerPlayer player,Session s){
+        if(s.pluginPreviewDirty){s.pluginPreviewData=s.pluginPreview==null?"":GhostCodec.encodeEdit(s.pluginPreview);s.pluginPreviewDirty=false;}
+        var json=Packets.JSON.toJson(Packets.pluginOnly(s.pluginPreviewData));
+        ServerPlatform.send(player,new Packets.Update(StatusFit.fit(json,STATUS_LIMIT,"Too big to draw: the preview is not shown")));
     }
     private static void requireSelection(Session s) {if(s.selection.size()==0)throw new IllegalArgumentException("Create a selection first");}
     private static void copy(ServerPlayer player,Session s,Options o,boolean cut) {
@@ -1084,9 +1116,10 @@ public final class EditorServer {
         if(s.selectionRevision!=s.selection.revision()){s.selectionRevision=s.selection.revision();s.selectionData=SelectionCodec.encode(s.selection.points());}
         if(s.clipboardDirty){s.clipboardGhostDirty=true;s.clipboardData=SelectionCodec.encode(s.clipboard.entrySet().stream().filter(e->!e.getValue().state().isAir()).map(Map.Entry::getKey).toList());s.clipboardDirty=false;}
         if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
+        if(s.pluginPreviewDirty){s.pluginPreviewData=s.pluginPreview==null?"":GhostCodec.encodeEdit(s.pluginPreview);s.pluginPreviewDirty=false;}
         if(ai!=null)aiData(ai); // one place makes the AI preview's data, so the owner and the players who see it always get the same
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null||Handshake.clientHas(player.getUUID(),Handshake.AI_SESSIONS)?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin,sharedFor(player,s),false,aiInfos(player,s));s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
+        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null||Handshake.clientHas(player.getUUID(),Handshake.AI_SESSIONS)?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin,sharedFor(player,s),false,aiInfos(player,s),s.pluginPreviewData);s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
         // A status that is too long for a packet cannot be written and would drop the player's connection, so one that is too big is sent without the largest drawn data.
         var json=Packets.JSON.toJson(status);var fitted=StatusFit.fit(json,STATUS_LIMIT,"Too big to draw: the selection or preview is still there, but not shown");
         if(fitted.length()!=json.length())s.sentAi.clear(); // what was left out was not drawn, so the next status carries the previews again

@@ -22,6 +22,18 @@ public final class ClientState {
     /** Set while a selection action is in flight, so its result can be checked for being suspiciously large. */
     /** An edit the server has worked out and is holding until it is confirmed with Enter. */
     public static GhostBlocks pending=GhostBlocks.EMPTY;
+    /** The ghost the plugin tool in use wants shown, as the server last said. It is not an edit waiting to be confirmed. */
+    public static GhostBlocks pluginPending=GhostBlocks.EMPTY;
+    private static String pluginPendingData="";
+    /** Takes in the plugin ghost a status carries. A status that does not carry one (null) leaves it as it was, and an unchanged one is not read again. */
+    static void updatePluginPreview(Packets.Status status){
+        String data=status.pluginPreviewData();
+        if(data==null||data.equals(pluginPendingData))return;
+        pluginPendingData=data;pluginPending=data.isEmpty()?GhostBlocks.EMPTY:GhostBlocks.parse(data);
+    }
+    /** How many blocks the ghost of the plugin tool in use has; 0 when there is none. */
+    public static int pluginPreviewBlocks(){return pluginPending.total();}
+    static void clearPluginPreview(){pluginPending=GhostBlocks.EMPTY;pluginPendingData="";}
     public static boolean hasPending(){return pending.total()>0;}
     /**
      * One of the player's AI sessions as the server last described it, with the build it holds as a preview (kept apart from the player's own and

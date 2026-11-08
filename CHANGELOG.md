@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+Changes since 1.3.1-beta.1.
+
+### Internal
+- A request can name a plugin's tool and carry the values of its settings, and the server runs it through the same gate as the editor's own tools, holding the settings to what the tool declared and its plan to the block limit. A tool can show a ghost of what it would build before the player clicks, which arrives on its own and never changes the status line. These are new optional fields, so older clients and servers ignore them, and a build that has them says so with the `plugin-tools` capability. Nothing registers a plugin tool yet, so nothing a player sees changes.
+
 ## 1.3.1-beta.1
 
 Changes since 1.3.0-beta.1.
