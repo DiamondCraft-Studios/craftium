@@ -31,8 +31,10 @@ public final class AiBridge {
      * instead of failing on a tool the other side does not have. Bump it when a tool gains something the MCP server relies on.
      * 2: preview summaries, get_state's world, build spec v2 (materials, mixes, roof, stairs, group), the "world" view of
      * get_preview_blocks (read_blocks) and render_view's "angles".
+     * 3: AI sessions: every call carries the session id of the Claude session that made it (and preview_build a label), and get_state lists
+     * the other sessions.
      */
-    public static final int PROTOCOL = 2;
+    public static final int PROTOCOL = 3;
     private static final int BODY_LIMIT = 1_000_000, READ_BLOCKS = 32_768, WAIT_SECONDS = 20;
     private static final Gson GSON = new Gson();
     private static final Object LOCK = new Object();
