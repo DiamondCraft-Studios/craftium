@@ -52,6 +52,7 @@ public final class EditorScreen extends CraftiumScreen {
     private double sliderStartX,sliderStartValue;
     /** A clickable area. {@code back} is what a right click does, for a control that cycles through values; null for the others. */
     private record Control(int x,int y,int width,int height,Runnable action,Runnable back,String tip,String panel,int clipTop,int clipBottom) {
+        Control{PanelLog.control(x,y,width,height,tip,panel);}
         Control(int x,int y,int width,int height,Runnable action,String tip){this(x,placed(y,height),width,height,action,null,tip,drawingPanel,scrollClipTop,scrollClipBottom);}
         Control(int x,int y,int width,int height,Runnable action,Runnable back,String tip){this(x,placed(y,height),width,height,action,back,tip,drawingPanel,scrollClipTop,scrollClipBottom);}
         boolean contains(double px,double py){if(!WorkspaceLayout.visible(panel))return false;var point=WorkspaceLayout.inverse(panel,px,py);return point[0]>=x&&point[1]>=y&&point[0]<x+width&&point[1]<y+height&&point[1]>=clipTop&&point[1]<clipBottom;}
@@ -190,7 +191,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(!suspended){fly();syncCursor();}
         BG=o().uiBackground;PANEL=o().uiPanel;LINE=o().uiBorder;ACCENT=o().uiAccent;TEXT=o().uiText;MUTED=o().uiMuted;
         if(!suspended&&layoutKey!=layoutKey())init();
-        pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();sliderAreas.clear();dragSources.clear();dropTargets.clear();
+        pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();sliderAreas.clear();dragSources.clear();dropTargets.clear();PanelLog.frame();
         syncCrosshair();
         SelectionOverlay.tint(g); // under the panels, so only the world is washed
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
@@ -1476,7 +1477,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(!apply||area==null)return;
         try{double v=Double.parseDouble(text.trim());if(!Double.isFinite(v))return;if(area.slider().typedMax()!=Double.POSITIVE_INFINITY)v=Math.clamp(v,area.slider().min(),area.slider().typedMax());area.slider().set.accept(area.integer()?Math.round(v):v);}catch(NumberFormatException ignored){}
     }
-    private void text(Gfx g,String text,int x,int y,int color){if(scrollActive)scrollContent=Math.max(scrollContent,y+9);if(culled(y,9))return;g.text(font,text,x,y,color,false);}
+    private void text(Gfx g,String text,int x,int y,int color){PanelLog.text(text,x,y,drawingPanel);if(scrollActive)scrollContent=Math.max(scrollContent,y+9);if(culled(y,9))return;g.text(font,text,x,y,color,false);}
     /** A tool's tooltip: its name and the key it is on (and the hotbar slot, when it has one) on the first line, its description below. */
     private static String toolTip(Tool tool,int slot){
         var mapping=CraftiumClient.toolKeys.get(tool);
