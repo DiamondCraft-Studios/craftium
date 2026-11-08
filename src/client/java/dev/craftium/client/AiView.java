@@ -80,7 +80,7 @@ final class AiView {
         int shown = 0;
         if (preview) {
             var ghost = AiBridge.onClient(() -> {
-                var pending = ClientState.aiPending;
+                var pending = ClientState.aiGhost(AiBridge.session());
                 return pending.total() == 0 ? null : new Ghost(pending.stateNames(), pending.placedCells().clone(), pending.removedCells().clone());
             });
             if (ghost != null) {
@@ -130,7 +130,7 @@ final class AiView {
         if (shown > 0) out.addProperty("previewLook", "blocks tinted violet are the preview, not yet built");
         if (preview) {
             // previewBlocksShown above counts only what fell inside this box; these say whether the preview was cut short as a whole.
-            var report = AiBridge.onClient(() -> { var r = new JsonObject(); AiBridge.previewReport(r, ClientState.aiPending); return r; });
+            var report = AiBridge.onClient(() -> { var r = new JsonObject(); AiBridge.previewReport(r, ClientState.aiGhost(AiBridge.session())); return r; });
             for (var entry : report.entrySet()) out.add(entry.getKey(), entry.getValue());
         }
         out.add("blocks", legend(names, counts, colourOf));

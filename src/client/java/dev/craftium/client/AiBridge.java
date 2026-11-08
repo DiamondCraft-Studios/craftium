@@ -46,6 +46,13 @@ public final class AiBridge {
     private static volatile long lastCall;
     private static volatile String lastTool = "";
     private static final long ACTIVE_MILLIS = 120_000;
+    /**
+     * The AI session and build label of the call being answered, which every request it makes to the server carries. The bridge answers one
+     * call at a time (its worker is a single thread), so these are the current call's for as long as it runs.
+     */
+    private static volatile String callSession = "", callLabel = "";
+    static String session() { return callSession; }
+    private static final String STOPPED = "The player stopped this AI session. Do not retry or build anything else; tell the player what you were doing and wait for their instructions.";
     private AiBridge() {}
 
     public enum State { OFF, WAITING, ACTIVE, WORKING }
@@ -84,7 +91,8 @@ public final class AiBridge {
         if (state == State.OFF) return;
         var font = Minecraft.getInstance().font;
         boolean preview = ClientState.hasAiPending();
-        String text = state == State.WORKING ? "AI working…" : preview ? "AI preview" : "AI";
+        int previews = ClientState.aiPendingCount(), sessions = ClientState.aiSessions.size();
+        String text = state == State.WORKING ? "AI working…" : previews > 1 ? "AI previews ×" + previews : preview ? "AI preview" : sessions > 1 ? "AI ×" + sessions : "AI";
         int accent = preview && state != State.WORKING ? 0xffc9a0ff : colour(state);
         int width = font.width(text) + 22, x = g.guiWidth() - width - 6, y = g.guiHeight() - 20; // bottom right, below the key hints and clear of the tips and toasts at the top
         g.fill(x, y, x + width, y + 14, 0xb0101923);
@@ -272,6 +280,11 @@ public final class AiBridge {
     // ---- tools --------------------------------------------------------------------------------------------------
 
     private static JsonObject call(String tool, JsonObject args) throws Exception {
+        // Which AI session is asking, and what it calls the build, ride on every call; an app from before sessions sends neither and is the default session.
+        callSession = dev.craftium.core.AiSessions.cleanId(args.has("session") && args.get("session").isJsonPrimitive() ? args.get("session").getAsString() : "");
+        callLabel = dev.craftium.core.AiSessions.cleanLabel(args.has("label") && args.get("label").isJsonPrimitive() ? args.get("label").getAsString() : "");
+        var asking = ClientState.aiSession(callSession);
+        if (asking != null && asking.info().stopped()) throw new IllegalStateException(STOPPED);
         return switch (tool) {
             case "get_state" -> onClient(() -> state(true));
             case "read_selection" -> read("ai_selection", null, null);
@@ -310,9 +323,9 @@ public final class AiBridge {
                 String action = add ? "ai_build_preview_add" : "ai_build_preview";
                 yield request(action, () -> previewBuild(spec, action));
             }
-            case "apply_preview" -> request("ai_apply", () -> CraftiumClient.send("ai_apply", null, null));
-            case "cancel_preview" -> request("ai_cancel", () -> CraftiumClient.send("ai_cancel", null, null));
-            case "undo" -> request("ai_undo", () -> CraftiumClient.send("ai_undo", null, null));
+            case "apply_preview" -> request("ai_apply", () -> CraftiumClient.sendAi("ai_apply", callSession, callLabel));
+            case "cancel_preview" -> request("ai_cancel", () -> CraftiumClient.sendAi("ai_cancel", callSession, callLabel));
+            case "undo" -> request("ai_undo", () -> CraftiumClient.sendAi("ai_undo", callSession, callLabel));
             default -> throw new IllegalArgumentException("Unknown tool \"" + tool + "\"");
         };
     }
@@ -358,7 +371,7 @@ public final class AiBridge {
             if (mc.player == null || mc.level == null) throw new IllegalStateException("Not in a world");
             if (!CraftiumClient.supported()) throw new IllegalStateException("This world has no Craftium on the server; install it there to read it");
             awaitingData = data;
-            CraftiumClient.send(action, from, to);
+            CraftiumClient.sendAi(action, callSession, callLabel);
             return null;
         });
         lastSent = System.nanoTime();
@@ -439,7 +452,7 @@ public final class AiBridge {
         var o = ClientState.options;
         o.buildSpec = spec;
         // The spec rides along on this one request and is not kept in the saved settings.
-        try { CraftiumClient.send(action, null, null); }
+        try { CraftiumClient.sendAi(action, callSession, callLabel); }
         finally { o.buildSpec = ""; }
     }
 
@@ -482,8 +495,26 @@ public final class AiBridge {
             selection.add("dimensions", array(status.max().x() - status.min().x() + 1, status.max().y() - status.min().y() + 1, status.max().z() - status.min().z() + 1));
         }
         out.add("selection", selection);
-        previewReport(out, ClientState.aiPending);
-        out.addProperty("undoSteps", status.aiUndo());
+        var mine = ClientState.aiSession(callSession);
+        previewReport(out, mine == null ? GhostBlocks.EMPTY : mine.ghost());
+        out.addProperty("undoSteps", mine == null ? 0 : mine.info().undo());
+        var others = new JsonArray();
+        for (var view : ClientState.aiSessions) {
+            if (view == mine) continue;
+            var info = view.info();
+            var one = new JsonObject();
+            one.addProperty("label", info.label());
+            one.addProperty("state", info.state());
+            one.addProperty("blocks", info.blocks());
+            if (info.min() != null && info.max() != null) { one.add("min", array(info.min().x(), info.min().y(), info.min().z())); one.add("max", array(info.max().x(), info.max().y(), info.max().z())); }
+            one.addProperty("idleSeconds", view.idleMs() / 1000);
+            others.add(one);
+        }
+        if (!others.isEmpty()) {
+            out.add("otherSessions", others);
+            out.addProperty("otherSessionsNote", "Other AI sessions are building for this player. Keep this build clear of the boxes they hold or built, and do not apply, discard or undo theirs.");
+        }
+        if (mine != null && !mine.info().label().isEmpty()) out.addProperty("sessionLabel", mine.info().label());
         out.addProperty("busy", status.busy());
         out.addProperty("lastMessage", status.message());
         if (full && mc.level != null) {

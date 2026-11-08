@@ -195,7 +195,7 @@ public final class AiBridgeGameTest implements FabricClientGameTest {
             require(!badState.get("ok").getAsBoolean() && badState.get("error").getAsString().contains("facing=north|"), "a bad state should list the values the block takes: " + badState);
             ctx.waitTicks(5);
             ctx.takeScreenshot("ai-preview");
-            require(ctx.computeOnClient(mc -> ClientState.hasAiPending() && ClientState.aiPending.ai), "the AI's preview should be held as the AI's own");
+            require(ctx.computeOnClient(mc -> ClientState.hasAiPending() && ClientState.aiGhost("").ai), "the AI's preview should be held as the AI's own");
             require(ctx.computeOnClient(mc -> !ClientState.hasPending()), "the AI's preview must not become the player's own pending edit");
 
             // What the player sees, as a screenshot: it is not turned or moved for it.

@@ -21,9 +21,74 @@ public final class ClientState {
     /** An edit the server has worked out and is holding until it is confirmed with Enter. */
     public static GhostBlocks pending=GhostBlocks.EMPTY;
     public static boolean hasPending(){return pending.total()>0;}
-    /** The build an AI app is holding as a preview, kept apart from the player's own: drawn in violet, and applied or discarded from the AI menu. */
-    public static GhostBlocks aiPending=GhostBlocks.EMPTY;
-    public static boolean hasAiPending(){return aiPending.total()>0;}
+    /**
+     * One of the player's AI sessions as the server last described it, with the build it holds as a preview (kept apart from the player's own and
+     * drawn in a colour of its own) and when that description arrived.
+     */
+    public record AiSessionView(Packets.AiSession info,GhostBlocks ghost,int slot,long receivedNanos){
+        public String id(){return info.id();}
+        /** How long the session has been going, counted on from when the server said, so it ticks between statuses. */
+        public long ageMs(){return info.age()+(System.nanoTime()-receivedNanos)/1_000_000;}
+        /** How long since the session last had a request. */
+        public long idleMs(){return info.idle()+(System.nanoTime()-receivedNanos)/1_000_000;}
+    }
+    /** The player's AI sessions, oldest first. */
+    public static volatile List<AiSessionView> aiSessions=List.of();
+    /** True when {@link #aiSessions} came from a server that predates AI sessions: it describes one preview, which is the default session's. */
+    public static volatile boolean aiLegacy;
+    private static final java.util.Map<String,Integer> aiSlots=new java.util.HashMap<>();
+    /** The AI session with this id, or null. On a server that predates sessions the one preview it has is every id's. */
+    public static AiSessionView aiSession(String id){
+        for(var view:aiSessions)if(view.id().equals(id))return view;
+        return aiLegacy&&!aiSessions.isEmpty()?aiSessions.get(0):null;
+    }
+    /** The preview that AI session holds, or an empty one. */
+    static GhostBlocks aiGhost(String id){var view=aiSession(id);return view==null?GhostBlocks.EMPTY:view.ghost();}
+    public static boolean hasAiPending(){for(var view:aiSessions)if(view.ghost().total()>0)return true;return false;}
+    /** How many of the AI sessions hold a preview, and how many blocks those hold in all. */
+    public static int aiPendingCount(){int n=0;for(var view:aiSessions)if(view.ghost().total()>0)n++;return n;}
+    public static int aiPendingBlocks(){int n=0;for(var view:aiSessions)n+=view.ghost().total();return n;}
+    /** Forgets every AI session, as when the player leaves the world. */
+    static void clearAi(){aiSessions=List.of();aiLegacy=false;aiSlots.clear();}
+    /** The colour slot of an AI session: the lowest not in use, kept for as long as the session is listed so its colour does not change. */
+    private static int slotFor(String id){
+        var own=aiSlots.get(id);if(own!=null)return own;
+        var taken=new java.util.HashSet<>(aiSlots.values());int slot=0;while(taken.contains(slot))slot++;
+        aiSlots.put(id,slot);return slot;
+    }
+    /** For a test: makes this ghost the preview of that AI session. */
+    public static void setAiGhost(String id,GhostBlocks ghost){
+        if(ghost.total()>0){ghost.ai=true;ghost.slot=slotFor(id);}
+        var info=new Packets.AiSession(id,"",ghost.total()>0?"preview":"idle",ghost.total(),null,null,"",0,"",0,0,false,"",0,"");
+        aiSessions=List.of(new AiSessionView(info,ghost,slotFor(id),System.nanoTime()));aiLegacy=false;
+    }
+    /** Takes in the AI sessions a status describes; a status without the list (a background one) leaves them as they were. */
+    static void updateAiSessions(Packets.Status status){
+        var list=status.aiSessions();
+        if(list==null){
+            if(status.background())return;
+            // A server from before AI sessions describes the one preview, which is the default session's.
+            var old=GhostBlocks.parse(status.aiPendingData());
+            if(old.total()==0&&status.aiUndo()==0){clearAi();return;}
+            aiLegacy=true;old.slot=slotFor("");if(old.total()>0)old.ai=true;
+            var info=new Packets.AiSession("","",old.total()>0?"preview":"applied",old.total(),null,null,"",status.aiUndo(),status.aiUndoName(),0,0,false,"",0,"");
+            aiSessions=List.of(new AiSessionView(info,old,old.slot,System.nanoTime()));
+            return;
+        }
+        aiLegacy=false;
+        var previous=new java.util.HashMap<String,AiSessionView>();for(var view:aiSessions)previous.put(view.id(),view);
+        var next=new ArrayList<AiSessionView>(list.size());var ids=new java.util.HashSet<String>();
+        for(var info:list){
+            ids.add(info.id());int slot=slotFor(info.id());
+            GhostBlocks ghost;
+            if(info.data()==null){var before=previous.get(info.id());ghost=before!=null&&before.info().previewId()==info.previewId()?before.ghost():GhostBlocks.EMPTY;} // unchanged: the one already here
+            else ghost=GhostBlocks.parse(info.data());
+            if(ghost.total()>0){ghost.ai=true;ghost.slot=slot;}
+            next.add(new AiSessionView(info,ghost,slot,System.nanoTime()));
+        }
+        aiSlots.keySet().retainAll(ids);
+        aiSessions=List.copyOf(next);
+    }
     /** Another player's AI preview, drawn beside the player's own in a colour of its own, with their name. */
     public record SharedAi(String owner,GhostBlocks ghost){}
     /** The AI previews other players in this dimension are holding, as the server last said. */
