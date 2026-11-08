@@ -387,7 +387,20 @@ public final class EditorScreen extends CraftiumScreen {
         if(sizeAtEnd())sizeControls(g,scrollContent+34); // the tools with their own fixed layouts keep the shape's size at the bottom
         if(o().tool.placesBlocks())blockLimit(g,scrollContent+24);
     }
+    /** The settings a tool declares for itself, as a form at the top of the options area. A tool without any keeps the built-in controls below. */
+    private boolean propertyForm(Gfx g) {
+        var spec=o().tool.spec();
+        if(spec.properties().isEmpty())return false;
+        var values=ClientState.toolProperties.computeIfAbsent(spec.id(),id->new PropertyValues(spec.properties()));
+        PropertyForm.draw(new PropertyForm.PanelBuilder(){
+            @Override public void slider(int x,int y,int width,String label,double value,double min,double max,double start,DoubleConsumer set,boolean integer){EditorScreen.this.slider(g,x,y,width,label,value,min,max,start,set,integer);}
+            @Override public void toggle(int x,int y,String label,boolean value,Runnable action){EditorScreen.this.toggle(g,x,y,label,value,action);}
+            @Override public void cycle(int x,int y,int width,int height,String label,Runnable next,Runnable previous){button(g,x,y,width,height,label,false,next,previous,"");}
+        },values,10,311,pw-20);
+        return true;
+    }
     private void toolOptions(Gfx g) {
+        if(propertyForm(g))return;
         if(o().tool==Tool.MAGIC_SELECT)searchButtons(g,266);
         if(o().tool==Tool.BOX_SELECT||o().tool==Tool.MAGIC_SELECT||o().tool==Tool.RULER) {
             var s=ClientState.status;

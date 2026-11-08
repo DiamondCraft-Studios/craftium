@@ -2,6 +2,9 @@ package dev.craftium.client;
 
 import dev.craftium.core.BrushMath;
 import dev.craftium.core.Options;
+import dev.craftium.core.PropertySpec;
+import dev.craftium.core.ToolCatalog;
+import dev.craftium.core.ToolSpec;
 import dev.craftium.core.Tool;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -25,8 +28,16 @@ import java.util.function.Consumer;
  * directory, next to a file for each case with what it laid out.
  */
 public final class PanelGameTest {
-    private record Case(String name, Tool tool, Consumer<Options> options) {}
+    private record Case(String name, Tool tool, Consumer<Options> options, List<PropertySpec> properties) {
+        Case(String name, Tool tool, Consumer<Options> options) { this(name, tool, options, null); }
+    }
 
+    /** The settings a tool would declare for itself; no built-in tool does, so the cases that show the form give one to a tool for as long as they run. */
+    private static final List<PropertySpec> DECLARED = List.of(
+        PropertySpec.number("scale", "Scale", 0.5, 4, 1),
+        PropertySpec.integer("count", "Count", 1, 8, 3),
+        PropertySpec.toggle("hollow", "Hollow", false),
+        PropertySpec.choice("axis", "Axis", List.of("X", "Y", "Z"), 1));
 
     private final ClientGameTestContext c;
     private final TestSingleplayerContext w;
@@ -53,6 +64,8 @@ public final class PanelGameTest {
             all.add(new Case("path_" + mode.name().toLowerCase(), Tool.PATH, o -> o.pathMode = mode));
         for (Options.Compare compare : Options.Compare.values())
             all.add(new Case("magic_select_compare_" + compare.name().toLowerCase(), Tool.MAGIC_SELECT, o -> o.compare = compare));
+        // The form a tool that declares settings gets, in place of the built-in controls. The panel record holds where each label and area is, not the values they show; the values are in PropertyFormTest.
+        all.add(new Case("declared_properties_form", Tool.TEXT, o -> {}, DECLARED));
         return all;
     }
 
@@ -94,7 +107,36 @@ public final class PanelGameTest {
     }
 
     /** Sets the case up and returns what the panels laid out in one frame. */
-    private List<String> record(Case one) { return recordNow(one); }
+    private List<String> record(Case one) {
+        if (one.properties == null) return recordNow(one);
+        var original = c.computeOnClient(mc -> declare(one.tool, one.properties));
+        try {
+            c.runOnClient(mc -> { ClientState.toolProperties.remove(one.tool.spec().id()); });
+            return recordNow(one);
+        } finally {
+            c.runOnClient(mc -> { restore(one.tool, original); ClientState.toolProperties.remove(original.id()); });
+        }
+    }
+
+    /** Gives {@code tool} a spec that declares {@code properties} and returns the spec it had. */
+    @SuppressWarnings("unchecked")
+    private static ToolSpec declare(Tool tool, List<PropertySpec> properties) {
+        var old = tool.spec();
+        put(tool, new ToolSpec(old.id(), old.label(), old.icon(), old.iconId(), old.section(), old.description(), old.brushUse(), old.interaction(), old.defaultKey(), old.useHint(),
+            old.confirms(), old.radiusShortcut(), old.buildsOnRelease(), old.placesBlocks(), old.selection(), old.transform(), properties));
+        return old;
+    }
+
+    private static void restore(Tool tool, ToolSpec spec) { put(tool, spec); }
+
+    @SuppressWarnings("unchecked")
+    private static void put(Tool tool, ToolSpec spec) {
+        try {
+            var field = ToolCatalog.class.getDeclaredField("BUILTIN");
+            field.setAccessible(true);
+            ((java.util.Map<Tool, ToolSpec>) field.get(null)).put(tool, spec);
+        } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+    }
 
     private List<String> recordNow(Case one) {
         c.runOnClient(mc -> {

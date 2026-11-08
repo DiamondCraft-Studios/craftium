@@ -11,6 +11,7 @@ final class PanelExpected {
         Map.entry("annotation_image", "124 texts=38 controls=86 e2148cfe0d4ff720"),
         Map.entry("annotation_line", "124 texts=38 controls=86 e2148cfe0d4ff720"),
         Map.entry("annotation_text", "124 texts=38 controls=86 e2148cfe0d4ff720"),
+        Map.entry("declared_properties_form", "136 texts=42 controls=94 9479745101575761"),
         Map.entry("distort_separate_axes", "157 texts=53 controls=104 af856c4ea68a25bc"),
         Map.entry("freehand_draw_shape_cone", "146 texts=46 controls=100 3dcfed31053e0adc"),
         Map.entry("freehand_draw_shape_cube", "148 texts=47 controls=101 79815fd74504498b"),

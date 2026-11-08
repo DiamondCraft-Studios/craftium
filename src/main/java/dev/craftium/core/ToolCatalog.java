@@ -30,7 +30,7 @@ public final class ToolCatalog {
             !selection && !transform && tool != Tool.RULER && tool != Tool.ANNOTATION && tool != Tool.MODIFY && tool != Tool.LINE && tool != Tool.PATH && tool != Tool.MODELLING && tool != Tool.SHAPE,
             tool.group.equals("Sculpt") && tool != Tool.MODIFY || tool.group.equals("Paint"),
             !selection && tool != Tool.RULER && tool != Tool.ANNOTATION && tool != Tool.TINKER && tool != Tool.PIVOT,
-            selection, transform);
+            selection, transform, java.util.List.of());
     }
 
     private static Tool.BrushUse brushUse(Tool tool) {
