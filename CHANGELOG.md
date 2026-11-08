@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0-beta.1
+
+Changes since 1.2.0-beta.1.
+
+### AI building
+- Several Claude sessions can build at once. Each has its own id, label, preview, undo list and selection, a tinted ghost, and a Build sessions gallery with a detail screen and a teleport to its build.
+- The AI bridge protocol is 3 (session ids); an oversized status trims session previews instead of failing.
+- A craftium-blockout skill blocks out rooms for mod and add-on landmarks.
+
+### Editor
+- Select outline in the Select menu.
+- The Options screen is a scroll view, and window titles drop the "Craftium /" prefix.
+
 ## 1.2.0-beta.1
 
 Changes since 1.1.0-beta.1.
