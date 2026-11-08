@@ -1191,10 +1191,22 @@ public final class EditorScreen extends CraftiumScreen {
                 item("Expand by 1","",()->resizeSelection("selection_expand",1)),item("Shrink by 1","",()->resizeSelection("selection_shrink",1)),
                 item("Select outline…","",()->ClientCompat.setScreen(minecraft,new ResizeSelectionScreen(this,ResizeSelectionScreen.Kind.OUTLINE))));
             case 3 -> List.of(item("Toggle side panels","",()->panels=!panels),item("Tool options","",()->{builder=false;pinnedTab=false;init();}),item("Builder controls","Alt",()->{builder=true;init();}),item("Studio inspector","",()->ClientCompat.setScreen(minecraft,new StudioScreen(this))),item("Colour picker / gradient","",()->ClientCompat.setScreen(minecraft,new ColourScreen(this))));
-            case 8 -> List.of(
-                item(AiBridge.running()?"Turn off AI building":"Turn on AI building","",()->{AiBridge.toggle();ClientState.notify(AiBridge.running()?"AI building is on":"AI building is off");}),divider(),
-                item("Apply AI preview","",()->CraftiumClient.send("ai_apply",null,null)),item("Discard AI preview","",()->CraftiumClient.send("ai_cancel",null,null)),item("Undo last AI build","",()->CraftiumClient.send("ai_undo",null,null)),item("Redo AI build","",()->CraftiumClient.send("ai_redo",null,null)),divider(),
-                item("AI status and setup…","",()->{var studio=new StudioScreen(this);studio.selectTab("AI");ClientCompat.setScreen(minecraft,studio);}));
+            case 8 -> {
+                int sessions=ClientState.aiSessions.size();
+                var items=new ArrayList<MenuItem>();
+                items.add(item(AiBridge.running()?"Turn off AI building":"Turn on AI building","",()->{AiBridge.toggle();ClientState.notify(AiBridge.running()?"AI building is on":"AI building is off");}));
+                items.add(divider());
+                items.add(item("Build sessions…"+(sessions>0?" ("+sessions+")":""),"",()->ClientCompat.setScreen(minecraft,new AiSessionsScreen(this))));
+                if(sessions>1){ // with several sessions the buttons below would have to guess which one is meant: they act on all, and the sessions screen acts on one
+                    items.add(item("Apply all AI previews","",AiSessionActions::applyAll));items.add(item("Discard all AI previews","",AiSessionActions::discardAll));
+                }else{
+                    items.add(item("Apply AI preview","",()->CraftiumClient.sendAiToOnly("ai_apply")));items.add(item("Discard AI preview","",()->CraftiumClient.sendAiToOnly("ai_cancel")));
+                    items.add(item("Undo last AI build","",()->CraftiumClient.sendAiToOnly("ai_undo")));items.add(item("Redo AI build","",()->CraftiumClient.sendAiToOnly("ai_redo")));
+                }
+                items.add(divider());
+                items.add(item("AI status and setup…","",()->{var studio=new StudioScreen(this);studio.selectTab("AI");ClientCompat.setScreen(minecraft,studio);}));
+                yield items;
+            }
             case 9 -> {var items=new ArrayList<MenuItem>();for(String id:WorkspaceLayout.windows.keySet())items.add(item("Toggle "+id,"",()->WorkspaceLayout.toggle(id)));items.add(item("Save layout","",WorkspaceLayout::save));items.add(item("Reset layout","",WorkspaceLayout::reset));items.add(item("Copy layout","",()->minecraft.keyboardHandler.setClipboard(WorkspaceLayout.json())));items.add(item("Paste layout","",()->{try{WorkspaceLayout.importJson(minecraft.keyboardHandler.getClipboard());WorkspaceLayout.save();}catch(Exception e){ClientState.notify("Invalid layout JSON");}}));yield items;}
             case 5 -> List.of(item("Import structure…","",ClientStructures::chooseImport),divider(),
                 item("Export selection…","",()->exportStructure(StructureSettings.SELECTION)),item("Export clipboard…","",()->exportStructure(StructureSettings.CLIPBOARD)),divider(),

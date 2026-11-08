@@ -32,15 +32,29 @@ export const NOT_RUNNING =
  * relies on, so every call is refused with what to update; a mod above it still works, and get_state says the plugin is behind.
  * A bridge file without a number comes from a mod before the check existed, which is protocol 1.
  */
-export const BRIDGE_PROTOCOL = 2;
-const NEEDED_MOD = "1.2.0-beta.1";
+/** A name for this Claude session, to tell it from the others building for the same player. Only a name, so it needs no secure randomness. */
+export function newSessionId() {
+  return Array.from({ length: 12 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+}
+
+export const BRIDGE_PROTOCOL = 3;
+const NEEDED_MOD = "1.3.0-beta.1";
+// Builds that change the world one at a time: a second session applying while another is still writing is told to wait, and retries.
+const RETRIED = new Set(["apply_preview", "undo"]);
+const BUSY = /applying; try again|Wait for the current/i;
 
 export class Bridge {
-  /** @param {{files?: string[], fetchImpl?: typeof fetch, timeoutMs?: number}} options */
-  constructor({ files = candidateFiles(), fetchImpl = fetch, timeoutMs = 30000 } = {}) {
+  /**
+   * @param {{files?: string[], fetchImpl?: typeof fetch, timeoutMs?: number, session?: string, retries?: number, retryMs?: number}} options
+   * `session` names this Claude session to the game, which keeps a preview and an undo list for each; every MCP server process makes its own.
+   */
+  constructor({ files = candidateFiles(), fetchImpl = fetch, timeoutMs = 30000, session = newSessionId(), retries = 6, retryMs = 600 } = {}) {
     this.files = files;
     this.fetch = fetchImpl;
     this.timeoutMs = timeoutMs;
+    this.session = session;
+    this.retries = retries;
+    this.retryMs = retryMs;
   }
 
   /** The newest bridge file that exists, read; the game deletes its file when the bridge closes. */
@@ -64,8 +78,19 @@ export class Bridge {
     }
   }
 
-  /** Calls one bridge tool and returns its JSON reply. A reply with ok:false is returned, not thrown, for the caller to report. */
+  /**
+   * Calls one bridge tool and returns its JSON reply. A reply with ok:false is returned, not thrown, for the caller to report.
+   * Applying and undoing wait their turn when another session's build is still being written.
+   */
   async call(tool, args = {}) {
+    for (let attempt = 0; ; attempt++) {
+      const reply = await this.once(tool, args);
+      if (!RETRIED.has(tool) || !reply || reply.ok !== false || attempt >= this.retries || !BUSY.test(String(reply.error ?? ""))) return reply;
+      await new Promise((resolve) => setTimeout(resolve, this.retryMs));
+    }
+  }
+
+  async once(tool, args) {
     const { port, token, protocol: given, version } = await this.connection();
     const protocol = Number.isInteger(given) ? given : 1;
     if (protocol < BRIDGE_PROTOCOL)
@@ -75,7 +100,7 @@ export class Bridge {
       response = await this.fetch(`http://127.0.0.1:${port}/${tool}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(args),
+        body: JSON.stringify({ ...args, session: this.session }),
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {

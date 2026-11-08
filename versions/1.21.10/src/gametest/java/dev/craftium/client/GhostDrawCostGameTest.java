@@ -111,7 +111,7 @@ public final class GhostDrawCostGameTest implements FabricClientGameTest {
             c.runOnClient(mc -> {
                 var ghost = GhostBlocks.parse(json);
                 ghost.ai = true;
-                ClientState.aiPending = ghost;
+                ClientState.setAiGhost("", ghost);
             });
             c.waitTicks(SETTLE_TICKS);
             long gc0 = gcMillis();
@@ -128,7 +128,7 @@ public final class GhostDrawCostGameTest implements FabricClientGameTest {
             report.append(String.format(Locale.ROOT, "%-9s %7d | %8.1f %8.1f %8.1f %8d %8d%n", shape.name(), cells.size(), (stamps.size() - 1) / seconds, median, p95, heap, gc));
         }
         }
-        c.runOnClient(mc -> ClientState.aiPending = GhostBlocks.EMPTY);
+        c.runOnClient(mc -> ClientState.clearAi());
         System.out.println("CRAFTIUM_GHOST_DRAW_COST\n" + report);
         try { java.nio.file.Files.writeString(java.nio.file.Path.of("ghost-draw-cost.txt"), report.toString()); } catch (java.io.IOException e) { System.out.println("could not write report: " + e); }
     }

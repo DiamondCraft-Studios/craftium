@@ -36,7 +36,7 @@
     "minecraft_dir": {
       "type": "directory",
       "title": "Minecraft folder",
-      "description": "Only needed if your game does not use the default .minecraft folder (for example a Prism, Modrinth or CurseForge profile). Choose the profile's game folder, the one containing config and mods.",
+      "description": "Only needed if your game does not use the default .minecraft folder (for example a Prism, Modrinth or CurseForge profile). Choose the profile's game folder, the one containing config and mods. To copy its path, open the game, then the AI menu > AI status and setup, and press Copy game folder (shown as \"This game's folder\").",
       "required": false
     }
   },

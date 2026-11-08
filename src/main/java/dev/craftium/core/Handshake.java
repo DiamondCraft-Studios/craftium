@@ -23,12 +23,14 @@ public final class Handshake {
     public static final String MODIFY_EXPANSION="modify-expansion";
     /** AI build specs with materials, mixes, roof, stairs and group, and the preview summary sent before the status. */
     public static final String AI_SPEC_V2="ai-spec-v2";
+    /** Several AI sessions per player, each with a preview and undo history of its own (see {@link AiSessions}), and the {@code aiSessions} list in the status. */
+    public static final String AI_SESSIONS="ai-sessions";
     /** The server does not put a flying player back for moving fast, so a client may fly or turn the arcball at any speed. Only the Fabric server has it. */
     public static final String FAST_MOVEMENT="fast-movement";
     /** What this build supports. */
-    public static final Set<String> CAPABILITIES=Set.of(MODIFY_EXPANSION,AI_SPEC_V2);
+    public static final Set<String> CAPABILITIES=Set.of(MODIFY_EXPANSION,AI_SPEC_V2,AI_SESSIONS);
     /** What the Fabric server adds to that: things only a server with mixins can do. */
-    public static final Set<String> FABRIC_SERVER_CAPABILITIES=Set.of(MODIFY_EXPANSION,AI_SPEC_V2,FAST_MOVEMENT);
+    public static final Set<String> FABRIC_SERVER_CAPABILITIES=Set.of(MODIFY_EXPANSION,AI_SPEC_V2,AI_SESSIONS,FAST_MOVEMENT);
     /** {@code version} is the mod or plugin version, such as 0.9.1-beta.1. {@code capabilities} is null from a build that predates the list, which means none. */
     public record Hello(int protocol,String version,Set<String> capabilities) {
         public boolean has(String capability){return capabilities!=null&&capabilities.contains(capability);}

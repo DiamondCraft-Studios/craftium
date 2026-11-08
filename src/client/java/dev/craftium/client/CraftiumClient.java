@@ -99,7 +99,7 @@ public final class CraftiumClient implements ClientModInitializer {
      */
     public static void resetEditor(){
         ClientState.selectionPending=false;ClientState.selectingSince=0;ClientState.selectionSizeBefore=0;ClientState.largeSelection=0;ClientState.heldSelection="";
-        ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.aiPending=GhostBlocks.EMPTY;ClientState.sharedAi=List.of();ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
+        ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.clearAi();ClientState.sharedAi=List.of();ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
         ShapeObject.cancel();TransformGizmo.cancel();PlacementPreview.cancel();BuilderMode.reset();SelectionOverlay.update("");
     }
     /** How far away another player's AI preview is still drawn, in blocks: past this it is out of sight, and drawing it costs a frame. */
@@ -107,7 +107,7 @@ public final class CraftiumClient implements ClientModInitializer {
     static void receiveStatus(String json){
             var next=Packets.JSON.fromJson(json,Packets.Status.class);
             if(next!=null&&next.background()){ClientState.updateShared(next);return;} // somebody else's preview changed: not a reply to anything this client asked, and nothing else in it
-            if(next!=null){ClientState.updateShared(next);ClientState.status=next;if(next.error()){if(next.message().startsWith("Too many edits waiting"))BuilderPrediction.rejectedNewest();else BuilderPrediction.rejected();}else if(next.message().startsWith("Applied "))BuilderPrediction.confirmed(next.message());HistoryPulse.receive(next);checkLargeSelection(next);applyPivot(next.pivotUpdate());if(next.message().startsWith("Undid ")||next.message().startsWith("Redid "))ClientState.boxCorners.clear();ClientRestore.apply(next.restore());if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());ClientState.aiPending=GhostBlocks.parse(next.aiPendingData());if(ClientState.aiPending.total()>0)ClientState.aiPending.ai=true;if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());var mc=Minecraft.getInstance();if(ClientCompat.screen(mc) instanceof EditorScreen editor)editor.statusReceived();AiBridge.statusReceived(next);}
+            if(next!=null){ClientState.updateShared(next);ClientState.status=next;if(next.error()){if(next.message().startsWith("Too many edits waiting"))BuilderPrediction.rejectedNewest();else BuilderPrediction.rejected();}else if(next.message().startsWith("Applied "))BuilderPrediction.confirmed(next.message());HistoryPulse.receive(next);checkLargeSelection(next);applyPivot(next.pivotUpdate());if(next.message().startsWith("Undid ")||next.message().startsWith("Redid "))ClientState.boxCorners.clear();ClientRestore.apply(next.restore());if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());ClientState.updateAiSessions(next);if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());var mc=Minecraft.getInstance();if(ClientCompat.screen(mc) instanceof EditorScreen editor)editor.statusReceived();AiBridge.statusReceived(next);}
     }
     /** Opens the confirmation when a selection action has just selected a suspiciously large area. */
     private static void checkLargeSelection(Packets.Status next){
@@ -311,6 +311,45 @@ public final class CraftiumClient implements ClientModInitializer {
     /** The longest step in blocks per tick this client may take, or infinity when the server does not mind. */
     public static double stepLimit(){return ClientHandshake.fastMovement()?Double.POSITIVE_INFINITY:ClientHandshake.SAFE_STEP;}
     public static boolean supported() {return Minecraft.getInstance().getConnection()!=null && (ClientPlayNetworking.canSend(Packets.Edit.TYPE)||ClientPlayNetworking.canSend(Packets.Bridge.TYPE));}
+    /**
+     * The previews of the player's AI sessions, each in a colour of its own, and named when the session has a label or there are several.
+     */
+    private static void drawAiSessions(Minecraft mc){
+        var sessions=ClientState.aiSessions;
+        for(var view:sessions){
+            var info=view.info();
+            if(view.id().equals(ClientState.highlightId)&&System.nanoTime()<ClientState.highlightUntil&&info.min()!=null&&info.max()!=null&&System.nanoTime()/250_000_000L%2==0){ // flashed for a few seconds when the player asks to see where it is
+                Overlay.box(new AABB(info.min().x(),info.min().y(),info.min().z(),info.max().x()+1,info.max().y()+1,info.max().z()+1),dev.craftium.core.AiSessions.shade(0xffc9a0ff,view.slot()),3f,0x30c9a0ff);
+            }
+            var ghost=view.ghost();if(ghost.total()==0||ClientState.aiHidden.contains(view.id()))continue;
+            ghost.draw(new Point(0,0,0),true);
+            String label=view.info().label();
+            if(label.isEmpty()&&sessions.size()<2)continue;
+            var at=ghost.labelAt();
+            if(at!=null)Overlay.text(label.isEmpty()?"AI preview":label,at,dev.craftium.core.AiSessions.shade(0xffc9a0ff,view.slot()),0xbb151c26,.04f);
+        }
+    }
+
+    /** Sends an AI action for one AI session (and, for a rename, the name). The session rides on this one request only. */
+    public static void sendAi(String action,String session,String label){
+        var o=ClientState.options;o.aiSession=session==null?"":session;o.aiLabel=label==null?"":label;
+        try{send(action,null,null);}finally{o.aiSession="";o.aiLabel="";}
+    }
+    /**
+     * Sends an AI action for the one session it can mean: the only session there is or, to apply or discard, the only one with a preview. With
+     * several it could mean, the player is told to choose in Build sessions instead of one being picked for them.
+     */
+    public static void sendAiToOnly(String action){
+        var sessions=ClientState.aiSessions;ClientState.AiSessionView target=null;
+        if(sessions.size()==1)target=sessions.get(0);
+        else if(action.equals("ai_apply")||action.equals("ai_cancel")){
+            int n=0;for(var view:sessions)if(view.ghost().total()>0){target=view;n++;}
+            if(n!=1)target=null;
+        }
+        if(target==null){ClientState.notify(sessions.isEmpty()?"No AI session yet":"Several AI sessions are open: choose one in Build sessions");return;}
+        sendAi(action,target.id(),null);
+    }
+
     public static void send(String action,Point target,Point normal) {
         if(!supported()){ClientState.notify("Install Craftium on this server to edit worlds");return;}
         if(ClientHandshake.problem()!=null){ClientState.notify(ClientHandshake.problem());return;}
@@ -441,7 +480,7 @@ public final class CraftiumClient implements ClientModInitializer {
             // The Ruler tool shows the block a click would put an end on, outlined and filled as a block of a selection is.
             if(hit!=null&&screen!=null&&screen.toolActive()&&ClientState.options.tool==Tool.RULER){var o=ClientState.options;Overlay.box(new AABB(hit.getBlockPos()),o.selectionColor,(float)o.selectionWidth,o.selectionFill);}
             ClientState.pending.draw(new Point(0,0,0),true);
-            ClientState.aiPending.draw(new Point(0,0,0),true);
+            drawAiSessions(mc);
             // The AI previews other players are holding, in their own colour and with the owner's name, as far away as they are worth drawing.
             if(ClientState.options.showSharedAiPreviews&&mc.player!=null)for(var other:ClientState.sharedAi)
                 if(other.ghost().within(mc.player.getX(),mc.player.getY(),mc.player.getZ(),SHARED_RANGE)){
