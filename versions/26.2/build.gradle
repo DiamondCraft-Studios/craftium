@@ -91,7 +91,11 @@ java {
     sourceCompatibility = JavaVersion.VERSION_25
     targetCompatibility = JavaVersion.VERSION_25
 }
-test { useJUnitPlatform() }
+test {
+    useJUnitPlatform()
+    // Both modules run their tests at once (org.gradle.parallel), and a worker at the default 512 MiB sometimes ran out of heap.
+    maxHeapSize = '1g'
+}
 
 jar {
     from(rootProject.file('LICENSE')) { rename { 'LICENSE_Craftium' } }
