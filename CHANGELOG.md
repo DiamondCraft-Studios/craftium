@@ -14,6 +14,7 @@ Changes since 1.3.0-beta.1.
 - Tools, their icons and the Lua sandbox were reorganised in preparation for plugins. Nothing else about how the editor behaves has changed.
 - A tool can declare its own settings (a number, a whole number, a switch or a choice), and the options panel draws them as a form. The tools the editor ships with declare none, and their panels are unchanged.
 - What a tool draws in the world, and the handles it shows, are drawn by the tool's own input handler instead of by the editor screen checking for each tool by name.
+- On the server, every edit passes one gate before it is built or held for confirmation, each tool's click is handled by its own behaviour instead of a switch on the tool, and actions with a namespaced name (`plugin_id:action`) can be registered for plugins. None of this changes what the editor's tools do; on a Paper server a plugin's action needs the new `craftium.plugins.use` permission.
 
 ## 1.3.0-beta.1
 

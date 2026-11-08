@@ -34,6 +34,7 @@ All permissions default to operators. Grant `craftium.edit` to trusted builders 
 | `craftium.gamemode` | Switch your own game mode |
 | `craftium.capabilities` | Extended reach and flight controls |
 | `craftium.rebuild` | Animated rebuild and cancellation |
+| `craftium.plugins.use` | Actions that plugins register (none are installed yet) |
 | `craftium.admin` | `/craftiumserver status` and `/craftiumserver reload` |
 
 Additional permissions require `craftium.edit`. No permission grants arbitrary server command execution. Craftium's fixed world/view commands use a limited native command source after authorization.
