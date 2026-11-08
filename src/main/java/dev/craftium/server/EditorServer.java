@@ -229,6 +229,11 @@ public final class EditorServer {
             boolean popup=Set.of("structure_preview","structure_export_file","structure_import_file").contains(r.action());
             if(!replaying&&!r.action().equals("builder_commit")&&now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             if(!popup)s.lastRequest=now;
+            if(ActionRegistry.isNamespaced(r.action())){ // an action of a plugin's: only the registry answers, and a name nobody registered is an error, never one of the editor's
+                var handler=ActionRegistry.find(r.action());
+                if(handler==null)throw new IllegalArgumentException("Unknown action "+r.action());
+                handler.run(new ActionUse(player,s,o,r.target(),r.normal()));return;
+            }
             if(r.action().equals("selection_restore")){
                 if(!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly())s.undo.removeFirst();
                 if(s.selectionBefore!=null){s.selection.restore(s.selectionBefore);s.selectionBefore=null;}send(player,s,"Selection cancelled",false);return;}

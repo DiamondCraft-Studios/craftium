@@ -32,6 +32,9 @@ permissions:
   craftium.teleport:
     description: Teleport to an AI build session
     default: op
+  craftium.plugins.use:
+    description: Use the actions and tools that plugins add to Craftium
+    default: op
   craftium.admin:
     description: Inspect and reload Craftium server settings
     default: op
