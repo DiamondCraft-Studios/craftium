@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 1.3.1-beta.1
 
 Changes since 1.3.0-beta.1.
+
+### AI building
+- AI world reads include the selection corners again.
 
 ### Tools
 - A Script Brush or mask script that calls itself without end no longer crashes the server. It stops with "Lua call depth exceeded; operation cancelled", as a script that runs out of instructions does.
