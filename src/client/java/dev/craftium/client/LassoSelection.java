@@ -7,10 +7,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
-final class LassoSelection {
-    record Pixel(double x,double y){}
+public final class LassoSelection {
+    public record Pixel(double x,double y){}
     private LassoSelection(){}
-    static List<Point> project(List<Pixel> polygon) {
+    public static List<Point> project(List<Pixel> polygon) {
         if(polygon.size()<3)return List.of();var mc=Minecraft.getInstance();if(mc.level==null)return List.of();var o=ClientState.options;
         double minX=polygon.stream().mapToDouble(Pixel::x).min().orElse(0),maxX=polygon.stream().mapToDouble(Pixel::x).max().orElse(0),minY=polygon.stream().mapToDouble(Pixel::y).min().orElse(0),maxY=polygon.stream().mapToDouble(Pixel::y).max().orElse(0);
         int step=Math.max(1,(int)Math.ceil(Math.sqrt((maxX-minX)*(maxY-minY)/8192)));

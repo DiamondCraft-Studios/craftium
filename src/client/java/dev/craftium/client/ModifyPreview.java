@@ -13,7 +13,7 @@ import java.util.*;
  * tools that turn around the cursor the red inner and green outer circle of the sweep with a line from the cursor to each.
  * It is rebuilt whenever a setting, the selection or the block under the cursor changes.
  */
-final class ModifyPreview {
+public final class ModifyPreview {
     private ModifyPreview() {}
     /** Past this many blocks the preview is a box around where they land, because a frame would have to draw every one. */
     private static final int LIMIT=4096;
@@ -29,14 +29,14 @@ final class ModifyPreview {
     private static boolean knob;
     private static Point lastCursor;
     /** Whether the preview is fixed where it was put, instead of following the cursor. */
-    static boolean anchored(){return !anchors.isEmpty();}
-    static Point anchor(){return anchors.isEmpty()?null:anchors.getFirst();}
+    public static boolean anchored(){return !anchors.isEmpty();}
+    public static Point anchor(){return anchors.isEmpty()?null:anchors.getFirst();}
     /** Fixes the preview at the cursor. Once it is anchored another click does nothing: the settings change that same preview. */
-    static void place(Point cursor){if(anchored())return;anchors.add(cursor);}
+    public static void place(Point cursor){if(anchored())return;anchors.add(cursor);}
     /** Whether the anchor is a knob the Move gizmo carries. */
     static boolean knob(){return knob&&anchored();}
     /** The handle points the Move gizmo can carry for this tool: the anchor while it is a knob, else none. */
-    static List<Point> knobNodes(){return knob()?anchors:new ArrayList<>();}
+    public static List<Point> knobNodes(){return knob()?anchors:new ArrayList<>();}
     /**
      * The Edit anchor button. Without an anchor yet, the anchor is put where the cursor was and becomes a knob; with one it becomes a knob;
      * with a knob it lets go and the preview follows the cursor again. Returns whether there is a knob now.
@@ -47,9 +47,9 @@ final class ModifyPreview {
         knob=true;return true;
     }
     /** Lets the preview follow the cursor again. */
-    static void edit(){anchors.clear();knob=false;}
+    public static void edit(){anchors.clear();knob=false;}
 
-    static void draw(Minecraft mc,Point cursor){
+    public static void draw(Minecraft mc,Point cursor){
         var o=ClientState.options;var selected=SelectionOverlay.points();
         if(o.tool!=Tool.MODIFY||selected.isEmpty()||mc.level==null)return;
         lastCursor=cursor;

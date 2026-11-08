@@ -1,6 +1,7 @@
 package dev.craftium.client;
 
 import dev.craftium.client.compat.Overlay;
+import dev.craftium.client.interaction.EditorContext;
 import dev.craftium.core.Point;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -10,7 +11,7 @@ import net.minecraft.world.phys.Vec3;
  * bounds as a white cube. The one being worked on gets the interactive gizmo from the editor; the other is shown beside it.
  * The box is drawn in the selection style: as a single cube after the first click, and as the two handles make it while one is dragged.
  */
-final class BoxHandles {
+public final class BoxHandles {
     private BoxHandles(){}
 
     private static final java.util.Map<Point,SceneShape> cubeShapes=new java.util.HashMap<>();
@@ -26,7 +27,7 @@ final class BoxHandles {
         cubeShapes.computeIfAbsent(at,p->SceneShape.of(level,java.util.List.of(p),true)).draw(colour&0xffffff|((fill>>>24)!=0?fill&0xff000000:SceneShape.FACE_ALPHA),colour,(float)ClientState.options.selectionWidth,fill);
     }
 
-    static void draw(EditorScreen screen){
+    public static void draw(EditorContext screen){
         var corners=ClientState.boxCorners;
         var o=ClientState.options;
         if(corners.isEmpty()){ // nothing clicked yet: the block a click would start the box on, as a single cube

@@ -11,8 +11,8 @@ import java.util.*;
  * Outlines what an Extrude or Floodfill click would change, as the cursor moves, as a selection is outlined; a right click then builds it. It runs
  * the very search the server builds from ({@link SurfaceFill}), stopping at a cap so hovering stays cheap on a large face or an open space.
  */
-final class ClickPreview {
-    static final int CAP=20_000;
+public final class ClickPreview {
+    public static final int CAP=20_000;
     private static final int VISITS=120_000; // a preview of 10,000 open cells looks at about six times as many, so this keeps it from stopping short and leaving gaps
     /** How many blocks the last search reached, up to {@link #CAP}. */
     private static int size;
@@ -66,7 +66,7 @@ final class ClickPreview {
         }
     }
     /** How many blocks a click at {@code hit} would change, counting up to {@link #CAP}; asked when the button is pressed, so it is never out of date. */
-    static int measure(Minecraft mc,BlockHitResult hit){
+    public static int measure(Minecraft mc,BlockHitResult hit){
         if(mc.level==null||hit==null)return 0;
         size=0;compute(mc,hit.getBlockPos(),CraftiumClient.normal(hit),ClientState.options);key=null; // the outline is worked out afresh at the next frame
         return size;

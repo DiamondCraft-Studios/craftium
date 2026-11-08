@@ -1,5 +1,6 @@
 package dev.craftium.client.compat;
 
+import dev.craftium.client.OverlayLog;
 import com.mojang.blaze3d.vertex.QuadInstance;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
@@ -63,15 +64,17 @@ public final class Overlay {
      * and labels belong in it; block models are queued per tick.
      */
     public static void frame(Runnable draw){pendingFrame=draw;}
+    /** Runs the per-frame drawing once, as the render loop does, so a test can see what it draws. */
+    public static void runFrame(){var hook=frame;var mc=Minecraft.getInstance();if(hook!=null&&mc.level!=null)try(var collector=mc.levelRenderer.collectPerFrameRenderThreadGizmos()){hook.run();}}
 
-    public static void line(Vec3 from,Vec3 to,int color,float width){Gizmos.line(from,to,color,width).setAlwaysOnTop();}
+    public static void line(Vec3 from,Vec3 to,int color,float width){OverlayLog.line(from,to,color,width,false);Gizmos.line(from,to,color,width).setAlwaysOnTop();}
     /** A line that belongs to the scene: blocks in front of it hide it, so it passes through them. */
-    public static void sceneLine(Vec3 from,Vec3 to,int color,float width){Gizmos.line(from,to,color,width);}
-    public static void box(AABB box,int strokeColor,float strokeWidth,int fillColor){Gizmos.cuboid(box,new GizmoStyle(strokeColor,strokeWidth,fillColor)).setAlwaysOnTop();}
+    public static void sceneLine(Vec3 from,Vec3 to,int color,float width){OverlayLog.line(from,to,color,width,true);Gizmos.line(from,to,color,width);}
+    public static void box(AABB box,int strokeColor,float strokeWidth,int fillColor){OverlayLog.box(box,strokeColor,strokeWidth,fillColor);Gizmos.cuboid(box,new GizmoStyle(strokeColor,strokeWidth,fillColor)).setAlwaysOnTop();}
     /** A filled quad. Corners are in order, counter-clockwise when seen from the side it faces. */
-    public static void face(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){Gizmos.rect(a,b,c,d,GizmoStyle.fill(color)).setAlwaysOnTop();}
+    public static void face(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){OverlayLog.face(a,b,c,d,color,false);Gizmos.rect(a,b,c,d,GizmoStyle.fill(color)).setAlwaysOnTop();}
     /** A filled quad that belongs to the scene: blocks in front of it hide it. */
-    public static void sceneFace(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){Gizmos.rect(a,b,c,d,GizmoStyle.fill(color));}
+    public static void sceneFace(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){OverlayLog.face(a,b,c,d,color,true);Gizmos.rect(a,b,c,d,GizmoStyle.fill(color));}
     /**
      * The real models of the blocks at {@code positions}, drawn translucent and tinted by {@code tint} (ARGB)
      * over the blocks themselves. The list is not copied and must not change after this call.
@@ -81,30 +84,30 @@ public final class Overlay {
      * Like {@link #blocks(List,int)}, but the model of {@code models.get(i)} is drawn at {@code places.get(i)}. This
      * previews blocks that are about to move. Both lists must have the same size and are not copied.
      */
-    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){building.add(new Ghost(models,places,new java.util.HashSet<>(places),null,tint,false));}
+    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){OverlayLog.blocks("blocks",places,tint);building.add(new Ghost(models,places,new java.util.HashSet<>(places),null,tint,false));}
     /**
      * Draws {@code states.get(i)} at {@code places.get(i)}, for blocks that are not in the world yet, such as an edit
      * waiting to be confirmed. Both lists must have the same size and are not copied.
      */
     public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){blockStates(states,places,new java.util.HashSet<>(places),tint);}
     /** As above, for a caller that keeps {@code placed} (the same positions as a set) between ticks instead of paying to rebuild it each time. */
-    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,java.util.Set<BlockPos> placed,int tint){building.add(new Ghost(places,places,placed,states,tint,false));}
+    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,java.util.Set<BlockPos> placed,int tint){OverlayLog.blocks("blockStates",places,tint);building.add(new Ghost(places,places,placed,states,tint,false));}
     /**
      * As {@link #blockStates(List,List,int)}, for a ghost that stays the same from frame to frame: the same two list objects must be
      * passed for as long as it does. What only depends on the blocks (which sides are on the outer surface, their models and tints)
      * is worked out once, the first frame, and kept until a frame passes without the ghost. In exchange the ghost does not notice
      * the world changing around it after that first frame.
      */
-    public static void cachedBlockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){building.add(new Ghost(places,places,null,states,tint,true));}
-    public static void point(Vec3 at,int color,float size){Gizmos.point(at,color,size).setAlwaysOnTop();}
+    public static void cachedBlockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){OverlayLog.blocks("cachedBlockStates",places,tint);building.add(new Ghost(places,places,null,states,tint,true));}
+    public static void point(Vec3 at,int color,float size){OverlayLog.point(at,color,size);Gizmos.point(at,color,size).setAlwaysOnTop();}
     /**
      * A label that always faces the camera, floating over the block at {@code pos}. {@code scale} is world
      * units per font pixel, like a name tag (0.025 is name-tag size). The game's gizmo text has no
      * background and divides its scale by 16, so the background is ignored here and the scale is multiplied back.
      */
-    public static void text(String text,BlockPos pos,int color,int background,float scale){Gizmos.billboardTextOverBlock(text,pos,0,color,scale*16f).setAlwaysOnTop();}
+    public static void text(String text,BlockPos pos,int color,int background,float scale){OverlayLog.text(text,new Vec3(pos.getX()+.5,pos.getY()+1.3,pos.getZ()+.5),color,background,scale);Gizmos.billboardTextOverBlock(text,pos,0,color,scale*16f).setAlwaysOnTop();}
     /** A label centred on the point {@code at}, with the same scale and background rules as above. */
-    public static void text(String text,Vec3 at,int color,int background,float scale){Gizmos.billboardText(text,at,net.minecraft.gizmos.TextGizmo.Style.forColorAndCentered(color).withScale(scale*16f)).setAlwaysOnTop();}
+    public static void text(String text,Vec3 at,int color,int background,float scale){OverlayLog.text(text,at,color,background,scale);Gizmos.billboardText(text,at,net.minecraft.gizmos.TextGizmo.Style.forColorAndCentered(color).withScale(scale*16f)).setAlwaysOnTop();}
 
     /** True when the neighbouring block's matching side is fully solid, so a face on this side could never be seen. */
     private static boolean hidden(net.minecraft.world.level.BlockGetter level,BlockPos pos,Direction face){

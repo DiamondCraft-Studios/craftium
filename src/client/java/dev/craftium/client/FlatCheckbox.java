@@ -2,6 +2,7 @@ package dev.craftium.client;
 
 import dev.craftium.client.compat.CraftiumButton;
 import dev.craftium.client.compat.Gfx;
+import dev.craftium.core.IconCatalog;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
@@ -13,7 +14,7 @@ final class FlatCheckbox extends CraftiumButton {
     static void box(Gfx g,int x,int y,int size,boolean checked,boolean hovered){
         var o=ClientState.options;
         g.fill(x,y,x+size,y+size,hovered?Hover.fill(checked?0xff386e9d:0xff233247):checked?0xff386e9d:0xff233247);g.outline(x,y,size,size,hovered?o.uiAccent:o.uiBorder);
-        if(checked){int d=(size-12)/2;ToolIcons.line(g,x+2+d,y+6+d,x+5+d,y+9+d,o.uiText);ToolIcons.line(g,x+5+d,y+9+d,x+10+d,y+3+d,o.uiText);}
+        if(checked){int d=(size-12)/2;Icons.draw(g,IconCatalog.CHECK,x+d,y+d,o.uiText);}
     }
     @Override protected void paint(Gfx g,int x,int y,float delta){
         var o=ClientState.options;boolean hovered=isHoveredOrFocused();int left=getX(),top=getY(),box=14,boxTop=top+(getHeight()-box)/2;

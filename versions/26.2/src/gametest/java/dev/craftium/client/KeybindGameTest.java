@@ -13,8 +13,14 @@ import static org.lwjgl.glfw.GLFW.*;
 /** Tests real screen dispatch and native input in an isolated Creative world. */
 public final class KeybindGameTest {
     private static void require(boolean ok,String message){if(!ok)throw new AssertionError(message);}
-    private static void key(ClientGameTestContext c,int key,int modifiers){c.runOnClient(mc->mc.gui.screen().keyPressed(new KeyEvent(key,0,modifiers)));}
+    /** A keystroke: pressed and let go again. Without the release the editor sees the same key pressed a second time as a held key repeating, and ignores it while a modifier is down. */
+    private static void key(ClientGameTestContext c,int key,int modifiers){c.runOnClient(mc->{var screen=mc.gui.screen();var event=new KeyEvent(key,0,modifiers);screen.keyPressed(event);screen.keyReleased(event);});}
     private static void settle(ClientGameTestContext c,TestSingleplayerContext w){w.getConnection().waitForServerboundPackets();c.waitTicks(5);w.getConnection().waitForClientboundPackets();c.waitFor(mc->!ClientState.status.busy(),200);w.getConnection().waitForClientboundPackets();}
+    /** Closes the editor the way a player does, which hands them back from spectator: setting the screen to null skips that, and the builder and the ingame shortcuts need Creative. */
+    private static void closeEditor(ClientGameTestContext c){
+        c.runOnClient(mc->{if(mc.gui.screen() instanceof EditorScreen editor)editor.onClose();else mc.gui.setScreen(null);});
+        c.waitFor(mc->mc.player!=null&&mc.player.isCreative(),200);
+    }
     private static void pause(){try{Thread.sleep(100);}catch(InterruptedException e){throw new AssertionError(e);}}
     private static void request(ClientGameTestContext c,TestSingleplayerContext w,String action,Point p){pause();c.runOnClient(mc->CraftiumClient.send(action,p,new Point(0,1,0)));settle(c,w);require(c.computeOnClient(mc->!ClientState.status.error()),"Request failed: "+c.computeOnClient(mc->ClientState.status.message()));}
     public static void run(ClientGameTestContext c,TestSingleplayerContext w){
@@ -38,7 +44,7 @@ public final class KeybindGameTest {
         require(c.computeOnClient(mc->PlacementPreview.origin.equals(new Point(4,11,4))),"Arrow/PageUp nudges did not use camera-relative axes");key(c,GLFW_KEY_DELETE,0);require(c.computeOnClient(mc->!PlacementPreview.active()),"Delete did not cancel placement");
         // Persist a custom shortcut and actually dispatch it after reloading.
         c.runOnClient(mc->{EditorBindings.set(Action.SHOW_BIOMES,Binding.key(GLFW_KEY_F8,2));EditorBindings.reset();EditorBindings.load();});key(c,GLFW_KEY_F8,2);require(c.computeOnClient(mc->ClientState.options.showBiomes),"Rebound shortcut did not persist");
-        c.runOnClient(mc->{EditorBindings.reset();EditorBindings.save();ClientState.options.showBiomes=false;ClientState.options.tool=Tool.BOX_SELECT;ClientState.options.position1=new Point(2,10,2);ClientState.options.position2=new Point(3,10,2);ClientState.options.block="minecraft:gold_block";});
+        c.runOnClient(mc->{EditorBindings.reset();EditorBindings.save();ClientState.options.showBiomes=false;ClientState.options.confirmEdits=false;ClientState.options.tool=Tool.BOX_SELECT;ClientState.options.position1=new Point(2,10,2);ClientState.options.position2=new Point(3,10,2);ClientState.options.block="minecraft:gold_block";});
         request(c,w,"select_box",null);pause();key(c,'F',2);settle(c,w);
         require(w.getServer().computeOnServer(server->server.overworld().getBlockState(new BlockPos(2,10,2)).is(Blocks.GOLD_BLOCK)),"Ctrl+F did not fill selection");
         pause();key(c,'C',2);settle(c,w);require(c.computeOnClient(mc->ClientState.status.clipboardSize()==2),"Ctrl+C did not copy");
@@ -54,7 +60,7 @@ public final class KeybindGameTest {
             request(c,w,"select_box",null);request(c,w,"copy",null);c.runOnClient(mc->PlacementPreview.begin(new Point(8,12,8)));pause();key(c,'F',2);settle(c,w);pause();key(c,GLFW_KEY_ENTER,0);settle(c,w);
             require(w.getServer().computeOnServer(server->{var level=server.overworld();return level.getBlockState(new BlockPos(8,12,8)).is(Blocks.STONE)&&level.getBlockState(new BlockPos(8+(selectedAxis==0?1:0),12+(selectedAxis==1?1:0),8+(selectedAxis==2?1:0))).is(Blocks.GOLD_BLOCK);}),"Ctrl+F did not flip along facing axis "+axis);
         }
-        c.runOnClient(mc->{mc.gui.setScreen(null);BuilderMode.reset();});c.getInput().holdAlt();c.waitTicks(4);require(c.computeOnClient(mc->mc.gui.screen()==null&&BuilderWidget.active()),"Holding Alt did not show the builder widget");c.getInput().releaseAlt();c.waitTicks(4);require(c.computeOnClient(mc->mc.gui.screen()==null&&!BuilderWidget.active()),"Releasing Alt did not hide the builder widget");
+        closeEditor(c);c.runOnClient(mc->BuilderMode.reset());c.getInput().holdAlt();c.waitTicks(4);require(c.computeOnClient(mc->mc.gui.screen()==null&&BuilderWidget.active()),"Holding Alt did not show the builder widget ("+c.computeOnClient(mc->"screen="+mc.gui.screen()+" usable="+BuilderMode.usable()+" builderActive="+BuilderMode.active()+" held="+CraftiumClient.held(CraftiumClient.contextKey)+" key="+CraftiumClient.contextKey.saveString()+" creative="+(mc.player!=null&&mc.player.isCreative()))+")");c.getInput().releaseAlt();c.waitTicks(4);require(c.computeOnClient(mc->mc.gui.screen()==null&&!BuilderWidget.active()),"Releasing Alt did not hide the builder widget");
         c.getInput().pressKey(GLFW_KEY_0);c.waitTick();c.getInput().pressKey(GLFW_KEY_0);c.waitTick();require(c.computeOnClient(mc->BuilderMode.active()),"0 toggled off the tenth slot");
         c.getInput().holdAlt();c.waitTicks(3);require(c.computeOnClient(mc->mc.gui.screen()==null&&BuilderMode.active()),"Alt opened editor instead of builder tool picker");c.getInput().scroll(1);c.getInput().releaseAlt();c.waitTicks(3);c.getInput().pressKey(GLFW_KEY_1);c.waitTick();require(c.computeOnClient(mc->!BuilderMode.active()),"1 did not return to hotbar");
         // Copy exact stair properties into the held item via the real ingame handler.
@@ -73,10 +79,10 @@ public final class KeybindGameTest {
         require(w.getServer().computeOnServer(server->server.overworld().getEntities((net.minecraft.world.entity.Entity)null,new AABB(9,11,9,12,15,12),e->e instanceof net.minecraft.world.entity.Display).size()==1),"Entity-only clipboard did not paste");
         pause();key(c,GLFW_KEY_DELETE,0);settle(c,w);require(w.getServer().computeOnServer(server->server.overworld().getEntity(java.util.UUID.fromString(entity))==null),"Delete did not remove the selected entity");
         pause();key(c,'Z',2);settle(c,w);require(w.getServer().computeOnServer(server->server.overworld().getEntity(java.util.UUID.fromString(entity))!=null),"Entity Delete could not be undone");
-        c.runOnClient(mc->{ClientState.options.entityUuid=entity;ClientState.options.gizmoTarget=Options.GizmoTarget.ENTITY;mc.gui.setScreen(null);});pause();c.runOnClient(mc->CraftiumClient.ingameKey(new KeyEvent('C',0,2),GLFW_PRESS));settle(c,w);
+        c.runOnClient(mc->{ClientState.options.entityUuid=entity;ClientState.options.gizmoTarget=Options.GizmoTarget.ENTITY;});closeEditor(c);pause();c.runOnClient(mc->CraftiumClient.ingameKey(new KeyEvent('C',0,2),GLFW_PRESS));settle(c,w);
         require(c.computeOnClient(mc->ClientState.status.clipboardEntityCount()==1&&ClientState.status.clipboardSize()==0),"Ingame Ctrl+C did not copy selected entity");
         pause();c.runOnClient(mc->{mc.hitResult=new BlockHitResult(new Vec3(14.5,12,14.5),Direction.UP,new BlockPos(14,12,14),false);CraftiumClient.ingameKey(new KeyEvent('V',0,2),GLFW_PRESS);});settle(c,w);
-        require(w.getServer().computeOnServer(server->server.overworld().getEntities((net.minecraft.world.entity.Entity)null,new AABB(13,12,13,16,16,16),e->e instanceof net.minecraft.world.entity.Display).size()==1),"Ingame Ctrl+V did not paste entity clipboard");
+        require(w.getServer().computeOnServer(server->server.overworld().getEntities((net.minecraft.world.entity.Entity)null,new AABB(13,12,13,16,16,16),e->e instanceof net.minecraft.world.entity.Display).size()==1),"Ingame Ctrl+V did not paste entity clipboard (displays: "+w.getServer().computeOnServer(server->{var found=new java.util.ArrayList<String>();for(var e:server.overworld().getEntities((net.minecraft.world.entity.Entity)null,new AABB(-64,-64,-64,64,128,64),x->x instanceof net.minecraft.world.entity.Display))found.add(e.blockPosition().toShortString());return found.toString();})+", status: "+c.computeOnClient(mc->ClientState.status.message()+" error="+ClientState.status.error()+" entityClip="+ClientState.status.clipboardEntityCount()+" blockClip="+ClientState.status.clipboardSize())+")");
         pause();c.runOnClient(mc->CraftiumClient.ingameKey(new KeyEvent(GLFW_KEY_DELETE,0,0),GLFW_PRESS));settle(c,w);require(w.getServer().computeOnServer(server->server.overworld().getEntity(java.util.UUID.fromString(entity))==null),"Ingame Delete did not remove selected entity");
         c.runOnClient(mc->{CraftiumClient.open(false);mc.gui.setScreen(new KeyboardShortcutsScreen(mc.gui.screen()));});c.waitTicks(3);c.takeScreenshot("craftium-keybinds");
         c.runOnClient(mc->mc.gui.setScreen(null));

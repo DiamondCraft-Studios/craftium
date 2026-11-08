@@ -36,7 +36,11 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             if("structures".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.StructureGameTest.run(ctx,world);return;}
             if("viewport".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.ViewportGameTest.run(ctx,world);return;}
             if("lua".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){luaLimits();return;}
+            if("interaction".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.InteractionGameTest.run(ctx,world);return;}
+            if("icons".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.IconSheetGameTest.run(ctx);return;}
             if("golden".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){GoldenToolGameTest.run(ctx,world);return;}
+            if("panel".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.PanelGameTest.run(ctx,world);return;}
+            if("overlay".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.OverlayGameTest.run(ctx,world);return;}
             if("toolhints".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.ToolHintsGameTest.run(ctx);return;}
             if("branding".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){screenshot();return;}
             if("gizmos".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){gizmoControls();return;}

@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.interaction.Interactions;
 import dev.craftium.client.compat.Overlay;
 import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.Gfx;
@@ -463,11 +464,12 @@ public final class CraftiumClient implements ClientModInitializer {
     private static Vec3 centre(Point p){return new Vec3(p.x()+.5,p.y()+.5,p.z()+.5);}
     private static void handles(EditorScreen screen) {
         if(screen==null){var anchor=BuilderMode.gizmoAnchor();if(anchor!=null)TransformGizmo.display(anchor,BuilderMode.gizmoAxes());return;}
-        if(ClientState.options.tool==Tool.BOX_SELECT)BoxHandles.draw(screen);
+        Interactions.of(ClientState.options.tool).drawHandles(screen.context());
         TransformGizmo.draw(screen);
         Point handle=screen.handlePoint();if(handle!=null&&ClientState.options.tool!=Tool.BOX_SELECT){Vec3 anchor=TransformGizmo.nodeAnchor(handle,screen.handleIndex());int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Overlay.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2);}
     }
-    private static void preview(Minecraft mc) {
+    /** What the world shows for the editor this tick; package-private so the overlay test can record it. */
+    static void preview(Minecraft mc) {
         var screen=ClientCompat.screen(mc) instanceof EditorScreen editor?editor:ClientCompat.screen(mc) instanceof StudioScreen studio?studio.editor():null;
         var hit=screen==null?null:screen.target();
         try(var collector=Overlay.begin(mc)) {
@@ -477,8 +479,6 @@ public final class CraftiumClient implements ClientModInitializer {
             ReplaceGhost.draw(mc);
             HistoryPulse.draw();
             if(screen!=null&&screen.bucketDragging())MagicPreview.drawBucket(mc,screen.bucketTarget());else{MagicPreview.draw(mc,hit);ClickPreview.draw(mc,screen!=null&&screen.toolActive()?hit:null);}
-            // The Ruler tool shows the block a click would put an end on, outlined and filled as a block of a selection is.
-            if(hit!=null&&screen!=null&&screen.toolActive()&&ClientState.options.tool==Tool.RULER){var o=ClientState.options;Overlay.box(new AABB(hit.getBlockPos()),o.selectionColor,(float)o.selectionWidth,o.selectionFill);}
             ClientState.pending.draw(new Point(0,0,0),true);
             drawAiSessions(mc);
             // The AI previews other players are holding, in their own colour and with the owner's name, as far away as they are worth drawing.
@@ -505,23 +505,12 @@ public final class CraftiumClient implements ClientModInitializer {
                 Point n=nodes.get(i);Vec3 at=new Vec3(n.x()+.5,n.y()+.5,n.z()+.5);Overlay.point(at,0xffe6cf8b,5);
                 if(i>0){Point before=nodes.get(i-1);Overlay.line(new Vec3(before.x()+.5,before.y()+.5,before.z()+.5),at,0xff8ac9fc,2);}
             }
-            if(hit!=null&&ClientState.options.visualizeBiome&&(ClientState.options.tool==Tool.BIOME_PAINTER||ClientState.options.tool==Tool.CLENTAMINATOR)){
-                String biome=mc.level.getBiome(hit.getBlockPos()).unwrapKey().map(k->dev.craftium.compat.Compat.keyName(k)).orElse("Unknown biome");
-                Overlay.text(biome,hit.getBlockPos().above(2),0xffabefb7,0xbb151c26,.025f);
-            }
             var s=ClientState.status;
             if(screen.showSelection())SelectionOverlay.draw(TransformGizmo.selectionPreview());
             PlacementPreview.draw();
             ShapeObject.draw(mc);
-            // The outline of the brush shows only for tools that use one, not the selection, transform, ruler or annotation tools.
-            var tool=ClientState.options.tool;
-            boolean brush=!tool.selection()&&!tool.transform()&&tool.brushUse()!=Tool.BrushUse.NONE;
-            if(tool==Tool.MODIFY&&screen.toolActive())ModifyPreview.draw(mc,hit==null?null:point(hit.getBlockPos()));
-            if(screen.toolActive()&&hit!=null && !PlacementPreview.active() && !ShapeObject.active() && brush) {
-                var p=hit.getBlockPos();
-                if(tool==Tool.SHAPE&&BrushGhost.draw(mc,p,ClientState.options)){/* drawn as ghost blocks */}
-                else BrushPreview.draw(mc,p,ClientState.options);
-            }
+            // What the chosen tool shows for the block under the cursor: its preview, or the outline of its brush.
+            Interactions.of(ClientState.options.tool).drawWorld(screen.context(),mc,hit);
         }
     }
 }

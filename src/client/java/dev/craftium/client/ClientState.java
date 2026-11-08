@@ -12,6 +12,8 @@ public final class ClientState {
     private static final Path CONFIG=FabricLoader.getInstance().getConfigDir().resolve("craftium.json");
     public static Options options=new Options();
     public static Packets.Status status=new Packets.Status("Ready · Right-click to use your tool",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);
+    /** The values of the settings tools declare for themselves, by the id of the tool's spec. */
+    public static final java.util.Map<String,dev.craftium.core.PropertyValues> toolProperties=new java.util.HashMap<>();
     public static String notice="";
     public static long noticeUntil;
     public static long strokeId;

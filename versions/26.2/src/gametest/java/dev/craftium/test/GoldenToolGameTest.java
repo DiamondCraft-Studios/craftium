@@ -37,7 +37,7 @@ public final class GoldenToolGameTest {
     private static final Point UP = new Point(0, 1, 0);
 
     /** One tool run: the options it uses, what the world holds first, and where it is clicked. */
-    private record Case(String name, Tool tool, Consumer<Options> options, Consumer<ServerLevel> setup, boolean clipboard, Point... clicks) {}
+    public record Case(String name, Tool tool, Consumer<Options> options, Consumer<ServerLevel> setup, boolean clipboard, Point... clicks) {}
 
     private final ClientGameTestContext ctx;
     private final TestSingleplayerContext world;
@@ -49,7 +49,7 @@ public final class GoldenToolGameTest {
     // ---- the terrain -------------------------------------------------------------------------------------------------------------
 
     /** Rolling ground with a bowl near the middle and a few sand patches: enough relief and variety for the sculpting tools. */
-    static int height(int x, int z) { return 2 + Math.floorMod(x * 3 + z * 5, 4) + (x * x + z * z) / 40; }
+    public static int height(int x, int z) { return 2 + Math.floorMod(x * 3 + z * 5, 4) + (x * x + z * z) / 40; }
 
     private static BlockState terrain(int x, int y, int z) {
         int h = height(x, z);
@@ -58,12 +58,13 @@ public final class GoldenToolGameTest {
         return (y >= h - 3 ? Blocks.DIRT : Blocks.STONE).defaultBlockState();
     }
 
-    private static Point surface(int x, int z) { return new Point(x, height(x, z), z); }
+    public static Point surface(int x, int z) { return new Point(x, height(x, z), z); }
 
     /** A small mixed block of gold, planks and a stair, floating over the east side, for the tools that work from a selection or clipboard. */
-    private static final Point CLIPBOARD_FROM = new Point(8, 10, -2), CLIPBOARD_TO = new Point(10, 12, 0);
+    public static final Point CLIPBOARD_FROM = new Point(8, 10, -2), CLIPBOARD_TO = new Point(10, 12, 0);
 
-    private void resetWorld(Consumer<ServerLevel> setup) {
+    /** Builds the terrain and the floating block again, runs {@code setup} on top of it, and puts the biomes back. */
+    public static void reset(TestSingleplayerContext world, Consumer<ServerLevel> setup) {
         world.getServer().runOnServer(server -> {
             var level = server.overworld();
             var pos = new BlockPos.MutableBlockPos();
@@ -107,7 +108,7 @@ public final class GoldenToolGameTest {
         };
     }
 
-    private static List<Case> cases() {
+    public static List<Case> cases() {
         Point a = surface(0, 0), b = surface(-6, 5), c = surface(6, 6), d = surface(-4, -4);
         var all = new ArrayList<Case>();
         // Every tool that changes the world from a single click on the ground, with the brush at its defaults.
@@ -190,7 +191,7 @@ public final class GoldenToolGameTest {
 
     /** Runs one case on freshly built terrain and returns {@code "<blocks changed> <hash>"}. */
     private String execute(Case test, Path out) {
-        resetWorld(test.setup);
+        reset(world, test.setup);
         ctx.runOnClient(mc -> ClientState.options = new Options());
         request("clear", null);
         if (test.clipboard) {
@@ -199,11 +200,9 @@ public final class GoldenToolGameTest {
             request("copy", null);
         }
         options(test.options);
-        var before = capture();
+        var before = capture(world);
         for (Point click : test.clicks) request("use", click);
-        var after = capture();
-        var lines = new ArrayList<String>();
-        for (var e : after.entrySet()) if (!e.getValue().equals(before.get(e.getKey()))) lines.add(e.getKey() + ": " + before.get(e.getKey()) + " -> " + e.getValue());
+        var lines = changes(before, capture(world));
         try {
             Files.createDirectories(out);
             Files.write(out.resolve(test.name + ".txt"), lines, StandardCharsets.UTF_8);
@@ -212,7 +211,7 @@ public final class GoldenToolGameTest {
     }
 
     /** Every block in the test box, then the biome of each 4 by 4 by 4 cell, as text keyed by position. */
-    private Map<String, String> capture() {
+    public static Map<String, String> capture(TestSingleplayerContext world) {
         return world.getServer().computeOnServer(server -> {
             var level = server.overworld();
             var map = new LinkedHashMap<String, String>();
@@ -227,7 +226,15 @@ public final class GoldenToolGameTest {
         });
     }
 
-    private static String hash(List<String> lines) {
+    /** Each position whose text differs between two captures, as {@code "<position>: <before> -> <after>"}, in capture order. */
+    public static List<String> changes(Map<String, String> before, Map<String, String> after) {
+        var lines = new ArrayList<String>();
+        for (var e : after.entrySet()) if (!e.getValue().equals(before.get(e.getKey()))) lines.add(e.getKey() + ": " + before.get(e.getKey()) + " -> " + e.getValue());
+        return lines;
+    }
+
+    /** The first eight bytes of a SHA-256 of the lines, as hex. */
+    public static String hash(List<String> lines) {
         try {
             var digest = MessageDigest.getInstance("SHA-256");
             for (String line : lines) { digest.update(line.getBytes(StandardCharsets.UTF_8)); digest.update((byte) '\n'); }
@@ -239,7 +246,7 @@ public final class GoldenToolGameTest {
     }
 
     private static void writeExpected(Path out, Map<String, String> results) {
-        var source = new StringBuilder("package dev.craftium.test;\n\nimport java.util.Map;\n\n/** Written by {@link GoldenToolGameTest} when run with CRAFTIUM_GOLDEN_UPDATE=1: \"<blocks changed> <hash of the change list>\" for each case. */\nfinal class GoldenToolExpected {\n    private GoldenToolExpected() {}\n    static final Map<String, String> CASES = Map.ofEntries(\n");
+        var source = new StringBuilder("package dev.craftium.test;\n\nimport java.util.Map;\n\n/** Written by {@link GoldenToolGameTest} when run with CRAFTIUM_GOLDEN_UPDATE=1: \"<blocks changed> <hash of the change list>\" for each case. */\npublic final class GoldenToolExpected {\n    private GoldenToolExpected() {}\n    public static final Map<String, String> CASES = Map.ofEntries(\n");
         var entries = new ArrayList<String>();
         for (var e : results.entrySet()) entries.add("        Map.entry(\"" + e.getKey() + "\", \"" + e.getValue() + "\")");
         source.append(String.join(",\n", entries)).append("\n    );\n}\n");

@@ -38,15 +38,16 @@ public final class SmokeGameTest implements FabricClientGameTest {
 
             // Flight momentum: 0% stops at once, and 100% leaves the game's own flight, which keeps drifting.
             ctx.runOnClient(mc->{var o=ClientState.options;o.cameraFlight=false;mc.player.getAbilities().flying=true;});
+            // The flight keeps its own velocity rather than the player's, so speed is built by flying forward for a few ticks and then letting go.
             boolean stops=ctx.computeOnClient(mc->{
                 ClientState.options.flightMomentumLevel=0;
-                mc.player.setDeltaMovement(new net.minecraft.world.phys.Vec3(.5,0,0));
+                for(int tick=0;tick<5;tick++)mc.player.travel(new net.minecraft.world.phys.Vec3(0,0,1));
                 mc.player.travel(net.minecraft.world.phys.Vec3.ZERO);
                 return mc.player.getDeltaMovement().lengthSqr()==0;
             });
             boolean drifts=ctx.computeOnClient(mc->{
                 ClientState.options.flightMomentumLevel=1;
-                mc.player.setDeltaMovement(new net.minecraft.world.phys.Vec3(.5,0,0));
+                for(int tick=0;tick<5;tick++)mc.player.travel(new net.minecraft.world.phys.Vec3(0,0,1));
                 mc.player.travel(net.minecraft.world.phys.Vec3.ZERO);
                 return mc.player.getDeltaMovement().lengthSqr()>0;
             });
