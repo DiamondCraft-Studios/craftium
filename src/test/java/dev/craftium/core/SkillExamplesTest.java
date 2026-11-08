@@ -13,11 +13,13 @@ import static org.junit.jupiter.api.Assertions.*;
 class SkillExamplesTest {
     private static final Pattern JSON = Pattern.compile("```json\\n(.*?)```", Pattern.DOTALL);
 
-    private static List<String> specs() throws Exception {
+    private static List<String> specs() throws Exception { return specs("mcp/skills/craftium-builder/references/examples.md"); }
+
+    private static List<String> specs(String file) throws Exception {
         Path dir = Path.of("").toAbsolutePath();
-        while (dir != null && !Files.exists(dir.resolve("mcp/skills/craftium-builder/references/examples.md"))) dir = dir.getParent();
-        assertNotNull(dir, "examples.md not found above " + Path.of("").toAbsolutePath());
-        String text = Files.readString(dir.resolve("mcp/skills/craftium-builder/references/examples.md")).replace("\r\n", "\n");
+        while (dir != null && !Files.exists(dir.resolve(file))) dir = dir.getParent();
+        assertNotNull(dir, file + " not found above " + Path.of("").toAbsolutePath());
+        String text = Files.readString(dir.resolve(file)).replace("\r\n", "\n");
         var out = new ArrayList<String>();
         var m = JSON.matcher(text);
         while (m.find()) out.add(m.group(1));
@@ -32,6 +34,40 @@ class SkillExamplesTest {
 
     private static String box(BuildSpec.Placement p) {
         return p.min() + " " + p.bounds().sx() + "x" + p.bounds().sy() + "x" + p.bounds().sz();
+    }
+
+    /** The blockout skill promises cubes only and its own legend, so every example must keep that promise. */
+    @Test void blockoutExamplesUseOnlyCubesAndTheLegend() throws Exception {
+        String base = "mcp/skills/craftium-blockout/references/";
+        var specs = specs(base + "examples.md");
+        assertEquals(4, specs.size(), "a room's three phases and a set");
+
+        Path dir = Path.of("").toAbsolutePath();
+        while (!Files.exists(dir.resolve(base + "legend.md"))) dir = dir.getParent();
+        String legend = Files.readString(dir.resolve(base + "legend.md"));
+        var allowedOps = Set.of("box", "set", "line", "replace", "group", "replace_selection");
+        var allowedBlocks = new HashSet<>(Set.of("minecraft:air", "minecraft:brown_concrete", "minecraft:light_gray_concrete", "minecraft:gray_concrete",
+            "minecraft:orange_concrete", "minecraft:yellow_concrete", "minecraft:red_concrete", "minecraft:purple_concrete", "minecraft:black_concrete",
+            "minecraft:cyan_concrete", "minecraft:magenta_concrete", "minecraft:blue_concrete", "minecraft:red_terracotta"));
+        for (String block : allowedBlocks) if (!block.equals("minecraft:air")) assertTrue(legend.contains(block.substring("minecraft:".length())), block + " is not in legend.md");
+
+        var opName = Pattern.compile("\"op\"\\s*:\\s*\"(\\w+)\"");
+        for (String json : specs) {
+            var spec = assertDoesNotThrow(() -> BuildSpec.parse(json), json);
+            assertEquals(java.util.List.of(), spec.build(spec.place()).warnings(), json);
+            var m = opName.matcher(json);
+            while (m.find()) assertTrue(allowedOps.contains(m.group(1)), "op " + m.group(1) + " is not a cube op");
+            assertTrue(allowedBlocks.containsAll(counts(spec).keySet()), counts(spec).keySet().toString());
+        }
+
+        assertEquals(new Point(100, 62, 200) + " 11x3x9", box(BuildSpec.parse(specs.get(0)).place()));
+        var massing = BuildSpec.parse(specs.get(1));
+        assertEquals(new Point(100, 65, 200) + " 11x5x9", box(massing.place()));
+        assertEquals(11 * 5 * 9 - 9 * 4 * 7 - 3 * 3, counts(massing).get("minecraft:light_gray_concrete"), "walls and ceiling, less the inside and the doorway");
+        var function = counts(BuildSpec.parse(specs.get(2)));
+        assertEquals(2, function.get("minecraft:yellow_concrete"));
+        assertEquals(1, function.get("minecraft:red_concrete"));
+        assertEquals(new Point(100, 62, 200) + " 21x8x9", box(BuildSpec.parse(specs.get(3)).place()));
     }
 
     @Test void everyExampleIsAcceptedAndMakesWhatItsTextSays() throws Exception {
