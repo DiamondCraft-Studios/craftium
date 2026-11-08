@@ -433,8 +433,14 @@ public final class EditorServer {
                 case "undo", "redo" -> {s.historyRemaining=0;if(r.action().equals("undo"))undoAnimated(player,s);else history(player,s,false);}
                 case "fill", "delete" -> {
                     requireSelection(s);var plan=new EditPlanner(player.level(),s,o);
-                    for(Point p:s.selection.points())plan.put(p,r.action().equals("delete")?Blocks.AIR.defaultBlockState():plan.material);
-                    start(player,s,plan.finish(r.action().equals("delete")?"Delete selection":"Fill selection"));
+                    boolean deleting=r.action().equals("delete");
+                    for(Point p:s.selection.points())plan.put(p,deleting?Blocks.AIR.defaultBlockState():plan.material);
+                    var edit=plan.finish(deleting?DELETE_SELECTION:"Fill selection");
+                    // Deleting the blocks lets go of the selection too, once the delete applies; undo gives the selection back with the blocks.
+                    if(deleting)edit=edit.withSelection(new Session.SelectionChange(new ArrayList<>(s.selection.points()),List.of(),null,null,Map.of("corners",s.cornersNow),Map.of("corners","none")));
+                    boolean nothing=deleting&&edit.changes().isEmpty()&&edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty();
+                    start(player,s,edit);
+                    if(nothing)letGoOfSelection(s); // there was nothing left to delete, and the selection is still let go of
                 }
                 case "paste", "paste_at", "paste_select", "paste_in_place" -> {
                     boolean inPlace=r.action().equals("paste_in_place");
@@ -965,7 +971,10 @@ public final class EditorServer {
                 j.session.recalculateBytes();
                 j.session.historyDirty=true;
                 j.session.event((j.backwards?"Undo ":"Redo ")+j.edit.name());
-            } else if(j.record)j.session.remember(actual,j.strokeId);
+            } else if(j.record){
+                j.session.remember(actual,j.strokeId);
+                if(actual.name().equals(DELETE_SELECTION)&&actual.selection()!=null)letGoOfSelection(j.session);
+            }
             j.session.busy=false;endJob();
             if(j.history&&!j.backwards&&j.session.historyRemaining==0&&!j.applied.isEmpty()&&j.session.options!=null&&j.session.options.historyPulse)j.session.pulse="redo:700:"+SelectionCodec.encode(pulsePoints(j.applied.stream().map(Session.Change::pos).toList()));
             var player=server.getPlayerList().getPlayer(j.owner);
@@ -1036,6 +1045,13 @@ public final class EditorServer {
             case "selection_move"->"Move selection";
             default->"Select "+size+" blocks";
         };
+    }
+    private static final String DELETE_SELECTION="Delete selection";
+    /** Empties the selection, and the box handles with it, without a history entry of its own: the delete's entry carries the way back. */
+    private static void letGoOfSelection(Session s){
+        s.selection.clear();s.corner=null;
+        s.cornersNow=s.cornersHistory="none";s.historySelection=List.of();s.historyRevision=s.selection.revision();
+        s.restoreUpdate=dev.craftium.core.Restore.encode(Map.of("corners","none"));
     }
     /** Adds the selection's latest change to the history, and remembers the selection as it is now. */
     private static void noteSelection(Session s){
