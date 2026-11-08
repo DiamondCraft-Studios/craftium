@@ -296,7 +296,7 @@ public final class EditorServer {
                 case "ai_blocks" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.blocks(player,r.target(),r.normal())));return;}
                 case "ai_selection" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.selection(player,s)));return;}
                 case "ai_surface","ai_surface_floor" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.surface(player,r.target(),r.normal(),r.action().equals("ai_surface_floor"))));return;}
-                case "ai_build_preview","ai_build_preview_add","ai_apply","ai_cancel","ai_undo","ai_redo","ai_session_stop","ai_session_resume","ai_session_rename","ai_session_forget" -> {aiAction(player,r.action(),o);return;}
+                case "ai_build_preview","ai_build_preview_add","ai_apply","ai_cancel","ai_undo","ai_redo","ai_session_stop","ai_session_resume","ai_session_rename","ai_session_forget","ai_session_teleport" -> {aiAction(player,r.action(),o);return;}
                 default -> {}
             }
             Point target=r.target(),normal=r.normal()==null?new Point(0,1,0):r.normal();
@@ -756,6 +756,14 @@ public final class EditorServer {
                 String label=AiSessions.cleanLabel(o.aiLabel);
                 ai.label=label;ai.renamed=!label.isEmpty(); // a name the player chose is not replaced by the AI app's own
                 send(player,playerSession(player),label.isEmpty()?"AI session name cleared":"Renamed AI session to \""+label+"\"",false);
+            }
+            case "ai_session_teleport" -> {
+                var box=ai.region;
+                if(box==null)throw new IllegalArgumentException("That AI session has not placed anything yet");
+                if(!Objects.equals(ai.dimension,player.level().dimension()))throw new IllegalArgumentException("That AI session is building in another dimension");
+                // On top of the middle of its build, which is clear air whatever it is made of; a player who is not flying lands on it.
+                player.teleportTo((box.minX()+box.maxX()+1)/2.0,box.maxY()+1,(box.minZ()+box.maxZ()+1)/2.0);
+                send(player,playerSession(player),"Teleported to AI session"+name,false);
             }
             case "ai_session_forget" -> {
                 if(ai.busy)throw new IllegalArgumentException("Stop this AI session first: it is still building");

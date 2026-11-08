@@ -29,6 +29,9 @@ permissions:
   craftium.rebuild:
     description: Run animated rebuilds
     default: op
+  craftium.teleport:
+    description: Teleport to an AI build session
+    default: op
   craftium.admin:
     description: Inspect and reload Craftium server settings
     default: op
