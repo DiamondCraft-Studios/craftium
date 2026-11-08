@@ -17,7 +17,7 @@ import java.util.*;
  * it is the outline of those blocks, drawn like the selection's silhouette, as it is and without its extra edges. Uses the hover preview's colours.
  * It is worked out again when the shape, the block under the cursor or, once a second, the world changes.
  */
-final class BrushPreview {
+public final class BrushPreview {
     /** The preview shows brushes well past what can be built (see Selection.LIMIT), since it is only drawn; beyond this it falls back to the box around the brush. */
     private static final int MAX_BLOCKS=600_000;
     /** The most cells the preview looks at to draw a shape: it is worked out on the frame that needs it, so it gets a good deal less than a build is allowed. A bigger shape is drawn as its box. */
@@ -29,7 +29,7 @@ final class BrushPreview {
 
     private BrushPreview(){}
 
-    static void draw(Minecraft mc,BlockPos at,Options o){
+    public static void draw(Minecraft mc,BlockPos at,Options o){
         if(mc.level==null)return;
         var now=List.<Object>of(o.tool.brushUse(),o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.outline,o.sizeX,o.sizeY,o.sizeZ,at,shownBlocks>Selection.LIMIT?0:mc.level.getGameTime()/20); // a huge brush is not worked out again every second
         if(!now.equals(key)){key=now;rebuild(mc,at,o);}

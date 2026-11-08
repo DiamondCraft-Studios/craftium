@@ -1,8 +1,14 @@
 package dev.craftium.client.interaction;
 
 import dev.craftium.client.ClientState;
+import dev.craftium.client.BrushPreview;
 import dev.craftium.client.ModifyPreview;
+import dev.craftium.client.PlacementPreview;
+import dev.craftium.client.ShapeObject;
 import dev.craftium.core.Point;
+import dev.craftium.core.Tool;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.List;
 
@@ -61,6 +67,28 @@ public interface Interaction {
      * yet, and a Modify preview with its anchor. A tool that owns one of them keeps its own by overriding this.
      */
     default void chosen(EditorContext editor) { ClientState.boxCorners.clear(); ModifyPreview.edit(); }
+
+    /**
+     * Draws, in the world, what the tool shows for the block under the cursor ({@code hit}, null over sky or a panel), once a tick while the editor
+     * is open and this tool is chosen. What it draws is its own on top of what the editor always shows (the selection, rulers, annotations, a waiting
+     * edit). The default is the outline of the brush, for the tools that have one and while no shape is being placed.
+     */
+    default void drawWorld(EditorContext editor, Minecraft mc, BlockHitResult hit) {
+        if (showsBrush(editor, hit)) BrushPreview.draw(mc, hit.getBlockPos(), editor.options());
+    }
+
+    /**
+     * Draws the tool's own handles, on every frame, as they follow the camera and the pointer. The editor draws the gizmo of the selected control
+     * point itself; this is for what a tool shows besides that.
+     */
+    default void drawHandles(EditorContext editor) {}
+
+    /** Whether the outline of the brush shows now: for a tool that uses one (not the selection, transform, ruler or annotation tools), in hand, over a block, with no shape being put down. */
+    static boolean showsBrush(EditorContext editor, BlockHitResult hit) {
+        var tool = editor.options().tool;
+        boolean brush = !tool.selection() && !tool.transform() && tool.brushUse() != Tool.BrushUse.NONE;
+        return editor.toolActive() && hit != null && !PlacementPreview.active() && !ShapeObject.active() && brush;
+    }
 
     /** Whether the turn keys (rotate, tilt, flip) turn this tool's hover preview before anything is put down. A shape that is down is turned by them whatever tool is chosen. */
     default boolean turnsPlacement() { return false; }

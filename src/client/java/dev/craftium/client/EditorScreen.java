@@ -95,6 +95,8 @@ public final class EditorScreen extends CraftiumScreen {
     private Tool previousTool=Tool.BOX_SELECT;
     private boolean toolActive=true;
     public boolean toolActive(){return toolActive;}
+    /** What the interactions may use of this screen. */
+    public EditorContext context(){return context;}
     private boolean showSelection=true;
     public EditorScreen(boolean builder){this(builder,false);}
     public EditorScreen(boolean builder,boolean heldContext){super(Component.literal("Craftium Building Studio"));this.builder=builder;this.heldContext=heldContext;
@@ -112,6 +114,8 @@ public final class EditorScreen extends CraftiumScreen {
         @Override public void ask(String text,String hint,Runnable action){confirm=new Confirm(text,hint,action);}
         @Override public List<LassoSelection.Pixel> lasso(){return lasso;}
         @Override public int selectedNode(){return selectedNode;}
+        @Override public boolean toolActive(){return EditorScreen.this.toolActive;}
+        @Override public int handleIndex(){return EditorScreen.this.handleIndex();}
         @Override public void selectNode(int index){selectedNode=index;}
         @Override public boolean hitsPointHandles(Point at,int index,double x,double y){return TransformGizmo.hitsPointHandles(TransformGizmo.nodeAnchor(at,index),x,y);}
     };

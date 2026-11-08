@@ -30,4 +30,8 @@ public interface EditorContext {
     void selectNode(int index);
     /** Whether the pointer at {@code x}, {@code y} is on one of the handles of the point gizmo of node {@code index}, at {@code at}, so a gizmo that is only shown can still be grabbed. */
     boolean hitsPointHandles(Point at, int index, double x, double y);
+    /** The control point whose gizmo is shown, as an index into the tool's point list, or -1 when none is selected or the selection is out of range. */
+    int handleIndex();
+    /** Whether a tool is in hand: false while the player has put it away to work with the world. */
+    boolean toolActive();
 }

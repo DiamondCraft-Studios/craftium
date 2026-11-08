@@ -30,7 +30,7 @@ public final class ShapeObject {
     private static Pose pose;
     private ShapeObject(){}
 
-    static boolean active(){return pose!=null;}
+    public static boolean active(){return pose!=null;}
     static Pose pose(){return pose;}
     /** True while the transform gizmo works on the shape: with the Move, Rotate and Scale tools, and with the Shape tool itself. */
     static boolean gizmoOn(){

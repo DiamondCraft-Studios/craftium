@@ -49,7 +49,7 @@ public final class ModifyPreview {
     /** Lets the preview follow the cursor again. */
     public static void edit(){anchors.clear();knob=false;}
 
-    static void draw(Minecraft mc,Point cursor){
+    public static void draw(Minecraft mc,Point cursor){
         var o=ClientState.options;var selected=SelectionOverlay.points();
         if(o.tool!=Tool.MODIFY||selected.isEmpty()||mc.level==null)return;
         lastCursor=cursor;

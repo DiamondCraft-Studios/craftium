@@ -1,5 +1,6 @@
 package dev.craftium.client.interaction;
 
+import dev.craftium.client.BoxHandles;
 import dev.craftium.client.ClientState;
 import dev.craftium.client.CraftiumClient;
 import dev.craftium.client.ModifyPreview;
@@ -27,6 +28,9 @@ final class BoxInteraction implements Interaction {
     @Override public boolean repeatsWhenDragged() { return false; }
 
     @Override public List<Point> points(EditorContext editor) { return ClientState.boxCorners; }
+
+    /** The cube on each corner, and the block a first click would start the box on. */
+    @Override public void drawHandles(EditorContext editor) { BoxHandles.draw(editor); }
 
     /** Both corners of a box show a gizmo; grabbing the one that is not selected selects it and starts the drag. */
     @Override public void grabHandle(EditorContext editor, double x, double y) {

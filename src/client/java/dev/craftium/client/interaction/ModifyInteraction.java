@@ -4,6 +4,8 @@ import dev.craftium.client.ClientState;
 import dev.craftium.client.CraftiumClient;
 import dev.craftium.client.ModifyPreview;
 import dev.craftium.core.Point;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.List;
 
@@ -12,6 +14,12 @@ import java.util.List;
  * preview. Apply or Enter builds it, or confirms an edit that is waiting for it (Modify).
  */
 final class ModifyInteraction implements Interaction {
+    /** The edit as it would be built, from the anchor once it is down and from the cursor before. */
+    @Override public void drawWorld(EditorContext editor, Minecraft mc, BlockHitResult hit) {
+        if (editor.toolActive()) ModifyPreview.draw(mc, hit == null ? null : CraftiumClient.point(hit.getBlockPos()));
+        Interaction.super.drawWorld(editor, mc, hit);
+    }
+
     @Override public boolean use(EditorContext editor) {
         var hit = editor.target();
         if (hit != null) ModifyPreview.place(CraftiumClient.point(hit.getBlockPos()));
