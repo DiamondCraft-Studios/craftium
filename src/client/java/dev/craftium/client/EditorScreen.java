@@ -797,7 +797,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** Over the world with the pipette in hand, or a tool that previews what is under the pointer, the pointer is a crosshair. */
     private void syncCrosshair(){
-        boolean over=!suspended&&menu<0&&!help&&!transform&&inViewport(pointerX/scale,pointerY/scale);
+        boolean over=ClientCompat.screen(minecraft)==this&&!suspended&&menu<0&&!help&&!transform&&inViewport(pointerX/scale,pointerY/scale);
         boolean grab=over&&gizmoHover(),want=over&&(pipetting||hoverPreviewTool());
         if((want||grab)&&ClientState.selecting())return; // the spinner has the cursor while a big selection is worked out
         int mode=grab?2:want?1:0; // a hand over a gizmo handle, a crosshair over the world for the tools that preview
@@ -806,6 +806,12 @@ public final class EditorScreen extends CraftiumScreen {
         if(mode==1&&crosshairCursor==0)crosshairCursor=GLFW.glfwCreateStandardCursor(GLFW.GLFW_CROSSHAIR_CURSOR);
         if(mode==2&&handCursor==0)handCursor=GLFW.glfwCreateStandardCursor(GLFW.GLFW_HAND_CURSOR);
         GLFW.glfwSetCursor(minecraft.getWindow().handle(),mode==2?handCursor:mode==1?crosshairCursor:0L);
+    }
+    /** Gives the pointer back as the ordinary arrow for whatever screen comes next: a cursor set here stays on the window until something resets it. */
+    private void releaseCursor(){
+        cursorShown=0;
+        if(minecraft==null||ClientState.selecting())return; // the spinner owns the pointer until the selection is worked out, and puts the arrow back itself
+        GLFW.glfwSetCursor(minecraft.getWindow().handle(),0L);
     }
     /** Whether the pointer is over a handle of a gizmo: the one being worked on, or the other corner's of a box selection. */
     private boolean gizmoHover(){
@@ -2004,6 +2010,6 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         return best<100;
     }
     private int key(long handle,int key){return GLFW.glfwGetKey(handle,key)==GLFW.GLFW_PRESS?1:0;}
-    @Override public void removed(){BlockDragCursor.release();keysDown.clear();pipetting=false;syncCrosshair();TransformGizmo.cancel();draggingNode=draggingPlacement=false;cameraGesture=CameraGesture.NONE;syncCursor();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
+    @Override public void removed(){BlockDragCursor.release();keysDown.clear();pipetting=false;releaseCursor();TransformGizmo.cancel();draggingNode=draggingPlacement=false;cameraGesture=CameraGesture.NONE;syncCursor();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
     @Override public void onClose(){ClientState.save();if(ClientState.largeSelection>0)confirmLargeSelection();ClientCompat.setScreen(minecraft,null);if(ClientState.hasPending()&&CraftiumClient.supported())CraftiumClient.send("pending_cancel",null,null);if(CraftiumClient.supported()&&minecraft.player!=null&&minecraft.player.isSpectator())CraftiumClient.send("gamemode_restore",null,null);}
 }
