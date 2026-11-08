@@ -1,5 +1,6 @@
 package dev.craftium.client.compat;
 
+import dev.craftium.client.OverlayLog;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -64,15 +65,15 @@ public final class Overlay {
      */
     public static void frame(Runnable draw){pendingFrame=draw;}
 
-    public static void line(Vec3 from,Vec3 to,int color,float width){out.add(new Line(from,to,color,width,false));}
+    public static void line(Vec3 from,Vec3 to,int color,float width){OverlayLog.line(from,to,color,width,false);out.add(new Line(from,to,color,width,false));}
     /** A line that belongs to the scene: blocks in front of it hide it, so it passes through them. Drawn in a pass that tests depth. */
-    public static void sceneLine(Vec3 from,Vec3 to,int color,float width){out.add(new Line(from,to,color,width,true));}
-    public static void box(AABB box,int strokeColor,float strokeWidth,int fillColor){out.add(new Box(box,strokeColor,strokeWidth,fillColor));}
-    public static void point(Vec3 at,int color,float size){out.add(new Point(at,color,size));}
+    public static void sceneLine(Vec3 from,Vec3 to,int color,float width){OverlayLog.line(from,to,color,width,true);out.add(new Line(from,to,color,width,true));}
+    public static void box(AABB box,int strokeColor,float strokeWidth,int fillColor){OverlayLog.box(box,strokeColor,strokeWidth,fillColor);out.add(new Box(box,strokeColor,strokeWidth,fillColor));}
+    public static void point(Vec3 at,int color,float size){OverlayLog.point(at,color,size);out.add(new Point(at,color,size));}
     /** A filled quad. Corners are in order, counter-clockwise when seen from the side it faces. */
-    public static void face(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){out.add(new Quad(a,b,c,d,color,false));}
+    public static void face(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){OverlayLog.face(a,b,c,d,color,false);out.add(new Quad(a,b,c,d,color,false));}
     /** A filled quad that belongs to the scene: blocks in front of it hide it. Drawn in the pass that tests depth. */
-    public static void sceneFace(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){out.add(new Quad(a,b,c,d,color,true));}
+    public static void sceneFace(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color){OverlayLog.face(a,b,c,d,color,true);out.add(new Quad(a,b,c,d,color,true));}
     /**
      * The real models of the blocks at {@code positions}, drawn translucent and tinted by {@code tint} (ARGB)
      * over the blocks themselves, so stairs, slabs and fences are highlighted in their true shape. The list is
@@ -83,24 +84,24 @@ public final class Overlay {
      * Like {@link #blocks(List,int)}, but the model of {@code models.get(i)} is drawn at {@code places.get(i)}. This
      * previews blocks that are about to move. Both lists must have the same size and are not copied.
      */
-    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){out.add(new Blocks(models,places,new java.util.HashSet<>(places),null,tint,false));}
+    public static void blocks(List<BlockPos> models,List<BlockPos> places,int tint){OverlayLog.blocks("blocks",places,tint);out.add(new Blocks(models,places,new java.util.HashSet<>(places),null,tint,false));}
     /**
      * Draws {@code states.get(i)} at {@code places.get(i)}, for blocks that are not in the world yet, such as an edit
      * waiting to be confirmed. Both lists must have the same size and are not copied.
      */
     public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){blockStates(states,places,new java.util.HashSet<>(places),tint);}
     /** As above, for a caller that keeps {@code placed} (the same positions as a set) between ticks instead of paying to rebuild it each time. */
-    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,java.util.Set<BlockPos> placed,int tint){out.add(new Blocks(places,places,placed,states,tint,false));}
+    public static void blockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,java.util.Set<BlockPos> placed,int tint){OverlayLog.blocks("blockStates",places,tint);out.add(new Blocks(places,places,placed,states,tint,false));}
     /**
      * As {@link #blockStates(List,List,int)}, for a ghost that stays the same from frame to frame: the same two list objects must be
      * passed for as long as it does. What only depends on the blocks (which sides are on the outer surface, their models and tints)
      * is worked out once, the first frame, and kept until a frame passes without the ghost. In exchange the ghost does not notice
      * the world changing around it after that first frame.
      */
-    public static void cachedBlockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){out.add(new Blocks(places,places,null,states,tint,true));}
+    public static void cachedBlockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){OverlayLog.blocks("cachedBlockStates",places,tint);out.add(new Blocks(places,places,null,states,tint,true));}
     public static void text(String text,BlockPos pos,int color,int background,float scale){text(text,new Vec3(pos.getX()+.5,pos.getY()+1.3,pos.getZ()+.5),color,background,scale);}
     /** A label centred on the point {@code at}. */
-    public static void text(String text,Vec3 at,int color,int background,float scale){out.add(new Label(text,at,color,background,scale));}
+    public static void text(String text,Vec3 at,int color,int background,float scale){OverlayLog.text(text,at,color,background,scale);out.add(new Label(text,at,color,background,scale));}
 
     // ---- drawing
 

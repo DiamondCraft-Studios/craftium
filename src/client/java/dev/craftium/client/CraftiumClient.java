@@ -428,7 +428,8 @@ public final class CraftiumClient implements ClientModInitializer {
         TransformGizmo.draw(screen);
         Point handle=screen.handlePoint();if(handle!=null&&ClientState.options.tool!=Tool.BOX_SELECT){Vec3 anchor=TransformGizmo.nodeAnchor(handle,screen.handleIndex());int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Overlay.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2);}
     }
-    private static void preview(Minecraft mc) {
+    /** What the world shows for the editor this tick; package-private so the overlay test can record it. */
+    static void preview(Minecraft mc) {
         var screen=ClientCompat.screen(mc) instanceof EditorScreen editor?editor:ClientCompat.screen(mc) instanceof StudioScreen studio?studio.editor():null;
         var hit=screen==null?null:screen.target();
         try(var collector=Overlay.begin(mc)) {
