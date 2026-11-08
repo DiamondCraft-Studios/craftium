@@ -396,7 +396,7 @@ public final class AiBridge {
             if (mc.player == null || mc.level == null) throw new IllegalStateException("Not in a world");
             if (!CraftiumClient.supported()) throw new IllegalStateException("This world has no Craftium on the server; install it there to read it");
             awaitingData = data;
-            CraftiumClient.sendAi(action, callSession, callLabel);
+            CraftiumClient.sendAi(action, callSession, callLabel, from, to);
             return null;
         });
         lastSent = System.nanoTime();

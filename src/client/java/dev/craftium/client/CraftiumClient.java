@@ -332,9 +332,11 @@ public final class CraftiumClient implements ClientModInitializer {
     }
 
     /** Sends an AI action for one AI session (and, for a rename, the name). The session rides on this one request only. */
-    public static void sendAi(String action,String session,String label){
+    public static void sendAi(String action,String session,String label){sendAi(action,session,label,null,null);}
+    /** As above, for a read of the world: the two corners of the area travel as the request's target and normal. */
+    public static void sendAi(String action,String session,String label,Point from,Point to){
         var o=ClientState.options;o.aiSession=session==null?"":session;o.aiLabel=label==null?"":label;
-        try{send(action,null,null);}finally{o.aiSession="";o.aiLabel="";}
+        try{send(action,from,to);}finally{o.aiSession="";o.aiLabel="";}
     }
     /**
      * Sends an AI action for the one session it can mean: the only session there is or, to apply or discard, the only one with a preview. With
