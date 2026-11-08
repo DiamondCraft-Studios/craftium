@@ -205,6 +205,19 @@ test("read_selection asks the game for the selection and forwards nothing the mo
   await bridge.close();
 });
 
+test("read_selection forwards refresh only when it is true, and rejects anything else", async () => {
+  const bridge = await fakeBridge({ read_selection: { ok: true, selected: 4 } });
+  const client = await connect(bridge.file);
+  await client.callTool({ name: "read_selection", arguments: { refresh: true } });
+  assert.deepEqual(bridge.seen[0].body, { refresh: true });
+  await client.callTool({ name: "read_selection", arguments: { refresh: false } });
+  assert.deepEqual(bridge.seen[1].body, {});
+  const bad = await client.callTool({ name: "read_selection", arguments: { refresh: "yes" } });
+  assert.equal(bad.isError, true);
+  assert.equal(bridge.seen.length, 2);
+  await bridge.close();
+});
+
 test("bad arguments are rejected before they reach the game", async () => {
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);

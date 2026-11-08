@@ -294,9 +294,9 @@ public final class EditorServer {
             }
             switch(r.action()){
                 case "ai_blocks" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.blocks(player,r.target(),r.normal())));return;}
-                case "ai_selection" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.selection(player,s)));return;}
+                case "ai_selection","ai_selection_refresh" -> {ServerPlatform.send(player,new Packets.AiReply(aiSelection(player,aiForRead(player,o),r.action().endsWith("refresh"))));return;}
                 case "ai_surface","ai_surface_floor" -> {ServerPlatform.send(player,new Packets.AiReply(AiWorld.surface(player,r.target(),r.normal(),r.action().equals("ai_surface_floor"))));return;}
-                case "ai_build_preview","ai_build_preview_add","ai_apply","ai_cancel","ai_undo","ai_redo","ai_session_stop","ai_session_resume","ai_session_rename","ai_session_forget","ai_session_teleport" -> {aiAction(player,r.action(),o);return;}
+                case "ai_build_preview","ai_build_preview_add","ai_apply","ai_cancel","ai_undo","ai_redo","ai_session_stop","ai_session_resume","ai_session_rename","ai_session_forget","ai_session_teleport","ai_selection_pin" -> {aiAction(player,r.action(),o);return;}
                 default -> {}
             }
             Point target=r.target(),normal=r.normal()==null?new Point(0,1,0):r.normal();
@@ -709,6 +709,42 @@ public final class EditorServer {
         }
         return out;
     }
+    /**
+     * Notes the player's selection as the one this AI session works with: when it has none yet and the player has a selection, or whenever
+     * {@code refresh} says the AI session was told to use the player's new one. A selection the player makes later does not change it.
+     */
+    private static void pinSelection(ServerPlayer player,Session ai,boolean refresh){
+        var mine=SESSIONS.get(player.getUUID());
+        var live=mine==null?Set.<Point>of():mine.selection.points();
+        if(!refresh&&(ai.pinned!=null||live.isEmpty()))return;
+        ai.pinned=live.isEmpty()?null:new LinkedHashSet<>(live);
+        ai.pinnedRevision=mine==null?0:mine.selection.revision();ai.pinnedAt=System.currentTimeMillis();
+    }
+    /** Whether the player's own selection is not the one this AI session pinned. */
+    private static boolean pinChanged(ServerPlayer player,Session ai){
+        if(ai.pinned==null)return false;
+        var mine=SESSIONS.get(player.getUUID());
+        return mine==null||mine.selection.revision()!=ai.pinnedRevision;
+    }
+    /** What read_selection answers: the selection this AI session pinned, and when the player's own has moved on, where it is now and what to do about it. */
+    private static String aiSelection(ServerPlayer player,Session ai,boolean refresh){
+        pinSelection(player,ai,refresh);
+        var extra=new com.google.gson.JsonObject();
+        var mine=SESSIONS.get(player.getUUID());
+        var live=mine==null?Set.<Point>of():mine.selection.points();
+        if(ai.pinned==null)return AiWorld.selection(player,live,extra); // nothing selected yet: the player's selection as it is, and it is noted once there is one
+        extra.addProperty("pinned",true);
+        extra.addProperty("pinnedSecondsAgo",Math.max(0,(System.currentTimeMillis()-ai.pinnedAt)/1000));
+        if(refresh)extra.addProperty("refreshed",true);
+        else if(pinChanged(player,ai)){
+            extra.addProperty("playerSelectionChanged",true);
+            var box=AiSessions.around(live);
+            if(box!=null){var now=new com.google.gson.JsonObject();now.addProperty("blocks",live.size());now.addProperty("box",box.text());extra.add("playerSelectionNow",now);}
+            else extra.addProperty("playerSelectionNow","nothing selected");
+            extra.addProperty("note","This is the selection you started with, and you keep working with it. The player has selected something else since. Use the new one only if the player says to (a new request for a new place, or \"use my new selection\"), by calling read_selection with refresh true.");
+        }
+        return AiWorld.selection(player,ai.pinned,extra);
+    }
     /** What a player's session tells the client about each of that player's AI sessions; ghost data only when a preview is new to this player. */
     private static List<Packets.AiSession> aiInfos(ServerPlayer player,Session viewer){
         var out=new ArrayList<Packets.AiSession>();long now=System.currentTimeMillis();var live=new HashSet<String>();
@@ -720,10 +756,12 @@ public final class EditorServer {
             if(!preview){data="";viewer.sentAi.remove(a.aiId);}
             else{var sent=viewer.sentAi.get(a.aiId);if(sent!=null&&sent==a.previewId)data=null;else{data=drawn;viewer.sentAi.put(a.aiId,a.previewId);}}
             var box=a.region;
+            var pin=a.pinned==null?null:AiSessions.around(a.pinned);
             out.add(new Packets.AiSession(a.aiId,a.label,state,preview?a.pendingEdit.changes().size():0,
                 box==null?null:new Point(box.minX(),box.minY(),box.minZ()),box==null?null:new Point(box.maxX(),box.maxY(),box.maxZ()),
                 a.dimension==null?"":a.dimension.toString(),a.undo.size(),a.undo.isEmpty()?"":a.undo.peekFirst().name(),
-                Math.max(0,now-a.createdAt),Math.max(0,now-a.lastActive),a.stopped,a.lastTool,a.previewId,data));
+                Math.max(0,now-a.createdAt),Math.max(0,now-a.lastActive),a.stopped,a.lastTool,a.previewId,data,
+                pin==null?null:new Point(pin.minX(),pin.minY(),pin.minZ()),pin==null?null:new Point(pin.maxX(),pin.maxY(),pin.maxZ()),a.pinned==null?0:a.pinned.size(),pinChanged(player,a)));
         }
         viewer.sentAi.keySet().retainAll(live);
         return out;
@@ -778,6 +816,7 @@ public final class EditorServer {
         var ai=aiSession(player,o);
         if(ai.stopped&&!action.equals("ai_cancel"))throw new IllegalArgumentException(STOPPED);
         ai.lastActive=System.currentTimeMillis();ai.lastTool=action.substring(3);
+        if(action.equals("ai_selection_pin")){pinSelection(player,ai,false);send(player,playerSession(player),"",false);return;}
         switch(action){
             case "ai_build_preview","ai_build_preview_add" -> {
                 if(ai.busy)throw new IllegalArgumentException("Wait for the current AI build to finish");
@@ -786,8 +825,8 @@ public final class EditorServer {
                 // the waiting preview as it was, so the player's ghost does not vanish and the AI can fix the spec and try again.
                 // Added to the waiting preview, the spec is planned on top of it and the two become one edit, applied and undone as one.
                 var onto=action.equals("ai_build_preview_add")?ai.pendingEdit:null;
-                var mine=SESSIONS.get(player.getUUID()); // the player's own selection, which operations on it read and never change
-                var edit=BuildPlanner.plan(player,ai,o,mine==null?Set.<Point>of():mine.selection.points(),onto);
+                pinSelection(player,ai,false); // a replace_selection works on the selection this session started with, not on one the player has made since
+                var edit=BuildPlanner.plan(player,ai,o,ai.pinned==null?Set.<Point>of():ai.pinned,onto);
                 var added=onto==null?edit:addedTo(onto,edit);
                 // Blocks the new spec put back to what the world holds (a doorway carved through a preview wall in open air) leave the edit
                 // altogether, so they are not in "added": count them, or a spec that only carves would look like one that did nothing.

@@ -45,7 +45,9 @@ public final class Packets {
      * {@code min} and {@code max} are the box of its preview or latest build, or null; {@code previewId} changes with each new preview.
      */
     public record AiSession(String id,String label,String state,int blocks,Point min,Point max,String dimension,int undo,String undoName,long age,long idle,
-                            boolean stopped,String lastTool,long previewId,String data) {}
+                            boolean stopped,String lastTool,long previewId,String data,
+                            /** The selection this session is working with (see the server's Session#pinned): its box and size, or null and 0, and whether the player's own has changed since. */
+                            Point pinMin,Point pinMax,int pinBlocks,boolean pinChanged) {}
 
     /** One player's waiting AI preview, as ghost data, and whose it is. */
     public record SharedPreview(String owner, String data) {}

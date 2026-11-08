@@ -63,7 +63,7 @@ public final class ClientState {
     /** For a test: makes this ghost the preview of that AI session. */
     public static void setAiGhost(String id,GhostBlocks ghost){
         if(ghost.total()>0){ghost.ai=true;ghost.slot=slotFor(id);}
-        var info=new Packets.AiSession(id,"",ghost.total()>0?"preview":"idle",ghost.total(),null,null,"",0,"",0,0,false,"",0,"");
+        var info=new Packets.AiSession(id,"",ghost.total()>0?"preview":"idle",ghost.total(),null,null,"",0,"",0,0,false,"",0,"",null,null,0,false);
         aiSessions=List.of(new AiSessionView(info,ghost,slotFor(id),System.nanoTime()));aiLegacy=false;
     }
     /** Takes in the AI sessions a status describes; a status without the list (a background one) leaves them as they were. */
@@ -75,7 +75,7 @@ public final class ClientState {
             var old=GhostBlocks.parse(status.aiPendingData());
             if(old.total()==0&&status.aiUndo()==0){clearAi();return;}
             aiLegacy=true;AiThumbnails.keepOnly(java.util.Set.of(""));old.slot=slotFor("");if(old.total()>0)old.ai=true;
-            var info=new Packets.AiSession("","",old.total()>0?"preview":"applied",old.total(),null,null,"",status.aiUndo(),status.aiUndoName(),0,0,false,"",0,"");
+            var info=new Packets.AiSession("","",old.total()>0?"preview":"applied",old.total(),null,null,"",status.aiUndo(),status.aiUndoName(),0,0,false,"",0,"",null,null,0,false);
             aiSessions=List.of(new AiSessionView(info,old,old.slot,System.nanoTime()));
             return;
         }

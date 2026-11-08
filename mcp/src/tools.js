@@ -48,6 +48,8 @@ Workflow:
 5. Show the player the rough form (size, shape and place) and get a yes before anything is built. After that, a build made in stages applies each stage once it checks out, so the player watches it grow; if they want to see it first ("just show me", "don't build it yet"), keep it as a preview until they say to build. If they asked you to just build it, apply it. undo reverses the last build you applied, never the player's own edits. cancel_preview discards a preview.
 Each tool's description gives its limits, and a request that goes past one is refused with what to do instead. Reads and builds stay in the dimension the player is in. Prefer a few well-chosen operations over many small ones; Minecraft builds read best with layered shapes, varied blocks and details like slabs, stairs and walls.
 
+The selection you first see is yours for the whole task. The player may select another place for another Claude session while you work, so get_state and read_selection keep reporting the selection you started with and tell you (playerSelectionChanged) when theirs has moved on. Keep building where you were, and use the new selection only when the player says to, by calling read_selection with refresh true.
+
 Other Claude sessions may be building for the same player at the same time, each with a preview and an undo list of its own: your preview, apply_preview, cancel_preview and undo only ever touch yours. get_state lists the others as otherSessions (label, state, box): keep your build clear of those boxes, and when a preview_build reply has "conflicts" yours overlaps one, so move it or ask the player. Give each preview_build a short "label" (such as "Egyptian pillar") so the player can tell the sessions apart in the game. The player can stop a session: if a tool says the player stopped this session, stop at once, do not retry or build anything else, tell the player what you were doing and wait for them.`;
 
 // ---- argument checks ------------------------------------------------------------------------------------------------
@@ -99,10 +101,15 @@ export const TOOLS = [
     description:
       "Reads the area the player has selected, as it really is and not only the box around it: how many blocks, its exact bounds, whether it is a solid box or an irregular shape (a lasso or magic wand can select any shape, such as the top of a platform), whether it is flat, what blocks it is made of, and how much clear space there is above it with whatever is in the way. " +
       'The reply has a one-sentence "summary". Use it when the player says they have selected a place for you to build on, or when get_state shows a selection, so you do not have to hunt for the spot with get_surface. ' +
-      "The selection is the player's: you never change it. They may not have one, and they may also just give you coordinates, so it is a help and never a requirement. It works for any selection the editor allows, up to 1,048,576 blocks, and answers in a few lines whatever its size.",
-    inputSchema: nothing,
+      "The selection is the player's: you never change it. They may not have one, and they may also just give you coordinates, so it is a help and never a requirement. It works for any selection the editor allows, up to 1,048,576 blocks, and answers in a few lines whatever its size. " +
+      "The first selection you see is yours for the whole task: when the player selects something else meanwhile (they may be sending another Claude session to build there), you keep getting the one you started with, and the reply says playerSelectionChanged with where the new one is. " +
+      "Switch to the new selection only when the player tells you to (a new request for a new place, \"use my new selection\"), with refresh: true.",
+    inputSchema: { type: "object", properties: { refresh: { type: "boolean", description: "Take the player's selection as it is now as the one you work with from here on. Only when the player says to use their new selection" } } },
     annotations: READ,
-    args: () => ({}),
+    args: (a) => {
+      if (a.refresh !== undefined && typeof a.refresh !== "boolean") throw new ArgumentError('"refresh" must be true or false');
+      return a.refresh === true ? { refresh: true } : {};
+    },
   },
   {
     name: "read_blocks",

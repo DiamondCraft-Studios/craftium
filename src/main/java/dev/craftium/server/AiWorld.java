@@ -364,12 +364,18 @@ final class AiWorld {
      * pass over the blocks, because the selection lives on the server and can hold a million blocks: the answer is a few lines whatever its
      * size. It reads only chunks that are already loaded (a selection is made in loaded ground, and reading it must not make new ground).
      */
-    static String selection(ServerPlayer player, Session s) {
+    static String selection(ServerPlayer player, Session s) { return selection(player, s.selection.points(), null); }
+
+    /** As above for these points, with the entries of {@code extra} added to the answer (what an AI session is told about its pinned selection). */
+    static String selection(ServerPlayer player, java.util.Set<Point> points, JsonObject extra) {
         var level = (ServerLevel) player.level();
-        var points = s.selection.points();
-        if (points.isEmpty()) return reply(dev.craftium.core.SelectionReport.describe(points, null, 0, null));
-        var out = dev.craftium.core.SelectionReport.describe(points, new LoadedBlocks(level), dev.craftium.core.SelectionReport.HEADROOM, null);
-        out.addProperty("source", "server");
+        JsonObject out;
+        if (points.isEmpty()) out = dev.craftium.core.SelectionReport.describe(points, null, 0, null);
+        else {
+            out = dev.craftium.core.SelectionReport.describe(points, new LoadedBlocks(level), dev.craftium.core.SelectionReport.HEADROOM, null);
+            out.addProperty("source", "server");
+        }
+        if (extra != null) for (var entry : extra.entrySet()) out.add(entry.getKey(), entry.getValue());
         return reply(out);
     }
 

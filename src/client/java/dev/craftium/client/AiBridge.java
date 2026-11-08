@@ -186,6 +186,7 @@ public final class AiBridge {
             token = "";
             lastCall = 0;
             lastTool = "";
+            toldPlayerOfOlderPlugin = false;
             working.set(0);
             try { Files.deleteIfExists(FILE); } catch (IOException ignored) {}
         }
@@ -243,7 +244,7 @@ public final class AiBridge {
             JsonObject result;
             working.incrementAndGet();
             lastTool = tool.length() > 24 ? tool.substring(0, 24) : tool;
-            try { result = call(tool, args); }
+            try { result = call(tool, args); if (!args.has("session")) warnSessionless(result); }
             catch (IllegalArgumentException | IllegalStateException e) { result = error(e.getMessage()); }
             catch (TimeoutException e) { result = error("Minecraft did not answer in time; is the game paused or loading?"); }
             catch (Exception e) { Craftium.LOG.warn("AI bridge tool {} failed", tool, e); result = error("Internal error: " + e.getClass().getSimpleName()); }
@@ -251,6 +252,21 @@ public final class AiBridge {
             reply(client, 200, result);
         } catch (IOException ignored) {
             // A dropped or slow connection is not worth reporting.
+        }
+    }
+
+    private static volatile boolean toldPlayerOfOlderPlugin;
+
+    /**
+     * A call without a session id comes from a Craftium plugin that predates sessions. Every such app shares the one default session, so two
+     * of them trample each other's previews and one can apply or undo the other's build. The AI is told in its answer, and the player once.
+     */
+    private static void warnSessionless(JsonObject result) {
+        if (result.has("ok") && !result.get("ok").getAsBoolean()) return; // an old plugin shows only the error text of a refusal
+        result.addProperty("pluginWarning", "This Craftium plugin is older than the game's Craftium and cannot name its session, so every Claude session using an old plugin shares ONE preview and ONE undo list: another session's build can be applied or replaced by you. Tell the player to update the Craftium plugin (or the .mcpb extension) before building with more than one Claude session at a time.");
+        if (!toldPlayerOfOlderPlugin) {
+            toldPlayerOfOlderPlugin = true;
+            Minecraft.getInstance().execute(() -> ClientState.notify("An AI app uses an older Craftium plugin: its sessions share one preview. Update the plugin to build in parallel."));
         }
     }
 
@@ -291,8 +307,12 @@ public final class AiBridge {
         var asking = ClientState.aiSession(callSession);
         if (asking != null && asking.info().stopped()) throw new IllegalStateException(STOPPED);
         return switch (tool) {
-            case "get_state" -> onClient(() -> state(true));
-            case "read_selection" -> read("ai_selection", null, null);
+            case "get_state" -> {
+                // The first look at the world is when this session takes the player's selection as its own (see Session#pinned on the server).
+                if (serverSupported() && ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SESSIONS)) request("ai_selection_pin", () -> CraftiumClient.sendAi("ai_selection_pin", callSession, callLabel));
+                yield onClient(() -> state(true));
+            }
+            case "read_selection" -> read(args.has("refresh") && args.get("refresh").isJsonPrimitive() && args.get("refresh").getAsBoolean() ? "ai_selection_refresh" : "ai_selection", null, null);
             case "get_preview_blocks" -> {
                 var from = point(args, "from"); var to = point(args, "to");
                 String view = args.has("view") ? args.get("view").getAsString() : "after";
@@ -493,11 +513,25 @@ public final class AiBridge {
         out.add("player", player);
         var status = ClientState.status;
         var selection = new JsonObject();
-        selection.addProperty("size", status.selectionSize());
-        if (status.selectionSize() > 0 && status.min() != null && status.max() != null) {
-            selection.add("min", array(status.min().x(), status.min().y(), status.min().z()));
-            selection.add("max", array(status.max().x(), status.max().y(), status.max().z()));
-            selection.add("dimensions", array(status.max().x() - status.min().x() + 1, status.max().y() - status.min().y() + 1, status.max().z() - status.min().z() + 1));
+        var pinned = ClientState.aiSession(callSession);
+        boolean pin = pinned != null && pinned.info().pinBlocks() > 0 && pinned.info().pinMin() != null && pinned.info().pinMax() != null;
+        // The selection this session started with, not the one the player has now, until the session is told to use the new one.
+        var min = pin ? pinned.info().pinMin() : status.min();
+        var max = pin ? pinned.info().pinMax() : status.max();
+        int size = pin ? pinned.info().pinBlocks() : status.selectionSize();
+        selection.addProperty("size", size);
+        if (size > 0 && min != null && max != null) {
+            selection.add("min", array(min.x(), min.y(), min.z()));
+            selection.add("max", array(max.x(), max.y(), max.z()));
+            selection.add("dimensions", array(max.x() - min.x() + 1, max.y() - min.y() + 1, max.z() - min.z() + 1));
+        }
+        if (pin) {
+            selection.addProperty("pinned", true);
+            if (pinned.info().pinChanged()) {
+                selection.addProperty("playerSelectionChanged", true);
+                selection.addProperty("playerSelectionNow", status.selectionSize() + " blocks" + (status.selectionSize() > 0 && status.min() != null && status.max() != null ? " from " + status.min().x() + "," + status.min().y() + "," + status.min().z() + " to " + status.max().x() + "," + status.max().y() + "," + status.max().z() : ""));
+                selection.addProperty("note", "This is the selection you started with, and you keep working with it. The player has selected something else since: use the new one only if the player says to, by calling read_selection with refresh true.");
+            }
         }
         out.add("selection", selection);
         var mine = ClientState.aiSession(callSession);

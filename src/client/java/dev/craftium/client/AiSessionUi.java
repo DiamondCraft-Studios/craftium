@@ -20,7 +20,8 @@ final class AiSessionUi {
         String label = view.info().label();
         if (!label.isEmpty()) return label;
         String id = view.id();
-        return id.isEmpty() ? "AI session" : "AI session " + id.substring(0, Math.min(4, id.length()));
+        // A session with no id comes from a plugin that predates sessions: every such app shares this one, which is worth knowing when two builds trample each other.
+        return id.isEmpty() ? "AI session (older plugin)" : "AI session " + id.substring(0, Math.min(4, id.length()));
     }
 
     static boolean working(ClientState.AiSessionView view) { return AiBridge.workingOn(view.id()); }
