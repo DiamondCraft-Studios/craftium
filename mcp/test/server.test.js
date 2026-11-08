@@ -13,6 +13,11 @@ import { BRIDGE_PROTOCOL, candidateFiles, NOT_RUNNING } from "../src/bridge.js";
 const ENTRY = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "index.js");
 const TOKEN = "t0ken";
 
+/** Every call carries the id of the Claude session that made it; tests look at the rest of the body, and the id on its own. */
+function splitSession({ session, ...body }) {
+  return { body, session };
+}
+
 /** A stand-in for the game's bridge that records requests and answers from a table. */
 async function fakeBridge(replies, info = { protocol: BRIDGE_PROTOCOL, version: "1.2.0-beta.1" }) {
   const seen = [];
@@ -20,7 +25,7 @@ async function fakeBridge(replies, info = { protocol: BRIDGE_PROTOCOL, version: 
     let body = "";
     req.on("data", (chunk) => (body += chunk));
     req.on("end", () => {
-      seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, host: req.headers.host, origin: req.headers.origin, body: body ? JSON.parse(body) : {} });
+      seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, host: req.headers.host, origin: req.headers.origin, ...splitSession(body ? JSON.parse(body) : {}) });
       if (req.headers.authorization !== `Bearer ${TOKEN}`) { res.writeHead(401); res.end("{}"); return; }
       const reply = replies[req.url.slice(1)];
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -246,7 +251,7 @@ test("a mod older than the plugin is refused before any call, with what to updat
     const client = await connect(bridge.file);
     const result = await client.callTool({ name: "get_state", arguments: {} });
     assert.equal(result.isError, true);
-    assert.match(text(result), /older than this Craftium plugin.*1\.2\.0-beta\.1/);
+    assert.match(text(result), /older than this Craftium plugin.*1.3.0-beta.1/);
     if (info.version) assert.match(text(result), /0\.9\.1-beta\.1/);
     assert.equal(bridge.seen.length, 0);
     await bridge.close();
@@ -279,4 +284,40 @@ test("candidate files honour the overrides and the platform's default folder", (
   assert.equal(candidateFiles({}, "linux", home).at(-1), path.join(home, ".minecraft", "config", "craftium", "bridge.json"));
   assert.equal(candidateFiles({}, "darwin", home).at(-1), path.join(home, "Library", "Application Support", "minecraft", "config", "craftium", "bridge.json"));
   assert.equal(candidateFiles({ APPDATA: "C:\\Users\\p\\AppData\\Roaming" }, "win32", home).at(-1), path.join("C:\\Users\\p\\AppData\\Roaming", ".minecraft", "config", "craftium", "bridge.json"));
+});
+
+test("every call carries this server's own session id, and a label rides with a build", async () => {
+  const bridge = await fakeBridge({ get_state: { ok: true }, preview_build: { ok: true } });
+  const spec = { ops: [{ op: "set", at: [0, 0, 0], block: "stone" }] };
+  const client = await connect(bridge.file);
+  await client.callTool({ name: "get_state", arguments: {} });
+  await client.callTool({ name: "preview_build", arguments: { spec, label: "  Egyptian pillar  " } });
+  assert.match(bridge.seen[0].session, /^[0-9a-f]{12}$/);
+  assert.equal(bridge.seen[1].session, bridge.seen[0].session, "one process is one session");
+  assert.deepEqual(bridge.seen[1].body, { spec, label: "Egyptian pillar" });
+  const other = await connect(bridge.file);
+  await other.callTool({ name: "get_state", arguments: {} });
+  assert.notEqual(bridge.seen[2].session, bridge.seen[0].session, "another process is another session");
+  await bridge.close();
+});
+
+test("an apply that finds another session's build still being written waits and tries again", async () => {
+  const { Bridge } = await import("../src/bridge.js");
+  const bridge = await fakeBridge({});
+  let calls = 0;
+  const answers = [
+    { ok: false, error: "Another edit or animated rebuild is applying; try again in a moment" },
+    { ok: false, error: "Another edit or animated rebuild is applying; try again in a moment" },
+    { ok: true, message: "Applying" },
+  ];
+  const real = globalThis.fetch;
+  const scripted = async () => new Response(JSON.stringify(answers[calls++]), { status: 200, headers: { "Content-Type": "application/json" } });
+  const instance = new Bridge({ files: [bridge.file], fetchImpl: scripted, retryMs: 1 });
+  assert.deepEqual(await instance.call("apply_preview"), { ok: true, message: "Applying" });
+  assert.equal(calls, 3);
+  calls = 0;
+  const refused = new Bridge({ files: [bridge.file], fetchImpl: async () => new Response(JSON.stringify({ ok: false, error: "You have no preview" }), { status: 200 }), retryMs: 1 });
+  assert.equal((await refused.call("apply_preview")).error, "You have no preview", "another refusal is not retried");
+  assert.equal(globalThis.fetch, real);
+  await bridge.close();
 });

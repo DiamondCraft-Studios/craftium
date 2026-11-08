@@ -46,7 +46,9 @@ Workflow:
 3. Call preview_build with a build spec in world coordinates. Its reply says what the spec made (where, how many blocks, of what, and which way stairs face): check it. If the spec is refused, the error names the operation at fault and what to use instead; fix it and try again, and your earlier preview stays waiting meanwhile. A new preview replaces the previous one.
 4. Tell the player to look at the ghost in the game. You can look too, without touching the player's view: render_view draws the build's area from an angle you choose, with your waiting preview tinted violet. Render when the look matters (the first rough form, the roof, the finished build), from two angles in one call (angles: ["se", "top"]); for a small change the preview_build reply is usually enough. If previewTruncated is true the game drew only part of the preview, so build in smaller stages to see all of it. Adjust with another preview_build if the result or the player wants changes.
 5. Show the player the rough form (size, shape and place) and get a yes before anything is built. After that, a build made in stages applies each stage once it checks out, so the player watches it grow; if they want to see it first ("just show me", "don't build it yet"), keep it as a preview until they say to build. If they asked you to just build it, apply it. undo reverses the last build you applied, never the player's own edits. cancel_preview discards a preview.
-Each tool's description gives its limits, and a request that goes past one is refused with what to do instead. Reads and builds stay in the dimension the player is in. Prefer a few well-chosen operations over many small ones; Minecraft builds read best with layered shapes, varied blocks and details like slabs, stairs and walls.`;
+Each tool's description gives its limits, and a request that goes past one is refused with what to do instead. Reads and builds stay in the dimension the player is in. Prefer a few well-chosen operations over many small ones; Minecraft builds read best with layered shapes, varied blocks and details like slabs, stairs and walls.
+
+Other Claude sessions may be building for the same player at the same time, each with a preview and an undo list of its own: your preview, apply_preview, cancel_preview and undo only ever touch yours. get_state lists the others as otherSessions (label, state, box): keep your build clear of those boxes, and when a preview_build reply has "conflicts" yours overlaps one, so move it or ask the player. Give each preview_build a short "label" (such as "Egyptian pillar") so the player can tell the sessions apart in the game. The player can stop a session: if a tool says the player stopped this session, stop at once, do not retry or build anything else, tell the player what you were doing and wait for them.`;
 
 // ---- argument checks ------------------------------------------------------------------------------------------------
 
@@ -85,7 +87,7 @@ export const TOOLS = [
   {
     name: "get_state",
     title: "Get Craftium state",
-    description: "Where the player is and which way they face, the area they have selected (corners and dimensions only, so call read_selection to see what is in it; theirs, and never changed by you), how many blocks your waiting preview holds (previewBlocks) and how many of them the game can draw (previewBlocksDrawn; previewTruncated and a previewWarning appear when a big preview is only partly drawn), and how many of your builds can be undone. " +
+    description: "Where the player is and which way they face, the area they have selected (corners and dimensions only, so call read_selection to see what is in it; theirs, and never changed by you), how many blocks your waiting preview holds (previewBlocks) and how many of them the game can draw (previewBlocksDrawn; previewTruncated and a previewWarning appear when a big preview is only partly drawn), and how many of your builds can be undone. Other Claude sessions building for the player at the same time are listed as otherSessions, so you can keep clear of them. " +
       "It also gives the world: dimension, the lowest and highest y a block can be at (minY, maxY), sea level and the biome the player stands in, a hint of the style that fits; and the player's current block and recently used blocks (playerBlocks), a hint of their taste. Call this first.",
     inputSchema: nothing,
     annotations: READ,
@@ -240,13 +242,15 @@ export const TOOLS = [
           required: ["ops"],
         },
         mode: { type: "string", enum: ["replace", "add"], description: '"replace" (default): this spec is the whole preview. "add": its blocks go on top of the waiting preview' },
+        label: { type: "string", maxLength: 60, description: 'A short name for this build, such as "Egyptian pillar": the player sees it on the preview and in the list of AI sessions, so they can tell sessions apart. Optional; the player may rename it' },
       },
       required: ["spec"],
     },
     annotations: CHANGE,
     args: (a) => {
       if (a.mode !== undefined && a.mode !== "replace" && a.mode !== "add") throw new ArgumentError('"mode" must be "replace" or "add"');
-      return { spec: spec(a.spec), ...(a.mode !== undefined ? { mode: a.mode } : {}) };
+      if (a.label !== undefined && typeof a.label !== "string") throw new ArgumentError('"label" must be a short text such as "Egyptian pillar"');
+      return { spec: spec(a.spec), ...(a.mode !== undefined ? { mode: a.mode } : {}), ...(a.label !== undefined && a.label.trim() ? { label: a.label.trim().slice(0, 60) } : {}) };
     },
   },
   {
