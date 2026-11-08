@@ -49,6 +49,36 @@ public final class AiSessions {
         return !busy && now - lastActive > IDLE_MS;
     }
 
+    /** How many colours the sessions of one player are told apart by before they start again. */
+    public static final int SLOTS = 6;
+
+    /**
+     * {@code argb} with its hue turned by 60 degrees for each {@code slot}, so one player's AI previews are each drawn in a colour of their own.
+     * Slot 0 is the colour as it is, a grey stays grey, and the alpha is kept.
+     */
+    public static int shade(int argb, int slot) {
+        int turns = Math.floorMod(slot, SLOTS);
+        if (turns == 0) return argb;
+        int a = argb >>> 24, r = (argb >> 16) & 255, g = (argb >> 8) & 255, b = argb & 255;
+        float max = Math.max(r, Math.max(g, b)), min = Math.min(r, Math.min(g, b)), d = max - min;
+        if (d == 0) return argb;
+        float h = max == r ? ((g - b) / d) % 6 : max == g ? (b - r) / d + 2 : (r - g) / d + 4;
+        h *= 60;
+        if (h < 0) h += 360;
+        float s = d / max, v = max / 255f;
+        h = (h + turns * 60f) % 360;
+        float c = v * s, x = c * (1 - Math.abs((h / 60f) % 2 - 1)), m = v - c, rr, gg, bb;
+        switch ((int) (h / 60f)) {
+            case 0 -> { rr = c; gg = x; bb = 0; }
+            case 1 -> { rr = x; gg = c; bb = 0; }
+            case 2 -> { rr = 0; gg = c; bb = x; }
+            case 3 -> { rr = 0; gg = x; bb = c; }
+            case 4 -> { rr = x; gg = 0; bb = c; }
+            default -> { rr = c; gg = 0; bb = x; }
+        }
+        return a << 24 | Math.round((rr + m) * 255) << 16 | Math.round((gg + m) * 255) << 8 | Math.round((bb + m) * 255);
+    }
+
     /** The box a build fills, corners included. */
     public record Region(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
         public boolean intersects(Region o) {

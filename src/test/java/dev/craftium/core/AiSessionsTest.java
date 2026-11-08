@@ -42,4 +42,19 @@ class AiSessionsTest {
         var box = AiSessions.around(List.of(new Point(3, 5, -2), new Point(-1, 7, 4)));
         assertEquals(new AiSessions.Region(-1, 5, -2, 3, 7, 4), box);
     }
+
+    @Test void eachSlotTurnsTheHueAndKeepsTheAlpha() {
+        int violet = 0x80a050ff;
+        assertEquals(violet, AiSessions.shade(violet, 0));
+        assertEquals(violet, AiSessions.shade(violet, AiSessions.SLOTS), "the colours start again after six");
+        var seen = new java.util.HashSet<Integer>();
+        for (int slot = 0; slot < AiSessions.SLOTS; slot++) {
+            int c = AiSessions.shade(violet, slot);
+            assertEquals(0x80, c >>> 24, "alpha is kept");
+            seen.add(c);
+        }
+        assertEquals(AiSessions.SLOTS, seen.size(), "six sessions, six colours");
+        assertEquals(0xffffff00, AiSessions.shade(0xffff0000, 1), "red turned 60 degrees is yellow");
+        assertEquals(0xff808080, AiSessions.shade(0xff808080, 3), "a grey stays grey");
+    }
 }
