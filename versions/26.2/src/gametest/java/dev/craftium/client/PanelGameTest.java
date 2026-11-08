@@ -27,6 +27,7 @@ import java.util.function.Consumer;
 public final class PanelGameTest {
     private record Case(String name, Tool tool, Consumer<Options> options) {}
 
+
     private final ClientGameTestContext c;
     private final TestSingleplayerContext w;
 
@@ -93,12 +94,17 @@ public final class PanelGameTest {
     }
 
     /** Sets the case up and returns what the panels laid out in one frame. */
-    private List<String> record(Case one) {
+    private List<String> record(Case one) { return recordNow(one); }
+
+    private List<String> recordNow(Case one) {
         c.runOnClient(mc -> {
             ClientState.options = new Options();
             ClientState.options.confirmEdits = false;
             CraftiumClient.resetEditor(); ClientState.rulerPoints.clear(); ClientState.rulers.clear(); ModifyPreview.edit(); ShapeObject.cancel();
             one.options.accept(ClientState.options);
+            // The info panel names the block under the cursor, and the view widget follows the camera's turn; both depend on where the player stands and looks when the
+            // world has loaded. High in the air and looking level, there is nothing under the cursor, and the camera is the one the table was recorded with.
+            mc.player.setPos(0.5, 250, 0.5); mc.player.setXRot(0); mc.player.setYRot(0); mc.player.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO); mc.player.setOldPosAndRot();
             ClientState.noticeUntil = 0; // a toast from an earlier case (choosing a transform tool with nothing selected) would still be showing for a few seconds
             resetToolList((EditorScreen) mc.gui.screen());
             ((EditorScreen) mc.gui.screen()).select(one.tool);
