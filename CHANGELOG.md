@@ -1,8 +1,8 @@
 # Changelog
 
-## 1.0.0-beta.1
+## 1.3.0-beta.1
 
-Changes since 0.9.1-beta.1.
+Changes since 1.2.0-beta.1.
 
 ### Tools
 - A Script Brush or mask script that calls itself without end no longer crashes the server. It stops with "Lua call depth exceeded; operation cancelled", as a script that runs out of instructions does.
