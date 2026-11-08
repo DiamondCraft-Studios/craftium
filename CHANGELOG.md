@@ -1,8 +1,8 @@
 # Changelog
 
-## 1.3.0-beta.1
+## Unreleased
 
-Changes since 1.2.0-beta.1.
+Changes since 1.3.0-beta.1.
 
 ### Tools
 - A Script Brush or mask script that calls itself without end no longer crashes the server. It stops with "Lua call depth exceeded; operation cancelled", as a script that runs out of instructions does.
@@ -12,6 +12,21 @@ Changes since 1.2.0-beta.1.
 
 ### Internal
 - Tools, their icons and the Lua sandbox were reorganised in preparation for plugins. Nothing else about how the editor behaves has changed.
+- A tool can declare its own settings (a number, a whole number, a switch or a choice), and the options panel draws them as a form. The tools the editor ships with declare none, and their panels are unchanged.
+- What a tool draws in the world, and the handles it shows, are drawn by the tool's own input handler instead of by the editor screen checking for each tool by name.
+
+## 1.3.0-beta.1
+
+Changes since 1.2.0-beta.1.
+
+### AI building
+- Several Claude sessions can build at once. Each has its own id, label, preview, undo list and selection, a tinted ghost, and a Build sessions gallery with a detail screen and a teleport to its build.
+- The AI bridge protocol is 3 (session ids); an oversized status trims session previews instead of failing.
+- A craftium-blockout skill blocks out rooms for mod and add-on landmarks.
+
+### Editor
+- Select outline in the Select menu.
+- The Options screen is a scroll view, and window titles drop the "Craftium /" prefix.
 
 ## 1.2.0-beta.1
 

@@ -18,6 +18,9 @@ public final class StatusFit {
     /** The previews other players are holding: left out before anything of the player's own. */
     static final String OTHERS = "sharedAi";
 
+    /** The player's own AI sessions, each of which may carry the data of a waiting preview. */
+    static final String SESSIONS = "aiSessions";
+
     private StatusFit() {}
 
     /**
@@ -33,6 +36,7 @@ public final class StatusFit {
         while (status.toString().length() > limit) {
             String biggest = null;
             int size = 0;
+            int session = -1;
             // What other players are doing goes first: the player's own selection, clipboard and previews matter more to them than somebody else's.
             var others = status.get(OTHERS);
             if (others != null && others.isJsonArray() && !others.getAsJsonArray().isEmpty()) biggest = OTHERS;
@@ -41,8 +45,14 @@ public final class StatusFit {
                 int length = value == null ? 0 : value.isJsonPrimitive() ? value.getAsString().length() : value.isJsonArray() ? value.toString().length() : 0;
                 if (length > size) { size = length; biggest = name; }
             }
+            // The player's own AI sessions carry their previews inside the list: the largest preview there competes with the rest.
+            if (!OTHERS.equals(biggest)) {
+                int at = largestSessionData(status);
+                if (at >= 0 && sessionDataLength(status, at) > size) { biggest = SESSIONS; session = at; }
+            }
             if (biggest == null) break; // nothing left to leave out: the rest is not ours to shrink
-            if (status.get(biggest).isJsonArray()) status.add(biggest, new JsonArray()); // a list of previews is left empty: none to show
+            if (session >= 0) status.getAsJsonArray(SESSIONS).get(session).getAsJsonObject().addProperty("data", ""); // that session's preview is left out, the session stays listed
+            else if (status.get(biggest).isJsonArray()) status.add(biggest, new JsonArray()); // a list of previews is left empty: none to show
             else status.addProperty(biggest, "");
             dropped.add(biggest);
         }
@@ -52,6 +62,23 @@ public final class StatusFit {
             status.addProperty("message", text.isEmpty() ? note : text + " · " + note);
         }
         return status.toString();
+    }
+
+    private static int sessionDataLength(JsonObject status, int index) {
+        var data = status.getAsJsonArray(SESSIONS).get(index).getAsJsonObject().get("data");
+        return data != null && data.isJsonPrimitive() ? data.getAsString().length() : 0;
+    }
+
+    /** The index in {@code aiSessions} of the entry with the most ghost data, or -1 when none carries any. */
+    private static int largestSessionData(JsonObject status) {
+        var list = status.get(SESSIONS);
+        if (list == null || !list.isJsonArray()) return -1;
+        int best = -1, size = 0;
+        for (int i = 0; i < list.getAsJsonArray().size(); i++) {
+            int length = sessionDataLength(status, i);
+            if (length > size) { size = length; best = i; }
+        }
+        return best;
     }
 
     /** The names of what {@link #fit} left out, for a message or a log. */

@@ -74,6 +74,17 @@ any time ("looks good, build it"). If it is unclear which they want, ask once.
   its state, drawn or not (`references/spec-pitfalls.md`).
 - When they say to build, apply what is waiting. A build too big to preview whole is applied in stages as usual.
 
+## Other sessions building at the same time
+
+The player can run several Claude sessions at once, each building somewhere else. Each has a preview and an undo list of its own, so
+`apply_preview`, `cancel_preview` and `undo` only ever touch yours.
+
+- Give every `preview_build` a short `label` ("Egyptian pillar", "Market stall"): the player tells sessions apart by it in the game.
+- `get_state` lists the others as `otherSessions` (label, state, box). Keep your site clear of those boxes, and tell the player if the
+  place they asked for is taken. A `preview_build` reply with `conflicts` means your build overlaps one: move it or ask.
+- If a tool says the player stopped this session, stop at once. Do not retry or build anything else; say what you were doing and wait.
+- If you are told the player already has six sessions, ask them to forget or stop one in the AI menu (Build sessions).
+
 ## Phase 0: Brief
 
 - Decide, and state in one or two lines: what, where, how big, what style. Ask only if the answer would change the

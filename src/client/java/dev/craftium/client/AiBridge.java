@@ -31,8 +31,10 @@ public final class AiBridge {
      * instead of failing on a tool the other side does not have. Bump it when a tool gains something the MCP server relies on.
      * 2: preview summaries, get_state's world, build spec v2 (materials, mixes, roof, stairs, group), the "world" view of
      * get_preview_blocks (read_blocks) and render_view's "angles".
+     * 3: AI sessions: every call carries the session id of the Claude session that made it (and preview_build a label), and get_state lists
+     * the other sessions.
      */
-    public static final int PROTOCOL = 2;
+    public static final int PROTOCOL = 3;
     private static final int BODY_LIMIT = 1_000_000, READ_BLOCKS = 32_768, WAIT_SECONDS = 20;
     private static final Gson GSON = new Gson();
     private static final Object LOCK = new Object();
@@ -46,6 +48,15 @@ public final class AiBridge {
     private static volatile long lastCall;
     private static volatile String lastTool = "";
     private static final long ACTIVE_MILLIS = 120_000;
+    /**
+     * The AI session and build label of the call being answered, which every request it makes to the server carries. The bridge answers one
+     * call at a time (its worker is a single thread), so these are the current call's for as long as it runs.
+     */
+    private static volatile String callSession = "", callLabel = "";
+    static String session() { return callSession; }
+    /** Whether a call from this AI session is being answered right now. */
+    static boolean workingOn(String id) { return working.get() > 0 && callSession.equals(id); }
+    private static final String STOPPED = "The player stopped this AI session. Do not retry or build anything else; tell the player what you were doing and wait for their instructions.";
     private AiBridge() {}
 
     public enum State { OFF, WAITING, ACTIVE, WORKING }
@@ -84,7 +95,8 @@ public final class AiBridge {
         if (state == State.OFF) return;
         var font = Minecraft.getInstance().font;
         boolean preview = ClientState.hasAiPending();
-        String text = state == State.WORKING ? "AI working…" : preview ? "AI preview" : "AI";
+        int previews = ClientState.aiPendingCount(), sessions = ClientState.aiSessions.size();
+        String text = state == State.WORKING ? "AI working…" : previews > 1 ? "AI previews ×" + previews : preview ? "AI preview" : sessions > 1 ? "AI ×" + sessions : "AI";
         int accent = preview && state != State.WORKING ? 0xffc9a0ff : colour(state);
         int width = font.width(text) + 22, x = g.guiWidth() - width - 6, y = g.guiHeight() - 20; // bottom right, below the key hints and clear of the tips and toasts at the top
         g.fill(x, y, x + width, y + 14, 0xb0101923);
@@ -98,6 +110,7 @@ public final class AiBridge {
             if (ClientState.options.aiBridge != running()) {
                 if (ClientState.options.aiBridge) start(); else stop();
             }
+            AiSessionActions.tick();
         });
         Runtime.getRuntime().addShutdownHook(new Thread(AiBridge::stop, "craftium-ai-bridge-shutdown"));
     }
@@ -173,6 +186,7 @@ public final class AiBridge {
             token = "";
             lastCall = 0;
             lastTool = "";
+            toldPlayerOfOlderPlugin = false;
             working.set(0);
             try { Files.deleteIfExists(FILE); } catch (IOException ignored) {}
         }
@@ -230,7 +244,7 @@ public final class AiBridge {
             JsonObject result;
             working.incrementAndGet();
             lastTool = tool.length() > 24 ? tool.substring(0, 24) : tool;
-            try { result = call(tool, args); }
+            try { result = call(tool, args); if (!args.has("session")) warnSessionless(result); }
             catch (IllegalArgumentException | IllegalStateException e) { result = error(e.getMessage()); }
             catch (TimeoutException e) { result = error("Minecraft did not answer in time; is the game paused or loading?"); }
             catch (Exception e) { Craftium.LOG.warn("AI bridge tool {} failed", tool, e); result = error("Internal error: " + e.getClass().getSimpleName()); }
@@ -238,6 +252,21 @@ public final class AiBridge {
             reply(client, 200, result);
         } catch (IOException ignored) {
             // A dropped or slow connection is not worth reporting.
+        }
+    }
+
+    private static volatile boolean toldPlayerOfOlderPlugin;
+
+    /**
+     * A call without a session id comes from a Craftium plugin that predates sessions. Every such app shares the one default session, so two
+     * of them trample each other's previews and one can apply or undo the other's build. The AI is told in its answer, and the player once.
+     */
+    private static void warnSessionless(JsonObject result) {
+        if (result.has("ok") && !result.get("ok").getAsBoolean()) return; // an old plugin shows only the error text of a refusal
+        result.addProperty("pluginWarning", "This Craftium plugin is older than the game's Craftium and cannot name its session, so every Claude session using an old plugin shares ONE preview and ONE undo list: another session's build can be applied or replaced by you. Tell the player to update the Craftium plugin (or the .mcpb extension) before building with more than one Claude session at a time.");
+        if (!toldPlayerOfOlderPlugin) {
+            toldPlayerOfOlderPlugin = true;
+            Minecraft.getInstance().execute(() -> ClientState.notify("An AI app uses an older Craftium plugin: its sessions share one preview. Update the plugin to build in parallel."));
         }
     }
 
@@ -272,9 +301,18 @@ public final class AiBridge {
     // ---- tools --------------------------------------------------------------------------------------------------
 
     private static JsonObject call(String tool, JsonObject args) throws Exception {
+        // Which AI session is asking, and what it calls the build, ride on every call; an app from before sessions sends neither and is the default session.
+        callSession = dev.craftium.core.AiSessions.cleanId(args.has("session") && args.get("session").isJsonPrimitive() ? args.get("session").getAsString() : "");
+        callLabel = dev.craftium.core.AiSessions.cleanLabel(args.has("label") && args.get("label").isJsonPrimitive() ? args.get("label").getAsString() : "");
+        var asking = ClientState.aiSession(callSession);
+        if (asking != null && asking.info().stopped()) throw new IllegalStateException(STOPPED);
         return switch (tool) {
-            case "get_state" -> onClient(() -> state(true));
-            case "read_selection" -> read("ai_selection", null, null);
+            case "get_state" -> {
+                // The first look at the world is when this session takes the player's selection as its own (see Session#pinned on the server).
+                if (serverSupported() && ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SESSIONS)) request("ai_selection_pin", () -> CraftiumClient.sendAi("ai_selection_pin", callSession, callLabel));
+                yield onClient(() -> state(true));
+            }
+            case "read_selection" -> read(args.has("refresh") && args.get("refresh").isJsonPrimitive() && args.get("refresh").getAsBoolean() ? "ai_selection_refresh" : "ai_selection", null, null);
             case "get_preview_blocks" -> {
                 var from = point(args, "from"); var to = point(args, "to");
                 String view = args.has("view") ? args.get("view").getAsString() : "after";
@@ -310,9 +348,9 @@ public final class AiBridge {
                 String action = add ? "ai_build_preview_add" : "ai_build_preview";
                 yield request(action, () -> previewBuild(spec, action));
             }
-            case "apply_preview" -> request("ai_apply", () -> CraftiumClient.send("ai_apply", null, null));
-            case "cancel_preview" -> request("ai_cancel", () -> CraftiumClient.send("ai_cancel", null, null));
-            case "undo" -> request("ai_undo", () -> CraftiumClient.send("ai_undo", null, null));
+            case "apply_preview" -> request("ai_apply", () -> CraftiumClient.sendAi("ai_apply", callSession, callLabel));
+            case "cancel_preview" -> request("ai_cancel", () -> CraftiumClient.sendAi("ai_cancel", callSession, callLabel));
+            case "undo" -> request("ai_undo", () -> CraftiumClient.sendAi("ai_undo", callSession, callLabel));
             default -> throw new IllegalArgumentException("Unknown tool \"" + tool + "\"");
         };
     }
@@ -358,7 +396,7 @@ public final class AiBridge {
             if (mc.player == null || mc.level == null) throw new IllegalStateException("Not in a world");
             if (!CraftiumClient.supported()) throw new IllegalStateException("This world has no Craftium on the server; install it there to read it");
             awaitingData = data;
-            CraftiumClient.send(action, from, to);
+            CraftiumClient.sendAi(action, callSession, callLabel);
             return null;
         });
         lastSent = System.nanoTime();
@@ -439,7 +477,7 @@ public final class AiBridge {
         var o = ClientState.options;
         o.buildSpec = spec;
         // The spec rides along on this one request and is not kept in the saved settings.
-        try { CraftiumClient.send(action, null, null); }
+        try { CraftiumClient.sendAi(action, callSession, callLabel); }
         finally { o.buildSpec = ""; }
     }
 
@@ -475,15 +513,47 @@ public final class AiBridge {
         out.add("player", player);
         var status = ClientState.status;
         var selection = new JsonObject();
-        selection.addProperty("size", status.selectionSize());
-        if (status.selectionSize() > 0 && status.min() != null && status.max() != null) {
-            selection.add("min", array(status.min().x(), status.min().y(), status.min().z()));
-            selection.add("max", array(status.max().x(), status.max().y(), status.max().z()));
-            selection.add("dimensions", array(status.max().x() - status.min().x() + 1, status.max().y() - status.min().y() + 1, status.max().z() - status.min().z() + 1));
+        var pinned = ClientState.aiSession(callSession);
+        boolean pin = pinned != null && pinned.info().pinBlocks() > 0 && pinned.info().pinMin() != null && pinned.info().pinMax() != null;
+        // The selection this session started with, not the one the player has now, until the session is told to use the new one.
+        var min = pin ? pinned.info().pinMin() : status.min();
+        var max = pin ? pinned.info().pinMax() : status.max();
+        int size = pin ? pinned.info().pinBlocks() : status.selectionSize();
+        selection.addProperty("size", size);
+        if (size > 0 && min != null && max != null) {
+            selection.add("min", array(min.x(), min.y(), min.z()));
+            selection.add("max", array(max.x(), max.y(), max.z()));
+            selection.add("dimensions", array(max.x() - min.x() + 1, max.y() - min.y() + 1, max.z() - min.z() + 1));
+        }
+        if (pin) {
+            selection.addProperty("pinned", true);
+            if (pinned.info().pinChanged()) {
+                selection.addProperty("playerSelectionChanged", true);
+                selection.addProperty("playerSelectionNow", status.selectionSize() + " blocks" + (status.selectionSize() > 0 && status.min() != null && status.max() != null ? " from " + status.min().x() + "," + status.min().y() + "," + status.min().z() + " to " + status.max().x() + "," + status.max().y() + "," + status.max().z() : ""));
+                selection.addProperty("note", "This is the selection you started with, and you keep working with it. The player has selected something else since: use the new one only if the player says to, by calling read_selection with refresh true.");
+            }
         }
         out.add("selection", selection);
-        previewReport(out, ClientState.aiPending);
-        out.addProperty("undoSteps", status.aiUndo());
+        var mine = ClientState.aiSession(callSession);
+        previewReport(out, mine == null ? GhostBlocks.EMPTY : mine.ghost());
+        out.addProperty("undoSteps", mine == null ? 0 : mine.info().undo());
+        var others = new JsonArray();
+        for (var view : ClientState.aiSessions) {
+            if (view == mine) continue;
+            var info = view.info();
+            var one = new JsonObject();
+            one.addProperty("label", info.label());
+            one.addProperty("state", info.state());
+            one.addProperty("blocks", info.blocks());
+            if (info.min() != null && info.max() != null) { one.add("min", array(info.min().x(), info.min().y(), info.min().z())); one.add("max", array(info.max().x(), info.max().y(), info.max().z())); }
+            one.addProperty("idleSeconds", view.idleMs() / 1000);
+            others.add(one);
+        }
+        if (!others.isEmpty()) {
+            out.add("otherSessions", others);
+            out.addProperty("otherSessionsNote", "Other AI sessions are building for this player. Keep this build clear of the boxes they hold or built, and do not apply, discard or undo theirs.");
+        }
+        if (mine != null && !mine.info().label().isEmpty()) out.addProperty("sessionLabel", mine.info().label());
         out.addProperty("busy", status.busy());
         out.addProperty("lastMessage", status.message());
         if (full && mc.level != null) {

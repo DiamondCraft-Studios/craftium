@@ -31,6 +31,8 @@ final class GhostBlocks {
 
     /** Set on a preview an AI app made, which is drawn in violet so it is never taken for one of the player's own edits. */
     boolean ai;
+    /** Which of the player's AI sessions made it (see AiSessions#shade): each is drawn in a colour of its own. */
+    int slot;
     /** Set on another player's AI preview, which is drawn in teal so it is told apart from the player's own violet one. */
     boolean shared;
     private int[] box; // x0, y0, z0, x1, y1, z1 of the blocks it places, worked out when first asked for
@@ -115,7 +117,7 @@ final class GhostBlocks {
         Vec3 at=new Vec3(origin.x(),origin.y(),origin.z());
         if(outline){
             var o=ClientState.options;
-            int line=shared?o.sharedAiColor:ai?o.aiColor:o.hoverColor,fill=shared?o.sharedAiFill:ai?o.aiFill:o.hoverFill;
+            int line=shared?o.sharedAiColor:ai?dev.craftium.core.AiSessions.shade(o.aiColor,slot):o.hoverColor,fill=shared?o.sharedAiFill:ai?dev.craftium.core.AiSessions.shade(o.aiFill,slot):o.hoverFill;
             if(!placedShape.isEmpty())placedShape.drawPlain(at,line,(float)ClientState.options.selectionWidth,fill,true,false);
             if(!removedShape.isEmpty())removedShape.drawFill(at,ClientState.options.removedFill);
         }
@@ -133,6 +135,6 @@ final class GhostBlocks {
             drawnPlaces=models<states.size()?cachedPlaces.subList(0,models):cachedPlaces;
             drawnStates=models<states.size()?states.subList(0,models):states;drawnFor=cachedPlaces;
         }
-        Overlay.cachedBlockStates(drawnStates,drawnPlaces,shared?ClientState.options.sharedAiTint:ai?ClientState.options.aiTint:ClientState.options.previewTint);
+        Overlay.cachedBlockStates(drawnStates,drawnPlaces,shared?ClientState.options.sharedAiTint:ai?dev.craftium.core.AiSessions.shade(ClientState.options.aiTint,slot):ClientState.options.previewTint);
     }
 }

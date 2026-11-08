@@ -137,22 +137,23 @@ public final class StudioScreen extends CraftiumScreen {
         int y=top+70+62;
         boolean on=AiBridge.running();
         button(on?"Turn off AI building":"Turn on AI building",left,y,160,24,()->{AiBridge.toggle();message=AiBridge.running()?"AI building is on":"AI building is off";init();}).lit(on);
-        button("Apply preview",left+166,y,100,24,()->send("ai_apply"));
-        button("Discard preview",left+272,y,100,24,()->send("ai_cancel"));
-        button("Undo AI build",left+378,y,115,24,()->send("ai_undo"));
-        button("Redo AI build",left+499,y,117,24,()->send("ai_redo"));
+        button("Apply preview",left+166,y,100,24,()->CraftiumClient.sendAiToOnly("ai_apply"));
+        button("Discard preview",left+272,y,100,24,()->CraftiumClient.sendAiToOnly("ai_cancel"));
+        button("Undo AI build",left+378,y,115,24,()->CraftiumClient.sendAiToOnly("ai_undo"));
+        button("Redo AI build",left+499,y,117,24,()->CraftiumClient.sendAiToOnly("ai_redo"));
         // Other players' AI previews are drawn in teal with their name; this hides them, and is remembered like the other settings.
-        addRenderableWidget(new FlatCheckbox(left,top+70+108,616,20,"Show AI previews from other players",ClientState.options.showSharedAiPreviews,()->{ClientState.options.showSharedAiPreviews=!ClientState.options.showSharedAiPreviews;init();}));
+        button("Build sessions… ("+ClientState.aiSessions.size()+")",left+390,top+70+108,226,20,()->ClientCompat.setScreen(minecraft,new AiSessionsScreen(this)));
+        addRenderableWidget(new FlatCheckbox(left,top+70+108,380,20,"Show AI previews from other players",ClientState.options.showSharedAiPreviews,()->{ClientState.options.showSharedAiPreviews=!ClientState.options.showSharedAiPreviews;init();}));
         int steps=top+70+138;
         labels.add(new Label("HOW IT WORKS",left,steps));
-        labels.add(new Label("1.  In Claude Code or Cowork, add the plugin, once:  /plugin marketplace add DiamondCraft-Studios/craftium",left,steps+15));
+        labels.add(new Label("1.  In Claude Code or Cowork, add it once:  /plugin marketplace add DiamondCraft-Studios/craftium  (or the repo's path)",left,steps+15));
         labels.add(new Label("2.  Install it:  /plugin install craftium@craftium  (it needs Node.js 18 or newer on your PATH).",left,steps+28));
         labels.add(new Label("3.  Turn on AI building above. Craftium remembers it.",left,steps+41));
         labels.add(new Label("4.  Ask Claude for a build, such as \"Build an Egyptian pillar in front of me\".",left,steps+54));
         labels.add(new Label("5.  Look at the ghost in your world. Ask for changes, then say \"apply it\", or press Apply preview.",left,steps+67));
         labels.add(new Label("Nothing is built until it is applied. Undo takes a build back, and Redo brings it again.",left,steps+86));
-        labels.add(new Label("Using a launcher profile? Give the plugin this game's folder, below, as its Minecraft folder. The craftium.mcpb",left,steps+99));
-        labels.add(new Label("extension is for Claude Desktop's Chat tab, where plugins do not run; use one or the other. Details: docs/AI.md",left,steps+112));
+        labels.add(new Label("Game from CurseForge, Modrinth App or Prism? Set the plugin's \"Minecraft folder\" setting to this game's folder, below.",left,steps+99));
+        labels.add(new Label("The craftium.mcpb extension is for Claude Desktop's Chat tab; use one or the other. Details: docs/AI.md",left,steps+112));
         // The folder this game keeps its settings in, which is what the plugin's Minecraft folder has to be when it is not the default .minecraft.
         String folder=AiBridge.gameFolder();
         labels.add(new Label("This game's folder: "+(font.width(folder)>420?"…"+font.plainSubstrByWidth(folder,420,true):folder),left,steps+130));
@@ -172,7 +173,7 @@ public final class StudioScreen extends CraftiumScreen {
         g.fill(x+12,y+13,x+24,y+25,AiBridge.colour(state));
         g.text(font,headline,x+34,y+12,o.uiText,false);
         g.text(font,font.plainSubstrByWidth(detail,width-46),x+34,y+30,o.uiMuted,false);
-        if(ClientState.hasAiPending())g.text(font,"Preview waiting: "+ClientState.aiPending.total()+" blocks. Apply it to build it, or discard it.",x,top+70+96,0xffffdca8,false);
+        if(ClientState.hasAiPending()){int n=ClientState.aiPendingCount();g.text(font,n==1?"Preview waiting: "+ClientState.aiPendingBlocks()+" blocks. Apply it to build it, or discard it.":n+" previews waiting ("+ClientState.aiPendingBlocks()+" blocks in all). Apply or discard them one by one in Build sessions.",x,top+70+96,0xffffdca8,false);}
     }
     private void createField(String name,int x,int y,int width){
         try{
