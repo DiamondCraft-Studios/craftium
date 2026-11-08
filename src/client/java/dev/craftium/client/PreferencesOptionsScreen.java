@@ -4,6 +4,7 @@ import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
 import dev.craftium.core.Options;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -61,31 +62,48 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
     private static final List<String> TABS=List.copyOf(GROUPS.keySet());
 
     private final Screen parent;
-    private int offset,tab;
+    private int tab;
     private boolean draggingBar;
+    /** How far the list is scrolled, in pixels. The rows are one long list, clipped to the space between the tabs' top and the footer. */
+    private double scroll;
+    /** The controls of the rows, and where each sits in the list before scrolling. They are drawn and moved here, not by the screen, so they can be clipped. */
+    private final java.util.List<AbstractWidget> listWidgets=new java.util.ArrayList<>();
+    private final java.util.List<Integer> listBase=new java.util.ArrayList<>();
     private List<Row> rows(){return GROUPS.get(TABS.get(tab));}
 
     PreferencesOptionsScreen(Screen parent){super(Component.literal("Options"));this.parent=parent;}
 
-    private int rowsPerPage(){return Math.max(1,(height-LIST_TOP-80)/ROW);}
+    private int viewTop(){return LIST_TOP-6;}
+    private int viewBottom(){return height-96;}
+    private int viewHeight(){return Math.max(ROW,viewBottom()-viewTop());}
+    private int maxScroll(){return Math.max(0,rows().size()*ROW-viewHeight());}
+    /** Adds the control of a row; {@code base} is the row's place in the list. */
+    private <T extends AbstractWidget> T track(int base,T widget){addWidget(widget);listWidgets.add(widget);listBase.add(base);return widget;}
+    /** Puts every row's controls where the scrolling has them, and turns off the ones that are out of sight so a click cannot reach them. */
+    private void layout(){
+        scroll=Math.clamp(scroll,0,maxScroll());
+        for(int i=0;i<listWidgets.size();i++){
+            var w=listWidgets.get(i);int y=viewTop()+listBase.get(i)-(int)scroll;
+            w.setY(y);w.visible=y+w.getHeight()>viewTop()&&y<viewBottom();
+        }
+    }
     private int left(){return Math.max(12,(width-600)/2)+120;}
     private int tabsLeft(){return left()-120;}
 
     @Override protected void init(){
-        clearWidgets();
-        var o=ClientState.options;int x=left(),per=rowsPerPage();var ROWS=rows(); // the rows of the chosen tab
-        for(int t=0;t<TABS.size();t++){int index=t;addRenderableWidget(new FlatButton(tabsLeft(),LIST_TOP-6+t*ROW,110,20,TABS.get(t),()->{tab=index;offset=0;init();}).lit(t==tab));}
-        offset=Math.clamp(offset,0,Math.max(0,ROWS.size()-per));
-        for(int i=offset;i<Math.min(ROWS.size(),offset+per);i++){
-            int y=LIST_TOP-6+(i-offset)*ROW;
+        clearWidgets();listWidgets.clear();listBase.clear();
+        var o=ClientState.options;int x=left();var ROWS=rows(); // the rows of the chosen tab
+        for(int t=0;t<TABS.size();t++){int index=t;addRenderableWidget(new FlatButton(tabsLeft(),LIST_TOP-6+t*ROW,110,20,TABS.get(t),()->{tab=index;scroll=0;init();}).lit(t==tab));}
+        for(int i=0;i<ROWS.size();i++){
+            int y=viewTop()+i*ROW,base=i*ROW;
             if(ROWS.get(i) instanceof Toggle t){
-                addRenderableWidget(new FlatButton(x+245,y,180,20,t.get().apply(o)?"On":"Off",()->{t.set().accept(o,!t.get().apply(o));init();}));
-                addRenderableWidget(new FlatButton(x+430,y,50,20,"Reset",()->{t.set().accept(o,t.get().apply(DEFAULTS));init();}));
+                track(base,new FlatButton(x+245,y,180,20,t.get().apply(o)?"On":"Off",()->{t.set().accept(o,!t.get().apply(o));init();}));
+                track(base,new FlatButton(x+430,y,50,20,"Reset",()->{t.set().accept(o,t.get().apply(DEFAULTS));init();}));
             }else if(ROWS.get(i) instanceof Cycle c){
-                addRenderableWidget(new FlatButton(x+245,y,180,20,c.get().apply(o),()->{c.next().accept(o);init();}));
-                addRenderableWidget(new FlatButton(x+430,y,50,20,"Reset",()->{c.reset().accept(o,DEFAULTS);init();}));
+                track(base,new FlatButton(x+245,y,180,20,c.get().apply(o),()->{c.next().accept(o);init();}));
+                track(base,new FlatButton(x+430,y,50,20,"Reset",()->{c.reset().accept(o,DEFAULTS);init();}));
             }else if(ROWS.get(i) instanceof Link link){
-                addRenderableWidget(new FlatButton(x+245,y,180,20,"Open…",()->ClientCompat.setScreen(minecraft,link.open().apply(this))));
+                track(base,new FlatButton(x+245,y,180,20,"Open…",()->ClientCompat.setScreen(minecraft,link.open().apply(this))));
             }else if(ROWS.get(i) instanceof Field f){
                 var box=new EditBox(font,x+245,y,180,20,Component.literal(""));
                 boolean[] fixing={false};
@@ -96,8 +114,8 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
                     if(clean.isEmpty())return;
                     f.set().accept(o,Math.clamp(Long.parseLong(clean),f.min(),f.max()));
                 });
-                addRenderableWidget(box);
-                addRenderableWidget(new FlatButton(x+430,y,50,20,"Reset",()->{f.set().accept(o,f.get().apply(DEFAULTS));init();}));
+                track(base,box);
+                track(base,new FlatButton(x+430,y,50,20,"Reset",()->{f.set().accept(o,f.get().apply(DEFAULTS));init();}));
             }else if(ROWS.get(i) instanceof Number n){
                 double span=n.max()-n.min();
                 var slider=new FlatSlider(x+245,y,180,20,Component.empty(),(n.get().apply(o)-n.min())/span){
@@ -105,14 +123,13 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
                     protected void applyValue(){n.set().accept(o,n.min()+(int)Math.round(value*span));}
                 };
                 slider.range(n.min(),n.max(),n.get().apply(DEFAULTS));slider.setRaw((n.get().apply(o)-n.min())/span);
-                addRenderableWidget(slider);
-                addRenderableWidget(new FlatButton(x+430,y,50,20,"Reset",()->{n.set().accept(o,n.get().apply(DEFAULTS));init();}));
+                track(base,slider);
+                track(base,new FlatButton(x+430,y,50,20,"Reset",()->{n.set().accept(o,n.get().apply(DEFAULTS));init();}));
             }
         }
-        addRenderableWidget(new FlatButton(x,height-62,32,20,"‹",()->{offset-=per;init();}));
-        addRenderableWidget(new FlatButton(x+37,height-62,32,20,"›",()->{offset+=per;init();}));
         addRenderableWidget(new FlatButton(x+280,height-62,110,20,"Reset these",()->{for(Row r:rows())reset(r);init();}));
         addRenderableWidget(new FlatButton(x+395,height-62,85,20,"Done",this::onClose));
+        layout();
     }
     private static String labelOf(Row row){return switch(row){case Toggle t->t.label();case Number n->n.label();case Field f->f.label();case Link l->l.label();case Cycle c->c.label();};}
     private static String aboutOf(Row row){return switch(row){case Toggle t->t.about();case Number n->n.about();case Field f->f.about();case Link l->l.about();case Cycle c->c.about();};}
@@ -126,18 +143,23 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
 
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){
         g.fill(0,0,width,height,0xf510151c);
-        int x=left(),per=rowsPerPage();var ROWS=rows(); // the rows of the chosen tab
+        int x=left();var ROWS=rows(); // the rows of the chosen tab
         g.text(font,"OPTIONS",tabsLeft(),14,0xffdce6ef,false);
         g.text(font,"Pick a category on the left. Ctrl-click a slider to type a value; middle-click resets it.",tabsLeft(),27,0xff8595a8,false);
-        for(int i=offset;i<Math.min(ROWS.size(),offset+per);i++){
-            int y=LIST_TOP-6+(i-offset)*ROW;Row row=ROWS.get(i);
-            String label=labelOf(row),about=aboutOf(row);
-            g.text(font,label,x,y+6,0xffdce6ef,false);
-            if(mouseX>=x&&mouseX<x+240&&mouseY>=y&&mouseY<y+20)g.text(font,font.plainSubstrByWidth(about,width-x*2),x,height-92,0xff8595a8,false);
+        String about="";
+        g.enableScissor(0,viewTop(),width,viewBottom()); // the rows scroll under this: whatever is above or below the list is cut off
+        for(int i=0;i<ROWS.size();i++){
+            int y=viewTop()+i*ROW-(int)scroll;
+            if(y+20<viewTop()||y>viewBottom())continue;
+            Row row=ROWS.get(i);
+            g.text(font,labelOf(row),x,y+6,0xffdce6ef,false);
+            if(mouseX>=x&&mouseX<x+240&&mouseY>=Math.max(y,viewTop())&&mouseY<Math.min(y+20,viewBottom()))about=aboutOf(row);
         }
-        g.text(font,"Rows "+(offset+1)+"–"+Math.min(ROWS.size(),offset+per)+" of "+ROWS.size(),x+80,height-79,0xff8595a8,false);
-        if(ROWS.size()>per){ // the scrollbar: its handle is as long as the part of the list that shows
-            int top=barTop(),track=barHeight(),thumb=thumbHeight(ROWS.size(),per),max=ROWS.size()-per,thumbY=top+(max==0?0:(track-thumb)*offset/max);
+        for(var w:listWidgets)if(w.visible)g.widget(w,mouseX,mouseY,delta);
+        g.disableScissor();
+        if(!about.isEmpty())g.text(font,font.plainSubstrByWidth(about,width-x*2),x,height-92,0xff8595a8,false);
+        if(maxScroll()>0){ // the scrollbar: its handle is as long as the part of the list that shows
+            int top=viewTop(),track=viewHeight(),thumb=thumbHeight(),thumbY=top+(int)((track-thumb)*(scroll/maxScroll()));
             g.fill(barX(),top,barX()+BAR,top+track,0xff1b2838);
             g.fill(barX(),thumbY,barX()+BAR,thumbY+thumb,draggingBar?0xff7cc4ff:0xff4a6585);
         }
@@ -146,19 +168,20 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
 
     private static final int BAR=6;
     private int barX(){return left()+496;}
-    private int barTop(){return LIST_TOP-6;}
-    private int barHeight(){return rowsPerPage()*ROW-4;}
-    private int thumbHeight(int rows,int per){return Math.max(20,barHeight()*per/rows);}
-    /** Sets the first row shown from where the bar is held. */
+    private int thumbHeight(){return Math.max(20,viewHeight()*viewHeight()/Math.max(viewHeight(),rows().size()*ROW));}
+    /** Scrolls to where the bar is held. */
     private void dragTo(double y){
-        int rows=rows().size(),per=rowsPerPage(),max=Math.max(0,rows-per),travel=barHeight()-thumbHeight(rows,per);
+        int travel=viewHeight()-thumbHeight();
         if(travel<=0)return;
-        int next=(int)Math.clamp(Math.round((y-barTop()-thumbHeight(rows,per)/2.0)/travel*max),0,max);
-        if(next!=offset){offset=next;init();}
+        scroll=Math.clamp((y-viewTop()-thumbHeight()/2.0)/travel*maxScroll(),0,maxScroll());layout();
     }
     @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event,boolean twice){
-        if(event.button()==0&&rows().size()>rowsPerPage()&&event.x()>=barX()-3&&event.x()<barX()+BAR+4&&event.y()>=barTop()&&event.y()<barTop()+barHeight()){draggingBar=true;dragTo(event.y());return true;}
-        return super.mouseClicked(event,twice);
+        if(event.button()==0&&maxScroll()>0&&event.x()>=barX()-3&&event.x()<barX()+BAR+4&&event.y()>=viewTop()&&event.y()<viewTop()+viewHeight()){draggingBar=true;dragTo(event.y());return true;}
+        // A control that is partly scrolled out of the list is still there under the tabs and the footer: a click outside the list does not reach it.
+        boolean inList=event.y()>=viewTop()&&event.y()<viewBottom();
+        if(!inList)for(var w:listWidgets)w.active=false;
+        try{return super.mouseClicked(event,twice);}
+        finally{if(!inList)for(var w:listWidgets)w.active=true;}
     }
     @Override public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event,double dx,double dy){
         if(draggingBar){dragTo(event.y());return true;}
@@ -168,7 +191,7 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
         if(draggingBar){draggingBar=false;return true;}
         return super.mouseReleased(event);
     }
-    @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){offset+=vertical<0?1:-1;init();return true;}
+    @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){scroll=Math.clamp(scroll-vertical*ROW*1.5,0,maxScroll());layout();return true;}
     @Override public boolean isPauseScreen(){return false;}
     @Override public void onClose(){ClientState.save();ClientCompat.setScreen(minecraft,parent);}
 }
