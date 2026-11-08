@@ -14,7 +14,7 @@ final class InventoryPaletteScreen extends CraftiumScreen {
     InventoryPaletteScreen(Screen parent){super(Component.literal("Craftium Inventory"));this.parent=parent;}
     @Override protected void init(){left=(width-276)/2;top=(height-190)/2;addRenderableWidget(new FlatButton(left+156,top+163,120,22,"Return",this::onClose));}
     @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
-    @Override protected void draw(Gfx g,int x,int y,float delta){g.fill(0,0,width,height,0xee101923);g.fill(left-12,top-25,left+288,top+198,0xff172330);g.text(font,"CRAFTIUM  /  INVENTORY",left,top-16,0xffb5dcfc,false);
+    @Override protected void draw(Gfx g,int x,int y,float delta){g.fill(0,0,width,height,0xee101923);g.fill(left-12,top-25,left+288,top+198,0xff172330);g.text(font,"INVENTORY",left,top-16,0xffb5dcfc,false);
         for(int i=0;i<36;i++){int row=i<9?3:(i-9)/9,col=i%9,bx=left+col*30,by=top+row*30+(row==3?9:0);boolean over=x>=bx&&x<bx+26&&y>=by&&y<by+26;g.fill(bx,by,bx+26,by+26,over?Hover.fill(0xff25364a):0xff25364a);if(over)g.outline(bx,by,26,26,ClientState.options.uiAccent);var item=minecraft.player.getInventory().getItem(i);if(!item.isEmpty()){g.item(item,bx+5,by+5);if(x>=bx&&x<bx+26&&y>=by&&y<by+26)g.text(font,item.getHoverName(),left,top+145,0xffffdca8,false);}}
         g.text(font,"Click a block to use it in the editor",left,top+132,0xff9db5cb,false);drawWidgets(g,x,y,delta);
     }

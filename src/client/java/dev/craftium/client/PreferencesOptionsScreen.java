@@ -126,7 +126,7 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){
         g.fill(0,0,width,height,0xf510151c);
         int x=left(),per=rowsPerPage();var ROWS=rows(); // the rows of the chosen tab
-        g.text(font,"CRAFTIUM / OPTIONS",tabsLeft(),14,0xffdce6ef,false);
+        g.text(font,"OPTIONS",tabsLeft(),14,0xffdce6ef,false);
         g.text(font,"Pick a category on the left. Ctrl-click a slider to type a value; middle-click resets it.",tabsLeft(),27,0xff8595a8,false);
         for(int i=page*per;i<Math.min(ROWS.size(),(page+1)*per);i++){
             int y=LIST_TOP-6+(i-page*per)*ROW;Row row=ROWS.get(i);
