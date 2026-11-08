@@ -878,15 +878,15 @@ public final class EditorServer {
         for(var c:merged.changes()){var old=before.get(c.pos());if(old==null||old.after().state()!=c.after().state()||!Objects.equals(old.after().data(),c.after().data()))out.add(c);}
         return new Session.Edit(merged.name(),out,List.of(),merged.flags());
     }
-    private static void start(ServerPlayer player,Session s,Session.Edit edit) {
+    /** Every edit comes in here: it is checked by the {@link EditGate}, then built, or held as a ghost until the player confirms it. */
+    static void start(ServerPlayer player,Session s,Session.Edit edit) {
         if(s.fromBuilder)edit=edit.withBuilder(true);
         if(s.shapeAtRequest!=null&&!edit.changes().isEmpty()){ // a shape that was built goes back to waiting to be built when it is undone
             var change=edit.selection()==null?Session.SelectionChange.restoring(Map.of(),Map.of()):edit.selection();
             edit=edit.withSelection(change.with(Map.of("shape",s.shapeAtRequest),Map.of("shape","none")));
         }
         if(edit.changes().isEmpty() && edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()){var why=s.nothingChangedBecause;s.nothingChangedBecause=null;send(player,s,why==null?"No matching blocks changed":"No matching blocks changed: "+why,false);return;}
-        if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller region");
-        EditProtection.check(player,edit);
+        EditGate.check(player,edit);
         if(s.confirmEdits&&!s.bypassConfirm){stage(player,s,edit);return;}
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
         begin(player,s,edit,false,false,s.requestStroke,false,s.requestRecord);
