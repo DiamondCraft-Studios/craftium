@@ -39,6 +39,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             if("interaction".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.InteractionGameTest.run(ctx,world);return;}
             if("icons".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.IconSheetGameTest.run(ctx);return;}
             if("golden".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){GoldenToolGameTest.run(ctx,world);return;}
+            if("plugintools".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.server.PluginToolGameTest.run(ctx,world);return;}
             if("actions".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.server.ActionGameTest.run(ctx,world);return;}
             if("panel".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.PanelGameTest.run(ctx,world);return;}
             if("overlay".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.OverlayGameTest.run(ctx,world);return;}
