@@ -9,6 +9,13 @@ public final class Options {
     public enum ModifyMode { TRANSLATE_COPIES, ROTATE_COPIES, REVOLVE, TWIST }
     public enum ShapeKind { BRUSH, SPHERE, CUBOID, OCTAHEDRON, SUPERSPHERE, CYLINDER, TUBE, CONE, PYRAMID, TORUS, DODECAHEDRON, ICOSAHEDRON, DISK, PLANE, POLYGON, SPIRAL }
     public Tool tool = Tool.BOX_SELECT;
+    /** The id of a plugin's tool in use ({@code plugin_id:tool}), or null when it is one of the editor's own, which {@link #tool} names. */
+    public String pluginTool;
+    /** The values of that tool's declared settings, by the id of each. The server holds them to what the tool declared, so what arrives here is only checked to be well formed. */
+    public java.util.Map<String, Double> toolSettings = new java.util.HashMap<>();
+    /** The most settings a tool can have values for in one request. */
+    public static final int MAX_TOOL_SETTINGS = 64;
+    private static final java.util.regex.Pattern PLUGIN_TOOL = java.util.regex.Pattern.compile("[a-z][a-z0-9_]*:[a-z][a-z0-9_]*"), SETTING = java.util.regex.Pattern.compile("[a-z][a-z0-9_]*");
     public BrushMath.Shape shape = BrushMath.Shape.SPHERE;
     public Selection.Mode mode = Selection.Mode.REPLACE;
     public int radius = 5;
@@ -307,6 +314,11 @@ public final class Options {
 
     public void validate() {
         if (tool == null || shape == null || mode == null) throw new IllegalArgumentException("Invalid tool options");
+        if (pluginTool != null && !PLUGIN_TOOL.matcher(pluginTool).matches()) throw new IllegalArgumentException("Invalid plugin tool");
+        if (toolSettings == null) toolSettings = new java.util.HashMap<>();
+        if (toolSettings.size() > MAX_TOOL_SETTINGS) throw new IllegalArgumentException("Too many tool settings");
+        for (var setting : toolSettings.entrySet())
+            if (setting.getKey() == null || !SETTING.matcher(setting.getKey()).matches() || setting.getValue() == null || !Double.isFinite(setting.getValue())) throw new IllegalArgumentException("Invalid tool setting");
         if(gizmoMode==null)gizmoMode=GizmoMode.MOVE;gizmoYaw=bounded(gizmoYaw,-360,360);gizmoPitch=bounded(gizmoPitch,-360,360);gizmoRoll=bounded(gizmoRoll,-360,360);
         if(gizmoTarget==null)gizmoTarget=GizmoTarget.AUTO;
         flightMomentumLevel=bounded(flightMomentumLevel,0,1);liquidOpacity=bounded(liquidOpacity,0,1);minimumBrightness=bounded(minimumBrightness,0,1);
