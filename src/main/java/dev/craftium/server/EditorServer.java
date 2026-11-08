@@ -377,9 +377,10 @@ public final class EditorServer {
                     var plan=new EditPlanner(player.level(),s,o);for(Point p:o.selectionPoints){plan.validate(p);if(p.distanceSquared(new Point((int)player.getX(),(int)player.getY(),(int)player.getZ()))>256*256)throw new IllegalArgumentException("Lasso reaches beyond editor range");}
                     s.selection.combine(masked(plan,o,o.selectionPoints),o.mode);send(player,s,"Lasso selected "+s.selection.size()+" blocks",false);
                 }
-                case "selection_move", "selection_expand", "selection_shrink", "selection_invert", "selection_convex" -> {
+                case "selection_move", "selection_expand", "selection_shrink", "selection_invert", "selection_convex", "selection_outline" -> {
                     var next=new LinkedHashSet<Point>(s.selection.points());
-                    if(r.action().equals("selection_move")){next.clear();for(Point p:s.selection.points())next.add(p.add(o.offsetX,o.offsetY,o.offsetZ));}
+                    if(r.action().equals("selection_outline")){next=new LinkedHashSet<>(SelectionEdge.outline(next,Math.max(1,o.selectionResize>0?o.selectionResize:o.expandAmount),o.pixelPerfect));}
+                    else if(r.action().equals("selection_move")){next.clear();for(Point p:s.selection.points())next.add(p.add(o.offsetX,o.offsetY,o.offsetZ));}
                     else if(r.action().equals("selection_invert")){var all=new LinkedHashSet<>(Selection.box(s.selection.min(),s.selection.max()));all.removeAll(next);next=all;}
                     else if(r.action().equals("selection_convex")){next=new LinkedHashSet<>(ConvexHull.fill(s.selection.points()));}
                     else for(int i=0;i<Math.max(1,o.selectionResize>0?o.selectionResize:(int)o.strength);i++){
@@ -892,7 +893,7 @@ public final class EditorServer {
     /** True for the actions that exist to change the selection, which the history records so they can be undone. */
     private static boolean changesSelection(String action,Options o){
         return switch(action){
-            case "select_box","select_box_adjust","lasso_select","clear","selection_move","selection_expand","selection_shrink","selection_invert","selection_convex",
+            case "select_box","select_box_adjust","lasso_select","clear","selection_move","selection_expand","selection_shrink","selection_invert","selection_convex","selection_outline",
                  "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo"->true;
             case "use"->o.tool.selection();
             default->false;
@@ -908,6 +909,7 @@ public final class EditorServer {
             case "selection_expand"->"Expand selection";
             case "selection_shrink"->"Shrink selection";
             case "selection_invert"->"Invert selection";
+            case "selection_outline"->"Select outline";
             case "selection_move"->"Move selection";
             default->"Select "+size+" blocks";
         };

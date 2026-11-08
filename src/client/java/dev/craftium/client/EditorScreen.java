@@ -1188,7 +1188,8 @@ public final class EditorScreen extends CraftiumScreen {
             case 2 -> List.of(item("Deselect","Alt+D",()->action("clear")),item("Inverse","",()->action("selection_invert")),
                 item(showSelection?"Hide selection":"Show selection","",()->showSelection=!showSelection),divider(),
                 item("Expand…","",()->ClientCompat.setScreen(minecraft,new ResizeSelectionScreen(this,true))),item("Shrink…","",()->ClientCompat.setScreen(minecraft,new ResizeSelectionScreen(this,false))),
-                item("Expand by 1","",()->resizeSelection("selection_expand",1)),item("Shrink by 1","",()->resizeSelection("selection_shrink",1)));
+                item("Expand by 1","",()->resizeSelection("selection_expand",1)),item("Shrink by 1","",()->resizeSelection("selection_shrink",1)),
+                item("Select outline…","",()->ClientCompat.setScreen(minecraft,new ResizeSelectionScreen(this,ResizeSelectionScreen.Kind.OUTLINE))));
             case 3 -> List.of(item("Toggle side panels","",()->panels=!panels),item("Tool options","",()->{builder=false;pinnedTab=false;init();}),item("Builder controls","Alt",()->{builder=true;init();}),item("Studio inspector","",()->ClientCompat.setScreen(minecraft,new StudioScreen(this))),item("Colour picker / gradient","",()->ClientCompat.setScreen(minecraft,new ColourScreen(this))));
             case 8 -> List.of(
                 item(AiBridge.running()?"Turn off AI building":"Turn on AI building","",()->{AiBridge.toggle();ClientState.notify(AiBridge.running()?"AI building is on":"AI building is off");}),divider(),
