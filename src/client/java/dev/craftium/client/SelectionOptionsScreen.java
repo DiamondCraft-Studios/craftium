@@ -167,7 +167,7 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){
         var o=ClientState.options;
         g.fill(0,0,width,height,0xef101923);g.fill(left-8,top-8,left+W+8,top+H+8,0xff172330);
-        g.text(font,"CRAFTIUM  /  "+heading,left+14,top+10,0xffb5dcfc,false);
+        g.text(font,heading,left+14,top+10,0xffb5dcfc,false);
         String group="";
         for(int i=0;i<entries.size();i++){
             var e=entries.get(i);int y=rowY(i);

@@ -1417,7 +1417,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void help(Gfx g) {
         controls.clear();
         g.fill(0,23,w,h-21,0x9910151c);int x=w/2-230,y=h/2-145;
-        panel(g,x,y,460,290,"Craftium / Building Studio");
+        panel(g,x,y,460,290,"Building Studio");
         String[] lines={"A familiar workspace for building, painting and sculpting.","","Right Shift          Open / close the editor","Left drag            Look around the world","W A S D / Space Shift Fly horizontally / up and down","Right click / drag   Use the selected tool","Middle click         Pick the block under the cursor","Ctrl + middle drag   Adjust brush radius","Ctrl Z / Ctrl Y      Undo / redo","Ctrl C / X / V       Copy / cut / paste at cursor","Ctrl R / Ctrl F      Rotate / mirror pending placement","Ctrl F / Ctrl R      Fill / replace the selection","Enter / Delete       Clear / delete selection","Ctrl J               Duplicate selection as a placement","Ctrl P / Ctrl B      Save blueprint / show biomes","View > Keybinds      Edit shortcuts; inspector via View","","Creative mode + cheats / operator level 2 required.","Biome edits use Minecraft's 4 × 4 × 4 biome cells."};
         int row=y+30;for(String line:lines){text(g,line,x+18,row,MUTED);row+=14;}
         button(g,x+350,y+258,92,22,"Back to editor",false,()->help=false,"");
