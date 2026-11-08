@@ -507,57 +507,14 @@ public final class EditorServer {
         finally {ChunkLease.endPlanning();}
     }
     /** The points a selection tool would add, less any the block mask rules out. */
-    private static List<Point> masked(EditPlanner plan,Options o,Iterable<Point> points){
+    static List<Point> masked(EditPlanner plan,Options o,Iterable<Point> points){
         var mask=BlockMask.of(o);var kept=new ArrayList<Point>();
         for(Point p:points)if(mask.allows(plan.state(p)))kept.add(p);
         return kept;
     }
+    /** What the player's tool does with a click on the world: whatever the tool's behaviour makes of it. */
     private static void use(ServerPlayer player,Session s,Options o,Point p,Point normal,EditPlanner plan) {
-        switch(o.tool) {
-            case ANNOTATION -> start(player,s,AnnotationEdits.plan("annotation_create",player.level(),o,p));
-            case BOX_SELECT -> {
-                if(s.corner==null) {s.corner=p;send(player,s,"First corner: "+p.coordinates()+" · choose the opposite corner",false);}
-                else {s.selection.combine(masked(plan,o,Selection.box(s.corner,p)),o.mode);s.corner=null;send(player,s,"Selected "+s.selection.size()+" blocks",false);}
-            }
-            case FREEHAND_SELECT -> {
-                s.selection.combine(masked(plan,o,plan.brush(p)),o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
-            }
-            case MAGIC_SELECT -> {
-                var origin=plan.state(p);var originData=o.compare==Options.Compare.NBT?AdvancedTools.data(plan,p):null;var blockMask=BlockMask.of(o);
-                var found=MagicWand.select(p,new MagicWand.World(){
-                    public boolean loaded(Point at){return player.level().hasChunk(at.x()>>4,at.z()>>4);}
-                    public boolean air(Point at){return plan.state(at).isAir();}
-                    public boolean matches(Point at){return blockMask.allows(plan.state(at))&&AdvancedTools.matches(plan,origin,originData,at);}
-                    public boolean surface(Point at){return plan.surface(at);}
-                },new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,Selection.LIMIT*4)).found();
-                s.selection.combine(found,o.mode);send(player,s,"Magic Wand: "+s.selection.size()+" blocks (128-block search radius)",false);
-            }
-            case RULER -> {
-                if(s.ruler==null) {s.ruler=p;send(player,s,"Ruler start: "+p.coordinates(),false);}
-                else {Point a=s.ruler;double distance=Math.sqrt(a.distanceSquared(p));int manhattan=Math.abs(a.x()-p.x())+Math.abs(a.y()-p.y())+Math.abs(a.z()-p.z());
-                    String message=String.format(Locale.ROOT,"Ruler: %s blocks · Manhattan %d · Δ %s",dev.craftium.core.Numbers.trim(distance),manhattan,p.subtract(a).coordinates());
-                    s.event(message);s.ruler=null;send(player,s,message,false);}
-            }
-            case LINE -> {
-                if(s.line==null) {s.line=p;send(player,s,"Line start set · choose the endpoint",false);}
-                else {for(Point point:BrushMath.line(s.line,p))for(Point at:BrushMath.brush(point,Math.min(o.radius,4),o.shape,o.hollow,o.outlineThickness,o.pixelPerfect))plan.put(at,plan.material);
-                    s.line=null;start(player,s,plan.finish("Draw line"));}
-            }
-            case SHAPE -> {
-                plan.tool(p,normal);
-                var edit=plan.finish(o.tool.label);
-                // What was placed becomes the selection, so the transform tools can take hold of it. Carving leaves nothing to select.
-                var placed=new LinkedHashSet<Point>();
-                if(!o.invert)for(var change:edit.changes())placed.add(change.pos());
-                if(placed.isEmpty()){start(player,s,edit);return;}
-                var before=new ArrayList<>(s.selection.points());
-                if(s.confirmEdits&&!s.bypassConfirm&&s.pendingSelectionBefore==null)s.pendingSelectionBefore=before;
-                s.selection.combine(placed,Selection.Mode.REPLACE);
-                try{start(player,s,edit.withSelection(new Session.SelectionChange(before,new ArrayList<>(placed))));}
-                catch(RuntimeException e){s.selection.restore(before);s.pendingSelectionBefore=null;throw e;}
-            }
-            default -> {plan.tool(p,normal);start(player,s,plan.finish(o.tool.label));}
-        }
+        ToolBehaviours.of(o.tool).use(new ToolUse(player,s,o,p,normal,plan));
     }
     private static void requireSelection(Session s) {if(s.selection.size()==0)throw new IllegalArgumentException("Create a selection first");}
     private static void copy(ServerPlayer player,Session s,Options o,boolean cut) {
