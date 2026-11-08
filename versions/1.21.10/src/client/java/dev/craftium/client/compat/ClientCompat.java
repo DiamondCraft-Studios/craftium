@@ -26,6 +26,10 @@ public final class ClientCompat {
     public static Camera camera(Minecraft mc){return mc.gameRenderer.getMainCamera();}
     /** The frame the game last drew, for screenshots. */
     public static com.mojang.blaze3d.pipeline.RenderTarget mainTarget(Minecraft mc){return mc.getMainRenderTarget();}
+    /** Sets the size the world is drawn at, which may differ from the window's, and resizes the render target to match. */
+    public static void setRenderSize(Minecraft mc,int width,int height){mc.getWindow().setWidth(width);mc.getWindow().setHeight(height);mc.resizeDisplay();}
+    /** Where the camera is and which way it looks, as x, y, z, yaw, pitch. */
+    public static double[] cameraPose(Camera camera){var p=camera.getPosition();return new double[]{p.x,p.y,p.z,camera.getYRot(),camera.getXRot()};}
     public static Camera.NearPlane nearPlane(Camera camera){return camera.getNearPlane();}
     public static KeyMapping registerKey(KeyMapping key){return KeyBindingHelper.registerKeyBinding(key);}
 
