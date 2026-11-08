@@ -36,6 +36,12 @@ Privacy: [PRIVACY.md](https://github.com/DiamondCraft-Studios/craftium/blob/main
 
 `DiamondCraft-Studios/craftium` is the GitHub repository, so there is nothing to download first, and you get the published plugin. With a copy of the repository (to try an unpublished build), add its folder by full path instead: `/plugin marketplace add C:\Users\you\craftium`, then install as above.
 
+**If your game is not the default Minecraft install**
+
+The plugin finds the game through a small file Craftium writes into the game's own folder (`config/craftium/bridge.json`). It looks in the default `.minecraft` folder unless you say otherwise. If you run Minecraft from a launcher profile, such as CurseForge, Modrinth App or Prism, the game's folder is somewhere else, so set the plugin's **Minecraft folder** setting to it. Choose the profile's game folder, the one that contains `config` and `mods`.
+
+Claude Code asks for this setting when you enable the plugin, and the Claude Desktop extension has the same setting in its settings. To get the exact path, open the game, go to **AI menu > AI status and setup**, and press **Copy game folder**. With the wrong folder, the plugin reports that Craftium is not reachable even while the game is running.
+
 **Cowork** runs plugins too. **Claude Desktop's Chat tab** does not run a plugin's local server, so use the Craftium
 extension there (`craftium.mcpb`, see the user guide). Install one or the other, not both, so the server is not
 registered twice.

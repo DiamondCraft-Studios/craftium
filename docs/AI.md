@@ -50,7 +50,13 @@ The [mcp](../mcp) folder is also a Claude plugin: the same server plus the **cra
 /plugin install craftium@craftium
 ```
 
-The plugin needs Node.js 18 or newer on your PATH (an extension gets Node from Claude Desktop, a plugin does not), and asks for a **Minecraft folder** when you enable it if your game uses a launcher profile. Claude Desktop's Chat tab does not run a plugin's local server, so use the extension there; install one or the other, not both. Steps 2 and 3 of [Set up](#set-up) apply either way.
+**If your game is not the default Minecraft install**
+
+The plugin finds the game through a small file Craftium writes into the game's own folder (`config/craftium/bridge.json`). It looks in the default `.minecraft` folder unless you say otherwise. If you run Minecraft from a launcher profile, such as CurseForge, Modrinth App or Prism, the game's folder is somewhere else, so set the plugin's **Minecraft folder** setting to it. Choose the profile's game folder, the one that contains `config` and `mods`.
+
+Claude Code asks for this setting when you enable the plugin, and the Claude Desktop extension has the same setting in its settings. To get the exact path, open the game, go to **AI menu > AI status and setup**, and press **Copy game folder**. With the wrong folder, the plugin reports that Craftium is not reachable even while the game is running.
+
+The plugin needs Node.js 18 or newer on your PATH (an extension gets Node from Claude Desktop, a plugin does not). Claude Desktop's Chat tab does not run a plugin's local server, so use the extension there; install one or the other, not both. Steps 2 and 3 of [Set up](#set-up) apply either way.
 
 ## What Claude can do
 
