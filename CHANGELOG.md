@@ -13,6 +13,72 @@ Changes since 0.9.1-beta.1.
 ### Internal
 - Tools, their icons and the Lua sandbox were reorganised in preparation for plugins. Nothing else about how the editor behaves has changed.
 
+## 1.2.0-beta.1
+
+Changes since 1.1.0-beta.1.
+
+### AI building
+- Build specs can generate roofs (gable, hip or shed) and flights of stairs with every stair facing the right way, so the AI no longer writes roofs stair by stair.
+- Build specs can name blocks by material (`spruce@stairs`, or `@stairs` with a material set once), mix blocks by weight for weathered walls and paths, and group operations to rotate, mirror and move them, turning stairs and logs with them.
+- One read_blocks tool replaces get_blocks and get_preview_blocks: the world, the world with the AI's preview applied, or the preview alone, up to a million blocks at a time.
+- render_view can draw up to three angles from one read of the world, about half the time of separate calls.
+- The AI can add to its waiting preview instead of resending the whole build, and the result is still applied and undone as one build.
+- The reply to a preview warns about doors and beds missing a half, torches, lanterns, signs and the like with nothing to hold them, and operations hidden entirely by later ones.
+- The AI plugin tells you when it and the mod are out of step, and which to update; a server whose Craftium is older gets a clear message when it cannot read a build.
+- A build that the server cannot draw no longer stops the server: the request fails, or the preview is dropped and logged.
+- An AI script is cancelled for the memory it allocated itself, not for garbage or other threads' growth, so the same spec behaves the same on a busy server; getHighestBlockYAt in it sees what the build has planned, and setting one block twice counts once against its cap.
+- Adding to a preview with a spec that only carves (air through a wall in open air) is kept and reported instead of dropped; an AI preview that cannot be drawn is refused with the reason when it is made; the warnings no longer miss two stacked lower door halves or warn about blocks backed by unloaded chunks or a grindstone; a world read on an older server says it is the smaller, older read.
+- Build specs can hold a Lua script that places blocks inside a box, for natural ground, rocks and trees. It runs in the same sandbox as the Lua brushes, only places inside its box, and builds the same each time from its seed.
+
+## 1.1.0-beta.1
+
+Changes since 1.0.0-beta.1.
+
+### Editor
+- A world axis gizmo shows in the editor, so you can see which way X, Y and Z point.
+- Reopening the editor on a box select puts the gizmo back on a corner of the box.
+
+### Performance
+- The editor draws faster: block icons are built once, line icons are baked into textures, measured and wrapped text is remembered between frames, and options rows scrolled out of view are skipped.
+
+## 1.0.0-beta.1
+
+Changes since 0.10.0-beta.1.
+
+### AI building
+- The reply to a preview tells the AI what it made: blocks placed and cleared, where they are, and the commonest blocks with how stairs and other facing blocks are turned, so a roof built the wrong way round is caught before it is drawn.
+- A build spec the server refuses no longer clears the preview that was waiting, so your ghost stays while the AI fixes its spec. The error names the operation that used a block the game does not have and the nearest real ones ("spruce_stair": minecraft:spruce_stairs), or the properties a block takes.
+- Replies to the AI are held to about 60 KB, which fits in what an AI app passes on. Reading a wide area of ground gives a summary (height range, how level it is, what it is made of, a coarse map) instead of every column.
+- get_state also gives the dimension, height limits, sea level, the biome you stand in and your recent blocks; get_palette is gone from the AI tools.
+- The building skill has worked examples (a gable cottage and a round tower) and renders only where the look matters, which saves time and tokens on every build.
+- The AI tab has a Redo AI build button (and a menu item), and HOW IT WORKS describes installing the Claude plugin in Claude Code or Cowork.
+
+### Preferences
+- The options screen is split into General, Selection, Builder, Gizmos & Rulers and AI tabs. Reset applies to the tab shown.
+- "Warn at (blocks)" sets when the editor and the Builder ask before keeping a big selection (it was a fixed 1,024, with an exception below the hover limit). It defaults to 50,000. The hover preview limit now defaults to 10,000, and both are typed into number boxes. A saved hover limit is kept.
+- "Builder magic select limit" (default 1,000) caps the Builder's magic select when it does not follow the editor's Magic Wand.
+- "Bulldozer same blocks" (on by default): a full Bulldozer sweep only breaks blocks equal to the first one, block state included, and a different block stops it until the button is let go.
+
+### Builder
+- Dragging the flight speed slider, or using any other control of the Builder widget, no longer breaks the block behind it.
+- Letting go of Alt before the mouse button no longer leaves the flight speed unapplied; the last value is saved and sent when the button is released.
+
+### Editor
+- Dragging a block out of the palette is carried in a cell over the windows, as before, and only turns into the crosshair out over the world.
+- Holding Ctrl and then dragging a gizmo handle moves the handle instead of starting the arcball camera.
+- With a gizmo showing, X, Y and Z lock it to those axes, as in the Builder, instead of being the editor's hotkeys.
+
+### Connection
+- Flying fast, or turning the arcball quickly, no longer gets a player thrown back on a Fabric server: the server skips the game's "moved too quickly" check for a Craftium player who is flying, and lists a new `fast-movement` capability. Against a server without it (Paper/Purpur, older builds) the client keeps flight and the arcball under nine blocks a tick, so there is no rubber-banding, only a speed limit.
+
+## 0.10.0-beta.1
+
+Changes since 0.9.1-beta.1.
+
+### Chunk leasing
+- Moving, cloning or stacking a selection or a Builder box between far-away chunks no longer asks you to walk there. Craftium loads the chunks at both ends for as long as the edit takes, then lets them go. Undo and redo of such an edit do the same.
+- Chunks nobody has visited are generated for the edit. An edit that needs more than 128 chunks that are not loaded is refused.
+
 ## 0.9.1-beta.1
 
 Changes since 0.9.0-beta.1.

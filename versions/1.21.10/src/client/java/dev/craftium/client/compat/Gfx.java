@@ -11,7 +11,7 @@ import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix3x2fStack;
 
 /** Minecraft 1.21.10 implementation of {@link Gfx}; see the 26.2 file in src/client for the contract. */
-public final class Gfx {
+public final class Gfx implements dev.craftium.client.Canvas {
     final GuiGraphics raw;
     private Gfx(GuiGraphics raw){this.raw=raw;}
 

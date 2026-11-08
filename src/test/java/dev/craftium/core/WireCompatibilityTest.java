@@ -329,6 +329,7 @@ class WireCompatibilityTest {
         shatterAxis primitive
         shatterWidth primitive
         showAnnotations primitive
+        showAxisGizmo primitive
         showBiomes primitive
         showCollisionMesh primitive
         showDisplayGizmos primitive

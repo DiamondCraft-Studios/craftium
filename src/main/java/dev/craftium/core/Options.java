@@ -39,6 +39,8 @@ public final class Options {
     public int outerRadius() { return Math.min(radius + outlineShift(), BrushMath.MAX_REACH); }
     /** Hand placement and breaking only; blocks the editor's tools write never update anything (see BlockSnapshot.NO_UPDATES). */
     public boolean noUpdates, forcePlace, replaceMode, bulldozer, tinker;
+    /** Whether a full Bulldozer sweep only breaks blocks that are the same, state included, as the first one it met; a different block ends it. */
+    public boolean bulldozerSameBlocks=true;
     public boolean inSelection;
     /** Whether undo and redo flash the blocks they change. */
     public boolean historyPulse = true;
@@ -52,15 +54,19 @@ public final class Options {
     public boolean maskExclude;
     /** Whether holding a gizmo handle hides the others, so only the one being dragged is drawn. */
     public boolean gizmoHideOthers=true;
+    /** Whether the editor draws the world axes gizmo, which turns with the camera, in the top right. */
+    public boolean showAxisGizmo=true;
     /** Include and Exclude both switched off, as they start: the block mask is ignored altogether, whatever blocks are toggled. */
     public boolean maskOff=true;
     /** Whether the tool masks (block mask, mask block, rules, script, height range and restrict to selection) also apply to the builder tools. */
     public boolean maskInBuilder;
     /** Whether the blocks you place and break by hand, with the game's own clicks, go into the undo history. */
     public boolean recordPlayerBuilding=true;
-    /** Whether the Builder's magic select uses the editor's Magic Wand settings; when off it matches by {@link #builderMagicCompare}, with the widest limit and the wand's plain defaults. */
+    /** Whether the Builder's magic select uses the editor's Magic Wand settings; when off it matches by {@link #builderMagicCompare}, up to {@link #builderMagicLimit} blocks, with the wand's plain defaults. */
     public boolean builderFollowsMagic=true;
     public Compare builderMagicCompare=Compare.BLOCK;
+    /** The most blocks the Builder's magic select looks for when it does not follow the editor. */
+    public int builderMagicLimit=1000;
     public String biome = "minecraft:plains";
     public String text = "CRAFTIUM";
     public int minY = -64, maxY = 319;
@@ -88,10 +94,13 @@ public final class Options {
     public int selectionInsideFill=0x40ffa63d;
     /** A wash over the whole screen while the camera is inside the selection; alpha 0 turns it off. */
     public int selectionInsideTint=0x18ffa63d;
-    public int selectionFill=0x225d91ff,selectionTint=0x9046B4EE,
-        previewColor=0xff8be3b5,previewFill=0x2247d29b,previewTint=0x9046B4EE,
-        removedFill=0x22ff5555,removedTint=0x90EE4646,
+    public int selectionFill=0x225d91ff,selectionTint=0x80ffffff,
+        previewColor=0xff8be3b5,previewFill=0x2247d29b,previewTint=0x80ffffff,
+        removedFill=0x22ff5555,removedTint=0x80ffffff,
         hoverColor=0xff7fd8ff,hoverFill=0x2240c0ff;
+    /** Colours (ARGB) of the player's own AI preview (violet outline) and of other players' AI previews (teal). The player's own blocks are untinted (white) at 50% opacity so they stay readable. */
+    public int aiColor=0xffc9a0ff,aiFill=0x22a070ff,aiTint=0x80ffffff,
+        sharedAiColor=0xff7fe3d4,sharedAiFill=0x2230d5c8,sharedAiTint=0x80ffffff;
     /** The colour (ARGB) and width, in pixels from 0.1 to 10, of the selection's outline. */
     public int selectionColor=0xff2389c6;
     /** The colour (ARGB) of a selection's face that touches a solid block outside it. Fully transparent turns it off. */
@@ -116,6 +125,8 @@ public final class Options {
     public boolean magicPreview=true;
     /** Whether a big selection waits to be confirmed before it is kept. */
     public boolean largeSelectionWarnings=true;
+    /** A selection this many blocks bigger than before is confirmed with the player first, in the editor and in the Builder. */
+    public int largeSelectionThreshold=50_000;
     /** Looks at the project's GitHub releases once per game session and says so when a newer build exists. Nothing is downloaded. */
     public boolean checkForUpdates=true;
     /** Extrude: how many layers one click adds or removes, from 1 to {@link #MAX_EXTRUDE_COUNT}. */
@@ -136,7 +147,7 @@ public final class Options {
     /** Brush flow, 1 to 100: how often a stroke applies the brush. 100 is as often as the server allows (about 30 times a second), 25 the usual rate (about 7 a second), less leaves wider gaps along the stroke. */
     public static final int FLOW_MIN=3,FLOW_MAX=100,FLOW_DEFAULT=25;
     public int brushFlow=FLOW_DEFAULT;
-    public int hoverPreviewLimit=5000;
+    public int hoverPreviewLimit=10_000;
     /** How many block models an AI preview ghost draws, 1,024 to 32,768. A bigger preview is still described and outlined in full; the models are the part that costs a frame. */
     public static final int AI_GHOST_DRAW_MIN=1024,AI_GHOST_DRAW_MAX=32_768,AI_GHOST_DRAW_DEFAULT=8192;
     public int aiGhostDrawLimit=AI_GHOST_DRAW_DEFAULT;
@@ -187,6 +198,8 @@ public final class Options {
     public String buildSpec="";
     /** Whether the client listens on this computer for an AI client (the craftium-mcp shim) to drive the editor. Off until the player turns it on. */
     public boolean aiBridge;
+    /** Whether to draw the AI previews other players are holding, in a colour of their own with the owner's name. */
+    public boolean showSharedAiPreviews=true;
     public String fontName="SansSerif",fontFile="",heightmap="",name="Untitled",entityType="block_display",entityNbt="{}",property="";
     public boolean useBuiltinFont=true,textShadow,fullBlocks=true,denoise=true,maskY,fastPlace,angelPlacement,noClip,blockStep;
     /** Flying slows to a stop as a wall comes close, like a camera focusing in, the first time a movement key is held toward it. */
@@ -338,7 +351,7 @@ public final class Options {
         distortX=Double.isFinite(distortX)?Math.max(0,distortX):2;distortY=Double.isFinite(distortY)?Math.max(0,distortY):2;distortZ=Double.isFinite(distortZ)?Math.max(0,distortZ):2;
         roughenRatio=Double.isFinite(roughenRatio)?Math.clamp(roughenRatio,0,1):.2;shatterWidth=Double.isFinite(shatterWidth)?Math.max(0,shatterWidth):1;
         extrudeCount=Math.clamp(extrudeCount,1,MAX_EXTRUDE_COUNT);brushFlow=Math.clamp(brushFlow,FLOW_MIN,FLOW_MAX);
-        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);blockLimit=Math.clamp(blockLimit,1,MAX_BLOCK_LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);aiGhostDrawLimit=Math.clamp(aiGhostDrawLimit,AI_GHOST_DRAW_MIN,AI_GHOST_DRAW_MAX);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;builderSelectionWidth=Double.isFinite(builderSelectionWidth)?Math.clamp(builderSelectionWidth,.1,10):1;builderPreviewWidth=Double.isFinite(builderPreviewWidth)?Math.clamp(builderPreviewWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
+        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);blockLimit=Math.clamp(blockLimit,1,MAX_BLOCK_LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);largeSelectionThreshold=Math.clamp(largeSelectionThreshold,1,Selection.LIMIT);builderMagicLimit=Math.clamp(builderMagicLimit,1,Selection.LIMIT);aiGhostDrawLimit=Math.clamp(aiGhostDrawLimit,AI_GHOST_DRAW_MIN,AI_GHOST_DRAW_MAX);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;builderSelectionWidth=Double.isFinite(builderSelectionWidth)?Math.clamp(builderSelectionWidth,.1,10):1;builderPreviewWidth=Double.isFinite(builderPreviewWidth)?Math.clamp(builderPreviewWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
         octaves=Math.clamp(octaves,1,8);lacunarity=bounded(lacunarity,1,4);gain=bounded(gain,.01,1);jitter=bounded(jitter,0,1);
         scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);
         sizeX=Math.copySign(bounded(Math.abs(sizeX),.1,8),sizeX);sizeY=Math.copySign(bounded(Math.abs(sizeY),.1,8),sizeY);sizeZ=Math.copySign(bounded(Math.abs(sizeZ),.1,8),sizeZ); // negative flips

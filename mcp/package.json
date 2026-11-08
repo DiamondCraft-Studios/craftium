@@ -1,6 +1,6 @@
 {
   "name": "craftium-mcp",
-  "version": "0.1.0",
+  "version": "0.6.0",
   "description": "MCP server that lets Claude Desktop (or any MCP client) build in Minecraft through the Craftium mod's local AI bridge.",
   "type": "module",
   "license": "GPL-3.0-only",

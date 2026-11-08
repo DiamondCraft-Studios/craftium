@@ -6,3 +6,5 @@ package-lock.json
 .nvmrc
 .claude-plugin/
 .mcp.json
+skills/
+PRIVACY.md

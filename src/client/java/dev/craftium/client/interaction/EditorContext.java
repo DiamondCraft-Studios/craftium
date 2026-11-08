@@ -28,6 +28,6 @@ public interface EditorContext {
     int selectedNode();
     /** Selects the control point at {@code index} of the tool's point list, so its gizmo is shown. */
     void selectNode(int index);
-    /** Whether the pointer at {@code x}, {@code y} is on one of the handles of a point gizmo at {@code at}, so a gizmo that is only shown can still be grabbed. */
-    boolean hitsPointHandles(Point at, double x, double y);
+    /** Whether the pointer at {@code x}, {@code y} is on one of the handles of the point gizmo of node {@code index}, at {@code at}, so a gizmo that is only shown can still be grabbed. */
+    boolean hitsPointHandles(Point at, int index, double x, double y);
 }

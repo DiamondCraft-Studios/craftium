@@ -304,6 +304,7 @@ final class ProtocolSnapshot {
         dev.craftium.core.Options.shatterAxis : dev.craftium.core.Options$ShatterAxis
         dev.craftium.core.Options.shatterWidth : double
         dev.craftium.core.Options.showAnnotations : boolean
+        dev.craftium.core.Options.showAxisGizmo : boolean
         dev.craftium.core.Options.showBiomes : boolean
         dev.craftium.core.Options.showCollisionMesh : boolean
         dev.craftium.core.Options.showDisplayGizmos : boolean

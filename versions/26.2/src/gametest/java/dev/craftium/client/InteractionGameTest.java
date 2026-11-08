@@ -372,12 +372,13 @@ public final class InteractionGameTest {
         void dragHandle(Point corner, int pixels) {
             pause();
             aim(corner);
-            double[] anchor = c.computeOnClient(mc -> project(mc, new Vec3(corner.x(), corner.y(), corner.z())));
+            Vec3 at = c.computeOnClient(mc -> TransformGizmo.nodeAnchor(corner, ClientState.boxCorners.indexOf(corner))); // a box corner's handle sits at the extremity of the bounds
+            double[] anchor = c.computeOnClient(mc -> project(mc, at));
             double[] press = c.computeOnClient(mc -> {
                 for (int radius = 6; radius <= 140; radius += 2)
                     for (int degrees = 0; degrees < 360; degrees += 15) {
                         double x = anchor[0] + radius * Math.cos(Math.toRadians(degrees)), y = anchor[1] + radius * Math.sin(Math.toRadians(degrees));
-                        if (TransformGizmo.hitsPointHandles(corner, x, y)) return new double[]{x, y};
+                        if (TransformGizmo.hitsPointHandles(at, x, y)) return new double[]{x, y};
                     }
                 return null;
             });

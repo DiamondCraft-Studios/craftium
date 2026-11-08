@@ -52,7 +52,7 @@ final class TransformGizmo {
     static boolean nudge(EditorScreen screen,Point step){
         if(ClientState.status.busy())return true;Target target=target(screen);if(target==null)return false;
         if(target.kind==Kind.PLACEMENT){PlacementPreview.origin=PlacementPreview.origin.add(step.x(),step.y(),step.z());return true;}
-        if(target.kind==Kind.NODE){screen.moveHandle(screen.handlePoint().add(step.x(),step.y(),step.z()));return true;}
+        if(target.kind==Kind.NODE){screen.moveHandle(screen.handlePoint().add(step.x(),step.y(),step.z()));screen.handlesMoved();return true;} // a box corner moved by a step reshapes the selection too
         if(target.kind==Kind.SHAPE){ShapeObject.move(step);return true;}
         Options original=ClientState.options,request=Packets.JSON.fromJson(Packets.JSON.toJson(original),Options.class);
         try{ClientState.options=request;request.yaw=request.pitch=request.roll=0;request.sizeX=request.sizeY=request.sizeZ=1;request.offsetX=step.x();request.offsetY=step.y();request.offsetZ=step.z();
@@ -62,7 +62,7 @@ final class TransformGizmo {
     }
     private static Target target(EditorScreen screen){
         if(PlacementPreview.active()){AABB bounds=bounds();Point p=PlacementPreview.origin;return new Target(Kind.PLACEMENT,new Vec3(p.x(),p.y(),p.z()).add(bounds.getCenter()),null);}
-        Point node=screen.handlePoint();double shift=nodeOffset();if(node!=null)return new Target(Kind.NODE,new Vec3(node.x()+shift,node.y()+shift,node.z()+shift),null);
+        Point node=screen.handlePoint();if(node!=null)return new Target(Kind.NODE,nodeAnchor(node,screen.handleIndex()),null);
         if(ShapeObject.gizmoOn())return new Target(Kind.SHAPE,ShapeObject.centre(),null);
         var status=ClientState.status;var o=ClientState.options;
         if(o.tool.transform()){
@@ -82,18 +82,29 @@ final class TransformGizmo {
         int chosen=pick(t,x,y);
         if(chosen<0)return selectEntity(x,y);dragging=t;handle=chosen;startX=slowX=lastX=x;startY=slowY=lastY=y;if(chosen==3&&mode==Options.GizmoMode.MOVE)grabFree(t.anchor,x,y);dragFlips=t.kind==Kind.NODE?flipsFor(t.anchor):null;delta=smooth=angles=Vec3.ZERO;size=new Vec3(1,1,1);startAngle=mode==Options.GizmoMode.ROTATE?(chosen==7?screenAngle(x,y,t.anchor):chosen<3?angle(x,y,t.anchor,handle):0):0;return true;
     }
+    /** The axes the editor's X, Y and Z keys have locked the gizmo to (X is 1, Y is 2, Z is 4), or 0 when none is held. */
+    private static int lockedAxes;
+    static void lock(int axes){lockedAxes=axes;}
+    /** The axes the handles work on: the locked ones, or all three. */
+    private static int lockMask(){return lockedAxes==0?ALL_AXES:lockedAxes;}
+    /** Whether a click here would grab a handle of the gizmo, without grabbing it. */
+    static boolean hits(EditorScreen screen,double x,double y){
+        if(ClientState.status.busy())return false;Target t=target(screen);return t!=null&&pick(t,x,y)>=0;
+    }
     /** Which handle of the gizmo is under the pointer, or -1: 0 to 2 are the axes, 3 the centre, 4 to 6 the plane handles. */
     private static int pick(Target t,double x,double y){
+        int mask=lockMask();
         mode=effectiveMode(t);localBasis=t.kind==Kind.SHAPE&&mode==Options.GizmoMode.SCALE;basis=axesAt(t.anchor);pickScale=screenScale(t.anchor);pickExtent=extent(t);pickReach=reach(t,pickExtent);double best=100;int chosen=-1;double[] center=project(t.anchor);
         boolean plain=t.kind==Kind.MODEL||t.kind==Kind.PIVOT||t.kind==Kind.SHAPE&&ClientState.options.tool.transform(); // the transform tools show only their own handles
         // The centre: free move, even scaling for the Scale tool's circle; Rotate has the trackball instead, below.
-        if((!plain||mode==Options.GizmoMode.SCALE&&blocky(t.kind))&&mode!=Options.GizmoMode.ROTATE&&center!=null&&Math.pow(x-center[0],2)+Math.pow(y-center[1],2)<81)chosen=3;
+        if(mask==ALL_AXES&&(!plain||mode==Options.GizmoMode.SCALE&&blocky(t.kind))&&mode!=Options.GizmoMode.ROTATE&&center!=null&&Math.pow(x-center[0],2)+Math.pow(y-center[1],2)<81)chosen=3;
         if(chosen<0)for(int i=0;i<3;i++){
+            if((mask>>i&1)==0)continue; // a locked axis leaves the others out
             if(mode==Options.GizmoMode.ROTATE){Vec3 a=basis[(i+1)%3],b=basis[(i+2)%3];for(int j=0;j<96;j++){double v=j*Math.PI/48,w=(j+1)*Math.PI/48;double d=distance(x,y,project(t.anchor.add(a.scale(Math.cos(v)*3.5*pickScale)).add(b.scale(Math.sin(v)*3.5*pickScale))),project(t.anchor.add(a.scale(Math.cos(w)*3.5*pickScale)).add(b.scale(Math.sin(w)*3.5*pickScale))));if(d<best){best=d;chosen=i;}}}
             else if(mode==Options.GizmoMode.SCALE&&pickExtent!=null){var pixel=project(faceCenter(faceBase(t),basis,pickExtent,i));double d=pixel==null?Double.POSITIVE_INFINITY:Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2);if(d<144&&d<best){best=d;chosen=i;}}
             else{double d=distance(x,y,project(t.anchor.add(basis[i].scale((mode==Options.GizmoMode.SCALE?4.7:.5)*pickScale))),project(t.anchor.add(basis[i].scale(5*pickScale))));if(d<best){best=d;chosen=i;}}
         }
-        if(mode==Options.GizmoMode.ROTATE&&chosen<0&&center!=null){
+        if(mode==Options.GizmoMode.ROTATE&&chosen<0&&center!=null&&mask==ALL_AXES){
             // The ring that faces the camera turns about the view; inside the sphere is a trackball.
             Vec3[] cam=cameraAxes();
             var ring=project(t.anchor.add(cam[0].scale(4.4*pickScale)));var disc=project(t.anchor.add(cam[0].scale(3.5*pickScale)));
@@ -101,7 +112,7 @@ final class TransformGizmo {
             if(ring!=null&&Math.abs(d-Math.hypot(ring[0]-center[0],ring[1]-center[1]))<10)chosen=7;
             else if(disc!=null&&d<Math.hypot(disc[0]-center[0],disc[1]-center[1]))chosen=3;
         }
-        if((mode==Options.GizmoMode.MOVE||mode==Options.GizmoMode.SCALE)&&chosen<0)for(int i=0;i<3;i++){Vec3 p=t.anchor.add(basis[(i+1)%3].scale(1.4*pickScale)).add(basis[(i+2)%3].scale(1.4*pickScale));var pixel=project(p);if(pixel!=null&&Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2)<144){chosen=4+i;break;}}
+        if((mode==Options.GizmoMode.MOVE||mode==Options.GizmoMode.SCALE)&&chosen<0)for(int i=0;i<3;i++){if((mask>>(i+1)%3&1)==0||(mask>>(i+2)%3&1)==0)continue;Vec3 p=t.anchor.add(basis[(i+1)%3].scale(1.4*pickScale)).add(basis[(i+2)%3].scale(1.4*pickScale));var pixel=project(p);if(pixel!=null&&Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2)<144){chosen=4+i;break;}}
         return chosen;
     }
     private static boolean selectEntity(double x,double y){var mc=Minecraft.getInstance();if(mc.level==null)return false;Entity closest=null;double best=100;for(var e:mc.level.entitiesForRendering()){if(!(e instanceof Display)&&!(e instanceof Marker)||e.distanceToSqr(mc.player)>128*128)continue;if(e instanceof Display&&!ClientState.options.showDisplayGizmos||e instanceof Marker&&!ClientState.options.showMarkerGizmos)continue;var pixel=project(e.position());if(pixel==null)continue;double d=Math.pow(x-pixel[0],2)+Math.pow(y-pixel[1],2);if(d<best){best=d;closest=e;}}if(closest==null)return false;ClientState.options.entityUuid=closest.getUUID().toString();ClientState.options.gizmoTarget=Options.GizmoTarget.ENTITY;CraftiumClient.send("entity_select_uuid",CraftiumClient.point(closest.blockPosition()),null);return true;}
@@ -170,7 +181,7 @@ final class TransformGizmo {
     }
     static boolean release(EditorScreen screen){
         if(dragging==null)return false;Target t=dragging;Options original=ClientState.options,request=Packets.JSON.fromJson(Packets.JSON.toJson(original),Options.class);try{
-            if(t.kind==Kind.NODE){double shift=nodeOffset();Point p=new Point((int)Math.round(t.anchor.x+delta.x-shift),(int)Math.round(t.anchor.y+delta.y-shift),(int)Math.round(t.anchor.z+delta.z-shift));screen.moveHandle(p);screen.handlesMoved();return true;}
+            if(t.kind==Kind.NODE){double shift=nodeOffset();Point p=dragFlips!=null?cornerFrom(t.anchor.add(delta),dragFlips):new Point((int)Math.round(t.anchor.x+delta.x-shift),(int)Math.round(t.anchor.y+delta.y-shift),(int)Math.round(t.anchor.z+delta.z-shift));screen.moveHandle(p);screen.handlesMoved();return true;}
             if(t.kind==Kind.SHAPE){ShapeObject.set(ShapeObject.apply(ShapeObject.pose(),mode,delta,angles,size));return true;} // the shape is made again from its new pose
             if(t.kind==Kind.PIVOT){original.pivotSet=true;original.pivotX=t.anchor.x+delta.x;original.pivotY=t.anchor.y+delta.y;original.pivotZ=t.anchor.z+delta.z;return true;}
             request.yaw=angles.y;request.pitch=angles.x;request.roll=angles.z;request.sizeX=size.x;request.sizeY=size.y;request.sizeZ=size.z;request.offsetX=(int)Math.round(delta.x);request.offsetY=(int)Math.round(delta.y);request.offsetZ=(int)Math.round(delta.z);ClientState.options=request;
@@ -252,11 +263,13 @@ final class TransformGizmo {
         return landing;
     }
     /** True when the pointer is on one of the handles of a point gizmo at {@code at}, so a gizmo that is only shown can still be grabbed. */
-    static boolean hitsPointHandles(Point at,double x,double y){
-        return pick(new Target(Kind.NODE,new Vec3(at.x(),at.y(),at.z()),null),x,y)>=0;
+    static boolean hitsPointHandles(Vec3 at,double x,double y){
+        return pick(new Target(Kind.NODE,at,null),x,y)>=0;
     }
     /** The handle under the pointer, or -1; kept so the gizmo can light it up before it is clicked. */
     private static int hovered=-1;
+    /** Whether the pointer is over a handle of the gizmo, and no handle is being held. */
+    static boolean hovering(){return dragging==null&&hovered>=0;}
     private static final String[] PLANES={"YZ","ZX","XY"};
     static void updateHover(EditorScreen screen){
         hovered=-1;
@@ -283,11 +296,13 @@ final class TransformGizmo {
     static boolean selectionPreview(){return dragging!=null&&(dragging.kind==Kind.SELECTION||dragging.kind==Kind.MODEL);}
     static void box(AABB box){if(dragging==null){Overlay.box(box,ClientState.options.previewColor,1,ClientState.options.previewFill);return;}Vec3[] points=new Vec3[8];for(int i=0;i<8;i++)points[i]=transformed(new Vec3((i&1)==0?box.minX:box.maxX,(i&2)==0?box.minY:box.maxY,(i&4)==0?box.minZ:box.maxZ));for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)Overlay.line(points[i],points[i|bit],ClientState.options.previewColor,1.5f);}
     static void draw(EditorScreen screen){
+        lock(screen.axisLock());
         Target t=dragging==null?target(screen):dragging;if(t==null)return;
         if(dragging==null)updateHover(screen);else followCamera(screen);
         localBasis=t.kind==Kind.SHAPE&&effectiveMode(t)==Options.GizmoMode.SCALE;
         faceBase=faceBase(t).add(delta);plainHandles=t.kind==Kind.MODEL||t.kind==Kind.PIVOT||t.kind==Kind.SHAPE&&ClientState.options.tool.transform();
-        render(t.anchor.add(dragging!=null&&effectiveMode(t)==Options.GizmoMode.MOVE?smooth:delta),effectiveMode(t),dragging!=null?handle:hovered,extent(t));
+        axisMask=lockMask();
+        try{render(t.anchor.add(dragging!=null&&effectiveMode(t)==Options.GizmoMode.MOVE?smooth:delta),effectiveMode(t),dragging!=null?handle:hovered,extent(t));}finally{axisMask=ALL_AXES;}
         faceBase=null;plainHandles=false;localBasis=false;
         if(dragging!=null){ruler(t.anchor.add(effectiveMode(t)==Options.GizmoMode.MOVE?smooth:delta));readout(t);}
         if(t.kind==Kind.PIVOT)Overlay.point(t.anchor.add(delta),0xffffd66d,11); // the pivot
@@ -381,7 +396,7 @@ final class TransformGizmo {
     private static boolean plainHandles;
     private static Vec3 pickExtent,pickReach;
     /** The camera's right, up and forward directions, for the handles that face the screen. */
-    private static Vec3[] cameraAxes(){
+    static Vec3[] cameraAxes(){
         var near=ClientCompat.nearPlane(ClientCompat.camera(Minecraft.getInstance()));
         Vec3 center=near.getPointOnPlane(0,0);
         return new Vec3[]{near.getPointOnPlane(1,0).subtract(center).normalize(),near.getPointOnPlane(0,1).subtract(center).normalize(),center.normalize()};
@@ -453,22 +468,50 @@ final class TransformGizmo {
      * A corner on the low side of an axis points down it, one on the high side points up it. Null for any other handle.
      */
     private static double[] flipsFor(Vec3 anchor){
-        var corners=ClientState.boxCorners;
-        if(ClientState.options.tool!=Tool.BOX_SELECT||corners.size()!=2)return null;
-        for(int index=0;index<2;index++){
-            Point c=corners.get(index),other=corners.get(1-index);
-            if(Math.abs(c.x()-anchor.x)>.01||Math.abs(c.y()-anchor.y)>.01||Math.abs(c.z()-anchor.z)>.01)continue;
-            int[] mine={c.x(),c.y(),c.z()},theirs={other.x(),other.y(),other.z()};
-            double[] flips=new double[3];
-            for(int axis=0;axis<3;axis++)flips[axis]=mine[axis]<theirs[axis]?-1:mine[axis]>theirs[axis]?1:index==0?-1:1;
-            return flips;
+        for(int index=0;index<ClientState.boxCorners.size();index++){
+            double[] flips=cornerFlips(index);if(flips==null)return null;
+            if(cornerAnchor(index).distanceTo(anchor)<.01)return flips;
         }
         return null;
     }
+    /**
+     * Which side of its block each axis of a box corner's handle sits on: -1 the low face, 1 the high face. A corner below the other on
+     * an axis takes the low side, one above it the high side; a lone corner, or one level with the other, takes low (first) or high (second).
+     * Null when the tool is not Box select or there is no such corner.
+     */
+    static double[] cornerFlips(int index){
+        var corners=ClientState.boxCorners;
+        if(ClientState.options.tool!=Tool.BOX_SELECT||index<0||index>=corners.size())return null;
+        if(corners.size()==1)return new double[]{-1,-1,-1};
+        Point c=corners.get(index),other=corners.get(1-index);
+        int[] mine={c.x(),c.y(),c.z()},theirs={other.x(),other.y(),other.z()};
+        double[] flips=new double[3];
+        for(int axis=0;axis<3;axis++)flips[axis]=mine[axis]<theirs[axis]?-1:mine[axis]>theirs[axis]?1:index==0?-1:1;
+        return flips;
+    }
+    /** Where a box corner's handle sits: the very extremity of the bounds, the outer corner of its block. */
+    static Vec3 cornerAnchor(int index){
+        Point c=ClientState.boxCorners.get(index);double[] f=cornerFlips(index);
+        return f==null?new Vec3(c.x(),c.y(),c.z()):new Vec3(c.x()+(f[0]>0?1:0),c.y()+(f[1]>0?1:0),c.z()+(f[2]>0?1:0));
+    }
+    /** The block of a box corner for a handle put at {@code anchor}, given the sides the handle is on. */
+    private static Point cornerFrom(Vec3 anchor,double[] flips){
+        return new Point((int)Math.round(anchor.x-(flips[0]>0?1:0)),(int)Math.round(anchor.y-(flips[1]>0?1:0)),(int)Math.round(anchor.z-(flips[2]>0?1:0)));
+    }
+    /** The block of the corner being dragged, as it is now; null when no box corner is being dragged. */
+    static Point liveCorner(){return dragging!=null&&dragging.kind==Kind.NODE&&dragFlips!=null?cornerFrom(dragging.anchor.add(delta),dragFlips):null;}
+    /** Where the handle of a node is shown: a box corner at the extremity of the bounds, any other node at its block (or its centre). */
+    static Vec3 nodeAnchor(Point node,int index){
+        if(index>=0&&index<ClientState.boxCorners.size()&&ClientState.boxCorners.get(index).equals(node)&&cornerFlips(index)!=null)return cornerAnchor(index);
+        double shift=nodeOffset();return new Vec3(node.x()+shift,node.y()+shift,node.z()+shift);
+    }
+    /** A solid white cube on a box corner's handle, big enough to read from a distance. */
+    static void cornerCube(Vec3 anchor){double h=.13*screenScale(anchor);Overlay.box(new AABB(anchor.add(-h,-h,-h),anchor.add(h,h,h)),0xffffffff,2,0xffffffff);}
     /** The axes for a gizmo at {@code anchor}, turned to point away from the box when it is a box corner. */
     private static Vec3[] axesAt(Vec3 anchor){
         Vec3[] directions=axes();
-        double[] flips=dragging!=null&&dragging.kind==Kind.NODE&&dragFlips!=null&&anchor.distanceTo(dragging.anchor.add(delta))<1e-6?dragFlips:flipsFor(anchor);
+        boolean dragged=dragging!=null&&dragging.kind==Kind.NODE&&dragFlips!=null&&(anchor.distanceTo(dragging.anchor.add(delta))<1e-6||anchor.distanceTo(dragging.anchor.add(smooth))<1e-6); // the gizmo is drawn at the smoothed position
+        double[] flips=dragged?dragFlips:flipsFor(anchor);
         if(flips!=null)for(int i=0;i<3;i++)directions[i]=directions[i].scale(flips[i]);
         return directions;
     }

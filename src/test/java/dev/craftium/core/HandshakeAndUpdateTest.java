@@ -29,6 +29,12 @@ class HandshakeAndUpdateTest {
         assertTrue(hello.has(Handshake.MODIFY_EXPANSION));assertFalse(hello.has("something-newer"));
         assertTrue(hello.missingFrom(Handshake.CAPABILITIES).isEmpty());
     }
+    @Test void onlyTheFabricServerListsFastMovement(){
+        assertFalse(Handshake.read(Handshake.write("0.10.0-beta.1")).has(Handshake.FAST_MOVEMENT),"the default list, as Paper sends it, leaves it out");
+        var fabric=Handshake.read(Handshake.write("0.10.0-beta.1",Handshake.FABRIC_SERVER_CAPABILITIES));
+        assertTrue(fabric.has(Handshake.FAST_MOVEMENT));assertTrue(fabric.has(Handshake.MODIFY_EXPANSION));assertTrue(fabric.has(Handshake.AI_SPEC_V2),"the AI client reads a Fabric server without it as one that predates spec v2");
+        assertTrue(fabric.missingFrom(Handshake.CAPABILITIES).isEmpty(),"a client that knows less loses nothing");
+    }
     @Test void aHelloFromBeforeTheListHasNoCapabilities(){
         var old=Handshake.read("{\"protocol\":1,\"version\":\"0.9.1-beta.1\"}");
         assertNotNull(old);assertFalse(old.has(Handshake.MODIFY_EXPANSION));
@@ -36,7 +42,7 @@ class HandshakeAndUpdateTest {
         assertNull(Handshake.problem(old,true),"still compatible, only without the optional features");
     }
     @Test void unknownCapabilitiesFromANewerPeerAreIgnored(){
-        var newer=Handshake.read("{\"protocol\":1,\"version\":\"2.0.0\",\"capabilities\":[\"modify-expansion\",\"from-the-future\"]}");
+        var newer=Handshake.read("{\"protocol\":1,\"version\":\"2.0.0\",\"capabilities\":[\"modify-expansion\",\"ai-spec-v2\",\"from-the-future\"]}");
         assertTrue(newer.has(Handshake.MODIFY_EXPANSION));assertTrue(newer.missingFrom(Handshake.CAPABILITIES).isEmpty());assertNull(Handshake.problem(newer,true));
     }
     @Test void theServerRemembersWhatEachClientSupports(){

@@ -99,26 +99,29 @@ public final class CraftiumClient implements ClientModInitializer {
      */
     public static void resetEditor(){
         ClientState.selectionPending=false;ClientState.selectingSince=0;ClientState.selectionSizeBefore=0;ClientState.largeSelection=0;ClientState.heldSelection="";
-        ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.aiPending=GhostBlocks.EMPTY;ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
+        ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.aiPending=GhostBlocks.EMPTY;ClientState.sharedAi=List.of();ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
         ShapeObject.cancel();TransformGizmo.cancel();PlacementPreview.cancel();BuilderMode.reset();SelectionOverlay.update("");
     }
-    private static void receiveStatus(String json){
+    /** How far away another player's AI preview is still drawn, in blocks: past this it is out of sight, and drawing it costs a frame. */
+    private static final double SHARED_RANGE=192;
+    static void receiveStatus(String json){
             var next=Packets.JSON.fromJson(json,Packets.Status.class);
-            if(next!=null){ClientState.status=next;if(next.error()){if(next.message().startsWith("Too many edits waiting"))BuilderPrediction.rejectedNewest();else BuilderPrediction.rejected();}else if(next.message().startsWith("Applied "))BuilderPrediction.confirmed(next.message());HistoryPulse.receive(next);checkLargeSelection(next);applyPivot(next.pivotUpdate());if(next.message().startsWith("Undid ")||next.message().startsWith("Redid "))ClientState.boxCorners.clear();ClientRestore.apply(next.restore());if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());ClientState.aiPending=GhostBlocks.parse(next.aiPendingData());if(ClientState.aiPending.total()>0)ClientState.aiPending.ai=true;if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());var mc=Minecraft.getInstance();if(ClientCompat.screen(mc) instanceof EditorScreen editor)editor.statusReceived();AiBridge.statusReceived(next);}
+            if(next!=null&&next.background()){ClientState.updateShared(next);return;} // somebody else's preview changed: not a reply to anything this client asked, and nothing else in it
+            if(next!=null){ClientState.updateShared(next);ClientState.status=next;if(next.error()){if(next.message().startsWith("Too many edits waiting"))BuilderPrediction.rejectedNewest();else BuilderPrediction.rejected();}else if(next.message().startsWith("Applied "))BuilderPrediction.confirmed(next.message());HistoryPulse.receive(next);checkLargeSelection(next);applyPivot(next.pivotUpdate());if(next.message().startsWith("Undid ")||next.message().startsWith("Redid "))ClientState.boxCorners.clear();ClientRestore.apply(next.restore());if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());ClientState.aiPending=GhostBlocks.parse(next.aiPendingData());if(ClientState.aiPending.total()>0)ClientState.aiPending.ai=true;if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());var mc=Minecraft.getInstance();if(ClientCompat.screen(mc) instanceof EditorScreen editor)editor.statusReceived();AiBridge.statusReceived(next);}
     }
     /** Opens the confirmation when a selection action has just selected a suspiciously large area. */
     private static void checkLargeSelection(Packets.Status next){
         if(!ClientState.selectionPending)return;
         if(next.error()){ClientState.selectionPending=false;ClientState.selectingSince=0;return;}
         String message=next.message();
+        if(message.startsWith("First corner"))ClientState.selectingSince=0; // the first click of a box selects nothing yet, so there is nothing to wait for
         if(!(message.startsWith("Selected ")||message.startsWith("Lasso selected ")||message.startsWith("Magic Wand: ")))return;
         ClientState.selectionPending=false;ClientState.selectingSince=0;
         int added=next.selectionSize()-ClientState.selectionSizeBefore;
-        if(added<ClientState.LARGE_SELECTION)return;
+        if(added<ClientState.options.largeSelectionThreshold)return;
         // A Magic Wand click that had its outline under the cursor was seen before it was made, so it needs no warning; only a selection too big for that preview asks.
         var options=ClientState.options;
         if(!options.largeSelectionWarnings)return;
-        if(options.tool==Tool.MAGIC_SELECT&&options.magicPreview&&added<options.hoverPreviewLimit)return;
         var mc=Minecraft.getInstance();
         // Set at once, before this status is drawn, so the popup comes first and the selection is not built until it is confirmed.
         if(ClientCompat.screen(mc) instanceof EditorScreen)ClientState.largeSelection=next.selectionSize();
@@ -305,6 +308,8 @@ public final class CraftiumClient implements ClientModInitializer {
         Vec3 at=mc.player.getEyePosition().add(mc.player.getLookAngle().scale(4));
         return new BlockHitResult(at,net.minecraft.core.Direction.UP,net.minecraft.core.BlockPos.containing(at),false);
     }
+    /** The longest step in blocks per tick this client may take, or infinity when the server does not mind. */
+    public static double stepLimit(){return ClientHandshake.fastMovement()?Double.POSITIVE_INFINITY:ClientHandshake.SAFE_STEP;}
     public static boolean supported() {return Minecraft.getInstance().getConnection()!=null && (ClientPlayNetworking.canSend(Packets.Edit.TYPE)||ClientPlayNetworking.canSend(Packets.Bridge.TYPE));}
     public static void send(String action,Point target,Point normal) {
         if(!supported()){ClientState.notify("Install Craftium on this server to edit worlds");return;}
@@ -421,7 +426,7 @@ public final class CraftiumClient implements ClientModInitializer {
         if(screen==null){var anchor=BuilderMode.gizmoAnchor();if(anchor!=null)TransformGizmo.display(anchor,BuilderMode.gizmoAxes());return;}
         if(ClientState.options.tool==Tool.BOX_SELECT)BoxHandles.draw(screen);
         TransformGizmo.draw(screen);
-        Point handle=screen.handlePoint();if(handle!=null){double shift=TransformGizmo.nodeOffset();Vec3 anchor=new Vec3(handle.x()+shift,handle.y()+shift,handle.z()+shift);int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Overlay.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2);}
+        Point handle=screen.handlePoint();if(handle!=null&&ClientState.options.tool!=Tool.BOX_SELECT){Vec3 anchor=TransformGizmo.nodeAnchor(handle,screen.handleIndex());int[] colors={0xffff7777,0xff8bef9a,0xff78b9ff};for(int axis=0;axis<3;axis++)Overlay.line(anchor,anchor.add(axis==0?3:0,axis==1?3:0,axis==2?3:0),colors[axis],screen.handleAxis()==axis?4:2);}
     }
     private static void preview(Minecraft mc) {
         var screen=ClientCompat.screen(mc) instanceof EditorScreen editor?editor:ClientCompat.screen(mc) instanceof StudioScreen studio?studio.editor():null;
@@ -437,6 +442,12 @@ public final class CraftiumClient implements ClientModInitializer {
             if(hit!=null&&screen!=null&&screen.toolActive()&&ClientState.options.tool==Tool.RULER){var o=ClientState.options;Overlay.box(new AABB(hit.getBlockPos()),o.selectionColor,(float)o.selectionWidth,o.selectionFill);}
             ClientState.pending.draw(new Point(0,0,0),true);
             ClientState.aiPending.draw(new Point(0,0,0),true);
+            // The AI previews other players are holding, in their own colour and with the owner's name, as far away as they are worth drawing.
+            if(ClientState.options.showSharedAiPreviews&&mc.player!=null)for(var other:ClientState.sharedAi)
+                if(other.ghost().within(mc.player.getX(),mc.player.getY(),mc.player.getZ(),SHARED_RANGE)){
+                    other.ghost().draw(new Point(0,0,0),true);
+                    var at=other.ghost().labelAt();if(at!=null)Overlay.text(other.owner()+"'s AI preview",at,0xff9ff0e4,0xbb151c26,.04f);
+                }
             if(ClientState.options.showMarkerGizmos||ClientState.options.showDisplayGizmos){int count=0;for(var entity:mc.level.entitiesForRendering()){boolean show=entity instanceof net.minecraft.world.entity.Marker&&ClientState.options.showMarkerGizmos||entity instanceof net.minecraft.world.entity.Display&&ClientState.options.showDisplayGizmos;if(!show||entity.distanceToSqr(mc.player)>128*128||++count>256)continue;Vec3 at=entity.position();int color=entity.getUUID().toString().equals(ClientState.options.entityUuid)?0xffffd66d:0xffe6edf7;Overlay.point(at,color,6);Overlay.box(new AABB(at.add(-.08,-.08,-.08),at.add(.08,.08,.08)),color,1,0);}}
             if(ClientState.options.showAnnotations&&ClientState.status.annotations()!=null)for(var note:ClientState.status.annotations()){
                 Point a=note.from(),b=note.to();Vec3 start=new Vec3(a.x()+.5,a.y()+.5,a.z()+.5),end=new Vec3(b.x()+.5,b.y()+.5,b.z()+.5);

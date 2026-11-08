@@ -33,7 +33,7 @@ final class BoxInteraction implements Interaction {
         var corners = ClientState.boxCorners;
         if (corners.size() != 2) return;
         for (int i = 0; i < 2; i++)
-            if (i != editor.selectedNode() && editor.hitsPointHandles(corners.get(i), x, y)) { editor.selectNode(i); break; }
+            if (i != editor.selectedNode() && editor.hitsPointHandles(corners.get(i), i, x, y)) { editor.selectNode(i); break; }
     }
 
     /** The box follows the handles, replacing the box it made before. */
