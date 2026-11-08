@@ -28,18 +28,31 @@ public final class Packets {
                           */
                          List<SharedPreview> sharedAi,
                          /** A status that only brings {@code sharedAi}: something somebody else did, not a reply to anything this player asked, so the client does not take it as one. */
-                         boolean background) {
-        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo,String entityUuid,String entityNbt,List<dev.craftium.core.Annotation> annotations,String selectionData,String clipboardData,List<dev.craftium.core.BlueprintInfo> blueprints,int clipboardEntityCount,String pendingData,String clipboardGhost,String pivotUpdate,long undoAge,long redoAge,String undoName,String redoName,String pulse,String aiPendingData,int aiUndo,String aiUndoName){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,entityUuid,entityNbt,annotations,selectionData,clipboardData,blueprints,clipboardEntityCount,pendingData,clipboardGhost,pivotUpdate,undoAge,redoAge,undoName,redoName,pulse,aiPendingData,aiUndo,aiUndoName,"",null,null,false);}
+                         boolean background,
+                         /**
+                          * All of this player's AI sessions, oldest first: what each is doing and holding. Null means the same as last time (a {@code background}
+                          * status has none), and an entry's {@code data} is null when its preview is the one the client was last sent.
+                          */
+                         List<AiSession> aiSessions) {
+        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo,String entityUuid,String entityNbt,List<dev.craftium.core.Annotation> annotations,String selectionData,String clipboardData,List<dev.craftium.core.BlueprintInfo> blueprints,int clipboardEntityCount,String pendingData,String clipboardGhost,String pivotUpdate,long undoAge,long redoAge,String undoName,String redoName,String pulse,String aiPendingData,int aiUndo,String aiUndoName){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,entityUuid,entityNbt,annotations,selectionData,clipboardData,blueprints,clipboardEntityCount,pendingData,clipboardGhost,pivotUpdate,undoAge,redoAge,undoName,redoName,pulse,aiPendingData,aiUndo,aiUndoName,"",null,null,false,null);}
         /** {@code undoAge} and {@code redoAge} are how many milliseconds ago the next edit to undo or redo was made, or -1 when there is none. */
-        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,false);}
+        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,false,null);}
     }
+
+    /**
+     * One AI session of a player. {@code state} is "idle", "preview" (a preview is waiting), "applying", "applied" (it has builds to undo) or
+     * "stopped". {@code age} and {@code idle} are how many milliseconds ago it began and last had a request, for the client to count on from.
+     * {@code min} and {@code max} are the box of its preview or latest build, or null; {@code previewId} changes with each new preview.
+     */
+    public record AiSession(String id,String label,String state,int blocks,Point min,Point max,String dimension,int undo,String undoName,long age,long idle,
+                            boolean stopped,String lastTool,long previewId,String data) {}
 
     /** One player's waiting AI preview, as ghost data, and whose it is. */
     public record SharedPreview(String owner, String data) {}
 
     /** A status that carries only the other players' AI previews, sent when one of them changes. */
     public static Status sharedOnly(List<SharedPreview> shared) {
-        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,shared,true);
+        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,shared,true,null);
     }
 
     public record Bridge(byte[] bytes) implements CustomPacketPayload {

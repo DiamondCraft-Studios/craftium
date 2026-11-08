@@ -20,6 +20,16 @@ final class Session {
      * player's. It has no selection, is never saved, and its statuses are described through the player's session.
      */
     boolean ai;
+    /** For an AI workspace: whose it is, which of their AI sessions it is ("" for the default one), and the label its AI app gave the build. */
+    UUID aiOwner;String aiId="",label="";
+    /** For an AI workspace: when it began and when it last had a request (epoch milliseconds), the tool of that request, and whether the player stopped it. */
+    long createdAt,lastActive;String lastTool="";boolean stopped;
+    /** For an AI workspace: whether the player chose its label, so the AI app's own is no longer put over it. */
+    boolean renamed;
+    /** For an AI workspace: the box its waiting preview or latest build fills, and when that was set. Null when it has none. Other sessions' previews are checked against it. */
+    dev.craftium.core.AiSessions.Region region;long regionAt;
+    /** For a player's own session: the preview each of their AI sessions had when this player was last sent it (AI session id to preview number), so only a change carries ghost data again. */
+    final Map<String,Long> sentAi=new HashMap<>();
     Point corner, ruler, line;
     long lastRequest;
     /** The game mode the player had before the editor made them a spectator; null when nothing is waiting to be restored. */

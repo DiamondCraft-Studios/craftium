@@ -217,8 +217,21 @@ final class AiWorld {
 
     /** {@link #previewSummary(Session.Edit)} with what looks wrong in it, if anything: see {@link #warnings}. */
     static String previewSummary(Session.Edit added, net.minecraft.server.level.ServerLevel level, Session.Edit whole, java.util.List<String> specWarnings, int takenBack) {
+        return previewSummary(added, level, whole, specWarnings, takenBack, java.util.List.of());
+    }
+
+    /**
+     * {@link #previewSummary(Session.Edit, net.minecraft.server.level.ServerLevel, Session.Edit, java.util.List, int)} with where the build runs into
+     * other AI sessions' previews and recent builds, if it does: the AI is told which, so it can move the build or tell the player.
+     */
+    static String previewSummary(Session.Edit added, net.minecraft.server.level.ServerLevel level, Session.Edit whole, java.util.List<String> specWarnings, int takenBack, java.util.List<String> conflicts) {
         var out = summaryJson(added);
         if (takenBack > 0) out.addProperty("takenBack", takenBack);
+        if (!conflicts.isEmpty()) {
+            var array = new com.google.gson.JsonArray();
+            for (String c : conflicts) array.add(c);
+            out.add("conflicts", array);
+        }
         var list = new java.util.ArrayList<>(specWarnings);
         list.addAll(warnings(level, whole, added));
         if (!list.isEmpty()) {
