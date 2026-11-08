@@ -13,7 +13,7 @@ import java.util.*;
  */
 public final class StatusFit {
     /** Fields that carry data to draw, biggest first when dropped. The rest of a status is small. */
-    static final List<String> DRAWN = List.of("selectionData", "clipboardData", "clipboardGhost", "pendingData", "aiPendingData", "sharedAi", "pulse", "restore");
+    static final List<String> DRAWN = List.of("selectionData", "clipboardData", "clipboardGhost", "pendingData", "pluginPreviewData", "aiPendingData", "sharedAi", "pulse", "restore");
 
     /** The previews other players are holding: left out before anything of the player's own. */
     static final String OTHERS = "sharedAi";
