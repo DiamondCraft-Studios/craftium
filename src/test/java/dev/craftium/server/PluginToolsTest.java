@@ -72,4 +72,29 @@ class PluginToolsTest {
         assertEquals(2, tool.settings(Map.of()).integer("height"));
         assertEquals(2, tool.settings(null).integer("height"));
     }
+
+    @Test void theVersionGoesUpOnlyWhenTheSetOfToolsChanges() {
+        int start = PluginTools.version();
+        PluginTools.register(spec("wall:build"), NOTHING);
+        assertEquals(start + 1, PluginTools.version());
+        assertThrows(IllegalArgumentException.class, () -> PluginTools.register(spec("wall:build"), NOTHING));
+        assertEquals(start + 1, PluginTools.version(), "a refused registration changes nothing");
+        assertEquals(0, PluginTools.unregister("other"));
+        assertEquals(start + 1, PluginTools.version(), "taking back nothing changes nothing");
+        PluginTools.unregister("wall");
+        assertEquals(start + 2, PluginTools.version());
+        PluginTools.clear();
+        assertEquals(start + 2, PluginTools.version(), "clearing an empty set changes nothing");
+        PluginTools.register(spec("wall:build"), NOTHING);
+        PluginTools.clear();
+        assertEquals(start + 4, PluginTools.version());
+    }
+
+    @Test void theToolsAreListedInAStableOrderWithTheirSettings() {
+        PluginTools.register(spec("zeta:last"), NOTHING);
+        PluginTools.register(spec("alpha:first", PropertySpec.toggle("hollow", "Hollow", false)), NOTHING);
+        var infos = PluginTools.infos();
+        assertEquals(List.of("alpha:first", "zeta:last"), infos.stream().map(dev.craftium.net.Packets.PluginTool::id).toList());
+        assertEquals("hollow", infos.get(0).properties().get(0).id());
+    }
 }

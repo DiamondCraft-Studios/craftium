@@ -2,9 +2,14 @@ package dev.craftium.server;
 
 import dev.craftium.core.PropertyValues;
 import dev.craftium.core.ToolSpec;
+import dev.craftium.net.Packets;
+import dev.craftium.net.PluginToolCodec;
 
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 /**
@@ -29,6 +34,15 @@ final class PluginTools {
     static final String RESERVED = "craftium";
 
     private static final Map<String, Registered> TOOLS = new ConcurrentHashMap<>();
+    /** Goes up whenever the set of tools changes, so a player who was told of the tools earlier can tell they have changed since. */
+    private static final AtomicInteger VERSION = new AtomicInteger();
+
+    static int version() { return VERSION.get(); }
+
+    /** The tools as a client is told of them, in a stable order. */
+    static List<Packets.PluginTool> infos() {
+        return TOOLS.values().stream().map(Registered::spec).sorted(Comparator.comparing(ToolSpec::id)).map(PluginToolCodec::toWire).toList();
+    }
 
     /** Makes the tool the spec describes do {@code behaviour}. Throws when the id is not a plugin's or is already taken. */
     static void register(ToolSpec spec, ToolBehaviour behaviour) {
@@ -37,6 +51,7 @@ final class PluginTools {
         if (!ID.matcher(id).matches()) throw new IllegalArgumentException("A tool is named plugin_id:tool, in lower case letters, digits and underscores: " + id);
         if (id.startsWith(RESERVED + ":")) throw new IllegalArgumentException("The " + RESERVED + " namespace is the editor's own: " + id);
         if (TOOLS.putIfAbsent(id, new Registered(spec, behaviour)) != null) throw new IllegalArgumentException("Tool " + id + " is already registered");
+        VERSION.incrementAndGet();
     }
 
     static Registered find(String id) { return id == null ? null : TOOLS.get(id); }
@@ -45,8 +60,9 @@ final class PluginTools {
     static int unregister(String namespace) {
         int[] removed = {0};
         TOOLS.keySet().removeIf(id -> { boolean ours = id.substring(0, id.indexOf(':')).equals(namespace); if (ours) removed[0]++; return ours; });
+        if (removed[0] > 0) VERSION.incrementAndGet();
         return removed[0];
     }
 
-    static void clear() { TOOLS.clear(); }
+    static void clear() { if (!TOOLS.isEmpty()) VERSION.incrementAndGet(); TOOLS.clear(); }
 }

@@ -636,6 +636,30 @@ public final class EditorServer {
      * owner leaves, and now and then, which catches an owner who changed dimension without doing anything. It sends a status of its own kind
      * ({@link Packets#sharedOnly}) that the client does not take for the reply to anything it asked, and sends nothing when nothing changed.
      */
+    /**
+     * The list of plugin tools for the status that is going to this player, or null when they already have the current one, are not allowed plugin tools, or
+     * have a client that does not know them. Asking marks the list as sent.
+     */
+    private static List<Packets.PluginTool> pluginToolsFor(ServerPlayer player,Session s){
+        int version=PluginTools.version();
+        if(s.pluginToolsSent==version||!Handshake.clientHas(player.getUUID(),Handshake.PLUGIN_TOOLS)||!ServerPlatform.permitted(player,PLUGIN_LIST))return null;
+        s.pluginToolsSent=version;
+        return PluginTools.infos();
+    }
+    /** The name a player's permission to see and use plugin tools is asked under; it has a colon, so the host answers as it does for a plugin's own actions. */
+    private static final String PLUGIN_LIST="plugins:list";
+    private static int pluginToolsPushed;
+    /** Tells every editor player when the set of plugin tools changed, as a status of its own that is nothing else. Cheap to ask every tick: it compares one number. */
+    static void refreshPluginTools(MinecraftServer server){
+        int version=PluginTools.version();
+        if(version==pluginToolsPushed)return;
+        pluginToolsPushed=version;
+        for(var player:server.getPlayerList().getPlayers()){
+            var s=SESSIONS.get(player.getUUID());if(s==null||!ServerPlatform.canSend(player))continue;
+            var tools=pluginToolsFor(player,s);if(tools==null)continue;
+            ServerPlatform.send(player,new Packets.Update(StatusFit.fit(Packets.JSON.toJson(Packets.toolsOnly(tools)),STATUS_LIMIT,"")));
+        }
+    }
     static void refreshShared(MinecraftServer server){
         for(var player:server.getPlayerList().getPlayers()){
             var s=SESSIONS.get(player.getUUID());if(s==null||!ServerPlatform.canSend(player))continue;
@@ -953,6 +977,7 @@ public final class EditorServer {
         send(player,s,backwards?"Undoing…":"Redoing…",false);
     }
     public static void tick(MinecraftServer server) {
+        refreshPluginTools(server);
         if(!AI_SESSIONS.isEmpty()&&server.getTickCount()%20==0){expireAi(server);refreshShared(server);} // an owner who changed dimension, or whose build has applied, without doing anything else
         AnimatedRebuild.tick(server);
         if(++historyTicks%100==0)for(var session:SESSIONS.values())HistoryStore.save(session);
@@ -1119,7 +1144,7 @@ public final class EditorServer {
         if(s.pluginPreviewDirty){s.pluginPreviewData=s.pluginPreview==null?"":GhostCodec.encodeEdit(s.pluginPreview);s.pluginPreviewDirty=false;}
         if(ai!=null)aiData(ai); // one place makes the AI preview's data, so the owner and the players who see it always get the same
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null||Handshake.clientHas(player.getUUID(),Handshake.AI_SESSIONS)?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin,sharedFor(player,s),false,aiInfos(player,s),s.pluginPreviewData);s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
+        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null||Handshake.clientHas(player.getUUID(),Handshake.AI_SESSIONS)?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin,sharedFor(player,s),false,aiInfos(player,s),s.pluginPreviewData,pluginToolsFor(player,s));s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
         // A status that is too long for a packet cannot be written and would drop the player's connection, so one that is too big is sent without the largest drawn data.
         var json=Packets.JSON.toJson(status);var fitted=StatusFit.fit(json,STATUS_LIMIT,"Too big to draw: the selection or preview is still there, but not shown");
         if(fitted.length()!=json.length())s.sentAi.clear(); // what was left out was not drawn, so the next status carries the previews again
