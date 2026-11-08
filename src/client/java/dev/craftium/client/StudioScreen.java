@@ -218,7 +218,7 @@ public final class StudioScreen extends CraftiumScreen {
     @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
     @Override protected void draw(Gfx g,int x,int y,float delta){
         g.pose().pushMatrix();g.pose().scale(uiScale,uiScale);
-        g.fill(0,0,canvasW,canvasH,0xee101923);g.fill(left-12,top-13,Math.min(canvasW-5,left+640),canvasH-25,0xff172330);g.text(font,"CRAFTIUM  /  "+tab.toUpperCase(Locale.ROOT),left,top-25,0xffb5dcfc,false);
+        g.fill(0,0,canvasW,canvasH,0xee101923);g.fill(left-12,top-13,Math.min(canvasW-5,left+640),canvasH-25,0xff172330);g.text(font,tab.toUpperCase(Locale.ROOT),left,top-25,0xffb5dcfc,false);
         for(Label label:labels)g.text(font,font.plainSubstrByWidth(label.text,625),label.x,label.y,0xff9db5cb,false);
         if(tab.equals("AI"))drawAi(g);
         drawWidgets(g,(int)(x/uiScale),(int)(y/uiScale),delta);g.text(font,font.plainSubstrByWidth(message.isBlank()?ClientState.status.message():message,canvasW-30),15,canvasH-17,0xffffdca8,false);g.pose().popMatrix();

@@ -1218,7 +1218,8 @@ public final class EditorScreen extends CraftiumScreen {
             case 2 -> List.of(item("Deselect","Alt+D",()->action("clear")),item("Inverse","",()->action("selection_invert")),
                 item(showSelection?"Hide selection":"Show selection","",()->showSelection=!showSelection),divider(),
                 item("Expand…","",()->ClientCompat.setScreen(minecraft,new ResizeSelectionScreen(this,true))),item("Shrink…","",()->ClientCompat.setScreen(minecraft,new ResizeSelectionScreen(this,false))),
-                item("Expand by 1","",()->resizeSelection("selection_expand",1)),item("Shrink by 1","",()->resizeSelection("selection_shrink",1)));
+                item("Expand by 1","",()->resizeSelection("selection_expand",1)),item("Shrink by 1","",()->resizeSelection("selection_shrink",1)),
+                item("Select outline…","",()->ClientCompat.setScreen(minecraft,new ResizeSelectionScreen(this,ResizeSelectionScreen.Kind.OUTLINE))));
             case 3 -> List.of(item("Toggle side panels","",()->panels=!panels),item("Tool options","",()->{builder=false;pinnedTab=false;init();}),item("Builder controls","Alt",()->{builder=true;init();}),item("Studio inspector","",()->ClientCompat.setScreen(minecraft,new StudioScreen(this))),item("Colour picker / gradient","",()->ClientCompat.setScreen(minecraft,new ColourScreen(this))));
             case 8 -> List.of(
                 item(AiBridge.running()?"Turn off AI building":"Turn on AI building","",()->{AiBridge.toggle();ClientState.notify(AiBridge.running()?"AI building is on":"AI building is off");}),divider(),
@@ -1447,7 +1448,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void help(Gfx g) {
         controls.clear();
         g.fill(0,23,w,h-21,0x9910151c);int x=w/2-230,y=h/2-145;
-        panel(g,x,y,460,290,"Craftium / Building Studio");
+        panel(g,x,y,460,290,"Building Studio");
         String[] lines={"A familiar workspace for building, painting and sculpting.","","Right Shift          Open / close the editor","Left drag            Look around the world","W A S D / Space Shift Fly horizontally / up and down","Right click / drag   Use the selected tool","Middle click         Pick the block under the cursor","Ctrl + middle drag   Adjust brush radius","Ctrl Z / Ctrl Y      Undo / redo","Ctrl C / X / V       Copy / cut / paste at cursor","Ctrl R / Ctrl F      Rotate / mirror pending placement","Ctrl F / Ctrl R      Fill / replace the selection","Enter / Delete       Clear / delete selection","Ctrl J               Duplicate selection as a placement","Ctrl P / Ctrl B      Save blueprint / show biomes","View > Keybinds      Edit shortcuts; inspector via View","","Creative mode + cheats / operator level 2 required.","Biome edits use Minecraft's 4 × 4 × 4 biome cells."};
         int row=y+30;for(String line:lines){text(g,line,x+18,row,MUTED);row+=14;}
         button(g,x+350,y+258,92,22,"Back to editor",false,()->help=false,"");

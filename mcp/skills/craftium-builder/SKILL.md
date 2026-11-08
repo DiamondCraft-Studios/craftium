@@ -9,6 +9,10 @@ Syntax and hard limits live in the `preview_build` tool description. This skill 
 builder works in, and what to check at each step. Build like a person would: rough form first, detail last, never
 detail on a form nobody has approved.
 
+If the player asks for a blockout, greybox or whitebox of a room or set of rooms (for example for a mod's dungeon or
+temple), or gives a room ruleset, use the `craftium-blockout` skill instead. It is a different job: cubes only,
+colour-coded placeholder blocks, preview only.
+
 ## Read these when
 
 - [references/proportions.md](references/proportions.md): before the brief and the blockout, and whenever you

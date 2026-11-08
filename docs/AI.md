@@ -36,7 +36,7 @@ Then ask Claude for a build while the game is open. Claude works on the world it
 
 ## As a Claude plugin (Claude Code and Cowork)
 
-The [mcp](../mcp) folder is also a Claude plugin: the same server plus the **craftium-builder** skill, which teaches Claude to build the way a person does (brief, site, an approved blockout, then shell, roof, openings, materials, detail), at Minecraft's scale rather than real-world scale, in stages that stay under the preview limit, and with stairs the right way round. In Claude Code:
+The [mcp](../mcp) folder is also a Claude plugin: the same server plus the **craftium-builder** skill, which teaches Claude to build the way a person does (brief, site, an approved blockout, then shell, roof, openings, materials, detail), at Minecraft's scale rather than real-world scale, in stages that stay under the preview limit, and with stairs the right way round. It also includes **craftium-blockout**, for mod and add-on authors: it blocks out the rooms of a dungeon, ruin, tower or temple in cubes and colour-coded placeholder blocks, following a room ruleset you write (a template is included), for one room or a set, and only as a preview until you say to build. In Claude Code:
 
 ```
 /plugin marketplace add DiamondCraft-Studios/craftium

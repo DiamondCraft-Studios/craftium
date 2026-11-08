@@ -24,6 +24,9 @@ Privacy: [PRIVACY.md](https://github.com/DiamondCraft-Studios/craftium/blob/main
 - **The `craftium-builder` skill.** It teaches the order a builder works in (brief, site, an approved blockout, then
   shell, roof, openings, materials, detail and context), Minecraft-scale proportions, how to build in stages around
   the preview limit, and how to get stair and roof orientation right.
+- **The `craftium-blockout` skill.** It blocks out the rooms of a landmark for a mod or add-on (dungeons, ruins,
+  towers, temples): cubes only, in colour-coded placeholder blocks, from a room ruleset you write, one room or a set,
+  preview only until you say to build.
 
 ## Install
 
@@ -61,6 +64,7 @@ may and may not do is pinned down in `test/contract.test.js`.
 | `src/surface.js` | Summarises a wide `get_surface` read into a few hundred words |
 | `src/bridge.js` | Finds the bridge file and calls the game on `127.0.0.1` |
 | `skills/craftium-builder/` | The building skill and its reference files |
+| `skills/craftium-blockout/` | The room blockout skill, its legend, ruleset template and examples |
 
 ```sh
 npm ci             # once (installs the test-only SDK)
