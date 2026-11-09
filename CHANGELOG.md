@@ -1,14 +1,18 @@
 # Changelog
 
-## Unreleased
+## 1.4.0-beta.1
 
 Changes since 1.3.1-beta.1.
 
 ### Interface
+- New 2D colour picker, with a window to open it in.
+- Turning off AI building in the editor asks first.
+- The fold arrow of editor windows folds them.
 - New Selections window. Save selection keeps what is selected as an entry named Selection 1, Selection 2 and so on (the count starts again at 1 when none are left), beside your selection and without changing it. Each entry has a colour square (the selection colour, then turned round the hue wheel for each next one; click it to change it), an eye to hide its outline, a pencil to edit it and a cross to delete it. Clicking an entry shows it in place of your selection and clicking it again gives yours back. Editing an entry lets any selection tool add to it or take from it, keeping the changes. Deleting asks nothing, and Ctrl+Z brings the entry back with its colour. Saved selections that are not shown are drawn like the selection, in their own colour, while the editor is open.
 
 ### AI building
 - Claude can take showcase pictures of your builds. capture_batch takes real in-game pictures (textures, lighting, sky, interface hidden) of any number of rooms from several angles each, and saves them to screenshots/craftium/<job>/<room>/ with a manifest.json. Angles are presets (hero, compass sides, corners, top, ground) or a target with azimuth, elevation and distance, or a placed camera; the lens is 30 to 110 degrees; pictures are 1920 by 1080 by default, up to 4K. They are drawn from a camera of their own, so you are never moved or turned. Pictures are framed on the blocks really in the room's box, a shot with terrain or trees in the way is retaken once from higher up, and capture_status can return a room's pictures as one labelled contact sheet. capture_status and capture_cancel follow and stop the job. A craftium-showcase skill works out the angles from what you say, takes the pictures, looks at the contact sheets and retakes the weak ones. A room outside the loaded chunks fails with a message saying so.
+- Panes, bars, fences and walls in AI builds now connect to their neighbours.
 - Claude can tell your saved selections apart. get_state lists them by name, read_selection takes a name to read one, and replace_selection takes a "selection" name, so one build can do "on Selection 1 do this, then on Selection 2 do that". An unknown name refuses the build and lists the names there are.
 
 ### Internal
