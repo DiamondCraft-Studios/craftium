@@ -3,6 +3,7 @@ package dev.craftium.client;
 import dev.craftium.Craftium;
 import dev.craftium.core.*;
 import dev.craftium.net.Packets;
+import dev.craftium.net.PluginToolCodec;
 import net.fabricmc.loader.api.FabricLoader;
 import com.google.gson.GsonBuilder;
 import java.nio.file.*;
@@ -31,6 +32,15 @@ public final class ClientState {
         if(data==null||data.equals(pluginPendingData))return;
         pluginPendingData=data;pluginPending=data.isEmpty()?GhostBlocks.EMPTY:GhostBlocks.parse(data);
     }
+    /** The tools the server's plugins have added, as the server last said; empty on a server that has none or does not know them. */
+    private static List<ToolSpec> pluginTools=List.of();
+    public static List<ToolSpec> pluginTools(){return pluginTools;}
+    /** Takes in the list of plugin tools a status carries. A status that does not carry one (null) leaves it as it was. */
+    static void updatePluginTools(Packets.Status status){
+        if(status.pluginTools()==null)return;
+        pluginTools=List.copyOf(PluginToolCodec.fromWire(status.pluginTools()));
+    }
+    static void clearPluginTools(){pluginTools=List.of();}
     /** How many blocks the ghost of the plugin tool in use has; 0 when there is none. */
     public static int pluginPreviewBlocks(){return pluginPending.total();}
     static void clearPluginPreview(){pluginPending=GhostBlocks.EMPTY;pluginPendingData="";}
