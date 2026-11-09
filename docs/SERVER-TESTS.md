@@ -27,7 +27,7 @@ A dedicated server refuses to start without an accepted Minecraft EULA. The buil
 | Large payloads | A 16,000-position lasso travels as fragmented frames and is counted correctly |
 | Builder | Move, clone, stack and erase commits with undo |
 | Entities | Display entity spawn, delete, undo |
-| World rules | `craftiumDoBlockGravity` changes server state and the sand-falling mixin obeys it |
+| World rules | `/craftium gamerule doBlockGravity` changes server state and the sand-falling mixin obeys it |
 | Libraries | Blueprint export is downloaded to the client; the client's copy uploads back and pastes |
 | Client | Editor opens (screenshot `dedicated-editor`) and restores the game mode; client commands select |
 | Persistence | History saved, client disconnects, reconnects, saved history reloads and undoes |
