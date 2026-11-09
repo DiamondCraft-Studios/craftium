@@ -36,7 +36,7 @@ Then ask Claude for a build while the game is open. Claude works on the world it
 
 ## As a Claude plugin (Claude Code and Cowork)
 
-The [mcp](../mcp) folder is also a Claude plugin: the same server plus the **craftium-builder** skill, which teaches Claude to build the way a person does (brief, site, an approved blockout, then shell, roof, openings, materials, detail), at Minecraft's scale rather than real-world scale, in stages that stay under the preview limit, and with stairs the right way round. It also includes **craftium-blockout**, for mod and add-on authors: it blocks out the rooms of a dungeon, ruin, tower or temple in cubes and colour-coded placeholder blocks, following a room ruleset you write (a template is included), for one room or a set, and only as a preview until you say to build. In Claude Code:
+The [mcp](../mcp) folder is also a Claude plugin: the same server plus the **craftium-builder** skill, which teaches Claude to build the way a person does (brief, site, an approved blockout, then shell, roof, openings, materials, detail), at Minecraft's scale rather than real-world scale, in stages that stay under the preview limit, and with stairs the right way round. It also includes **craftium-showcase**, which takes showcase screenshots of your builds (see [Showcase pictures](#showcase-pictures)), and **craftium-blockout**, for mod and add-on authors: it blocks out the rooms of a dungeon, ruin, tower or temple in cubes and colour-coded placeholder blocks, following a room ruleset you write (a template is included), for one room or a set, and only as a preview until you say to build. In Claude Code:
 
 ```
 /plugin marketplace add DiamondCraft-Studios/craftium
@@ -68,6 +68,7 @@ The plugin needs Node.js 18 or newer on your PATH (an extension gets Node from C
 | `get_surface` | The ground of an area (up to 128 by 128 columns), to find ground level: every column for a small area or a strip, and for a wide one a summary (height range, how level it is, what it is made of, a coarse map) |
 | `get_screenshot` | A picture of what you see in the game, including the preview |
 | `render_view` | Claude's own camera: a picture of any box of the world from an angle it picks (see [Claude's own view](#claudes-own-view)), so it can check its work without touching your view |
+| `capture_batch`, `capture_status`, `capture_cancel` | Takes real in-game pictures of rooms from several angles and saves them to your disk (see [Showcase pictures](#showcase-pictures)): start a job, check how it is going, stop it |
 | `preview_build` | Shows a build as a ghost, replacing any earlier preview, or adding to it (`mode: "add"`) so a build kept as a preview grows phase by phase and is still applied and undone as one |
 | `apply_preview` | Builds the preview, as one undoable step, loading the ground first if nobody is near it |
 | `cancel_preview`, `undo` | Discards the preview, or undoes the last build Claude applied (never your own edits) |
@@ -88,6 +89,20 @@ Claude has a workspace of its own, apart from yours. It never changes your selec
 `render_view` draws a box of the world as flat-shaded blocks, each in the average colour of its texture (so resource packs show), seen from an angle Claude chooses: four isometric corners (`se`, `sw`, `ne`, `nw`), straight down (`top`, north at the top), or level with one side (`north`, `south`, `east`, `west`, for judging heights). Up to three angles can be asked for at once (`angles`), drawn from one read of the world, which takes about half the time of separate calls. It never turns or moves you and does not need the box to be near you. Your waiting preview is drawn over the world tinted violet, so Claude sees what you see. The picture is for Claude only; you keep looking at the violet ghost in the game.
 
 It has no textures, shadows or transparency (water and glass draw as solid colour), so it is for shape, proportion and layout, not for fine detail. The game describes an AI preview up to 32,768 blocks, the blocks that show first, and this picture draws all of those. The ghost in the game draws block models for the first 8,192 of them (the **AI preview models** setting in Preferences) and the rest as an outline. When a preview is bigger than 32,768 blocks, `get_state`, `preview_build` and `render_view` all say so (`previewTruncated`, with how many blocks are described and a warning), so Claude does not mistake the missing blocks for a mistake in the build; the whole preview is still built when it is applied. A box can be up to 128 blocks a side and 262,144 blocks (for example 64 by 64 by 64); it is read from the server in 32-block pieces, each within the chunk limit below.
+
+## Showcase pictures
+
+`capture_batch` takes real pictures of your builds, with textures, lighting and sky, the way the game draws them: a set of rooms, each from as many angles as Claude is told to use. It is for showing a build off, where `render_view` is for checking its shape.
+
+The game draws them from a camera of its own, so you are not moved, turned or selected, and your own view comes back when each picture is done. The job runs in the background; Claude starts it and then asks how it is going (`capture_status`), and can stop it (`capture_cancel`). While it runs, your screen shows what the camera sees, with the interface hidden, so leave the game alone until it finishes, and close any menu first.
+
+Pictures are saved to `screenshots/craftium/<job>/<room>/<room>_<angle>.png` in your game folder, next to a `manifest.json` that records every camera and the result of every picture. Nothing is sent to the AI app but the job's status (file names, cameras and errors), and a contact sheet of a room's pictures (at most 1024 pixels wide) when it asks for one. An earlier job's folder is never overwritten, and a job can be carried on later, skipping the pictures it already saved.
+
+Tell Claude what you want in your own words: the rooms and where they are (or just "photograph my saved selections": each entry of the Selections window can be a room, by name), the angles (compass sides, corners, from above, low to the ground, or a spot and where to look), the lens (field of view 30 to 110, default 70) and the size. Pictures are 1920 by 1080 unless you ask for more, up to 4K (3840 by 2160). A job can take up to 50 rooms and 100 pictures. The camera cannot tilt sideways.
+
+Pictures are framed on the blocks that are really in the room's box (read from the game's own copy of the world), so an L-shaped build is not framed as if it filled its whole box. When Claude gives a target or a distance, that is used as given. A shot's `manifest.json` entry says whether it was framed on `blocks` or the `box`. Before each one the game checks for terrain, trees or another build between the camera and the room, and retakes it once from higher up if so; the manifest records what it found (`occlusion`), and a picture that stays hidden is reported. Claude can ask for a **contact sheet** of a room (`capture_status` with `contact_sheet`): all its pictures as labelled thumbnails on one image, also saved as `contact-sheet.jpg`, so it judges every angle at once and retakes only the bad ones. The sheet is the only picture sent to the AI app, and only when it asks.
+
+The game only holds the chunks near you, so a room far away cannot be pictured until you walk there: its pictures fail with a message saying so, and the rest of the job goes on. A picture taken before every chunk in view was drawn is marked `chunksReady: false` in the manifest and may have gaps.
 
 ## Reading the preview
 
@@ -138,6 +153,7 @@ A build ignores your brush settings (mask, symmetry, height range) and places ex
 - The bridge is **off until you turn it on**, and it listens on `127.0.0.1` only.
 - Each launch writes a new random token to `config/craftium/bridge.json`. Requests without it are refused, as are requests that come from a web page (they carry an `Origin`) or name another host.
 - `get_screenshot` sends a picture of your game window (at most 1024 pixels wide) to the AI app, so close anything private on screen first. It is only taken when the AI app asks, and the corner marker shows **AI working…** while it does. `render_view` does not use your screen at all: it draws from block data, so it shows nothing but blocks.
+- `capture_batch` writes picture files to `screenshots/craftium/` in your game folder, only when the AI app asks. It cannot write anywhere else: Claude names a job, rooms and angles, never a path.
 - Builds are always staged as a ghost first, even if you have turned confirmation off for your own edits. Applying is a separate step. The ghost is Claude's own, so it cannot be applied by accident with your own Enter key.
 - The file is deleted when the bridge stops. If Minecraft crashes and leaves it behind, the extension reports that the game is not running.
 - Anyone who can read your Minecraft folder or run programs as you can read the token, as with any local app. Turn the bridge off when you are not using it.

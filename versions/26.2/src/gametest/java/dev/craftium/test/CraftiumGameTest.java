@@ -31,6 +31,8 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             if("replaceghost".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.ReplaceGhostGameTest.run(ctx,world);return;}
             if("prediction".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.PredictionGameTest.run(ctx,world);return;}
             if("queue".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.BuilderQueueGameTest.run(ctx,world);return;}
+            if("showcase-live".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){try{dev.craftium.client.ShowcaseGameTest.runLive(ctx,world);}catch(RuntimeException|Error e){throw e;}catch(Exception e){throw new AssertionError(e);}return;}
+            if("showcase".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){try{dev.craftium.client.ShowcaseGameTest.run(ctx,world);}catch(RuntimeException|Error e){throw e;}catch(Exception e){throw new AssertionError(e);}return;}
             if("selection".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.SelectionOutlineGameTest.run(ctx,world);return;}
             if("savedselections".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.SavedSelectionsGameTest.run(ctx,world);return;}
             if("selectionperf".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.SelectionDrawCostGameTest.run(ctx,world);return;}

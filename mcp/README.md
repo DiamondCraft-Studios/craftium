@@ -20,13 +20,17 @@ Privacy: [PRIVACY.md](https://github.com/DiamondCraft-Studios/craftium/blob/main
 ## What's in it
 
 - **The tools Claude uses:** read the world and its own preview (`get_state`, `read_selection`, `read_blocks`, `get_surface`), look at it
-  (`render_view`, `get_screenshot`), and build (`preview_build`, `apply_preview`, `cancel_preview`, `undo`).
+  (`render_view`, `get_screenshot`), take showcase pictures of rooms and save them to disk
+  (`capture_batch`, `capture_status`, `capture_cancel`), and build (`preview_build`, `apply_preview`, `cancel_preview`, `undo`).
 - **The `craftium-builder` skill.** It teaches the order a builder works in (brief, site, an approved blockout, then
   shell, roof, openings, materials, detail and context), Minecraft-scale proportions, how to build in stages around
   the preview limit, and how to get stair and roof orientation right.
 - **The `craftium-blockout` skill.** It blocks out the rooms of a landmark for a mod or add-on (dungeons, ruins,
   towers, temples): cubes only, in colour-coded placeholder blocks, from a room ruleset you write, one room or a set,
   preview only until you say to build.
+- **The `craftium-showcase` skill.** It takes showcase screenshots of your builds: it works out the boxes and angles
+  from what you say (or uses exactly the angles, lens and size you give), has the game take the pictures, looks at a
+  contact sheet of each room and retakes the weak ones. Pictures are saved to `screenshots/craftium/` in your game folder.
 
 ## Install
 
@@ -73,6 +77,7 @@ may and may not do is pinned down in `test/contract.test.js`.
 | `src/bridge.js` | Finds the bridge file and calls the game on `127.0.0.1` |
 | `skills/craftium-builder/` | The building skill and its reference files |
 | `skills/craftium-blockout/` | The room blockout skill, its legend, ruleset template and examples |
+| `skills/craftium-showcase/` | The showcase pictures skill and its shot guide (example batches are unit tested) |
 
 ```sh
 npm ci             # once (installs the test-only SDK)
