@@ -73,7 +73,7 @@ public final class Packets {
 
     /** One saved selection as the client sees it: the blocks stay on the server. {@code active} is the one swapped in for the live selection, {@code editing} whether changes are written back to it. */
     public record SavedSelection(int id, String name, int size, Point min, Point max, boolean active, boolean editing,
-                                 /** The blocks as {@code SelectionCodec} text, so the client can draw it in the selection style: null means the client already has them, and empty means there are too many to draw that way. */
+                                 /** The blocks as {@code SelectionCodec} text, so the client can draw it in the selection style: null means the client already has them, and empty means they were left out because the status was too big (see {@code StatusFit}). */
                                  String data) {}
     /** A status that carries only the list of plugin tools, sent when it changes: not a reply to anything, so the client takes the list and nothing else from it. */
     public static Status toolsOnly(List<PluginTool> tools) {

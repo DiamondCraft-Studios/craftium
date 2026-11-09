@@ -1997,6 +1997,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     }
     private int savedScroll;
     private static final String[] PENCIL={"......XX.",".....XXXX","....XXXX.","...XXXX..","..XXXX...",".XXXX....",".XXX.....","XX......."};
+    private static final String[] EYE={"...XXX...",".XX...XX.","X..XXX..X",".XX...XX.","...XXX..."};
     private static final String[] CROSS={"X.......X",".X.....X.","..X...X..","...X.X...","....X....","...X.X...","..X...X..",".X.....X.","X.......X"};
     /** A small picture drawn pixel by pixel from rows of X, centred on the given box. */
     private void glyph(Gfx g,int x,int y,int width,int height,String[] rows,int colour){
@@ -2023,11 +2024,14 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             int colour=ClientState.savedColor(id);
             g.fill(x+14,ry+4,x+28,ry+rowHeight-4,0xff000000|colour&0xffffff);g.outline(x+14,ry+4,14,rowHeight-8,LINE);
             String label=entry.name()+" • "+savedSpan(entry);
-            text(g,shorten(label,pw-100),x+34,ry+6,entry.active()?TEXT:MUTED);
+            text(g,shorten(label,pw-124),x+34,ry+6,entry.active()?TEXT:MUTED);
             // later controls win where they overlap, so the row comes first and the cells and buttons on it after
             controls.add(new Control(x+9,ry,pw-18,rowHeight,()->action(entry.active()&&!entry.editing()?"saved_selection:release":"saved_selection:view:"+id),entry.active()&&!entry.editing()?"Let go: your own selection comes back":"Show this selection in place of yours. Click it again to get yours back · It is a copy: changes you make while it is shown are not kept"));
             controls.add(new Control(x+14,ry+4,14,rowHeight-8,()->ClientCompat.setScreen(minecraft,SelectionOptionsScreen.saved(this,id,entry.name())),"Change this selection's outline colour"));
-            int pencil=x+pw-50,cross=x+pw-28;
+            int eye=x+pw-72,pencil=x+pw-50,cross=x+pw-28;boolean hidden=ClientState.savedHidden(id);
+            button(g,eye,ry+2,18,rowHeight-4,"",false,()->ClientState.toggleSavedHidden(id),hidden?"Show this selection in the world":"Hide this selection in the world · It stays saved, and shows while you look at it or edit it");
+            glyph(g,eye,ry+2,18,rowHeight-4,EYE,hidden?0xff56606e:TEXT);
+            if(hidden){int ox=eye+(18-9)/2,oy=ry+2+(rowHeight-4-5)/2;for(int k=0;k<9;k++)g.fill(ox+k,oy+4-k/2,ox+k+1,oy+5-k/2,0xffe07070);} // a slash through it
             button(g,pencil,ry+2,18,rowHeight-4,"",entry.editing(),()->action(entry.editing()?"saved_selection:release":"saved_selection:edit:"+id),entry.editing()?"Stop editing: your own selection comes back":"Edit: show this selection in place of yours, then add to it or take from it with any selection tool. Changes are kept");
             glyph(g,pencil,ry+2,18,rowHeight-4,PENCIL,TEXT);
             button(g,cross,ry+2,18,rowHeight-4,"",false,()->action("saved_selection:delete:"+id),"Delete this selection, no questions asked · Ctrl+Z brings it back");
