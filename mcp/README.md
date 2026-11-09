@@ -28,6 +28,9 @@ Privacy: [PRIVACY.md](https://github.com/DiamondCraft-Studios/craftium/blob/main
 - **The `craftium-blockout` skill.** It blocks out the rooms of a landmark for a mod or add-on (dungeons, ruins,
   towers, temples): cubes only, in colour-coded placeholder blocks, from a room ruleset you write, one room or a set,
   preview only until you say to build.
+- **The `craftium-showcase` skill.** It takes showcase screenshots of your builds: it works out the boxes and angles
+  from what you say (or uses exactly the angles, lens and size you give), has the game take the pictures, looks at a
+  contact sheet of each room and retakes the weak ones. Pictures are saved to `screenshots/craftium/` in your game folder.
 
 ## Install
 
@@ -74,6 +77,7 @@ may and may not do is pinned down in `test/contract.test.js`.
 | `src/bridge.js` | Finds the bridge file and calls the game on `127.0.0.1` |
 | `skills/craftium-builder/` | The building skill and its reference files |
 | `skills/craftium-blockout/` | The room blockout skill, its legend, ruleset template and examples |
+| `skills/craftium-showcase/` | The showcase pictures skill and its shot guide (example batches are unit tested) |
 
 ```sh
 npm ci             # once (installs the test-only SDK)
