@@ -2076,7 +2076,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             text(g,shorten(label,pw-124),x+34,ry+6,entry.active()?TEXT:MUTED);
             // later controls win where they overlap, so the row comes first and the cells and buttons on it after
             controls.add(new Control(x+9,ry,pw-18,rowHeight,()->action(entry.active()&&!entry.editing()?"saved_selection:release":"saved_selection:view:"+id),entry.active()&&!entry.editing()?"Let go: your own selection comes back":"Show this selection in place of yours. Click it again to get yours back · It is a copy: changes you make while it is shown are not kept"));
-            controls.add(new Control(x+14,ry+4,14,rowHeight-8,()->ClientCompat.setScreen(minecraft,SelectionOptionsScreen.saved(this,id,entry.name())),"Change this selection's outline colour"));
+            controls.add(new Control(x+14,ry+4,14,rowHeight-8,()->ColourPickerScreen.open(this,entry.name()+" colour",()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0)),"Change this selection's outline colour"));
             int eye=x+pw-72,pencil=x+pw-50,cross=x+pw-28;boolean hidden=ClientState.savedHidden(id);
             button(g,eye,ry+2,18,rowHeight-4,"",false,()->ClientState.toggleSavedHidden(id),hidden?"Show this selection in the world":"Hide this selection in the world · It stays saved, and shows while you look at it or edit it");
             glyph(g,eye,ry+2,18,rowHeight-4,EYE,hidden?0xff56606e:TEXT);
