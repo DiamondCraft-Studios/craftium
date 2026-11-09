@@ -1,5 +1,6 @@
 package dev.craftium.client.showcase;
 
+import dev.craftium.core.Point;
 import dev.craftium.core.ShotSpec;
 
 import dev.craftium.client.compat.ClientCompat;
@@ -26,20 +27,27 @@ public final class ShowcaseCapture {
     private static final class Job {
         final ShotSpec spec;
         final Path file;
+        final Point focus;
         final CompletableFuture<Result> done = new CompletableFuture<>();
         CameraRig rig;
         int ticks;
         boolean grabbing;
 
-        Job(ShotSpec spec, Path file) { this.spec = spec; this.file = file; }
+        Job(ShotSpec spec, Path file, Point focus) { this.spec = spec; this.file = file; this.focus = focus; }
     }
 
     private static Job current;
     private static boolean registered;
 
     /** Starts a picture and returns at once; the future completes when the file is written, or fails with the reason. */
-    public static CompletableFuture<Result> capture(ShotSpec spec, Path file) {
-        var job = new Job(spec, file);
+    public static CompletableFuture<Result> capture(ShotSpec spec, Path file) { return capture(spec, file, null); }
+
+    /**
+     * As above, and refuses at once, with the reason, when the chunk under {@code focus} (what the shot is of) or under the camera is not
+     * loaded on this client: the client only holds chunks within its render distance of the player, and a picture of the rest would be sky and fog.
+     */
+    public static CompletableFuture<Result> capture(ShotSpec spec, Path file, Point focus) {
+        var job = new Job(spec, file, focus);
         Minecraft.getInstance().execute(() -> start(job));
         return job.done;
     }
@@ -49,12 +57,26 @@ public final class ShowcaseCapture {
         try {
             if (current != null) throw new IllegalStateException("Another picture is being taken");
             if (!registered) { ClientTickEvents.END_CLIENT_TICK.register(ShowcaseCapture::tick); registered = true; }
+            if (mc.level == null) throw new IllegalStateException("Not in a world");
+            if (job.focus != null) requireLoaded(mc, job.focus.x(), job.focus.z(), "the subject");
+            requireLoaded(mc, (int) Math.floor(job.spec.x()), (int) Math.floor(job.spec.z()), "the camera");
             Files.createDirectories(job.file.toAbsolutePath().getParent());
             job.rig = CameraRig.install(mc, job.spec);
             current = job;
         } catch (Throwable t) {
             fail(job, t);
         }
+    }
+
+    private static void requireLoaded(Minecraft mc, int x, int z, String what) {
+        if (!mc.level.getChunkSource().hasChunk(x >> 4, z >> 4))
+            throw new IllegalStateException("The chunk at " + x + ", " + z + " (" + what + ") is not loaded on this client. The game only holds the chunks within its render distance of the player, so stand near it, or raise the render distance, and try again");
+    }
+
+    /** Stops the picture being set up or waited for, if any, and puts the player's view back. One already being saved finishes. Client thread only. */
+    public static void cancel() {
+        var job = current;
+        if (job != null && !job.grabbing) fail(job, new java.util.concurrent.CancellationException("Cancelled"));
     }
 
     private static void tick(Minecraft mc) {

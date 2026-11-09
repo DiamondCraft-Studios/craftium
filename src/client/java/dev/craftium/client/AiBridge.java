@@ -342,6 +342,10 @@ public final class AiBridge {
             case "get_palette" -> onClient(AiBridge::palette);
             case "get_screenshot" -> screenshot();
             case "render_view" -> AiView.render(args);
+            // Showcase pictures are taken and saved by the game itself; these three only start, ask after and stop a job.
+            case "capture_batch" -> onClient(() -> dev.craftium.client.showcase.ShowcaseJobs.start(args));
+            case "capture_status" -> onClient(dev.craftium.client.showcase.ShowcaseJobs::status);
+            case "capture_cancel" -> onClient(dev.craftium.client.showcase.ShowcaseJobs::cancel);
             case "preview_build" -> {
                 if (!args.has("spec")) throw new IllegalArgumentException("Missing \"spec\"");
                 var element = args.get("spec");
