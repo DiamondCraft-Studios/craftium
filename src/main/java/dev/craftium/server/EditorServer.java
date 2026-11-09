@@ -231,6 +231,9 @@ public final class EditorServer {
             if(!replaying&&!r.action().equals("builder_commit")&&now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             if(!popup)s.lastRequest=now;
             if(r.action().equals("tool_preview")){toolPreview(player,s,o,r.target(),r.normal());return;} // the ghost of a plugin's tool, which is not an edit and answers with the ghost alone
+            if(r.action().startsWith("ai_selection_named:")){ // one of the player's saved selections, read by the name it has in the Selections window
+                ServerPlatform.send(player,new Packets.AiReply(aiSelectionNamed(player,r.action().substring("ai_selection_named:".length()))));return;
+            }
             if(r.action().startsWith(SavedSelectionActions.PREFIX)){ // the Selections window (before the plugin actions, as "saved_selection:save" has the shape of one): swaps entries in and out of the live selection, never changes a block
                 if(!Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS))throw new IllegalArgumentException("This client does not know saved selections");
                 send(player,s,SavedSelectionActions.run(s,r.action()),false);return;
@@ -778,6 +781,23 @@ public final class EditorServer {
         }
         return AiWorld.selection(player,ai.pinned,extra);
     }
+    /** The blocks of the player's saved selection with that name (any case), or an error that says which names there are. */
+    private static Set<Point> savedByName(ServerPlayer player,String name){
+        var mine=SESSIONS.get(player.getUUID());var entry=mine==null?null:mine.saved.byName(name);
+        if(entry==null){
+            var names=mine==null?List.<String>of():mine.saved.entries().stream().map(e->e.name()).toList();
+            throw new IllegalArgumentException("The player has no saved selection named \""+name+"\". "+(names.isEmpty()?"They have saved none: ask them to select the blocks and press Save selection in the Selections window":"They have: "+String.join(", ",names)));
+        }
+        return new LinkedHashSet<>(entry.points());
+    }
+    /** What read_selection answers for a saved selection: the same report as for the selection itself, with its name, and where the player has it. */
+    private static String aiSelectionNamed(ServerPlayer player,String name){
+        var points=savedByName(player,name);var mine=SESSIONS.get(player.getUUID());var entry=mine.saved.byName(name);
+        var extra=new com.google.gson.JsonObject();
+        extra.addProperty("name",entry.name());extra.addProperty("saved",true);
+        if(mine.saved.active()==entry)extra.addProperty("shownByPlayer",mine.saved.editing()?"editing":"viewing");
+        return AiWorld.selection(player,points,extra);
+    }
     /** What a player's session tells the client about each of that player's AI sessions; ghost data only when a preview is new to this player. */
     private static List<Packets.AiSession> aiInfos(ServerPlayer player,Session viewer){
         var out=new ArrayList<Packets.AiSession>();long now=System.currentTimeMillis();var live=new HashSet<String>();
@@ -862,7 +882,7 @@ public final class EditorServer {
                 // Added to the waiting preview, the spec is planned on top of it and the two become one edit, applied and undone as one.
                 var onto=action.equals("ai_build_preview_add")?ai.pendingEdit:null;
                 pinSelection(player,ai,false); // a replace_selection works on the selection this session started with, not on one the player has made since
-                var edit=BuildPlanner.plan(player,ai,o,ai.pinned==null?Set.<Point>of():ai.pinned,onto);
+                var edit=BuildPlanner.plan(player,ai,o,ai.pinned==null?Set.<Point>of():ai.pinned,onto,name->savedByName(player,name));
                 var added=onto==null?edit:addedTo(onto,edit);
                 // Blocks the new spec put back to what the world holds (a doorway carved through a preview wall in open air) leave the edit
                 // altogether, so they are not in "added": count them, or a spec that only carves would look like one that did nothing.

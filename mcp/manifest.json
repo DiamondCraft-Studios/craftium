@@ -22,7 +22,7 @@
   },
   "tools": [
     { "name": "get_state", "description": "Player position, their selection, the world and biome, their blocks, and your preview status" },
-    { "name": "read_selection", "description": "Read what the player has selected: its shape, blocks and the space above it" },
+    { "name": "read_selection", "description": "Read what the player has selected, or one of their saved selections by name: its shape, blocks and the space above it" },
     { "name": "read_blocks", "description": "Read the blocks in a box: the world, the world with your preview applied, or the preview alone" },
     { "name": "get_surface", "description": "Read the ground height of an area" },
     { "name": "get_screenshot", "description": "See what the player sees, including the preview" },
