@@ -139,6 +139,42 @@ class ShowcasePlanTest {
         assertThrows(IllegalArgumentException.class, () -> plan("{\"rooms\":[{\"name\":\"a\",\"from\":[0.5,0,0],\"to\":[1,1,1],\"shots\":[\"hero\"]}]}"));
     }
 
+    private static final ShowcasePlan.Selections SAVED = new ShowcasePlan.Selections() {
+        @Override public Point[] find(String name) {
+            return switch (name.toLowerCase()) {
+                case "selection 1" -> new Point[]{new Point(0, 64, 0), new Point(9, 70, 9)};
+                case "windmill" -> new Point[]{new Point(20, 64, 20), new Point(24, 80, 24)};
+                default -> null;
+            };
+        }
+        @Override public java.util.List<String> names() { return java.util.List.of("\"Selection 1\"", "\"Windmill\""); }
+    };
+
+    @Test void aRoomCanBeASavedSelectionByName() {
+        var request = JsonParser.parseString("{\"rooms\":[{\"selection\":\" selection 1 \",\"shots\":[\"hero\"]},{\"selection\":\"Windmill\",\"name\":\"mill\",\"shots\":[\"top\"]}]}").getAsJsonObject();
+        var resolved = ShowcasePlan.resolveSelections(request, SAVED);
+        assertTrue(request.getAsJsonArray("rooms").get(0).getAsJsonObject().has("selection"), "the request itself is not changed");
+        var entries = ShowcasePlan.parse(resolved, "x").entries();
+        assertEquals("selection-1", entries.get(0).room(), "the saved name becomes the room's name");
+        assertEquals("mill", entries.get(1).room());
+        assertEquals(new Point(0, 64, 0), entries.get(0).min());
+        assertEquals(new Point(9, 70, 9), entries.get(0).max());
+        assertEquals(new Point(24, 80, 24), entries.get(1).max());
+        // Rooms that give a box are left alone.
+        var plain = ShowcasePlan.resolveSelections(JsonParser.parseString("{\"rooms\":[{\"name\":\"a\",\"from\":[0,0,0],\"to\":[1,1,1],\"shots\":[\"hero\"]}]}").getAsJsonObject(), SAVED);
+        assertEquals(1, ShowcasePlan.parse(plain, "x").entries().size());
+    }
+
+    @Test void anUnknownSavedSelectionNamesTheOnesThePlayerHas() {
+        var e = assertThrows(IllegalArgumentException.class, () -> ShowcasePlan.resolveSelections(JsonParser.parseString("{\"rooms\":[{\"selection\":\"Castle\",\"shots\":[\"hero\"]}]}").getAsJsonObject(), SAVED));
+        assertTrue(e.getMessage().contains("Castle") && e.getMessage().contains("Windmill"), e.getMessage());
+        var none = assertThrows(IllegalArgumentException.class, () -> ShowcasePlan.resolveSelections(JsonParser.parseString("{\"rooms\":[{\"selection\":\"x\",\"shots\":[\"hero\"]}]}").getAsJsonObject(),
+            new ShowcasePlan.Selections() { public Point[] find(String n) { return null; } public java.util.List<String> names() { return java.util.List.of(); } }));
+        assertTrue(none.getMessage().contains("saved none"), none.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> ShowcasePlan.resolveSelections(JsonParser.parseString("{\"rooms\":[{\"selection\":\"Windmill\",\"from\":[0,0,0],\"to\":[1,1,1],\"shots\":[\"hero\"]}]}").getAsJsonObject(), SAVED));
+        assertThrows(IllegalArgumentException.class, () -> ShowcasePlan.resolveSelections(JsonParser.parseString("{\"rooms\":[{\"selection\":\"\",\"shots\":[\"hero\"]}]}").getAsJsonObject(), SAVED));
+    }
+
     @Test void aJobIsCappedAtOneHundredPictures() {
         var shots = new StringBuilder("[");
         for (int i = 0; i < ShowcasePlan.MAX_SHOTS + 1; i++) shots.append(i > 0 ? "," : "").append("{\"name\":\"s").append(i).append("\",\"preset\":\"hero\"}");

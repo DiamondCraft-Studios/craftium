@@ -131,14 +131,22 @@ test("capture_batch forwards only the keys it names, and bad requests never reac
     { rooms: [room], resume: true },
     { rooms: Array.from({ length: 51 }, (_, i) => ({ ...room, name: `r${i}` })) },
   ];
+  // A room may name a saved selection instead of a box, and its name is then optional.
+  const bySelection = { selection: "Selection 1", shots: ["hero"] };
+  await client.callTool({ name: "capture_batch", arguments: { rooms: [bySelection, { ...bySelection, selection: "Windmill", name: "mill" }] } });
+  assert.deepEqual(bridge.seen[2].body, { rooms: [bySelection, { ...bySelection, selection: "Windmill", name: "mill" }] });
+  bad.push(
+    { rooms: [{ ...bySelection, from: [0, 0, 0], to: [1, 1, 1] }] }, { rooms: [{ ...bySelection, selection: "" }] }, { rooms: [{ ...bySelection, selection: 4 }] },
+    { rooms: [{ ...bySelection, name: "" }] }, { rooms: [{ name: "a", shots: ["hero"] }] },
+  );
   for (const args of bad) {
     const result = await client.callTool({ name: "capture_batch", arguments: args });
     assert.equal(result.isError, true, JSON.stringify(args).slice(0, 80));
   }
-  assert.equal(bridge.seen.length, 2, "bad requests must not reach the game");
+  assert.equal(bridge.seen.length, 3, "bad requests must not reach the game");
   const poll = await client.callTool({ name: "capture_status", arguments: { ignored: 1 } });
   assert.match(text(poll), /done/);
-  assert.deepEqual(bridge.seen[2].body, {});
+  assert.deepEqual(bridge.seen[3].body, {});
   const stop = await client.callTool({ name: "capture_cancel", arguments: {} });
   assert.match(text(stop), /cancelled/);
   const tools = (await client.listTools()).tools;

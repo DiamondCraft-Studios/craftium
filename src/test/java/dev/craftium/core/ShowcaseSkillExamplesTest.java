@@ -27,11 +27,15 @@ class ShowcaseSkillExamplesTest {
         while (blocks.find()) {
             String json = blocks.group(1);
             if (!json.contains("\"rooms\"")) continue;
-            var plan = ShowcasePlan.parse(JsonParser.parseString(json).getAsJsonObject(), "20261110-120000");
+            var saved = new ShowcasePlan.Selections() {
+                @Override public Point[] find(String name) { return new Point[]{new Point(0, 64, 0), new Point(9, 70, 9)}; }
+                @Override public java.util.List<String> names() { return java.util.List.of(); }
+            };
+            var plan = ShowcasePlan.parse(ShowcasePlan.resolveSelections(JsonParser.parseString(json).getAsJsonObject(), saved), "20261110-120000");
             assertFalse(plan.entries().isEmpty());
             checked++;
         }
-        assertEquals(3, checked, "castle, retake and 4K examples");
+        assertEquals(4, checked, "castle, saved selections, retake and 4K examples");
     }
 
     @Test void theInteriorCameraExampleIsAValidShot() throws Exception {
