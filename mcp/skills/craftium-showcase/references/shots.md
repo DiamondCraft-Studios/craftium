@@ -74,6 +74,16 @@ names.)
 }
 ```
 
+Photographing the player's saved selections (`get_state` lists them as `savedSelections`): one room each, by name, no
+corners needed. An irregular selection is framed by its bounding box and the blocks inside it.
+
+```json
+{"job": "my-builds", "rooms": [
+  {"selection": "Selection 1", "shots": ["hero", "south"]},
+  {"selection": "Selection 2", "name": "windmill", "shots": ["hero", "top"]}
+]}
+```
+
 A retake of one weak shot, after the sheet showed a tree in front of the south view:
 
 ```json
