@@ -33,7 +33,8 @@ public final class PlacementPreview {
     public static boolean active(){return origin!=null;}
     static void cancel(){origin=null;}
     static void nudge(int amount){if(origin!=null)origin=origin.add(axis==0?amount:0,axis==1?amount:0,axis==2?amount:0);}
-    public static void confirm(){if(origin!=null&&!ClientState.status.busy()){BuilderPrediction.paste(ClientState.options,origin,ghost.placed());CraftiumClient.send("paste_at",origin,new Point(0,1,0));origin=null;}}
+    /** Places the clipboard where the ghost is, and the pasted blocks become the selection, so the transform tools can take hold of them; {@link #pasteCopy} keeps the selection as it is. */
+    public static void confirm(){pasteAndSelect();}
     public static void pasteCopy(){if(origin!=null&&!ClientState.status.busy()){BuilderPrediction.paste(ClientState.options,origin,ghost.placed());CraftiumClient.send("paste_at",origin,new Point(0,1,0));}}
     public static void pasteAndSelect(){if(origin!=null&&!ClientState.status.busy()){BuilderPrediction.paste(ClientState.options,origin,ghost.placed());CraftiumClient.send("paste_select",origin,new Point(0,1,0));origin=null;}}
     public static void snapToGround(){

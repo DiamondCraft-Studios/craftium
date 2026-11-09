@@ -24,6 +24,7 @@ class IconCatalogTest {
         craftium:tool/text @@ Tools/Draw @@ 24x24
         craftium:tool/erase @@ Tools/Draw @@ 24x24
         craftium:tool/painter @@ Tools/Paint @@ 24x24
+        craftium:tool/paint_bucket @@ Tools/Paint @@ 24x24
         craftium:tool/gradient_painter @@ Tools/Paint @@ 24x24
         craftium:tool/noise_painter @@ Tools/Paint @@ 24x24
         craftium:tool/script_brush @@ Tools/Paint @@ 24x24
@@ -70,6 +71,8 @@ class IconCatalogTest {
         craftium:shape/torus @@ Shapes @@ 24x24
         craftium:shape/tube @@ Shapes @@ 24x24
         craftium:shape/polygon @@ Shapes @@ 24x24
+        craftium:shape/irregular_polygon @@ Shapes @@ 24x24
+        craftium:shape/star @@ Shapes @@ 24x24
         craftium:ui/hard_hat @@ Interface @@ 19x19
         craftium:ui/chain_linked @@ Interface @@ 17x9
         craftium:ui/chain_broken @@ Interface @@ 17x9

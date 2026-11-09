@@ -375,7 +375,7 @@ public final class CraftiumClient implements ClientModInitializer {
         Vec3 start=camera.position();
         BlockHitResult hit;
         SlabSplit.suppress(true); // the whole of a double slab is aimed at, not one half
-        try{hit=mc.level.clip(new ClipContext(start,start.add(direction.scale(256)),ClipContext.Block.OUTLINE,ClientState.options.solidFluids?ClipContext.Fluid.ANY:ClipContext.Fluid.NONE,mc.player));}finally{SlabSplit.suppress(false);}
+        try{hit=mc.level.clip(new ClipContext(start,start.add(direction.scale(256)),ClipContext.Block.OUTLINE,ClientState.options.solidFluids||ClientState.options.selectLiquids&&ClientState.options.tool==Tool.MAGIC_SELECT?ClipContext.Fluid.ANY:ClipContext.Fluid.NONE,mc.player));}finally{SlabSplit.suppress(false);}
         return hit.getType()==HitResult.Type.BLOCK?hit:null;
     }
     /** The transform handles: the builder's, or the editor's with the box corners and the point being dragged. Drawn each frame. */

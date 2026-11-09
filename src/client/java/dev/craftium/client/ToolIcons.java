@@ -31,6 +31,11 @@ final class ToolIcons {
                 g.outline(x+5,y+1,4,9,color);g.fill(x+7,y+7,x+10,y+11,color); // the handle and the pivot it turns on
                 g.fill(x+20,y+13,x+21,y+15,color);g.fill(x+19,y+15,x+22,y+17,color);g.fill(x+18,y+17,x+23,y+21,color);g.fill(x+19,y+21,x+22,y+22,color); // the drop
             }
+            case PAINT_BUCKET -> { // an upright pail, filled part way with paint, with its handle over the rim
+                line(g,x+4,y+8,x+20,y+8,color);line(g,x+4,y+8,x+7,y+21,color);line(g,x+20,y+8,x+17,y+21,color);line(g,x+7,y+21,x+17,y+21,color);
+                fillQuad(g,x+5,y+13,x+19,y+13,x+17,y+21,x+7,y+21,color);
+                line(g,x+6,y+8,x+8,y+3,color);line(g,x+8,y+3,x+16,y+3,color);line(g,x+16,y+3,x+18,y+8,color);
+            }
             case FLUID_BALL -> {line(g,x+12,y+2,x+3,y+15,color);line(g,x+12,y+2,x+21,y+15,color);line(g,x+3,y+15,x+8,y+22,color);line(g,x+8,y+22,x+17,y+22,color);line(g,x+17,y+22,x+21,y+15,color);}
             case MOVE -> {line(g,x+12,y+2,x+12,y+22,color);line(g,x+2,y+12,x+22,y+12,color);line(g,x+12,y+2,x+8,y+7,color);line(g,x+12,y+2,x+16,y+7,color);line(g,x+22,y+12,x+17,y+8,color);line(g,x+22,y+12,x+17,y+16,color);}
             case ROTATE -> { // most of a circle, with an arrowhead where it ends
@@ -122,6 +127,8 @@ final class ToolIcons {
             case PLANE -> {line(g,x+2,y+17,x+7,y+8,color);line(g,x+7,y+8,x+22,y+8,color);line(g,x+22,y+8,x+17,y+17,color);line(g,x+17,y+17,x+2,y+17,color);}
             case DISK -> {ring(g,x+12,y+12,10,5,color);g.fill(x+11,y+11,x+14,y+14,color);}
             case POLYGON -> {line(g,x+12,y+3,x+21,y+9,color);line(g,x+21,y+9,x+18,y+20,color);line(g,x+18,y+20,x+6,y+20,color);line(g,x+6,y+20,x+3,y+9,color);line(g,x+3,y+9,x+12,y+3,color);}
+            case IRREGULAR_POLYGON -> {line(g,x+10,y+3,x+21,y+7,color);line(g,x+21,y+7,x+19,y+17,color);line(g,x+19,y+17,x+11,y+21,color);line(g,x+11,y+21,x+4,y+15,color);line(g,x+4,y+15,x+10,y+3,color);} // a lopsided outline: sides of different lengths
+            case STAR -> {line(g,x+12,y+2,x+18,y+21,color);line(g,x+18,y+21,x+3,y+9,color);line(g,x+3,y+9,x+21,y+9,color);line(g,x+21,y+9,x+6,y+21,color);line(g,x+6,y+21,x+12,y+2,color);}
             case PYRAMID -> {line(g,x+12,y+2,x+3,y+17,color);line(g,x+12,y+2,x+13,y+22,color);line(g,x+12,y+2,x+22,y+16,color);line(g,x+3,y+17,x+13,y+22,color);line(g,x+13,y+22,x+22,y+16,color);line(g,x+3,y+17,x+10,y+14,color);line(g,x+10,y+14,x+22,y+16,color);}
             case CONE -> {line(g,x+12,y+2,x+3,y+18,color);line(g,x+12,y+2,x+21,y+18,color);ring(g,x+12,y+18,9,3,color);}
             case HEMISPHERE -> {arc(g,x+12,y+16,10,12,Math.PI,Math.PI*2,color);ring(g,x+12,y+16,10,3,color);}

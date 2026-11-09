@@ -31,7 +31,7 @@ final class EditPlanner {
 
     EditPlanner(ServerLevel level, Session session, Options options) {
         this.level=level;this.session=session;this.o=options;
-        material=parse(options.block); secondary=parse(options.secondary);
+        material=options.transparency?Blocks.AIR.defaultBlockState():parse(options.block); secondary=parse(options.secondary);
         mask=options.mask.isBlank()?null:parse(options.mask);
         if(!options.maskOff)for(String entry:options.maskActive){blockMask.add(parse(entry));blockMaskExact.add(entry.contains("["));}
         noise=new NoiseField(options);

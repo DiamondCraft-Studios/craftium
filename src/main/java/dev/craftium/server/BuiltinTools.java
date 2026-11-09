@@ -6,6 +6,8 @@ import dev.craftium.core.Options;
 import dev.craftium.core.Point;
 import dev.craftium.core.Selection;
 
+import net.minecraft.server.level.ServerPlayer;
+
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -56,12 +58,40 @@ final class BuiltinTools {
         var found = MagicWand.select(p, new MagicWand.World() {
             public boolean loaded(Point at) { return player.level().hasChunk(at.x() >> 4, at.z() >> 4); }
             public boolean air(Point at) { return plan.state(at).isAir(); }
-            public boolean matches(Point at) { return blockMask.allows(plan.state(at)) && AdvancedTools.matches(plan, origin, originData, at); }
+            public boolean matches(Point at) { return (o.selectLiquids || !(plan.state(at).getBlock() instanceof net.minecraft.world.level.block.LiquidBlock)) && blockMask.allows(plan.state(at)) && AdvancedTools.matches(plan, origin, originData, at); }
             public boolean surface(Point at) { return plan.surface(at); }
         }, new MagicWand.Params(o.selectLimit, o.selectRange, o.selectCorners, o.selectUp, o.selectDown, o.selectHorizontal, o.surfaceOnly, 128, Selection.LIMIT * 4)).found();
         s.selection.combine(found, o.mode);
         u.say("Magic Wand: " + s.selection.size() + " blocks (128-block search radius)");
     };
+
+    /** Fills what is connected to the clicked block, found as the Magic Wand finds it with its directions and select type, with the foreground block. */
+    static final ToolBehaviour PAINT_BUCKET = u -> u.submit(bucketFill(u.player(), u.plan(), u.options(), u.point(), u.options().compare, "Paint Bucket"));
+
+    /**
+     * The blocks connected to {@code target} that the Magic Wand would pick with {@code compare}, replaced with the active block. Shared by the
+     * Paint Bucket tool and by dropping a block in the world, which always compares by block.
+     */
+    static Session.Edit bucketFill(ServerPlayer player, EditPlanner plan, Options o, Point target, Options.Compare compare, String name) {
+        var origin = plan.state(target);
+        if (origin.isAir()) throw new IllegalArgumentException(name + " needs a block, not empty space");
+        var originData = compare == Options.Compare.NBT ? AdvancedTools.data(plan, target) : null;
+        var found = MagicWand.select(target, new MagicWand.World() {
+            public boolean loaded(Point at) { return player.level().hasChunk(at.x() >> 4, at.z() >> 4); }
+            public boolean air(Point at) { return plan.state(at).isAir(); }
+            public boolean matches(Point at) { return compare == Options.Compare.BLOCK ? plan.state(at).is(origin.getBlock()) : AdvancedTools.matches(plan, origin, originData, at); }
+            public boolean surface(Point at) { return plan.surface(at); }
+        }, new MagicWand.Params(o.selectLimit, o.selectRange, o.selectCorners, o.selectUp, o.selectDown, o.selectHorizontal, o.surfaceOnly, 128, Selection.LIMIT * 4)).found();
+        if (found.isEmpty()) throw new IllegalArgumentException(name + " found no connected blocks there; check the directions and surface settings");
+        for (Point at : found) plan.put(at, plan.preserve(plan.state(at), plan.material));
+        if (plan.changes.isEmpty()) {
+            String why = origin.getBlock() == plan.material.getBlock() ? "those blocks are already that block"
+                : !BlockMask.of(o).allows(origin) || !o.mask.isBlank() ? "the block mask excludes them"
+                : o.inSelection ? "Only in selection is on" : "the Y range, or the block can't be placed there (enable force place)";
+            throw new IllegalArgumentException(name + " changed nothing: " + why + " (" + found.size() + " blocks matched)");
+        }
+        return plan.finish(name);
+    }
 
     static final ToolBehaviour RULER = u -> {
         var s = u.session();

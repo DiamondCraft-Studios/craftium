@@ -13,7 +13,10 @@ public final class ShapeLimits {
     public static final long SCAN_CELLS = 1L << 27;
 
     /** The blocks a solid shape of this radius is made of. */
-    public static double solid(BrushMath.Shape shape, int radius, int sides) {
+    public static double solid(BrushMath.Shape shape, int radius, int sides) { return solid(shape, radius, sides, BrushMath.Form.DEFAULT); }
+
+    /** As above; {@code form} is what an irregular polygon or a star is made from, so their count is that of the very polygon the seed gives. */
+    public static double solid(BrushMath.Shape shape, int radius, int sides, BrushMath.Form form) {
         if (radius < 0) return 0;
         double r = radius, reach = r + .5, side = 2 * r + 1, disk = Math.PI * reach * reach;
         return switch (shape) {
@@ -23,6 +26,7 @@ public final class ShapeLimits {
             case CYLINDER -> disk * side;
             case PLANE -> side * side;
             case DISK -> disk;
+            case IRREGULAR_POLYGON, STAR -> disk * BrushMath.fanShare(shape, sides, form);
             case POLYGON -> disk * (Math.max(3, sides) * Math.sin(2 * Math.PI / Math.max(3, sides)) / (2 * Math.PI));
             case PYRAMID -> side * (side + 1) * (2 * side + 1) / 6;
             case CONE -> disk * side / 3;
@@ -36,7 +40,7 @@ public final class ShapeLimits {
     public static double cells(BrushMath.Shape shape, int outer) {
         double side = 2.0 * outer + 1, reach = outer + .5;
         return switch (shape) {
-            case PLANE, DISK, POLYGON -> side * side; // one layer
+            case PLANE, DISK, POLYGON, IRREGULAR_POLYGON, STAR -> side * side; // one layer
             case SPHERE -> 4.0 / 3 * Math.PI * reach * reach * reach + side * side;
             case HEMISPHERE -> 2.0 / 3 * Math.PI * reach * reach * reach + side * side;
             case TORUS -> Math.PI * reach * reach * (.5 * outer + 2) + side * side;
@@ -47,21 +51,29 @@ public final class ShapeLimits {
 
     /** The blocks the brush holds before it is done: for a pixel perfect wall that is the whole solid, which is then thinned. */
     public static double blocks(BrushMath.Shape shape, int radius, boolean hollow, int thickness, boolean pixelPerfect, int shift, int sides, boolean outline) {
+        return blocks(shape, radius, hollow, thickness, pixelPerfect, shift, sides, outline, BrushMath.Form.DEFAULT);
+    }
+
+    public static double blocks(BrushMath.Shape shape, int radius, boolean hollow, int thickness, boolean pixelPerfect, int shift, int sides, boolean outline, BrushMath.Form form) {
         int outer = Math.min(radius + (hollow && !outline ? Math.max(0, shift) : 0), BrushMath.MAX_REACH);
-        if (outline) return Math.min(solid(shape, outer, sides), 24.0 * outer + 24); // the rim of the shape, in all three planes
-        if (!hollow || pixelPerfect) return solid(shape, outer, sides);
+        if (outline) return Math.min(solid(shape, outer, sides, form), 24.0 * outer + 24); // the rim of the shape, in all three planes
+        if (!hollow || pixelPerfect) return solid(shape, outer, sides, form);
         int wall = Math.clamp(thickness, 1, Math.max(1, radius));
-        double shell = solid(shape, outer, sides) - solid(shape, outer - wall, sides);
+        double shell = solid(shape, outer, sides, form) - solid(shape, outer - wall, sides, form);
         // The inner copy of a ring is not inside the outer one all the way round, so its wall is about its surface, which the difference of volumes misses.
         if (shape == BrushMath.Shape.TORUS) shell = Math.max(shell, 4 * Math.PI * Math.PI * .75 * outer * (.25 * outer + .5));
         // Shapes whose inner copy is not exactly inside the outer one (a ring, a tube) leave a thicker wall than the volumes say: a little is added, so a wall is never guessed short.
-        return Math.min(shell * 1.15, solid(shape, outer, sides));
+        return Math.min(shell * 1.15, solid(shape, outer, sides, form));
     }
 
     /** Whether a brush shape with these settings stays within both limits. */
     public static boolean fits(BrushMath.Shape shape, int radius, boolean hollow, int thickness, boolean pixelPerfect, int shift, int sides, boolean outline) {
+        return fits(shape, radius, hollow, thickness, pixelPerfect, shift, sides, outline, BrushMath.Form.DEFAULT);
+    }
+
+    public static boolean fits(BrushMath.Shape shape, int radius, boolean hollow, int thickness, boolean pixelPerfect, int shift, int sides, boolean outline, BrushMath.Form form) {
         int outer = Math.min(radius + (hollow && !outline ? Math.max(0, shift) : 0), BrushMath.MAX_REACH);
-        return blocks(shape, radius, hollow, thickness, pixelPerfect, shift, sides, outline) <= Selection.LIMIT && cells(shape, outer) <= SCAN_CELLS;
+        return blocks(shape, radius, hollow, thickness, pixelPerfect, shift, sides, outline, form) <= Selection.LIMIT && cells(shape, outer) <= SCAN_CELLS;
     }
 
     /** The largest radius a shape with the options' settings can have, from 1 to {@link BrushMath#MAX_RADIUS}. */
@@ -72,7 +84,7 @@ public final class ShapeLimits {
         int lo = 1, hi = BrushMath.MAX_RADIUS;
         while (lo < hi) { // the limits only tighten as the radius grows, so the largest radius that fits can be found by halving
             int mid = (lo + hi + 1) >>> 1;
-            boolean ok = plain ? fits(shape, mid, o.hollow, o.outlineThickness, o.pixelPerfect, o.outlineShift(mid), o.polygonSides, o.outline)
+            boolean ok = plain ? fits(shape, mid, o.hollow, o.outlineThickness, o.pixelPerfect, o.outlineShift(mid), o.polygonSides, o.outline, o.form())
                 : fits(BrushMath.Shape.CUBE, mid, false, 1, false, 0, 3, false) && solid(BrushMath.Shape.SPHERE, mid, 3) <= Selection.LIMIT * (o.hollow ? 8.0 : 1);
             if (ok) lo = mid; else hi = mid - 1;
         }

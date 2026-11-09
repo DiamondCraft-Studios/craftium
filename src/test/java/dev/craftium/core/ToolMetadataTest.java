@@ -17,6 +17,7 @@ class ToolMetadataTest {
         FREEHAND_SELECT @@ Freehand Select @@ FS @@ Select @@ Brush a selection; use selection mode to add or subtract. @@ SHAPE @@ true @@ false @@ false @@ true @@ 78
         RULER @@ Ruler @@ RL @@ Utility @@ Add measurement points; use the inspector for circles, splits and center selection. @@ NONE @@ false @@ false @@ false @@ false @@ -1
         PAINTER @@ Painter @@ PA @@ Paint @@ Paint existing blocks with your active material. @@ SHAPE @@ true @@ false @@ true @@ false @@ 80
+        PAINT_BUCKET @@ Paint Bucket @@ PB @@ Paint @@ Fill the connected blocks you click with your foreground block. Directions and select type work as in the Magic Wand. @@ NONE @@ false @@ false @@ true @@ false @@ -1
         NOISE_PAINTER @@ Noise Painter @@ NP @@ Paint @@ Blend two materials with coherent seeded noise. @@ SHAPE @@ true @@ false @@ true @@ false @@ 79
         BIOME_PAINTER @@ Biome Painter @@ BP @@ Paint @@ Paint biome cells inside the brush. Biomes use 4-block cells. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
         CLENTAMINATOR @@ Clentaminator @@ CL @@ Paint @@ Convert biome and matching surface materials together. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
@@ -59,7 +60,7 @@ class ToolMetadataTest {
     private static final String SECTIONS = """
         Select: BOX_SELECT,MAGIC_SELECT,LASSO_SELECT,FREEHAND_SELECT
         Draw: SHAPE,LINE,PATH,MODELLING,FREEHAND_DRAW,TEXT,ERASE
-        Paint: PAINTER,GRADIENT_PAINTER,NOISE_PAINTER,SCRIPT_BRUSH,BIOME_PAINTER,CLENTAMINATOR
+        Paint: PAINTER,PAINT_BUCKET,GRADIENT_PAINTER,NOISE_PAINTER,SCRIPT_BRUSH,BIOME_PAINTER,CLENTAMINATOR
         Sculpt: SMOOTH,ROUGHEN,DISTORT,MELT,WELD,SHATTER,EXTRUDE,SMEAR,SCULPT_DRAW,MODIFY,STAMP
         Terrain: ELEVATION,FLATTEN,SLOPE,ROCK,FLOODFILL,FLUID_BALL
         Utility: RULER,TINKER,ANNOTATION

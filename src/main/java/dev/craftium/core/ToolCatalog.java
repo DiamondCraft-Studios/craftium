@@ -49,7 +49,7 @@ public final class ToolCatalog {
             case PATH, MODELLING -> InteractionKind.POINTS;
             case BOX_SELECT -> InteractionKind.BOX;
             case LASSO_SELECT -> InteractionKind.LASSO;
-            case EXTRUDE, FLOODFILL -> InteractionKind.CONFIRMED_CLICK;
+            case EXTRUDE, FLOODFILL, PAINT_BUCKET -> InteractionKind.CONFIRMED_CLICK;
             case SHAPE -> InteractionKind.SHAPE_PLACEMENT;
             case MODIFY -> InteractionKind.MODIFY_ANCHOR;
             case LINE -> InteractionKind.LINE;
@@ -92,7 +92,7 @@ public final class ToolCatalog {
             case TEXT -> "Place text";
             case STAMP -> "Stamp clipboard";
             case ERASE -> "Erase";
-            case PAINTER, NOISE_PAINTER, BIOME_PAINTER, CLENTAMINATOR, GRADIENT_PAINTER, SCRIPT_BRUSH -> "Paint";
+            case PAINTER, PAINT_BUCKET, NOISE_PAINTER, BIOME_PAINTER, CLENTAMINATOR, GRADIENT_PAINTER, SCRIPT_BRUSH -> "Paint";
             default -> "Use " + tool.label;
         };
     }

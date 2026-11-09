@@ -44,6 +44,7 @@ class ToolCatalogTest {
         special.put(Tool.LASSO_SELECT, InteractionKind.LASSO);
         special.put(Tool.EXTRUDE, InteractionKind.CONFIRMED_CLICK);
         special.put(Tool.FLOODFILL, InteractionKind.CONFIRMED_CLICK);
+        special.put(Tool.PAINT_BUCKET, InteractionKind.CONFIRMED_CLICK);
         special.put(Tool.SHAPE, InteractionKind.SHAPE_PLACEMENT);
         special.put(Tool.MODIFY, InteractionKind.MODIFY_ANCHOR);
         special.put(Tool.LINE, InteractionKind.LINE);

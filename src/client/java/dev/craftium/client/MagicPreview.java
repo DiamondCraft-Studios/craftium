@@ -31,7 +31,7 @@ final class MagicPreview {
         if(hit==null||mc.level==null||o.tool!=Tool.MAGIC_SELECT||!o.magicPreview||TransformGizmo.dragging()||PlacementPreview.active()){key=null;shape=OutlineShape.EMPTY;return;}
         BlockPos at=hit.getBlockPos();
         // The world can change under a still cursor, so the result is also refreshed about once a second.
-        Object now=java.util.List.of(at,o.compare,o.hoverPreviewLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,java.util.List.copyOf(o.maskActive),o.maskExclude,o.maskOff,mc.level.getGameTime()/20);
+        Object now=java.util.List.of(at,o.compare,o.selectLiquids,o.hoverPreviewLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,java.util.List.copyOf(o.maskActive),o.maskExclude,o.maskOff,mc.level.getGameTime()/20);
         if(!Objects.equals(key,now)){key=now;shape=compute(mc,at,o);}
         if(shape.isEmpty())return;
         shape.drawPlain(Vec3.ZERO,ClientState.options.hoverColor,(float)ClientState.options.selectionWidth,ClientState.options.hoverFill,true,false);
@@ -63,11 +63,11 @@ final class MagicPreview {
         if(!bucketShape.isEmpty())bucketShape.drawPlain(Vec3.ZERO,ClientState.options.hoverColor,(float)ClientState.options.selectionWidth,ClientState.options.hoverFill,true,false);
     }
 
-    private static MagicWand.Result bucketSearch(Minecraft mc,BlockPos at,Options o){
-        return MagicWand.select(CraftiumClient.point(at),world(mc,at,o,Options.Compare.BLOCK,false),new MagicWand.Params(Math.min(o.selectLimit,BUCKET_LIMIT),o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,BUCKET_VISITS));
+    static MagicWand.Result bucketSearch(Minecraft mc,BlockPos at,Options o,Options.Compare compare){
+        return MagicWand.select(CraftiumClient.point(at),world(mc,at,o,compare,false),new MagicWand.Params(Math.min(o.selectLimit,BUCKET_LIMIT),o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,BUCKET_VISITS));
     }
     /** How many blocks a bucket fill at {@code at} would reach, counting up to {@link #BUCKET_LIMIT}. */
-    static int bucketCount(Minecraft mc,BlockPos at,Options o){return mc.level.getBlockState(at).isAir()?0:bucketSearch(mc,at,o).found().size();}
+    static int bucketCount(Minecraft mc,BlockPos at,Options o){return mc.level.getBlockState(at).isAir()?0:bucketSearch(mc,at,o,Options.Compare.BLOCK).found().size();}
 
     private static OutlineShape compute(Minecraft mc,BlockPos at,Options o){
         if(mc.level.getBlockState(at).isAir())return OutlineShape.EMPTY;
@@ -88,6 +88,7 @@ final class MagicPreview {
             public boolean matches(Point p){
                 var s=level.getBlockState(pos(p));
                 if(blockMask!=null&&!blockMask.allows(s))return false;
+                if(masked&&!o.selectLiquids&&s.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock)return false; // the Magic Wand's own search passes over liquids unless asked
                 return switch(compare){
                     case ANY->!s.isAir();
                     case BLOCK->s.is(origin.getBlock());
