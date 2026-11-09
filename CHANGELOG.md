@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.0-beta.1
+
+Changes since 1.4.0-beta.1.
+
+### Interface
+- Craftium's chat messages start with a dark aqua [Craftium] tag, are written in sentence case and split over lines.
+- The world rule commands moved under /craftium gamerule.
+- The intro screen and the docs chat messages no longer mention Axiom.
+
 ## 1.4.0-beta.1
 
 Changes since 1.3.1-beta.1.
