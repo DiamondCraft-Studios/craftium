@@ -14,9 +14,26 @@ class SavedSelectionsTest {
         assertEquals("Selection 1",saved.save(s).name());assertEquals("Selection 2",saved.save(s).name());
         assertEquals(Set.of(A,B),set(s));assertNull(saved.active());
     }
-    @Test void aNameIsNotGivenAgainAfterADelete(){
-        var saved=new SavedSelections();var s=live(A);saved.save(s);var two=saved.save(s);saved.delete(two.id(),s);
-        assertEquals("Selection 3",saved.save(s).name());
+    @Test void aNumberFreedAtTheEndIsUsedAgainButAGapIsNotFilled(){
+        var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);saved.save(s);
+        saved.delete(two.id(),s);assertEquals("Selection 4",saved.save(s).name(),"the gap at 2 stays, the count goes on from the highest");
+        var last=saved.entries().getLast();saved.delete(last.id(),s);assertEquals("Selection 4",saved.save(s).name(),"the freed end comes round again");
+    }
+    @Test void deletingEverythingStartsTheCountAgainAtOne(){
+        var saved=new SavedSelections();var s=live(A);saved.save(s);saved.save(s);
+        for(var e:List.copyOf(saved.entries()))saved.delete(e.id(),s);
+        assertEquals("Selection 1",saved.save(s).name());
+    }
+    @Test void aRenamedEntryDoesNotCountTowardsTheNumbers(){
+        var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);
+        saved.rename(two.id(),"Roof");assertEquals("Selection 2",saved.save(s).name());
+    }
+    @Test void anEntryBroughtBackWhoseNumberWasTakenGetsTheNextFreeName(){
+        var saved=new SavedSelections();var s=live(A);var one=saved.save(s);saved.delete(one.id(),s);
+        saved.save(s); // takes "Selection 1" again
+        assertSame(one,saved.undoDelete(0));
+        assertEquals(List.of("Selection 1","Selection 2"),saved.entries().stream().map(SavedSelections.Entry::name).sorted().toList());
+        assertEquals("Selection 2",one.name(),"the one that came back, not the new one, is renamed");
     }
     @Test void savingNothingIsRefused(){assertThrows(IllegalArgumentException.class,()->new SavedSelections().save(new Selection()));}
     @Test void viewingSwapsAndReleasingBringsTheOriginalBack(){

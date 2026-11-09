@@ -22,7 +22,8 @@ public final class SavedSelections {
         public int version(){return version;}
     }
     private final List<Entry> entries=new ArrayList<>();
-    private int nextNumber=1,nextId=1;
+    private int nextId=1;
+    private static final java.util.regex.Pattern NUMBERED=java.util.regex.Pattern.compile("Selection (\\d{1,9})");
     /** The saved selection being looked at or edited, or null. */
     private Entry active;private boolean editing;
     /** The live selection as it was before looking began; null when not looking. */
@@ -41,12 +42,22 @@ public final class SavedSelections {
     /** An entry by its name, ignoring case, so "selection 1" finds "Selection 1"; null when there is none. */
     public Entry byName(String name){if(name==null)return null;var wanted=name.strip();for(var e:entries)if(e.name.equalsIgnoreCase(wanted))return e;return null;}
 
-    /** Saves the live selection as a new entry, "Selection 1", "Selection 2", and so on. Numbers are not given again after a delete, so a name keeps meaning one selection. */
+    /**
+     * The next default name: one more than the highest "Selection N" there is, so the count starts again at 1 when none are left, and a number
+     * freed at the end is used again. A gap in the middle is not filled, and a renamed entry does not count.
+     */
+    private String freeName(){
+        int highest=0;
+        for(var e:entries){var m=NUMBERED.matcher(e.name);if(m.matches())highest=Math.max(highest,Integer.parseInt(m.group()
+            .substring("Selection ".length())));}
+        return "Selection "+(highest+1);
+    }
+    /** Saves the live selection as a new entry, "Selection 1", "Selection 2", and so on (see {@link #freeName}). */
     public Entry save(Selection live){
         if(live.size()==0)throw new IllegalArgumentException("Nothing is selected to save");
         if(entries.size()>=MAX)throw new IllegalArgumentException("Saved selection limit: "+MAX);
         // while looking at one, the live selection is the saved one, so what a player means by saving is what they see: the tweaked copy
-        var entry=new Entry(nextId++,"Selection "+nextNumber++,live.points());entries.add(entry);revision++;return entry;
+        var entry=new Entry(nextId++,freeName(),live.points());entries.add(entry);revision++;return entry;
     }
     public void rename(int id,String name){
         var entry=need(id);var clean=name==null?"":name.strip();
@@ -88,11 +99,13 @@ public final class SavedSelections {
         var last=deleted.peekLast();if(last==null||last.time<=time)return null;
         deleted.removeLast();
         if(byId(last.entry.id)!=null||entries.size()>=MAX)return null;
+        if(byName(last.entry.name)!=null)last.entry.name=freeName(); // its number was taken by a new one in the meantime
         entries.add(Math.clamp(last.index,0,entries.size()),last.entry);revision++;return last.entry;
     }
     /** Puts a deleted entry back where it was, with its id and name. */
     public void restore(Entry entry,int index){
         if(byId(entry.id)!=null||entries.size()>=MAX)return;
+        if(byName(entry.name)!=null)entry.name=freeName(); // its number was taken by a new one in the meantime
         entries.add(Math.clamp(index,0,entries.size()),entry);revision++;
     }
     public int indexOf(Entry entry){return entries.indexOf(entry);}

@@ -46,7 +46,8 @@ public final class ClientState {
     public static List<Packets.SavedSelection> savedSelections(){return savedSelections;}
     /** The outline colour of each saved selection by id. A colour belongs to the client: it starts as the selection colour turned by the golden angle for each one saved before it, and the player can change it. */
     private static final Map<Integer,Integer> savedColors=new HashMap<>();
-    private static int savedSeen;
+    /** The place in the hue wheel each entry's starting colour was taken from. */
+    private static final Map<Integer,Integer> savedIndex=new HashMap<>();
     /** Takes in the saved selections a status carries. A status that does not carry them (null) leaves them as they were. */
     static void updateSavedSelections(Packets.Status status){
         if(status.savedSelections()==null)return;
@@ -59,7 +60,13 @@ public final class ClientState {
             else savedShapes.put(saved.id(),OutlineShape.ofLater(SelectionCodec.decode(saved.data())));
         }
         savedShapes.keySet().retainAll(present);
-        for(var saved:savedSelections)savedColors.computeIfAbsent(saved.id(),id->dev.craftium.core.SavedSelectionColors.forIndex(options.selectionColor,savedSeen++));
+        // an entry seen for the first time takes the lowest place on the wheel that no entry here uses, so colours are reused as entries go and the first one is the selection colour again
+        for(var saved:savedSelections){
+            if(savedColors.containsKey(saved.id()))continue;
+            var used=new HashSet<Integer>();for(var other:savedSelections){var at=savedIndex.get(other.id());if(at!=null)used.add(at);}
+            int index=0;while(used.contains(index))index++;
+            savedIndex.put(saved.id(),index);savedColors.put(saved.id(),dev.craftium.core.SavedSelectionColors.forIndex(options.selectionColor,index));
+        }
     }
     /** The outline of each saved selection by id, drawn in the selection style. A selection with none is drawn as a box. */
     private static final Map<Integer,OutlineShape> savedShapes=new HashMap<>();
@@ -68,7 +75,7 @@ public final class ClientState {
     private static final Set<Integer> savedHidden=new HashSet<>();
     public static boolean savedHidden(int id){return savedHidden.contains(id);}
     public static void toggleSavedHidden(int id){if(!savedHidden.remove(id))savedHidden.add(id);}
-    static void clearSavedSelections(){savedSelections=List.of();savedColors.clear();savedHidden.clear();savedShapes.clear();savedSeen=0;}
+    static void clearSavedSelections(){savedSelections=List.of();savedColors.clear();savedHidden.clear();savedShapes.clear();savedIndex.clear();}
     public static int savedColor(int id){return savedColors.getOrDefault(id,options.selectionColor);}
     public static void setSavedColor(int id,int color){savedColors.put(id,color);}
     /** The saved selection being looked at or edited, or null. */
