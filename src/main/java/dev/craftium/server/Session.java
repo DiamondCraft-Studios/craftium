@@ -55,6 +55,8 @@ final class Session {
     int pluginToolsSent=-1;
     /** The selections this player saved, and the {@link dev.craftium.core.SavedSelections#revision} of them that was last sent, or -1 when none has been. */
     final dev.craftium.core.SavedSelections saved=new dev.craftium.core.SavedSelections();long savedSent=-1;
+    /** The {@link dev.craftium.core.SavedSelections.Entry#version} of each saved selection's blocks that this player was last sent, by id. */
+    final Map<Integer,Integer> savedDataSent=new HashMap<>();
     /** What the last AI spec planned looked wrong in (see BuildSpec.Result#warnings), for the reply that describes its preview. */
     List<String> specWarnings=List.of();
     /** The clipboard's blocks as a ghost for the placement preview, and whether it needs encoding again. */

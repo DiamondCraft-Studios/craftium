@@ -12,12 +12,14 @@ public final class SavedSelections {
     public static final int MAX=64;
     /** A saved selection: it keeps its id and name when the others come and go. */
     public static final class Entry {
-        private final int id;private String name;private List<Point> points;
+        private final int id;private String name;private List<Point> points;private int version;
         Entry(int id,String name,Collection<Point> points){this.id=id;this.name=name;this.points=List.copyOf(points);}
         public int id(){return id;}
         public String name(){return name;}
         public List<Point> points(){return points;}
         public int size(){return points.size();}
+        /** Goes up whenever the blocks change, so what was sent of them can be told from what is there now. */
+        public int version(){return version;}
     }
     private final List<Entry> entries=new ArrayList<>();
     private int nextNumber=1,nextId=1;
@@ -72,7 +74,7 @@ public final class SavedSelections {
     public boolean sync(Selection live){
         if(!editing()||live.size()==0)return false; // an emptied selection (Clear, Delete) never empties the saved one; delete it from the window instead
         if(active.points.size()==live.size()&&new HashSet<>(active.points).equals(live.points()))return false;
-        active.points=List.copyOf(live.points());revision++;return true;
+        active.points=List.copyOf(live.points());active.version++;revision++;return true;
     }
     /** Removes the entry; if it was being looked at, the live selection comes back first. Returns the removed entry so a delete can be undone. */
     public Entry delete(int id,Selection live){

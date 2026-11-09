@@ -379,11 +379,15 @@ public final class CraftiumClient implements ClientModInitializer {
         return hit.getType()==HitResult.Type.BLOCK?hit:null;
     }
     /** The transform handles: the builder's, or the editor's with the box corners and the point being dragged. Drawn each frame. */
-    /** The saved selections that are not swapped in, each as the box around it in its own colour. They only show while the editor is open. The one being looked at is the live selection and is drawn by the selection overlay, in its colour. */
+    /** The saved selections that are not swapped in, each drawn like the selection (its style, width and fills) in its own colour, or as the box around it when it is too big for that. They only show while the editor is open. The one being looked at is the live selection and is drawn by the selection overlay, in its colour. */
     private static void drawSavedSelections(){
         for(var saved:ClientState.savedSelections()){
             if(saved.active()||saved.size()==0)continue;
-            int colour=ClientState.savedColor(saved.id());Point a=saved.min(),b=saved.max();
+            int colour=ClientState.savedColor(saved.id());Point a=saved.min(),b=saved.max();var o=ClientState.options;
+            var shape=ClientState.savedShape(saved.id());
+            if(shape!=null){ // the same style, width and fills as the selection, in the entry's colour
+                shape.drawPlain(Vec3.ZERO,colour,(float)o.selectionWidth,colour&0xffffff|o.selectionFill&0xff000000,colour&0xffffff|o.selectionInsideFill&0xff000000,true,false);continue;
+            }
             Overlay.box(new AABB(a.x()-.02,a.y()-.02,a.z()-.02,b.x()+1.02,b.y()+1.02,b.z()+1.02),colour,(float)ClientState.options.selectionWidth,colour&0xffffff|0x18000000);
         }
     }

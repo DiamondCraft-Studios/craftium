@@ -29,18 +29,29 @@ final class SavedSelectionActions {
     }
 
     /** What the client is shown of them: the list in order, with where each one is and which is being looked at. */
-    static List<Packets.SavedSelection> list(Session s){
+    static List<Packets.SavedSelection> list(Session s){return list(s,false);}
+    /** More blocks than this are not sent for drawing in the selection style; the client draws a box around them instead. */
+    static final int DRAW_LIMIT=200_000;
+    private static List<Packets.SavedSelection> list(Session s,boolean withData){
         var out=new java.util.ArrayList<Packets.SavedSelection>();
         for(var e:s.saved.entries()){
             Point min=e.points().isEmpty()?new Point(0,0,0):new Point(e.points().stream().mapToInt(Point::x).min().getAsInt(),e.points().stream().mapToInt(Point::y).min().getAsInt(),e.points().stream().mapToInt(Point::z).min().getAsInt());
             Point max=e.points().isEmpty()?min:new Point(e.points().stream().mapToInt(Point::x).max().getAsInt(),e.points().stream().mapToInt(Point::y).max().getAsInt(),e.points().stream().mapToInt(Point::z).max().getAsInt());
-            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,e==s.saved.active(),e==s.saved.active()&&s.saved.editing()));
+            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,e==s.saved.active(),e==s.saved.active()&&s.saved.editing(),withData?data(s,e):null));
         }
         return out;
     }
     /** The list for the status that is going to this player, or null when they already have the current one. Asking marks it as sent. */
     static List<Packets.SavedSelection> forStatus(Session s,boolean supported){
         if(!supported||s.savedSent==s.saved.revision())return null;
-        s.savedSent=s.saved.revision();return list(s);
+        s.savedSent=s.saved.revision();
+        s.savedDataSent.keySet().retainAll(s.saved.entries().stream().map(e->e.id()).collect(java.util.stream.Collectors.toSet())); // forget what was sent of deleted ones
+        return list(s,true);
+    }
+    /** The blocks of an entry, once for each time they change; null when the client has them, empty when there are too many. */
+    private static String data(Session s,dev.craftium.core.SavedSelections.Entry e){
+        if(Integer.valueOf(e.version()).equals(s.savedDataSent.get(e.id())))return null;
+        s.savedDataSent.put(e.id(),e.version());
+        return e.size()>DRAW_LIMIT?"":dev.craftium.core.SelectionCodec.encode(e.points());
     }
 }

@@ -44,4 +44,13 @@ class SavedSelectionActionsTest {
         assertTrue(ActionRegistry.isNamespaced("saved_selection:save"));assertTrue(ActionRegistry.isNamespaced("saved_selection:release"));
         assertTrue(SavedSelectionActions.PREFIX.equals("saved_selection:"));
     }
+    @Test void theBlocksAreSentOnceAndAgainOnlyWhenTheyChange(){
+        var s=session();SavedSelectionActions.run(s,"saved_selection:save");int id=s.saved.entries().getFirst().id();
+        var first=SavedSelectionActions.forStatus(s,true).getFirst();
+        assertEquals(dev.craftium.core.SelectionCodec.encode(s.saved.entries().getFirst().points()),first.data());
+        SavedSelectionActions.run(s,"saved_selection:rename:"+id+":Roof");
+        assertNull(SavedSelectionActions.forStatus(s,true).getFirst().data(),"a rename does not resend the blocks");
+        SavedSelectionActions.run(s,"saved_selection:edit:"+id);s.selection.combine(List.of(new Point(9,9,9)),Selection.Mode.ADD);s.saved.sync(s.selection);
+        assertNotNull(SavedSelectionActions.forStatus(s,true).getFirst().data(),"changed blocks are sent again");
+    }
 }

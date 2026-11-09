@@ -52,9 +52,20 @@ public final class ClientState {
         if(status.savedSelections()==null)return;
         savedSelections=List.copyOf(status.savedSelections());
         if(savedSelections.isEmpty()){savedColors.clear();savedSeen=0;}
+        var present=new HashSet<Integer>();
+        for(var saved:savedSelections){
+            present.add(saved.id());
+            if(saved.data()==null)continue; // unchanged: the outline already made for it is still right
+            if(saved.data().isEmpty())savedShapes.remove(saved.id()); // too many blocks to draw as an outline: it is drawn as a box
+            else savedShapes.put(saved.id(),OutlineShape.ofLater(SelectionCodec.decode(saved.data())));
+        }
+        savedShapes.keySet().retainAll(present);
         for(var saved:savedSelections)savedColors.computeIfAbsent(saved.id(),id->dev.craftium.core.SavedSelectionColors.forIndex(options.selectionColor,savedSeen++));
     }
-    static void clearSavedSelections(){savedSelections=List.of();savedColors.clear();savedSeen=0;}
+    /** The outline of each saved selection by id, drawn in the selection style. A selection with none is drawn as a box. */
+    private static final Map<Integer,OutlineShape> savedShapes=new HashMap<>();
+    static OutlineShape savedShape(int id){return savedShapes.get(id);}
+    static void clearSavedSelections(){savedSelections=List.of();savedColors.clear();savedShapes.clear();savedSeen=0;}
     public static int savedColor(int id){return savedColors.getOrDefault(id,options.selectionColor);}
     public static void setSavedColor(int id,int color){savedColors.put(id,color);}
     /** The saved selection being looked at or edited, or null. */
