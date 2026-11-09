@@ -39,7 +39,7 @@ public final class Geometry {
     }
     public static List<Point> shape(Point center,Options o) {
         if(o.shapeKind==Options.ShapeKind.BRUSH&&o.yaw==0&&o.pitch==0&&o.roll==0&&o.sizeX==1&&o.sizeY==1&&o.sizeZ==1)
-            return BrushMath.brush(center,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline);
+            return BrushMath.brush(center,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline,Selection.LIMIT,o.form());
         if(o.shapeKind==Options.ShapeKind.BRUSH&&o.sizeX==1&&o.sizeY==1&&o.sizeZ==1)return turned(center,o);
         double scaled=o.yaw==0&&o.pitch==0&&o.roll==0?Math.max(o.sizeX,Math.max(o.sizeY,o.sizeZ)):Math.sqrt(o.sizeX*o.sizeX+o.sizeY*o.sizeY+o.sizeZ*o.sizeZ);
         double outer=o.outerRadius();
@@ -69,7 +69,7 @@ public final class Geometry {
     private static List<Point> turned(Point center,Options o){
         // An outline and a pixel perfect wall are worked out on the turned solid, since a line of single blocks does not survive being turned.
         boolean afterwards=o.outline||o.hollow&&o.pixelPerfect;
-        var base=BrushMath.brush(new Point(0,0,0),o.radius,o.shape,o.hollow&&!afterwards,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,false);
+        var base=BrushMath.brush(new Point(0,0,0),o.radius,o.shape,o.hollow&&!afterwards,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,false,Selection.LIMIT,o.form());
         int e=0;double far=0;
         for(Point p:base){e=Math.max(e,Math.max(Math.abs(p.x()),Math.max(Math.abs(p.y()),Math.abs(p.z()))));far=Math.max(far,(double)p.x()*p.x()+(double)p.y()*p.y()+(double)p.z()*p.z());}
         int extent=(int)Math.ceil(Math.sqrt(far));
@@ -113,6 +113,7 @@ public final class Geometry {
                 case TORUS->Math.pow(radial-.75,2)+y*y<=Math.pow(.25+.5/outer,2);
                 case TUBE->radial<=reach&&radial>=.5&&Math.abs(y)<=1+py;
                 case POLYGON->radial<=reach&&Math.abs(y)<=.5/outer&&polygon(x,z,o.polygonSides,reach);
+                case IRREGULAR_POLYGON,STAR->radial<=reach&&Math.abs(y)<=.5/outer&&BrushMath.fanContains(o.shape,Math.max(BrushMath.MIN_SIDES,o.polygonSides),o.form(),x,z,reach);
                 case PLANE->inside(x,y,z,o,Options.ShapeKind.PLANE,px,py,pz);case PYRAMID->inside(x,y,z,o,Options.ShapeKind.PYRAMID,px,py,pz);
             };
             case SPHERE -> x*x+y*y+z*z<=1;

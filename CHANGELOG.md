@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+Changes since 1.3.1-beta.1.
+
+### Interface
+- New Selections window. Save selection keeps what is selected as an entry named Selection 1, Selection 2 and so on (the count starts again at 1 when none are left), beside your selection and without changing it. Each entry has a colour square (the selection colour, then turned round the hue wheel for each next one; click it to change it), an eye to hide its outline, a pencil to edit it and a cross to delete it. Clicking an entry shows it in place of your selection and clicking it again gives yours back. Editing an entry lets any selection tool add to it or take from it, keeping the changes. Deleting asks nothing, and Ctrl+Z brings the entry back with its colour. Saved selections that are not shown are drawn like the selection, in their own colour, while the editor is open.
+
+### AI building
+- Claude can tell your saved selections apart. get_state lists them by name, read_selection takes a name to read one, and replace_selection takes a "selection" name, so one build can do "on Selection 1 do this, then on Selection 2 do that". An unknown name refuses the build and lists the names there are.
+
+### Internal
+- A request can name a plugin's tool and carry the values of its settings, and the server runs it through the same gate as the editor's own tools, holding the settings to what the tool declared and its plan to the block limit. A tool can show a ghost of what it would build before the player clicks, which arrives on its own and never changes the status line. These are new optional fields, so older clients and servers ignore them, and a build that has them says so with the `plugin-tools` capability. Nothing registers a plugin tool yet, so nothing a player sees changes.
+- The server tells a client which tools its plugins have added, in the first status after they change and as a push of its own when they do, with each tool's settings. The client keeps the tools it understands and leaves out any it does not, and nothing lists them yet.
+
 ## 1.3.1-beta.1
 
 Changes since 1.3.0-beta.1.
@@ -8,15 +22,27 @@ Changes since 1.3.0-beta.1.
 - AI world reads include the selection corners again.
 
 ### Tools
+- Two new flat shapes, Irregular polygon and Star. Irregular polygon keeps its number of Sides but gives each corner a random distance and spacing; the Seed slider picks which one, and the same seed always gives the same shape. Star has Points and an Inner radius slider for how deep the notches between the points go. Both work with every tool that picks a shape, hollow, outline and the scale and turn controls.
+- The Magic Wand has a Select liquids switch. Off, which is the default, it aims through water and lava and no longer selects them with the Any select type; on, it can aim at them and select them.
+- New Paint Bucket tool under Paint. Click a block to fill everything connected to it with your foreground block. It outlines what it would fill, asks first when that is a lot, and follows the Magic Wand's Up, Down, Horizontal, Corners and select type settings.
 - A Script Brush or mask script that calls itself without end no longer crashes the server. It stops with "Lua call depth exceeded; operation cancelled", as a script that runs out of instructions does.
 
 ### Interface
+- Sliders for an angle that can go round more than once, such as Modify's Angle, show whole degrees (567°), and a whole number of turns as 360°×2 once past one turn.
+- Pasting with Ctrl+V and a click or Enter makes the pasted blocks the selection and lets go of the original, handles included, so Move, Rotate and Scale work on what you pasted. Undo gives the old selection back. Paste a copy keeps the selection as it was.
+- Box Select shows its hover cube for every first point, not only the first box: after a box is made, the block a new box would start on is outlined as before.
+- The selection tools show an icon on the pointer's bottom-right, as big as the pointer, for how the next selection combines with the current one: replace, add, subtract or intersect.
+- Sliders for an angle that can go round more than once, such as Modify's Angle, show whole degrees (567°), and a whole number of turns past one as 360°×2.
+- Pasting with Ctrl+V and a click or Enter makes the pasted blocks the selection and lets go of the original, handles included, so Move, Rotate and Scale work on what you pasted. Undo gives the old selection back. Paste a copy keeps the selection as it was.
+- The block palette has a transparency toggle under the foreground slot, also on T. While it is on, every tool paints the foreground as air, and the slot keeps showing the block, faded, that it goes back to when you turn it off.
+- The Magic Wand's directions, selection mode and select type are now one widget that other tool panels can reuse. The Paint Bucket shows its directions and select type.
 - Every tool has an icon of its own. Smear, Annotation, Shape, Line, Extrude, Distort, Roughen, Modelling, Biome Painter and Clentaminator were drawn the same as another tool, and now have new icons.
 
 ### Internal
 - Tools, their icons and the Lua sandbox were reorganised in preparation for plugins. Nothing else about how the editor behaves has changed.
 - A tool can declare its own settings (a number, a whole number, a switch or a choice), and the options panel draws them as a form. The tools the editor ships with declare none, and their panels are unchanged.
 - What a tool draws in the world, and the handles it shows, are drawn by the tool's own input handler instead of by the editor screen checking for each tool by name.
+- On the server, every edit passes one gate before it is built or held for confirmation, each tool's click is handled by its own behaviour instead of a switch on the tool, and actions with a namespaced name (`plugin_id:action`) can be registered for plugins. None of this changes what the editor's tools do; on a Paper server a plugin's action needs the new `craftium.plugins.use` permission.
 
 ## 1.3.0-beta.1
 

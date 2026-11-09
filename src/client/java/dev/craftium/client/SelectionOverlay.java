@@ -88,7 +88,8 @@ final class SelectionOverlay {
     static void draw(boolean transforming){
         adopt();
         if(shape.isEmpty())return;
-        int colour=ClientState.options.selectionColor;float width=(float)ClientState.options.selectionWidth;
+        var looking=ClientState.activeSaved(); // a saved selection swapped in is drawn in its own colour
+        int colour=looking!=null?ClientState.savedColor(looking.id()):ClientState.options.selectionColor;float width=(float)ClientState.options.selectionWidth;
         var landing=transforming?TransformGizmo.landing(selected):null;
         if(landing!=null)landing.drawLive(Vec3.ZERO,colour,width,ClientState.options.selectionFill,true); // a rotate or scale: the blocks it will leave
         else if(transforming)shape.draw(Vec3.ZERO,TransformGizmo::line,colour,ClientState.options.selectionFill,false,ClientState.options.selectionStyle,TransformGizmo::eyeInShape);

@@ -33,6 +33,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             if("queue".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.BuilderQueueGameTest.run(ctx,world);return;}
             if("showcase".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){try{dev.craftium.client.ShowcaseGameTest.run(ctx,world);}catch(RuntimeException|Error e){throw e;}catch(Exception e){throw new AssertionError(e);}return;}
             if("selection".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.SelectionOutlineGameTest.run(ctx,world);return;}
+            if("savedselections".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.SavedSelectionsGameTest.run(ctx,world);return;}
             if("selectionperf".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.SelectionDrawCostGameTest.run(ctx,world);return;}
             if("structures".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.StructureGameTest.run(ctx,world);return;}
             if("viewport".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.ViewportGameTest.run(ctx,world);return;}
@@ -40,6 +41,9 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             if("interaction".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.InteractionGameTest.run(ctx,world);return;}
             if("icons".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.IconSheetGameTest.run(ctx);return;}
             if("golden".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){GoldenToolGameTest.run(ctx,world);return;}
+            if("toollist".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.server.PluginToolListGameTest.run(ctx,world);return;}
+            if("plugintools".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.server.PluginToolGameTest.run(ctx,world);return;}
+            if("actions".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.server.ActionGameTest.run(ctx,world);return;}
             if("panel".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.PanelGameTest.run(ctx,world);return;}
             if("overlay".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.OverlayGameTest.run(ctx,world);return;}
             if("toolhints".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.ToolHintsGameTest.run(ctx);return;}

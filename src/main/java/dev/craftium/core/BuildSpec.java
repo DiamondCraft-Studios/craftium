@@ -57,9 +57,12 @@ public final class BuildSpec {
     /**
      * An edit of the player's selection: every block in it (or every block that is {@code find}) becomes {@code block}, keeping the
      * properties named in {@code keep} (facing, half, shape...) so stairs stay the way they face. {@code keep} null keeps every property
-     * both blocks have. Applied by the server after the shapes, to a selection this class knows nothing about.
+     * both blocks have. Applied by the server after the shapes, to a selection this class knows nothing about. {@code selection} names one of
+     * the player's saved selections ("Selection 1") to work on instead of the one this session started with; null means that one.
      */
-    public record SelectionOp(String block, String find, List<String> keep) {}
+    public record SelectionOp(String block, String find, List<String> keep, String selection) {
+        public SelectionOp(String block, String find, List<String> keep) { this(block, find, keep, null); }
+    }
 
     /**
      * A Lua script that builds inside a box: {@code {"op":"script","from":[x,y,z],"to":[x,y,z],"code":"...","seed":n}}. The server runs it
@@ -192,7 +195,7 @@ public final class BuildSpec {
         return out;
     }
 
-    /** Reads a replace_selection operation: {"op":"replace_selection","block":B,"find":B (optional),"keep":["facing","half"] (optional)}. */
+    /** Reads a replace_selection operation: {"op":"replace_selection","block":B,"find":B (optional),"keep":["facing","half"] (optional),"selection":"Selection 1" (optional)}. */
     private SelectionOp selectionOp(JsonObject op, int i) {
         String kind = "replace_selection";
         if (op.has("repeat") || op.has("hollow")) throw fail(i, kind, "\"repeat\" and \"hollow\" do not apply: it works on the player's selection");
@@ -208,7 +211,13 @@ public final class BuildSpec {
                 keep.add(each.getAsString());
             }
         }
-        return new SelectionOp(block, find, keep == null ? null : List.copyOf(keep));
+        String selection = null;
+        if (op.has("selection")) {
+            if (!op.get("selection").isJsonPrimitive() || !op.getAsJsonPrimitive("selection").isString() || op.get("selection").getAsString().strip().isEmpty() || op.get("selection").getAsString().length() > 40)
+                throw fail(i, kind, "\"selection\" must be the name of one of the player's saved selections, such as \"Selection 1\" (read_selection with that name, or get_state, lists them)");
+            selection = op.get("selection").getAsString().strip();
+        }
+        return new SelectionOp(block, find, keep == null ? null : List.copyOf(keep), selection);
     }
 
     /** Checks a script operation's fields, so a spec that cannot run is refused before anything is planned. */

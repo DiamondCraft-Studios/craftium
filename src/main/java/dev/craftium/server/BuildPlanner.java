@@ -16,6 +16,14 @@ final class BuildPlanner {
      * @param onto a waiting preview to build on top of (its changes are planned first, so the new operations see its blocks), or null
      */
     static Session.Edit plan(net.minecraft.server.level.ServerPlayer player, Session ai, Options o, java.util.Set<Point> selection, Session.Edit onto) {
+        return plan(player, ai, o, selection, onto, name -> { throw new IllegalArgumentException("There are no saved selections to work on"); });
+    }
+
+    /**
+     * As above, and {@code named} finds one of the player's saved selections by the name an operation gave ("Selection 1"), or throws saying
+     * which names there are. Operations that name none work on {@code selection}, so one spec can work on several selections at once.
+     */
+    static Session.Edit plan(net.minecraft.server.level.ServerPlayer player, Session ai, Options o, java.util.Set<Point> selection, Session.Edit onto, java.util.function.Function<String, java.util.Set<Point>> named) {
         var spec = BuildSpec.parse(o.buildSpec);
         var level = (net.minecraft.server.level.ServerLevel) player.level();
         var plan = new EditPlanner(level, ai, o);
@@ -23,11 +31,10 @@ final class BuildPlanner {
         if (onto != null) for (var change : onto.changes()) plan.changes.put(change.pos(), change);
         if (!spec.hasShapes()) {
             // Only operations on the selection: there is no area of its own, so the ground to load is the selection's.
-            if (selection.isEmpty()) throw new IllegalArgumentException("replace_selection works on the player's selection, and nothing is selected. Ask the player to select the blocks, or give coordinates and use replace with from and to");
+            if (selection.isEmpty() && usesSessionSelection(spec)) throw new IllegalArgumentException("replace_selection works on the player's selection, and nothing is selected. Ask the player to select the blocks, or give coordinates and use replace with from and to");
             var states = states(level, spec);
             plan.exact = true;
-            loadAround(level, selection);
-            applySelection(level, plan, spec, states, selection, new HashMap<>());
+            applySelection(level, plan, spec, states, selection, new HashMap<>(), named);
             return plan.finish("AI build");
         }
         var place = spec.place();
@@ -64,9 +71,8 @@ final class BuildPlanner {
             ai.specWarnings = List.copyOf(warnings);
         }
         if (!spec.selectionOps().isEmpty()) {
-            if (selection.isEmpty()) throw new IllegalArgumentException("replace_selection works on the player's selection, and nothing is selected. Ask the player to select the blocks, or give coordinates and use replace with from and to");
-            loadAround(level, selection);
-            applySelection(level, plan, spec, states, selection, matches);
+            if (selection.isEmpty() && usesSessionSelection(spec)) throw new IllegalArgumentException("replace_selection works on the player's selection, and nothing is selected. Ask the player to select the blocks, or give coordinates and use replace with from and to");
+            applySelection(level, plan, spec, states, selection, matches, named);
         }
         return plan.finish("AI build");
     }
@@ -168,8 +174,21 @@ final class BuildPlanner {
      * Applies the spec's operations on the selection, one after another, each seeing what the ones before it planned. It walks the selection
      * once per operation and keeps nothing per block beyond the plan itself, so a selection of a million blocks costs what the plan costs.
      */
-    private static void applySelection(net.minecraft.server.level.ServerLevel level, EditPlanner plan, BuildSpec spec, Map<String, BlockState> states, java.util.Set<Point> selection, Map<String, Match> matches) {
+    /** Whether some replace_selection names no saved selection, so it needs the one this session started with. */
+    private static boolean usesSessionSelection(BuildSpec spec) {
+        for (var op : spec.selectionOps()) if (op.selection() == null) return true;
+        return false;
+    }
+
+    private static void applySelection(net.minecraft.server.level.ServerLevel level, EditPlanner plan, BuildSpec spec, Map<String, BlockState> states, java.util.Set<Point> sessionSelection, Map<String, Match> matches, java.util.function.Function<String, java.util.Set<Point>> named) {
+        // Every named selection is found before anything is changed, so an unknown name refuses the whole spec and not half of it.
+        var sets = new HashMap<String, java.util.Set<Point>>();
+        for (var op : spec.selectionOps()) if (op.selection() != null) sets.computeIfAbsent(op.selection().toLowerCase(java.util.Locale.ROOT), key -> named.apply(op.selection()));
+        var loaded = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<java.util.Set<Point>, Boolean>());
         for (var op : spec.selectionOps()) {
+            var selection = op.selection() == null ? sessionSelection : sets.get(op.selection().toLowerCase(java.util.Locale.ROOT));
+            if (selection.isEmpty()) throw new IllegalArgumentException(op.selection() == null ? "Nothing is selected" : "\"" + op.selection() + "\" has no blocks");
+            if (loaded.add(selection)) loadAround(level, selection);
             var wanted = states.get(op.block());
             var found = op.find() == null ? null : match(level, matches, op.find());
             for (Point at : selection) {

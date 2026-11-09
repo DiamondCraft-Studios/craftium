@@ -33,10 +33,19 @@ public final class Packets {
                           * All of this player's AI sessions, oldest first: what each is doing and holding. Null means the same as last time (a {@code background}
                           * status has none), and an entry's {@code data} is null when its preview is the one the client was last sent.
                           */
-                         List<AiSession> aiSessions) {
-        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo,String entityUuid,String entityNbt,List<dev.craftium.core.Annotation> annotations,String selectionData,String clipboardData,List<dev.craftium.core.BlueprintInfo> blueprints,int clipboardEntityCount,String pendingData,String clipboardGhost,String pivotUpdate,long undoAge,long redoAge,String undoName,String redoName,String pulse,String aiPendingData,int aiUndo,String aiUndoName){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,entityUuid,entityNbt,annotations,selectionData,clipboardData,blueprints,clipboardEntityCount,pendingData,clipboardGhost,pivotUpdate,undoAge,redoAge,undoName,redoName,pulse,aiPendingData,aiUndo,aiUndoName,"",null,null,false,null);}
+                         List<AiSession> aiSessions,
+                         /** The ghost a plugin's tool wants shown for the player, as ghost data like {@code pendingData}; empty when it wants none. */
+                         String pluginPreviewData,
+                         /**
+                          * The tools plugins have added, in full: null means the same as last time, and an empty list means there are none now. A status that only brings
+                          * the ghost of a tool has null here, and one that only brings the list has null for the ghost.
+                          */
+                         List<PluginTool> pluginTools,
+                         /** The player's saved selections, in order: null means the same as last time, and an empty list means there are none now. */
+                         List<SavedSelection> savedSelections) {
+        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo,String entityUuid,String entityNbt,List<dev.craftium.core.Annotation> annotations,String selectionData,String clipboardData,List<dev.craftium.core.BlueprintInfo> blueprints,int clipboardEntityCount,String pendingData,String clipboardGhost,String pivotUpdate,long undoAge,long redoAge,String undoName,String redoName,String pulse,String aiPendingData,int aiUndo,String aiUndoName){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,entityUuid,entityNbt,annotations,selectionData,clipboardData,blueprints,clipboardEntityCount,pendingData,clipboardGhost,pivotUpdate,undoAge,redoAge,undoName,redoName,pulse,aiPendingData,aiUndo,aiUndoName,"",null,null,false,null,"",null,null);}
         /** {@code undoAge} and {@code redoAge} are how many milliseconds ago the next edit to undo or redo was made, or -1 when there is none. */
-        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,false,null);}
+        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,false,null,"",null,null);}
     }
 
     /**
@@ -52,9 +61,33 @@ public final class Packets {
     /** One player's waiting AI preview, as ghost data, and whose it is. */
     public record SharedPreview(String owner, String data) {}
 
+    /**
+     * A tool a plugin added, as a client is told of it. The kinds are text so that a client that does not know one (or an interaction) can leave the tool out
+     * instead of misreading it. See {@code PluginToolCodec}.
+     */
+    public record PluginTool(String id, String label, String icon, String iconId, String section, String description, String useHint, String interaction, boolean confirms,
+                             List<PluginProperty> properties) {}
+
+    /** One setting of a plugin's tool: {@code kind} is NUMBER, INTEGER, TOGGLE or CHOICE, and {@code number} is where it starts (the index of the choice for a choice). */
+    public record PluginProperty(String id, String label, String kind, double min, double max, double number, List<String> choices) {}
+
+    /** One saved selection as the client sees it: the blocks stay on the server. {@code active} is the one swapped in for the live selection, {@code editing} whether changes are written back to it. */
+    public record SavedSelection(int id, String name, int size, Point min, Point max, boolean active, boolean editing,
+                                 /** The blocks as {@code SelectionCodec} text, so the client can draw it in the selection style: null means the client already has them, and empty means they were left out because the status was too big (see {@code StatusFit}). */
+                                 String data) {}
+    /** A status that carries only the list of plugin tools, sent when it changes: not a reply to anything, so the client takes the list and nothing else from it. */
+    public static Status toolsOnly(List<PluginTool> tools) {
+        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,null,tools,null);
+    }
+
+    /** A status that carries only the ghost a plugin's tool is showing: not a reply to anything, so the client takes the ghost and nothing else from it. */
+    public static Status pluginOnly(String ghost) {
+        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,ghost,null,null);
+    }
+
     /** A status that carries only the other players' AI previews, sent when one of them changes. */
     public static Status sharedOnly(List<SharedPreview> shared) {
-        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,shared,true,null);
+        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,shared,true,null,null,null,null);
     }
 
     public record Bridge(byte[] bytes) implements CustomPacketPayload {

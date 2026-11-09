@@ -174,6 +174,7 @@ public final class EditorServer {
             if(r==null || r.action()==null || r.options()==null)throw new IllegalArgumentException("Invalid editor request");
             if(!ServerPlatform.permitted(player,r.action()))throw new IllegalArgumentException("You do not have permission for this Craftium action");
             Options o=r.options();o.validate();
+            if(o.pluginTool!=null&&!ServerPlatform.permitted(player,o.pluginTool))throw new IllegalArgumentException("You do not have permission to use plugin tools on this server");
             boolean inWorld=r.action().equals("builder_place")||r.action().equals("builder_break");
             s.requestRecord=o.recordPlayerBuilding||!inWorld; // a click in the world is the player building by hand; the editor's own tools always are recorded
             s.requestStroke=r.action().equals("use")||inWorld?r.strokeId():0;
@@ -189,7 +190,7 @@ public final class EditorServer {
             s.confirmEdits=o.confirmEdits;
             s.currentAction=r.action();s.recordSelection=changesSelection(r.action(),o);
             // The builder and the clipboard placement preview have their own confirmation, and dropping a block in the world is one, so they apply straight away.
-            s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("bucket_fill")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm")||r.action().equals("stroke_end")||r.action().equals("use")&&(o.tool==Tool.EXTRUDE||o.tool==Tool.FLOODFILL)
+            s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("bucket_fill")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm")||r.action().equals("stroke_end")||r.action().equals("use")&&(o.tool==Tool.EXTRUDE||o.tool==Tool.FLOODFILL||o.tool==Tool.PAINT_BUCKET)
                 ||!o.enterToBuild&&!r.action().equals("use"); // with Enter to build off, a stroke is staged until the button is let go (stroke_end) and any other action is built at once
             if(r.action().equals("status")) { s.sharedKey=null;s.sentAi.clear();send(player,s,"Ready",false);return; }
             if(r.action().equals("capabilities")){send(player,s,"Builder capabilities synchronized",false);return;}
@@ -229,6 +230,19 @@ public final class EditorServer {
             boolean popup=Set.of("structure_preview","structure_export_file","structure_import_file").contains(r.action());
             if(!replaying&&!r.action().equals("builder_commit")&&now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             if(!popup)s.lastRequest=now;
+            if(r.action().equals("tool_preview")){toolPreview(player,s,o,r.target(),r.normal());return;} // the ghost of a plugin's tool, which is not an edit and answers with the ghost alone
+            if(r.action().startsWith("ai_selection_named:")){ // one of the player's saved selections, read by the name it has in the Selections window
+                ServerPlatform.send(player,new Packets.AiReply(aiSelectionNamed(player,r.action().substring("ai_selection_named:".length()))));return;
+            }
+            if(r.action().startsWith(SavedSelectionActions.PREFIX)){ // the Selections window (before the plugin actions, as "saved_selection:save" has the shape of one): swaps entries in and out of the live selection, never changes a block
+                if(!Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS))throw new IllegalArgumentException("This client does not know saved selections");
+                send(player,s,SavedSelectionActions.run(s,r.action()),false);return;
+            }
+            if(ActionRegistry.isNamespaced(r.action())){ // an action of a plugin's: only the registry answers, and a name nobody registered is an error, never one of the editor's
+                var handler=ActionRegistry.find(r.action());
+                if(handler==null)throw new IllegalArgumentException("Unknown action "+r.action());
+                handler.run(new ActionUse(player,s,o,r.target(),r.normal()));return;
+            }
             if(r.action().equals("selection_restore")){
                 if(!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly())s.undo.removeFirst();
                 if(s.selectionBefore!=null){s.selection.restore(s.selectionBefore);s.selectionBefore=null;}send(player,s,"Selection cancelled",false);return;}
@@ -425,11 +439,22 @@ public final class EditorServer {
                     if(top==null||!top.builder()){send(player,s,back?"Nothing to undo in the builder":"Nothing to redo in the builder",false);return;}
                     s.historyRemaining=0;if(back)undoAnimated(player,s);else history(player,s,false);
                 }
-                case "undo", "redo" -> {s.historyRemaining=0;if(r.action().equals("undo"))undoAnimated(player,s);else history(player,s,false);}
+                case "undo", "redo" -> {
+                    s.historyRemaining=0;
+                    // a saved selection deleted after the last edit comes back first: Undo takes back the most recent thing
+                    if(r.action().equals("undo")&&s.saved.undoDelete(s.undo.isEmpty()?0:s.undo.peekFirst().time())!=null){send(player,s,"Saved selection back",false);return;}
+                    if(r.action().equals("undo"))undoAnimated(player,s);else history(player,s,false);
+                }
                 case "fill", "delete" -> {
                     requireSelection(s);var plan=new EditPlanner(player.level(),s,o);
-                    for(Point p:s.selection.points())plan.put(p,r.action().equals("delete")?Blocks.AIR.defaultBlockState():plan.material);
-                    start(player,s,plan.finish(r.action().equals("delete")?"Delete selection":"Fill selection"));
+                    boolean deleting=r.action().equals("delete");
+                    for(Point p:s.selection.points())plan.put(p,deleting?Blocks.AIR.defaultBlockState():plan.material);
+                    var edit=plan.finish(deleting?DELETE_SELECTION:"Fill selection");
+                    // Deleting the blocks lets go of the selection too, once the delete applies; undo gives the selection back with the blocks.
+                    if(deleting)edit=edit.withSelection(new Session.SelectionChange(new ArrayList<>(s.selection.points()),List.of(),null,null,Map.of("corners",s.cornersNow),Map.of("corners","none")));
+                    boolean nothing=deleting&&edit.changes().isEmpty()&&edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty();
+                    start(player,s,edit);
+                    if(nothing)letGoOfSelection(s); // there was nothing left to delete, and the selection is still let go of
                 }
                 case "paste", "paste_at", "paste_select", "paste_in_place" -> {
                     boolean inPlace=r.action().equals("paste_in_place");
@@ -447,8 +472,12 @@ public final class EditorServer {
                     Session.SelectionChange selected=null;
                     if(r.action().equals("paste_select")){ // the pasted blocks become the selection, and undo takes it back
                         var before=new ArrayList<>(s.selection.points());
+                        var handlesBefore=Map.of("corners",s.cornersNow);
                         s.selection.combine(placed,Selection.Mode.REPLACE);
-                        selected=new Session.SelectionChange(before,new ArrayList<>(placed));
+                        // The box handles belonged to the selection that was there, so they go with it: the pasted blocks are the selection now, and undo gives the old one back with its handles.
+                        s.corner=null;s.cornersNow=s.cornersHistory="none";s.historySelection=new ArrayList<>(placed);s.historyRevision=s.selection.revision();
+                        s.restoreUpdate=dev.craftium.core.Restore.encode(Map.of("corners","none"));
+                        selected=new Session.SelectionChange(before,new ArrayList<>(placed),null,null,handlesBefore,Map.of("corners","none"));
                     }
                     var edit=plan.finish("Paste clipboard");start(player,s,new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),o.pasteEntities?ClipboardEntities.paste(player,s,origin):List.of(),List.of(),selected));
                 }
@@ -482,23 +511,8 @@ public final class EditorServer {
                         start(player,s,plan.finish("Fill selection"));
                         return;
                     }
-                    var origin=plan.state(target);
-                    if(origin.isAir())throw new IllegalArgumentException("Drop the block onto a block, not empty space");
-                    var found=MagicWand.select(target,new MagicWand.World(){
-                        public boolean loaded(Point at){return player.level().hasChunk(at.x()>>4,at.z()>>4);}
-                        public boolean air(Point at){return plan.state(at).isAir();}
-                        public boolean matches(Point at){return plan.state(at).is(origin.getBlock());}
-                        public boolean surface(Point at){return plan.surface(at);}
-                    },new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,Selection.LIMIT*4)).found();
-                    if(found.isEmpty())throw new IllegalArgumentException("Bucket fill found no connected blocks there; check the Magic Wand range and surface settings");
-                    for(Point at:found)plan.put(at,plan.preserve(plan.state(at),plan.material));
-                    if(plan.changes.isEmpty()){
-                        String why=origin.getBlock()==plan.material.getBlock()?"those blocks are already that block"
-                            :!BlockMask.of(o).allows(origin)||!o.mask.isBlank()?"the block mask excludes them"
-                            :o.inSelection?"Only in selection is on":"the Y range, or the block can't be placed there (enable force place)";
-                        throw new IllegalArgumentException("Bucket fill changed nothing: "+why+" ("+found.size()+" blocks matched)");
-                    }
-                    start(player,s,plan.finish("Bucket fill"));
+                    if(plan.state(target).isAir())throw new IllegalArgumentException("Drop the block onto a block, not empty space");
+                    start(player,s,BuiltinTools.bucketFill(player,plan,o,target,Options.Compare.BLOCK,"Bucket fill"));
                 }
                 default -> throw new IllegalArgumentException("Unknown editor action");
             }
@@ -507,57 +521,44 @@ public final class EditorServer {
         finally {ChunkLease.endPlanning();}
     }
     /** The points a selection tool would add, less any the block mask rules out. */
-    private static List<Point> masked(EditPlanner plan,Options o,Iterable<Point> points){
+    static List<Point> masked(EditPlanner plan,Options o,Iterable<Point> points){
         var mask=BlockMask.of(o);var kept=new ArrayList<Point>();
         for(Point p:points)if(mask.allows(plan.state(p)))kept.add(p);
         return kept;
     }
+    /** What the player's tool does with a click on the world: whatever the tool's behaviour makes of it. */
     private static void use(ServerPlayer player,Session s,Options o,Point p,Point normal,EditPlanner plan) {
-        switch(o.tool) {
-            case ANNOTATION -> start(player,s,AnnotationEdits.plan("annotation_create",player.level(),o,p));
-            case BOX_SELECT -> {
-                if(s.corner==null) {s.corner=p;send(player,s,"First corner: "+p.coordinates()+" · choose the opposite corner",false);}
-                else {s.selection.combine(masked(plan,o,Selection.box(s.corner,p)),o.mode);s.corner=null;send(player,s,"Selected "+s.selection.size()+" blocks",false);}
-            }
-            case FREEHAND_SELECT -> {
-                s.selection.combine(masked(plan,o,plan.brush(p)),o.mode);send(player,s,"Selected "+s.selection.size()+" blocks",false);
-            }
-            case MAGIC_SELECT -> {
-                var origin=plan.state(p);var originData=o.compare==Options.Compare.NBT?AdvancedTools.data(plan,p):null;var blockMask=BlockMask.of(o);
-                var found=MagicWand.select(p,new MagicWand.World(){
-                    public boolean loaded(Point at){return player.level().hasChunk(at.x()>>4,at.z()>>4);}
-                    public boolean air(Point at){return plan.state(at).isAir();}
-                    public boolean matches(Point at){return blockMask.allows(plan.state(at))&&AdvancedTools.matches(plan,origin,originData,at);}
-                    public boolean surface(Point at){return plan.surface(at);}
-                },new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,Selection.LIMIT*4)).found();
-                s.selection.combine(found,o.mode);send(player,s,"Magic Wand: "+s.selection.size()+" blocks (128-block search radius)",false);
-            }
-            case RULER -> {
-                if(s.ruler==null) {s.ruler=p;send(player,s,"Ruler start: "+p.coordinates(),false);}
-                else {Point a=s.ruler;double distance=Math.sqrt(a.distanceSquared(p));int manhattan=Math.abs(a.x()-p.x())+Math.abs(a.y()-p.y())+Math.abs(a.z()-p.z());
-                    String message=String.format(Locale.ROOT,"Ruler: %s blocks · Manhattan %d · Δ %s",dev.craftium.core.Numbers.trim(distance),manhattan,p.subtract(a).coordinates());
-                    s.event(message);s.ruler=null;send(player,s,message,false);}
-            }
-            case LINE -> {
-                if(s.line==null) {s.line=p;send(player,s,"Line start set · choose the endpoint",false);}
-                else {for(Point point:BrushMath.line(s.line,p))for(Point at:BrushMath.brush(point,Math.min(o.radius,4),o.shape,o.hollow,o.outlineThickness,o.pixelPerfect))plan.put(at,plan.material);
-                    s.line=null;start(player,s,plan.finish("Draw line"));}
-            }
-            case SHAPE -> {
-                plan.tool(p,normal);
-                var edit=plan.finish(o.tool.label);
-                // What was placed becomes the selection, so the transform tools can take hold of it. Carving leaves nothing to select.
-                var placed=new LinkedHashSet<Point>();
-                if(!o.invert)for(var change:edit.changes())placed.add(change.pos());
-                if(placed.isEmpty()){start(player,s,edit);return;}
-                var before=new ArrayList<>(s.selection.points());
-                if(s.confirmEdits&&!s.bypassConfirm&&s.pendingSelectionBefore==null)s.pendingSelectionBefore=before;
-                s.selection.combine(placed,Selection.Mode.REPLACE);
-                try{start(player,s,edit.withSelection(new Session.SelectionChange(before,new ArrayList<>(placed))));}
-                catch(RuntimeException e){s.selection.restore(before);s.pendingSelectionBefore=null;throw e;}
-            }
-            default -> {plan.tool(p,normal);start(player,s,plan.finish(o.tool.label));}
+        if(o.pluginTool==null){ToolBehaviours.of(o.tool).use(new ToolUse(player,s,o,p,normal,plan));return;}
+        var tool=pluginTool(o);
+        if(s.pluginPreview!=null){s.pluginPreview=null;s.pluginPreviewDirty=true;} // the click is what the ghost showed, so it has had its say
+        tool.behaviour().use(new ToolUse(player,s,o,p,normal,plan,true,tool.settings(o.toolSettings)));
+    }
+    private static PluginTools.Registered pluginTool(Options o){
+        var tool=PluginTools.find(o.pluginTool);
+        if(tool==null)throw new IllegalArgumentException("Unknown tool "+o.pluginTool);
+        return tool;
+    }
+    /**
+     * Asks the plugin's tool what it would make for the block the cursor is over, and keeps that as the ghost the player is shown. The reply carries the ghost and
+     * nothing else, so moving the cursor never changes the status line. A tool that shows nothing, or whose plan is past the block limit, shows no ghost.
+     */
+    private static void toolPreview(ServerPlayer player,Session s,Options o,Point target,Point normal){
+        Session.Edit edit=null;
+        if(o.pluginTool!=null&&target!=null){
+            var tool=pluginTool(o);
+            try{
+                edit=tool.behaviour().preview(new ToolUse(player,s,o,target,normal,new EditPlanner(player.level(),s,o),true,tool.settings(o.toolSettings)));
+                if(edit!=null)EditGate.checkLimit(edit,EditGate.limit(o));
+            }catch(IllegalArgumentException e){edit=null;}
         }
+        if(edit==null&&s.pluginPreview==null)return;
+        s.pluginPreview=edit;s.pluginPreviewDirty=true;
+        sendPluginPreview(player,s);
+    }
+    private static void sendPluginPreview(ServerPlayer player,Session s){
+        if(s.pluginPreviewDirty){s.pluginPreviewData=s.pluginPreview==null?"":GhostCodec.encodeEdit(s.pluginPreview);s.pluginPreviewDirty=false;}
+        var json=Packets.JSON.toJson(Packets.pluginOnly(s.pluginPreviewData));
+        ServerPlatform.send(player,new Packets.Update(StatusFit.fit(json,STATUS_LIMIT,"Too big to draw: the preview is not shown")));
     }
     private static void requireSelection(Session s) {if(s.selection.size()==0)throw new IllegalArgumentException("Create a selection first");}
     private static void copy(ServerPlayer player,Session s,Options o,boolean cut) {
@@ -636,6 +637,30 @@ public final class EditorServer {
      * owner leaves, and now and then, which catches an owner who changed dimension without doing anything. It sends a status of its own kind
      * ({@link Packets#sharedOnly}) that the client does not take for the reply to anything it asked, and sends nothing when nothing changed.
      */
+    /**
+     * The list of plugin tools for the status that is going to this player, or null when they already have the current one, are not allowed plugin tools, or
+     * have a client that does not know them. Asking marks the list as sent.
+     */
+    private static List<Packets.PluginTool> pluginToolsFor(ServerPlayer player,Session s){
+        int version=PluginTools.version();
+        if(s.pluginToolsSent==version||!Handshake.clientHas(player.getUUID(),Handshake.PLUGIN_TOOLS)||!ServerPlatform.permitted(player,PLUGIN_LIST))return null;
+        s.pluginToolsSent=version;
+        return PluginTools.infos();
+    }
+    /** The name a player's permission to see and use plugin tools is asked under; it has a colon, so the host answers as it does for a plugin's own actions. */
+    private static final String PLUGIN_LIST="plugins:list";
+    private static int pluginToolsPushed;
+    /** Tells every editor player when the set of plugin tools changed, as a status of its own that is nothing else. Cheap to ask every tick: it compares one number. */
+    static void refreshPluginTools(MinecraftServer server){
+        int version=PluginTools.version();
+        if(version==pluginToolsPushed)return;
+        pluginToolsPushed=version;
+        for(var player:server.getPlayerList().getPlayers()){
+            var s=SESSIONS.get(player.getUUID());if(s==null||!ServerPlatform.canSend(player))continue;
+            var tools=pluginToolsFor(player,s);if(tools==null)continue;
+            ServerPlatform.send(player,new Packets.Update(StatusFit.fit(Packets.JSON.toJson(Packets.toolsOnly(tools)),STATUS_LIMIT,"")));
+        }
+    }
     static void refreshShared(MinecraftServer server){
         for(var player:server.getPlayerList().getPlayers()){
             var s=SESSIONS.get(player.getUUID());if(s==null||!ServerPlatform.canSend(player))continue;
@@ -745,6 +770,23 @@ public final class EditorServer {
         }
         return AiWorld.selection(player,ai.pinned,extra);
     }
+    /** The blocks of the player's saved selection with that name (any case), or an error that says which names there are. */
+    private static Set<Point> savedByName(ServerPlayer player,String name){
+        var mine=SESSIONS.get(player.getUUID());var entry=mine==null?null:mine.saved.byName(name);
+        if(entry==null){
+            var names=mine==null?List.<String>of():mine.saved.entries().stream().map(e->e.name()).toList();
+            throw new IllegalArgumentException("The player has no saved selection named \""+name+"\". "+(names.isEmpty()?"They have saved none: ask them to select the blocks and press Save selection in the Selections window":"They have: "+String.join(", ",names)));
+        }
+        return new LinkedHashSet<>(entry.points());
+    }
+    /** What read_selection answers for a saved selection: the same report as for the selection itself, with its name, and where the player has it. */
+    private static String aiSelectionNamed(ServerPlayer player,String name){
+        var points=savedByName(player,name);var mine=SESSIONS.get(player.getUUID());var entry=mine.saved.byName(name);
+        var extra=new com.google.gson.JsonObject();
+        extra.addProperty("name",entry.name());extra.addProperty("saved",true);
+        if(mine.saved.active()==entry)extra.addProperty("shownByPlayer",mine.saved.editing()?"editing":"viewing");
+        return AiWorld.selection(player,points,extra);
+    }
     /** What a player's session tells the client about each of that player's AI sessions; ghost data only when a preview is new to this player. */
     private static List<Packets.AiSession> aiInfos(ServerPlayer player,Session viewer){
         var out=new ArrayList<Packets.AiSession>();long now=System.currentTimeMillis();var live=new HashSet<String>();
@@ -829,7 +871,7 @@ public final class EditorServer {
                 // Added to the waiting preview, the spec is planned on top of it and the two become one edit, applied and undone as one.
                 var onto=action.equals("ai_build_preview_add")?ai.pendingEdit:null;
                 pinSelection(player,ai,false); // a replace_selection works on the selection this session started with, not on one the player has made since
-                var edit=BuildPlanner.plan(player,ai,o,ai.pinned==null?Set.<Point>of():ai.pinned,onto);
+                var edit=BuildPlanner.plan(player,ai,o,ai.pinned==null?Set.<Point>of():ai.pinned,onto,name->savedByName(player,name));
                 var added=onto==null?edit:addedTo(onto,edit);
                 // Blocks the new spec put back to what the world holds (a doorway carved through a preview wall in open air) leave the edit
                 // altogether, so they are not in "added": count them, or a spec that only carves would look like one that did nothing.
@@ -878,15 +920,15 @@ public final class EditorServer {
         for(var c:merged.changes()){var old=before.get(c.pos());if(old==null||old.after().state()!=c.after().state()||!Objects.equals(old.after().data(),c.after().data()))out.add(c);}
         return new Session.Edit(merged.name(),out,List.of(),merged.flags());
     }
-    private static void start(ServerPlayer player,Session s,Session.Edit edit) {
+    /** Every edit comes in here: it is checked by the {@link EditGate}, then built, or held as a ghost until the player confirms it. */
+    static void start(ServerPlayer player,Session s,Session.Edit edit) {
         if(s.fromBuilder)edit=edit.withBuilder(true);
         if(s.shapeAtRequest!=null&&!edit.changes().isEmpty()){ // a shape that was built goes back to waiting to be built when it is undone
             var change=edit.selection()==null?Session.SelectionChange.restoring(Map.of(),Map.of()):edit.selection();
             edit=edit.withSelection(change.with(Map.of("shape",s.shapeAtRequest),Map.of("shape","none")));
         }
         if(edit.changes().isEmpty() && edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()){var why=s.nothingChangedBecause;s.nothingChangedBecause=null;send(player,s,why==null?"No matching blocks changed":"No matching blocks changed: "+why,false);return;}
-        if(edit.estimatedBytes()>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Edit exceeds the "+Selection.HISTORY_BYTES/1024/1024+" MiB history budget; use a smaller region");
-        EditProtection.check(player,edit);
+        EditGate.check(player,edit);
         if(s.confirmEdits&&!s.bypassConfirm){stage(player,s,edit);return;}
         if(job!=null||AnimatedRebuild.active())throw new IllegalArgumentException("Another edit or animated rebuild is applying; try again in a moment");
         begin(player,s,edit,false,false,s.requestStroke,false,s.requestRecord);
@@ -953,6 +995,7 @@ public final class EditorServer {
         send(player,s,backwards?"Undoing…":"Redoing…",false);
     }
     public static void tick(MinecraftServer server) {
+        refreshPluginTools(server);
         if(!AI_SESSIONS.isEmpty()&&server.getTickCount()%20==0){expireAi(server);refreshShared(server);} // an owner who changed dimension, or whose build has applied, without doing anything else
         AnimatedRebuild.tick(server);
         if(++historyTicks%100==0)for(var session:SESSIONS.values())HistoryStore.save(session);
@@ -1003,7 +1046,10 @@ public final class EditorServer {
                 j.session.recalculateBytes();
                 j.session.historyDirty=true;
                 j.session.event((j.backwards?"Undo ":"Redo ")+j.edit.name());
-            } else if(j.record)j.session.remember(actual,j.strokeId);
+            } else if(j.record){
+                j.session.remember(actual,j.strokeId);
+                if(actual.name().equals(DELETE_SELECTION)&&actual.selection()!=null)letGoOfSelection(j.session);
+            }
             j.session.busy=false;endJob();
             if(j.history&&!j.backwards&&j.session.historyRemaining==0&&!j.applied.isEmpty()&&j.session.options!=null&&j.session.options.historyPulse)j.session.pulse="redo:700:"+SelectionCodec.encode(pulsePoints(j.applied.stream().map(Session.Change::pos).toList()));
             var player=server.getPlayerList().getPlayer(j.owner);
@@ -1075,6 +1121,13 @@ public final class EditorServer {
             default->"Select "+size+" blocks";
         };
     }
+    private static final String DELETE_SELECTION="Delete selection";
+    /** Empties the selection, and the box handles with it, without a history entry of its own: the delete's entry carries the way back. */
+    private static void letGoOfSelection(Session s){
+        s.selection.clear();s.corner=null;
+        s.cornersNow=s.cornersHistory="none";s.historySelection=List.of();s.historyRevision=s.selection.revision();
+        s.restoreUpdate=dev.craftium.core.Restore.encode(Map.of("corners","none"));
+    }
     /** Adds the selection's latest change to the history, and remembers the selection as it is now. */
     private static void noteSelection(Session s){
         if(s.selection.revision()==s.historyRevision)return;
@@ -1101,14 +1154,16 @@ public final class EditorServer {
         var ai=s.ai?s:latestAi(player.getUUID());
         if(s.ai)s=SESSIONS.computeIfAbsent(player.getUUID(),id->new Session());
         noteSelection(s);
+        s.saved.sync(s.selection); // while one is being edited, whatever changed the selection is written to it
         if(!ServerPlatform.canSend(player))return;
         String entityId="",entityNbt="";if(s.selectedEntity!=null){var entity=player.level().getEntity(s.selectedEntity);if(entity!=null){entityId=s.selectedEntity.toString();String nbt=EntityEdits.snapshot(entity,player.level()).toString();if(nbt.length()<12000)entityNbt=nbt;}}
         if(s.selectionRevision!=s.selection.revision()){s.selectionRevision=s.selection.revision();s.selectionData=SelectionCodec.encode(s.selection.points());}
         if(s.clipboardDirty){s.clipboardGhostDirty=true;s.clipboardData=SelectionCodec.encode(s.clipboard.entrySet().stream().filter(e->!e.getValue().state().isAir()).map(Map.Entry::getKey).toList());s.clipboardDirty=false;}
         if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
+        if(s.pluginPreviewDirty){s.pluginPreviewData=s.pluginPreview==null?"":GhostCodec.encodeEdit(s.pluginPreview);s.pluginPreviewDirty=false;}
         if(ai!=null)aiData(ai); // one place makes the AI preview's data, so the owner and the players who see it always get the same
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null||Handshake.clientHas(player.getUUID(),Handshake.AI_SESSIONS)?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin,sharedFor(player,s),false,aiInfos(player,s));s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
+        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null||Handshake.clientHas(player.getUUID(),Handshake.AI_SESSIONS)?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin,sharedFor(player,s),false,aiInfos(player,s),s.pluginPreviewData,pluginToolsFor(player,s),SavedSelectionActions.forStatus(s,Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS)));s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
         // A status that is too long for a packet cannot be written and would drop the player's connection, so one that is too big is sent without the largest drawn data.
         var json=Packets.JSON.toJson(status);var fitted=StatusFit.fit(json,STATUS_LIMIT,"Too big to draw: the selection or preview is still there, but not shown");
         if(fitted.length()!=json.length())s.sentAi.clear(); // what was left out was not drawn, so the next status carries the previews again

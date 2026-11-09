@@ -197,7 +197,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
         g.pose().pushMatrix();g.pose().scale(scale,scale);
         topbar(g);
-        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);}
+        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);selectionsPanel(g);magicPanel(g);}
         finishPanel(g);
         viewport(g);
         axisGizmo(g);
@@ -218,6 +218,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         hoverFeedback(g);
         pipettePreview(g);
+        selectionModeBadge(g);
         if(!help&&menu<0&&ctxCell<0&&!shapeMenu&&confirm==null) { // an open menu or pop-up is what the pointer is for, so no tooltip over it
             String tooltip="";for(var c:controls)if(c.contains(mx,my)&&!c.tip.isEmpty())tooltip=c.tip;
             if(!tooltip.isEmpty()) {
@@ -401,7 +402,13 @@ public final class EditorScreen extends CraftiumScreen {
     }
     private void toolOptions(Gfx g) {
         if(propertyForm(g))return;
-        if(o().tool==Tool.MAGIC_SELECT)searchButtons(g,266);
+        if(o().tool==Tool.MAGIC_SELECT)MagicSelectOptions.directions(magicHost(g),o(),10,266,pw-20);
+        if(o().tool==Tool.PAINT_BUCKET){ // the Magic Wand's search settings, without the selection mode: the bucket fills what it finds
+            int used=MagicSelectOptions.draw(magicHost(g),o(),10,311,pw-20,MagicSelectOptions.SEARCH_ONLY);
+            toggle(g,10,311+used+8,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly,"Fill only blocks that touch air");
+            wrap(g,"Click a block to fill every connected block of its type with your foreground block. Directions and select type are the Magic Wand's.",10,311+used+34,pw-20,MUTED,4);
+            return;
+        }
         if(o().tool==Tool.BOX_SELECT||o().tool==Tool.MAGIC_SELECT||o().tool==Tool.RULER) {
             var s=ClientState.status;
             if(o().tool==Tool.RULER) {
@@ -420,9 +427,10 @@ public final class EditorScreen extends CraftiumScreen {
             } else {
                 modeButtons(g,311);
                 if(o().tool==Tool.MAGIC_SELECT){
-                    compareButtons(g,361);
+                    MagicSelectOptions.type(magicHost(g),o(),10,361,pw-20);
                     toggle(g,10,391,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
                     toggle(g,10,409,"Hover preview (under "+o().hoverPreviewLimit+")",o().magicPreview,()->o().magicPreview=!o().magicPreview);
+                    toggle(g,10,427,"Select liquids",o().selectLiquids,()->o().selectLiquids=!o().selectLiquids,"Aim at and select water and lava; off, the wand passes over them");
                 }
                 // The bounds are only information, so they sit at the very bottom, over the Fill and Clear buttons.
                 fixed(g,()->{
@@ -450,8 +458,12 @@ public final class EditorScreen extends CraftiumScreen {
             o().outlineThickness=Math.clamp(o().outlineThickness,1,o().radius); // a wall is never thicker than the radius
             // A polygon's sides take the row under the radius, and everything below moves down a row. The track stops at 64; more is typed.
             if(sidesShown())
-                slider(g,10,375,pw-20,"Sides",o().polygonSides,BrushMath.MIN_SIDES,BrushMath.SLIDER_SIDES,BrushMath.MAX_SIDES,BrushMath.DEFAULT_SIDES,v->o().polygonSides=Math.clamp((int)Math.round(v),BrushMath.MIN_SIDES,BrushMath.MAX_SIDES),true);
-            if(sizeInline())sizeControls(g,375+(sidesShown()?28:0)); // the shape's size, under the radius and the polygon's sides
+                slider(g,10,375,pw-20,o().shape==BrushMath.Shape.STAR?"Points":"Sides",o().polygonSides,BrushMath.MIN_SIDES,BrushMath.SLIDER_SIDES,BrushMath.MAX_SIDES,BrushMath.DEFAULT_SIDES,v->o().polygonSides=Math.clamp((int)Math.round(v),BrushMath.MIN_SIDES,BrushMath.MAX_SIDES),true);
+            if(extraShown()&&o().shape==BrushMath.Shape.IRREGULAR_POLYGON) // which irregular polygon these sides make: the same seed gives the same one
+                slider(g,10,403,pw-20,"Seed",o().polygonSeed,0,999,99_999,DEFAULTS.polygonSeed,v->o().polygonSeed=(int)Math.clamp(Math.round(v),0,99_999),true);
+            if(extraShown()&&o().shape==BrushMath.Shape.STAR) // how far in the notches between the points go
+                slider(g,10,403,pw-20,"Inner radius",o().starInner,.1,.9,DEFAULTS.starInner,v->o().starInner=Math.clamp(Math.round(v*100)/100d,.1,.9),false);
+            if(sizeInline())sizeControls(g,375+sidesBlock()); // the shape's size, under the radius and the polygon's sides
             if(o().tool==Tool.EXTRUDE) // layers, 1 to 64
                 slider(g,10,375+sidesRow()-lift(),pw-20,"Count",o().extrudeCount,1,Options.MAX_EXTRUDE_COUNT,Options.MAX_EXTRUDE_COUNT,DEFAULTS.extrudeCount,v->o().extrudeCount=(int)Math.clamp(Math.round(v),1,Options.MAX_EXTRUDE_COUNT),true);
             else if(hasStrength())
@@ -740,6 +752,7 @@ public final class EditorScreen extends CraftiumScreen {
         handSlot(g,x+10,248);
         blockSlot(g,x+70,264,"Background block",o().secondary,id->o().secondary=id);
         blockSlot(g,x+50,248,"Foreground block",o().block,id->ClientState.pick(id));
+        transparencyToggle(g,x+51,280);
         pipetteControls(g,x+110,248);
         // The cells flow across the panel and down as far as it reaches; the first is always "+", which adds a block to the palette
         // and makes it the foreground. What does not fit scrolls.
@@ -767,6 +780,19 @@ public final class EditorScreen extends CraftiumScreen {
             controls.add(new Control(barX-2,top,9,track,()->{double py=WorkspaceLayout.inverse("palette",mx,my)[1];paletteScroll=Math.clamp((int)Math.round((py-top-thumb/2.0)/Math.max(1,track-thumb)*max),0,max);},""));
         }
     }
+    /** Turns transparency on or off: while on, the foreground paints as air, and the slot keeps showing the block it will go back to. */
+    private void toggleTransparency(){
+        o().transparency=!o().transparency;ClientState.save();
+        ClientState.notify("Transparency "+(o().transparency?"on: the foreground paints as air":"off"));
+    }
+    /** The transparency toggle under the foreground slot, a small checkerboard that lights up while it is on. */
+    private void transparencyToggle(Gfx g,int x,int y){
+        boolean on=o().transparency;
+        FlatButton.face(g,x,y,18,16,"",on,true,false);
+        int light=on?0xffffffff:0xffd0deeb,dark=on?0xff6f87a3:0xff4a5f78;
+        for(int r=0;r<2;r++)for(int c=0;c<2;c++)g.fill(x+4+c*5,y+3+r*5,x+9+c*5,y+8+r*5,(r+c)%2==0?light:dark);
+        controls.add(new Control(x,y,18,16,this::toggleTransparency,"Transparency · T · "+(on?"on: the foreground paints as air":"off: click to paint as air")+", the slot keeps the block"));
+    }
     /** Whether the next click on the world takes the block it lands on into the palette, and the block the pointer is over meanwhile. */
     private boolean pipetting;
     private String pipetteBlock="";
@@ -776,6 +802,18 @@ public final class EditorScreen extends CraftiumScreen {
         int color=pipetting?0xffffffff:0xffd0deeb;
         Icons.draw(g,IconCatalog.PIPETTE,x,y,color);
         controls.add(new Control(x,y,30,30,()->pipetting=!pipetting,"Click a block in the world to take it as the foreground · Ctrl + click adds it to the palette and keeps the pipette · Esc cancels"));
+    }
+    /**
+     * On the pointer's bottom-right, while a selection tool is over the world: a small icon of how the next selection combines with the current one. Replace is one
+     * square, add two joined squares, subtract a square with a cut out of it, and intersect two outlines with only where they meet filled.
+     */
+    private void selectionModeBadge(Gfx g){
+        if(!toolActive||!o().tool.selection()||pipetting||menu>=0||help||transform||TransformGizmo.dragging()||!inViewport(pointerX/scale,pointerY/scale))return;
+        // As big as the pointer, which is about 16 screen pixels across and centred on the point it aims at: the badge's top-left corner sits on the pointer's bottom-right.
+        double cursor=16.0*minecraft.getWindow().getGuiScaledWidth()/Math.max(1,minecraft.getWindow().getScreenWidth())/scale;
+        int size=Math.max(8,(int)Math.round(cursor)),x=Math.clamp(mx+(int)Math.round(cursor/2),0,w-size-2),y=Math.clamp(my+(int)Math.round(cursor/2),25,h-size-24);
+        g.fill(x,y,x+size+2,y+size+2,0xd01b2838);
+        SelectionModeIcon.draw(g,o().mode,x+1,y+1,size,0xffe6eef7);
     }
     /** While the pipette is in hand: finds the block under the pointer and shows its item in a cell above and to the right of the cursor. */
     private void pipettePreview(Gfx g){
@@ -793,11 +831,11 @@ public final class EditorScreen extends CraftiumScreen {
     private boolean hoverPreviewTool(){
         if(!toolActive)return false;
         Tool t=o().tool;
-        return t==Tool.MAGIC_SELECT||t==Tool.BOX_SELECT||t==Tool.EXTRUDE||t==Tool.FLOODFILL||!t.selection()&&!t.transform()&&t.brushUse()!=Tool.BrushUse.NONE;
+        return t==Tool.MAGIC_SELECT||t==Tool.BOX_SELECT||t==Tool.EXTRUDE||t==Tool.FLOODFILL||t==Tool.PAINT_BUCKET||!t.selection()&&!t.transform()&&t.brushUse()!=Tool.BrushUse.NONE;
     }
     /** Over the world with the pipette in hand, or a tool that previews what is under the pointer, the pointer is a crosshair. */
     private void syncCrosshair(){
-        boolean over=!suspended&&menu<0&&!help&&!transform&&inViewport(pointerX/scale,pointerY/scale);
+        boolean over=ClientCompat.screen(minecraft)==this&&!suspended&&menu<0&&!help&&!transform&&inViewport(pointerX/scale,pointerY/scale);
         boolean grab=over&&gizmoHover(),want=over&&(pipetting||hoverPreviewTool());
         if((want||grab)&&ClientState.selecting())return; // the spinner has the cursor while a big selection is worked out
         int mode=grab?2:want?1:0; // a hand over a gizmo handle, a crosshair over the world for the tools that preview
@@ -806,6 +844,12 @@ public final class EditorScreen extends CraftiumScreen {
         if(mode==1&&crosshairCursor==0)crosshairCursor=GLFW.glfwCreateStandardCursor(GLFW.GLFW_CROSSHAIR_CURSOR);
         if(mode==2&&handCursor==0)handCursor=GLFW.glfwCreateStandardCursor(GLFW.GLFW_HAND_CURSOR);
         GLFW.glfwSetCursor(minecraft.getWindow().handle(),mode==2?handCursor:mode==1?crosshairCursor:0L);
+    }
+    /** Gives the pointer back as the ordinary arrow for whatever screen comes next: a cursor set here stays on the window until something resets it. */
+    private void releaseCursor(){
+        cursorShown=0;
+        if(minecraft==null||ClientState.selecting())return; // the spinner owns the pointer until the selection is worked out, and puts the arrow back itself
+        GLFW.glfwSetCursor(minecraft.getWindow().handle(),0L);
     }
     /** Whether the pointer is over a handle of a gizmo: the one being worked on, or the other corner's of a box selection. */
     private boolean gizmoHover(){
@@ -829,6 +873,10 @@ public final class EditorScreen extends CraftiumScreen {
         g.fill(x,y,x+30,y+30,0xff1b2838);g.outline(x,y,30,30,label.startsWith("Fore")?ACCENT:LINE);
         dropArea(x,y,30,30,id->{set.accept(id);ClientState.save();});
         BlockPickerScreen.icon(g,font,block,x+7,y+7);
+        if(o().transparency&&label.startsWith("Fore")){ // painting as air: the block stays in view, faded behind a checkerboard
+            g.fill(x+1,y+1,x+29,y+29,0x99141c26);
+            for(int r=0;r<6;r++)for(int c=0;c<6;c++)if((r+c)%2==0)g.fill(x+1+c*5,y+1+r*5,x+6+c*5,y+6+r*5,0x40ffffff);
+        }
         dragSource(new Control(x,y,30,30,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,label,block,id->{set.accept(id);ClientState.save();})),label+" · "+block+" · Click to replace · Drag into the world to bucket fill"),block);
     }
     /** A block cell that is clicked as usual, or dragged into the world to bucket fill with it. */
@@ -912,6 +960,12 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,x+10,y+24,cell[0],19,"Undo "+ClientState.status.undo(),false,()->action("undo"),"Undo · Ctrl+Z");
         button(g,x+19+cell[0],y+24,cell[1],19,"Redo "+ClientState.status.redo(),false,()->action("redo"),"Redo · Ctrl+Y");
         int row=y+51,index=0;for(String event:ClientState.status.history()){if(row>y+height-12)break;int steps=++index;text(g,shorten(event,pw-20),x+10,row,MUTED);controls.add(new Control(x+7,row-3,pw-14,14,()->{o().historySteps=steps;action("history_undo_many");},""));row+=15;}
+    }
+    /** The Magic select window: directions, mode and select type of the Magic Wand, shown from Window → Toggle magic whichever tool is active. */
+    private void magicPanel(Gfx g){
+        int x=w-RIGHT-244,y=263; // under where the Rulers panel opens, left of the right-hand column
+        panel(g,x,y,236,160,"Magic select");
+        MagicSelectOptions.draw(magicHost(g),o(),x+10,y+26,pw-20,MagicSelectOptions.ALL);
     }
     private void masks(Gfx g) {
         int x=w-RIGHT,y=masksTop();panel(g,x,y,RIGHT,masksHeight(),"Tool masks");
@@ -1248,20 +1302,16 @@ public final class EditorScreen extends CraftiumScreen {
             default -> List.of(item("Editor controls","",()->help=true),item("About Craftium","",()->ClientCompat.setScreen(minecraft,new AboutScreen(this))));
         };
     }
+    /** The panel the Magic Select options widget draws into: this screen's buttons and icons. */
+    private MagicSelectOptions.Host magicHost(Gfx g){
+        return new MagicSelectOptions.Host(){
+            @Override public void button(int x,int y,int width,int height,String label,boolean active,Runnable action,String tip){EditorScreen.this.button(g,x,y,width,height,label,active,action,tip);}
+            @Override public void modeIcon(int x,int y,Selection.Mode mode,boolean active){SelectionModeIcon.draw(g,mode,x,y,13,active?0xffffffff:0xffd0deeb);}
+            @Override public void icon(float x,float y,String iconId,boolean active){g.pose().pushMatrix();g.pose().translate(x,y);g.pose().scale(.75f,.75f);Icons.draw(g,iconId,0,0,active?0xffffffff:0xffd0deeb);g.pose().popMatrix();}
+        };
+    }
     /** How a new selection combines with the current one, as four buttons in a grid with the active one lit. */
-    private void modeButtons(Gfx g,int y){
-        int half=(pw-24)/2;var modes=Selection.Mode.values();
-        String[] tips={"Replace the selection","Add to the selection","Subtract from the selection","Keep only what overlaps the selection"};
-        for(int i=0;i<modes.length;i++){
-            final var mode=modes[i];
-            button(g,10+(i%2)*(half+4),y+(i/2)*22,half,19,nice(mode.name()),o().mode==mode,()->o().mode=mode,tips[i]);
-        }
-    }
-    /** Which ways the Magic Wand's search may spread from the clicked block, two buttons a row with the allowed ones lit. */
-    private void searchButtons(Gfx g,int y){
-        var o=o();
-        sideButtons(g,y,new boolean[]{o.selectUp,o.selectDown,o.selectHorizontal,o.selectCorners},new Runnable[]{()->o.selectUp=!o.selectUp,()->o.selectDown=!o.selectDown,()->o.selectHorizontal=!o.selectHorizontal,()->o.selectCorners=!o.selectCorners});
-    }
+    private void modeButtons(Gfx g,int y){MagicSelectOptions.mode(magicHost(g),o(),10,y,pw-20);}
     /** The Floodfill tool's spread, the same four switches as the Magic Wand's search. */
     private void floodButtons(Gfx g,int y){
         var o=o();
@@ -1282,16 +1332,6 @@ public final class EditorScreen extends CraftiumScreen {
         for(var mode:Options.SmoothMode.values())button(g,10+mode.ordinal()*(third+4),y+56,third,20,mode.label,o.smoothMode==mode,()->o.smoothMode=mode,switch(mode){case STABLE->"Keep the block count at the ratio";case MELT->"Lean towards taking blocks away";case GROW->"Lean towards adding blocks";});
         toggle(g,10,y+84,"Fix edges",o.smoothFixEdges,()->o.smoothFixEdges=!o.smoothFixEdges,"Leave the brush's outer layer as it was so the smoothing blends into the terrain");
         return 84;
-    }
-    /** Which blocks the Magic Wand connects, as one icon button each with the active one lit. */
-    private void compareButtons(Gfx g,int y){
-        var kinds=Options.Compare.values();int width=(pw-20-4*(kinds.length-1))/kinds.length;
-        String[] tips={"Any: connect every non-air block","Block: connect blocks of the same type (default)","Block state: connect blocks of the same type and state","Tag: connect blocks that share a block tag with the clicked one","NBT: connect blocks of the same type with the same block entity data"};
-        for(int i=0;i<kinds.length;i++){
-            final var kind=kinds[i];int x=10+i*(width+4);boolean active=o().compare==kind;
-            button(g,x,y,width,22,"",active,()->o().compare=kind,tips[i]);
-            g.pose().pushMatrix();g.pose().translate(x+(width-18)/2f,y+2);g.pose().scale(.75f,.75f);Icons.draw(g,IconCatalog.compare(kind),0,0,active?0xffffffff:0xffd0deeb);g.pose().popMatrix();
-        }
     }
     /** Inside, Center and Outside: where a hollow shape's wall sits against the edge the radius gives it. */
     /** Solid, Hollow and Outline on one line: exactly one is chosen, and Hollow and Outline never apply together. */
@@ -1316,7 +1356,7 @@ public final class EditorScreen extends CraftiumScreen {
     private boolean shapeMenu;private int shapeX,shapeY;
     private record ShapeCell(BrushMath.Shape shape,int x,int y){}
     /** How far the controls under the radius move down while the Sides slider is shown. */
-    private int sidesRow(){return (sidesShown()?28:0)+(sizeInline()?sizeHeight():0);}
+    private int sidesRow(){return sidesBlock()+(sizeInline()?sizeHeight():0);}
     /** The tools whose brush is the picked shape have its size as properties: a control for each dimension that shape has, and a Chain that keeps the proportions. */
     private static final EnumSet<Tool> FIXED_LAYOUT=EnumSet.of(Tool.ROCK,Tool.DISTORT,Tool.ROUGHEN,Tool.SHATTER,Tool.NOISE_PAINTER,Tool.BIOME_PAINTER,Tool.CLENTAMINATOR);
     private boolean sizes(){return o().tool.brushUse()==Tool.BrushUse.SHAPE;}
@@ -1354,7 +1394,11 @@ public final class EditorScreen extends CraftiumScreen {
         if(o().tool==Tool.TEXT)return 0;
         return switch(o().tool.brushUse()){case DISC,SPHERE->32;case NONE->60;default->0;};
     }
-    private boolean sidesShown(){return o().tool.picksShape()&&o().shape==BrushMath.Shape.POLYGON&&!EnumSet.of(Tool.ROCK,Tool.DISTORT,Tool.ROUGHEN,Tool.SHATTER,Tool.NOISE_PAINTER,Tool.BIOME_PAINTER,Tool.CLENTAMINATOR).contains(o().tool);}
+    private static boolean polygonLike(BrushMath.Shape shape){return shape==BrushMath.Shape.POLYGON||shape==BrushMath.Shape.IRREGULAR_POLYGON||shape==BrushMath.Shape.STAR;}
+    /** The room the polygon's own rows take under the radius: its sides, and for the irregular polygon and the star a second row, the seed or the notch depth. */
+    private int sidesBlock(){return (sidesShown()?28:0)+(extraShown()?28:0);}
+    private boolean extraShown(){return sidesShown()&&o().shape!=BrushMath.Shape.POLYGON;}
+    private boolean sidesShown(){return o().tool.picksShape()&&polygonLike(o().shape)&&!EnumSet.of(Tool.ROCK,Tool.DISTORT,Tool.ROUGHEN,Tool.SHATTER,Tool.NOISE_PAINTER,Tool.BIOME_PAINTER,Tool.CLENTAMINATOR).contains(o().tool);}
     /** The button that shows the current shape and opens the picker. */
     private void shapeSelector(Gfx g,int y){
         var shape=o().shape;
@@ -1485,9 +1529,11 @@ public final class EditorScreen extends CraftiumScreen {
         text(g,label,x,y-10,MUTED);
         var slider=new Slider(x,width,min,max,typedMax,def,set,unbounded);String panel=drawingPanel,key=panel+"/"+label;
         boolean editing=typing!=null&&typing.key().equals(key);
-        String display=integer?Integer.toString((int)value):String.format(Locale.ROOT,"%.2f",value);
+        String display=integer?Integer.toString((int)value):String.format(Locale.ROOT,"%.2f",value); // what is typed over when Ctrl-click starts editing
+        // A turn that has no end (-360 to 360 and unbounded) is shown as whole degrees, or as 360°×n at a whole number of turns.
+        String shown=unbounded&&min==-360&&max==360?degreeText(value):display;
         if(!culled(y,17)){
-            FlatSlider.track(g,x,y,width,17,(value-min)/(max-min),editing?Component.empty():Component.literal(display),editing,false,editing);
+            FlatSlider.track(g,x,y,width,17,(value-min)/(max-min),editing?Component.empty():Component.literal(shown),editing,false,editing);
             if(editing)entry.paint(g,x,y,width,17);
         }
         var control=new Control(x,y,width,17,()->{
@@ -1496,6 +1542,12 @@ public final class EditorScreen extends CraftiumScreen {
             if(unbounded){sliderStartX=WorkspaceLayout.inverse(panel,mx,my)[0];sliderStartValue=value;}else slider.update(WorkspaceLayout.inverse(panel,mx,my)[0],false,minecraft.hasShiftDown());
         },"Drag to change "+label.toLowerCase(Locale.ROOT)+" · Ctrl-click to type"+(typedMax==Double.POSITIVE_INFINITY?" (no limit)":typedMax>max?" (up to "+(int)typedMax+")":"")+" · Middle-click to reset");
         controls.add(control);sliderAreas.add(new SliderArea(control,slider,key,integer));
+    }
+    /** An angle that can go round more than once: {@code 567°}, but {@code 360°×2} where it is a whole number of turns ({@code 360°} for one). */
+    static String degreeText(double degrees){
+        long whole=Math.round(degrees);
+        if(whole!=0&&whole%360==0&&Math.abs(whole)>360)return "360°×"+whole/360;
+        return whole+"°";
     }
     /** Applies what was typed into a slider, clamped to its range, and stops typing. Text that is not a number changes nothing. */
     private void finishTyping(boolean apply){
@@ -1746,6 +1798,7 @@ public final class EditorScreen extends CraftiumScreen {
             return true;
         }
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("palette")){paletteScroll=Math.max(0,paletteScroll+(vertical<0?1:-1));return true;} // clamped when drawn
+        if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("selections")){savedScroll=Math.max(0,savedScroll+(vertical<0?1:-1));return true;}
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("rulers")){rulerScroll=Math.max(0,rulerScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("masks")){maskScroll=Math.max(0,maskScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("tools")){toolScroll=Math.clamp(toolScroll+(vertical<0?1:-1),0,maxToolScroll());return true;}
@@ -1806,7 +1859,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(EditorBindings.matches(Action.FLIP_PLACEMENT,event)){action("flip_facing");return true;}
         }
         if(EditorBindings.matches(Action.EXTRUDE_POINT,event)&&Interactions.of(o().tool).extrudePoint(context))return true;
-        if(o().shape==BrushMath.Shape.POLYGON&&o().tool!=Tool.TEXT&&!o().tool.transform()){
+        if(polygonLike(o().shape)&&o().tool!=Tool.TEXT&&!o().tool.transform()){
             int step=event.key()==GLFW.GLFW_KEY_EQUAL||event.key()==GLFW.GLFW_KEY_KP_ADD?1:event.key()==GLFW.GLFW_KEY_MINUS||event.key()==GLFW.GLFW_KEY_KP_SUBTRACT?-1:0;
             if(step!=0){o().polygonSides=Math.clamp(o().polygonSides+step,BrushMath.MIN_SIDES,BrushMath.MAX_SIDES);return true;}
         }
@@ -1816,6 +1869,7 @@ public final class EditorScreen extends CraftiumScreen {
         for(Action binding:Action.values())if(!EditorBindings.get(binding).mouse()&&EditorBindings.matches(binding,event)&&perform(binding))return true;
         if(event.key()==GLFW.GLFW_KEY_BACKSPACE&&(event.modifiers()&7)==0){perform(Action.DELETE);return true;}
         if((event.modifiers()&7)==0)for(var entry:CraftiumClient.toolKeys.entrySet())if(entry.getValue().matches(event)){select(entry.getKey());return true;}
+        if((event.modifiers()&7)==0&&event.key()==GLFW.GLFW_KEY_T&&!repeat){toggleTransparency();return true;} // T: transparency, unless a tool has taken the key
         return true;
     }
     /**
@@ -1988,6 +2042,53 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         }
         button(g,x+10,y+ph-26,pw-20,20,"Clear all",false,this::clearRulers,"Delete every ruler in this world");
     }
+    private int savedScroll;
+    private static final String[] PENCIL={"......XX.",".....XXXX","....XXXX.","...XXXX..","..XXXX...",".XXXX....",".XXX.....","XX......."};
+    private static final String[] EYE={"..XXXXX..",".X.....X.","X..XXX..X",".X.....X.","..XXXXX.."};
+    private static final String[] CROSS={"X.......X",".X.....X.","..X...X..","...X.X...","....X....","...X.X...","..X...X..",".X.....X.","X.......X"};
+    /** A small picture drawn pixel by pixel from rows of X, centred on the given box. */
+    private void glyph(Gfx g,int x,int y,int width,int height,String[] rows,int colour){
+        int gw=rows[0].length(),ox=x+(width-gw)/2,oy=y+(height-rows.length)/2;
+        for(int r=0;r<rows.length;r++)for(int c=0;c<gw;c++)if(rows[r].charAt(c)=='X')g.fill(ox+c,oy+r,ox+c+1,oy+r+1,colour);
+    }
+    /** "3 x 4 x 2": how many blocks a saved selection spans along each axis. */
+    private static String savedSpan(dev.craftium.net.Packets.SavedSelection s){return (s.max().x()-s.min().x()+1)+" x "+(s.max().y()-s.min().y()+1)+" x "+(s.max().z()-s.min().z()+1);}
+    /** The Selections panel: every selection saved by name, to look at (click), edit (pencil) or delete (cross). The player's own selection is only swapped out while one is looked at, and given back when it is let go. */
+    private void selectionsPanel(Gfx g){
+        var saved=ClientState.savedSelections();
+        if(saved.isEmpty()&&ClientState.status.selectionSize()==0)return; // nothing to save and nothing saved
+        int x=w-RIGHT-488,y=27;
+        panel(g,x,y,236,230,"Selections");
+        boolean looking=ClientState.activeSaved()!=null;
+        button(g,x+10,y+24,pw-20,19,"Save selection",false,()->action("saved_selection:save"),looking?"Save what is selected now as a new entry. While one is shown, that is a copy of it":"Save what is selected now as a new entry, under the name Selection 1, 2 and so on");
+        int top=y+50,bottom=y+ph-8,rowHeight=20,rows=Math.max(1,(bottom-top)/rowHeight),total=saved.size();
+        g.fill(x+8,top-2,x+pw-8,top+rows*rowHeight+1,0xff141c26);g.outline(x+8,top-2,pw-16,rows*rowHeight+3,LINE);
+        savedScroll=Math.clamp(savedScroll,0,Math.max(0,total-rows));
+        if(total==0)text(g,"Nothing saved yet",x+16,top+6,MUTED);
+        for(int i=0;i<rows&&savedScroll+i<total;i++){
+            var entry=saved.get(savedScroll+i);int ry=top+i*rowHeight,id=entry.id();
+            if(entry.active())g.fill(x+9,ry,x+pw-9,ry+rowHeight,entry.editing()?0xff5b4a84:0xff315b84);
+            int colour=ClientState.savedColor(id);
+            g.fill(x+14,ry+4,x+28,ry+rowHeight-4,0xff000000|colour&0xffffff);g.outline(x+14,ry+4,14,rowHeight-8,LINE);
+            String label=entry.name()+" • "+savedSpan(entry);
+            text(g,shorten(label,pw-124),x+34,ry+6,entry.active()?TEXT:MUTED);
+            // later controls win where they overlap, so the row comes first and the cells and buttons on it after
+            controls.add(new Control(x+9,ry,pw-18,rowHeight,()->action(entry.active()&&!entry.editing()?"saved_selection:release":"saved_selection:view:"+id),entry.active()&&!entry.editing()?"Let go: your own selection comes back":"Show this selection in place of yours. Click it again to get yours back · It is a copy: changes you make while it is shown are not kept"));
+            controls.add(new Control(x+14,ry+4,14,rowHeight-8,()->ClientCompat.setScreen(minecraft,SelectionOptionsScreen.saved(this,id,entry.name())),"Change this selection's outline colour"));
+            int eye=x+pw-72,pencil=x+pw-50,cross=x+pw-28;boolean hidden=ClientState.savedHidden(id);
+            button(g,eye,ry+2,18,rowHeight-4,"",false,()->ClientState.toggleSavedHidden(id),hidden?"Show this selection in the world":"Hide this selection in the world · It stays saved, and shows while you look at it or edit it");
+            glyph(g,eye,ry+2,18,rowHeight-4,EYE,hidden?0xff56606e:TEXT);
+            if(hidden){int ox=eye+(18-9)/2,oy=ry+2+(rowHeight-4-5)/2;for(int k=0;k<9;k++)g.fill(ox+k,oy+4-k/2,ox+k+1,oy+5-k/2,0xffe07070);} // a slash through it
+            button(g,pencil,ry+2,18,rowHeight-4,"",entry.editing(),()->action(entry.editing()?"saved_selection:release":"saved_selection:edit:"+id),entry.editing()?"Stop editing: your own selection comes back":"Edit: show this selection in place of yours, then add to it or take from it with any selection tool. Changes are kept");
+            glyph(g,pencil,ry+2,18,rowHeight-4,PENCIL,TEXT);
+            button(g,cross,ry+2,18,rowHeight-4,"",false,()->action("saved_selection:delete:"+id),"Delete this selection, no questions asked · Ctrl+Z brings it back");
+            glyph(g,cross,ry+2,18,rowHeight-4,CROSS,0xffe07070);
+        }
+        if(total>rows){
+            int track=rows*rowHeight,thumb=Math.max(10,track*rows/total),thumbY=top+(track-thumb)*savedScroll/Math.max(1,total-rows);
+            g.fill(x+pw-14,top,x+pw-10,top+track,0xff1b2b40);g.fill(x+pw-14,thumbY,x+pw-10,thumbY+thumb,ACCENT);
+        }
+    }
     public void moveHandle(Point point){if(selectedNode>=0&&selectedNode<handleNodes().size())handleNodes().set(selectedNode,point);}
     private double[] project(Point p){return project(p,0);}
     private double[] project(Point p,double shift){return project(new Vec3(p.x()+shift,p.y()+shift,p.z()+shift));}
@@ -2004,6 +2105,6 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         return best<100;
     }
     private int key(long handle,int key){return GLFW.glfwGetKey(handle,key)==GLFW.GLFW_PRESS?1:0;}
-    @Override public void removed(){BlockDragCursor.release();keysDown.clear();pipetting=false;syncCrosshair();TransformGizmo.cancel();draggingNode=draggingPlacement=false;cameraGesture=CameraGesture.NONE;syncCursor();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
+    @Override public void removed(){BlockDragCursor.release();keysDown.clear();pipetting=false;releaseCursor();TransformGizmo.cancel();draggingNode=draggingPlacement=false;cameraGesture=CameraGesture.NONE;syncCursor();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
     @Override public void onClose(){ClientState.save();if(ClientState.largeSelection>0)confirmLargeSelection();ClientCompat.setScreen(minecraft,null);if(ClientState.hasPending()&&CraftiumClient.supported())CraftiumClient.send("pending_cancel",null,null);if(CraftiumClient.supported()&&minecraft.player!=null&&minecraft.player.isSpectator())CraftiumClient.send("gamemode_restore",null,null);}
 }

@@ -187,6 +187,18 @@ class BuildSpecTest {
         assertTrue(e.getMessage().contains("ops[1]"), e.getMessage());
     }
 
+    @Test void replaceSelectionCanNameASavedSelectionAndASpecCanNameSeveral() {
+        var spec = BuildSpec.parse("{\"ops\":["
+            + "{\"op\":\"replace_selection\",\"selection\":\" Selection 1 \",\"block\":\"stone_bricks\"},"
+            + "{\"op\":\"replace_selection\",\"selection\":\"Selection 2\",\"block\":\"deepslate_bricks\"},"
+            + "{\"op\":\"replace_selection\",\"block\":\"glass\"}]}");
+        var ops = spec.selectionOps();
+        assertEquals("Selection 1", ops.get(0).selection(), "the name is trimmed");
+        assertEquals("Selection 2", ops.get(1).selection());
+        assertNull(ops.get(2).selection(), "none means the selection the session started with");
+        for (String bad : new String[]{"\"\"", "3", "\"" + "x".repeat(41) + "\"", "[\"a\"]"})
+            assertThrows(IllegalArgumentException.class, () -> BuildSpec.parse("{\"ops\":[{\"op\":\"replace_selection\",\"selection\":" + bad + ",\"block\":\"glass\"}]}"), bad);
+    }
     @Test void replaceSelectionIsKeptApartFromTheShapesAndItsBlocksAreResolved() {
         var spec = BuildSpec.parse("{\"palette\":{\"deep\":\"minecraft:deepslate_tile_stairs\"},\"ops\":["
             + "{\"op\":\"set\",\"at\":[0,0,0],\"block\":\"stone\"},"

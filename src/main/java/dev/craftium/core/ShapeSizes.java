@@ -21,7 +21,7 @@ public final class ShapeSizes {
             case SPHERE, CUBE, OCTAHEDRON -> List.of(X, Y, Z);
             case CYLINDER, TUBE, TORUS -> List.of(new Row("Diameter", new int[]{0, 2}), new Row("Height", new int[]{1}));
             case CONE, PYRAMID, HEMISPHERE -> List.of(new Row("Base", new int[]{0, 2}), new Row("Height", new int[]{1}));
-            case PLANE, DISK, POLYGON -> List.of(X, Z);
+            case PLANE, DISK, POLYGON, IRREGULAR_POLYGON, STAR -> List.of(X, Z);
         };
     }
 

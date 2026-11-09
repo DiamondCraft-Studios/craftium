@@ -13,13 +13,16 @@ import java.util.*;
  */
 public final class StatusFit {
     /** Fields that carry data to draw, biggest first when dropped. The rest of a status is small. */
-    static final List<String> DRAWN = List.of("selectionData", "clipboardData", "clipboardGhost", "pendingData", "aiPendingData", "sharedAi", "pulse", "restore");
+    static final List<String> DRAWN = List.of("selectionData", "clipboardData", "clipboardGhost", "pendingData", "pluginPreviewData", "aiPendingData", "sharedAi", "pulse", "restore");
 
     /** The previews other players are holding: left out before anything of the player's own. */
     static final String OTHERS = "sharedAi";
 
     /** The player's own AI sessions, each of which may carry the data of a waiting preview. */
     static final String SESSIONS = "aiSessions";
+
+    /** The player's saved selections, each of which carries its blocks to draw in {@code data}. */
+    static final String SAVED = "savedSelections";
 
     private StatusFit() {}
 
@@ -45,13 +48,15 @@ public final class StatusFit {
                 int length = value == null ? 0 : value.isJsonPrimitive() ? value.getAsString().length() : value.isJsonArray() ? value.toString().length() : 0;
                 if (length > size) { size = length; biggest = name; }
             }
-            // The player's own AI sessions carry their previews inside the list: the largest preview there competes with the rest.
+            // The player's own AI sessions and saved selections carry their data inside a list: the largest piece there competes with the rest.
             if (!OTHERS.equals(biggest)) {
-                int at = largestSessionData(status);
-                if (at >= 0 && sessionDataLength(status, at) > size) { biggest = SESSIONS; session = at; }
+                for (String list : List.of(SESSIONS, SAVED)) {
+                    int at = largestSessionData(status, list);
+                    if (at >= 0 && sessionDataLength(status, list, at) > size) { biggest = list; session = at; size = sessionDataLength(status, list, at); }
+                }
             }
             if (biggest == null) break; // nothing left to leave out: the rest is not ours to shrink
-            if (session >= 0) status.getAsJsonArray(SESSIONS).get(session).getAsJsonObject().addProperty("data", ""); // that session's preview is left out, the session stays listed
+            if (session >= 0) status.getAsJsonArray(biggest).get(session).getAsJsonObject().addProperty("data", ""); // that entry's data is left out, the entry stays listed
             else if (status.get(biggest).isJsonArray()) status.add(biggest, new JsonArray()); // a list of previews is left empty: none to show
             else status.addProperty(biggest, "");
             dropped.add(biggest);
@@ -64,18 +69,18 @@ public final class StatusFit {
         return status.toString();
     }
 
-    private static int sessionDataLength(JsonObject status, int index) {
-        var data = status.getAsJsonArray(SESSIONS).get(index).getAsJsonObject().get("data");
+    private static int sessionDataLength(JsonObject status, String list, int index) {
+        var data = status.getAsJsonArray(list).get(index).getAsJsonObject().get("data");
         return data != null && data.isJsonPrimitive() ? data.getAsString().length() : 0;
     }
 
     /** The index in {@code aiSessions} of the entry with the most ghost data, or -1 when none carries any. */
-    private static int largestSessionData(JsonObject status) {
-        var list = status.get(SESSIONS);
+    private static int largestSessionData(JsonObject status, String name) {
+        var list = status.get(name);
         if (list == null || !list.isJsonArray()) return -1;
         int best = -1, size = 0;
         for (int i = 0; i < list.getAsJsonArray().size(); i++) {
-            int length = sessionDataLength(status, i);
+            int length = sessionDataLength(status, name, i);
             if (length > size) { size = length; best = i; }
         }
         return best;

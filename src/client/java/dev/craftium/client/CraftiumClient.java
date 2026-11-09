@@ -57,7 +57,7 @@ public final class CraftiumClient implements ClientModInitializer {
         }));
         ClientPlayConnectionEvents.DISCONNECT.register((handler,client)-> {
             ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);
-            ClientState.save();resetEditor();placementSynced="";
+            ClientState.save();resetEditor();ClientState.clearPluginTools();ClientState.clearSavedSelections();placementSynced="";
             ClientCommands.reset();ClientHandshake.disconnected();
             ClientAssets.clear();bridge.clear();BlockSearch.clear(); // another world may have other data packs, so its tags and tabs are looked up again
             PlacementPreview.update("");
@@ -100,15 +100,15 @@ public final class CraftiumClient implements ClientModInitializer {
      */
     public static void resetEditor(){
         ClientState.selectionPending=false;ClientState.selectingSince=0;ClientState.selectionSizeBefore=0;ClientState.largeSelection=0;ClientState.heldSelection="";
-        ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.clearAi();ClientState.sharedAi=List.of();ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
+        ClientState.boxCorners.clear();ClientState.pending=GhostBlocks.EMPTY;ClientState.clearPluginPreview();ClientState.clearAi();ClientState.sharedAi=List.of();ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;
         ShapeObject.cancel();TransformGizmo.cancel();PlacementPreview.cancel();BuilderMode.reset();SelectionOverlay.update("");
     }
     /** How far away another player's AI preview is still drawn, in blocks: past this it is out of sight, and drawing it costs a frame. */
     private static final double SHARED_RANGE=192;
     static void receiveStatus(String json){
             var next=Packets.JSON.fromJson(json,Packets.Status.class);
-            if(next!=null&&next.background()){ClientState.updateShared(next);return;} // somebody else's preview changed: not a reply to anything this client asked, and nothing else in it
-            if(next!=null){ClientState.updateShared(next);ClientState.status=next;if(next.error()){if(next.message().startsWith("Too many edits waiting"))BuilderPrediction.rejectedNewest();else BuilderPrediction.rejected();}else if(next.message().startsWith("Applied "))BuilderPrediction.confirmed(next.message());HistoryPulse.receive(next);checkLargeSelection(next);applyPivot(next.pivotUpdate());if(next.message().startsWith("Undid ")||next.message().startsWith("Redid "))ClientState.boxCorners.clear();ClientRestore.apply(next.restore());if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());ClientState.updateAiSessions(next);if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());var mc=Minecraft.getInstance();if(ClientCompat.screen(mc) instanceof EditorScreen editor)editor.statusReceived();AiBridge.statusReceived(next);}
+            if(next!=null&&next.background()){ClientState.updateShared(next);ClientState.updatePluginPreview(next);ClientState.updatePluginTools(next);return;} // somebody else's preview changed: not a reply to anything this client asked, and nothing else in it
+            if(next!=null){ClientState.updateShared(next);ClientState.updatePluginPreview(next);ClientState.updatePluginTools(next);ClientState.updateSavedSelections(next);ClientState.status=next;if(next.error()){if(next.message().startsWith("Too many edits waiting"))BuilderPrediction.rejectedNewest();else BuilderPrediction.rejected();}else if(next.message().startsWith("Applied "))BuilderPrediction.confirmed(next.message());HistoryPulse.receive(next);checkLargeSelection(next);applyPivot(next.pivotUpdate());if(next.message().startsWith("Undid ")||next.message().startsWith("Redid "))ClientState.boxCorners.clear();ClientRestore.apply(next.restore());if(next.message().startsWith("Blueprint library")){ClientState.blueprints=next.blueprints()==null?List.of():next.blueprints();ClientState.libraryVersion++;}if(ClientState.duplicatePending&&(next.message().startsWith("Copied ")||next.message().startsWith("Applied Cut "))){ClientState.duplicatePending=false;PlacementPreview.begin(ClientState.pendingPlacementOrigin==null?next.min():ClientState.pendingPlacementOrigin);ClientState.pendingPlacementOrigin=null;}if(next.error()){ClientState.duplicatePending=false;ClientState.pendingPlacementOrigin=null;}if(ClientState.largeSelection>0)ClientState.heldSelection=next.selectionData();else SelectionOverlay.update(next.selectionData());PlacementPreview.update(next.clipboardData());PlacementPreview.updateGhost(next.clipboardGhost());ClientState.pending=GhostBlocks.parse(next.pendingData());ClientState.updateAiSessions(next);if(next.entityUuid()!=null&&!next.entityUuid().isBlank()){ClientState.options.entityUuid=next.entityUuid();if(next.entityNbt()!=null&&!next.entityNbt().isBlank())ClientState.options.entityNbt=next.entityNbt();}if(next.error())ClientState.notify(next.message());var mc=Minecraft.getInstance();if(ClientCompat.screen(mc) instanceof EditorScreen editor)editor.statusReceived();AiBridge.statusReceived(next);}
     }
     /** Opens the confirmation when a selection action has just selected a suspiciously large area. */
     private static void checkLargeSelection(Packets.Status next){
@@ -375,10 +375,20 @@ public final class CraftiumClient implements ClientModInitializer {
         Vec3 start=camera.position();
         BlockHitResult hit;
         SlabSplit.suppress(true); // the whole of a double slab is aimed at, not one half
-        try{hit=mc.level.clip(new ClipContext(start,start.add(direction.scale(256)),ClipContext.Block.OUTLINE,ClientState.options.solidFluids?ClipContext.Fluid.ANY:ClipContext.Fluid.NONE,mc.player));}finally{SlabSplit.suppress(false);}
+        try{hit=mc.level.clip(new ClipContext(start,start.add(direction.scale(256)),ClipContext.Block.OUTLINE,ClientState.options.solidFluids||ClientState.options.selectLiquids&&ClientState.options.tool==Tool.MAGIC_SELECT?ClipContext.Fluid.ANY:ClipContext.Fluid.NONE,mc.player));}finally{SlabSplit.suppress(false);}
         return hit.getType()==HitResult.Type.BLOCK?hit:null;
     }
     /** The transform handles: the builder's, or the editor's with the box corners and the point being dragged. Drawn each frame. */
+    /** The saved selections that are not swapped in, each drawn like the selection (its style, width and fills) in its own colour, unless it is hidden with the eye. They only show while the editor is open. The one being looked at is the live selection and is drawn by the selection overlay, in its colour. */
+    private static void drawSavedSelections(){
+        for(var saved:ClientState.savedSelections()){
+            if(saved.active()||saved.size()==0||ClientState.savedHidden(saved.id()))continue;
+            int colour=ClientState.savedColor(saved.id());var o=ClientState.options;
+            var shape=ClientState.savedShape(saved.id());if(shape==null)continue; // its blocks have not arrived: nothing is drawn, never a box in their place
+            // the same style, width and fills as the selection, in the entry's colour
+            shape.drawPlain(Vec3.ZERO,colour,(float)o.selectionWidth,colour&0xffffff|o.selectionFill&0xff000000,colour&0xffffff|o.selectionInsideFill&0xff000000,true,false);
+        }
+    }
     /** Every ruler: its line (or circle), its length, and a knob at each end. The end being dragged shows where it will land, and the length with it. */
     private static void drawRulers(EditorScreen screen){
         var o=ClientState.options;
@@ -482,6 +492,7 @@ public final class CraftiumClient implements ClientModInitializer {
             HistoryPulse.draw();
             if(screen!=null&&screen.bucketDragging())MagicPreview.drawBucket(mc,screen.bucketTarget());else{MagicPreview.draw(mc,hit);ClickPreview.draw(mc,screen!=null&&screen.toolActive()?hit:null);}
             ClientState.pending.draw(new Point(0,0,0),true);
+            ClientState.pluginPending.draw(new Point(0,0,0),true);
             drawAiSessions(mc);
             // The AI previews other players are holding, in their own colour and with the owner's name, as far away as they are worth drawing.
             if(ClientState.options.showSharedAiPreviews&&mc.player!=null)for(var other:ClientState.sharedAi)
@@ -499,6 +510,7 @@ public final class CraftiumClient implements ClientModInitializer {
                 else Overlay.line(start,end,note.color(),note.width());
             }
             drawRulers(screen);
+            if(screen!=null)drawSavedSelections();
             // The handles follow the camera and the pointer, so they are drawn every frame and not with the tick's batch.
             Overlay.frame(()->handles(screen));
             if(screen==null)return;

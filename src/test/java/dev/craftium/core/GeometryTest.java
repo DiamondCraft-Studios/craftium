@@ -10,7 +10,9 @@ class GeometryTest {
             var solid = new HashSet<>(BrushMath.brush(new Point(0,0,0),5,shape,false));
             var shell = new HashSet<>(BrushMath.brush(new Point(0,0,0),5,shape,true));
             assertTrue(solid.containsAll(shell)); assertFalse(shell.contains(new Point(0,0,0)));
-            solid.forEach(p -> assertTrue(solid.contains(new Point(-p.x(),p.y(),p.z())) && solid.contains(new Point(p.x(),p.y(),-p.z())), shape + " is not mirrored sideways"));
+            // An irregular polygon is lopsided on purpose.
+            if (shape != BrushMath.Shape.IRREGULAR_POLYGON)
+                solid.forEach(p -> assertTrue(solid.contains(new Point(-p.x(),p.y(),p.z())) && solid.contains(new Point(p.x(),p.y(),-p.z())), shape + " is not mirrored sideways"));
             // The pointed shapes and the hemisphere stand on a base, so they are not the same upside down.
             if (!EnumSet.of(BrushMath.Shape.PYRAMID, BrushMath.Shape.CONE, BrushMath.Shape.HEMISPHERE).contains(shape))
                 solid.forEach(p -> assertTrue(solid.contains(new Point(p.x(),-p.y(),p.z())), shape + " is not mirrored vertically"));
@@ -125,5 +127,34 @@ class GeometryTest {
             assertTrue(Math.abs(a-BrushMath.noise(i*.13+.001,3.25,-1.2,42))<.01);
         }
         assertNotEquals(BrushMath.noise(.3,.4,.5,42),BrushMath.noise(.3,.4,.5,43));
+    }
+
+    private static Set<Point> flat(BrushMath.Shape shape, int radius, int sides, BrushMath.Form form) {
+        return new HashSet<>(BrushMath.brush(new Point(0,0,0), radius, shape, false, 1, false, 0, sides, false, Selection.LIMIT, form));
+    }
+
+    @Test void anIrregularPolygonIsTheSameForTheSameSeedAndDifferentForAnother() {
+        var a = flat(BrushMath.Shape.IRREGULAR_POLYGON, 12, 7, new BrushMath.Form(5, .4));
+        assertEquals(a, flat(BrushMath.Shape.IRREGULAR_POLYGON, 12, 7, new BrushMath.Form(5, .4)));
+        assertNotEquals(a, flat(BrushMath.Shape.IRREGULAR_POLYGON, 12, 7, new BrushMath.Form(6, .4)));
+        assertFalse(a.isEmpty());
+        for (Point p : a) assertEquals(0, p.y());
+    }
+
+    @Test void anIrregularPolygonStaysInsideItsRadiusAndKeepsItsCentre() {
+        for (int seed = 0; seed < 40; seed++) for (int sides : new int[]{3, 4, 5, 9, 30}) {
+            var shape = flat(BrushMath.Shape.IRREGULAR_POLYGON, 10, sides, new BrushMath.Form(seed, .4));
+            assertTrue(shape.contains(new Point(0, 0, 0)), "seed " + seed + " sides " + sides);
+            for (Point p : shape) assertTrue(p.x() * p.x() + p.z() * p.z() <= 10.5 * 10.5, "seed " + seed + " sides " + sides);
+        }
+    }
+
+    @Test void aStarIsSmallerThanItsPolygonAndDeeperNotchesLeaveLess() {
+        var polygon = flat(BrushMath.Shape.POLYGON, 15, 5, BrushMath.Form.DEFAULT);
+        var shallow = flat(BrushMath.Shape.STAR, 15, 5, new BrushMath.Form(1, .8));
+        var deep = flat(BrushMath.Shape.STAR, 15, 5, new BrushMath.Form(1, .2));
+        assertTrue(shallow.size() < polygon.size());
+        assertTrue(deep.size() < shallow.size());
+        assertTrue(shallow.contains(new Point(0, 0, -15)) || shallow.contains(new Point(0, 0, -14)), "a point of the star faces -z");
     }
 }
