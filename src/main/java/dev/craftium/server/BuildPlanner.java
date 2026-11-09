@@ -35,6 +35,7 @@ final class BuildPlanner {
             var states = states(level, spec);
             plan.exact = true;
             applySelection(level, plan, spec, states, selection, new HashMap<>(), named);
+            ConnectionResolver.resolve(level, plan, Map.of());
             return plan.finish("AI build");
         }
         var place = spec.place();
@@ -48,6 +49,8 @@ final class BuildPlanner {
         var turned = new HashMap<String, Map<Turn, BlockState>>();
         // The spec says exactly where blocks go, so the player's brush mask, symmetry and height settings do not apply.
         plan.exact = true;
+        var written = new HashMap<String, Set<String>>();
+        var pinned = new HashMap<Point, Set<String>>();
         for (var entry : result.cells().entrySet()) {
             var at = min.add(entry.getKey().x(), entry.getKey().y(), entry.getKey().z());
             var cell = entry.getValue();
@@ -63,6 +66,9 @@ final class BuildPlanner {
                 state = turned.computeIfAbsent(cell.block(), k -> new HashMap<>()).computeIfAbsent(cell.turn(), t -> turn(plain, t));
             }
             plan.put(at, state);
+            // What the spec wrote on a block is its design (a pane with no north side), so it is left as written when connections are worked out.
+            var names = written.computeIfAbsent(cell.block(), name -> writtenProperties(level, spec, name));
+            if (!names.isEmpty()) pinned.put(at, names);
         }
         if (!spec.scripts().isEmpty()) {
             // Scripts come after the shapes, and see what they placed.
@@ -74,6 +80,7 @@ final class BuildPlanner {
             if (selection.isEmpty() && usesSessionSelection(spec)) throw new IllegalArgumentException("replace_selection works on the player's selection, and nothing is selected. Ask the player to select the blocks, or give coordinates and use replace with from and to");
             applySelection(level, plan, spec, states, selection, matches, named);
         }
+        ConnectionResolver.resolve(level, plan, pinned);
         return plan.finish("AI build");
     }
 
@@ -95,6 +102,16 @@ final class BuildPlanner {
         } catch (Exception e) {
             throw new IllegalArgumentException(explain(lookup, spec, name, real, e));
         }
+    }
+
+    /** The names of the properties a block name wrote, as {@code glass_pane[north=false]} wrote "north". */
+    private static Set<String> writtenProperties(net.minecraft.server.level.ServerLevel level, BuildSpec spec, String name) {
+        var lookup = level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK);
+        try {
+            var names = new HashSet<String>();
+            for (var property : net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(lookup, new com.mojang.brigadier.StringReader(concrete(name, spec)), false).properties().keySet()) names.add(property.getName());
+            return names;
+        } catch (Exception e) { return Set.of(); }
     }
 
     /**
