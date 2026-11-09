@@ -19,11 +19,13 @@ public final class ShowcaseGameTest implements net.fabricmc.fabric.api.client.ga
     private record Before(double x, double y, double z, float yaw, float pitch, int fov, boolean hudHidden, boolean invisible, Object camera, int width, int height) {}
 
     @Override public void runTest(ClientGameTestContext c) {
-        if (!"showcase".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))) return;
+        String scope = System.getenv("CRAFTIUM_TEST_SCOPE");
+        boolean live = "showcase-live".equals(scope);
+        if (!live && !"showcase".equals(scope)) return;
         try (var world = c.worldBuilder().adjustSettings(st -> st.setGameMode(WorldCreationUiState.SelectedGameMode.CREATIVE)).create()) {
             c.waitTicks(40);
             world.getClientWorld().waitForChunksDownload();
-            run(c, world);
+            if (live) runLive(c, world); else run(c, world);
         } catch (RuntimeException | Error e) {
             throw e;
         } catch (Exception e) {
@@ -123,6 +125,37 @@ public final class ShowcaseGameTest implements net.fabricmc.fabric.api.client.ga
         require(c.computeOnClient(mc -> dev.craftium.client.compat.ClientCompat.mainTarget(mc).width == before.width() && dev.craftium.client.compat.ClientCompat.mainTarget(mc).height == before.height()),
             "The render target was not put back to the window size");
         System.out.println("CRAFTIUM_SHOWCASE_PASS files in " + dir + " : " + hd.file().getFileName() + " " + back.file().getFileName() + " " + uhd.file().getFileName());
+    }
+
+    /**
+     * The live run: the AI bridge is switched on in a real world and the real MCP server (a Node process, as an AI app starts it) builds a
+     * castle and photographs it through the bridge, the way an agent following the craftium-showcase skill would. Run with
+     * {@code CRAFTIUM_TEST_SCOPE=showcase-live}; the contact sheets it fetched are written to a live-run folder for review.
+     */
+    public static void runLive(ClientGameTestContext c, TestSingleplayerContext w) throws Exception {
+        c.waitFor(mc -> mc.player.onGround(), 600);
+        c.runOnClient(mc -> { if (!AiBridge.running()) AiBridge.toggle(); });
+        for (int i = 0; i < 200 && !c.computeOnClient(mc -> AiBridge.running()); i++) c.waitTick();
+        require(c.computeOnClient(mc -> AiBridge.running()), "the AI bridge did not start");
+        Path mcp = null;
+        for (Path dir = Path.of("").toAbsolutePath(); dir != null && mcp == null; dir = dir.getParent())
+            if (Files.exists(dir.resolve("mcp/test/e2e-showcase.mjs"))) mcp = dir.resolve("mcp");
+        require(mcp != null, "mcp/test/e2e-showcase.mjs was not found above " + Path.of("").toAbsolutePath());
+        Path out = Path.of("live-run").toAbsolutePath();
+        var process = new ProcessBuilder("node", "test/e2e-showcase.mjs", AiBridge.FILE.toString(), out.toString()).directory(mcp.toFile()).redirectErrorStream(true).start();
+        var output = new StringBuffer();
+        var reader = CompletableFuture.runAsync(() -> { try { output.append(new String(process.getInputStream().readAllBytes())); } catch (Exception ignored) {} });
+        long deadline = System.currentTimeMillis() + 300_000;
+        while (process.isAlive() && System.currentTimeMillis() < deadline) c.waitTick();
+        if (process.isAlive()) process.destroyForcibly();
+        reader.join();
+        System.out.println("CRAFTIUM_SHOWCASE_LIVE_OUTPUT\n" + output);
+        require(process.exitValue() == 0 && output.toString().contains("LIVE_DONE"), "the live run failed:\n" + output);
+        require(Files.size(out.resolve("sheet-castle.jpg")) > 5_000 && Files.size(out.resolve("sheet-hall.jpg")) > 5_000, "the contact sheets were not fetched");
+        // The player's own view must be back after a job run from outside the game.
+        c.waitTicks(5);
+        require(c.computeOnClient(mc -> mc.getCameraEntity() == mc.player && !dev.craftium.client.compat.ClientCompat.hudHidden(mc) && !mc.player.isInvisible()), "the player's view was not restored after the live run");
+        System.out.println("CRAFTIUM_SHOWCASE_LIVE_PASS sheets in " + out);
     }
 
     private static ShowcaseCapture.Result shot(ClientGameTestContext c, ShotSpec spec, Path dir) throws Exception {
