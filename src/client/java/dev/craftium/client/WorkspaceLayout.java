@@ -7,7 +7,7 @@ import java.nio.file.*;
 import java.util.*;
 
 final class WorkspaceLayout {
-    static final class Rect {int x,y,w,h;boolean visible=true;Rect(int x,int y,int w,int h){this.x=x;this.y=y;this.w=w;this.h=h;}}
+    static final class Rect {int x,y,w,h;boolean visible=true,folded;Rect(int x,int y,int w,int h){this.x=x;this.y=y;this.w=w;this.h=h;}}
     static final Map<String,Rect> base=new LinkedHashMap<>(),windows=new LinkedHashMap<>();
     private static final Path FILE=FabricLoader.getInstance().getConfigDir().resolve("craftium/layout.json");
     private static boolean loaded;
@@ -17,6 +17,12 @@ final class WorkspaceLayout {
     /** A panel as first laid out: all shown but History and Magic select, which stay out of the way until they are opened from the Window menu. */
     private static Rect fresh(String id,int x,int y,int w,int h){var r=new Rect(x,y,w,h);r.visible=!id.equals("history")&&!id.equals("magic");return r;}
     static void snap(String id,int width,int height){var window=windows.get(id);if(window==null)return;if(window.x<12)window.x=0;if(window.y<37)window.y=27;if(Math.abs(window.x+window.w-width)<12)window.x=width-window.w;if(Math.abs(window.y+window.h-height+25)<12)window.y=height-25-window.h;for(var e:windows.entrySet())if(!e.getKey().equals(id)&&e.getValue().visible){var other=e.getValue();if(Math.abs(window.x-other.x-other.w)<10)window.x=other.x+other.w+6;if(Math.abs(window.y-other.y-other.h)<10)window.y=other.y+other.h+6;}window.x=Math.clamp(window.x,0,Math.max(0,width-50));window.y=Math.clamp(window.y,27,Math.max(27,height-40));}
+    /** The height of a panel folded up to its title bar. */
+    static final int TITLE=19;
+    static boolean folded(String id){var r=windows.get(id);return r!=null&&r.folded;}
+    static void fold(String id){var r=windows.get(id);if(r!=null){r.folded=!r.folded;save();}}
+    /** Whether a point of the panel's own (unmoved) space lies in the part a folded panel hides. */
+    static boolean hiddenByFold(String id,double y){var r=windows.get(id);var b=base.get(id);return r!=null&&b!=null&&r.folded&&y>=b.y+TITLE;}
     static boolean visible(String id){var r=windows.get(id);return r==null||r.visible;}
     /** Moves drawing to where the panel is. Panels are never stretched: contents lay themselves out in the panel's real size, see {@link #width} and {@link #height}. */
     static void apply(Gfx g,String id){var a=base.get(id);var b=windows.get(id);if(a==null||b==null)return;g.pose().translate(b.x-a.x,b.y-a.y);}
@@ -24,7 +30,7 @@ final class WorkspaceLayout {
     static int width(String id,int fallback){var r=windows.get(id);return r==null?fallback:r.w;}
     static int height(String id,int fallback){var r=windows.get(id);return r==null?fallback:r.h;}
     static double[] inverse(String id,double x,double y){var a=base.get(id);var b=windows.get(id);if(a==null||b==null)return new double[]{x,y};return new double[]{x-b.x+a.x,y-b.y+a.y};}
-    static String hit(double x,double y,boolean header){var keys=new ArrayList<>(windows.keySet());Collections.reverse(keys);for(String key:keys){var r=windows.get(key);if(r.visible&&x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+(header?18:r.h))return key;}return "";}
+    static String hit(double x,double y,boolean header){var keys=new ArrayList<>(windows.keySet());Collections.reverse(keys);for(String key:keys){var r=windows.get(key);if(r.visible&&x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+(header?18:r.folded?TITLE:r.h))return key;}return "";}
     static void toggle(String id){var r=windows.get(id);if(r!=null)r.visible=!r.visible;save();}
     static void reset(){windows.clear();base.forEach((k,r)->windows.put(k,fresh(k,r.x,r.y,r.w,r.h)));save();}
     static void save(){try{Files.createDirectories(FILE.getParent());Files.writeString(FILE,json());}catch(Exception e){ClientState.notify("Could not save workspace layout");}}
