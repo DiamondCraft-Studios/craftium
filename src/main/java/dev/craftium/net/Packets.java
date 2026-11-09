@@ -73,11 +73,6 @@ public final class Packets {
 
     /** One saved selection as the client sees it: the blocks stay on the server. {@code active} is the one swapped in for the live selection, {@code editing} whether changes are written back to it. */
     public record SavedSelection(int id, String name, int size, Point min, Point max, boolean active, boolean editing) {}
-    /** A status that carries only the saved selections, sent when they change: not a reply to anything, so the client takes the list and nothing else from it. */
-    public static Status savedOnly(List<SavedSelection> saved) {
-        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,null,null,saved);
-    }
-
     /** A status that carries only the list of plugin tools, sent when it changes: not a reply to anything, so the client takes the list and nothing else from it. */
     public static Status toolsOnly(List<PluginTool> tools) {
         return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,null,tools,null);

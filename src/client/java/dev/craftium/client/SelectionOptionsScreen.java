@@ -90,6 +90,11 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     private SelectionOptionsScreen(Screen parent,String title,List<Entry> entries,List<Width> widths,boolean styled){
         super(Component.literal(title));this.parent=parent;heading=title.toUpperCase(Locale.ROOT);this.entries=entries;this.widths=widths;this.styled=styled;
     }
+    /** The outline colour of one saved selection, in the same editor as the other colours; it opens with that colour picked. */
+    static SelectionOptionsScreen saved(Screen parent,int id,String name){
+        var entry=new Entry("Saved selection",name,()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0));
+        var screen=new SelectionOptionsScreen(parent,name+" colour",List.of(entry),List.of(),false);screen.selected=0;return screen;
+    }
     /** The Ruler tool's colours: its line, its knobs and its span label. */
     static SelectionOptionsScreen ruler(Screen parent){return new SelectionOptionsScreen(parent,"Ruler options",RULER_ENTRIES,RULER_WIDTHS,false);}
 

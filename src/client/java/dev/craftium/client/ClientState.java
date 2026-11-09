@@ -41,6 +41,24 @@ public final class ClientState {
         pluginTools=List.copyOf(PluginToolCodec.fromWire(status.pluginTools()));
     }
     static void clearPluginTools(){pluginTools=List.of();}
+    /** The selections the player saved, as the server last said; empty on a server that has none or does not know them. */
+    private static List<Packets.SavedSelection> savedSelections=List.of();
+    public static List<Packets.SavedSelection> savedSelections(){return savedSelections;}
+    /** The outline colour of each saved selection by id. A colour belongs to the client: it starts as the selection colour turned by the golden angle for each one saved before it, and the player can change it. */
+    private static final Map<Integer,Integer> savedColors=new HashMap<>();
+    private static int savedSeen;
+    /** Takes in the saved selections a status carries. A status that does not carry them (null) leaves them as they were. */
+    static void updateSavedSelections(Packets.Status status){
+        if(status.savedSelections()==null)return;
+        savedSelections=List.copyOf(status.savedSelections());
+        if(savedSelections.isEmpty()){savedColors.clear();savedSeen=0;}
+        for(var saved:savedSelections)savedColors.computeIfAbsent(saved.id(),id->dev.craftium.core.SavedSelectionColors.forIndex(options.selectionColor,savedSeen++));
+    }
+    static void clearSavedSelections(){savedSelections=List.of();savedColors.clear();savedSeen=0;}
+    public static int savedColor(int id){return savedColors.getOrDefault(id,options.selectionColor);}
+    public static void setSavedColor(int id,int color){savedColors.put(id,color);}
+    /** The saved selection being looked at or edited, or null. */
+    public static Packets.SavedSelection activeSaved(){for(var saved:savedSelections)if(saved.active())return saved;return null;}
     /** How many blocks the ghost of the plugin tool in use has; 0 when there is none. */
     public static int pluginPreviewBlocks(){return pluginPending.total();}
     static void clearPluginPreview(){pluginPending=GhostBlocks.EMPTY;pluginPendingData="";}
