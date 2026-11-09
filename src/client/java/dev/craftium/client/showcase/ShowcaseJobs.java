@@ -75,20 +75,40 @@ public final class ShowcaseJobs {
         out.addProperty("state", run.state);
         out.addProperty("total", run.plan.entries().size());
         out.addProperty("done", run.next);
-        int failed = 0, notReady = 0;
+        int failed = 0, notReady = 0, hidden = 0;
         for (var r : run.results) {
             if (!r.get("ok").getAsBoolean()) failed++;
             else if (r.has("chunksReady") && !r.get("chunksReady").getAsBoolean()) notReady++;
+            if (r.has("occlusion") && r.getAsJsonObject("occlusion").has("hidden")) hidden++;
         }
         out.addProperty("failed", failed);
         out.addProperty("folder", run.dir.toAbsolutePath().toString());
         out.addProperty("manifest", run.dir.resolve("manifest.json").toAbsolutePath().toString());
         if (run.problem != null) out.addProperty("problem", run.problem);
-        if (notReady > 0) out.addProperty("warning", notReady + " picture(s) were taken before every chunk in view was drawn; they may have gaps. They are marked chunksReady: false.");
+        var warnings = new StringBuilder();
+        if (notReady > 0) warnings.append(notReady).append(" picture(s) were taken before every chunk in view was drawn; they may have gaps (chunksReady: false). ");
+        if (hidden > 0) warnings.append(hidden).append(" picture(s) have terrain, trees or another build between the camera and the room even after raising the camera (occlusion.hidden); try another angle, a closer distance or a placed camera. ");
+        if (warnings.length() > 0) out.addProperty("warning", warnings.toString().trim());
         var shots = new JsonArray();
         for (var r : run.results) shots.add(r);
         out.add("shots", shots);
         return out;
+    }
+
+    /** What a contact sheet of one room is made from: its saved pictures so far, in order. Client thread only. */
+    public static ShowcaseSheets.Sources sheetSources(String room) {
+        var run = current != null ? current : last;
+        if (run == null) throw new IllegalStateException("No showcase job has been started in this game session; start one with capture_batch");
+        String name = ShowcasePlan.safeName(room, "room");
+        var files = new ArrayList<String>();
+        var shots = new ArrayList<String>();
+        for (var r : run.results) {
+            if (r.get("room").getAsString().equals(name) && r.get("ok").getAsBoolean()) { files.add(r.get("file").getAsString()); shots.add(r.get("shot").getAsString()); }
+        }
+        boolean known = false;
+        for (var e : run.plan.entries()) known |= e.room().equals(name);
+        if (!known) throw new IllegalArgumentException("The job \"" + run.job + "\" has no room called \"" + name + "\"; its rooms are " + ShowcasePlan.rooms(run.plan));
+        return new ShowcaseSheets.Sources(run.job, run.state, name, run.dir, files, shots);
     }
 
     /** Stops after the picture being taken, and gives the player their view back at once if none is being saved. */
@@ -116,8 +136,12 @@ public final class ShowcaseJobs {
                 run.next++;
                 continue;
             }
-            ShowcaseCapture.capture(entry.spec(), file, entry.aim()).whenComplete((r, t) -> {
-                var picture = result(entry, t == null);
+            // Look before shooting: if something is in the way, the shot is retaken once from higher up when it can be.
+            var resolved = Occlusion.resolve(mc, entry);
+            var used = resolved.entry();
+            ShowcaseCapture.capture(used.spec(), file, used.aim()).whenComplete((r, t) -> {
+                var picture = result(used, t == null);
+                picture.add("occlusion", resolved.info());
                 if (t == null) {
                     picture.addProperty("width", r.width());
                     picture.addProperty("height", r.height());

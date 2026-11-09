@@ -344,7 +344,15 @@ public final class AiBridge {
             case "render_view" -> AiView.render(args);
             // Showcase pictures are taken and saved by the game itself; these three only start, ask after and stop a job.
             case "capture_batch" -> onClient(() -> dev.craftium.client.showcase.ShowcaseJobs.start(args));
-            case "capture_status" -> onClient(dev.craftium.client.showcase.ShowcaseJobs::status);
+            case "capture_status" -> {
+                // A room's contact sheet is made from its saved files here, off the game's thread, so a big sheet never stalls a frame.
+                if (args.has("contact_sheet") && args.get("contact_sheet").isJsonPrimitive()) {
+                    String room = args.get("contact_sheet").getAsString();
+                    var sources = onClient(() -> dev.craftium.client.showcase.ShowcaseJobs.sheetSources(room));
+                    yield dev.craftium.client.showcase.ShowcaseSheets.build(sources);
+                }
+                yield onClient(dev.craftium.client.showcase.ShowcaseJobs::status);
+            }
             case "capture_cancel" -> onClient(dev.craftium.client.showcase.ShowcaseJobs::cancel);
             case "preview_build" -> {
                 if (!args.has("spec")) throw new IllegalArgumentException("Missing \"spec\"");

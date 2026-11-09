@@ -303,10 +303,20 @@ export const TOOLS = [
     title: "Check the showcase job",
     description:
       "How the running showcase job, or else the last one, is going: its state (running, done, cancelled or failed), how many pictures are done out of the total, how many failed, the folder and manifest.json on the player's disk, and for each picture so far its file, the camera it asked for and the one the game drew from, and why it failed if it did. " +
-      "A picture with chunksReady false was taken before every chunk in view was drawn and may have gaps; retake it with another capture_batch if it matters. Poll every few seconds; a picture takes about a second, a little more at 4K.",
-    inputSchema: nothing,
+      "A picture with chunksReady false was taken before every chunk in view was drawn and may have gaps; retake it with another capture_batch if it matters. Poll every few seconds; a picture takes about a second, a little more at 4K. " +
+      "Before each picture the game checks for terrain, trees or another build between the camera and the room, and retakes it once from higher up if so: each picture's occlusion says how many of 9 sample rays were blocked, and whether it was raised; occlusion.hidden means it is still hidden, so choose another angle or distance. " +
+      'Give "contact_sheet" with a room\'s name to get ONE image holding all of that room\'s saved pictures as labelled thumbnails (also saved as contact-sheet.jpg in the room\'s folder): look at it to judge every angle at once instead of opening each file, then retake only the ones that are wrong. ' +
+      "Take the sheet once the room's pictures are done.",
+    inputSchema: {
+      type: "object",
+      properties: { contact_sheet: { type: "string", maxLength: 64, description: "A room's name: returns a contact sheet image of that room's saved pictures instead of the status" } },
+    },
     annotations: READ,
-    args: () => ({}),
+    args: (a) => {
+      if (a.contact_sheet === undefined) return {};
+      if (typeof a.contact_sheet !== "string" || a.contact_sheet.trim() === "" || a.contact_sheet.length > 64) throw new ArgumentError('"contact_sheet" must be a room name');
+      return { contact_sheet: a.contact_sheet };
+    },
   },
   {
     name: "capture_cancel",

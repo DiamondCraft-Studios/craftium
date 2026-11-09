@@ -148,6 +148,21 @@ test("capture_batch forwards only the keys it names, and bad requests never reac
   await bridge.close();
 });
 
+test("capture_status asks for a room's contact sheet and gets it back as an image", async () => {
+  const bridge = await fakeBridge({ capture_status: { ok: true, image: "QUJD", mime: "image/jpeg", job: "castle", room: "throne-room", thumbnails: [{ position: 1, shot: "hero" }] } });
+  const client = await connect(bridge.file);
+  const sheet = await client.callTool({ name: "capture_status", arguments: { contact_sheet: "throne-room", sneaky: 1 } });
+  assert.equal(sheet.isError, undefined);
+  assert.deepEqual(sheet.content[0], { type: "image", data: "QUJD", mimeType: "image/jpeg" });
+  assert.match(text({ content: [sheet.content[1]] }), /throne-room/);
+  assert.deepEqual(bridge.seen[0].body, { contact_sheet: "throne-room" });
+  for (const bad of [{ contact_sheet: "" }, { contact_sheet: 3 }, { contact_sheet: "x".repeat(65) }]) {
+    assert.equal((await client.callTool({ name: "capture_status", arguments: bad })).isError, true, JSON.stringify(bad));
+  }
+  assert.equal(bridge.seen.length, 1);
+  await bridge.close();
+});
+
 test("preview_build passes the spec through untouched", async () => {
   const bridge = await fakeBridge({ preview_build: { ok: true, message: "Edit ready: 12 blocks" } });
   const client = await connect(bridge.file);
