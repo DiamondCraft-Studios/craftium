@@ -1997,7 +1997,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     }
     private int savedScroll;
     private static final String[] PENCIL={"......XX.",".....XXXX","....XXXX.","...XXXX..","..XXXX...",".XXXX....",".XXX.....","XX......."};
-    private static final String[] EYE={"...XXX...",".XX...XX.","X..XXX..X",".XX...XX.","...XXX..."};
+    private static final String[] EYE={"..XXXXX..",".X.....X.","X..XXX..X",".X.....X.","..XXXXX.."};
     private static final String[] CROSS={"X.......X",".X.....X.","..X...X..","...X.X...","....X....","...X.X...","..X...X..",".X.....X.","X.......X"};
     /** A small picture drawn pixel by pixel from rows of X, centred on the given box. */
     private void glyph(Gfx g,int x,int y,int width,int height,String[] rows,int colour){
