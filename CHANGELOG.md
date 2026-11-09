@@ -4,6 +4,12 @@
 
 Changes since 1.3.1-beta.1.
 
+### Interface
+- New Selections window. Save selection keeps what is selected as an entry named Selection 1, Selection 2 and so on, beside your selection and without changing it. Each entry has a colour square (the selection colour, then turned round the hue wheel for each next one; click it to change it), an eye to hide its outline, a pencil to edit it and a cross to delete it. Clicking an entry shows it in place of your selection and clicking it again gives yours back. Editing an entry lets any selection tool add to it or take from it, keeping the changes. Deleting asks nothing, and Ctrl+Z brings the entry back with its colour. Saved selections that are not shown are drawn like the selection, in their own colour, while the editor is open.
+
+### AI building
+- Claude can tell your saved selections apart. get_state lists them by name, read_selection takes a name to read one, and replace_selection takes a "selection" name, so one build can do "on Selection 1 do this, then on Selection 2 do that". An unknown name refuses the build and lists the names there are.
+
 ### Internal
 - A request can name a plugin's tool and carry the values of its settings, and the server runs it through the same gate as the editor's own tools, holding the settings to what the tool declared and its plan to the block limit. A tool can show a ghost of what it would build before the player clicks, which arrives on its own and never changes the status line. These are new optional fields, so older clients and servers ignore them, and a build that has them says so with the `plugin-tools` capability. Nothing registers a plugin tool yet, so nothing a player sees changes.
 - The server tells a client which tools its plugins have added, in the first status after they change and as a push of its own when they do, with each tool's settings. The client keeps the tools it understands and leaves out any it does not, and nothing lists them yet.
