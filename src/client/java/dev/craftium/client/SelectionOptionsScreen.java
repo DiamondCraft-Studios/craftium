@@ -4,7 +4,6 @@ import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
 import dev.craftium.core.Options;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
@@ -13,7 +12,7 @@ import java.util.function.*;
 
 /**
  * How the selection looks, in the editor and in the builder tools: its style, the width of its lines and every colour it and its previews
- * are drawn in, grouped by use. Clicking a colour's swatch opens an editor for it, with a typeable hex code and a slider for each channel.
+ * are drawn in, grouped by use. Clicking a colour's swatch opens a 2D colour picker for it, with a typeable hex code.
  */
 public final class SelectionOptionsScreen extends CraftiumScreen {
     private static final int W=640,H=420,ROW=19;
@@ -80,27 +79,18 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     /** Whether the screen sets the selection's style: the selection screen does, the ruler's does not. */
     private final boolean styled;
     private int left,top,selected=-1;
-    private EditBox hex;
-    private boolean updatingHex;
-    private final FlatSlider[] channels=new FlatSlider[4];
-    private static final String[] CHANNEL_NAMES={"Red","Green","Blue","Opacity"};
-    private static final int[] CHANNEL_SHIFT={16,8,0,24};
+    private ColourPicker picker;
 
     public SelectionOptionsScreen(Screen parent){this(parent,"Selection options",ENTRIES,WIDTHS,true);}
     private SelectionOptionsScreen(Screen parent,String title,List<Entry> entries,List<Width> widths,boolean styled){
         super(Component.literal(title));this.parent=parent;heading=title.toUpperCase(Locale.ROOT);this.entries=entries;this.widths=widths;this.styled=styled;
-    }
-    /** The outline colour of one saved selection, in the same editor as the other colours; it opens with that colour picked. */
-    static SelectionOptionsScreen saved(Screen parent,int id,String name){
-        var entry=new Entry("Saved selection",name,()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0));
-        var screen=new SelectionOptionsScreen(parent,name+" colour",List.of(entry),List.of(),false);screen.selected=0;return screen;
     }
     /** The Ruler tool's colours: its line, its knobs and its span label. */
     static SelectionOptionsScreen ruler(Screen parent){return new SelectionOptionsScreen(parent,"Ruler options",RULER_ENTRIES,RULER_WIDTHS,false);}
 
     @Override protected void init(){
         left=(width-W)/2;top=(height-H)/2;
-        clearWidgets();hex=null;
+        clearWidgets();picker=null;
         var o=ClientState.options;
         int ex0=left+W-290,sy=top+262; // the style and the line widths sit under the colour editor, so the list of colours has the whole left side
         if(styled){
@@ -122,41 +112,8 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
         addRenderableWidget(new FlatButton(ex0+138,top+H-30,132,22,"Done",this::onClose));
         if(selected<0)return;
         var entry=entries.get(selected);int ex=left+W-290;
-        hex=new EditBox(font,ex,top+78,100,20,Component.literal("Hex colour"));
-        hex.setMaxLength(9);hex.setValue(hexOf(entry.get().getAsInt()));
-        hex.setResponder(text->{if(updatingHex)return;Integer parsed=parse(text,entry.get().getAsInt());if(parsed!=null){entry.set().accept(parsed);syncSliders();}});
-        addRenderableWidget(hex);
-        for(int i=0;i<4;i++){
-            int channel=i,shift=CHANNEL_SHIFT[i];
-            var slider=new FlatSlider(ex,top+108+i*24,270,19,Component.empty(),(entry.get().getAsInt()>>shift&255)/255d){
-                protected void updateMessage(){setMessage(Component.literal(CHANNEL_NAMES[channel]+": "+(channel==3?Math.round(value*100)+"%":String.valueOf(Math.round(value*255)))));}
-                protected void applyValue(){
-                    int colour=entry.get().getAsInt();
-                    entry.set().accept(colour&~(255<<shift)|(int)Math.round(value*255)<<shift);
-                    if(hex!=null&&!hex.isFocused()){updatingHex=true;hex.setValue(hexOf(entry.get().getAsInt()));updatingHex=false;}
-                }
-            };
-            slider.range(0,channel==3?100:255,channel==3?Math.round((entry.fallback().getAsInt()>>shift&255)*100/255f):entry.fallback().getAsInt()>>shift&255);slider.setRaw((entry.get().getAsInt()>>shift&255)/255d);
-            channels[i]=slider;addRenderableWidget(slider);
-        }
-        addRenderableWidget(new FlatButton(ex,top+212,132,20,"Reset this colour",()->{entry.set().accept(entry.fallback().getAsInt());init();}));
-    }
-
-    private void syncSliders(){
-        if(selected<0)return;int colour=entries.get(selected).get().getAsInt();
-        for(int i=0;i<4;i++)if(channels[i]!=null)channels[i].setRaw((colour>>CHANNEL_SHIFT[i]&255)/255d);
-    }
-    /** The colour's red, green and blue as hex; the opacity has its own slider. */
-    private static String hexOf(int argb){return String.format(Locale.ROOT,"#%06X",argb&0xffffff);}
-    /** A hex code of six digits (the opacity is kept) or eight (red, green, blue, opacity), with or without the #; null when it is not one. */
-    private static Integer parse(String text,int current){
-        String t=text.trim();if(t.startsWith("#"))t=t.substring(1);
-        if(t.length()!=6&&t.length()!=8)return null;
-        try{
-            long v=Long.parseLong(t,16);
-            if(t.length()==6)return current&0xff000000|(int)v;
-            return (int)(v&0xff)<<24|(int)(v>>8);
-        }catch(NumberFormatException e){return null;}
+        picker=new ColourPicker(ex,top+52,entry.get(),entry.set(),entry.fallback());
+        picker.init(font,w->addRenderableWidget(w));
     }
 
     private int rowY(int index){
@@ -185,11 +142,9 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
         if(selected>=0){
             var e=entries.get(selected);int ex=left+W-290;
             g.text(font,e.group()+" · "+e.name(),ex,top+36,0xffffd66d,false);
-            swatch(g,ex,top+50,270,20,e.get().getAsInt());
-            g.text(font,"Hex",ex+108,top+84,0xff9db5cb,false);
-            g.text(font,"6 digits keep the opacity · 8 digits are RRGGBBAA",ex,top+240,0xff7e91a4,false);
         }else g.text(font,"Click a colour to edit it",left+W-290,top+40,0xff9db5cb,false);
         if(styled)g.text(font,o.selectionStyle==Options.SelectionStyle.SILHOUETTE?"Silhouette: only the contour on the screen":o.selectionStyle==Options.SelectionStyle.OUTLINE?"Outline: the edges on the near side":"All edges: every edge of the selection",left+W-290,top+286,0xff7e91a4,false);
+        if(picker!=null)picker.draw(g,font);
         drawWidgets(g,mouseX,mouseY,delta);
     }
 
@@ -202,11 +157,20 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     }
 
     @Override public boolean mouseClicked(MouseButtonEvent event,boolean twice){
+        if(picker!=null&&picker.mouseClicked(event.x(),event.y(),event.button()))return true;
         if(event.button()==0)for(int i=0;i<entries.size();i++){
             int y=rowY(i);
             if(event.x()>=left+14&&event.x()<left+314&&event.y()>=y&&event.y()<y+ROW-1){selected=selected==i?-1:i;init();return true;}
         }
         return super.mouseClicked(event,twice);
+    }
+    @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy){
+        if(picker!=null&&picker.mouseDragged(event.x(),event.y(),event.button()))return true;
+        return super.mouseDragged(event,dx,dy);
+    }
+    @Override public boolean mouseReleased(MouseButtonEvent event){
+        if(picker!=null&&picker.mouseReleased(event.button()))return true;
+        return super.mouseReleased(event);
     }
     @Override public boolean isPauseScreen(){return false;}
     @Override public void onClose(){ClientState.save();ClientCompat.setScreen(minecraft,parent);}

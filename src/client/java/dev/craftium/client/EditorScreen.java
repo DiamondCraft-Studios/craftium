@@ -55,7 +55,7 @@ public final class EditorScreen extends CraftiumScreen {
         Control{PanelLog.control(x,y,width,height,tip,panel);}
         Control(int x,int y,int width,int height,Runnable action,String tip){this(x,placed(y,height),width,height,action,null,tip,drawingPanel,scrollClipTop,scrollClipBottom);}
         Control(int x,int y,int width,int height,Runnable action,Runnable back,String tip){this(x,placed(y,height),width,height,action,back,tip,drawingPanel,scrollClipTop,scrollClipBottom);}
-        boolean contains(double px,double py){if(!WorkspaceLayout.visible(panel))return false;var point=WorkspaceLayout.inverse(panel,px,py);return point[0]>=x&&point[1]>=y&&point[0]<x+width&&point[1]<y+height&&point[1]>=clipTop&&point[1]<clipBottom;}
+        boolean contains(double px,double py){if(!WorkspaceLayout.visible(panel))return false;var point=WorkspaceLayout.inverse(panel,px,py);return point[0]>=x&&point[1]>=y&&point[0]<x+width&&point[1]<y+height&&point[1]>=clipTop&&point[1]<clipBottom&&!WorkspaceLayout.hiddenByFold(panel,point[1]);}
     }
     // While a panel's contents scroll, controls are made where they are drawn (shifted) and only answer inside the visible part.
     private static boolean scrollActive;
@@ -210,7 +210,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(transform)transform(g);
         if((panels||transform) && menu<0 && !help)for(var field:fields.entrySet()) {
             if(transform != (field.getKey().startsWith("offset")||field.getKey().equals("copies")))continue;
-            String panel=WorkspaceLayout.fieldPanel(field.getKey());if(!WorkspaceLayout.visible(panel))continue;g.pose().pushMatrix();WorkspaceLayout.apply(g,panel);var point=WorkspaceLayout.inverse(panel,mx,my);
+            String panel=WorkspaceLayout.fieldPanel(field.getKey());if(!WorkspaceLayout.visible(panel)||WorkspaceLayout.folded(panel))continue;g.pose().pushMatrix();WorkspaceLayout.apply(g,panel);var point=WorkspaceLayout.inverse(panel,mx,my);
             var f=field.getValue();if(!fieldShown(field.getKey(),f)){g.pose().popMatrix();continue;}
             g.fill(f.getX()-3,f.getY()-4,f.getX()+f.getWidth()+3,f.getY()+14,0xff1b2838);
             if(f.isFocused())g.outline(f.getX()-4,f.getY()-5,f.getWidth()+8,20,ACCENT);
@@ -286,16 +286,18 @@ public final class EditorScreen extends CraftiumScreen {
             WorkspaceLayout.prepare(id,x,y,width,height);drawingPanel=id;g.pose().pushMatrix();WorkspaceLayout.apply(g,id);
             if(!WorkspaceLayout.visible(id)){g.enableScissor(0,0,0,0);panelScissor=true;}
             width=WorkspaceLayout.width(id,width);height=WorkspaceLayout.height(id,height);
+            if(!panelScissor&&WorkspaceLayout.folded(id)){g.enableScissor(x,y,x+width,y+WorkspaceLayout.TITLE);panelScissor=true;} // folded: only the title bar shows
         }
         pw=width;ph=height;pb=y+height;
-        g.fill(x,y,x+width,y+height,BG);g.outline(x,y,width,height,LINE);
+        boolean folded=!id.isBlank()&&WorkspaceLayout.folded(id);int shown=folded?WorkspaceLayout.TITLE:height;
+        g.fill(x,y,x+width,y+shown,BG);g.outline(x,y,width,shown,LINE);
         g.fill(x+1,y+1,x+width-1,y+18,0xff202a37);g.fill(x+1,y+1,x+3,y+18,ACCENT);
-        text(g,"▾",x+7,y+6,MUTED);text(g,title,x+17,y+6,TEXT);
-        if(!id.isBlank()){text(g,"×",x+width-12,y+5,MUTED);controls.add(new Control(x+width-17,y+2,15,14,()->WorkspaceLayout.toggle(id),""));boolean grip=resizeGripHovered(id);g.fill(x+width-6,y+height-6,x+width-2,y+height-2,grip||id.equals(draggedPanel)&&resizePanel?ACCENT:LINE);}
+        text(g,folded?"▸":"▾",x+7,y+6,MUTED);text(g,title,x+17,y+6,TEXT);
+        if(!id.isBlank()){text(g,"×",x+width-12,y+5,MUTED);controls.add(new Control(x+width-17,y+2,15,14,()->WorkspaceLayout.toggle(id),""));controls.add(new Control(x+3,y+2,14,14,()->WorkspaceLayout.fold(id),folded?"Unfold this window":"Fold this window up to its title bar"));if(!folded){boolean grip=resizeGripHovered(id);g.fill(x+width-6,y+height-6,x+width-2,y+height-2,grip||id.equals(draggedPanel)&&resizePanel?ACCENT:LINE);}}
     }
     /** The size of the panel being drawn, and where its bottom edge is; contents lay out against these, never against fixed sizes. */
     private int pw,ph,pb;
-    private boolean resizeGripHovered(String id){var r=WorkspaceLayout.windows.get(id);return r!=null&&r.visible&&draggedPanel.isBlank()&&mx>r.x+r.w-12&&mx<r.x+r.w&&my>r.y+r.h-12&&my<r.y+r.h;}
+    private boolean resizeGripHovered(String id){var r=WorkspaceLayout.windows.get(id);return r!=null&&r.visible&&!r.folded&&draggedPanel.isBlank()&&mx>r.x+r.w-12&&mx<r.x+r.w&&my>r.y+r.h-12&&my<r.y+r.h;}
     /** Splits {@code total} into one width per weight with {@code gap} between them: a flex row. The last takes the rounding. */
     private static int[] flex(int total,int gap,int... weights){
         int sum=0;for(int weight:weights)sum+=weight;
@@ -1679,7 +1681,7 @@ public final class EditorScreen extends CraftiumScreen {
                 for(var entry:fields.entrySet()){
                     EditBox field=entry.getValue();field.setFocused(false);
                     if(transform != (entry.getKey().startsWith("offset")||entry.getKey().equals("copies")))continue;
-                    String panel=WorkspaceLayout.fieldPanel(entry.getKey());if(!WorkspaceLayout.visible(panel))continue;var point=WorkspaceLayout.inverse(panel,x,y);
+                    String panel=WorkspaceLayout.fieldPanel(entry.getKey());if(!WorkspaceLayout.visible(panel)||WorkspaceLayout.folded(panel))continue;var point=WorkspaceLayout.inverse(panel,x,y);
                     if(fieldShown(entry.getKey(),field)&&point[0]>=field.getX()-3&&point[0]<field.getX()+field.getWidth()+3&&point[1]>=field.getY()-4&&point[1]<field.getY()+15)selected=field;
                 }
                 if(selected!=null){selected.setFocused(true);String id="";for(var entry:fields.entrySet())if(entry.getValue()==selected)id=entry.getKey();var point=WorkspaceLayout.inverse(WorkspaceLayout.fieldPanel(id),x,y);selected.mouseClicked(new MouseButtonEvent(point[0],point[1],event.buttonInfo()),doubleClick);return true;}
@@ -1688,7 +1690,7 @@ public final class EditorScreen extends CraftiumScreen {
             for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(c.contains(x,y)){c.action.run();return true;}}
             if(help||transform)return true;if(menu>=0){menu=-1;return true;}
             if(panels){String id=WorkspaceLayout.hit(x,y,true);if(!id.isBlank()){var r=WorkspaceLayout.windows.get(id);draggedPanel=id;resizePanel=false;dragOriginX=r.x;dragOriginY=r.y;dragPointerX=x;dragPointerY=y;return true;}
-                id=WorkspaceLayout.hit(x,y,false);if(!id.isBlank()){var r=WorkspaceLayout.windows.get(id);if(x>r.x+r.w-12&&y>r.y+r.h-12){draggedPanel=id;resizePanel=true;dragOriginX=r.w;dragOriginY=r.h;dragPointerX=x;dragPointerY=y;return true;}}
+                id=WorkspaceLayout.hit(x,y,false);if(!id.isBlank()){var r=WorkspaceLayout.windows.get(id);if(!r.folded&&x>r.x+r.w-12&&y>r.y+r.h-12){draggedPanel=id;resizePanel=true;dragOriginX=r.w;dragOriginY=r.h;dragPointerX=x;dragPointerY=y;return true;}}
             }
         }
         if(event.button()==1&&!help&&!transform&&menu<0)for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(c.contains(x,y)){if(c.back!=null){c.back.run();return true;}break;}} // a cycling button steps back
@@ -2078,7 +2080,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             text(g,shorten(label,pw-124),x+34,ry+6,entry.active()?TEXT:MUTED);
             // later controls win where they overlap, so the row comes first and the cells and buttons on it after
             controls.add(new Control(x+9,ry,pw-18,rowHeight,()->action(entry.active()&&!entry.editing()?"saved_selection:release":"saved_selection:view:"+id),entry.active()&&!entry.editing()?"Let go: your own selection comes back":"Show this selection in place of yours. Click it again to get yours back · It is a copy: changes you make while it is shown are not kept"));
-            controls.add(new Control(x+14,ry+4,14,rowHeight-8,()->ClientCompat.setScreen(minecraft,SelectionOptionsScreen.saved(this,id,entry.name())),"Change this selection's outline colour"));
+            controls.add(new Control(x+14,ry+4,14,rowHeight-8,()->ColourPickerScreen.open(this,entry.name()+" colour",()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0)),"Change this selection's outline colour"));
             int eye=x+pw-72,pencil=x+pw-50,cross=x+pw-28;boolean hidden=ClientState.savedHidden(id);
             button(g,eye,ry+2,18,rowHeight-4,"",false,()->ClientState.toggleSavedHidden(id),hidden?"Show this selection in the world":"Hide this selection in the world · It stays saved, and shows while you look at it or edit it");
             glyph(g,eye,ry+2,18,rowHeight-4,EYE,hidden?0xff56606e:TEXT);
