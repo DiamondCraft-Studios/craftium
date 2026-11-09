@@ -31,7 +31,7 @@ public final class BrushPreview {
 
     public static void draw(Minecraft mc,BlockPos at,Options o){
         if(mc.level==null)return;
-        var now=List.<Object>of(o.tool.brushUse(),o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.outline,o.sizeX,o.sizeY,o.sizeZ,at,shownBlocks>Selection.LIMIT?0:mc.level.getGameTime()/20); // a huge brush is not worked out again every second
+        var now=List.<Object>of(o.tool.brushUse(),o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.polygonSeed,o.starInner,o.outline,o.sizeX,o.sizeY,o.sizeZ,at,shownBlocks>Selection.LIMIT?0:mc.level.getGameTime()/20); // a huge brush is not worked out again every second
         if(!now.equals(key)){key=now;rebuild(mc,at,o);}
         if(tooLarge){Overlay.box(new AABB(at).inflate(o.radius),o.hoverColor,1.5f,0);return;} // too large to work out: the box it fits in
         int fill=o.hoverColor&0xffffff|SceneShape.FACE_ALPHA;
@@ -54,7 +54,7 @@ public final class BrushPreview {
                 case SMALL_SHAPE->BrushMath.brush(origin,Math.min(o.radius,4),o.shape,o.hollow,o.outlineThickness,o.pixelPerfect);
                 case DISC->BrushMath.brush(origin,o.radius,BrushMath.Shape.DISK,false,1,false,0,BrushMath.DEFAULT_SIDES,false,MAX_BLOCKS);
                 case SPHERE->BrushMath.brush(origin,o.radius,BrushMath.Shape.SPHERE,false,1,false,0,BrushMath.DEFAULT_SIDES,false,MAX_BLOCKS);
-                default->dev.craftium.core.ShapeSizes.isDefault(o)?BrushMath.brush(origin,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline,MAX_BLOCKS):dev.craftium.core.Geometry.shape(origin,o); // a shape with its own sizes is made the way the server makes it
+                default->dev.craftium.core.ShapeSizes.isDefault(o)?BrushMath.brush(origin,o.radius,o.shape,o.hollow,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,o.outline,MAX_BLOCKS,o.form()):dev.craftium.core.Geometry.shape(origin,o); // a shape with its own sizes is made the way the server makes it
             };
         }
         catch(IllegalArgumentException e){tooLarge=true;shownBlocks=MAX_BLOCKS;return;}

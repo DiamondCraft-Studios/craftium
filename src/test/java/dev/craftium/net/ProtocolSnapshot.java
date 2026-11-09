@@ -559,6 +559,7 @@ final class ProtocolSnapshot {
         enum dev.craftium.core.Tool.MOVE
         enum dev.craftium.core.Tool.NOISE_PAINTER
         enum dev.craftium.core.Tool.PAINTER
+        enum dev.craftium.core.Tool.PAINT_BUCKET
         enum dev.craftium.core.Tool.PATH
         enum dev.craftium.core.Tool.PIVOT
         enum dev.craftium.core.Tool.ROCK

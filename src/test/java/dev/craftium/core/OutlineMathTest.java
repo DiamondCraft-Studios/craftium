@@ -24,7 +24,7 @@ class OutlineMathTest {
 
     @Test void noPathFromOutsideReachesTheBlocksTheOutlineLeavesOut() {
         for (var shape : BrushMath.Shape.values()) for (int r : new int[]{3, 6, 10}) {
-            if (shape == BrushMath.Shape.PLANE || shape == BrushMath.Shape.DISK || shape == BrushMath.Shape.POLYGON) continue; // a sheet's outline is its edge, and its face is open by nature
+            if (shape == BrushMath.Shape.PLANE || shape == BrushMath.Shape.DISK || shape == BrushMath.Shape.POLYGON || shape == BrushMath.Shape.IRREGULAR_POLYGON || shape == BrushMath.Shape.STAR) continue; // a sheet's outline is its edge, and its face is open by nature
             var s = solid(shape, r); var outline = thin(shape, r, 1);
             // Fill from outside through every cell that is not part of the outline, a face at a time.
             var seen = new HashSet<Point>(); var queue = new ArrayDeque<Point>();

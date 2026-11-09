@@ -190,7 +190,7 @@ public final class EditorServer {
             s.confirmEdits=o.confirmEdits;
             s.currentAction=r.action();s.recordSelection=changesSelection(r.action(),o);
             // The builder and the clipboard placement preview have their own confirmation, and dropping a block in the world is one, so they apply straight away.
-            s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("bucket_fill")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm")||r.action().equals("stroke_end")||r.action().equals("use")&&(o.tool==Tool.EXTRUDE||o.tool==Tool.FLOODFILL)
+            s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("bucket_fill")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm")||r.action().equals("stroke_end")||r.action().equals("use")&&(o.tool==Tool.EXTRUDE||o.tool==Tool.FLOODFILL||o.tool==Tool.PAINT_BUCKET)
                 ||!o.enterToBuild&&!r.action().equals("use"); // with Enter to build off, a stroke is staged until the button is let go (stroke_end) and any other action is built at once
             if(r.action().equals("status")) { s.sharedKey=null;s.sentAi.clear();send(player,s,"Ready",false);return; }
             if(r.action().equals("capabilities")){send(player,s,"Builder capabilities synchronized",false);return;}
@@ -472,8 +472,12 @@ public final class EditorServer {
                     Session.SelectionChange selected=null;
                     if(r.action().equals("paste_select")){ // the pasted blocks become the selection, and undo takes it back
                         var before=new ArrayList<>(s.selection.points());
+                        var handlesBefore=Map.of("corners",s.cornersNow);
                         s.selection.combine(placed,Selection.Mode.REPLACE);
-                        selected=new Session.SelectionChange(before,new ArrayList<>(placed));
+                        // The box handles belonged to the selection that was there, so they go with it: the pasted blocks are the selection now, and undo gives the old one back with its handles.
+                        s.corner=null;s.cornersNow=s.cornersHistory="none";s.historySelection=new ArrayList<>(placed);s.historyRevision=s.selection.revision();
+                        s.restoreUpdate=dev.craftium.core.Restore.encode(Map.of("corners","none"));
+                        selected=new Session.SelectionChange(before,new ArrayList<>(placed),null,null,handlesBefore,Map.of("corners","none"));
                     }
                     var edit=plan.finish("Paste clipboard");start(player,s,new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),o.pasteEntities?ClipboardEntities.paste(player,s,origin):List.of(),List.of(),selected));
                 }
@@ -507,23 +511,8 @@ public final class EditorServer {
                         start(player,s,plan.finish("Fill selection"));
                         return;
                     }
-                    var origin=plan.state(target);
-                    if(origin.isAir())throw new IllegalArgumentException("Drop the block onto a block, not empty space");
-                    var found=MagicWand.select(target,new MagicWand.World(){
-                        public boolean loaded(Point at){return player.level().hasChunk(at.x()>>4,at.z()>>4);}
-                        public boolean air(Point at){return plan.state(at).isAir();}
-                        public boolean matches(Point at){return plan.state(at).is(origin.getBlock());}
-                        public boolean surface(Point at){return plan.surface(at);}
-                    },new MagicWand.Params(o.selectLimit,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,128,Selection.LIMIT*4)).found();
-                    if(found.isEmpty())throw new IllegalArgumentException("Bucket fill found no connected blocks there; check the Magic Wand range and surface settings");
-                    for(Point at:found)plan.put(at,plan.preserve(plan.state(at),plan.material));
-                    if(plan.changes.isEmpty()){
-                        String why=origin.getBlock()==plan.material.getBlock()?"those blocks are already that block"
-                            :!BlockMask.of(o).allows(origin)||!o.mask.isBlank()?"the block mask excludes them"
-                            :o.inSelection?"Only in selection is on":"the Y range, or the block can't be placed there (enable force place)";
-                        throw new IllegalArgumentException("Bucket fill changed nothing: "+why+" ("+found.size()+" blocks matched)");
-                    }
-                    start(player,s,plan.finish("Bucket fill"));
+                    if(plan.state(target).isAir())throw new IllegalArgumentException("Drop the block onto a block, not empty space");
+                    start(player,s,BuiltinTools.bucketFill(player,plan,o,target,Options.Compare.BLOCK,"Bucket fill"));
                 }
                 default -> throw new IllegalArgumentException("Unknown editor action");
             }

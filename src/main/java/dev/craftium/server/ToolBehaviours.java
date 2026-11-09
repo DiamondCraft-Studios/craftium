@@ -16,6 +16,7 @@ final class ToolBehaviours {
         BUILTIN.put(Tool.BOX_SELECT, BuiltinTools.BOX_SELECT);
         BUILTIN.put(Tool.FREEHAND_SELECT, BuiltinTools.FREEHAND_SELECT);
         BUILTIN.put(Tool.MAGIC_SELECT, BuiltinTools.MAGIC_SELECT);
+        BUILTIN.put(Tool.PAINT_BUCKET, BuiltinTools.PAINT_BUCKET);
         BUILTIN.put(Tool.RULER, BuiltinTools.RULER);
         BUILTIN.put(Tool.LINE, BuiltinTools.LINE);
         BUILTIN.put(Tool.SHAPE, BuiltinTools.SHAPE);
