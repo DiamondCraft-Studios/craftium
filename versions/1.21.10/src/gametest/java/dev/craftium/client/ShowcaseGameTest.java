@@ -65,19 +65,23 @@ public final class ShowcaseGameTest implements net.fabricmc.fabric.api.client.ga
 
         // A job: two rooms with several angles each, and a third far outside the loaded chunks that has to fail clearly without stopping the rest.
         w.getServer().runCommand("fill " + (cx + 14) + " " + g + " " + cz + " " + (cx + 18) + " " + (g + 4) + " " + (cz + 4) + " emerald_block");
+        // A third room with a low wall along its south side, where the "south" camera stands: the low view is blocked and has to be raised.
+        w.getServer().runCommand("fill " + (cx - 18) + " " + g + " " + cz + " " + (cx - 14) + " " + (g + 4) + " " + (cz + 4) + " emerald_block");
+        w.getServer().runCommand("fill " + (cx - 26) + " " + g + " " + (cz + 7) + " " + (cx - 6) + " " + (g + 2) + " " + (cz + 7) + " stone_bricks");
         c.waitTicks(20);
         var request = com.google.gson.JsonParser.parseString("{\"job\":\"gametest-job\",\"rooms\":["
             + "{\"name\":\"Tower\",\"from\":[" + (cx - 1) + "," + g + "," + (cz - 1) + "],\"to\":[" + (cx + 1) + "," + (g + 7) + "," + (cz + 1) + "],\"shots\":[\"hero\",\"south\",{\"name\":\"overhead\",\"preset\":\"top\"}]},"
             + "{\"name\":\"Annex\",\"from\":[" + (cx + 14) + "," + g + "," + cz + "],\"to\":[" + (cx + 18) + "," + (g + 4) + "," + (cz + 4) + "],\"shots\":[\"hero\",{\"name\":\"close\",\"preset\":\"east\",\"fov\":50}]},"
+            + "{\"name\":\"Walled\",\"from\":[" + (cx - 18) + "," + g + "," + cz + "],\"to\":[" + (cx - 14) + "," + (g + 4) + "," + (cz + 4) + "],\"shots\":[\"south\"]},"
             + "{\"name\":\"Faraway\",\"from\":[" + (cx + 5000) + "," + g + "," + cz + "],\"to\":[" + (cx + 5004) + "," + (g + 4) + "," + (cz + 4) + "],\"shots\":[\"hero\"]}]}").getAsJsonObject();
         c.runOnClient(mc -> { try { dev.craftium.client.showcase.ShowcaseJobs.start(request); } catch (java.io.IOException e) { throw new AssertionError(e); } });
         c.waitFor(mc -> !"running".equals(dev.craftium.client.showcase.ShowcaseJobs.status().get("state").getAsString()), 6000);
         var status = c.computeOnClient(mc -> dev.craftium.client.showcase.ShowcaseJobs.status());
         require("done".equals(status.get("state").getAsString()), "The job ended as " + status);
-        require(status.get("total").getAsInt() == 6 && status.get("done").getAsInt() == 6, "The job did not go through all six shots: " + status);
+        require(status.get("total").getAsInt() == 7 && status.get("done").getAsInt() == 7, "The job did not go through all seven shots: " + status);
         require(status.get("failed").getAsInt() == 1, "Exactly the far room should have failed: " + status);
         var folder = Path.of(status.get("folder").getAsString());
-        for (var name : new String[]{"tower/tower_hero.png", "tower/tower_south.png", "tower/tower_overhead.png", "annex/annex_hero.png", "annex/annex_close.png"}) {
+        for (var name : new String[]{"tower/tower_hero.png", "tower/tower_south.png", "tower/tower_overhead.png", "annex/annex_hero.png", "annex/annex_close.png", "walled/walled_south.png"}) {
             require(Files.size(folder.resolve(name)) > 10_000, name + " was not saved");
             require(goldOrGreen(folder.resolve(name)) > 300, name + " does not show the build it is of");
         }
@@ -86,13 +90,30 @@ public final class ShowcaseGameTest implements net.fabricmc.fabric.api.client.ga
         for (var shot : status.getAsJsonArray("shots")) if (!shot.getAsJsonObject().get("ok").getAsBoolean()) error = shot.getAsJsonObject().get("error").getAsString();
         require(error != null && error.contains("not loaded"), "The far room's failure did not say the chunk is not loaded: " + error);
         var manifest = com.google.gson.JsonParser.parseString(Files.readString(folder.resolve("manifest.json"))).getAsJsonObject();
-        require("done".equals(manifest.get("state").getAsString()) && manifest.getAsJsonArray("shots").size() == 6, "manifest.json is incomplete");
+        require("done".equals(manifest.get("state").getAsString()) && manifest.getAsJsonArray("shots").size() == 7, "manifest.json is incomplete");
+        // The walled room's low view was blocked, so it was retaken from higher up; the open rooms were left alone.
+        for (var shot : status.getAsJsonArray("shots")) {
+            var o = shot.getAsJsonObject();
+            if (!o.get("ok").getAsBoolean()) continue;
+            var occlusion = o.getAsJsonObject("occlusion");
+            if (o.get("room").getAsString().equals("walled")) {
+                require(occlusion.has("raised") && occlusion.get("raised").getAsBoolean(), "The walled room's blocked view was not raised: " + occlusion);
+                require(occlusion.get("blockedBeforeRetry").getAsInt() >= 4 && occlusion.get("blocked").getAsInt() < occlusion.get("blockedBeforeRetry").getAsInt(), "Raising did not clear the view: " + occlusion);
+            } else {
+                require(!occlusion.has("raised") && !occlusion.has("hidden"), o.get("file").getAsString() + " was judged blocked in open ground: " + occlusion);
+            }
+        }
+        // A contact sheet of the tower's three angles: one image, no wider than 1024, saved beside them.
+        var sheet = dev.craftium.client.showcase.ShowcaseSheets.build(c.computeOnClient(mc -> dev.craftium.client.showcase.ShowcaseJobs.sheetSources("Tower")));
+        require(sheet.get("width").getAsInt() == 1024 && sheet.getAsJsonArray("thumbnails").size() == 3, "The contact sheet is not 1024 wide with three thumbnails: " + sheet.get("width") + " " + sheet.get("thumbnails"));
+        require(Files.size(folder.resolve("tower/contact-sheet.jpg")) > 5_000, "The contact sheet was not saved");
+        require(java.util.Base64.getDecoder().decode(sheet.get("image").getAsString()).length == Files.size(folder.resolve("tower/contact-sheet.jpg")), "The returned sheet is not the saved one");
         // Taking it again with resume must find every saved picture and take none of them twice.
         c.runOnClient(mc -> { request.addProperty("resume", true); try { dev.craftium.client.showcase.ShowcaseJobs.start(request); } catch (java.io.IOException e) { throw new AssertionError(e); } });
         c.waitFor(mc -> !"running".equals(dev.craftium.client.showcase.ShowcaseJobs.status().get("state").getAsString()), 6000);
         int skipped = 0;
         for (var shot : c.computeOnClient(mc -> dev.craftium.client.showcase.ShowcaseJobs.status()).getAsJsonArray("shots")) if (shot.getAsJsonObject().has("skipped")) skipped++;
-        require(skipped == 5, "Resuming should have skipped the five saved pictures, skipped " + skipped);
+        require(skipped == 6, "Resuming should have skipped the six saved pictures, skipped " + skipped);
 
         var after = c.computeOnClient(mc -> new Before(mc.player.getX(), mc.player.getY(), mc.player.getZ(), mc.player.getYRot(), mc.player.getXRot(),
             mc.options.fov().get(), dev.craftium.client.compat.ClientCompat.hudHidden(mc), mc.player.isInvisible(), mc.getCameraEntity(), mc.getWindow().getWidth(), mc.getWindow().getHeight()));
