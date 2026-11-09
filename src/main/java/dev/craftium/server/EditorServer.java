@@ -231,14 +231,14 @@ public final class EditorServer {
             if(!replaying&&!r.action().equals("builder_commit")&&now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             if(!popup)s.lastRequest=now;
             if(r.action().equals("tool_preview")){toolPreview(player,s,o,r.target(),r.normal());return;} // the ghost of a plugin's tool, which is not an edit and answers with the ghost alone
+            if(r.action().startsWith(SavedSelectionActions.PREFIX)){ // the Selections window (before the plugin actions, as "saved_selection:save" has the shape of one): swaps entries in and out of the live selection, never changes a block
+                if(!Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS))throw new IllegalArgumentException("This client does not know saved selections");
+                send(player,s,SavedSelectionActions.run(s,r.action()),false);return;
+            }
             if(ActionRegistry.isNamespaced(r.action())){ // an action of a plugin's: only the registry answers, and a name nobody registered is an error, never one of the editor's
                 var handler=ActionRegistry.find(r.action());
                 if(handler==null)throw new IllegalArgumentException("Unknown action "+r.action());
                 handler.run(new ActionUse(player,s,o,r.target(),r.normal()));return;
-            }
-            if(r.action().startsWith(SavedSelectionActions.PREFIX)){ // the Selections window: swaps entries in and out of the live selection, never changes a block
-                if(!Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS))throw new IllegalArgumentException("This client does not know saved selections");
-                send(player,s,SavedSelectionActions.run(s,r.action()),false);return;
             }
             if(r.action().equals("selection_restore")){
                 if(!s.undo.isEmpty()&&s.undo.peekFirst().selectionOnly())s.undo.removeFirst();

@@ -39,4 +39,9 @@ class SavedSelectionActionsTest {
         SavedSelectionActions.run(s,"saved_selection:rename:"+id+":Roof: east side");
         assertEquals("Roof: east side",s.saved.entries().getFirst().name());
     }
+    /** "saved_selection:save" has the shape of a plugin's action, so the server must route it before asking the plugin registry; this pins the shape that made that matter. */
+    @Test void theShortActionsLookLikePluginActions(){
+        assertTrue(ActionRegistry.isNamespaced("saved_selection:save"));assertTrue(ActionRegistry.isNamespaced("saved_selection:release"));
+        assertTrue(SavedSelectionActions.PREFIX.equals("saved_selection:"));
+    }
 }
