@@ -312,7 +312,13 @@ public final class AiBridge {
                 if (serverSupported() && ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SESSIONS)) request("ai_selection_pin", () -> CraftiumClient.sendAi("ai_selection_pin", callSession, callLabel));
                 yield onClient(() -> state(true));
             }
-            case "read_selection" -> read(args.has("refresh") && args.get("refresh").isJsonPrimitive() && args.get("refresh").getAsBoolean() ? "ai_selection_refresh" : "ai_selection", null, null);
+            case "read_selection" -> {
+                if (args.has("name") && args.get("name").isJsonPrimitive()) {
+                    if (!ClientHandshake.serverHas(dev.craftium.core.Handshake.SAVED_SELECTIONS)) throw new IllegalStateException("This server does not have saved selections: update Craftium on it, or read the player's selection without a name");
+                    yield read("ai_selection_named:" + args.get("name").getAsString(), null, null);
+                }
+                yield read(args.has("refresh") && args.get("refresh").isJsonPrimitive() && args.get("refresh").getAsBoolean() ? "ai_selection_refresh" : "ai_selection", null, null);
+            }
             case "get_preview_blocks" -> {
                 var from = point(args, "from"); var to = point(args, "to");
                 String view = args.has("view") ? args.get("view").getAsString() : "after";
@@ -534,6 +540,24 @@ public final class AiBridge {
             }
         }
         out.add("selection", selection);
+        // The selections the player saved by name in the Selections window: each can be read and worked on by its name.
+        var saved = new JsonArray();
+        for (var s : ClientState.savedSelections()) {
+            var entry = new JsonObject();
+            entry.addProperty("name", s.name());
+            entry.addProperty("blocks", s.size());
+            if (s.size() > 0 && s.min() != null && s.max() != null) {
+                entry.add("min", array(s.min().x(), s.min().y(), s.min().z()));
+                entry.add("max", array(s.max().x(), s.max().y(), s.max().z()));
+                entry.add("dimensions", array(s.max().x() - s.min().x() + 1, s.max().y() - s.min().y() + 1, s.max().z() - s.min().z() + 1));
+            }
+            if (s.active()) entry.addProperty("shownByPlayer", s.editing() ? "editing" : "viewing");
+            saved.add(entry);
+        }
+        if (saved.size() > 0) {
+            out.add("savedSelections", saved);
+            out.addProperty("savedSelectionsNote", "The player saved these selections by name. Read one with read_selection and its name, and work on one with replace_selection's \"selection\" field; one build can use several, each by its own name. When the player says \"selection 1\" they mean the one with that name.");
+        }
         var mine = ClientState.aiSession(callSession);
         previewReport(out, mine == null ? GhostBlocks.EMPTY : mine.ghost());
         out.addProperty("undoSteps", mine == null ? 0 : mine.info().undo());

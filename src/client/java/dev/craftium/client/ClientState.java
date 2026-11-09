@@ -41,6 +41,45 @@ public final class ClientState {
         pluginTools=List.copyOf(PluginToolCodec.fromWire(status.pluginTools()));
     }
     static void clearPluginTools(){pluginTools=List.of();}
+    /** The selections the player saved, as the server last said; empty on a server that has none or does not know them. */
+    private static List<Packets.SavedSelection> savedSelections=List.of();
+    public static List<Packets.SavedSelection> savedSelections(){return savedSelections;}
+    /** The outline colour of each saved selection by id. A colour belongs to the client: it starts as the selection colour turned by the golden angle for each one saved before it, and the player can change it. */
+    private static final Map<Integer,Integer> savedColors=new HashMap<>();
+    /** The place in the hue wheel each entry's starting colour was taken from. */
+    private static final Map<Integer,Integer> savedIndex=new HashMap<>();
+    /** Takes in the saved selections a status carries. A status that does not carry them (null) leaves them as they were. */
+    static void updateSavedSelections(Packets.Status status){
+        if(status.savedSelections()==null)return;
+        savedSelections=List.copyOf(status.savedSelections());
+        var present=new HashSet<Integer>();
+        for(var saved:savedSelections){
+            present.add(saved.id());
+            if(saved.data()==null)continue; // unchanged: the outline already made for it is still right
+            if(saved.data().isEmpty())savedShapes.remove(saved.id()); // left out because the status was too big: nothing is drawn for it
+            else savedShapes.put(saved.id(),OutlineShape.ofLater(SelectionCodec.decode(saved.data())));
+        }
+        savedShapes.keySet().retainAll(present);
+        // an entry seen for the first time takes the lowest place on the wheel that no entry here uses, so colours are reused as entries go and the first one is the selection colour again
+        for(var saved:savedSelections){
+            if(savedColors.containsKey(saved.id()))continue;
+            var used=new HashSet<Integer>();for(var other:savedSelections){var at=savedIndex.get(other.id());if(at!=null)used.add(at);}
+            int index=0;while(used.contains(index))index++;
+            savedIndex.put(saved.id(),index);savedColors.put(saved.id(),dev.craftium.core.SavedSelectionColors.forIndex(options.selectionColor,index));
+        }
+    }
+    /** The outline of each saved selection by id, drawn in the selection style. A selection with none is drawn as a box. */
+    private static final Map<Integer,OutlineShape> savedShapes=new HashMap<>();
+    static OutlineShape savedShape(int id){return savedShapes.get(id);}
+    /** The saved selections the player hid with the eye. Like the colours, they are kept by id when an entry is deleted, so Undo brings one back as it was. */
+    private static final Set<Integer> savedHidden=new HashSet<>();
+    public static boolean savedHidden(int id){return savedHidden.contains(id);}
+    public static void toggleSavedHidden(int id){if(!savedHidden.remove(id))savedHidden.add(id);}
+    static void clearSavedSelections(){savedSelections=List.of();savedColors.clear();savedHidden.clear();savedShapes.clear();savedIndex.clear();}
+    public static int savedColor(int id){return savedColors.getOrDefault(id,options.selectionColor);}
+    public static void setSavedColor(int id,int color){savedColors.put(id,color);}
+    /** The saved selection being looked at or edited, or null. */
+    public static Packets.SavedSelection activeSaved(){for(var saved:savedSelections)if(saved.active())return saved;return null;}
     /** How many blocks the ghost of the plugin tool in use has; 0 when there is none. */
     public static int pluginPreviewBlocks(){return pluginPending.total();}
     static void clearPluginPreview(){pluginPending=GhostBlocks.EMPTY;pluginPendingData="";}

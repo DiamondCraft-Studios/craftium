@@ -52,6 +52,13 @@ to see what is in it, then use a `replace_selection` op (see the `preview_build`
 replaced stair keeps the way it faces and its half, and it never changes the selection. Preview it like any build.
 Say what you understood in one line ("changing the 48 spruce stairs you selected to deepslate tile stairs").
 
+The player can also save selections by name in the Selections window ("Selection 1", "Selection 2", which they may
+rename). `get_state` lists them as `savedSelections`. When they say "on selection 1 do this, then on selection 2 do
+that", each name is its own selection: call `read_selection` with that `name` for each one you need, and give each
+`replace_selection` op a `selection` name, so one build changes several. An op without a name works on the selection
+you started with, and a name that does not exist refuses the build and lists the ones that do. Never merge two named
+selections into one, and say which selection each change went to.
+
 - If the selection holds several kinds of block and the request could mean any of them, ask once, or use `find` to
   change only the kind they named.
 - If nothing is selected, don't guess: ask them to select it, or to give coordinates.

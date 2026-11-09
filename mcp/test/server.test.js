@@ -218,6 +218,31 @@ test("read_selection forwards refresh only when it is true, and rejects anything
   await bridge.close();
 });
 
+test("read_selection reads a saved selection by name and keeps it apart from refresh", async () => {
+  const bridge = await fakeBridge({ read_selection: { ok: true, selected: 4 } });
+  const client = await connect(bridge.file);
+  await client.callTool({ name: "read_selection", arguments: { name: "  Selection 2 " } });
+  assert.deepEqual(bridge.seen[0].body, { name: "Selection 2" });
+  await client.callTool({ name: "read_selection", arguments: { name: "Selection 1" } });
+  assert.deepEqual(bridge.seen[1].body, { name: "Selection 1" }, "two reads stay two separate reads");
+  for (const bad of [{ name: "" }, { name: 3 }, { name: "x".repeat(41) }, { name: "Selection 1", refresh: true }]) {
+    const result = await client.callTool({ name: "read_selection", arguments: bad });
+    assert.equal(result.isError, true, JSON.stringify(bad));
+  }
+  assert.equal(bridge.seen.length, 2, "refused before they reach the game");
+  await bridge.close();
+});
+
+test("the build tool explains how to work on several saved selections in one spec", async () => {
+  const bridge = await fakeBridge({});
+  const client = await connect(bridge.file);
+  const tools = (await client.listTools()).tools;
+  const text = JSON.stringify(tools);
+  assert.match(text, /\\"selection\\":\\"Selection 1\\"/);
+  assert.match(text, /savedSelections/);
+  await bridge.close();
+});
+
 test("bad arguments are rejected before they reach the game", async () => {
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);

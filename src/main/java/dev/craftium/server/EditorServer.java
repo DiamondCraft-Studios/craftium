@@ -231,6 +231,13 @@ public final class EditorServer {
             if(!replaying&&!r.action().equals("builder_commit")&&now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             if(!popup)s.lastRequest=now;
             if(r.action().equals("tool_preview")){toolPreview(player,s,o,r.target(),r.normal());return;} // the ghost of a plugin's tool, which is not an edit and answers with the ghost alone
+            if(r.action().startsWith("ai_selection_named:")){ // one of the player's saved selections, read by the name it has in the Selections window
+                ServerPlatform.send(player,new Packets.AiReply(aiSelectionNamed(player,r.action().substring("ai_selection_named:".length()))));return;
+            }
+            if(r.action().startsWith(SavedSelectionActions.PREFIX)){ // the Selections window (before the plugin actions, as "saved_selection:save" has the shape of one): swaps entries in and out of the live selection, never changes a block
+                if(!Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS))throw new IllegalArgumentException("This client does not know saved selections");
+                send(player,s,SavedSelectionActions.run(s,r.action()),false);return;
+            }
             if(ActionRegistry.isNamespaced(r.action())){ // an action of a plugin's: only the registry answers, and a name nobody registered is an error, never one of the editor's
                 var handler=ActionRegistry.find(r.action());
                 if(handler==null)throw new IllegalArgumentException("Unknown action "+r.action());
@@ -432,7 +439,12 @@ public final class EditorServer {
                     if(top==null||!top.builder()){send(player,s,back?"Nothing to undo in the builder":"Nothing to redo in the builder",false);return;}
                     s.historyRemaining=0;if(back)undoAnimated(player,s);else history(player,s,false);
                 }
-                case "undo", "redo" -> {s.historyRemaining=0;if(r.action().equals("undo"))undoAnimated(player,s);else history(player,s,false);}
+                case "undo", "redo" -> {
+                    s.historyRemaining=0;
+                    // a saved selection deleted after the last edit comes back first: Undo takes back the most recent thing
+                    if(r.action().equals("undo")&&s.saved.undoDelete(s.undo.isEmpty()?0:s.undo.peekFirst().time())!=null){send(player,s,"Saved selection back",false);return;}
+                    if(r.action().equals("undo"))undoAnimated(player,s);else history(player,s,false);
+                }
                 case "fill", "delete" -> {
                     requireSelection(s);var plan=new EditPlanner(player.level(),s,o);
                     boolean deleting=r.action().equals("delete");
@@ -758,6 +770,23 @@ public final class EditorServer {
         }
         return AiWorld.selection(player,ai.pinned,extra);
     }
+    /** The blocks of the player's saved selection with that name (any case), or an error that says which names there are. */
+    private static Set<Point> savedByName(ServerPlayer player,String name){
+        var mine=SESSIONS.get(player.getUUID());var entry=mine==null?null:mine.saved.byName(name);
+        if(entry==null){
+            var names=mine==null?List.<String>of():mine.saved.entries().stream().map(e->e.name()).toList();
+            throw new IllegalArgumentException("The player has no saved selection named \""+name+"\". "+(names.isEmpty()?"They have saved none: ask them to select the blocks and press Save selection in the Selections window":"They have: "+String.join(", ",names)));
+        }
+        return new LinkedHashSet<>(entry.points());
+    }
+    /** What read_selection answers for a saved selection: the same report as for the selection itself, with its name, and where the player has it. */
+    private static String aiSelectionNamed(ServerPlayer player,String name){
+        var points=savedByName(player,name);var mine=SESSIONS.get(player.getUUID());var entry=mine.saved.byName(name);
+        var extra=new com.google.gson.JsonObject();
+        extra.addProperty("name",entry.name());extra.addProperty("saved",true);
+        if(mine.saved.active()==entry)extra.addProperty("shownByPlayer",mine.saved.editing()?"editing":"viewing");
+        return AiWorld.selection(player,points,extra);
+    }
     /** What a player's session tells the client about each of that player's AI sessions; ghost data only when a preview is new to this player. */
     private static List<Packets.AiSession> aiInfos(ServerPlayer player,Session viewer){
         var out=new ArrayList<Packets.AiSession>();long now=System.currentTimeMillis();var live=new HashSet<String>();
@@ -842,7 +871,7 @@ public final class EditorServer {
                 // Added to the waiting preview, the spec is planned on top of it and the two become one edit, applied and undone as one.
                 var onto=action.equals("ai_build_preview_add")?ai.pendingEdit:null;
                 pinSelection(player,ai,false); // a replace_selection works on the selection this session started with, not on one the player has made since
-                var edit=BuildPlanner.plan(player,ai,o,ai.pinned==null?Set.<Point>of():ai.pinned,onto);
+                var edit=BuildPlanner.plan(player,ai,o,ai.pinned==null?Set.<Point>of():ai.pinned,onto,name->savedByName(player,name));
                 var added=onto==null?edit:addedTo(onto,edit);
                 // Blocks the new spec put back to what the world holds (a doorway carved through a preview wall in open air) leave the edit
                 // altogether, so they are not in "added": count them, or a spec that only carves would look like one that did nothing.
@@ -1125,6 +1154,7 @@ public final class EditorServer {
         var ai=s.ai?s:latestAi(player.getUUID());
         if(s.ai)s=SESSIONS.computeIfAbsent(player.getUUID(),id->new Session());
         noteSelection(s);
+        s.saved.sync(s.selection); // while one is being edited, whatever changed the selection is written to it
         if(!ServerPlatform.canSend(player))return;
         String entityId="",entityNbt="";if(s.selectedEntity!=null){var entity=player.level().getEntity(s.selectedEntity);if(entity!=null){entityId=s.selectedEntity.toString();String nbt=EntityEdits.snapshot(entity,player.level()).toString();if(nbt.length()<12000)entityNbt=nbt;}}
         if(s.selectionRevision!=s.selection.revision()){s.selectionRevision=s.selection.revision();s.selectionData=SelectionCodec.encode(s.selection.points());}
@@ -1133,7 +1163,7 @@ public final class EditorServer {
         if(s.pluginPreviewDirty){s.pluginPreviewData=s.pluginPreview==null?"":GhostCodec.encodeEdit(s.pluginPreview);s.pluginPreviewDirty=false;}
         if(ai!=null)aiData(ai); // one place makes the AI preview's data, so the owner and the players who see it always get the same
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
-        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null||Handshake.clientHas(player.getUUID(),Handshake.AI_SESSIONS)?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin,sharedFor(player,s),false,aiInfos(player,s),s.pluginPreviewData,pluginToolsFor(player,s));s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
+        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null||Handshake.clientHas(player.getUUID(),Handshake.AI_SESSIONS)?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin,sharedFor(player,s),false,aiInfos(player,s),s.pluginPreviewData,pluginToolsFor(player,s),SavedSelectionActions.forStatus(s,Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS)));s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
         // A status that is too long for a packet cannot be written and would drop the player's connection, so one that is too big is sent without the largest drawn data.
         var json=Packets.JSON.toJson(status);var fitted=StatusFit.fit(json,STATUS_LIMIT,"Too big to draw: the selection or preview is still there, but not shown");
         if(fitted.length()!=json.length())s.sentAi.clear(); // what was left out was not drawn, so the next status carries the previews again

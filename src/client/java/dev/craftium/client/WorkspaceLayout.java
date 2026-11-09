@@ -12,7 +12,7 @@ final class WorkspaceLayout {
     private static final Path FILE=FabricLoader.getInstance().getConfigDir().resolve("craftium/layout.json");
     private static boolean loaded;
     private WorkspaceLayout(){}
-    static String key(String title){return switch(title){case "Tools"->"tools";case "Tool options","Builder controls"->"options";case "Target info"->"target";case "Clipboard"->"clipboard";case "Block palette"->"palette";case "History"->"history";case "Tool masks"->"masks";case "Rulers"->"rulers";case "Magic select"->"magic";default->"";};}
+    static String key(String title){return switch(title){case "Tools"->"tools";case "Tool options","Builder controls"->"options";case "Target info"->"target";case "Clipboard"->"clipboard";case "Block palette"->"palette";case "History"->"history";case "Tool masks"->"masks";case "Rulers"->"rulers";case "Magic select"->"magic";case "Selections"->"selections";default->"";};}
     static void prepare(String id,int x,int y,int w,int h){if(id.isBlank())return;if(!loaded){loaded=true;try{if(Files.exists(FILE))importJson(Files.readString(FILE));}catch(Exception e){ClientState.notify("Could not load workspace layout");}}var previous=base.get(id);var window=windows.get(id);if(previous!=null&&window!=null&&previous.x==window.x&&previous.y==window.y&&previous.w==window.w&&previous.h==window.h){window.x=x;window.y=y;window.w=w;window.h=h;}base.put(id,new Rect(x,y,w,h));windows.computeIfAbsent(id,key->fresh(id,x,y,w,h));}
     /** A panel as first laid out: all shown but History and Magic select, which stay out of the way until they are opened from the Window menu. */
     private static Rect fresh(String id,int x,int y,int w,int h){var r=new Rect(x,y,w,h);r.visible=!id.equals("history")&&!id.equals("magic");return r;}
@@ -33,7 +33,7 @@ final class WorkspaceLayout {
     static String json(){var tree=Packets.JSON.toJsonTree(windows).getAsJsonObject();tree.addProperty("_v",VERSION);return Packets.JSON.toJson(tree);}
     static void importJson(String json){var data=Packets.JSON.fromJson(json,com.google.gson.JsonObject.class);var next=new LinkedHashMap<String,Rect>();int saved=data.has("_v")?data.get("_v").getAsInt():0;for(var e:data.entrySet()){
         if(saved<2&&Set.of("masks","palette","history").contains(e.getKey()))continue; // laid out again at their new default places
-        if(!Set.of("tools","options","target","clipboard","palette","history","masks","rulers").contains(e.getKey()))continue;
+        if(!Set.of("tools","options","target","clipboard","palette","history","masks","rulers","selections").contains(e.getKey()))continue;
         var r=Packets.JSON.fromJson(e.getValue(),Rect.class);r.x=Math.clamp(r.x,0,4000);r.y=Math.clamp(r.y,24,3000);r.w=Math.clamp(r.w,110,1600);r.h=Math.clamp(r.h,60,1600);next.put(e.getKey(),r);
     }windows.clear();windows.putAll(next);}
     static String fieldPanel(String field){return switch(field){case "block"->"palette";case "mask","minY","maxY"->"masks";case "offsetX","offsetY","offsetZ","copies"->"";default->"options";};}

@@ -197,7 +197,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
         g.pose().pushMatrix();g.pose().scale(scale,scale);
         topbar(g);
-        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);magicPanel(g);}
+        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);selectionsPanel(g);magicPanel(g);}
         finishPanel(g);
         viewport(g);
         axisGizmo(g);
@@ -1798,6 +1798,7 @@ public final class EditorScreen extends CraftiumScreen {
             return true;
         }
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("palette")){paletteScroll=Math.max(0,paletteScroll+(vertical<0?1:-1));return true;} // clamped when drawn
+        if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("selections")){savedScroll=Math.max(0,savedScroll+(vertical<0?1:-1));return true;}
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("rulers")){rulerScroll=Math.max(0,rulerScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("masks")){maskScroll=Math.max(0,maskScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("tools")){toolScroll=Math.clamp(toolScroll+(vertical<0?1:-1),0,maxToolScroll());return true;}
@@ -2040,6 +2041,53 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             g.fill(x+pw-14,top,x+pw-10,top+track,0xff1b2b40);g.fill(x+pw-14,thumbY,x+pw-10,thumbY+thumb,ACCENT);
         }
         button(g,x+10,y+ph-26,pw-20,20,"Clear all",false,this::clearRulers,"Delete every ruler in this world");
+    }
+    private int savedScroll;
+    private static final String[] PENCIL={"......XX.",".....XXXX","....XXXX.","...XXXX..","..XXXX...",".XXXX....",".XXX.....","XX......."};
+    private static final String[] EYE={"..XXXXX..",".X.....X.","X..XXX..X",".X.....X.","..XXXXX.."};
+    private static final String[] CROSS={"X.......X",".X.....X.","..X...X..","...X.X...","....X....","...X.X...","..X...X..",".X.....X.","X.......X"};
+    /** A small picture drawn pixel by pixel from rows of X, centred on the given box. */
+    private void glyph(Gfx g,int x,int y,int width,int height,String[] rows,int colour){
+        int gw=rows[0].length(),ox=x+(width-gw)/2,oy=y+(height-rows.length)/2;
+        for(int r=0;r<rows.length;r++)for(int c=0;c<gw;c++)if(rows[r].charAt(c)=='X')g.fill(ox+c,oy+r,ox+c+1,oy+r+1,colour);
+    }
+    /** "3 x 4 x 2": how many blocks a saved selection spans along each axis. */
+    private static String savedSpan(dev.craftium.net.Packets.SavedSelection s){return (s.max().x()-s.min().x()+1)+" x "+(s.max().y()-s.min().y()+1)+" x "+(s.max().z()-s.min().z()+1);}
+    /** The Selections panel: every selection saved by name, to look at (click), edit (pencil) or delete (cross). The player's own selection is only swapped out while one is looked at, and given back when it is let go. */
+    private void selectionsPanel(Gfx g){
+        var saved=ClientState.savedSelections();
+        if(saved.isEmpty()&&ClientState.status.selectionSize()==0)return; // nothing to save and nothing saved
+        int x=w-RIGHT-488,y=27;
+        panel(g,x,y,236,230,"Selections");
+        boolean looking=ClientState.activeSaved()!=null;
+        button(g,x+10,y+24,pw-20,19,"Save selection",false,()->action("saved_selection:save"),looking?"Save what is selected now as a new entry. While one is shown, that is a copy of it":"Save what is selected now as a new entry, under the name Selection 1, 2 and so on");
+        int top=y+50,bottom=y+ph-8,rowHeight=20,rows=Math.max(1,(bottom-top)/rowHeight),total=saved.size();
+        g.fill(x+8,top-2,x+pw-8,top+rows*rowHeight+1,0xff141c26);g.outline(x+8,top-2,pw-16,rows*rowHeight+3,LINE);
+        savedScroll=Math.clamp(savedScroll,0,Math.max(0,total-rows));
+        if(total==0)text(g,"Nothing saved yet",x+16,top+6,MUTED);
+        for(int i=0;i<rows&&savedScroll+i<total;i++){
+            var entry=saved.get(savedScroll+i);int ry=top+i*rowHeight,id=entry.id();
+            if(entry.active())g.fill(x+9,ry,x+pw-9,ry+rowHeight,entry.editing()?0xff5b4a84:0xff315b84);
+            int colour=ClientState.savedColor(id);
+            g.fill(x+14,ry+4,x+28,ry+rowHeight-4,0xff000000|colour&0xffffff);g.outline(x+14,ry+4,14,rowHeight-8,LINE);
+            String label=entry.name()+" • "+savedSpan(entry);
+            text(g,shorten(label,pw-124),x+34,ry+6,entry.active()?TEXT:MUTED);
+            // later controls win where they overlap, so the row comes first and the cells and buttons on it after
+            controls.add(new Control(x+9,ry,pw-18,rowHeight,()->action(entry.active()&&!entry.editing()?"saved_selection:release":"saved_selection:view:"+id),entry.active()&&!entry.editing()?"Let go: your own selection comes back":"Show this selection in place of yours. Click it again to get yours back · It is a copy: changes you make while it is shown are not kept"));
+            controls.add(new Control(x+14,ry+4,14,rowHeight-8,()->ClientCompat.setScreen(minecraft,SelectionOptionsScreen.saved(this,id,entry.name())),"Change this selection's outline colour"));
+            int eye=x+pw-72,pencil=x+pw-50,cross=x+pw-28;boolean hidden=ClientState.savedHidden(id);
+            button(g,eye,ry+2,18,rowHeight-4,"",false,()->ClientState.toggleSavedHidden(id),hidden?"Show this selection in the world":"Hide this selection in the world · It stays saved, and shows while you look at it or edit it");
+            glyph(g,eye,ry+2,18,rowHeight-4,EYE,hidden?0xff56606e:TEXT);
+            if(hidden){int ox=eye+(18-9)/2,oy=ry+2+(rowHeight-4-5)/2;for(int k=0;k<9;k++)g.fill(ox+k,oy+4-k/2,ox+k+1,oy+5-k/2,0xffe07070);} // a slash through it
+            button(g,pencil,ry+2,18,rowHeight-4,"",entry.editing(),()->action(entry.editing()?"saved_selection:release":"saved_selection:edit:"+id),entry.editing()?"Stop editing: your own selection comes back":"Edit: show this selection in place of yours, then add to it or take from it with any selection tool. Changes are kept");
+            glyph(g,pencil,ry+2,18,rowHeight-4,PENCIL,TEXT);
+            button(g,cross,ry+2,18,rowHeight-4,"",false,()->action("saved_selection:delete:"+id),"Delete this selection, no questions asked · Ctrl+Z brings it back");
+            glyph(g,cross,ry+2,18,rowHeight-4,CROSS,0xffe07070);
+        }
+        if(total>rows){
+            int track=rows*rowHeight,thumb=Math.max(10,track*rows/total),thumbY=top+(track-thumb)*savedScroll/Math.max(1,total-rows);
+            g.fill(x+pw-14,top,x+pw-10,top+track,0xff1b2b40);g.fill(x+pw-14,thumbY,x+pw-10,thumbY+thumb,ACCENT);
+        }
     }
     public void moveHandle(Point point){if(selectedNode>=0&&selectedNode<handleNodes().size())handleNodes().set(selectedNode,point);}
     private double[] project(Point p){return project(p,0);}
