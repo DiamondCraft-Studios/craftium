@@ -8,6 +8,7 @@ public enum Tool {
     FREEHAND_SELECT("Freehand Select", "FS", "Select", "Brush a selection; use selection mode to add or subtract."),
     RULER("Ruler", "RL", "Utility", "Add measurement points; use the inspector for circles, splits and center selection."),
     PAINTER("Painter", "PA", "Paint", "Paint existing blocks with your active material."),
+    PAINT_BUCKET("Paint Bucket", "PB", "Paint", "Fill the connected blocks you click with your foreground block. Directions and select type work as in the Magic Wand."),
     NOISE_PAINTER("Noise Painter", "NP", "Paint", "Blend two materials with coherent seeded noise."),
     BIOME_PAINTER("Biome Painter", "BP", "Paint", "Paint biome cells inside the brush. Biomes use 4-block cells."),
     CLENTAMINATOR("Clentaminator", "CL", "Paint", "Convert biome and matching surface materials together."),
@@ -75,7 +76,7 @@ public enum Tool {
         var all = new LinkedHashMap<String, List<Tool>>();
         all.put("Select", List.of(BOX_SELECT, MAGIC_SELECT, LASSO_SELECT, FREEHAND_SELECT));
         all.put("Draw", List.of(SHAPE, LINE, PATH, MODELLING, FREEHAND_DRAW, TEXT, ERASE));
-        all.put("Paint", List.of(PAINTER, GRADIENT_PAINTER, NOISE_PAINTER, SCRIPT_BRUSH, BIOME_PAINTER, CLENTAMINATOR));
+        all.put("Paint", List.of(PAINTER, PAINT_BUCKET, GRADIENT_PAINTER, NOISE_PAINTER, SCRIPT_BRUSH, BIOME_PAINTER, CLENTAMINATOR));
         all.put("Sculpt", List.of(SMOOTH, ROUGHEN, DISTORT, MELT, WELD, SHATTER, EXTRUDE, SMEAR, SCULPT_DRAW, MODIFY, STAMP));
         all.put("Terrain", List.of(ELEVATION, FLATTEN, SLOPE, ROCK, FLOODFILL, FLUID_BALL));
         all.put("Utility", List.of(RULER, TINKER, ANNOTATION));

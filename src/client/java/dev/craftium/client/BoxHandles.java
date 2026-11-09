@@ -52,5 +52,7 @@ public final class BoxHandles {
             Overlay.box(new AABB(Math.min(a.x(),b.x()),Math.min(a.y(),b.y()),Math.min(a.z(),b.z()),Math.max(a.x(),b.x())+1,Math.max(a.y(),b.y())+1,Math.max(a.z(),b.z())+1),o.selectionColor,(float)o.selectionWidth,o.selectionFill);
         }
         if(aimed!=null&&!aimed.equals(corners.get(0)))cube(aimed,o.hoverColor,o.hoverFill); // the block the second click would set, as the first was shown before it
+        // A finished box: the next click starts another, so the block it would start on is shown as the very first one was.
+        if(corners.size()==2&&dragged==null&&!TransformGizmo.dragging()&&screen.toolActive()){var hit=screen.target();if(hit!=null)cube(CraftiumClient.point(hit.getBlockPos()),o.hoverColor,o.hoverFill);}
     }
 }

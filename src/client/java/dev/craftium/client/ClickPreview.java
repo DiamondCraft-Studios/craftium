@@ -8,7 +8,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
 /**
- * Outlines what an Extrude or Floodfill click would change, as the cursor moves, as a selection is outlined; a right click then builds it. It runs
+ * Outlines what an Extrude, Floodfill or Paint Bucket click would change, as the cursor moves, as a selection is outlined; a right click then builds it. It runs
  * the very search the server builds from ({@link SurfaceFill}), stopping at a cap so hovering stays cheap on a large face or an open space.
  */
 public final class ClickPreview {
@@ -23,10 +23,10 @@ public final class ClickPreview {
 
     static void draw(Minecraft mc,BlockHitResult hit){
         var o=ClientState.options;var tool=o.tool;
-        if(hit==null||mc.level==null||tool!=Tool.EXTRUDE&&tool!=Tool.FLOODFILL||TransformGizmo.dragging()||PlacementPreview.active()||ClientState.hasPending()){key=null;shape=OutlineShape.EMPTY;return;}
+        if(hit==null||mc.level==null||tool!=Tool.EXTRUDE&&tool!=Tool.FLOODFILL&&tool!=Tool.PAINT_BUCKET||TransformGizmo.dragging()||PlacementPreview.active()||ClientState.hasPending()){key=null;shape=OutlineShape.EMPTY;return;}
         BlockPos at=hit.getBlockPos();Point normal=CraftiumClient.normal(hit);
         // The world can change under a still cursor, so the result is also refreshed about once a second.
-        Object now=List.of(tool,at,normal,o.compare,o.selectLimit,o.extrudeCount,o.extrudeReplaceable,o.smartExtrude,o.invert,o.blockLimit,o.floodGap,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners,mc.level.getGameTime()/20);
+        Object now=List.of(tool,at,normal,o.compare,o.selectLimit,o.extrudeCount,o.extrudeReplaceable,o.smartExtrude,o.invert,o.blockLimit,o.floodGap,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners,o.selectRange,o.selectCorners,o.selectUp,o.selectDown,o.selectHorizontal,o.surfaceOnly,mc.level.getGameTime()/20);
         if(!Objects.equals(key,now)){key=now;compute(mc,at,normal,o);}
         if(shape.isEmpty())return;
         if(removing)shape.drawFill(Vec3.ZERO,o.removedFill); // blocks that go are only filled, never outlined
@@ -53,6 +53,12 @@ public final class ClickPreview {
                 int s=o.invert?1-step:step;cells.add(p.add(normal.x()*s,normal.y()*s,normal.z()*s));
             }
             size=cells.size();shape=OutlineShape.of(cells);
+        }else if(o.tool==Tool.PAINT_BUCKET){
+            size=0;
+            if(level.getBlockState(at).isAir())return;
+            var compare=o.compare==Options.Compare.NBT?Options.Compare.BLOCK:o.compare; // block entity data is not all known here
+            var found=MagicPreview.bucketSearch(mc,at,o,compare).found();
+            size=found.size();shape=OutlineShape.of(found);
         }else{
             Point start=level.getBlockState(at).isAir()?centre:centre.add(normal.x(),normal.y(),normal.z());
             var matching=level.getBlockState(new BlockPos(start.x(),start.y(),start.z()));

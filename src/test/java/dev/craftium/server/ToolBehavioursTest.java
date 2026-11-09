@@ -15,7 +15,7 @@ class ToolBehavioursTest {
 
     /** The tools that do more with a click than plan what they make where it was clicked. Adding one here is a decision, not an accident. */
     @Test void onlyTheseToolsHaveABehaviourOfTheirOwn() {
-        Set<Tool> own = EnumSet.of(Tool.ANNOTATION, Tool.BOX_SELECT, Tool.FREEHAND_SELECT, Tool.MAGIC_SELECT, Tool.RULER, Tool.LINE, Tool.SHAPE);
+        Set<Tool> own = EnumSet.of(Tool.ANNOTATION, Tool.BOX_SELECT, Tool.FREEHAND_SELECT, Tool.MAGIC_SELECT, Tool.PAINT_BUCKET, Tool.RULER, Tool.LINE, Tool.SHAPE);
         for (Tool tool : Tool.values()) assertEquals(own.contains(tool), ToolBehaviours.hasOwn(tool), tool.name());
     }
 

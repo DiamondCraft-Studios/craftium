@@ -123,6 +123,10 @@ public final class Options {
     public int selectionResize;
     /** Hovering with the Magic Wand outlines what a click would select, unless that is this many blocks or more: likely terrain, not an object. */
     public boolean magicPreview=true;
+    /** Whether the Magic Wand can aim at and select liquids; off, water and lava are passed over. */
+    public boolean selectLiquids;
+    /** Transparency in the block palette: while on, the foreground paints as air, whichever block is shown in its slot. */
+    public boolean transparency;
     /** Whether a big selection waits to be confirmed before it is kept. */
     public boolean largeSelectionWarnings=true;
     /** A selection this many blocks bigger than before is confirmed with the player first, in the editor and in the Builder. */
@@ -193,6 +197,10 @@ public final class Options {
     public boolean looped,extendToGround,useStairsAndSlabs,deferred,symmetryX,symmetryY,symmetryZ;
     public double slack=4,yaw,pitch,roll,sizeX=1,sizeY=1,sizeZ=1,exponent=4,innerRadius=.5,baseChance=1,minSpacing=1;
     public boolean randomYaw=true,randomFlip;
+    /** Which irregular polygon the sides make, and how deep the star's notches are (a share of the radius). */
+    public int polygonSeed=1;
+    public double starInner=.4;
+    public BrushMath.Form form(){return new BrushMath.Form(polygonSeed,starInner);}
     public int polygonSides=6,fluidHeight=100,fontSize=16,textThickness=1,modelColumns=4;
     /** The build an AI client described, as a {@link BuildSpec}; read only by the ai_build_preview action. */
     public String buildSpec="";
@@ -364,7 +372,7 @@ public final class Options {
         yaw=bounded(yaw,-360,360);pitch=bounded(pitch,-360,360);roll=bounded(roll,-360,360);
         exponent=bounded(exponent,.25,16);innerRadius=bounded(innerRadius,.05,.95);outlineThickness=Math.clamp(outlineThickness,1,radius);if(strokeAlign==null)strokeAlign=StrokeAlign.INSIDE;slack=bounded(slack,-64,64);
         baseChance=bounded(baseChance,0,1);minSpacing=bounded(minSpacing,.1,8);smoothing=bounded(smoothing,.1,5);threshold=bounded(threshold,0,1);meldStrength=bounded(meldStrength,0,3);
-        polygonSides=Math.clamp(polygonSides,BrushMath.MIN_SIDES,BrushMath.MAX_SIDES);fluidHeight=Math.clamp(fluidHeight,0,100);fontSize=Math.clamp(fontSize,6,96);textThickness=Math.clamp(textThickness,1,8);modelColumns=Math.clamp(modelColumns,2,32);
+        polygonSides=Math.clamp(polygonSides,BrushMath.MIN_SIDES,BrushMath.MAX_SIDES);polygonSeed=Math.clamp(polygonSeed,0,99_999);starInner=Math.clamp(starInner,.1,.9);fluidHeight=Math.clamp(fluidHeight,0,100);fontSize=Math.clamp(fontSize,6,96);textThickness=Math.clamp(textThickness,1,8);modelColumns=Math.clamp(modelColumns,2,32);
         if(nodes==null||nodes.size()>64||nodes.contains(null))throw new IllegalArgumentException("Maximum 64 control points");
         if(selectionPoints==null||selectionPoints.size()>32768||selectionPoints.contains(null))throw new IllegalArgumentException("Lasso selection limit: 32,768 blocks");
         for(String value:new String[]{materials,maskExpression,maskScript,script,fontName,fontFile,heightmap,name,entityType,entityNbt,property,annotationMode,billboard})
