@@ -1,4 +1,4 @@
-package dev.craftium.client.showcase;
+package dev.craftium.core;
 
 /**
  * One showcase picture: where the camera is (its eye, in world coordinates), which way it looks, how wide its lens is and how big

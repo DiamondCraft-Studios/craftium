@@ -1,5 +1,7 @@
 package dev.craftium.client.showcase;
 
+import dev.craftium.core.ShotSpec;
+
 import com.mojang.authlib.GameProfile;
 import dev.craftium.client.compat.ClientCompat;
 import java.util.UUID;

@@ -1,5 +1,7 @@
 package dev.craftium.client.showcase;
 
+import dev.craftium.core.ShotSpec;
+
 import dev.craftium.client.compat.ClientCompat;
 import java.nio.file.Files;
 import java.nio.file.Path;
