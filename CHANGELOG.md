@@ -1,13 +1,17 @@
 # Changelog
 
-## Unreleased
+## 1.4.0-beta.1
 
 Changes since 1.3.1-beta.1.
 
 ### Interface
+- New 2D colour picker, with a window to open it in.
+- Turning off AI building in the editor asks first.
+- The fold arrow of editor windows folds them.
 - New Selections window. Save selection keeps what is selected as an entry named Selection 1, Selection 2 and so on (the count starts again at 1 when none are left), beside your selection and without changing it. Each entry has a colour square (the selection colour, then turned round the hue wheel for each next one; click it to change it), an eye to hide its outline, a pencil to edit it and a cross to delete it. Clicking an entry shows it in place of your selection and clicking it again gives yours back. Editing an entry lets any selection tool add to it or take from it, keeping the changes. Deleting asks nothing, and Ctrl+Z brings the entry back with its colour. Saved selections that are not shown are drawn like the selection, in their own colour, while the editor is open.
 
 ### AI building
+- Panes, bars, fences and walls in AI builds now connect to their neighbours.
 - Claude can tell your saved selections apart. get_state lists them by name, read_selection takes a name to read one, and replace_selection takes a "selection" name, so one build can do "on Selection 1 do this, then on Selection 2 do that". An unknown name refuses the build and lists the names there are.
 
 ### Internal
