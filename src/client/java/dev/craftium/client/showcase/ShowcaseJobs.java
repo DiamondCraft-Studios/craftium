@@ -137,11 +137,13 @@ public final class ShowcaseJobs {
                 continue;
             }
             // Look before shooting: if something is in the way, the shot is retaken once from higher up when it can be.
-            var resolved = Occlusion.resolve(mc, entry);
+            var framed = Tight.refit(mc, entry);
+            var resolved = Occlusion.resolve(mc, framed);
             var used = resolved.entry();
             ShowcaseCapture.capture(used.spec(), file, used.aim()).whenComplete((r, t) -> {
                 var picture = result(used, t == null);
                 picture.add("occlusion", resolved.info());
+                picture.addProperty("framedOn", framed != entry ? "blocks" : "box");
                 if (t == null) {
                     picture.addProperty("width", r.width());
                     picture.addProperty("height", r.height());

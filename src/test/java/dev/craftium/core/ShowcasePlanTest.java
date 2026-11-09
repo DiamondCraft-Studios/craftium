@@ -145,4 +145,30 @@ class ShowcasePlanTest {
         shots.append("]");
         assertThrows(IllegalArgumentException.class, () -> oneRoom(shots.toString()));
     }
+
+    @Test void anLShapedBuildIsFramedOnItsBlocksNotItsBox() {
+        // A box 22 wide whose only solid part is a 4 by 4 tower at the far east end: the box's empty corners must not push the camera back.
+        var room = plan("{\"rooms\":[{\"name\":\"keep\",\"from\":[0,0,0],\"to\":[21,15,10],\"shots\":[\"hero\",{\"name\":\"fixed\",\"preset\":\"hero\",\"distance\":30},{\"name\":\"aimed\",\"preset\":\"hero\",\"target\":[2,2,2]}]}]}").entries();
+        double[][] tower = new double[8][];
+        for (int i = 0; i < 8; i++) tower[i] = new double[]{18 + (i & 1) * 4, (i >> 1 & 1) * 16, 3 + (i >> 2 & 1) * 4};
+        var boxed = room.get(0);
+        var tight = ShowcasePlan.refit(boxed, tower);
+        double boxDistance = boxed.orbit()[5], towerDistance = tight.orbit()[5];
+        assertTrue(towerDistance < boxDistance * 0.7, "tower " + towerDistance + " box " + boxDistance);
+        assertEquals(20, tight.orbit()[0], 1e-6, "aims at the middle of what is solid");
+        assertEquals(8, tight.orbit()[1], 1e-6);
+        assertEquals(new Point(20, 8, 5), tight.aim());
+        assertEquals(boxed.path(), tight.path());
+        // The agent's own distance or target is never overridden, and neither is a placed camera.
+        assertSame(room.get(1), ShowcasePlan.refit(room.get(1), tower));
+        assertEquals(30, ShowcasePlan.refit(room.get(1), tower).orbit()[5]);
+        var aimed = ShowcasePlan.refit(room.get(2), tower);
+        assertEquals(2, aimed.orbit()[0], 1e-6, "an explicit target stays");
+        assertSame(boxed, ShowcasePlan.refit(boxed, null));
+        assertSame(boxed, ShowcasePlan.refit(boxed, new double[0][]));
+        // Raising a refitted shot keeps what was worked out.
+        var up = ShowcasePlan.raised(tight, 50);
+        assertEquals(towerDistance, up.orbit()[5], 1e-9);
+        assertEquals(20, up.orbit()[0], 1e-9);
+    }
 }

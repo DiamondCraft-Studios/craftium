@@ -29,7 +29,7 @@ public final class ShowcasePlan {
 
     /**
      * One shot to take: the camera, where its file goes (relative to the job's folder, always with forward slashes) and what it frames.
-     * {@code min} and {@code max} are the room's box (blocks, inclusive). {@code orbit} is {aimX, aimY, aimZ, azimuth, elevation, distance}
+     * {@code min} and {@code max} are the room's box (blocks, inclusive). {@code orbit} is {aimX, aimY, aimZ, azimuth, elevation, distance, distanceWasAuto, targetWasAuto} (the last two 1 or 0)
      * for a shot worked out from a bearing, so it can be re-aimed from higher up; null for a camera placed outright.
      */
     public record Entry(String room, String shot, ShotSpec spec, String path, Point aim, Point min, Point max, double[] orbit) {}
@@ -124,6 +124,7 @@ public final class ShowcasePlan {
             }
             spec = new ShotSpec(name, p[0], p[1], p[2], normYaw(yaw), (float) pitch, fov, width, height, hideHud);
         } else {
+            boolean autoTarget = !o.has("target");
             if (o.has("target")) aimAt = vec(o, "target", where);
             double azimuth, elevation;
             if (preset != null) {
@@ -134,13 +135,14 @@ public final class ShowcasePlan {
             if (o.has("azimuth")) azimuth = number(o, "azimuth", where);
             if (o.has("elevation")) elevation = number(o, "elevation", where);
             if (elevation < -89 || elevation > 89.9) throw new IllegalArgumentException("\"elevation\" is " + elevation + "; it must be -89 (looking up from below) to 89.9 (straight down) (" + where + ")");
+            boolean autoDistance = !o.has("distance");
             double distance;
             if (o.has("distance")) {
                 distance = number(o, "distance", where);
                 if (distance < 1 || distance > 512) throw new IllegalArgumentException("\"distance\" is " + distance + "; it must be 1 to 512 blocks (" + where + ")");
             } else distance = fitDistance(minX, minY, minZ, minX + sx, minY + sy, minZ + sz, aimAt, azimuth, elevation, fov, width, height);
             spec = orbit(name, aimAt, azimuth, elevation, distance, fov, width, height, hideHud);
-            orbit = new double[]{aimAt[0], aimAt[1], aimAt[2], azimuth, elevation, distance};
+            orbit = new double[]{aimAt[0], aimAt[1], aimAt[2], azimuth, elevation, distance, autoDistance ? 1 : 0, autoTarget ? 1 : 0};
         }
         return new Entry(roomName, name, spec, roomName + "/" + roomName + "_" + name + ".png", new Point((int) Math.floor(aimAt[0]), (int) Math.floor(aimAt[1]), (int) Math.floor(aimAt[2])),
             new Point((int) minX, (int) minY, (int) minZ), new Point((int) (minX + sx - 1), (int) (minY + sy - 1), (int) (minZ + sz - 1)), orbit);
@@ -162,7 +164,7 @@ public final class ShowcasePlan {
         double[] o = e.orbit();
         var old = e.spec();
         var spec = orbit(old.name(), new double[]{o[0], o[1], o[2]}, o[3], elevation, o[5], old.fov(), old.width(), old.height(), old.hideHud());
-        return new Entry(e.room(), e.shot(), spec, e.path(), e.aim(), e.min(), e.max(), new double[]{o[0], o[1], o[2], o[3], elevation, o[5]});
+        return new Entry(e.room(), e.shot(), spec, e.path(), e.aim(), e.min(), e.max(), new double[]{o[0], o[1], o[2], o[3], elevation, o[5], o[6], o[7]});
     }
 
     /**
@@ -171,31 +173,63 @@ public final class ShowcasePlan {
      * its height, and a cube by its corners, not by a sphere around it.
      */
     public static double fitDistance(double x0, double y0, double z0, double x1, double y1, double z1, double[] aim, double azimuth, double elevation, int fov, int width, int height) {
+        return fitPoints(boxCorners(x0, y0, z0, x1, y1, z1), aim, azimuth, elevation, fov, width, height);
+    }
+
+    static double[][] boxCorners(double x0, double y0, double z0, double x1, double y1, double z1) {
+        double[][] c = new double[8][];
+        for (int i = 0; i < 8; i++) c[i] = new double[]{(i & 1) == 0 ? x0 : x1, (i & 2) == 0 ? y0 : y1, (i & 4) == 0 ? z0 : z1};
+        return c;
+    }
+
+    /** As {@link #fitDistance}, for any set of points (such as the corners of the solid blocks a build is really made of). */
+    public static double fitPoints(double[][] points, double[] aim, double azimuth, double elevation, int fov, int width, int height) {
         double tanV = Math.tan(Math.toRadians(fov) / 2), tanH = tanV * width / height;
         double lo = 1, hi = MAX_DISTANCE;
-        if (!fits(x0, y0, z0, x1, y1, z1, aim, azimuth, elevation, hi, fov, width, height, tanH, tanV)) return MAX_DISTANCE;
+        if (!fits(points, aim, azimuth, elevation, hi, fov, width, height, tanH, tanV)) return MAX_DISTANCE;
         for (int i = 0; i < 40; i++) {
             double mid = (lo + hi) / 2;
-            if (fits(x0, y0, z0, x1, y1, z1, aim, azimuth, elevation, mid, fov, width, height, tanH, tanV)) hi = mid; else lo = mid;
+            if (fits(points, aim, azimuth, elevation, mid, fov, width, height, tanH, tanV)) hi = mid; else lo = mid;
         }
         return Math.max(MIN_DISTANCE, hi);
     }
 
-    private static boolean fits(double x0, double y0, double z0, double x1, double y1, double z1, double[] aim, double azimuth, double elevation, double d, int fov, int w, int h, double tanH, double tanV) {
+    private static boolean fits(double[][] points, double[] aim, double azimuth, double elevation, double d, int fov, int w, int h, double tanH, double tanV) {
         var cam = orbit("fit", aim, azimuth, elevation, d, fov, w, h, true);
         double yaw = Math.toRadians(cam.yaw()), pitch = Math.toRadians(cam.pitch());
         // Forward, right and up as the game turns them: yaw 0 faces +z, and the right hand of that is -x; positive pitch looks down.
         double[] f = {-Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)};
         double[] r = {-Math.cos(yaw), 0, -Math.sin(yaw)};
         double[] u = {r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]};
-        for (int i = 0; i < 8; i++) {
-            double vx = ((i & 1) == 0 ? x0 : x1) - cam.x(), vy = ((i & 2) == 0 ? y0 : y1) - cam.y(), vz = ((i & 4) == 0 ? z0 : z1) - cam.z();
+        for (double[] p : points) {
+            double vx = p[0] - cam.x(), vy = p[1] - cam.y(), vz = p[2] - cam.z();
             double depth = vx * f[0] + vy * f[1] + vz * f[2];
             if (depth < 0.5) return false;
             if (Math.abs(vx * r[0] + vy * r[1] + vz * r[2]) / depth > FILL * tanH) return false;
             if (Math.abs(vx * u[0] + vy * u[1] + vz * u[2]) / depth > FILL * tanV) return false;
         }
         return true;
+    }
+
+    /**
+     * The same shot framed on what is really there: {@code solid} holds the corner points of the box's solid blocks. When the shot's target
+     * and distance were both left to us, the camera aims at the middle of those points and backs off just far enough to fit them, so an
+     * L-shaped build is not framed as if it filled its whole box. A shot with a target or distance of the agent's own, or a placed camera,
+     * is returned as it was; so is one with nothing solid to frame.
+     */
+    public static Entry refit(Entry e, double[][] solid) {
+        if (e.orbit() == null || solid == null || solid.length == 0 || e.orbit()[6] == 0 || e.orbit()[7] == 0) return e;
+        double[] o = e.orbit();
+        double[] aim = {o[0], o[1], o[2]};
+        {
+            double[] lo = {Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE}, hi = {-Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE};
+            for (double[] p : solid) for (int i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], p[i]); hi[i] = Math.max(hi[i], p[i]); }
+            for (int i = 0; i < 3; i++) aim[i] = (lo[i] + hi[i]) / 2;
+        }
+        double distance = fitPoints(solid, aim, o[3], o[4], e.spec().fov(), e.spec().width(), e.spec().height());
+        var old = e.spec();
+        var spec = orbit(old.name(), aim, o[3], o[4], distance, old.fov(), old.width(), old.height(), old.hideHud());
+        return new Entry(e.room(), e.shot(), spec, e.path(), new Point((int) Math.floor(aim[0]), (int) Math.floor(aim[1]), (int) Math.floor(aim[2])), e.min(), e.max(), new double[]{aim[0], aim[1], aim[2], o[3], o[4], distance, o[6], o[7]});
     }
 
     /** How far back the camera stands so the room's bounding sphere fills about {@link #FILL} of the shorter half of the picture. */
