@@ -1,6 +1,6 @@
 package dev.craftium.client;
 
-import dev.craftium.client.showcase.ShotSpec;
+import dev.craftium.core.ShotSpec;
 import dev.craftium.client.showcase.ShowcaseCapture;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -63,6 +63,37 @@ public final class ShowcaseGameTest implements net.fabricmc.fabric.api.client.ga
             require(goldPixels(r.file()) > 300, r.file() + " does not show the gold tower: it was not aimed at it, or its chunks were not drawn");
         }
 
+        // A job: two rooms with several angles each, and a third far outside the loaded chunks that has to fail clearly without stopping the rest.
+        w.getServer().runCommand("fill " + (cx + 14) + " " + g + " " + cz + " " + (cx + 18) + " " + (g + 4) + " " + (cz + 4) + " emerald_block");
+        c.waitTicks(20);
+        var request = com.google.gson.JsonParser.parseString("{\"job\":\"gametest-job\",\"rooms\":["
+            + "{\"name\":\"Tower\",\"from\":[" + (cx - 1) + "," + g + "," + (cz - 1) + "],\"to\":[" + (cx + 1) + "," + (g + 7) + "," + (cz + 1) + "],\"shots\":[\"hero\",\"south\",{\"name\":\"overhead\",\"preset\":\"top\"}]},"
+            + "{\"name\":\"Annex\",\"from\":[" + (cx + 14) + "," + g + "," + cz + "],\"to\":[" + (cx + 18) + "," + (g + 4) + "," + (cz + 4) + "],\"shots\":[\"hero\",{\"name\":\"close\",\"preset\":\"east\",\"fov\":50}]},"
+            + "{\"name\":\"Faraway\",\"from\":[" + (cx + 5000) + "," + g + "," + cz + "],\"to\":[" + (cx + 5004) + "," + (g + 4) + "," + (cz + 4) + "],\"shots\":[\"hero\"]}]}").getAsJsonObject();
+        c.runOnClient(mc -> { try { dev.craftium.client.showcase.ShowcaseJobs.start(request); } catch (java.io.IOException e) { throw new AssertionError(e); } });
+        c.waitFor(mc -> !"running".equals(dev.craftium.client.showcase.ShowcaseJobs.status().get("state").getAsString()), 6000);
+        var status = c.computeOnClient(mc -> dev.craftium.client.showcase.ShowcaseJobs.status());
+        require("done".equals(status.get("state").getAsString()), "The job ended as " + status);
+        require(status.get("total").getAsInt() == 6 && status.get("done").getAsInt() == 6, "The job did not go through all six shots: " + status);
+        require(status.get("failed").getAsInt() == 1, "Exactly the far room should have failed: " + status);
+        var folder = Path.of(status.get("folder").getAsString());
+        for (var name : new String[]{"tower/tower_hero.png", "tower/tower_south.png", "tower/tower_overhead.png", "annex/annex_hero.png", "annex/annex_close.png"}) {
+            require(Files.size(folder.resolve(name)) > 10_000, name + " was not saved");
+            require(goldOrGreen(folder.resolve(name)) > 300, name + " does not show the build it is of");
+        }
+        require(!Files.exists(folder.resolve("faraway/faraway_hero.png")), "A picture of unloaded chunks was saved");
+        String error = null;
+        for (var shot : status.getAsJsonArray("shots")) if (!shot.getAsJsonObject().get("ok").getAsBoolean()) error = shot.getAsJsonObject().get("error").getAsString();
+        require(error != null && error.contains("not loaded"), "The far room's failure did not say the chunk is not loaded: " + error);
+        var manifest = com.google.gson.JsonParser.parseString(Files.readString(folder.resolve("manifest.json"))).getAsJsonObject();
+        require("done".equals(manifest.get("state").getAsString()) && manifest.getAsJsonArray("shots").size() == 6, "manifest.json is incomplete");
+        // Taking it again with resume must find every saved picture and take none of them twice.
+        c.runOnClient(mc -> { request.addProperty("resume", true); try { dev.craftium.client.showcase.ShowcaseJobs.start(request); } catch (java.io.IOException e) { throw new AssertionError(e); } });
+        c.waitFor(mc -> !"running".equals(dev.craftium.client.showcase.ShowcaseJobs.status().get("state").getAsString()), 6000);
+        int skipped = 0;
+        for (var shot : c.computeOnClient(mc -> dev.craftium.client.showcase.ShowcaseJobs.status()).getAsJsonArray("shots")) if (shot.getAsJsonObject().has("skipped")) skipped++;
+        require(skipped == 5, "Resuming should have skipped the five saved pictures, skipped " + skipped);
+
         var after = c.computeOnClient(mc -> new Before(mc.player.getX(), mc.player.getY(), mc.player.getZ(), mc.player.getYRot(), mc.player.getXRot(),
             mc.options.fov().get(), dev.craftium.client.compat.ClientCompat.hudHidden(mc), mc.player.isInvisible(), mc.getCameraEntity(), mc.getWindow().getWidth(), mc.getWindow().getHeight()));
         require(after.equals(before), "The player's view was not restored.\n before: " + before + "\n after:  " + after);
@@ -103,6 +134,19 @@ public final class ShowcaseGameTest implements net.fabricmc.fabric.api.client.ga
         double dyaw = Math.abs(((p[3] - yaw + 540) % 360) - 180);
         require(Math.abs(p[0] - x) < .01 && Math.abs(p[1] - y) < .01 && Math.abs(p[2] - z) < .01 && dyaw < .1 && Math.abs(p[4] - pitch) < .1,
             r.file().getFileName() + ": the camera was at " + java.util.Arrays.toString(p) + ", not " + java.util.Arrays.toString(new double[]{x, y, z, yaw, pitch}));
+    }
+
+    /** How many sampled pixels are gold, oak or emerald-green: the only strong colours in the test world besides the sky and grass, so a picture of the builds holds plenty. */
+    private static int goldOrGreen(Path file) throws Exception {
+        var image = javax.imageio.ImageIO.read(file.toFile());
+        int hits = 0;
+        for (int y = 0; y < image.getHeight(); y += 4) for (int x = 0; x < image.getWidth(); x += 4) {
+            int rgb = image.getRGB(x, y), r = rgb >> 16 & 255, gr = rgb >> 8 & 255, b = rgb & 255;
+            boolean gold = r > gr && gr > b * 1.3 && r - b > 40; // gold, and the tower's oak top
+            boolean emerald = gr > 100 && gr > r * 1.8 && gr > b * 1.4;
+            if (gold || emerald) hits++;
+        }
+        return hits;
     }
 
     private static void require(boolean ok, String message) { if (!ok) throw new AssertionError(message); }
