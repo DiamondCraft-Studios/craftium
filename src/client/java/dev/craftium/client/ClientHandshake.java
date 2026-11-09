@@ -58,12 +58,12 @@ final class ClientHandshake {
         String line="Craftium "+found.get().version()+" is out (you have "+UpdateChecker.clean(version())+"). /craftium update";
         ClientState.notify(line);
         // the HUD line is gone in a few seconds; the chat keeps it
-        dev.craftium.client.compat.ClientCompat.chat(net.minecraft.client.Minecraft.getInstance(),dev.craftium.core.Chat.say(line+" shows the link."));
+        dev.craftium.client.compat.ClientCompat.chat(net.minecraft.client.Minecraft.getInstance(),dev.craftium.core.Chat.say("Craftium "+found.get().version()+" is out.\nYou have "+UpdateChecker.clean(version())+".\nRun /craftium update for the download link."));
     }
     static String describe(){
         var found=latest;
         String me=UpdateChecker.clean(version());
-        if(!checked&&!ClientState.options.checkForUpdates)return "Craftium "+me+". Update checks are off; /craftium update on turns them on.";
-        return found.map(r->"Craftium "+r.version()+" is out; you have "+me+". Download it from "+r.url()+" and replace the jar in your mods folder.").orElse("Craftium "+me+" is the newest release for Minecraft "+minecraft()+" (or the check could not reach GitHub).");
+        if(!checked&&!ClientState.options.checkForUpdates)return "Craftium "+me+".\nUpdate checks are off. Run /craftium update on to turn them on.";
+        return found.map(r->"Craftium "+r.version()+" is out. You have "+me+".\nDownload it from "+r.url()+"\nThen replace the jar in your mods folder.").orElse("Craftium "+me+" is the newest release for Minecraft "+minecraft()+".\nIf this looks wrong, the check could not reach GitHub.");
     }
 }
