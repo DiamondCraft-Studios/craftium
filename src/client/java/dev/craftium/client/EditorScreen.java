@@ -1278,7 +1278,11 @@ public final class EditorScreen extends CraftiumScreen {
             case 8 -> {
                 int sessions=ClientState.aiSessions.size();
                 var items=new ArrayList<MenuItem>();
-                items.add(item(AiBridge.running()?"Turn off AI building":"Turn on AI building","",()->{AiBridge.toggle();ClientState.notify(AiBridge.running()?"AI building is on":"AI building is off");}));
+                items.add(item(AiBridge.running()?"Turn off AI building":"Turn on AI building","",()->{
+                    Runnable toggle=()->{AiBridge.toggle();ClientState.notify(AiBridge.running()?"AI building is on":"AI building is off");};
+                    // Turning it off disconnects whatever AI is building: ask first, as turning it on costs nothing.
+                    if(AiBridge.running())confirm=new Confirm("Turn off AI building? Any AI connected will stop building.","Turn off",toggle);else toggle.run();
+                }));
                 items.add(divider());
                 items.add(item("Build sessions…"+(sessions>0?" ("+sessions+")":""),"",()->ClientCompat.setScreen(minecraft,new AiSessionsScreen(this))));
                 if(sessions>1){ // with several sessions the buttons below would have to guess which one is meant: they act on all, and the sessions screen acts on one
