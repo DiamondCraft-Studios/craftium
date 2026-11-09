@@ -82,6 +82,8 @@ const coordinate = (description) => ({ type: "array", items: { type: "integer" }
 const nothing = { type: "object", properties: {} };
 const box = { type: "object", properties: { from: coordinate("One corner, [x, y, z] in world coordinates"), to: coordinate("The opposite corner, [x, y, z] in world coordinates") }, required: ["from", "to"] };
 const READ = { readOnlyHint: true, openWorldHint: false };
+// Saves pictures to the player's disk but never changes the world.
+const SAVES_FILES = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
 const CHANGE = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
 
@@ -230,6 +232,89 @@ export const TOOLS = [
         ...(a.preview !== undefined ? { preview: a.preview } : {}),
       };
     },
+  },
+  {
+    name: "capture_batch",
+    title: "Take showcase pictures",
+    description:
+      "Takes real in-game pictures (textures, lighting, sky, with the interface hidden) of one or more rooms or builds, each from as many angles as you list, and saves them to the player's disk. " +
+      "The game draws them from its own camera without moving, turning or touching the player, and the job runs in the background: this returns at once, then call capture_status until its state is done. " +
+      "Pictures go to screenshots/craftium/<job>/<room>/<room>_<shot>.png in the game folder, beside a manifest.json that records every camera and result; you never choose a path, and an earlier job's folder is never overwritten. " +
+      'Give {"job": "castle", "rooms": [{"name": "throne-room", "from": [x,y,z], "to": [x,y,z], "shots": ["hero", "south", {"name": "dais", "target": [x,y,z], "azimuth": 90, "elevation": 10, "distance": 12, "fov": 45}]}]}. ' +
+      "from and to are the corners of the room or build to frame (world coordinates, as read_selection and get_surface give). " +
+      "A shot is a preset name or an object. Presets: hero (south-east, looking down), three_quarter, front/south, back/north, east, west, se, sw, ne, nw (raised corner views), top (straight down), ground (low, looking up). " +
+      'A shot object may set "preset", or aim the camera at a "target" (default: the middle of the room) from an "azimuth" (the side the camera stands on: 0 north, 90 east, 180 south, 270 west), an "elevation" in degrees above level (negative looks up) and a "distance" (default: worked out so the room fills most of the picture). ' +
+      'Or place the camera yourself with "position" [x,y,z] and either "look_at" [x,y,z] or "yaw" and "pitch" (yaw 0 faces south, 90 west; pitch positive looks down). ' +
+      '"fov" is the lens in degrees, 30 to 110 (default 70); "width" and "height" default to 1920 by 1080 and go up to 3840 by 2160 (4K); "hide_hud" (default true) hides the interface. ' +
+      'Any of fov, width, height and hide_hud can go on a shot, on a room, or in "defaults" for the whole job; the shot wins, then the room, then the defaults. There is no camera roll. ' +
+      "At most 50 rooms and 100 pictures per job. Names become lowercase file names; two rooms, or two shots of one room, cannot share a name. " +
+      'Set "resume": true with the same job name to carry on an earlier job, skipping pictures already saved. ' +
+      "The game only holds the chunks near the player, so a room outside them fails with a message saying so (the other pictures still go ahead): ask the player to stand near it. The player's own screen must have no menu open. " +
+      "The reply is the job's status; the pictures themselves are files, not images in this reply.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        job: { type: "string", maxLength: 64, description: 'A name for this set of pictures, such as "castle" (default: showcase-<date and time>)' },
+        rooms: {
+          type: "array", minItems: 1, maxItems: 50,
+          description: "The rooms or builds to photograph, each with its box and its shots",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string", maxLength: 64, description: "The room's name, used in the file names" },
+              from: coordinate("One corner of the room or build, [x, y, z]"),
+              to: coordinate("The opposite corner, [x, y, z]"),
+              shots: { type: "array", minItems: 1, items: { anyOf: [{ type: "string" }, { type: "object" }] }, description: 'Presets such as "hero", or shot objects (see above)' },
+            },
+            required: ["name", "from", "to", "shots"],
+          },
+        },
+        defaults: { type: "object", description: "fov, width, height and hide_hud for every shot that does not set its own" },
+        resume: { type: "boolean", description: "Carry on the job of this name, skipping pictures already saved" },
+      },
+      required: ["rooms"],
+    },
+    annotations: SAVES_FILES,
+    args: (a) => {
+      if (!Array.isArray(a.rooms) || a.rooms.length < 1) throw new ArgumentError('"rooms" must list at least one room');
+      if (a.rooms.length > 50) throw new ArgumentError(`A job can have at most 50 rooms; this has ${a.rooms.length}`);
+      a.rooms.forEach((room, i) => {
+        if (room === null || typeof room !== "object" || Array.isArray(room)) throw new ArgumentError(`rooms[${i}] must be an object`);
+        if (typeof room.name !== "string" || room.name.trim() === "") throw new ArgumentError(`rooms[${i}] needs a "name"`);
+        whole(room.from, `rooms[${i}].from`);
+        whole(room.to, `rooms[${i}].to`);
+        if (!Array.isArray(room.shots) || room.shots.length < 1) throw new ArgumentError(`rooms[${i}] needs "shots": a list of presets or shot objects`);
+        if (!room.shots.every((x) => typeof x === "string" || (x !== null && typeof x === "object" && !Array.isArray(x)))) throw new ArgumentError(`rooms[${i}].shots must hold preset names or shot objects`);
+      });
+      if (a.job !== undefined && (typeof a.job !== "string" || a.job.trim() === "")) throw new ArgumentError('"job" must be a name');
+      if (a.defaults !== undefined && (a.defaults === null || typeof a.defaults !== "object" || Array.isArray(a.defaults))) throw new ArgumentError('"defaults" must be an object');
+      if (a.resume !== undefined && typeof a.resume !== "boolean") throw new ArgumentError('"resume" must be true or false');
+      if (a.resume === true && a.job === undefined) throw new ArgumentError('"resume" needs the "job" name of the job to carry on');
+      return {
+        rooms: a.rooms,
+        ...(a.job !== undefined ? { job: a.job } : {}),
+        ...(a.defaults !== undefined ? { defaults: a.defaults } : {}),
+        ...(a.resume !== undefined ? { resume: a.resume } : {}),
+      };
+    },
+  },
+  {
+    name: "capture_status",
+    title: "Check the showcase job",
+    description:
+      "How the running showcase job, or else the last one, is going: its state (running, done, cancelled or failed), how many pictures are done out of the total, how many failed, the folder and manifest.json on the player's disk, and for each picture so far its file, the camera it asked for and the one the game drew from, and why it failed if it did. " +
+      "A picture with chunksReady false was taken before every chunk in view was drawn and may have gaps; retake it with another capture_batch if it matters. Poll every few seconds; a picture takes about a second, a little more at 4K.",
+    inputSchema: nothing,
+    annotations: READ,
+    args: () => ({}),
+  },
+  {
+    name: "capture_cancel",
+    title: "Stop the showcase job",
+    description: 'Stops the running showcase job after the picture being saved, and gives the player their view back. Pictures already saved stay on disk and in manifest.json; carry on later with capture_batch and "resume": true.',
+    inputSchema: nothing,
+    annotations: SAVES_FILES,
+    args: () => ({}),
   },
   {
     name: "preview_build",

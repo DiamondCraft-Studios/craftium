@@ -59,7 +59,7 @@ test("lists every tool with its hints, and the server's instructions", async () 
   const bridge = await fakeBridge({});
   const client = await connect(bridge.file);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "get_screenshot", "get_state", "get_surface", "preview_build", "read_blocks", "read_selection", "render_view", "undo"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ["apply_preview", "cancel_preview", "capture_batch", "capture_cancel", "capture_status", "get_screenshot", "get_state", "get_surface", "preview_build", "read_blocks", "read_selection", "render_view", "undo"]);
   assert.equal(tools.find((t) => t.name === "get_state").annotations.readOnlyHint, true);
   assert.equal(tools.find((t) => t.name === "apply_preview").annotations.destructiveHint, true);
   assert.match(tools.find((t) => t.name === "preview_build").description, /cylinder/);
@@ -109,6 +109,42 @@ test("render_view passes its box, angle and preview flag through, and its pictur
     assert.equal(bad.isError, true, JSON.stringify(args));
   }
   assert.equal(bridge.seen.length, 3, "bad angles must not reach the game");
+  await bridge.close();
+});
+
+test("capture_batch forwards only the keys it names, and bad requests never reach the game", async () => {
+  const status = { ok: true, job: "castle", state: "running", total: 2, done: 0, failed: 0, folder: "C:/game/screenshots/craftium/castle" };
+  const bridge = await fakeBridge({ capture_batch: status, capture_status: { ...status, state: "done", done: 2 }, capture_cancel: { ...status, state: "cancelled" } });
+  const client = await connect(bridge.file);
+  const room = { name: "Throne Room", from: [0, 64, 0], to: [20, 74, 30], shots: ["hero", { name: "dais", target: [5, 65, 5], azimuth: 90, fov: 45 }] };
+  const ok = await client.callTool({ name: "capture_batch", arguments: { job: "castle", rooms: [room], defaults: { fov: 60, width: 3840, height: 2160 }, resume: false, path: "C:/evil", sneaky: 1 } });
+  assert.equal(ok.isError, undefined);
+  assert.match(text(ok), /castle/);
+  assert.deepEqual(bridge.seen[0].body, { rooms: [room], job: "castle", defaults: { fov: 60, width: 3840, height: 2160 }, resume: false });
+  await client.callTool({ name: "capture_batch", arguments: { rooms: [room] } });
+  assert.deepEqual(bridge.seen[1].body, { rooms: [room] });
+  const bad = [
+    {}, { rooms: [] }, { rooms: "hero" }, { rooms: [null] },
+    { rooms: [{ ...room, name: "" }] }, { rooms: [{ ...room, from: [0, 0] }] }, { rooms: [{ ...room, to: [0.5, 1, 1] }] },
+    { rooms: [{ ...room, shots: [] }] }, { rooms: [{ ...room, shots: [5] }] }, { rooms: [{ ...room, shots: [["hero"]] }] },
+    { rooms: [room], job: "" }, { rooms: [room], job: 7 }, { rooms: [room], defaults: [] }, { rooms: [room], resume: "yes" },
+    { rooms: [room], resume: true },
+    { rooms: Array.from({ length: 51 }, (_, i) => ({ ...room, name: `r${i}` })) },
+  ];
+  for (const args of bad) {
+    const result = await client.callTool({ name: "capture_batch", arguments: args });
+    assert.equal(result.isError, true, JSON.stringify(args).slice(0, 80));
+  }
+  assert.equal(bridge.seen.length, 2, "bad requests must not reach the game");
+  const poll = await client.callTool({ name: "capture_status", arguments: { ignored: 1 } });
+  assert.match(text(poll), /done/);
+  assert.deepEqual(bridge.seen[2].body, {});
+  const stop = await client.callTool({ name: "capture_cancel", arguments: {} });
+  assert.match(text(stop), /cancelled/);
+  const tools = (await client.listTools()).tools;
+  assert.equal(tools.find((t) => t.name === "capture_status").annotations.readOnlyHint, true);
+  assert.equal(tools.find((t) => t.name === "capture_batch").annotations.readOnlyHint, false);
+  assert.equal(tools.find((t) => t.name === "capture_batch").annotations.destructiveHint, false, "pictures never change the world");
   await bridge.close();
 });
 
