@@ -241,7 +241,7 @@ export const TOOLS = [
       "The game draws them from its own camera without moving, turning or touching the player, and the job runs in the background: this returns at once, then call capture_status until its state is done. " +
       "Pictures go to screenshots/craftium/<job>/<room>/<room>_<shot>.png in the game folder, beside a manifest.json that records every camera and result; you never choose a path, and an earlier job's folder is never overwritten. " +
       'Give {"job": "castle", "rooms": [{"name": "throne-room", "from": [x,y,z], "to": [x,y,z], "shots": ["hero", "south", {"name": "dais", "target": [x,y,z], "azimuth": 90, "elevation": 10, "distance": 12, "fov": 45}]}]}. ' +
-      "from and to are the corners of the room or build to frame (world coordinates, as read_selection and get_surface give). " +
+      "from and to are the corners of the room or build to frame (world coordinates, as read_selection and get_surface give). Or give \"selection\" with the name of one of the player's saved selections (get_state lists them as savedSelections) instead of from and to: its box is used, and its name is the room's name unless you give one. A saved selection that is irregular is framed by its bounding box. " +
       "A shot is a preset name or an object. Presets: hero (south-east, looking down), three_quarter, front/south, back/north, east, west, se, sw, ne, nw (raised corner views), top (straight down), ground (low, looking up). " +
       'A shot object may set "preset", or aim the camera at a "target" (default: the middle of the room) from an "azimuth" (the side the camera stands on: 0 north, 90 east, 180 south, 270 west), an "elevation" in degrees above level (negative looks up) and a "distance" (default: worked out from the solid blocks in the box so the build fills most of the picture; when you give a target or a distance, it is used as given, so the box should be tight around the build). ' +
       'Or place the camera yourself with "position" [x,y,z] and either "look_at" [x,y,z] or "yaw" and "pitch" (yaw 0 faces south, 90 west; pitch positive looks down). ' +
@@ -261,12 +261,13 @@ export const TOOLS = [
           items: {
             type: "object",
             properties: {
-              name: { type: "string", maxLength: 64, description: "The room's name, used in the file names" },
+              name: { type: "string", maxLength: 64, description: "The room's name, used in the file names (default: the saved selection's name)" },
+              selection: { type: "string", maxLength: 64, description: "The name of one of the player's saved selections, in place of from and to" },
               from: coordinate("One corner of the room or build, [x, y, z]"),
               to: coordinate("The opposite corner, [x, y, z]"),
               shots: { type: "array", minItems: 1, items: { anyOf: [{ type: "string" }, { type: "object" }] }, description: 'Presets such as "hero", or shot objects (see above)' },
             },
-            required: ["name", "from", "to", "shots"],
+            required: ["shots"],
           },
         },
         defaults: { type: "object", description: "fov, width, height and hide_hud for every shot that does not set its own" },
@@ -280,9 +281,15 @@ export const TOOLS = [
       if (a.rooms.length > 50) throw new ArgumentError(`A job can have at most 50 rooms; this has ${a.rooms.length}`);
       a.rooms.forEach((room, i) => {
         if (room === null || typeof room !== "object" || Array.isArray(room)) throw new ArgumentError(`rooms[${i}] must be an object`);
-        if (typeof room.name !== "string" || room.name.trim() === "") throw new ArgumentError(`rooms[${i}] needs a "name"`);
-        whole(room.from, `rooms[${i}].from`);
-        whole(room.to, `rooms[${i}].to`);
+        if (room.selection !== undefined) {
+          if (typeof room.selection !== "string" || room.selection.trim() === "" || room.selection.length > 64) throw new ArgumentError(`rooms[${i}].selection must be the name of a saved selection`);
+          if (room.from !== undefined || room.to !== undefined) throw new ArgumentError(`rooms[${i}] gives both a saved selection and "from" and "to"; give one or the other`);
+          if (room.name !== undefined && (typeof room.name !== "string" || room.name.trim() === "")) throw new ArgumentError(`rooms[${i}] "name" must be text`);
+        } else {
+          if (typeof room.name !== "string" || room.name.trim() === "") throw new ArgumentError(`rooms[${i}] needs a "name"`);
+          whole(room.from, `rooms[${i}].from`);
+          whole(room.to, `rooms[${i}].to`);
+        }
         if (!Array.isArray(room.shots) || room.shots.length < 1) throw new ArgumentError(`rooms[${i}] needs "shots": a list of presets or shot objects`);
         if (!room.shots.every((x) => typeof x === "string" || (x !== null && typeof x === "object" && !Array.isArray(x)))) throw new ArgumentError(`rooms[${i}].shots must hold preset names or shot objects`);
       });

@@ -50,7 +50,18 @@ public final class ShowcaseJobs {
         if (mc.level == null || mc.player == null) throw new IllegalStateException("Not in a world");
         if (ClientCompat.screen(mc) != null) throw new IllegalStateException("A menu is open in the game; ask the player to close it so the world can be drawn");
         if (current != null) throw new IllegalStateException("The job \"" + current.job + "\" is still running (" + current.next + " of " + current.plan.entries().size() + " pictures); wait for it, or cancel it with capture_cancel");
-        var plan = ShowcasePlan.parse(args, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.ROOT)));
+        var plan = ShowcasePlan.parse(ShowcasePlan.resolveSelections(args, new ShowcasePlan.Selections() {
+            @Override public dev.craftium.core.Point[] find(String name) {
+                for (var s : dev.craftium.client.ClientState.savedSelections())
+                    if (s.name().trim().equalsIgnoreCase(name) && s.size() > 0 && s.min() != null && s.max() != null) return new dev.craftium.core.Point[]{s.min(), s.max()};
+                return null;
+            }
+            @Override public List<String> names() {
+                var names = new ArrayList<String>();
+                for (var s : dev.craftium.client.ClientState.savedSelections()) names.add("\"" + s.name() + "\"");
+                return names;
+            }
+        }), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.ROOT)));
         boolean resume = args.has("resume") && args.get("resume").isJsonPrimitive() && args.get("resume").getAsBoolean();
         String job = plan.job();
         Path dir = root().resolve(job);
