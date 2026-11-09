@@ -20,7 +20,8 @@ Privacy: [PRIVACY.md](https://github.com/DiamondCraft-Studios/craftium/blob/main
 ## What's in it
 
 - **The tools Claude uses:** read the world and its own preview (`get_state`, `read_selection`, `read_blocks`, `get_surface`), look at it
-  (`render_view`, `get_screenshot`), and build (`preview_build`, `apply_preview`, `cancel_preview`, `undo`).
+  (`render_view`, `get_screenshot`), take showcase pictures of rooms and save them to disk
+  (`capture_batch`, `capture_status`, `capture_cancel`), and build (`preview_build`, `apply_preview`, `cancel_preview`, `undo`).
 - **The `craftium-builder` skill.** It teaches the order a builder works in (brief, site, an approved blockout, then
   shell, roof, openings, materials, detail and context), Minecraft-scale proportions, how to build in stages around
   the preview limit, and how to get stair and roof orientation right.
