@@ -38,7 +38,36 @@ class ShowcasePlanTest {
         double radius = 0.5 * Math.sqrt(21 * 21 + 11 * 11 + 31 * 31);
         double d = Math.sqrt(Math.pow(south.spec().x() - 10.5, 2) + Math.pow(south.spec().y() - 69.5, 2) + Math.pow(south.spec().z() - 15.5, 2));
         assertTrue(d > radius);
-        assertEquals(ShowcasePlan.autoDistance(radius, 70, 1920, 1080), d, 0.01);
+        // Worked out from the box's corners, so never farther than the cruder sphere fit, and never so close the box spills out of the picture.
+        assertTrue(d <= ShowcasePlan.autoDistance(radius, 70, 1920, 1080) + 0.01);
+        double wider = ShowcasePlan.fitDistance(0, 64, 0, 21, 75, 31, new double[]{10.5, 69.5, 15.5}, 180, 6, 50, 1920, 1080);
+        assertTrue(wider > d, "a narrower lens needs more distance");
+    }
+
+    @Test void aCubeIsFramedTighterThanASphereWouldFrameIt() {
+        double sphere = ShowcasePlan.autoDistance(0.5 * Math.sqrt(75), 70, 1920, 1080);
+        double fit = ShowcasePlan.fitDistance(0, 0, 0, 5, 5, 5, new double[]{2.5, 2.5, 2.5}, 180, 0, 70, 1920, 1080);
+        assertTrue(fit < sphere, "fit " + fit + " sphere " + sphere);
+        // Seen face on from 180, its corners are what limit it: half the cube's height (2.5) over the distance to its near face (fit - 2.5) stays within the fill.
+        assertEquals(2.5 / (ShowcasePlan.FILL * Math.tan(Math.toRadians(35))) + 2.5, fit, 0.05);
+    }
+
+    @Test void aWideRoomIsLimitedByItsWidthOnANarrowPicture() {
+        double wide = ShowcasePlan.fitDistance(0, 0, 0, 40, 4, 4, new double[]{20, 2, 2}, 180, 0, 70, 1920, 1080);
+        double tall = ShowcasePlan.fitDistance(0, 0, 0, 4, 40, 4, new double[]{2, 20, 2}, 180, 0, 70, 1920, 1080);
+        assertTrue(tall > wide, "the same box stood on end needs more distance, since the picture is wider than tall");
+    }
+
+    @Test void aShotWorkedOutFromABearingCanBeRaisedAndAPlacedCameraCannot() {
+        var orbit = oneRoom("[\"south\",{\"name\":\"gate\",\"position\":[0,70,-10],\"look_at\":[0,70,0]}]").entries();
+        var up = ShowcasePlan.raised(orbit.get(0), 45);
+        assertNotNull(up);
+        assertTrue(up.spec().y() > orbit.get(0).spec().y());
+        assertTrue(up.spec().pitch() > orbit.get(0).spec().pitch());
+        assertEquals(orbit.get(0).path(), up.path());
+        assertNull(ShowcasePlan.raised(orbit.get(1), 45));
+        assertEquals(new Point(0, 64, 0), orbit.get(0).min());
+        assertEquals(new Point(20, 74, 30), orbit.get(0).max());
     }
 
     @Test void theCompassSidesPutTheCameraOnThatSide() {

@@ -27,8 +27,12 @@ public final class ShowcasePlan {
     static final double FILL = 0.7;
     static final double MIN_DISTANCE = 3, MAX_DISTANCE = 160;
 
-    /** One shot to take: the camera, where its file goes (relative to the job's folder, always with forward slashes) and what it frames. */
-    public record Entry(String room, String shot, ShotSpec spec, String path, Point aim) {}
+    /**
+     * One shot to take: the camera, where its file goes (relative to the job's folder, always with forward slashes) and what it frames.
+     * {@code min} and {@code max} are the room's box (blocks, inclusive). {@code orbit} is {aimX, aimY, aimZ, azimuth, elevation, distance}
+     * for a shot worked out from a bearing, so it can be re-aimed from higher up; null for a camera placed outright.
+     */
+    public record Entry(String room, String shot, ShotSpec spec, String path, Point aim, Point min, Point max, double[] orbit) {}
 
     /** The whole request. {@code job} is a safe folder name. */
     public record Plan(String job, List<Entry> entries) {}
@@ -102,6 +106,7 @@ public final class ShowcasePlan {
         double radius = 0.5 * Math.sqrt(sx * sx + sy * sy + sz * sz);
 
         ShotSpec spec;
+        double[] orbit = null;
         double[] aimAt = {cx, cy, cz};
         if (o.has("position")) {
             double[] p = vec(o, "position", where);
@@ -133,15 +138,64 @@ public final class ShowcasePlan {
             if (o.has("distance")) {
                 distance = number(o, "distance", where);
                 if (distance < 1 || distance > 512) throw new IllegalArgumentException("\"distance\" is " + distance + "; it must be 1 to 512 blocks (" + where + ")");
-            } else distance = autoDistance(radius, fov, width, height);
-            double az = Math.toRadians(azimuth), el = Math.toRadians(elevation);
-            double px = aimAt[0] + Math.sin(az) * Math.cos(el) * distance, py = aimAt[1] + Math.sin(el) * distance, pz = aimAt[2] - Math.cos(az) * Math.cos(el) * distance;
-            double dx = aimAt[0] - px, dy = aimAt[1] - py, dz = aimAt[2] - pz, len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            // Straight down has no horizontal direction to take a yaw from, so face away from the bearing's side (north-up picture).
-            double yaw = Math.abs(el) > Math.toRadians(89.5) ? normYaw(azimuth + 180) : yawOf(dx, dz);
-            spec = new ShotSpec(name, px, py, pz, normYaw(yaw), (float) Math.toDegrees(-Math.asin(dy / len)), fov, width, height, hideHud);
+            } else distance = fitDistance(minX, minY, minZ, minX + sx, minY + sy, minZ + sz, aimAt, azimuth, elevation, fov, width, height);
+            spec = orbit(name, aimAt, azimuth, elevation, distance, fov, width, height, hideHud);
+            orbit = new double[]{aimAt[0], aimAt[1], aimAt[2], azimuth, elevation, distance};
         }
-        return new Entry(roomName, name, spec, roomName + "/" + roomName + "_" + name + ".png", new Point((int) Math.floor(aimAt[0]), (int) Math.floor(aimAt[1]), (int) Math.floor(aimAt[2])));
+        return new Entry(roomName, name, spec, roomName + "/" + roomName + "_" + name + ".png", new Point((int) Math.floor(aimAt[0]), (int) Math.floor(aimAt[1]), (int) Math.floor(aimAt[2])),
+            new Point((int) minX, (int) minY, (int) minZ), new Point((int) (minX + sx - 1), (int) (minY + sy - 1), (int) (minZ + sz - 1)), orbit);
+    }
+
+    /** A camera standing on the side {@code azimuth} of {@code aim}, {@code elevation} degrees up and {@code distance} away, looking at it. */
+    public static ShotSpec orbit(String name, double[] aim, double azimuth, double elevation, double distance, int fov, int width, int height, boolean hideHud) {
+        double az = Math.toRadians(azimuth), el = Math.toRadians(elevation);
+        double px = aim[0] + Math.sin(az) * Math.cos(el) * distance, py = aim[1] + Math.sin(el) * distance, pz = aim[2] - Math.cos(az) * Math.cos(el) * distance;
+        double dx = aim[0] - px, dy = aim[1] - py, dz = aim[2] - pz, len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        // Straight down has no horizontal direction to take a yaw from, so face away from the bearing's side (north-up picture).
+        double yaw = Math.abs(el) > Math.toRadians(89.5) ? normYaw(azimuth + 180) : yawOf(dx, dz);
+        return new ShotSpec(name, px, py, pz, normYaw(yaw), (float) Math.toDegrees(-Math.asin(dy / len)), fov, width, height, hideHud);
+    }
+
+    /** The same shot from {@code elevation} degrees up instead, for getting over whatever is in the way; null for a camera that was placed outright. */
+    public static Entry raised(Entry e, double elevation) {
+        if (e.orbit() == null) return null;
+        double[] o = e.orbit();
+        var old = e.spec();
+        var spec = orbit(old.name(), new double[]{o[0], o[1], o[2]}, o[3], elevation, o[5], old.fov(), old.width(), old.height(), old.hideHud());
+        return new Entry(e.room(), e.shot(), spec, e.path(), e.aim(), e.min(), e.max(), new double[]{o[0], o[1], o[2], o[3], elevation, o[5]});
+    }
+
+    /**
+     * How far back the camera stands so all eight corners of the box (from {@code (x0,y0,z0)} to {@code (x1,y1,z1)}, the outer faces of its
+     * blocks) sit inside {@link #FILL} of the picture, as the lens really sees them: a wide low building is judged by its width, a tall one by
+     * its height, and a cube by its corners, not by a sphere around it.
+     */
+    public static double fitDistance(double x0, double y0, double z0, double x1, double y1, double z1, double[] aim, double azimuth, double elevation, int fov, int width, int height) {
+        double tanV = Math.tan(Math.toRadians(fov) / 2), tanH = tanV * width / height;
+        double lo = 1, hi = MAX_DISTANCE;
+        if (!fits(x0, y0, z0, x1, y1, z1, aim, azimuth, elevation, hi, fov, width, height, tanH, tanV)) return MAX_DISTANCE;
+        for (int i = 0; i < 40; i++) {
+            double mid = (lo + hi) / 2;
+            if (fits(x0, y0, z0, x1, y1, z1, aim, azimuth, elevation, mid, fov, width, height, tanH, tanV)) hi = mid; else lo = mid;
+        }
+        return Math.max(MIN_DISTANCE, hi);
+    }
+
+    private static boolean fits(double x0, double y0, double z0, double x1, double y1, double z1, double[] aim, double azimuth, double elevation, double d, int fov, int w, int h, double tanH, double tanV) {
+        var cam = orbit("fit", aim, azimuth, elevation, d, fov, w, h, true);
+        double yaw = Math.toRadians(cam.yaw()), pitch = Math.toRadians(cam.pitch());
+        // Forward, right and up as the game turns them: yaw 0 faces +z, and the right hand of that is -x; positive pitch looks down.
+        double[] f = {-Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)};
+        double[] r = {-Math.cos(yaw), 0, -Math.sin(yaw)};
+        double[] u = {r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]};
+        for (int i = 0; i < 8; i++) {
+            double vx = ((i & 1) == 0 ? x0 : x1) - cam.x(), vy = ((i & 2) == 0 ? y0 : y1) - cam.y(), vz = ((i & 4) == 0 ? z0 : z1) - cam.z();
+            double depth = vx * f[0] + vy * f[1] + vz * f[2];
+            if (depth < 0.5) return false;
+            if (Math.abs(vx * r[0] + vy * r[1] + vz * r[2]) / depth > FILL * tanH) return false;
+            if (Math.abs(vx * u[0] + vy * u[1] + vz * u[2]) / depth > FILL * tanV) return false;
+        }
+        return true;
     }
 
     /** How far back the camera stands so the room's bounding sphere fills about {@link #FILL} of the shorter half of the picture. */
