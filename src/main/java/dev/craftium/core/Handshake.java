@@ -32,10 +32,12 @@ public final class Handshake {
      * a status carries the ghost the tool wants shown ({@code pluginPreviewData}).
      */
     public static final String PLUGIN_TOOLS="plugin-tools";
+    /** The list of saved selections and the actions that swap, edit and delete them. */
+    public static final String SAVED_SELECTIONS="saved-selections";
     /** What this build supports. */
-    public static final Set<String> CAPABILITIES=Set.of(MODIFY_EXPANSION,AI_SPEC_V2,AI_SESSIONS,PLUGIN_TOOLS);
+    public static final Set<String> CAPABILITIES=Set.of(MODIFY_EXPANSION,AI_SPEC_V2,AI_SESSIONS,PLUGIN_TOOLS,SAVED_SELECTIONS);
     /** What the Fabric server adds to that: things only a server with mixins can do. */
-    public static final Set<String> FABRIC_SERVER_CAPABILITIES=Set.of(MODIFY_EXPANSION,AI_SPEC_V2,AI_SESSIONS,PLUGIN_TOOLS,FAST_MOVEMENT);
+    public static final Set<String> FABRIC_SERVER_CAPABILITIES=Set.of(MODIFY_EXPANSION,AI_SPEC_V2,AI_SESSIONS,PLUGIN_TOOLS,SAVED_SELECTIONS,FAST_MOVEMENT);
     /** {@code version} is the mod or plugin version, such as 0.9.1-beta.1. {@code capabilities} is null from a build that predates the list, which means none. */
     public record Hello(int protocol,String version,Set<String> capabilities) {
         public boolean has(String capability){return capabilities!=null&&capabilities.contains(capability);}

@@ -43,6 +43,10 @@ class SavedSelectionsTest {
         s.combine(List.of(A),Selection.Mode.SUBTRACT);saved.sync(s);assertEquals(List.of(B),one.points());
         saved.release(s);assertEquals(Set.of(C),set(s));assertEquals(List.of(B),one.points());
     }
+    @Test void clearingTheSelectionWhileEditingDoesNotEmptyTheEntry(){
+        var saved=new SavedSelections();var s=live(A,B);var one=saved.save(s);saved.edit(one.id(),s);
+        s.clear();assertFalse(saved.sync(s));assertEquals(2,one.size());
+    }
     @Test void aSavedEntryIsNotChangedByLaterEditsToTheLiveSelectionItWasSavedFrom(){
         var saved=new SavedSelections();var s=live(A,B);var one=saved.save(s);s.combine(List.of(C),Selection.Mode.ADD);
         assertEquals(2,one.size());
@@ -57,6 +61,13 @@ class SavedSelectionsTest {
         int at=saved.indexOf(one);saved.delete(one.id(),s);saved.restore(one,at);
         assertEquals(List.of("Selection 1","Selection 2","Selection 3"),saved.entries().stream().map(SavedSelections.Entry::name).toList());
         assertSame(two,saved.byName("selection 2"));
+    }
+    @Test void undoBringsBackTheLastDeleteOnlyWhenItIsNewerThanTheLastEdit(){
+        var saved=new SavedSelections();var s=live(A);var one=saved.save(s);saved.save(s);
+        saved.delete(one.id(),s);
+        assertNull(saved.undoDelete(System.currentTimeMillis()+1000),"an edit made after the delete is undone first");
+        assertSame(one,saved.undoDelete(0));assertEquals("Selection 1",saved.entries().getFirst().name());
+        assertNull(saved.undoDelete(0),"nothing left to bring back");
     }
     @Test void renamingKeepsNamesUniqueAndNonEmpty(){
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);

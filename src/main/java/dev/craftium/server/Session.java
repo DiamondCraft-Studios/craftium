@@ -53,6 +53,8 @@ final class Session {
     Edit pluginPreview;String pluginPreviewData="";boolean pluginPreviewDirty;
     /** The {@link PluginTools#version} of the list of plugin tools this player was last sent, or -1 when they have not been sent one. */
     int pluginToolsSent=-1;
+    /** The selections this player saved, and the {@link dev.craftium.core.SavedSelections#revision} of them that was last sent, or -1 when none has been. */
+    final dev.craftium.core.SavedSelections saved=new dev.craftium.core.SavedSelections();long savedSent=-1;
     /** What the last AI spec planned looked wrong in (see BuildSpec.Result#warnings), for the reply that describes its preview. */
     List<String> specWarnings=List.of();
     /** The clipboard's blocks as a ghost for the placement preview, and whether it needs encoding again. */

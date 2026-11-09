@@ -26,6 +26,9 @@ public final class SavedSelections {
     /** The live selection as it was before looking began; null when not looking. */
     private List<Point> stash;
     private long revision;
+    /** Entries that were deleted, newest last, so Undo can bring the latest back. */
+    private record Deleted(Entry entry,int index,long time){}
+    private final Deque<Deleted> deleted=new ArrayDeque<>();
 
     public List<Entry> entries(){return Collections.unmodifiableList(entries);}
     public Entry active(){return active;}
@@ -67,14 +70,23 @@ public final class SavedSelections {
     }
     /** While editing, writes the live selection to the entry being edited. Call it after anything changed the live selection. */
     public boolean sync(Selection live){
-        if(!editing()||live.size()==0&&active.points.isEmpty())return false;
+        if(!editing()||live.size()==0)return false; // an emptied selection (Clear, Delete) never empties the saved one; delete it from the window instead
         if(active.points.size()==live.size()&&new HashSet<>(active.points).equals(live.points()))return false;
         active.points=List.copyOf(live.points());revision++;return true;
     }
     /** Removes the entry; if it was being looked at, the live selection comes back first. Returns the removed entry so a delete can be undone. */
     public Entry delete(int id,Selection live){
         var entry=need(id);if(active==entry)release(live);
-        entries.remove(entry);revision++;return entry;
+        int index=entries.indexOf(entry);entries.remove(entry);revision++;
+        deleted.addLast(new Deleted(entry,index,System.currentTimeMillis()));while(deleted.size()>16)deleted.removeFirst();
+        return entry;
+    }
+    /** Brings back the entry deleted last, when that was after {@code time} (epoch milliseconds: when the newest edit in the history was made, so Undo takes the most recent thing). Returns the entry, or null when there is none to bring back. */
+    public Entry undoDelete(long time){
+        var last=deleted.peekLast();if(last==null||last.time<=time)return null;
+        deleted.removeLast();
+        if(byId(last.entry.id)!=null||entries.size()>=MAX)return null;
+        entries.add(Math.clamp(last.index,0,entries.size()),last.entry);revision++;return last.entry;
     }
     /** Puts a deleted entry back where it was, with its id and name. */
     public void restore(Entry entry,int index){
