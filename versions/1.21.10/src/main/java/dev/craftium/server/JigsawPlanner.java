@@ -61,10 +61,12 @@ final class JigsawPlanner {
     static Path packFolder(MinecraftServer server) throws IOException {
         var folder = server.getWorldPath(LevelResource.DATAPACK_DIR).resolve(PACK);
         var meta = folder.resolve("pack.mcmeta");
-        if (!Files.exists(meta)) {
+        // A pack_format alone is read by the game as an unknown format, so the range is written too. A file this planner made before that is brought up to date.
+        boolean outdated = Files.exists(meta) && Files.readString(meta).contains("Jigsaw pools made with Craftium") && !Files.readString(meta).contains("min_format");
+        if (!Files.exists(meta) || outdated) {
             Files.createDirectories(folder.resolve("data"));
             int format = net.minecraft.SharedConstants.getCurrentVersion().packVersion(PackType.SERVER_DATA).major();
-            Files.writeString(meta, "{\n  \"pack\": {\n    \"description\": \"Jigsaw pools made with Craftium\",\n    \"pack_format\": " + format + "\n  }\n}\n");
+            Files.writeString(meta, "{\n  \"pack\": {\n    \"description\": \"Jigsaw pools made with Craftium\",\n    \"pack_format\": " + format + ",\n    \"min_format\": " + format + ",\n    \"max_format\": " + format + "\n  }\n}\n");
         }
         return folder;
     }
