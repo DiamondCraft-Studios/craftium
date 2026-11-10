@@ -71,6 +71,7 @@ public final class BlueprintScreen extends CraftiumScreen {
     /** Asks for the list again: the server's arrives as a reply, the client's is read on another thread. */
     private void reload(){
         int ticket=++loads;listing=true;waitTicks=0;waitVersion=ClientState.libraryVersion;
+        version=ClientState.libraryVersion; // this load answers the change: without it tick() would start another every tick, and each would drop the one before it
         if(!ClientState.options.libraryClient){CraftiumClient.send("blueprint_list",null,null);return;}
         java.util.concurrent.CompletableFuture.supplyAsync(ClientAssets::list).whenComplete((found,error)->minecraft.execute(()->{if(ticket!=loads)return;local=error==null?found:List.of();listing=false;filter();}));
     }
