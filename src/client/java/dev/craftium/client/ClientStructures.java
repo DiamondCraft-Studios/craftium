@@ -89,6 +89,27 @@ final class ClientStructures {
         thread.setDaemon(true);thread.start();
     }
 
+    /** Picks a Java structure file (.nbt) and hands its name (without the extension, as a template name) and bytes to {@code then} on the game thread. */
+    static void chooseJavaStructure(java.util.function.BiConsumer<String,byte[]> then){
+        var thread=new Thread(()->{
+            try(MemoryStack stack=MemoryStack.stackPush()){
+                PointerBuffer filters=stack.mallocPointer(1);filters.put(stack.UTF8("*.nbt")).flip();
+                String chosen=TinyFileDialogs.tinyfd_openFileDialog("Import structure",defaultDirectory(ClientState.options.structure).toString()+java.io.File.separator,filters,"Java structure (*.nbt)",false);
+                if(chosen==null)return;
+                Path path=Path.of(chosen);
+                if(Files.size(path)>LIMIT)throw new IllegalArgumentException("Structure import limit: 1 MiB");
+                byte[] data=Files.readAllBytes(path);
+                String file=path.getFileName().toString();
+                String base=file.toLowerCase(Locale.ROOT).endsWith(".nbt")?file.substring(0,file.length()-4):file;
+                String name=base.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]+","_").replaceAll("^_+|_+$","");
+                if(name.isEmpty())name="imported";
+                String result=name;
+                Minecraft.getInstance().execute(()->then.accept(result,data));
+            }catch(Exception e){Minecraft.getInstance().execute(()->ClientState.notify(e.getMessage()==null?"Could not read the structure":e.getMessage()));}
+        },"Craftium structure import");
+        thread.setDaemon(true);thread.start();
+    }
+
     /** Picks a structure file (Java NBT, Sponge schematic or Bedrock) and loads it into the clipboard on the server. */
     static void chooseImport(){
         var thread=new Thread(()->{

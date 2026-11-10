@@ -77,11 +77,12 @@ final class JigsawEditor {
     // ---- entry point
 
     /** Does one command and sends the player the model that results. Throws {@link IllegalArgumentException} with the reason when it cannot be done. */
-    static String act(ServerPlayer player, String json) {
+    static String act(ServerPlayer player, String json, String data) {
         var memory = memory(player);
         JsonObject command;
         try { command = JsonParser.parseString(json.isBlank() ? "{\"op\":\"open\"}" : json).getAsJsonObject(); }
         catch (RuntimeException e) { throw new IllegalArgumentException("The pool editor could not read that command"); }
+        if (data != null && !data.isEmpty()) command.addProperty("data", data); // a file that came with the command
         try {
             var server = player.level().getServer();
             JigsawPlanner.withPacks(server, env -> {
@@ -183,6 +184,23 @@ final class JigsawEditor {
                 pool.getAsJsonArray("elements").add(single(name.toString(), 1, "rigid"));
                 writePool(env, edit, id, pool);
                 return "Saved the selection as " + name + " and added it to " + id;
+            }
+            case "element_from_file" -> {
+                byte[] bytes;
+                try { bytes = Base64.getDecoder().decode(text(c, "data")); }
+                catch (IllegalArgumentException e) { throw new IllegalArgumentException("The file did not arrive whole"); }
+                CompoundTag tag;
+                try { tag = NbtIo.readCompressed(new java.io.ByteArrayInputStream(bytes), NbtAccounter.create(32L * 1024 * 1024)); }
+                catch (IOException e) { throw new IllegalArgumentException("That is not a Java structure file (.nbt)"); }
+                if (tag.get("size") == null || (tag.get("palette") == null && tag.get("palettes") == null)) throw new IllegalArgumentException("That file is not a Java structure: it has no size or palette");
+                var home = poolId(text(c, "pool"));
+                var typed = text(c, "name").strip();
+                var name = poolId(typed.contains(":") ? typed : home.getNamespace() + ":" + typed);
+                writeTemplate(env, edit, name, tag);
+                var pool = readPool(env, home);
+                pool.getAsJsonArray("elements").add(single(name.toString(), 1, "rigid"));
+                writePool(env, edit, home, pool);
+                return "Imported the structure as " + name + " and added it to " + home;
             }
             case "features" -> { memory.featureQuery = c.has("query") ? text(c, "query") : ""; return ""; }
             case "element_add_empty" -> {

@@ -254,6 +254,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 case "Selection" -> "Saves the blocks you selected as a new template and adds it.";
                 case "Feature" -> "Adds a feature, such as a tree or a flower, that the game places by itself.";
                 case "Empty" -> "Adds an empty slot, which places nothing.";
+                case "Structure" -> "Imports a structure file from your computer as a template.";
                 case "Add an empty slot" -> "Adds an element that places nothing, so a connector can end here some of the time.";
                 case "Create pool", "Copy pool", "Rename pool" -> "Does it with the name typed above.";
                 case "Create connector pool" -> "Makes an empty pool with this name, so the connector has somewhere to point. Add elements to it afterwards.";
@@ -389,11 +390,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
     /** The panel that adds an element to the pool: a template (found, or made from the selection), a feature such as a tree, or an empty slot. */
     private void overlay() {
         int w = Math.min(460, cw - 40), x = (cw - w) / 2, y = 40;
-        String[] tabs = {"Template", "Selection", "Feature", "Empty"};
-        int tabW = (w - 20 - 12) / 4;
+        String[] tabs = {"Template", "Selection", "Structure", "Feature", "Empty"};
+        int tabW = (w - 20 - 16) / 5;
         for (int i = 0; i < tabs.length; i++) {
             int index = i;
-            button(tabs[i], x + 10 + i * (tabW + 4), y + 32, tabW, 20, () -> { addTab = index; if (index == 2) edit("features", "query", featureQuery); else init(); }).lit(addTab == i);
+            button(tabs[i], x + 10 + i * (tabW + 4), y + 32, tabW, 20, () -> { addTab = index; if (index == 3) edit("features", "query", featureQuery); else init(); }).lit(addTab == i);
         }
         int top = y + 60, boxY = top + 12, listY = top + 38, rows = Math.max(1, (ch - 40 - listY - 12) / 20);
         switch (addTab) {
@@ -410,6 +411,12 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 button("Save selection", x + w - 114, boxY + 39, 104, 20, this::saveSelection).active = num(model, "selection", 0) > 0;
             }
             case 2 -> {
+                tips.on(button("Import structure", x + 10, top + 44, 150, 22, this::importStructure), "Choose a Java structure file (.nbt) on your computer. It is saved as a template, with its jigsaw blocks as they are, and added to the pool.");
+                var library = button("From blueprint library", x + 10, top + 72, 150, 22, () -> { });
+                library.active = false;
+                tips.on(library, "Coming soon: pick a template from your blueprint library.");
+            }
+            case 3 -> {
                 tips.on(box(x + 10, boxY, w - 20, featureQuery, 80, v -> featureQuery = v, () -> edit("features", "query", featureQuery)), "Part of a feature name, such as oak or flower. Press Enter to search.");
                 var found = model.has("features") ? model.getAsJsonArray("features") : new JsonArray();
                 for (int i = 0; i < Math.min(found.size(), rows); i++) {
@@ -420,6 +427,17 @@ final class JigsawEditorScreen extends CraftiumScreen {
             default -> button("Add an empty slot", x + 10, top + 64, 150, 22, () -> { edit("element_add_empty", "pool", poolId()); adding = false; });
         }
         button("Close", x + w - 80, y + 6, 70, 20, () -> { adding = false; init(); });
+    }
+
+    private void importStructure() {
+        ClientStructures.chooseJavaStructure((name, data) -> {
+            var o = ClientState.options;
+            String prior = o.assetData;
+            o.assetData = java.util.Base64.getEncoder().encodeToString(data);
+            try { edit("element_from_file", "pool", poolId(), "name", name); }
+            finally { o.assetData = prior; }
+            adding = false;
+        });
     }
 
     private void saveSelection() {
@@ -647,6 +665,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 g.text(font, blocks > 0 ? blocks + " blocks are selected." : "Select blocks in the world first.", x + 10, line + 4, blocks > 0 ? OK : WARN, false);
             }
             case 2 -> {
+                int line = top;
+                String text = "Imports a Java structure file (.nbt) from your computer as a new template and adds it to the pool. The jigsaw blocks inside it are kept.";
+                for (var row : font.split(Component.literal(text), w - 20)) { g.text(font, row, x + 10, line, MUTED, false); line += 10; }
+            }
+            case 3 -> {
                 g.text(font, "Trees, flowers and other things the game places by itself:", x + 10, top, MUTED, false);
                 int found = model.has("features") ? model.getAsJsonArray("features").size() : 0;
                 if (found == 0) g.text(font, "No features match.", x + 10, listY + 4, MUTED, false);
