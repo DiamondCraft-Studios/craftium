@@ -61,6 +61,17 @@ public final class EditorServer {
             else for(var c:run)(j.backwards?c.before():c.after()).place(j.level,EditPlanner.pos(c.pos()),flags);
             from=to;
         }
+        // Placing a block that has a block entity makes one, which the edit did not describe. What the world holds now is what undo has to find there, or it
+        // takes the block for one that changed since and leaves it standing.
+        if(!j.backwards){
+            int base=j.applied.size()-due.size();
+            for(int i=0;i<due.size();i++){
+                var c=due.get(i);
+                if(!c.after().state().hasBlockEntity())continue;
+                var now=BlockSnapshot.capture(j.level,EditPlanner.pos(c.pos()));
+                if(now.state()==c.after().state())j.applied.set(base+i,new Session.Change(c.pos(),c.before(),now));
+            }
+        }
         if(!j.backwards&&!j.history&&j.edit.name().equals(IN_WORLD_BREAK))breakEffects(j.level,due);
     }
     /** The name of the edit a left click in the world makes while the break is the editor's, not the game's: infinite reach or symmetry. */
