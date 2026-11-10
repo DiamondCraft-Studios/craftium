@@ -70,9 +70,7 @@ public final class BlueprintFiles {
                 return "Renamed to " + leaf;
             }
             case "delete" -> {
-                var picked = new ArrayList<Path>();
-                for (String p : paths) picked.add(existing(root, p));
-                picked.removeIf(a -> picked.stream().anyMatch(b -> b != a && a.startsWith(b))); // inside a folder that goes too
+                var picked = pick(root, paths);
                 if (picked.isEmpty()) throw new IllegalArgumentException("Choose a file or folder");
                 Path stamped = archive.toAbsolutePath().normalize().resolve(java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")));
                 for (Path path : picked) archive(root, stamped, path);
@@ -83,8 +81,7 @@ public final class BlueprintFiles {
                 Path target = resolve(root, op.target());
                 if (!Files.isDirectory(target)) throw new IllegalArgumentException("Open a folder to paste into");
                 int done = 0;
-                for (String p : paths) {
-                    Path source = existing(root, p);
+                for (Path source : pick(root, paths)) {
                     boolean directory = Files.isDirectory(source);
                     if (directory && target.startsWith(source)) throw new IllegalArgumentException("A folder cannot be pasted into itself");
                     if (move && source.getParent().equals(target)) continue;
@@ -141,6 +138,13 @@ public final class BlueprintFiles {
         if (path.equals(root)) throw new IllegalArgumentException("Choose a file or folder");
         if (!Files.exists(path)) throw new IllegalArgumentException("That no longer exists");
         return path;
+    }
+
+    /** The items a request names, each once, and none that sits inside a folder that is also named (it goes with the folder). */
+    private static List<Path> pick(Path root, List<String> names) {
+        var all = new ArrayList<Path>();
+        for (String name : names) { Path path = existing(root, name); if (!all.contains(path)) all.add(path); }
+        return all.stream().filter(a -> all.stream().noneMatch(b -> !b.equals(a) && a.startsWith(b))).toList();
     }
 
     private static Path sidecar(Path file) { return file.resolveSibling(file.getFileName() + ".json"); }

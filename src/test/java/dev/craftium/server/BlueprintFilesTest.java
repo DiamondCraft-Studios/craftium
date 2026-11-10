@@ -101,6 +101,20 @@ class BlueprintFilesTest {
         assertTrue(Files.exists(root.resolve("dest2/b.nbt"))); assertFalse(Files.exists(root.resolve("dest2/b.nbt.json")));
     }
 
+    @Test void aPathNamedTwiceIsArchivedOnce() throws IOException {
+        blueprint("a.nbt", "a");
+        assertTrue(run("delete", null, List.of("a.nbt", "a.nbt"), null).startsWith("Archived 1 item "));
+        assertFalse(Files.exists(root.resolve("a.nbt")));
+    }
+
+    @Test void aFileNamedWithItsFolderGoesOnlyWithTheFolder() throws IOException {
+        blueprint("dir/a.nbt", "a"); Files.createDirectories(root.resolve("dest"));
+        assertEquals("Copied 1 item", run("copy", "dest", List.of("dir/", "dir/a.nbt", "dir/"), null));
+        assertTrue(Files.exists(root.resolve("dest/dir/a.nbt"))); assertFalse(Files.exists(root.resolve("dest/a.nbt")));
+        assertEquals("Moved 1 item", run("cut", "dest", List.of("dir/", "dir/a.nbt"), null)); // a cut of both used to fail on the file the folder had already taken
+        assertFalse(Files.exists(root.resolve("dir")));
+    }
+
     @Test void aFolderCannotGoIntoItselfAndACopyBringsItsContents() throws IOException {
         blueprint("dir/a.nbt", "a"); Files.createDirectories(root.resolve("dir/sub")); Files.createDirectories(root.resolve("other"));
         assertThrows(IllegalArgumentException.class, () -> run("cut", "dir/sub", List.of("dir/"), null));
