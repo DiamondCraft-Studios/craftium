@@ -67,6 +67,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private int awaitTicks;
     /** The add panel's tab (template, selection, feature, empty), what was last searched for among the features, the guide, and the name being asked for. */
     private int addTab;
+    private static final String SIDEWAYS = "This connector faces sideways, and a joint only matters for a connector that faces up or down, so there is nothing to set here.";
     private String featureQuery = "";
     private boolean helpOpen;
     private String dialogMode, dialogText = "";
@@ -268,8 +269,8 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 case "↑" -> "Moves this element up the list. The order does not change how often it is chosen; the weight does.";
                 case "↓" -> "Moves this element down the list. The order does not change how often it is chosen; the weight does.";
                 case "Remove" -> "Removes this element from the pool. The template itself is kept.";
-                case "Rollable" -> "Rollable: a piece joined to a vertical connector may be turned any way round it. Click to make it aligned.";
-                case "Aligned" -> "Aligned: the joined piece is turned to line up with the top of this connector. Click to make it rollable.";
+                case "Rollable" -> b.active ? "Rollable: a piece joined to a vertical connector may be turned any way round it. Click to make it aligned." : SIDEWAYS;
+                case "Aligned" -> b.active ? "Aligned: the joined piece is turned to line up with the top of this connector. Click to make it rollable." : SIDEWAYS;
                 case "Save selection" -> "Saves the blocks you selected as a new template, and adds it to this pool.";
                 default -> adding ? "Adds this to the pool as a new element." : null;
             };
@@ -370,7 +371,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
             tips.on(box(x + half + 4 + 40, y + 38, rightW - (half + 4) - 40, str(jig, "target", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("target", focusedText()); change(c); }), "Needs: the name the connector of the next piece must have to join this one. Enter applies.");
             boolean vertical = !jig.has("vertical") || jig.get("vertical").getAsBoolean(); // only a connector that faces up or down has a joint that matters
             boolean rollable = str(jig, "joint", "rollable").equals("rollable");
-            if (vertical) button(rollable ? "Rollable" : "Aligned", x, y + 62, 76, 18, () -> { var c = base.deepCopy(); c.addProperty("joint", rollable ? "aligned" : "rollable"); change(c); });
+            button(rollable ? "Rollable" : "Aligned", x, y + 62, 76, 18, () -> { var c = base.deepCopy(); c.addProperty("joint", rollable ? "aligned" : "rollable"); change(c); }).active = vertical; // greyed out for a connector that faces sideways
             tips.on(box(x + 114, y + 62, 40, String.valueOf(num(jig, "placement", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "placement", focusedText()); change(c); }), "Placement priority: when several pieces wait to be attached, those from connectors with a higher number are placed first. Enter applies.");
             tips.on(box(x + 204, y + 62, 40, String.valueOf(num(jig, "selection", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "selection", focusedText()); change(c); }), "Selection priority: among the connectors of a piece, those with a higher number are tried first. Enter applies.");
             if (str(jig, "issue", "").endsWith("does not exist")) {
@@ -617,7 +618,6 @@ final class JigsawEditorScreen extends CraftiumScreen {
             g.text(font, "Called", x, y + 18, MUTED, false);
             g.text(font, "Pick from", x, y + 42, MUTED, false);
             g.text(font, "Needs", x + (rightW / 2 - 3) + 4, y + 42, MUTED, false);
-            if (jig.has("vertical") && !jig.get("vertical").getAsBoolean()) g.text(font, "side connector", x, y + 66, MUTED, false);
             g.text(font, "place", x + 82, y + 66, MUTED, false);
             g.text(font, "select", x + 160, y + 66, MUTED, false);
         }
