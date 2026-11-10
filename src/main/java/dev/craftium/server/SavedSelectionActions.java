@@ -17,10 +17,12 @@ final class SavedSelectionActions {
             case "save"->{var entry=saved.create(s.selection);return "Created "+entry.name();}
             case "view"->{saved.view(id(part),s.selection);return "Showing "+saved.active().name();}
             case "viewset"->{ // viewset:<ids separated by commas>: these BuildObjects, selected together; none lets go
-                var ids=new java.util.ArrayList<Integer>();
-                try{if(part.length>1&&!part[1].isBlank())for(var t:part[1].split(","))ids.add(Integer.parseInt(t.strip()));}catch(NumberFormatException e){throw new IllegalArgumentException("Pick BuildObjects");}
+                var ids=ids(part);
                 saved.viewSet(ids,s.selection);return ids.isEmpty()?"Your selection is back":"Showing "+ids.size()+" BuildObjects";
             }
+            case "group"->{var entry=saved.group(ids(part));return "Grouped into "+entry.name();}
+            case "createchild"->{var entry=saved.createChild(id(part),s.selection);return "Created "+entry.name();}
+            case "deleteset"->{var ids=ids(part);saved.deleteMany(ids,s.selection);return "Deleted "+ids.size()+" BuildObjects";}
             case "edit"->{saved.edit(id(part),s.selection);return "Editing "+saved.active().name();}
             case "release"->{saved.release(s.selection);return "Your selection is back";}
             case "delete"->{var entry=saved.delete(id(part),s.selection);return "Deleted "+entry.name();}
@@ -34,12 +36,18 @@ final class SavedSelectionActions {
         }
     }
     /** Whether the action changes the BuildObjects themselves (and so goes in the history), as against only what is being looked at. */
-    static boolean changesHierarchy(String action){return switch(verb(action)){case "save","delete","rename","place"->true;default->false;};}
+    static boolean changesHierarchy(String action){return switch(verb(action)){case "save","delete","deleteset","rename","place","group","createchild"->true;default->false;};}
     /** What the history calls the action: "Undid Create BuildObject". */
     static String historyName(String action){
-        return switch(verb(action)){case "save"->"Create BuildObject";case "delete"->"Delete BuildObject";case "rename"->"Rename BuildObject";case "place"->"Move BuildObject";default->"BuildObject";};
+        return switch(verb(action)){case "save","createchild"->"Create BuildObject";case "group"->"Group BuildObjects";case "delete"->"Delete BuildObject";case "deleteset"->"Delete BuildObjects";case "rename"->"Rename BuildObject";case "place"->"Move BuildObject";default->"BuildObject";};
     }
     private static String verb(String action){return action.startsWith(PREFIX)?action.substring(PREFIX.length()).split(":",2)[0]:"";}
+    /** The ids of an action like {@code group:1,2,3}. */
+    private static List<Integer> ids(String[] part){
+        var out=new java.util.ArrayList<Integer>();
+        try{if(part.length>1&&!part[1].isBlank())for(var t:part[1].split(","))out.add(Integer.parseInt(t.strip()));}catch(NumberFormatException e){throw new IllegalArgumentException("Pick BuildObjects");}
+        return out;
+    }
     private static int id(String[] part){
         if(part.length<2)throw new IllegalArgumentException("Pick a BuildObject");
         try{return Integer.parseInt(part[1]);}catch(NumberFormatException e){throw new IllegalArgumentException("Pick a BuildObject");}

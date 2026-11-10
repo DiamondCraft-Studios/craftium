@@ -125,12 +125,36 @@ public final class SavedSelections {
         var held=new HashSet<Point>();for(var t:taken)held.addAll(effective(t));
         var own=new ArrayList<Point>();for(var p:cells)if(!held.contains(p))own.add(p);
         var entry=new Entry(nextId++,freeName(),own);entries.add(entry);
-        if(!taken.isEmpty()){
-            var first=taken.getFirst();var parent=first.parent;int index=children(parent).indexOf(first);
-            place(entry.id,parent==null?0:parent.id,index);
-            int k=0;for(var t:taken)place(t.id,entry.id,k++);
-        }
+        adopt(entry,taken);
         revision++;return entry;
+    }
+    /** Puts {@code taken} (in tree order, none under another) inside the new top-level {@code entry}, which takes the place of the first of them. */
+    private void adopt(Entry entry,List<Entry> taken){
+        if(taken.isEmpty())return;
+        var first=taken.getFirst();var parent=first.parent;int index=children(parent).indexOf(first);
+        place(entry.id,parent==null?0:parent.id,index);
+        int k=0;for(var t:taken)place(t.id,entry.id,k++);
+    }
+    /** Makes an empty BuildObject around these ones (each with everything under it), in the place of the first of them: grouping them. One that is under another listed one stays under it. */
+    public Entry group(List<Integer> ids){
+        var picked=new LinkedHashSet<Entry>();for(int id:ids)picked.add(need(id));
+        if(picked.isEmpty())throw new IllegalArgumentException("Pick the BuildObjects to group");
+        if(entries.size()>=MAX)throw new IllegalArgumentException("BuildObject limit: "+MAX);
+        var taken=entries.stream().filter(e->picked.contains(e)&&picked.stream().noneMatch(o->o!=e&&isUnder(e,o))).toList(); // tree order, the outermost only
+        var entry=new Entry(nextId++,freeName(),List.of());entries.add(entry);
+        adopt(entry,taken);revision++;return entry;
+    }
+    /** Makes a BuildObject from the live selection as the last child of {@code parentId}. Unlike {@link #create}, it takes nothing in. */
+    public Entry createChild(int parentId,Selection live){
+        var parent=need(parentId);
+        if(live.size()==0)throw new IllegalArgumentException("Nothing is selected to make a BuildObject from");
+        if(entries.size()>=MAX)throw new IllegalArgumentException("BuildObject limit: "+MAX);
+        var entry=new Entry(nextId++,freeName(),live.points());entries.add(entry);
+        place(entry.id,parent.id,children(parent).size());revision++;return entry;
+    }
+    /** Deletes these BuildObjects, each with everything under it (one already gone with another is skipped). */
+    public void deleteMany(List<Integer> ids,Selection live){
+        for(int id:ids)if(byId(id)!=null)delete(id,live);
     }
     public void rename(int id,String name){
         var entry=need(id);var clean=name==null?"":name.strip();

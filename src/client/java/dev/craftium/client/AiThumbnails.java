@@ -15,7 +15,7 @@ final class AiThumbnails {
     static final int WIDTH = 128, HEIGHT = 88;
     /** Pictures are drawn from boxes up to this many blocks; a bigger preview is shown without one. */
     private static final long MAX_VOLUME = 2_000_000L;
-    private record Entry(Tex tex, ReferenceTexture texture, long previewId) {}
+    record Entry(Tex tex, ReferenceTexture texture, long previewId) {}
     private static final Map<String, Entry> CACHE = new HashMap<>();
     private static boolean builtThisFrame;
     private AiThumbnails() {}
@@ -50,7 +50,7 @@ final class AiThumbnails {
         CACHE.clear();
     }
 
-    private static void release(Entry entry) {
+    static void release(Entry entry) {
         Minecraft.getInstance().getTextureManager().release(entry.tex().id());
     }
 
@@ -73,7 +73,15 @@ final class AiThumbnails {
         int[] colours = new int[sx * sy * sz];
         for (int i = 0; i + 3 < cells.length; i += 4)
             colours[(cells[i] - x0) + sx * ((cells[i + 2] - z0) + sz * (cells[i + 1] - y0))] = palette[cells[i + 3]];
-        var picture = VoxelView.render(sx, sy, sz, colours, VoxelView.Angle.SE, WIDTH, HEIGHT).image();
+        return draw(sx, sy, sz, colours, view.info().previewId());
+    }
+
+    /** The picture of a box of block colours (0 for nothing), registered as a texture; shared with the blueprint browser. */
+    static Entry draw(int sx, int sy, int sz, int[] colours, long previewId) { return draw(sx, sy, sz, colours, colours, colours, previewId); }
+
+    /** As above, with a colour for the top, the sides and the underside of each block. */
+    static Entry draw(int sx, int sy, int sz, int[] top, int[] colours, int[] bottom, long previewId) {
+        var picture = VoxelView.render(sx, sy, sz, top, colours, bottom, VoxelView.Angle.SE, WIDTH, HEIGHT).image();
         var image = new NativeImage(WIDTH, HEIGHT, false);
         int ox = (WIDTH - picture.getWidth()) / 2, oy = (HEIGHT - picture.getHeight()) / 2;
         for (int y = 0; y < HEIGHT; y++)
@@ -85,6 +93,6 @@ final class AiThumbnails {
         texture.filtering(true);
         var tex = Tex.of("craftium", "ai_session/" + UUID.randomUUID());
         Minecraft.getInstance().getTextureManager().register(tex.id(), texture);
-        return new Entry(tex, texture, view.info().previewId());
+        return new Entry(tex, texture, previewId);
     }
 }

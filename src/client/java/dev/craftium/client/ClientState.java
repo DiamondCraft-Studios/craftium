@@ -76,6 +76,7 @@ public final class ClientState {
     private static final Set<Integer> savedHidden=new HashSet<>();
     public static boolean savedHidden(int id){return savedHidden.contains(id);}
     public static void toggleSavedHidden(int id){if(!savedHidden.remove(id))savedHidden.add(id);}
+    public static void setSavedHidden(int id,boolean hidden){if(hidden)savedHidden.add(id);else savedHidden.remove(id);}
     /** The BuildObjects folded in the Hierarchy, so what is under them is not listed. A fold belongs to the client. */
     private static final Set<Integer> savedFolded=new HashSet<>();
     public static boolean savedFolded(int id){return savedFolded.contains(id);}

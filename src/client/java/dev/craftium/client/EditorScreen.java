@@ -26,6 +26,8 @@ public final class EditorScreen extends CraftiumScreen {
     private boolean builder,help,transform,panels=true,painting,pinnedTab;
     private boolean hudHidden,previousHideGui;
     private int menu=-1;
+    /** {@link #menu} while the right-click menu of a row of the Hierarchy is open. */
+    private static final int ROW_MENU=99;
     /** The menu bar in order; {@link #menuItems} numbers its cases the same way. */
     private static final String[] MENUS={"File","Edit","Select","View","Create","Structure","Operations","Masks","AI","Window","Help"};
     /** A menu's width in the bar: its name with padding, and room for the status square beside AI while its bridge is on. */
@@ -209,7 +211,7 @@ public final class EditorScreen extends CraftiumScreen {
         for(int i=1;i<lasso.size();i++)ToolIcons.line(g,(int)(lasso.get(i-1).x()/scale),(int)(lasso.get(i-1).y()/scale),(int)(lasso.get(i).x()/scale),(int)(lasso.get(i).y()/scale),0xffffd66d);
         statusbar(g);
         rowDragGhost(g);
-        if(menu>=0)dropdown(g);
+        if(menu==ROW_MENU)rowMenuDraw(g);else if(menu>=0)dropdown(g);
         if(ctxCell>=0)maskMenu(g);
         if(shapeMenu)shapeMenu(g);
         if(help)help(g);
@@ -1310,7 +1312,8 @@ public final class EditorScreen extends CraftiumScreen {
                 yield items;
             }
             case 9 -> {var items=new ArrayList<MenuItem>();for(String id:WorkspaceLayout.windows.keySet())items.add(item("Toggle "+id,"",()->WorkspaceLayout.toggle(id)));items.add(item("Save layout","",WorkspaceLayout::save));items.add(item("Reset layout","",WorkspaceLayout::reset));items.add(item("Copy layout","",()->minecraft.keyboardHandler.setClipboard(WorkspaceLayout.json())));items.add(item("Paste layout","",()->{try{WorkspaceLayout.importJson(minecraft.keyboardHandler.getClipboard());WorkspaceLayout.save();}catch(Exception e){ClientState.notify("Invalid layout JSON");}}));yield items;}
-            case 5 -> List.of(item("Import structure…","",ClientStructures::chooseImport),divider(),
+            case 5 -> List.of(item("Blueprint library","",()->ClientCompat.setScreen(minecraft,new BlueprintScreen(this))),divider(),
+                item("Import structure…","",ClientStructures::chooseImport),divider(),
                 item("Export selection…","",()->exportStructure(StructureSettings.SELECTION)),item("Export clipboard…","",()->exportStructure(StructureSettings.CLIPBOARD)),divider(),
                 submenu("Export selection as",item("Structure (.nbt)","",()->exportStructure(StructureSettings.SELECTION,StructureSettings.JAVA,StructureSettings.NBT)),item("Schematic (.schem)","",()->exportStructure(StructureSettings.SELECTION,StructureSettings.JAVA,StructureSettings.SCHEM)),item("Bedrock structure (.mcstructure)","",()->exportStructure(StructureSettings.SELECTION,StructureSettings.BEDROCK,StructureSettings.NBT))),
                 divider(),item("Open structures folder","",ClientStructures::openFolder));
@@ -1707,6 +1710,7 @@ public final class EditorScreen extends CraftiumScreen {
                 id=WorkspaceLayout.hit(x,y,false);if(!id.isBlank()){var r=WorkspaceLayout.windows.get(id);if(!r.folded&&x>r.x+r.w-12&&y>r.y+r.h-12){draggedPanel=id;resizePanel=true;dragOriginX=r.w;dragOriginY=r.h;dragPointerX=x;dragPointerY=y;return true;}}
             }
         }
+        if(event.button()==1&&!help&&!transform&&menu<0)for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(!c.contains(x,y))continue;for(var area:renameAreas)if(area.row()==c){openRowMenu(area.id(),(int)x,(int)y);return true;}break;} // a right click on a row of the Hierarchy opens its menu
         if(event.button()==1&&!help&&!transform&&menu<0)for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(c.contains(x,y)){if(c.back!=null){c.back.run();return true;}break;}} // a cycling button steps back
         if(help||transform||menu>=0)return true;
         if(!inViewport(x,y))return true;
@@ -2169,7 +2173,10 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         int shown=0;for(var e:ClientState.savedSelections())if(e.active())shown++;
         if(shown!=1||minecraft.player==null)return false;
         if(ClientState.status.selectionSize()==0){ClientState.notify("That BuildObject has no blocks to look at");return true;}
-        var lo=ClientState.status.min();var hi=ClientState.status.max();
+        return focusOn(ClientState.status.min(),ClientState.status.max());
+    }
+    /** Moves the view to face the middle of the box between the corners, back far enough that all of it fits between the panels. */
+    private boolean focusOn(Point lo,Point hi){
         double sx=hi.x()-lo.x()+1,sy=hi.y()-lo.y()+1,sz=hi.z()-lo.z()+1;
         var centre=new Vec3(lo.x()+sx/2,lo.y()+sy/2,lo.z()+sz/2);
         double radius=Math.max(1,.5*Math.sqrt(sx*sx+sy*sy+sz*sz)); // a sphere round all of it, so it fits whichever way it is seen
@@ -2182,6 +2189,75 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         if(away>limit){to=from.add(to.subtract(from).scale(limit/away));ClientState.notify("That is further than this server lets you move at once: press F again");}
         minecraft.player.setPos(to.x,to.y,to.z);minecraft.player.setDeltaMovement(Vec3.ZERO);minecraft.player.setOldPosAndRot();
         return true;
+    }
+    // ---- the right-click menu of a row ---------------------------------------------------------------------------------------------------
+    private List<MenuItem> rowMenu=List.of();private int rowMenuX,rowMenuY;
+    /** The BuildObjects the menu works on: the ones shown when the row is one of them, else the row alone, which the click has just chosen. */
+    private List<Integer> rowMenuTargets(int id){
+        var shown=new ArrayList<Integer>();for(var e:hierarchyAll)if(e.active())shown.add(e.id());
+        return shown.contains(id)?shown:List.of(id);
+    }
+    private void openRowMenu(int id,int x,int y){
+        var row=savedById(id);if(row==null)return;
+        var targets=rowMenuTargets(id);int n=targets.size();String csv=String.join(",",targets.stream().map(String::valueOf).toList());
+        if(!targets.equals(List.of(id))||!row.active())if(n==1)action("saved_selection:view:"+id); // right-clicking one chooses it, as in any list
+        var items=new ArrayList<MenuItem>();
+        var kids=new ArrayList<Integer>();for(var e:hierarchyAll)if(e.parent()==id)kids.add(e.id());
+        boolean only=n==1&&row.active()&&!row.editing();
+        if(!only||n>1)items.add(item("Select","",()->action("saved_selection:view:"+id)));
+        if(!kids.isEmpty())items.add(item("Select children only","",()->action("saved_selection:viewset:"+String.join(",",kids.stream().map(String::valueOf).toList()))));
+        items.add(item("Edit blocks","",()->action("saved_selection:edit:"+id)));
+        items.add(divider());
+        items.add(n>1?item("Group selected ("+n+")","",()->action("saved_selection:group:"+csv)):item("Create empty parent","",()->action("saved_selection:group:"+id)));
+        if(ClientState.status.selectionSize()>0&&!row.active())items.add(item("Create child from selection","",()->action("saved_selection:createchild:"+id)));
+        items.add(divider());
+        items.add(item("Rename","",()->startRename(new RenameArea(null,id))));
+        items.add(n>1?item("Delete selected ("+n+")","",()->action("saved_selection:deleteset:"+csv)):item("Delete","",()->action("saved_selection:delete:"+id)));
+        var moves=new ArrayList<MenuItem>();
+        int at=siblingIndex(row);int siblings=childCount(row.parent());
+        if(at>0)moves.add(item("Move up","",()->action("saved_selection:place:"+id+":"+row.parent()+":"+(at-1))));
+        if(at<siblings-1)moves.add(item("Move down","",()->action("saved_selection:place:"+id+":"+row.parent()+":"+(at+1))));
+        if(row.parent()!=0){var up=savedById(row.parent());if(up!=null)moves.add(item("Move out of parent","",()->action("saved_selection:place:"+id+":"+up.parent()+":"+(siblingIndex(up)+1))));}
+        if(!kids.isEmpty()){boolean folded=ClientState.savedFolded(id);moves.add(item(folded?"Unfold all below":"Fold all below","",()->foldBelow(id,!folded)));}
+        if(!moves.isEmpty()){items.add(divider());items.addAll(moves);}
+        items.add(divider());
+        boolean allHidden=targets.stream().allMatch(ClientState::savedHidden);
+        items.add(item(n>1?(allHidden?"Show outlines ("+n+")":"Hide outlines ("+n+")"):(allHidden?"Show outline":"Hide outline"),"",()->{for(int t:targets)ClientState.setSavedHidden(t,!allHidden);}));
+        if(n==1)items.add(item("Change colour…","",()->ColourPickerScreen.open(this,row.name()+" colour",()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0))));
+        var box=subtreeBounds(id);
+        if(box!=null)items.add(item("Focus","F",()->focusOn(box[0],box[1])));
+        rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;menu=ROW_MENU;openSub="";openSub2="";
+    }
+    /** The corners of the box round the blocks of the BuildObject and everything under it, or null when there are none. */
+    private Point[] subtreeBounds(int id){
+        Point lo=null,hi=null;
+        for(var e:hierarchyAll){
+            if(e.id()!=id&&!isUnder(e,id))continue;
+            if(e.size()==0||e.min()==null||e.max()==null)continue;
+            lo=lo==null?e.min():new Point(Math.min(lo.x(),e.min().x()),Math.min(lo.y(),e.min().y()),Math.min(lo.z(),e.min().z()));
+            hi=hi==null?e.max():new Point(Math.max(hi.x(),e.max().x()),Math.max(hi.y(),e.max().y()),Math.max(hi.z(),e.max().z()));
+        }
+        return lo==null?null:new Point[]{lo,hi};
+    }
+    /** Folds or unfolds the BuildObject and everything under it that has something under it. */
+    private void foldBelow(int id,boolean fold){
+        var parents=new HashSet<Integer>();for(var e:hierarchyAll)parents.add(e.parent());
+        for(var e:hierarchyAll)if((e.id()==id||isUnder(e,id))&&parents.contains(e.id())&&ClientState.savedFolded(e.id())!=fold)ClientState.toggleSavedFolded(e.id());
+    }
+    private void rowMenuDraw(Gfx g){
+        int width=226,height=4;for(var item:rowMenu)height+=item.action==null?9:25;
+        int x=Math.max(0,rowMenuX+width>w?rowMenuX-width:rowMenuX),y=Math.clamp(rowMenuY,27,Math.max(27,h-25-height));
+        g.fill(x,y,x+width,y+height,0xff1c2735);g.outline(x,y,width,height,LINE);
+        menuAlign=true;
+        try{
+            int row=y+3;
+            for(var item:rowMenu){
+                if(item.action==null){g.fill(x+8,row+4,x+width-8,row+5,LINE);row+=9;continue;}
+                final var run=item.action;button(g,x+3,row,width-6,24,item.label,false,()->{menu=-1;run.run();},HIDDEN_TIP+"menu "+item.label); // named for tests, no tooltip
+                if(!item.shortcut.isEmpty())text(g,item.shortcut,x+width-14-font.width(item.shortcut),row+8,MUTED);
+                row+=25;
+            }
+        }finally{menuAlign=false;}
     }
     /** A row of the Hierarchy that a double click renames: the row's own control, so a click on a button of the row is not a rename. */
     private record RenameArea(Control row,int id){}

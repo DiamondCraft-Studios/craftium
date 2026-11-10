@@ -245,6 +245,33 @@ class SavedSelectionsTest {
         saved.view(a.id(),s);assertEquals(List.of(a),saved.viewed());saved.edit(a.id(),s);assertTrue(saved.editing());
         saved.viewSet(List.of(a.id()),s);assertFalse(saved.editing(),"showing it as a set is looking, not editing");
     }
+    @Test void groupingPutsTheListedOnesInAnEmptyParentInTheFirstOnesPlace(){
+        var saved=new SavedSelections();var a=saved.save(live(A));var b=saved.save(live(B));var c=saved.save(live(C));
+        var group=saved.group(List.of(c.id(),a.id()));
+        assertEquals(List.of(group,a,c,b),saved.entries(),"the group sits where the first of them was, with them in tree order");
+        assertEquals(List.of(),group.points());assertEquals(List.of(a,c),saved.children(group));assertEquals(0,b.parentId());
+    }
+    @Test void groupingAParentAndItsChildKeepsTheChildUnderIt(){
+        var saved=new SavedSelections();var a=saved.save(live(A));var b=saved.save(live(B));saved.place(b.id(),a.id(),0);
+        var group=saved.group(List.of(a.id(),b.id()));
+        assertEquals(List.of(a),saved.children(group));assertEquals(a.id(),b.parentId());
+    }
+    @Test void groupingOneInsideAParentGroupsItThere(){
+        var saved=new SavedSelections();var p=saved.save(live(A));var x=saved.save(live(B));var y=saved.save(live(C));saved.place(x.id(),p.id(),0);saved.place(y.id(),p.id(),1);
+        var group=saved.group(List.of(x.id()));
+        assertEquals(List.of(group,y),saved.children(p));assertEquals(List.of(x),saved.children(group));
+    }
+    @Test void groupingNothingIsRefused(){assertThrows(IllegalArgumentException.class,()->new SavedSelections().group(List.of()));}
+    @Test void aChildMadeFromTheSelectionTakesNothingInAndIsTheLast(){
+        var saved=new SavedSelections();var p=saved.save(live(A));var x=saved.save(live(B));saved.place(x.id(),p.id(),0);
+        var child=saved.createChild(p.id(),live(B,C));
+        assertEquals(List.of(x,child),saved.children(p));assertEquals(List.of(B,C),child.points(),"it holds the whole selection, taking nothing in");assertEquals(0,saved.children(x).size());
+    }
+    @Test void deletingSeveralSkipsOnesThatWentWithAnother(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);saved.place(b.id(),a.id(),0);
+        saved.deleteMany(List.of(a.id(),b.id(),c.id()),s);
+        assertTrue(saved.entries().isEmpty());
+    }
     @Test void theLimitIsEnforced(){
         var saved=new SavedSelections();var s=live(A);for(int i=0;i<SavedSelections.MAX;i++)saved.save(s);
         assertThrows(IllegalArgumentException.class,()->saved.save(s));
