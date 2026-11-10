@@ -86,7 +86,7 @@ Writes the same JSON vanilla reads, so the datapack also works as normal worldge
 Built on 1.21.10 in `feat/jigsaw-planner`. What differs from the plan above:
 
 - **Commands:** the planner is `/jigsawplan`, not `/craftium jigsaw`, because the client owns the `craftium` command root and rejects subcommands it does not know.
-- **Phase 2:** drawing only the blocks of the hovered piece for huge runs was left out; the layout-only view is the fallback. Controls are commands (back, next, depth, view, pin) and, from Phase 3, buttons in the Jigsaw tab.
+- **Phase 2:** drawing only the blocks of the hovered piece for huge runs was left out; the layout-only view is the fallback. Controls are commands (back, next, depth, view, pin) and, from Phase 3, buttons on the planner screen (Structure → Jigsaw planner…).
 - **Phase 3:** the report is text under the buttons; the open-connector reason is "no piece fit here, or the depth ran out" unless the pool or name is missing, because vanilla does not record which applied.
 - **Phase 4:** the processor list and the fallback are text boxes (Enter applies), not pickers; there is no drag and drop from a template browser, an "Add template" panel searches instead; the open element's thumbnail is an isometric picture, not a rotatable 3D view. Pools are listed from every pack, and editing one from another pack writes an override under the same name into `datapacks/craftium`.
 - **Open questions answered by default:** Apply places blocks only, and the editor manages pools only (not `worldgen/structure` or `structure_set`).

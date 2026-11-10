@@ -41,7 +41,6 @@ public final class StudioScreen extends CraftiumScreen {
         GROUPS.put("Hotbars",List.of("name"));
         GROUPS.put("Rebuild",List.of("rebuildStartDelay","rebuildMaxDelay","rebuildAirDelay","rebuildSameDelay","rebuildDifferentDelay","rebuildRandomDelay","rebuildHorizontalMultiplier","rebuildVerticalMultiplier","seed"));
         GROUPS.put("AI",List.of());
-        GROUPS.put("Jigsaw",List.of("jigsawPool","jigsawStart","jigsawDepth","jigsawDistance","jigsawSeed"));
         GROUPS.put("Lighting",List.of("shadeSun","shadeFrom","shadeAzimuth","shadeAltitude","shadeAmbientOcclusion","shadeBounces","shadeDither","shadeExposure","shadeSamples","shadeRayLength","shadeAutomatic","shadeFullBlocks","shadeOpaque","shadeNoOres","shadeNoGlazed","shadeNoBlockEntities","materials"));
     }
     public StudioScreen(EditorScreen editor){super(Component.literal("Craftium Studio Inspector"));this.editor=editor;}
@@ -52,15 +51,14 @@ public final class StudioScreen extends CraftiumScreen {
         if(!initialized){previousHud=ClientCompat.hudHidden(minecraft);if(!previousHud)ClientCompat.toggleHud(minecraft);initialized=true;}
         uiScale=Math.min(1f,Math.min(width/680f,height/440f));canvasW=Math.round(width/uiScale);canvasH=Math.round(height/uiScale);
         clearWidgets();labels.clear();left=Math.max(12,(canvasW-640)/2);top=30;rows=Math.max(2,(canvasH-(tab.equals("Entities")?250:170))/46);
-        int tx=left,ty=top;for(String name:GROUPS.keySet()){if(name.equals("Jigsaw"))continue; // opened from Structure → Jigsaw planner, not from the tab row
-            int bw=font.width(name)+13;if(tx+bw>canvasW-18){tx=left;ty+=22;}button(name,tx,ty,bw,18,()->{tab=name;page=0;init();}).lit(name.equals("AI")&&AiBridge.running());tx+=bw+3;}
+        int tx=left,ty=top;for(String name:GROUPS.keySet()){int bw=font.width(name)+13;if(tx+bw>canvasW-18){tx=left;ty+=22;}button(name,tx,ty,bw,18,()->{tab=name;page=0;init();}).lit(name.equals("AI")&&AiBridge.running());tx+=bw+3;}
         List<String> names=tab.equals("Script")?List.of():GROUPS.get(tab);int count=rows*columns,total=Math.max(1,(names.size()+count-1)/count);page=Math.clamp(page,0,total-1);
         for(int i=page*count;i<Math.min(names.size(),(page+1)*count);i++){
             String name=names.get(i);int index=i-page*count,x=left+(index%columns)*316,y=top+70+(index/columns)*46;
             createField(name,x,y,300);
         }
         int bottom=canvasH-57;
-        if(!tab.equals("AI")&&!tab.equals("Jigsaw")){ // these tabs have one page and no tool to apply
+        if(!tab.equals("AI")){ // this tab has one page and no tool to apply
             button("‹",left,bottom,24,20,()->{page=Math.max(0,page-1);init();});button("›",left+29,bottom,24,20,()->{page=Math.min(total-1,page+1);init();});
             labels.add(new Label((page+1)+" / "+total,left+62,bottom+6));
             button("Apply tool",left+385,bottom,110,20,()->send("use"));
@@ -126,40 +124,9 @@ public final class StudioScreen extends CraftiumScreen {
             for(int i=0;i<actions.length;i++){String action=actions[i];button(human(action),left+(i%4)*158,top+170+(i/4)*28,150,22,()->send(action));}
         }else if(tab.equals("AI")){
             aiTab();
-        }else if(tab.equals("Jigsaw")){
-            jigsawTab();
         }else if(tab.equals("Annotations")){
             actionRow(new String[]{"Create","Update","Delete","Clear all","Import image…"},new Runnable[]{()->send("annotation_create"),()->send("annotation_update"),()->send("annotation_delete"),()->send("annotation_clear"),()->AnnotationImages.choose(this::init)});
             button("Browse annotations",left+316,top+254,300,22,()->{String report=ClientState.status.annotations()==null?"No annotations":String.join("\n",ClientState.status.annotations().stream().map(note->note.id()+"  "+note.mode()+"  "+note.text()).toList());ClientCompat.setScreen(minecraft,new ReportScreen(this,report));});
-        }
-    }
-    private static final int JIGSAW_LINE=11;
-    private int jigsawReportY(){return top+70+156+JIGSAW_LINE*2;}
-    /** The jigsaw planner: the settings above are fields, then the buttons for a run, then what the planner said about it (see {@link #drawJigsaw}). */
-    private void jigsawTab(){
-        int y=top+70+156,w=100,gap=5;
-        String[] first={"Generate","Reroll","‹ Back","Next ›","Pin seed","View"},run={"generate","reroll","back","next","pin","view"};
-        for(int i=0;i<first.length;i++){String action="craftium:jigsaw_"+run[i];button(first[i],left+i*(w+gap),y,w,22,()->sendJigsaw(action));}
-        int y2=y+27;
-        button("Apply (Enter)",left,y2,w,22,()->sendJigsaw("craftium:jigsaw_apply"));
-        button("Cancel (Esc)",left+(w+gap),y2,w,22,()->sendJigsaw("craftium:jigsaw_cancel"));
-        button("List pools",left+2*(w+gap),y2,w,22,()->sendJigsaw("craftium:jigsaw_pools"));
-        button("Pool editor…",left+4*(w+gap),y2+27,w,22,()->JigsawEditorScreen.open(this));
-        button("Full report",left+3*(w+gap),y2,w,22,()->ClientCompat.setScreen(minecraft,new ReportScreen(this,ClientState.jigsawReport.isBlank()?"Nothing to report yet. Generate a structure first.":ClientState.jigsawReport)));
-        addRenderableWidget(new FlatCheckbox(left+4*(w+gap),y2,2*w+gap,22,"Live: run again on save",ClientState.options.jigsawLive,()->{ClientState.options.jigsawLive=!ClientState.options.jigsawLive;sendJigsaw("craftium:jigsaw_live");init();}));
-    }
-    private void sendJigsaw(String action){try{CraftiumClient.send(action,null,null);message="";}catch(Exception e){message=String.valueOf(e.getMessage());}}
-    /** What the planner said about its last run, a line each: problems in the pools, and the connectors left open. */
-    private void drawJigsaw(Gfx g){
-        int y=jigsawReportY()+55;
-        g.text(font,"REPORT",left,y,0xffb5dcfc,false);y+=JIGSAW_LINE+3;
-        var report=ClientState.jigsawReport;
-        if(report==null||report.isBlank()){g.text(font,"Generate a structure to see problems in its pools and the connectors left open. Pools are read from the world's datapacks and from datapacks/craftium.",left,y,0xff7f93a8,false);return;}
-        var lines=report.split("\n");int room=Math.max(1,(canvasH-70-y)/JIGSAW_LINE);
-        for(int i=0;i<Math.min(lines.length,room);i++){
-            String line=i==room-1&&lines.length>room?"...and "+(lines.length-room+1)+" more lines (Full report)":lines[i];
-            int colour=line.startsWith("ERROR")?0xffff8a80:line.startsWith("WARN")?0xffffd479:line.startsWith("OPEN")?0xff8fd3ff:0xff9db5cb;
-            g.text(font,font.plainSubstrByWidth(line,625),left,y+i*JIGSAW_LINE,colour,false);
         }
     }
     /**
@@ -252,10 +219,9 @@ public final class StudioScreen extends CraftiumScreen {
     @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
     @Override protected void draw(Gfx g,int x,int y,float delta){
         g.pose().pushMatrix();g.pose().scale(uiScale,uiScale);
-        g.fill(0,0,canvasW,canvasH,0xee101923);g.fill(left-12,top-13,Math.min(canvasW-5,left+640),canvasH-25,0xff172330);g.text(font,tab.equals("Jigsaw")?"JIGSAW PLANNER":tab.toUpperCase(Locale.ROOT),left,top-25,0xffb5dcfc,false);
+        g.fill(0,0,canvasW,canvasH,0xee101923);g.fill(left-12,top-13,Math.min(canvasW-5,left+640),canvasH-25,0xff172330);g.text(font,tab.toUpperCase(Locale.ROOT),left,top-25,0xffb5dcfc,false);
         for(Label label:labels)g.text(font,font.plainSubstrByWidth(label.text,625),label.x,label.y,0xff9db5cb,false);
         if(tab.equals("AI"))drawAi(g);
-        if(tab.equals("Jigsaw"))drawJigsaw(g);
         drawWidgets(g,(int)(x/uiScale),(int)(y/uiScale),delta);g.text(font,font.plainSubstrByWidth(message.isBlank()?ClientState.status.message():message,canvasW-30),15,canvasH-17,0xffffdca8,false);g.pose().popMatrix();
     }
     @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event,boolean twice){
