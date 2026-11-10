@@ -191,7 +191,8 @@ public final class SavedSelectionsGameTest {
         hierarchyIsInHistory();
         severalAtOnceAndFocus();
         contextMenu();
-        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu");
+        duplicateCopyCutExportAndEyes();
+        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu duplicate");
     }
 
     // ---- Claude --------------------------------------------------------------------------------------------------------------------------
@@ -516,6 +517,83 @@ public final class SavedSelectionsGameTest {
         require(ClientState.savedSelections().size() == 3 && saved(0).size() == 0 && saved(1).parent() == saved(0).id() && saved(2).parent() == saved(0).id(), "Ctrl+G groups both shown into an empty parent: " + ClientState.savedSelections());
         undo();
         require(ClientState.savedSelections().size() == 2, "and Undo takes it back");
+    }
+    /** Duplicate (Ctrl+D), Copy, Cut, Paste and Export in the menu, a right click on another row while a menu is open, and Ctrl on the eye. */
+    private void duplicateCopyCutExportAndEyes() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        click(row(0)); // shown
+        String original = saved(0).guid();
+
+        // Ctrl+D copies the blocks, starts a placement where they were, and Enter pastes them as a selection and makes a BuildObject
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_D, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        c.waitFor(mc -> PlacementPreview.active(), 200);
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        c.waitTicks(10);
+        require(ClientState.savedSelections().size() == 2 && saved(0).guid().equals(original) && saved(1).name().equals("BuildObject (copy)") && saved(1).size() == 8,
+            "Ctrl+D makes a copy after the original, holding its blocks: " + ClientState.savedSelections());
+        require(liveIs(a()), "and the pasted blocks are the selection");
+        undo();
+        require(ClientState.savedSelections().size() == 1, "Undo takes the copy back: " + ClientState.savedSelections());
+        redo();
+        require(ClientState.savedSelections().size() == 2, "and Redo makes it again");
+
+        // a right click on another row while a menu is open opens that row's menu
+        rightClick(row(0));
+        c.waitTicks(2);
+        require(menuControl("Move down") != null && menuControl("Move up") == null, "the first row's menu");
+        rightClick(row(1));
+        c.waitTicks(2);
+        require(menuControl("Move up") != null && menuControl("Move down") == null, "a right click on another row opens its menu, not nothing");
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
+
+        // Copy puts the blocks on the clipboard, and Paste then offers a placement that makes a BuildObject
+        rightClick(row(0));
+        menuClick("Copy");
+        c.waitTicks(10);
+        require(c.computeOnClient(mc -> ClientState.status.clipboardSize()) == 8, "Copy copies the blocks of the BuildObject");
+        rightClick(row(0));
+        c.waitTicks(2);
+        require(menuControl("Paste") != null, "and Paste is offered");
+        click(menuControl("Paste"));
+        require(c.computeOnClient(mc -> PlacementPreview.active()), "Paste starts a placement");
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
+
+        // Export opens the export pop-up on the blocks shown
+        rightClick(row(0));
+        menuClick("Export…");
+        c.waitTicks(4);
+        require(c.computeOnClient(mc -> mc.gui.screen() instanceof StructureExportScreen), "Export opens the export pop-up");
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
+        c.waitTicks(4);
+
+        // Ctrl on the eye takes everything under it along
+        drag(row(1), row(0), 0.5); // the copy goes under the original
+        require(saved(1).parent() == saved(0).id(), "nested for the eyes");
+        int parent = saved(0).id(), child = saved(1).id();
+        boolean hiddenBefore = c.computeOnClient(mc -> ClientState.savedHidden(parent) && ClientState.savedHidden(child));
+        require(hiddenBefore, "both start closed");
+        c.runOnClient(mc -> {
+            try {
+                var screen = (EditorScreen) mc.gui.screen();
+                var method = EditorScreen.class.getDeclaredMethod("eyeClick", dev.craftium.net.Packets.SavedSelection.class, boolean.class);
+                method.setAccessible(true);
+                method.invoke(screen, ClientState.savedSelections().get(0), true);
+            } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+        });
+        require(c.computeOnClient(mc -> !ClientState.savedHidden(parent) && !ClientState.savedHidden(child)), "Ctrl on the eye opens it for everything under it");
+
+        // Cut takes the blocks and the BuildObjects; Undo brings both back
+        click(row(0));
+        rightClick(row(0));
+        menuClick("Cut");
+        c.waitTicks(30);
+        settle();
+        require(ClientState.savedSelections().isEmpty() && allAre(a(), Blocks.AIR), "Cut takes the blocks and the BuildObjects: " + ClientState.savedSelections());
+        undo();
+        undo();
+        require(ClientState.savedSelections().size() == 2 && allAre(a(), Blocks.STONE), "and two Undos bring both back: " + ClientState.savedSelections());
     }
     /** The n-th row of the Hierarchy, as an area. */
     private int[] row(int n) {
