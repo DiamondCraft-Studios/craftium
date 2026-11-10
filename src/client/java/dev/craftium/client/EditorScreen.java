@@ -1301,7 +1301,7 @@ public final class EditorScreen extends CraftiumScreen {
             case 5 -> List.of(item("Import structure…","",ClientStructures::chooseImport),
                 item("Export selection…","",()->exportStructure(StructureSettings.SELECTION)),item("Export clipboard…","",()->exportStructure(StructureSettings.CLIPBOARD)),
                 submenu("Export selection as",item("Structure (.nbt)","",()->exportStructure(StructureSettings.SELECTION,StructureSettings.JAVA,StructureSettings.NBT)),item("Schematic (.schem)","",()->exportStructure(StructureSettings.SELECTION,StructureSettings.JAVA,StructureSettings.SCHEM)),item("Bedrock structure (.mcstructure)","",()->exportStructure(StructureSettings.SELECTION,StructureSettings.BEDROCK,StructureSettings.NBT))),
-                divider(),item("Jigsaw planner…","",()->JigsawPlannerScreen.open(this)),
+                divider(),item("Jigsaw planner…","",()->JigsawPlannerScreen.open(this)),item("Jigsaw pool editor…","",()->JigsawEditorScreen.open(this)),
                 item("Open structures folder","",ClientStructures::openFolder));
             case 4 -> List.of(item("Shape","",()->select(Tool.SHAPE)),item("Block text","",()->select(Tool.TEXT)),item("Line","",()->select(Tool.LINE)),item("Rock","",()->select(Tool.ROCK)));
             case 6 -> List.of(item("Fill selection","Ctrl+F",()->action("fill")),item("Delete selection","Del",()->action("delete")),item("Move / clone / stack…","",()->{transform=true;init();}),item("Smooth brush","",()->select(Tool.SMOOTH)),item("Flatten brush","",()->select(Tool.FLATTEN)));
