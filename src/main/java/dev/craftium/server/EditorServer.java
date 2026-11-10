@@ -191,7 +191,7 @@ public final class EditorServer {
             s.confirmEdits=o.confirmEdits;
             s.currentAction=r.action();s.recordSelection=changesSelection(r.action(),o);
             // The builder and the clipboard placement preview have their own confirmation, and dropping a block in the world is one, so they apply straight away.
-            s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("bucket_fill")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().equals("pending_confirm")||r.action().equals("stroke_end")||r.action().equals("use")&&(o.tool==Tool.EXTRUDE||o.tool==Tool.FLOODFILL||o.tool==Tool.PAINT_BUCKET)
+            s.bypassConfirm=r.action().startsWith("builder_")||r.action().equals("bucket_fill")||r.action().equals("paste_at")||r.action().equals("paste_select")||r.action().startsWith("saved_selection:deleteblocks:")||r.action().equals("pending_confirm")||r.action().equals("stroke_end")||r.action().equals("use")&&(o.tool==Tool.EXTRUDE||o.tool==Tool.FLOODFILL||o.tool==Tool.PAINT_BUCKET)
                 ||!o.enterToBuild&&!r.action().equals("use"); // with Enter to build off, a stroke is staged until the button is let go (stroke_end) and any other action is built at once
             if(r.action().equals("status")) { s.sharedKey=null;s.sentAi.clear();send(player,s,"Ready",false);return; }
             if(r.action().equals("capabilities")){send(player,s,"Builder capabilities synchronized",false);return;}
@@ -238,6 +238,19 @@ public final class EditorServer {
             }
             if(r.action().startsWith(SavedSelectionActions.PREFIX)){ // the Selections window (before the plugin actions, as "saved_selection:save" has the shape of one): swaps entries in and out of the live selection, never changes a block
                 if(!Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS))throw new IllegalArgumentException("This client does not know BuildObjects");
+                if(r.action().startsWith(SavedSelectionActions.PREFIX+"deleteblocks:")){ // the BuildObjects and every block they hold (each with everything under it), as one step in the history
+                    HierarchyPermissions.require(player,"delete");
+                    var ids=SavedSelectionActions.idsOf(r.action().substring((SavedSelectionActions.PREFIX+"deleteblocks:").length()));
+                    var cells=new LinkedHashSet<Point>();
+                    for(int id:ids){var entry=s.saved.byId(id);if(entry!=null)cells.addAll(s.saved.effective(entry));}
+                    var hierarchyBefore=s.saved.state();
+                    var plan=new EditPlanner(player.level(),s,o);
+                    for(Point p:cells)plan.put(p,Blocks.AIR.defaultBlockState());
+                    s.saved.deleteMany(ids,s.selection);
+                    var edit=plan.finish("Delete BuildObject and blocks").withSelection(Session.SelectionChange.hierarchy(hierarchyBefore,s.saved.state()));
+                    try{start(player,s,edit);}catch(RuntimeException e){s.saved.restore(hierarchyBefore,s.selection);throw e;}
+                    return;
+                }
                 if(r.action().equals(SavedSelectionActions.PREFIX+"duplicate")){ // copies the blocks shown and remembers the BuildObjects they belong to, for the paste that follows
                     HierarchyPermissions.require(player,"create");
                     requireSelection(s);
@@ -384,7 +397,8 @@ public final class EditorServer {
                 case "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo" -> {var plan=new EditPlanner(player.level(),s,o);s.selection.combine(SelectionTransforms.apply(r.action(),plan),Selection.Mode.REPLACE);send(player,s,"Selection updated: "+s.selection.size()+" blocks",false);}
                 case "clear" -> {s.saved.release(s.selection);s.selection.clear();s.corner=null;s.line=null;s.ruler=null;send(player,s,"Selection cleared",false);}
                 case "ruler_clear" -> {s.ruler=null;send(player,s,"Measurement cleared",false);}
-                case "asset_upload","blueprint_list","blueprint_save","blueprint_load","blueprint_data","structure_export","schematic_export","schematic_import","selection_csv" -> {
+                case "asset_upload","blueprint_list","blueprint_save","blueprint_load","blueprint_data","blueprint_op","structure_export","schematic_export","schematic_import","selection_csv" -> {
+                    if(r.action().equals("blueprint_op")&&!dev.craftium.compat.Compat.isGamemaster(player))throw new IllegalArgumentException("Only operators can change the server's blueprint library");
                     var plan=new EditPlanner(player.level(),s,o);String result=BlueprintLibrary.act(r.action(),plan);if(Set.of("blueprint_save","structure_export","schematic_export","selection_csv","blueprint_data").contains(r.action()))result+=BlueprintLibrary.download(r.action(),plan,player);send(player,s,result,false);
                 }
                 case "structure_preview","structure_export_file","structure_import_file" -> {
@@ -978,7 +992,7 @@ public final class EditorServer {
             edit=edit.withSelection(change.with(Map.of("shape",s.shapeAtRequest),Map.of("shape","none")));
         }
         if(edit.changes().isEmpty()&&edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()&&edit.selection()!=null&&edit.selection().hasHierarchy()){
-            s.remember(edit);send(player,s,"Pasted the same blocks as a new BuildObject",false);return; // nothing to build, as when a copy is put back in place, but the BuildObject it made is in the history
+            s.remember(edit);send(player,s,edit.name(),false);return; // nothing to build (a copy put back in place, or blocks that were air already), but what it did to the BuildObjects is in the history
         }
         if(edit.changes().isEmpty() && edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()){var why=s.nothingChangedBecause;s.nothingChangedBecause=null;send(player,s,why==null?"No matching blocks changed":"No matching blocks changed: "+why,false);return;}
         EditGate.check(player,edit);

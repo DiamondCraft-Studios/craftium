@@ -65,6 +65,12 @@ final class SavedSelectionActions {
     }
     private static String verb(String action){return action.startsWith(PREFIX)?action.substring(PREFIX.length()).split(":",2)[0]:"";}
     /** The ids of an action like {@code group:1,2,3}. */
+    /** The ids in text like {@code 1,2,3}. */
+    static List<Integer> idsOf(String text){
+        var out=new java.util.ArrayList<Integer>();
+        try{if(!text.isBlank())for(var t:text.split(","))out.add(Integer.parseInt(t.strip()));}catch(NumberFormatException e){throw new IllegalArgumentException("Pick BuildObjects");}
+        return out;
+    }
     private static List<Integer> ids(String[] part){
         var out=new java.util.ArrayList<Integer>();
         try{if(part.length>1&&!part[1].isBlank())for(var t:part[1].split(","))out.add(Integer.parseInt(t.strip()));}catch(NumberFormatException e){throw new IllegalArgumentException("Pick BuildObjects");}

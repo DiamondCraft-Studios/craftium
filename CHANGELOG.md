@@ -30,6 +30,7 @@ Changes since 1.5.0-beta.1.
 - Dragging one of several shown rows carries all of them together, in their order, and the drag shows how many.
 - Duplicate makes the whole hierarchy again: the same names, order, parents and colours, with the top one marked "(copy)", each holding its own blocks at the new place. If the copy is turned or something else is copied before it is placed, it falls back to one BuildObject.
 - A click on empty space in the Hierarchy, and Alt + D, let go of the BuildObjects shown (Alt + D also clears the selection).
+- "Delete blocks" in the Hierarchy menu (next to Delete, which still only removes the grouping) deletes the BuildObject, everything under it and all the blocks they hold, as one step: Ctrl+Z brings back the blocks and the BuildObjects together. It asks the first time, with a "Don't show this message again" tick box.
 - Target info moved to the bottom of the left column, under Tool options.
 - The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
 - Your saved window layout is reset once, to the new places.

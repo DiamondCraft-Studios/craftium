@@ -950,8 +950,9 @@ public final class EditorScreen extends CraftiumScreen {
         sendBucket(block,point,normal);
     }
     /** A question the player answers before something happens: the text, what Confirm is for, and what Confirm does. */
-    private record Confirm(String text,String hint,Runnable action){}
-    private Confirm confirm;
+    /** A question with a button to go ahead; {@code optOut}, when given, adds a tick box with that label, and ticking it turns {@code onOptOut} on when the question is answered yes. */
+    private record Confirm(String text,String hint,Runnable action,String optOut,Runnable onOptOut){Confirm(String text,String hint,Runnable action){this(text,hint,action,null,null);}}
+    private Confirm confirm;private boolean confirmOptOut;
     private static final long HISTORY_CONFIRM_MS=60_000;
     /** Undo or redo, after a confirmation when the edit it reaches is a minute old or more. */
     private void historyAction(boolean undo){
@@ -966,8 +967,8 @@ public final class EditorScreen extends CraftiumScreen {
         String prior=o().block;o().block=block;
         try{CraftiumClient.send("bucket_fill",target,normal);}finally{o().block=prior;}
     }
-    private void acceptConfirm(){var pending=confirm;confirm=null;if(pending!=null)pending.action().run();}
-    private void dismissConfirm(){confirm=null;}
+    private void acceptConfirm(){var pending=confirm;confirm=null;if(pending!=null){if(pending.optOut()!=null&&confirmOptOut)pending.onOptOut().run();confirmOptOut=false;pending.action().run();}}
+    private void dismissConfirm(){confirm=null;confirmOptOut=false;}
     private void swapBlocks() {String front=o().block;ClientState.pick(o().secondary);o().secondary=front;ClientState.save();}
     private void history(Gfx g) {
         int x=w-2*RIGHT-8,y=333; // beside the right-hand column, which the palette now fills; hidden until opened
@@ -1186,6 +1187,10 @@ public final class EditorScreen extends CraftiumScreen {
     private int[] popupBounds(){
         if(ClientState.largeSelection<=0&&confirm==null)return null;
         int left=panels?LEFT+6:6,right=panels?w-RIGHT-6:w-6;
+        if(confirm!=null){ // as tall as its lines, with room for the tick box when there is one
+            int lines=confirm.text().split("\n").length,height=26+lines*11+(confirm.optOut()==null?0:20)+30;
+            return new int[]{(left+right-300)/2,h/2-70,300,height};
+        }
         return new int[]{(left+right-250)/2,h/2-70,250,62};
     }
     /** A small popup beside the work, not over it: the editor stays visible and nothing is dimmed. */
@@ -1194,9 +1199,17 @@ public final class EditorScreen extends CraftiumScreen {
         if(b==null)return;
         g.fill(b[0],b[1],b[0]+b[2],b[1]+b[3],0xf0141d29);g.outline(b[0],b[1],b[2],b[3],ACCENT);
         if(confirm!=null){
-            text(g,shorten(confirm.text(),b[2]-20),b[0]+10,b[1]+9,TEXT);
-            button(g,b[0]+10,b[1]+30,112,22,"Confirm",true,this::acceptConfirm,"");
-            button(g,b[0]+128,b[1]+30,112,22,"Cancel",false,this::dismissConfirm,"");
+            int y=b[1]+9;
+            for(var line:confirm.text().split("\n")){text(g,shorten(line,b[2]-20),b[0]+10,y,TEXT);y+=11;}
+            y+=6;
+            if(confirm.optOut()!=null){ // "Don't show this message again"
+                boolean over=mx>=b[0]+10&&mx<b[0]+b[2]-10&&my>=y&&my<y+14;
+                FlatCheckbox.box(g,b[0]+10,y,14,confirmOptOut,over);text(g,confirm.optOut(),b[0]+30,y+3,MUTED);
+                controls.add(new Control(b[0]+10,y,b[2]-20,14,()->confirmOptOut=!confirmOptOut,HIDDEN_TIP+"menu "+confirm.optOut()));
+                y+=20;
+            }
+            button(g,b[0]+10,y,112,22,"Confirm",true,this::acceptConfirm,"");
+            button(g,b[0]+128,y,112,22,"Cancel",false,this::dismissConfirm,"");
             return;
         }
         text(g,"Selected "+ClientState.largeSelection+" blocks, confirm?",b[0]+10,b[1]+9,TEXT);
@@ -2209,6 +2222,13 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             if(PlacementPreview.active()){PlacementPreview.asObject=made;PlacementPreview.asObjectAfter=after;}
         });
     }
+    /** Deletes these BuildObjects and every block they hold, asking first unless the player ticked "Don't show this message again". One step in the history. */
+    private void deleteWithBlocks(List<Integer> ids){
+        Runnable go=()->action("saved_selection:deleteblocks:"+String.join(",",ids.stream().map(String::valueOf).toList()));
+        if(!o().warnDeleteBlocks){go.run();return;}
+        confirmOptOut=false;
+        confirm=new Confirm("Delete the BuildObject and its blocks in the world?\nCtrl+Z brings both back.","Delete blocks",go,"Don't show this message again",()->{o().warnDeleteBlocks=false;ClientState.save();});
+    }
     /** Cuts the blocks of the BuildObjects shown, and then the BuildObjects themselves, so a paste is where they live now. */
     private void cutObjects(List<Integer> ids){
         action("cut");
@@ -2296,6 +2316,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         items.add(item("Cut","Ctrl+X",()->cutObjects(targets)));
         if(ClientState.status.clipboardSize()>0&&ClientState.status.clipboardOrigin()!=null)items.add(item("Paste","",()->pasteAsObject(id)));
         items.add(n>1?item("Delete selected ("+n+")","",()->action("saved_selection:deleteset:"+csv)):item("Delete","",()->action("saved_selection:delete:"+id)));
+        items.add(item(n>1?"Delete selected + blocks ("+n+")":"Delete blocks","",()->deleteWithBlocks(targets))); // the BuildObjects and the blocks they hold
         items.add(item("Export…","",()->exportStructure(StructureSettings.SELECTION))); // the blocks shown, which are everything under each BuildObject
         var moves=new ArrayList<MenuItem>();
         int at=siblingIndex(row);int siblings=childCount(row.parent());
