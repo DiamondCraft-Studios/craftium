@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * The Selections window and the saved selections behind it, end to end on a real server: Save selection, showing an entry in place of the
+ * The Hierarchy window and the saved selections behind it, end to end on a real server: Save selection, showing an entry in place of the
  * selection and getting yours back, editing, the eye, deleting and bringing it back with Ctrl+Z, the numbers starting again, and Claude reading
  * and building on two selections by name in one spec. The window is driven through its own controls, found where the panel says it laid them
  * out (see {@link PanelLog}), so a button that moved or stopped answering fails here.
@@ -57,23 +57,23 @@ public final class SavedSelectionsGameTest {
         w.getServer().runCommand("setblock " + (baseX + 9) + " " + baseY + " " + baseZ + " stone");
         c.waitTicks(10);
 
-        require(control("Save what is selected now", 0) == null, "the Selections window should stay out of the way with nothing selected and nothing saved");
+        require(control("Save what is selected now", 0) != null, "the Hierarchy window is always shown, empty at first");
 
         selectOnly(a());
-        require(control("Save what is selected now", 0) != null, "the window should appear once something is selected");
+        require(control("Save what is selected now", 0) != null, "the window should still be there once something is selected");
         click(control("Save what is selected now", 0));
         var one = saved(0);
         require(ClientState.savedSelections().size() == 1 && one.name().equals("Selection 1"), "Save selection should make Selection 1, got " + ClientState.savedSelections());
         require(one.size() == 8 && !one.active(), "an entry holds the 8 blocks and is not shown yet");
         require(liveIs(a()), "saving must leave the selection as it was");
-        require(panelShows("Selection 1 • 2 x 2 x 2"), "the entry reads its name and its size: " + texts());
+        require(panelShows("Selection 1") && tipHas("'2 x 2 x 2 blocks"), "the entry reads its name, and its size is in the tip: " + texts());
         require(ClientState.savedColor(one.id()) == ClientState.options.selectionColor, "the first entry starts as the selection colour");
 
         selectOnly(b());
         click(control("Save what is selected now", 0));
         var two = saved(1);
         require(two.name().equals("Selection 2") && two.size() == 3, "the second entry is Selection 2 with 3 blocks, got " + ClientState.savedSelections());
-        require(panelShows("Selection 2 • 3 x 1 x 1"), "the second entry reads its size: " + texts());
+        require(panelShows("Selection 2") && tipHas("'3 x 1 x 1 blocks"), "the second entry has its size in the tip: " + texts());
         require(ClientState.savedColor(two.id()) != ClientState.savedColor(one.id()), "each entry starts with its own colour");
         require(liveIs(b()), "saving the second must not change the selection either");
 
@@ -246,18 +246,19 @@ public final class SavedSelectionsGameTest {
         c.waitTicks(3);
         return c.computeOnClient(mc -> { var copy = new ArrayList<>(PanelLog.sink); PanelLog.sink = null; return copy; });
     }
-    private List<String> texts() { return lines().stream().filter(l -> l.startsWith("text selections ")).toList(); }
-    private boolean panelShows(String text) { return lines().stream().anyMatch(l -> l.startsWith("text selections ") && l.contains(text)); }
+    private List<String> texts() { return lines().stream().filter(l -> l.startsWith("text hierarchy ")).toList(); }
+    private boolean panelShows(String text) { return lines().stream().anyMatch(l -> l.startsWith("text hierarchy ") && l.contains(text)); }
 
     /** The area of the n-th control of the Selections window whose tip starts with {@code tip}, as {x, y, width, height}; null when there is none. */
+    private boolean tipHas(String text) { return lines().stream().anyMatch(l -> l.startsWith("control hierarchy ") && l.contains(text)); }
     private int[] control(String tip, int n) {
         int seen = 0;
         for (String line : lines()) {
-            if (!line.startsWith("control selections ")) continue;
+            if (!line.startsWith("control hierarchy ")) continue;
             int quote = line.indexOf('\'');
-            if (quote < 0 || !line.substring(quote + 1).startsWith(tip)) continue;
+            if (quote < 0 || !line.substring(quote + 1).replaceFirst("^[0-9]+ x [0-9]+ x [0-9]+ blocks · ", "").startsWith(tip)) continue; // an entry's tip opens with its size
             if (seen++ != n) continue;
-            var parts = line.substring("control selections ".length(), quote).trim().split(" ");
+            var parts = line.substring("control hierarchy ".length(), quote).trim().split(" ");
             var at = parts[0].split(","); var size = parts[1].split("x");
             return new int[]{Integer.parseInt(at[0]), Integer.parseInt(at[1]), Integer.parseInt(size[0]), Integer.parseInt(size[1])};
         }

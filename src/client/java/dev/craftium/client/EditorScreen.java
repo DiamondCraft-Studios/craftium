@@ -153,8 +153,11 @@ public final class EditorScreen extends CraftiumScreen {
         }
     }
     /** The options panel's real width and bottom edge, which its text inputs are placed by; they are rebuilt when the panels change size. */
+    /** Tool options fills the left column down to the Target info panel, which sits at the bottom with a gap of 6 between them. */
+    private int optionsHeight(){return h-224-(TARGET_HEIGHT+6);}
+    private static final int TARGET_HEIGHT=82;
     private int optionsWidth(){return WorkspaceLayout.width("options",LEFT);}
-    private int optionsBottom(){return 199+WorkspaceLayout.height("options",h-224);}
+    private int optionsBottom(){return 199+WorkspaceLayout.height("options",optionsHeight());}
     private int layoutKey(){return java.util.Objects.hash(optionsWidth(),optionsBottom(),WorkspaceLayout.width("masks",RIGHT),WorkspaceLayout.height("masks",187));}
     private int layoutKey;
     private final Map<String,Integer> fieldBaseY=new HashMap<>();
@@ -197,7 +200,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
         g.pose().pushMatrix();g.pose().scale(scale,scale);
         topbar(g);
-        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);selectionsPanel(g);magicPanel(g);}
+        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);hierarchyPanel(g);magicPanel(g);}
         finishPanel(g);
         viewport(g);
         axisGizmo(g);
@@ -364,7 +367,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
     }
     private void options(Gfx g) {
-        panel(g,0,199,LEFT,h-224,builder?"Builder controls":"Tool options");
+        panel(g,0,199,LEFT,optionsHeight(),builder?"Builder controls":"Tool options");
         int[] tab=flex(pw-20,4,1,1,1);
         button(g,10,222,tab[0],19,"Tool",!builder&&!pinnedTab,()->{builder=false;pinnedTab=false;init();},"Options of the active tool");
         button(g,14+tab[0],222,tab[1],19,"Builder",builder,()->{builder=true;init();},"");
@@ -731,34 +734,37 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,10,631,pw-20,20,"Builder tool: "+o().builderTool.name(),false,()->{o().builderTool=Options.BuilderTool.values()[(o().builderTool.ordinal()+1)%Options.BuilderTool.values().length];},()->{o().builderTool=Options.BuilderTool.values()[Math.floorMod(o().builderTool.ordinal()-1,Options.BuilderTool.values().length)];},"Press 0 in the world · Alt + wheel changes tools");
     }
     private void targetInfo(Gfx g) {
-        int x=w-RIGHT;panel(g,x,27,RIGHT,82,"Target info");var hit=target();
-        if(hit!=null&&minecraft.level!=null){var p=hit.getBlockPos();text(g,p.getX()+"  /  "+p.getY()+"  /  "+p.getZ(),x+10,53,TEXT);text(g,shorten(BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(p).getBlock()).toString(),pw-20),x+10,69,MUTED);}
-        else text(g,"Point at a block",x+10,53,MUTED);
-        var shown=SelectionOverlay.outline().fallback();text(g,shown==null?ClientState.status.selectionSize()+" blocks selected":ClientState.status.selectionSize()+" blocks · "+shown,x+10,89,0xffa5cef2);
+        int x=0,y=h-25-TARGET_HEIGHT; // the bottom of the left column, under Tool options
+        panel(g,x,y,LEFT,TARGET_HEIGHT,"Target info");var hit=target();
+        if(hit!=null&&minecraft.level!=null){var p=hit.getBlockPos();text(g,p.getX()+"  /  "+p.getY()+"  /  "+p.getZ(),x+10,y+26,TEXT);text(g,shorten(BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(p).getBlock()).toString(),pw-20),x+10,y+42,MUTED);}
+        else text(g,"Point at a block",x+10,y+26,MUTED);
+        var shown=SelectionOverlay.outline().fallback();text(g,shorten(shown==null?ClientState.status.selectionSize()+" blocks selected":ClientState.status.selectionSize()+" blocks · "+shown,pw-20),x+10,y+62,0xffa5cef2);
     }
     private void clipboard(Gfx g) {
-        int x=w-RIGHT;panel(g,x,115,RIGHT,101,"Clipboard");
-        text(g,ClientState.status.clipboardSize()==0?"No copied blocks":ClientState.status.clipboardSize()+" blocks ready to place",x+10,141,MUTED);
+        int x=w-RIGHT-488,y=27; // off until it is opened from the Window menu; where the Selections window used to float
+        panel(g,x,y,RIGHT,101,"Clipboard");
+        text(g,ClientState.status.clipboardSize()==0?"No copied blocks":ClientState.status.clipboardSize()+" blocks ready to place",x+10,y+26,MUTED);
         int[] top=flex(pw-20,6,1,1,1),bottom=flex(pw-20,4,44,44,84);
-        button(g,x+10,159,top[0],20,"Copy",false,()->action("copy"),"Copy selection · Ctrl+C");
-        button(g,x+16+top[0],159,top[1],20,"Cut",false,()->action("cut"),"Cut selection · Ctrl+X");
-        button(g,x+22+top[0]+top[1],159,top[2],20,"Paste",false,()->action("paste"),"Paste at cursor · Ctrl+V");
-        button(g,x+10,186,bottom[0],20,"Rotate",false,()->action("rotate"),"Rotate clipboard 90° · Ctrl+R");
-        button(g,x+14+bottom[0],186,bottom[1],20,"Mirror",false,()->action("flip"),"Mirror clipboard on X · Ctrl+F");
-        button(g,x+18+bottom[0]+bottom[1],186,bottom[2],20,"Paste in place",false,PlacementPreview::beginInPlace,"Start a placement at the coordinates the blocks were copied from · Ctrl+Shift+V · Enter builds it");
+        button(g,x+10,y+44,top[0],20,"Copy",false,()->action("copy"),"Copy selection · Ctrl+C");
+        button(g,x+16+top[0],y+44,top[1],20,"Cut",false,()->action("cut"),"Cut selection · Ctrl+X");
+        button(g,x+22+top[0]+top[1],y+44,top[2],20,"Paste",false,()->action("paste"),"Paste at cursor · Ctrl+V");
+        button(g,x+10,y+71,bottom[0],20,"Rotate",false,()->action("rotate"),"Rotate clipboard 90° · Ctrl+R");
+        button(g,x+14+bottom[0],y+71,bottom[1],20,"Mirror",false,()->action("flip"),"Mirror clipboard on X · Ctrl+F");
+        button(g,x+18+bottom[0]+bottom[1],y+71,bottom[2],20,"Paste in place",false,PlacementPreview::beginInPlace,"Start a placement at the coordinates the blocks were copied from · Ctrl+Shift+V · Enter builds it");
     }
     private void palette(Gfx g) {
-        int x=w-RIGHT;panel(g,x,222,RIGHT,Math.max(105,masksTop()-6-222),"Block palette"); // down to the Tool masks
-        dropArea(x,222,RIGHT,Math.max(105,masksTop()-6-222),this::dropInPalette); // a block dropped anywhere on the panel joins the palette
+        int x=w-RIGHT,y=groupTop(),height=Math.max(105,(WorkspaceLayout.visible("masks")?masksTop()-6:h-25)-y);
+        panel(g,x,y,RIGHT,height,"Block palette"); // the top of the palette and masks group, down to the Tool masks
+        dropArea(x,y,RIGHT,height,this::dropInPalette); // a block dropped anywhere on the panel joins the palette
         // Drawn back to front, like a paint tool: the foreground sits on top of the background.
-        handSlot(g,x+10,248);
-        blockSlot(g,x+70,264,"Background block",o().secondary,id->o().secondary=id);
-        blockSlot(g,x+50,248,"Foreground block",o().block,id->ClientState.pick(id));
-        transparencyToggle(g,x+51,280);
-        pipetteControls(g,x+110,248);
+        handSlot(g,x+10,y+26);
+        blockSlot(g,x+70,y+42,"Background block",o().secondary,id->o().secondary=id);
+        blockSlot(g,x+50,y+26,"Foreground block",o().block,id->ClientState.pick(id));
+        transparencyToggle(g,x+51,y+58);
+        pipetteControls(g,x+110,y+26);
         // The cells flow across the panel and down as far as it reaches; the first is always "+", which adds a block to the palette
         // and makes it the foreground. What does not fit scrolls.
-        var blocks=ClientState.palette;int total=blocks.size()+1,top=298,pitch=26,visibleRows=Math.max(1,(pb-6-top+3)/pitch);
+        var blocks=ClientState.palette;int total=blocks.size()+1,top=y+76,pitch=26,visibleRows=Math.max(1,(pb-6-top+3)/pitch);
         int columns=Math.max(1,(pw-17)/pitch);
         boolean bar=(total+columns-1)/columns>visibleRows;
         if(bar)columns=Math.max(1,(pw-25)/pitch);
@@ -1012,6 +1018,9 @@ public final class EditorScreen extends CraftiumScreen {
     private boolean maskLimitsOpen;
     /** The Tool masks panel: the buttons and one row of blocks, and with the limits unfolded the height range and Only in selection under them. It sits against the bottom of the screen. */
     private int masksHeight(){return maskLimitsOpen?150:98;}
+    /** The Block palette and Tool masks sit together at the bottom of the right column and take 3/8 of its height, never less than what they need (a palette of 105 and the masks). Hierarchy has the rest. */
+    private int groupHeight(){return Math.max(Math.round((h-25-27)*3f/8),105+6+masksHeight());}
+    private int groupTop(){return h-25-groupHeight();}
     private int masksTop(){return h-25-masksHeight();}
     private int maskCols=7,maskRows=3;
     private static final int MASK_PITCH=25,MASK_MENU_WIDTH=110,MASK_MENU_ROW=18;
@@ -1804,7 +1813,7 @@ public final class EditorScreen extends CraftiumScreen {
             return true;
         }
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("palette")){paletteScroll=Math.max(0,paletteScroll+(vertical<0?1:-1));return true;} // clamped when drawn
-        if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("selections")){savedScroll=Math.max(0,savedScroll+(vertical<0?1:-1));return true;}
+        if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("hierarchy")){savedScroll=Math.max(0,savedScroll+(vertical<0?1:-1));return true;}
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("rulers")){rulerScroll=Math.max(0,rulerScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("masks")){maskScroll=Math.max(0,maskScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("tools")){toolScroll=Math.clamp(toolScroll+(vertical<0?1:-1),0,maxToolScroll());return true;}
@@ -2059,12 +2068,11 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     }
     /** "3 x 4 x 2": how many blocks a saved selection spans along each axis. */
     private static String savedSpan(dev.craftium.net.Packets.SavedSelection s){return (s.max().x()-s.min().x()+1)+" x "+(s.max().y()-s.min().y()+1)+" x "+(s.max().z()-s.min().z()+1);}
-    /** The Selections panel: every selection saved by name, to look at (click), edit (pencil) or delete (cross). The player's own selection is only swapped out while one is looked at, and given back when it is let go. */
-    private void selectionsPanel(Gfx g){
+    /** The Hierarchy panel, the top of the right column: every selection saved by name, to look at (click), edit (pencil) or delete (cross). The player's own selection is only swapped out while one is looked at, and given back when it is let go. It is the list BuildObjects will grow into. */
+    private void hierarchyPanel(Gfx g){
         var saved=ClientState.savedSelections();
-        if(saved.isEmpty()&&ClientState.status.selectionSize()==0)return; // nothing to save and nothing saved
-        int x=w-RIGHT-488,y=27;
-        panel(g,x,y,236,230,"Selections");
+        int x=w-RIGHT,y=27;
+        panel(g,x,y,RIGHT,Math.max(90,groupTop()-6-y),"Hierarchy");
         boolean looking=ClientState.activeSaved()!=null;
         button(g,x+10,y+24,pw-20,19,"Save selection",false,()->action("saved_selection:save"),looking?"Save what is selected now as a new entry. While one is shown, that is a copy of it":"Save what is selected now as a new entry, under the name Selection 1, 2 and so on");
         int top=y+50,bottom=y+ph-8,rowHeight=20,rows=Math.max(1,(bottom-top)/rowHeight),total=saved.size();
@@ -2076,10 +2084,10 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             if(entry.active())g.fill(x+9,ry,x+pw-9,ry+rowHeight,entry.editing()?0xff5b4a84:0xff315b84);
             int colour=ClientState.savedColor(id);
             g.fill(x+14,ry+4,x+28,ry+rowHeight-4,0xff000000|colour&0xffffff);g.outline(x+14,ry+4,14,rowHeight-8,LINE);
-            String label=entry.name()+" • "+savedSpan(entry);
+            String label=entry.name();
             text(g,shorten(label,pw-124),x+34,ry+6,entry.active()?TEXT:MUTED);
             // later controls win where they overlap, so the row comes first and the cells and buttons on it after
-            controls.add(new Control(x+9,ry,pw-18,rowHeight,()->action(entry.active()&&!entry.editing()?"saved_selection:release":"saved_selection:view:"+id),entry.active()&&!entry.editing()?"Let go: your own selection comes back":"Show this selection in place of yours. Click it again to get yours back · It is a copy: changes you make while it is shown are not kept"));
+            controls.add(new Control(x+9,ry,pw-18,rowHeight,()->action(entry.active()&&!entry.editing()?"saved_selection:release":"saved_selection:view:"+id),savedSpan(entry)+" blocks · "+(entry.active()&&!entry.editing()?"Let go: your own selection comes back":"Show this selection in place of yours. Click it again to get yours back · It is a copy: changes you make while it is shown are not kept")));
             controls.add(new Control(x+14,ry+4,14,rowHeight-8,()->ColourPickerScreen.open(this,entry.name()+" colour",()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0)),"Change this selection's outline colour"));
             int eye=x+pw-72,pencil=x+pw-50,cross=x+pw-28;boolean hidden=ClientState.savedHidden(id);
             button(g,eye,ry+2,18,rowHeight-4,"",false,()->ClientState.toggleSavedHidden(id),hidden?"Show this selection in the world":"Hide this selection in the world · It stays saved, and shows while you look at it or edit it");
