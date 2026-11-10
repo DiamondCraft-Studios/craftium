@@ -189,7 +189,8 @@ public final class SavedSelectionsGameTest {
         transformsCarryObjects();
         overlapTakesObjectsWhole();
         hierarchyIsInHistory();
-        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history");
+        severalAtOnceAndFocus();
+        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus");
     }
 
     // ---- Claude --------------------------------------------------------------------------------------------------------------------------
@@ -400,6 +401,37 @@ public final class SavedSelectionsGameTest {
         require(saved(1).parent() == around.id() && saved(2).parent() == around.id() && around.parent() == 0, "both went inside it, in their order: " + ClientState.savedSelections());
         require(saved(1).size() == 8 && saved(2).size() == 3, "each whole, though the selection reached one block of the second: " + ClientState.savedSelections());
         require(around.size() == 1, "and it holds only the block that belonged to none: " + around);
+    }
+    /** Several BuildObjects shown together are one selection, and F with exactly one shown puts the view where all of it is on screen, facing its middle. */
+    private void severalAtOnceAndFocus() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        int one = saved(0).id(), two = saved(1).id();
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:viewset:" + one + "," + two, null, null));
+        settle();
+        var both = new HashSet<Point>(a());
+        both.addAll(b());
+        require(saved(0).active() && saved(1).active() && live().equals(both), "two shown together are one selection of both: " + ClientState.savedSelections());
+
+        click(control("Let go", 0)); // a plain click on one of the two shown shows it alone
+        require(saved(0).active() && !saved(1).active() && liveIs(a()), "a plain click shows one alone: " + ClientState.savedSelections());
+        c.runOnClient(mc -> { mc.player.setPos(baseX + 40, baseY + 5, baseZ + 40); mc.player.setYRot(30f); mc.player.setXRot(10f); mc.player.setOldPosAndRot(); });
+        c.waitTicks(3);
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_F, 0, 0); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        c.waitTicks(3);
+        var centre = new net.minecraft.world.phys.Vec3(baseX + 1, baseY + 1, baseZ + 1);
+        double[] result = c.computeOnClient(mc -> {
+            var toCentre = centre.subtract(mc.player.getEyePosition());
+            return new double[]{toCentre.normalize().dot(mc.player.getLookAngle()), toCentre.length()};
+        });
+        require(result[0] > 0.999 && result[1] > 2 && result[1] < 40, "F puts the middle of the BuildObject in the middle of the view, back far enough to see it all: " + java.util.Arrays.toString(result));
+
+        click(control("Let go", 0));
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_F, 0, 0); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
     }
     /** Everything done in the Hierarchy is in the history: Undo takes it back and Redo does it again. */
     private void hierarchyIsInHistory() {
