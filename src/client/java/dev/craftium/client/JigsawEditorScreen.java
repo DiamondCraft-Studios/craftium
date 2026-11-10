@@ -378,9 +378,9 @@ final class JigsawEditorScreen extends CraftiumScreen {
             JsonObject base = cmd("jigsaw_set", "template", template);
             base.add("pos", at);
             int half = rightW / 2 - 3;
-            tips.on(box(x + 52, y + 14, rightW - 52, str(jig, "name", ""), 80, null, () -> { var c = base.deepCopy(); c.addProperty("name", focusedText()); change(c); }), "Called: the name of this connector. When another piece asks for a connector with this name, this is the one it joins. Enter applies.");
-            tips.on(box(x + 52, y + 38, half - 52, str(jig, "pool", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("pool", focusedText()); change(c); }), "Pick from: the pool the next piece is chosen from, by chance. minecraft:empty means nothing attaches here. Enter applies.");
-            tips.on(box(x + half + 4 + 40, y + 38, rightW - (half + 4) - 40, str(jig, "target", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("target", focusedText()); change(c); }), "Needs: the name the connector of the next piece must have to join this one. Enter applies.");
+            tips.on(box(x + 52, y + 14, rightW - 52, str(jig, "name", ""), 80, null, () -> { var c = base.deepCopy(); c.addProperty("name", focusedText()); change(c); }), "Name: the name of this connector. When another piece asks for a connector with this name, this is the one it joins. Enter applies.");
+            tips.on(box(x + 52, y + 38, half - 52, str(jig, "pool", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("pool", focusedText()); change(c); }), "Pool: the pool the next piece is chosen from, by chance. minecraft:empty means nothing attaches here. Enter applies.");
+            tips.on(box(x + half + 4 + 40, y + 38, rightW - (half + 4) - 40, str(jig, "target", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("target", focusedText()); change(c); }), "Target: the name the connector of the next piece must have to join this one. Enter applies.");
             boolean vertical = !jig.has("vertical") || jig.get("vertical").getAsBoolean(); // only a connector that faces up or down has a joint that matters
             boolean rollable = str(jig, "joint", "rollable").equals("rollable");
             button(rollable ? "Rollable" : "Aligned", x, y + 62, 76, 18, () -> { var c = base.deepCopy(); c.addProperty("joint", rollable ? "aligned" : "rollable"); change(c); }).active = vertical; // greyed out for a connector that faces sideways
@@ -757,9 +757,9 @@ final class JigsawEditorScreen extends CraftiumScreen {
             g.text(font, "#" + (jigPage * per + slot + 1) + " at " + at.get(0) + " " + at.get(1) + " " + at.get(2), x, y + 2, MUTED, false);
             String verdict = !issue.isEmpty() ? issue : fits < 0 ? "ends here (empty pool)" : "meets " + fits + (fits == 1 ? " element" : " elements");
             g.text(font, font.plainSubstrByWidth(verdict, rightW - 100), x + rightW - 4 - Math.min(font.width(verdict), rightW - 100), y + 2, !issue.isEmpty() ? ERROR : fits < 0 ? MUTED : OK, false);
-            g.text(font, "Called", x, y + 18, MUTED, false);
-            g.text(font, "Pick from", x, y + 42, MUTED, false);
-            g.text(font, "Needs", x + (rightW / 2 - 3) + 4, y + 42, MUTED, false);
+            g.text(font, "Name", x, y + 18, MUTED, false);
+            g.text(font, "Pool", x, y + 42, MUTED, false);
+            g.text(font, "Target", x + (rightW / 2 - 3) + 4, y + 42, MUTED, false);
             g.text(font, "Turns into", x, y + 88, MUTED, false);
             g.text(font, "place", x + 82, y + 66, MUTED, false);
             g.text(font, "select", x + 160, y + 66, MUTED, false);
@@ -929,7 +929,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
             {"t", "3. Make the pools your connectors point at, and add pieces to those in the same way. A connector that points at a pool that does not exist has a button to make it."},
             {"t", "4. The Connectors panel shows how many pieces can attach to each connector. Preview from here shows the result in the world, and Apply keeps your changes in the datapack."},
             {"h", "A connector's fields"},
-            {"t", "Called is this connector's own name. Pick from is the pool the next piece comes from. Needs is the name the next piece's connector must have. Rollable or Aligned is how the next piece may turn on a connector that faces up or down."},
+            {"t", "Name is this connector's own name. Pool is the pool the next piece comes from. Target is the name the next piece's connector must have. Rollable or Aligned is how the next piece may turn on a connector that faces up or down."},
         };
         int line = y + 12;
         for (var part : text) {
