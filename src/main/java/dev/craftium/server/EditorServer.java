@@ -938,9 +938,12 @@ public final class EditorServer {
     /** The player's session, for commands that work on their selection and waiting preview. */
     static Session session(ServerPlayer player){return playerSession(player);}
     /** Holds an edit as the player's waiting preview in place of whatever waited before; Enter builds it and Esc cancels it, like any staged edit. */
-    static void preview(ServerPlayer player,Session.Edit edit,String message){
+    static void preview(ServerPlayer player,Session.Edit edit,String message){preview(player,edit,message,null,true);}
+    /** As above, with the pieces of a jigsaw layout to draw, and whether its blocks are drawn too. */
+    static void preview(ServerPlayer player,Session.Edit edit,String message,GhostCodec.Layout layout,boolean blocks){
         var s=playerSession(player);
         s.pendingEdit=edit;s.pendingSelectionBefore=null;s.pendingDirty=true;
+        s.layoutFor=layout==null?null:edit;s.layout=layout;s.layoutBlocks=blocks;
         send(player,s,message,false);
     }
     /** Builds the waiting preview, as the Enter key does. */
@@ -1182,7 +1185,7 @@ public final class EditorServer {
         String entityId="",entityNbt="";if(s.selectedEntity!=null){var entity=player.level().getEntity(s.selectedEntity);if(entity!=null){entityId=s.selectedEntity.toString();String nbt=EntityEdits.snapshot(entity,player.level()).toString();if(nbt.length()<12000)entityNbt=nbt;}}
         if(s.selectionRevision!=s.selection.revision()){s.selectionRevision=s.selection.revision();s.selectionData=SelectionCodec.encode(s.selection.points());}
         if(s.clipboardDirty){s.clipboardGhostDirty=true;s.clipboardData=SelectionCodec.encode(s.clipboard.entrySet().stream().filter(e->!e.getValue().state().isAir()).map(Map.Entry::getKey).toList());s.clipboardDirty=false;}
-        if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
+        if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":s.layout!=null&&s.pendingEdit==s.layoutFor?GhostCodec.encodeLayout(s.pendingEdit,GhostCodec.AI_LIMIT,s.layout,s.layoutBlocks):GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
         if(s.pluginPreviewDirty){s.pluginPreviewData=s.pluginPreview==null?"":GhostCodec.encodeEdit(s.pluginPreview);s.pluginPreviewDirty=false;}
         if(ai!=null)aiData(ai); // one place makes the AI preview's data, so the owner and the players who see it always get the same
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}

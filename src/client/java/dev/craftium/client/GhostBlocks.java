@@ -19,7 +19,7 @@ import java.util.*;
 final class GhostBlocks {
     static final GhostBlocks EMPTY=new GhostBlocks(null);
     /** The shape of what the server sends; see the server's GhostCodec. */
-    private record Data(List<String> states,int[] blocks,int[] removed,int total){}
+    private record Data(List<String> states,int[] blocks,int[] removed,int total,int[] layout,List<String> names,boolean large){}
 
     private final Data data;
     private List<BlockState> states;
@@ -111,10 +111,37 @@ final class GhostBlocks {
         return out;
     }
 
+    /** Whether this is a jigsaw preview, which carries the outline of each piece. */
+    boolean hasLayout(){return data!=null&&data.layout()!=null&&data.layout().length>=7;}
+
+    /** A jigsaw preview's pieces: a box each, coloured by the template it comes from (white for the start piece), named when the camera is near. */
+    private void drawLayout(Vec3 origin){
+        if(!hasLayout())return;
+        int[] l=data.layout();var names=data.names();
+        var player=Minecraft.getInstance().player;var camera=player==null?null:player.getEyePosition();
+        for(int i=0,piece=0;i+6<l.length;i+=7,piece++){
+            int hue=l[i+6];
+            int line=hue<0?0xffffffff:rainbow(hue,0xff),fill=hue<0?0x22ffffff:rainbow(hue,0x22);
+            var box=new net.minecraft.world.phys.AABB(l[i]+origin.x,l[i+1]+origin.y,l[i+2]+origin.z,l[i+3]+1+origin.x,l[i+4]+1+origin.y,l[i+5]+1+origin.z);
+            Overlay.box(box,line,2f,fill);
+            if(camera!=null&&names!=null&&piece<names.size()&&box.getCenter().distanceToSqr(camera)<48*48&&box.getCenter().distanceToSqr(camera)>8*8){
+                var top=new Vec3((box.minX+box.maxX)/2,box.maxY+.6,(box.minZ+box.maxZ)/2);
+                Overlay.text(names.get(piece),top,line,0xbb151c26,.04f);
+            }
+        }
+    }
+    /** A bright colour for a hue in degrees, with the given alpha. */
+    private static int rainbow(int hue,int alpha){
+        float h=(hue%360)/60f;int sector=(int)h;float f=h-sector;
+        float q=1-f;float[] rgb=switch(sector){case 0->new float[]{1,f,0};case 1->new float[]{q,1,0};case 2->new float[]{0,1,f};case 3->new float[]{0,q,1};case 4->new float[]{f,0,1};default->new float[]{1,0,q};};
+        return alpha<<24|(int)(rgb[0]*220+35)<<16|(int)(rgb[1]*220+35)<<8|(int)(rgb[2]*220+35);
+    }
+
     /** Draws the ghost with its blocks moved by {@code origin}. */
     void draw(Point origin,boolean outline){
         if(data==null||!resolve())return;
         Vec3 at=new Vec3(origin.x(),origin.y(),origin.z());
+        if(outline)drawLayout(at);
         if(outline){
             var o=ClientState.options;
             int line=shared?o.sharedAiColor:ai?dev.craftium.core.AiSessions.shade(o.aiColor,slot):o.hoverColor,fill=shared?o.sharedAiFill:ai?dev.craftium.core.AiSessions.shade(o.aiFill,slot):o.hoverFill;
@@ -130,7 +157,7 @@ final class GhostBlocks {
         }
         // An AI preview can hold far more blocks than a frame can draw as models; the server sends the visible ones first, so the first few are the ones that show.
         // Another player's AI preview is one too, so it is held to the same limit.
-        int models=ai||shared?Math.min(states.size(),ClientState.options.aiGhostDrawLimit):states.size();
+        int models=ai||shared||data.large()?Math.min(states.size(),ClientState.options.aiGhostDrawLimit):states.size();
         if(drawnPlaces==null||drawnPlaces.size()!=models||drawnFor!=cachedPlaces){ // the same list objects every frame, so the renderer can keep what it worked out about them
             drawnPlaces=models<states.size()?cachedPlaces.subList(0,models):cachedPlaces;
             drawnStates=models<states.size()?states.subList(0,models):states;drawnFor=cachedPlaces;

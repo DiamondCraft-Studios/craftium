@@ -19,7 +19,16 @@ final class GhostCodec {
      * describing can go further than the drawing; the blocks that show come first, so a cut never leaves a hole in the outer surface.
      */
     static final int AI_LIMIT=32_768;
-    record Ghost(List<String> states,int[] blocks,int[] removed,int total){}
+    /**
+     * {@code layout} and {@code names} are only there for a jigsaw preview: one box per piece (x0, y0, z0, x1, y1, z1 and a hue, or -1 for the start piece)
+     * and the template each piece comes from. {@code large} says the preview may hold more blocks than a frame can draw, so the client draws only as many
+     * models as it allows for AI previews.
+     */
+    record Ghost(List<String> states,int[] blocks,int[] removed,int total,int[] layout,List<String> names,boolean large){
+        Ghost(List<String> states,int[] blocks,int[] removed,int total){this(states,blocks,removed,total,null,null,false);}
+    }
+    /** The pieces of a jigsaw layout, as {@link Ghost#layout} and {@link Ghost#names} carry them. */
+    record Layout(int[] boxes,List<String> names){}
 
     private GhostCodec(){}
 
@@ -27,7 +36,18 @@ final class GhostCodec {
     static String encodeEdit(Session.Edit edit){return encodeEdit(edit,LIMIT);}
 
     /** As {@link #encodeEdit(Session.Edit)}, describing up to {@code limit} placed blocks and as many removed ones. */
-    static String encodeEdit(Session.Edit edit,int limit){
+    static String encodeEdit(Session.Edit edit,int limit){return Packets.JSON.toJson(describe(edit,limit));}
+
+    /**
+     * A jigsaw preview: the layout of its pieces, and the blocks too unless {@code blocks} is false (a layout alone is cheap at any size). It is flagged as large,
+     * so the client draws a capped number of models, but it describes up to {@code limit} blocks for the outline.
+     */
+    static String encodeLayout(Session.Edit edit,int limit,Layout layout,boolean blocks){
+        var base=blocks?describe(edit,limit):new Ghost(List.of(),new int[0],new int[0],describe(edit,0).total());
+        return Packets.JSON.toJson(new Ghost(base.states(),base.blocks(),base.removed(),base.total(),layout.boxes(),layout.names(),true));
+    }
+
+    private static Ghost describe(Session.Edit edit,int limit){
         var palette=new LinkedHashMap<BlockState,Integer>();var blocks=new ArrayList<Integer>();var removed=new ArrayList<Integer>();
         int total=0,placedCount=0;
         for(var change:edit.changes()){
@@ -48,7 +68,8 @@ final class GhostCodec {
             else if(blocks.size()/4<limit)place(blocks,palette,change);
         }
         for(var change:buried){if(blocks.size()/4>=limit)break;place(blocks,palette,change);}
-        return json(palette,blocks,removed,total);
+        var states=new ArrayList<String>();for(var state:palette.keySet())states.add(BlockStateParser.serialize(state));
+        return new Ghost(states,blocks.stream().mapToInt(Integer::intValue).toArray(),removed.stream().mapToInt(Integer::intValue).toArray(),total);
     }
 
     private static void place(List<Integer> blocks,Map<BlockState,Integer> palette,Session.Change change){

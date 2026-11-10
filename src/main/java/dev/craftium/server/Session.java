@@ -51,6 +51,8 @@ final class Session {
     String pendingData="";boolean pendingDirty;
     /** The ghost a plugin's tool is showing for this player, as an edit and as the data the client is sent. It is not an edit waiting to be built. */
     Edit pluginPreview;String pluginPreviewData="";boolean pluginPreviewDirty;
+    /** A jigsaw preview's layout and how it is drawn, which only apply while {@link #pendingEdit} is still the edit it was made for. */
+    Edit layoutFor;GhostCodec.Layout layout;boolean layoutBlocks=true;
     /** The {@link PluginTools#version} of the list of plugin tools this player was last sent, or -1 when they have not been sent one. */
     int pluginToolsSent=-1;
     /** The selections this player saved, and the {@link dev.craftium.core.SavedSelections#revision} of them that was last sent, or -1 when none has been. */
