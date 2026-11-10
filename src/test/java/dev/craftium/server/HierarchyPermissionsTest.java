@@ -31,8 +31,28 @@ class HierarchyPermissionsTest {
         assertTrue(may(denied,true,U,"Op","delete"),"the bypass is on unless it is turned off");
         assertFalse(may("{\"everyone\":{\"delete\":false},\"operatorsBypass\":false}",true,U,"Op","delete"));
     }
-    @Test void unknownActionsAndBadValuesAreIgnoredNotTrusted(){
-        var json="{\"everyone\":{\"explode\":false,\"create\":\"no\"},\"players\":{\"Alex\":\"nope\"}}";
-        assertTrue(may(json,false,U,"Alex","create"));
+    @Test void aMistakeInTheFileIsAnErrorNotSomethingIgnored(){
+        for(var bad:new String[]{
+            "{\"everyone\":{\"delet\":false}}",                 // a misspelled action would not be restricted
+            "{\"everyone\":{\"delete\":\"no\"}}",              // not true or false
+            "{\"everyone\":5}","{\"players\":[1]}","{\"players\":{\"Alex\":\"nope\"}}",
+            "{\"operatorsBypass\":\"yes\"}","not json"})
+            assertThrows(RuntimeException.class,()->HierarchyPermissions.parse(bad),bad);
+    }
+    @Test void aFileThatCannotBeReadKeepsTheLastGoodOneInForce(){
+        HierarchyPermissions.forgetForTest();
+        var good=HierarchyPermissions.readOrKeep("{\"everyone\":{\"delete\":false}}","test");
+        assertFalse(HierarchyPermissions.allowed(good,false,U,"Alex","delete"));
+        var after=HierarchyPermissions.readOrKeep("{\"everyone\":{\"delete\":flase}}","test"); // a typo in the file
+        assertSame(good,after,"the restriction is not dropped because of a typo");
+        HierarchyPermissions.forgetForTest();
+    }
+    @Test void withNothingBeforeItAFileThatCannotBeReadClosesTheTreeToEveryoneButOperators(){
+        HierarchyPermissions.forgetForTest();
+        var closed=HierarchyPermissions.readOrKeep("{","test");
+        for(var verb:HierarchyPermissions.VERBS){
+            assertFalse(HierarchyPermissions.allowed(closed,false,U,"Alex",verb),verb);
+            assertTrue(HierarchyPermissions.allowed(closed,true,U,"Op",verb),"operators still may: "+verb);
+        }
     }
 }
