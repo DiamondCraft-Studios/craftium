@@ -74,7 +74,7 @@ public final class SavedSelectionsGameTest {
         var two = saved(1);
         require(two.name().equals("BuildObject (1)") && two.size() == 3, "the second entry is BuildObject (1) with 3 blocks, got " + ClientState.savedSelections());
         require(panelShows("BuildObject (1)") && tipHas("'3 x 1 x 1 blocks"), "the second entry has its size in the tip: " + texts());
-        require(ClientState.savedColor(two.id()) != ClientState.savedColor(one.id()), "each entry starts with its own colour");
+        require(ClientState.savedColor(two.id()) == ClientState.options.selectionColor && ClientState.savedColor(one.id()) == ClientState.options.selectionColor, "every entry is drawn in the selection colour until one is chosen");
         require(liveIs(b()), "saving the second must not change the selection either");
 
         // click an entry: it replaces the selection, and clicking again gives the selection back
@@ -93,13 +93,13 @@ public final class SavedSelectionsGameTest {
         require(liveIs(cell()), "letting go drops the changes made while it was shown and gives back the selection from before");
 
         // edit: any selection tool changes the entry, and stopping gives the selection back
-        click(control("Edit:", 1));
+        sendAction("saved_selection:edit:" + saved(1).id());
         require(saved(1).active() && saved(1).editing() && liveIs(b()), "the pencil shows the entry and starts editing it");
         addToLive(cellAt(7));
         require(saved(1).size() == 4, "a block added while editing is kept in the entry, got " + saved(1).size());
         subtractFromLive(b().get(0));
         require(saved(1).size() == 3, "a block taken while editing comes out of the entry, got " + saved(1).size());
-        click(control("Stop editing", 0));
+        sendAction("saved_selection:release");
         require(liveIs(cell()) && ClientState.activeSaved() == null, "stopping the edit gives the selection back");
         require(saved(1).size() == 3, "the edit stays");
 
@@ -114,7 +114,8 @@ public final class SavedSelectionsGameTest {
         // the colour survives deleting and bringing an entry back
         int coloured = saved(1).id();
         ClientState.setSavedColor(coloured, 0xffaa3366);
-        click(control("Delete this BuildObject", 1));
+        c.waitTicks(40); // the colour goes to the server once the picker is still
+        sendAction("saved_selection:delete:" + saved(1).id());
         require(ClientState.savedSelections().size() == 1, "the cross deletes without asking");
         require(!panelShows("BuildObject (1)"), "the deleted entry leaves the window");
         undo();
@@ -187,7 +188,21 @@ public final class SavedSelectionsGameTest {
 
         screenshot();
         transformsCarryObjects();
-        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow");
+        overlapTakesObjectsWhole();
+        hierarchyIsInHistory();
+        severalAtOnceAndFocus();
+        contextMenu();
+        blocksLeaveTheirObjects();
+        multiDragAndKeptView();
+        duplicateCopyCutExportAndEyes();
+        duplicateKeepsStructureAndDeselect();
+        deleteWithBlocksAndWarning();
+        duplicateTransfersWhatIsShown();
+        ctrlShortcutsInTheHierarchy();
+        rulersWindowComesUpOnce();
+        sharedPersistentAndPermitted();
+        refusedPasteKeepsTheSelection();
+        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu duplicate shared prune view structure deselect delete-blocks transfer shortcuts rulers");
     }
 
     // ---- Claude --------------------------------------------------------------------------------------------------------------------------
@@ -280,8 +295,14 @@ public final class SavedSelectionsGameTest {
         settle();
         c.runOnClient(mc -> ClientState.options.mode = Selection.Mode.REPLACE);
     }
+    private void redo() { sleep(); c.runOnClient(mc -> CraftiumClient.send("redo", null, null)); settle(); }
     private void undo() { sleep(); c.runOnClient(mc -> CraftiumClient.send("undo", null, null)); settle(); }
-    private void deleteAll() { while (!ClientState.savedSelections().isEmpty()) click(control("Delete this BuildObject", 0)); }
+    private void deleteAll() {
+        if (ClientState.savedSelections().isEmpty()) return;
+        sendAction("saved_selection:deleteset:" + String.join(",", ClientState.savedSelections().stream().map(e -> String.valueOf(e.id())).toList()));
+    }
+    /** Asks the server for something the Hierarchy no longer has a button for, and waits for the answer. */
+    private void sendAction(String action) { sleep(); c.runOnClient(mc -> CraftiumClient.send(action, null, null)); settle(); }
 
     private Set<Point> live() { return c.computeOnClient(mc -> new HashSet<>(SelectionCodec.decode(ClientState.status.selectionData()))); }
     private int liveCount() { return live().size(); }
@@ -379,6 +400,603 @@ public final class SavedSelectionsGameTest {
         require(saved(0).max().x() - saved(0).min().x() + 1 == 4 && saved(0).size() == 16, "scaling up keeps the BuildObject whole: " + saved(0));
         undo();
         require(saved(0).size() == 8 && saved(0).min().equals(minA), "and Undo shrinks it back");
+    }
+    /** A selection that touches BuildObjects makes a new one with them inside it, whole, whatever part of them it reached. */
+    private void overlapTakesObjectsWhole() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        var reach = new ArrayList<>(a());
+        reach.add(b().get(0)); // all of the first, one block of the second
+        reach.add(cell().get(0)); // and a block that belongs to none
+        selectOnly(reach);
+        click(control("Create a BuildObject from what is selected now", 0));
+        require(ClientState.savedSelections().size() == 3, "one new BuildObject: " + ClientState.savedSelections());
+        var around = saved(0);
+        require(saved(1).parent() == around.id() && saved(2).parent() == around.id() && around.parent() == 0, "both went inside it, in their order: " + ClientState.savedSelections());
+        require(saved(1).size() == 8 && saved(2).size() == 3, "each whole, though the selection reached one block of the second: " + ClientState.savedSelections());
+        require(around.size() == 1, "and it holds only the block that belonged to none: " + around);
+    }
+    /** Several BuildObjects shown together are one selection, and F with exactly one shown puts the view where all of it is on screen, facing its middle. */
+    private void severalAtOnceAndFocus() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        int one = saved(0).id(), two = saved(1).id();
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:viewset:" + one + "," + two, null, null));
+        settle();
+        var both = new HashSet<Point>(a());
+        both.addAll(b());
+        require(saved(0).active() && saved(1).active() && live().equals(both), "two shown together are one selection of both: " + ClientState.savedSelections());
+
+        click(control("Let go", 0)); // a plain click on one of the two shown shows it alone
+        require(saved(0).active() && !saved(1).active() && liveIs(a()), "a plain click shows one alone: " + ClientState.savedSelections());
+        c.runOnClient(mc -> { mc.player.setPos(baseX + 40, baseY + 5, baseZ + 40); mc.player.setYRot(30f); mc.player.setXRot(10f); mc.player.setOldPosAndRot(); });
+        c.waitTicks(3);
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_F, 0, 0); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        c.waitTicks(3);
+        var centre = new net.minecraft.world.phys.Vec3(baseX + 1, baseY + 1, baseZ + 1);
+        double[] result = c.computeOnClient(mc -> {
+            var toCentre = centre.subtract(mc.player.getEyePosition());
+            return new double[]{toCentre.normalize().dot(mc.player.getLookAngle()), toCentre.length()};
+        });
+        require(result[0] > 0.999 && result[1] > 2 && result[1] < 40, "F puts the middle of the BuildObject in the middle of the view, back far enough to see it all: " + java.util.Arrays.toString(result));
+
+        click(control("Let go", 0));
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_F, 0, 0); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+    }
+    /** The right-click menu of a row: each item does what it says, and what it changes is in the history. */
+    private void contextMenu() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        int first = saved(0).id(), second = saved(1).id();
+
+        rightClick(row(0));
+        menuClick("Create empty parent");
+        require(ClientState.savedSelections().size() == 3 && saved(0).size() == 0 && saved(1).id() == first && saved(1).parent() == saved(0).id() && saved(2).id() == second, "Create empty parent puts a new one around the row: " + ClientState.savedSelections());
+        var parentBox = ClientState.subtreeBounds(saved(0).id());
+        require(parentBox != null && parentBox[0].equals(saved(1).min()) && parentBox[1].equals(saved(1).max()) && ClientState.subtreeSize(saved(0).id()) == saved(1).size(),
+            "an empty parent is framed by what is under it, for the showcase and the AI: " + java.util.Arrays.toString(parentBox));
+        rightClick(row(1));
+        menuClick("Move out of parent");
+        require(saved(1).id() == first && saved(1).parent() == 0, "Move out of parent: " + ClientState.savedSelections());
+        rightClick(row(0));
+        menuClick("Delete");
+        require(ClientState.savedSelections().size() == 2 && saved(0).id() == first && saved(1).id() == second, "Delete from the menu: " + ClientState.savedSelections());
+        undo();
+        require(ClientState.savedSelections().size() == 3, "and it is in the history: " + ClientState.savedSelections());
+        redo();
+
+        rightClick(row(0));
+        menuClick("Move down");
+        require(saved(0).id() == second && saved(1).id() == first, "Move down: " + ClientState.savedSelections());
+        rightClick(row(1));
+        menuClick("Move up");
+        require(saved(0).id() == first && saved(1).id() == second, "Move up: " + ClientState.savedSelections());
+
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:viewset:" + first + "," + second, null, null));
+        settle();
+        rightClick(row(0));
+        menuClick("Group selected (2)");
+        require(ClientState.savedSelections().size() == 3 && saved(1).parent() == saved(0).id() && saved(2).parent() == saved(0).id(), "Group selected puts both in a new parent: " + ClientState.savedSelections());
+        undo();
+        require(ClientState.savedSelections().size() == 2 && saved(0).parent() == 0 && saved(1).parent() == 0, "and Undo takes the group back: " + ClientState.savedSelections());
+
+        rightClick(row(0));
+        menuClick("Rename");
+        typeText("Wall");press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        require(saved(0).name().equals("Wall"), "Rename from the menu: " + saved(0).name());
+
+        rightClick(row(0));
+        menuClick("Show outline");
+        require(!ClientState.savedHidden(saved(0).id()), "Show outline opens the eye");
+        rightClick(row(0));
+        c.waitTicks(2);
+        require(menuControl("Focus") != null && menuControl("Hide outline") != null, "a BuildObject with blocks offers Focus, and the eye item now offers to hide");
+        c.takeScreenshot("hierarchy-menu"); // for a person to look at
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE); // closes the menu
+
+        // F2 renames the BuildObject shown, in its row
+        click(row(0));
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(291, 0, 0); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        c.waitTicks(2);
+        typeText("Gate");press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        require(saved(0).name().equals("Gate"), "F2 renames the BuildObject shown: " + saved(0).name());
+        click(control("Let go", 0));
+
+        // the open menu is the pointer's: a click on it that is off its items does nothing behind it, and a click away closes it
+        rightClick(row(0));
+        c.waitTicks(2);
+        var top = menuControl("Select");
+        require(top != null, "the menu is open");
+        int before = ClientState.savedSelections().size();
+        click(new int[]{top[0], top[1] - 2, top[2], 1}); // the padding above the first item
+        require(ClientState.savedSelections().size() == before, "the padding of the menu does not act on what is behind it");
+        click(new int[]{20, 600, 20, 20}); // somewhere else
+        c.waitTicks(2);
+        require(menuControl("Select") == null, "a click away closes the menu");
+
+        // Ctrl+G groups the BuildObjects shown into an empty parent
+        int a1 = saved(0).id(), a2 = saved(1).id();
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:viewset:" + a1 + "," + a2, null, null));
+        settle();
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_G, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        settle();
+        require(ClientState.savedSelections().size() == 3 && saved(0).size() == 0 && saved(1).parent() == saved(0).id() && saved(2).parent() == saved(0).id(), "Ctrl+G groups both shown into an empty parent: " + ClientState.savedSelections());
+        undo();
+        require(ClientState.savedSelections().size() == 2, "and Undo takes it back");
+    }
+    /** Duplicate (Ctrl+D), Copy, Cut, Paste and Export in the menu, a right click on another row while a menu is open, and Ctrl on the eye. */
+    private void duplicateCopyCutExportAndEyes() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        click(row(0)); // shown
+        String original = saved(0).guid();
+
+        // Ctrl+D copies the blocks, starts a placement where they were, and Enter pastes them as a selection and makes a BuildObject
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_D, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        c.waitFor(mc -> PlacementPreview.active(), 200);
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        c.waitTicks(10);
+        require(ClientState.savedSelections().size() == 2 && saved(0).guid().equals(original) && saved(1).name().equals("BuildObject (copy)") && saved(1).size() == 8,
+            "Ctrl+D makes a copy after the original, holding its blocks: " + ClientState.savedSelections());
+        require(liveIs(a()), "and the pasted blocks are the selection");
+        undo();
+        require(ClientState.savedSelections().size() == 1, "Undo takes the copy back: " + ClientState.savedSelections());
+        redo();
+        require(ClientState.savedSelections().size() == 2, "and Redo makes it again");
+
+        // a right click on another row while a menu is open opens that row's menu
+        rightClick(row(0));
+        c.waitTicks(2);
+        require(menuControl("Move down") != null && menuControl("Move up") == null, "the first row's menu");
+        rightClick(row(1));
+        c.waitTicks(2);
+        require(menuControl("Move up") != null && menuControl("Move down") == null, "a right click on another row opens its menu, not nothing");
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
+
+        // Copy puts the blocks on the clipboard, and Paste then offers a placement that makes a BuildObject
+        rightClick(row(0));
+        menuClick("Copy");
+        c.waitTicks(10);
+        require(c.computeOnClient(mc -> ClientState.status.clipboardSize()) == 8, "Copy copies the blocks of the BuildObject");
+        rightClick(row(0));
+        c.waitTicks(2);
+        require(menuControl("Paste") != null, "and Paste is offered");
+        click(menuControl("Paste"));
+        require(c.computeOnClient(mc -> PlacementPreview.active()), "Paste starts a placement");
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
+
+        // Export opens the export pop-up on the blocks shown
+        rightClick(row(0));
+        menuClick("Export…");
+        c.waitTicks(4);
+        require(c.computeOnClient(mc -> mc.gui.screen() instanceof StructureExportScreen), "Export opens the export pop-up");
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
+        c.waitTicks(4);
+
+        // Ctrl on the eye takes everything under it along
+        drag(row(1), row(0), 0.5); // the copy goes under the original
+        require(saved(1).parent() == saved(0).id(), "nested for the eyes");
+        int parent = saved(0).id(), child = saved(1).id();
+        boolean hiddenBefore = c.computeOnClient(mc -> ClientState.savedHidden(parent) && ClientState.savedHidden(child));
+        require(hiddenBefore, "both start closed");
+        c.runOnClient(mc -> {
+            try {
+                var screen = (EditorScreen) mc.gui.screen();
+                var method = EditorScreen.class.getDeclaredMethod("eyeClick", dev.craftium.net.Packets.SavedSelection.class, boolean.class);
+                method.setAccessible(true);
+                method.invoke(screen, ClientState.savedSelections().get(0), true);
+            } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+        });
+        require(c.computeOnClient(mc -> !ClientState.savedHidden(parent) && !ClientState.savedHidden(child)), "Ctrl on the eye opens it for everything under it");
+
+        // Cut takes the blocks and the BuildObjects; Undo brings both back
+        click(row(0));
+        rightClick(row(0));
+        menuClick("Cut");
+        c.waitTicks(30);
+        settle();
+        require(ClientState.savedSelections().isEmpty() && allAre(a(), Blocks.AIR), "Cut takes the blocks and the BuildObjects: " + ClientState.savedSelections());
+        undo();
+        undo();
+        require(ClientState.savedSelections().size() == 2 && allAre(a(), Blocks.STONE), "and two Undos bring both back: " + ClientState.savedSelections());
+    }
+    /** Dragging one of several shown rows carries them all; and the eye and fold of a BuildObject are kept by GUID, so they hold when the list comes again. */
+    private void multiDragAndKeptView() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(cell());
+        click(control("Create a BuildObject from what is selected now", 0));
+        int x = saved(0).id(), y = saved(1).id(), z = saved(2).id();
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:viewset:" + x + "," + z, null, null));
+        settle();
+        drag(row(0), row(1), 0.5); // the first of the two shown, onto the middle of the one that is not
+        require(saved(0).id() == y && saved(1).parent() == y && saved(2).parent() == y && saved(1).id() == x && saved(2).id() == z,
+            "dragging one of two shown rows carries both under the row it was dropped on: " + ClientState.savedSelections());
+
+        // the eye and the fold are this player's, kept by GUID: they come back when the list does
+        c.runOnClient(mc -> { ClientState.setSavedHidden(y, false); ClientState.toggleSavedFolded(y); });
+        c.waitTicks(40);
+        var file = net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("craftium/hierarchy-view.json");
+        require(java.nio.file.Files.exists(file), "the choices were written to " + file);
+        c.runOnClient(mc -> ClientState.clearSavedSelections()); // as on joining a world: the client knows nothing
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:view:" + y, null, null));
+        settle();
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:release", null, null));
+        settle();
+        require(c.computeOnClient(mc -> !ClientState.savedHidden(y) && ClientState.savedFolded(y) && ClientState.savedHidden(x) && ClientState.savedHidden(z) && !ClientState.savedFolded(x)),
+            "the open eye and the fold of the parent come back, and the others stay closed");
+        c.runOnClient(mc -> ClientState.toggleSavedFolded(y)); // unfolded again for what follows
+    }
+    /** A block that is deleted or cut leaves its BuildObject (and Undo puts it back); Move takes the BuildObject along; deleting from the Hierarchy leaves the blocks. */
+    private void blocksLeaveTheirObjects() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        var minA = saved(0).min();
+        require(saved(0).size() == 8, "the BuildObject holds its eight blocks");
+
+        var three = a().subList(0, 3);
+        selectOnly(three);
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_DELETE);
+        c.waitTicks(10);
+        require(allAre(three, Blocks.AIR) && saved(0).size() == 5, "deleting three blocks takes them out of the BuildObject: " + saved(0));
+        undo();
+        require(allAre(three, Blocks.STONE) && saved(0).size() == 8, "Undo puts the blocks back into it: " + saved(0));
+        redo();
+        require(allAre(three, Blocks.AIR) && saved(0).size() == 5, "and Redo takes them out again: " + saved(0));
+        undo();
+
+        selectOnly(a().subList(0, 2));
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("cut", null, null));
+        settle();
+        c.waitTicks(10);
+        require(saved(0).size() == 6, "cutting two takes them out of it: " + saved(0));
+        undo();
+        require(saved(0).size() == 8 && allAre(a(), Blocks.STONE), "and Undo brings them back: " + saved(0));
+
+        selectOnly(a());
+        sleep();
+        c.runOnClient(mc -> {
+            Options original = ClientState.options;
+            var request = dev.craftium.net.Packets.JSON.fromJson(dev.craftium.net.Packets.JSON.toJson(original), Options.class);
+            try { ClientState.options = request; request.offsetX = 10; request.offsetY = request.offsetZ = 0; CraftiumClient.send("move", null, null); }
+            finally { ClientState.options = original; }
+        });
+        settle();
+        c.waitTicks(10);
+        require(saved(0).min().equals(minA.add(10, 0, 0)) && saved(0).size() == 8, "Move takes the BuildObject with its blocks: " + saved(0));
+        undo();
+        require(saved(0).min().equals(minA) && allAre(a(), Blocks.STONE), "and Undo puts both back: " + saved(0));
+
+        sendAction("saved_selection:delete:" + saved(0).id());
+        require(ClientState.savedSelections().isEmpty() && allAre(a(), Blocks.STONE), "deleting from the Hierarchy removes the grouping and leaves every block");
+        undo();
+        require(ClientState.savedSelections().size() == 1, "and Undo brings the grouping back");
+    }
+    /** Duplicating a hierarchy makes the same hierarchy again, and a click on empty space or Alt+D lets go of the BuildObjects shown. */
+    private void duplicateKeepsStructureAndDeselect() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        drag(row(1), row(0), 0.5); // the second under the first
+        int parent = saved(0).id();
+        require(saved(1).parent() == parent, "nested to duplicate: " + ClientState.savedSelections());
+        click(row(0)); // shows the parent, so its blocks and its child's
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_D, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        c.waitFor(mc -> PlacementPreview.active(), 200);
+        c.waitTicks(5);
+        String asObject = c.computeOnClient(mc -> String.valueOf(PlacementPreview.asObject) + " busy=" + ClientState.status.busy() + " active=" + PlacementPreview.active());
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        c.waitTicks(10);
+        require(ClientState.savedSelections().size() == 4, "the parent and its child were each copied (" + asObject + " then " + c.computeOnClient(mc -> "active=" + PlacementPreview.active()) + "): [" + c.computeOnClient(mc -> ClientState.status.message()) + " / " + c.computeOnClient(mc -> ClientState.status.error()) + "] " + ClientState.savedSelections());
+        require(saved(2).name().equals("BuildObject (copy)") && saved(2).parent() == 0 && saved(2).size() == 8, "the copy of the parent follows it: " + ClientState.savedSelections());
+        require(saved(3).name().equals(saved(1).name()) && saved(3).parent() == saved(2).id() && saved(3).size() == 3, "and the copy of the child is under it, with the same name: " + ClientState.savedSelections());
+        require(saved(0).parent() == 0 && saved(1).parent() == saved(0).id(), "the original is as it was");
+        undo();
+        require(ClientState.savedSelections().size() == 2, "Undo takes the whole copy back: " + ClientState.savedSelections());
+        redo();
+        require(ClientState.savedSelections().size() == 4, "and Redo makes it again");
+
+        // Alt+D lets go of the BuildObjects shown, with the selection
+        if (!saved(0).active()) click(row(0)); // a click on the one shown would let it go
+        require(saved(0).active(), "shown");
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_D, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_ALT); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        settle();
+        require(c.computeOnClient(mc -> ClientState.savedSelections().stream().noneMatch(e -> e.active())) && live().isEmpty(), "Alt+D lets go of them and clears the selection: " + ClientState.savedSelections());
+
+        // so does a click on empty space in the Hierarchy
+        click(row(0));
+        require(saved(0).active(), "shown again");
+        var last = row(3);
+        click(new int[]{last[0] + 20, last[1] + last[3] + 40, 10, 10});
+        settle();
+        require(c.computeOnClient(mc -> ClientState.savedSelections().stream().noneMatch(e -> e.active())), "a click on empty space lets go of the one shown: " + ClientState.savedSelections());
+    }
+    /** "Delete blocks" deletes the BuildObject and its blocks as one step, asks the first time, and stops asking when told to. */
+    private void deleteWithBlocksAndWarning() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        drag(row(1), row(0), 0.5);
+        require(saved(1).parent() == saved(0).id(), "a parent with a child");
+        require(c.computeOnClient(mc -> ClientState.options.warnDeleteBlocks), "the warning is on until it is turned off");
+
+        rightClick(row(0));
+        menuClick("Delete blocks");
+        require(confirmShown(), "the first time it asks");
+        c.takeScreenshot("delete-blocks-warning"); // for a person to look at
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
+        require(!confirmShown() && ClientState.savedSelections().size() == 2 && allAre(a(), Blocks.STONE), "cancelling changes nothing");
+
+        rightClick(row(0));
+        menuClick("Delete blocks");
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        c.waitTicks(15);
+        settle();
+        require(ClientState.savedSelections().isEmpty() && allAre(a(), Blocks.AIR) && allAre(b(), Blocks.AIR), "confirming deletes the BuildObject, its child and all their blocks: " + ClientState.savedSelections());
+        undo();
+        require(ClientState.savedSelections().size() == 2 && saved(1).parent() == saved(0).id() && allAre(a(), Blocks.STONE) && allAre(b(), Blocks.STONE), "one Undo brings back the BuildObjects, as they were, and the blocks: " + ClientState.savedSelections());
+        redo();
+        require(ClientState.savedSelections().isEmpty() && allAre(a(), Blocks.AIR), "and Redo deletes them again");
+        undo();
+
+        // ticking the box turns the warning off for good
+        rightClick(row(0));
+        menuClick("Delete blocks");
+        click(menuControl("Don't show this message again"));
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        c.waitTicks(15);
+        settle();
+        require(ClientState.savedSelections().isEmpty() && c.computeOnClient(mc -> !ClientState.options.warnDeleteBlocks), "it deleted, and the warning is off now");
+        undo();
+        rightClick(row(0));
+        menuClick("Delete blocks");
+        c.waitTicks(15);
+        settle();
+        require(!confirmShown() && ClientState.savedSelections().isEmpty(), "and it no longer asks");
+        undo();
+        c.runOnClient(mc -> ClientState.options.warnDeleteBlocks = true);
+        require(allAre(a(), Blocks.STONE) && allAre(b(), Blocks.STONE), "the world is as it was");
+    }
+    private boolean confirmShown() {
+        return c.computeOnClient(mc -> {
+            try {
+                var f = EditorScreen.class.getDeclaredField("confirm");
+                f.setAccessible(true);
+                return f.get(mc.gui.screen()) != null;
+            } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+        });
+    }
+    /** After a duplicate or a paste from the Hierarchy the new BuildObjects are the ones shown, not the originals. */
+    private void duplicateTransfersWhatIsShown() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        click(row(0));
+        require(saved(0).active(), "the original is shown");
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_D, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        c.waitFor(mc -> PlacementPreview.active(), 200);
+        c.waitTicks(5);
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        c.waitTicks(10);
+        require(ClientState.savedSelections().size() == 2, "the copy was made: " + ClientState.savedSelections());
+        require(!saved(0).active() && saved(1).active() && liveIs(a()), "the copy is shown and the original is not: " + ClientState.savedSelections());
+        undo();
+        require(ClientState.savedSelections().size() == 1 && !saved(0).active() && liveIs(a()), "Undo takes the copy back, and the selection is the original blocks, not a leftover: " + ClientState.savedSelections());
+    }
+    /** Ctrl+X with BuildObjects shown takes them along; Ctrl+V with the pointer over no block starts the placement where the blocks were. */
+    private void ctrlShortcutsInTheHierarchy() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        click(row(0));
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_X, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        c.waitTicks(30);
+        settle();
+        require(ClientState.savedSelections().isEmpty() && allAre(a(), Blocks.AIR), "Ctrl+X cuts the blocks and the BuildObject: " + ClientState.savedSelections());
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE); // a cut already starts a placement of what was cut: put that away, so Ctrl+V starts one
+        require(c.computeOnClient(mc -> !PlacementPreview.active()), "no placement before Ctrl+V");
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_V, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        c.waitTicks(5);
+        require(c.computeOnClient(mc -> PlacementPreview.active()), "Ctrl+V with no block under the pointer starts the placement where the blocks were");
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
+        undo();
+        undo();
+        require(ClientState.savedSelections().size() == 1 && allAre(a(), Blocks.STONE), "and two Undos bring back the cut");
+    }
+    /** The Rulers window starts out of the way, comes up the first time a ruler is used, and then stays as the player leaves it. */
+    private void rulersWindowComesUpOnce() {
+        c.runOnClient(mc -> { WorkspaceLayout.windows.remove("rulers"); WorkspaceLayout.base.remove("rulers"); ClientState.options.rulersIntroduced = false; });
+        c.waitTicks(3);
+        c.runOnClient(mc -> ((EditorScreen) mc.gui.screen()).select(dev.craftium.core.Tool.RULER));
+        c.waitTicks(6);
+        require(c.computeOnClient(mc -> ClientState.options.rulersIntroduced && WorkspaceLayout.windows.get("rulers") != null && WorkspaceLayout.windows.get("rulers").visible), "the Rulers window comes up the first time the ruler is used");
+        c.runOnClient(mc -> WorkspaceLayout.toggle("rulers")); // the player closes it
+        c.runOnClient(mc -> ((EditorScreen) mc.gui.screen()).select(dev.craftium.core.Tool.BOX_SELECT));
+        c.waitTicks(3);
+        c.runOnClient(mc -> ((EditorScreen) mc.gui.screen()).select(dev.craftium.core.Tool.RULER));
+        c.waitTicks(6);
+        require(c.computeOnClient(mc -> !WorkspaceLayout.windows.get("rulers").visible), "and it stays closed the next time");
+        c.runOnClient(mc -> ((EditorScreen) mc.gui.screen()).select(dev.craftium.core.Tool.BOX_SELECT));
+    }
+    /** A paste as a BuildObject that is refused (the permission goes between the duplicate and the Enter) leaves the player's selection as it was. */
+    private void refusedPasteKeepsTheSelection() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        click(row(0));
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_D, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        c.waitFor(mc -> PlacementPreview.active(), 200);
+        c.waitTicks(5);
+        var config = dev.craftium.runtime.ServerPlatform.assets().resolve("hierarchy-permissions.json");
+        try {
+            writeFile(config, "{\"everyone\":{\"create\":false},\"operatorsBypass\":false}");
+            sleepMillis(2300);
+            c.runOnClient(mc -> PlacementPreview.nudge(6)); // the copy goes elsewhere, so what it would have selected is not what is selected now
+            var selectionBefore = live();
+            c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER, 0, 0); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); }); // not press(): that insists on no error
+            c.waitTicks(15);
+            var message = c.computeOnClient(mc -> ClientState.status.message());
+            require(message.contains("permission"), "the paste was refused, and said why: " + message);
+            require(ClientState.savedSelections().size() == 1 && live().equals(selectionBefore), "and the selection is as it was: " + ClientState.savedSelections());
+        } finally {
+            writeFile(config, "{\"everyone\":{},\"operatorsBypass\":true}");
+            sleepMillis(2300);
+            c.runOnClient(mc -> PlacementPreview.cancel());
+        }
+    }
+    /** The BuildObjects are written to the world, the colour chosen goes to the server and comes back, and a denied action is refused. */
+    private void sharedPersistentAndPermitted() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        int id = saved(0).id();
+
+        // the colour is the server's: it is sent once the picker is still, and comes back in the list everyone gets
+        c.runOnClient(mc -> ClientState.setSavedColor(id, 0xff112233));
+        c.waitTicks(40);
+        require(saved(0).color() == 0xff112233, "the colour chosen is kept by the server: " + saved(0));
+
+        // written to the world's folder within a few seconds
+        c.waitTicks(220);
+        var file = c.computeOnClient(mc -> mc.getSingleplayerServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).resolve("craftium/buildobjects/minecraft_overworld.nbt"));
+        require(java.nio.file.Files.exists(file) && fileSize(file) > 20, "the BuildObjects were written to the world: " + file);
+
+        // a denied action is refused, with a reason, and changes nothing
+        var config = dev.craftium.runtime.ServerPlatform.assets().resolve("hierarchy-permissions.json");
+        try {
+            writeFile(config, "{\"everyone\":{\"delete\":false},\"operatorsBypass\":false}");
+            sleepMillis(2300); // the server looks at the file every couple of seconds
+            sleep();
+            c.runOnClient(mc -> CraftiumClient.send("saved_selection:delete:" + id, null, null));
+            c.waitTicks(15);
+            var refusal = c.computeOnClient(mc -> ClientState.status.message());
+            require(refusal.contains("permission") && ClientState.savedSelections().size() == 1, "delete was refused: " + refusal + " " + ClientState.savedSelections());
+            sleep();
+            c.runOnClient(mc -> CraftiumClient.send("saved_selection:rename:" + id + ":Allowed", null, null));
+            settle();
+            require(saved(0).name().equals("Allowed"), "and what was not denied still works");
+        } finally {
+            writeFile(config, "{\"everyone\":{},\"operatorsBypass\":true}");
+            sleepMillis(2300);
+        }
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:delete:" + id, null, null));
+        settle();
+        require(ClientState.savedSelections().isEmpty(), "allowed again once the file says so");
+    }
+    private static void writeFile(java.nio.file.Path file, String text) { try { java.nio.file.Files.writeString(file, text); } catch (java.io.IOException e) { throw new AssertionError(e); } }
+    private static long fileSize(java.nio.file.Path file) { try { return java.nio.file.Files.size(file); } catch (java.io.IOException e) { return -1; } }
+    private static void sleepMillis(long ms) { try { Thread.sleep(ms); } catch (InterruptedException e) { throw new AssertionError(e); } }
+    /** The n-th row of the Hierarchy, as an area. */
+    private int[] row(int n) {
+        int seen = 0;
+        for (String line : lines()) {
+            if (!line.startsWith("control hierarchy ")) continue;
+            int quote = line.indexOf('\'');
+            if (quote < 0) continue;
+            String tip = line.substring(quote + 1).replaceFirst("^[0-9]+ x [0-9]+ x [0-9]+ blocks · ", "");
+            if (!tip.startsWith("Select this BuildObject") && !tip.startsWith("Let go")) continue;
+            if (seen++ != n) continue;
+            var parts = line.substring("control hierarchy ".length(), quote).trim().split(" ");
+            var at = parts[0].split(","); var size = parts[1].split("x");
+            return new int[]{Integer.parseInt(at[0]), Integer.parseInt(at[1]), Integer.parseInt(size[0]), Integer.parseInt(size[1])};
+        }
+        return null;
+    }
+    /** The menu button with this label, as an area, or null. */
+    private int[] menuControl(String label) {
+        for (String line : lines()) {
+            if (!line.startsWith("control  ")) continue;
+            int quote = line.indexOf('\'');
+            if (quote < 0 || !line.substring(quote + 1).startsWith("menu " + label)) continue;
+            var parts = line.substring("control  ".length(), quote).trim().split(" ");
+            var at = parts[0].split(","); var size = parts[1].split("x");
+            return new int[]{Integer.parseInt(at[0]), Integer.parseInt(at[1]), Integer.parseInt(size[0]), Integer.parseInt(size[1])};
+        }
+        return null;
+    }
+    private void menuClick(String label) {
+        c.waitTicks(2);
+        click(menuControl(label));
+    }
+    /** A right click on the middle of an area. */
+    private void rightClick(int[] area) {
+        require(area != null, "the row to right click is not in the window");
+        sleep();
+        c.runOnClient(mc -> {
+            var screen = (EditorScreen) mc.gui.screen();
+            double scale;
+            try { var f = EditorScreen.class.getDeclaredField("scale"); f.setAccessible(true); scale = f.getFloat(screen); } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            var event = new MouseButtonEvent((area[0] + area[2] / 2.0) * scale, (area[1] + area[3] / 2.0) * scale, new MouseButtonInfo(1, 0));
+            screen.mouseClicked(event, false); screen.mouseReleased(event);
+        });
+        settle();
+    }
+    /** Everything done in the Hierarchy is in the history: Undo takes it back and Redo does it again. */
+    private void hierarchyIsInHistory() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        String guid = saved(0).guid();
+        require(ClientState.savedSelections().size() == 1, "one BuildObject made");
+        undo();
+        require(ClientState.savedSelections().isEmpty(), "Undo takes the + back");
+        redo();
+        require(ClientState.savedSelections().size() == 1 && saved(0).guid().equals(guid), "Redo makes the same BuildObject again: " + ClientState.savedSelections());
+
+        doubleClick(control("Select this BuildObject", 0));
+        typeText("Tower");press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        require(saved(0).name().equals("Tower"), "renamed");
+        click(control("Let go", 0));
+        undo();
+        require(saved(0).name().equals("BuildObject"), "Undo takes the rename back: " + saved(0).name());
+        redo();
+        require(saved(0).name().equals("Tower"), "and Redo does it again");
+
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        drag(control("Select this BuildObject", 1), control("Select this BuildObject", 0), 0.5);
+        require(saved(1).parent() == saved(0).id(), "dropped into the first: " + ClientState.savedSelections());
+        undo();
+        require(saved(1).parent() == 0 && saved(0).guid().equals(guid), "Undo takes the move back: " + ClientState.savedSelections());
+        redo();
+        require(saved(1).parent() == saved(0).id(), "and Redo does it again");
+
+        sendAction("saved_selection:delete:" + saved(0).id());
+        require(ClientState.savedSelections().isEmpty(), "the parent took its child with it");
+        undo();
+        require(ClientState.savedSelections().size() == 2 && saved(1).parent() == saved(0).id() && saved(0).name().equals("Tower"), "Undo brings back both, as they were: " + ClientState.savedSelections());
+        redo();
+        require(ClientState.savedSelections().isEmpty(), "and Redo deletes them again");
+        undo();
+        undo(); // the move
+        undo(); // the second +
+        require(ClientState.savedSelections().size() == 1, "and the stack goes back through all of it: " + ClientState.savedSelections());
     }
     /** Transforms the selected blocks as the Edit menu does: an offset along x and a size along each axis. */
     private void transform(int offsetX, double sizeX, double sizeY, double sizeZ) {

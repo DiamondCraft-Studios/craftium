@@ -20,7 +20,10 @@ public final class PlacementPreview {
         shape.draw(new Vec3(origin.x(),origin.y(),origin.z()),TransformGizmo::line,ClientState.options.previewColor,ClientState.options.previewFill,!TransformGizmo.dragging());
         if(!TransformGizmo.dragging())ghost.draw(origin,false); // the real blocks, so the preview shows what will be placed
     }
+    /** When set, confirming the placement also makes a BuildObject of the pasted blocks: its name, and the one it goes after (0 for the end). Set by a duplicate or a paste from the Hierarchy. */
+    static String asObject;static int asObjectAfter;
     public static void begin(Point at){
+        asObject=null;
         if(ClientState.status.clipboardSize()==0&&ClientState.status.clipboardEntityCount()==0){ClientState.notify("Copy a selection or load a blueprint first");return;}
         origin=at;axis=0;ClientState.notify("Placement ready · drag an axis · arrows / Page Up / Page Down · Enter to place · Esc to cancel");
     }
@@ -31,12 +34,19 @@ public final class PlacementPreview {
         begin(from);
     }
     public static boolean active(){return origin!=null;}
-    static void cancel(){origin=null;}
+    static void cancel(){origin=null;asObject=null;}
     static void nudge(int amount){if(origin!=null)origin=origin.add(axis==0?amount:0,axis==1?amount:0,axis==2?amount:0);}
     /** Places the clipboard where the ghost is, and the pasted blocks become the selection, so the transform tools can take hold of them; {@link #pasteCopy} keeps the selection as it is. */
     public static void confirm(){pasteAndSelect();}
     public static void pasteCopy(){if(origin!=null&&!ClientState.status.busy()){BuilderPrediction.paste(ClientState.options,origin,ghost.placed());CraftiumClient.send("paste_at",origin,new Point(0,1,0));}}
-    public static void pasteAndSelect(){if(origin!=null&&!ClientState.status.busy()){BuilderPrediction.paste(ClientState.options,origin,ghost.placed());CraftiumClient.send("paste_select",origin,new Point(0,1,0));origin=null;}}
+    public static void pasteAndSelect(){
+        if(origin==null||ClientState.status.busy())return;
+        BuilderPrediction.paste(ClientState.options,origin,ghost.placed());
+        var o=ClientState.options;String was=o.pasteAsObject;int wasAfter=o.pasteAsObjectAfter;
+        if(asObject!=null){o.pasteAsObject=asObject;o.pasteAsObjectAfter=asObjectAfter;} // for this one request only
+        try{CraftiumClient.send("paste_select",origin,new Point(0,1,0));}finally{o.pasteAsObject=was;o.pasteAsObjectAfter=wasAfter;}
+        origin=null;asObject=null;
+    }
     public static void snapToGround(){
         var mc=net.minecraft.client.Minecraft.getInstance();if(origin==null||mc.level==null)return;var bottom=new HashMap<Long,Point>();
         for(Point p:SelectionCodec.decode(data)){long key=((long)p.x()<<32)|(p.z()&0xffffffffL);var old=bottom.get(key);if(old==null||p.y()<old.y())bottom.put(key,p);}

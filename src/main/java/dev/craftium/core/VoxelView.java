@@ -35,7 +35,15 @@ public final class VoxelView {
      *                alpha) is empty space
      */
     public static Result render(int sx, int sy, int sz, int[] colours, Angle angle, int maxWidth, int maxHeight) {
-        if (sx < 1 || sy < 1 || sz < 1 || colours.length != sx * sy * sz) throw new IllegalArgumentException("The blocks do not fill the box");
+        return render(sx, sy, sz, colours, colours, colours, angle, maxWidth, maxHeight);
+    }
+
+    /**
+     * As above, with a colour for the top, the sides and the underside of each block, so a grass block is green on top and brown at the sides. {@code colours}
+     * (the sides) says where the blocks are; the top and the underside fall back to it where they have no colour.
+     */
+    public static Result render(int sx, int sy, int sz, int[] top, int[] colours, int[] bottom, Angle angle, int maxWidth, int maxHeight) {
+        if (sx < 1 || sy < 1 || sz < 1 || colours.length != sx * sy * sz || top.length != colours.length || bottom.length != colours.length) throw new IllegalArgumentException("The blocks do not fill the box");
         double[] d = direction(angle);
         double[] right, up;
         if (angle == Angle.TOP) { right = new double[]{1, 0, 0}; up = new double[]{0, 0, -1}; }
@@ -76,11 +84,12 @@ public final class VoxelView {
                 int z = d[2] > 0 ? sz - 1 - zi : zi;
                 for (int xi = 0; xi < sx; xi++) {
                     int x = d[0] > 0 ? sx - 1 - xi : xi;
-                    int colour = colours[x + sx * (z + sz * y)];
+                    int index = x + sx * (z + sz * y);
+                    int colour = colours[index];
                     if ((colour >>> 24) == 0) continue;
                     if (fx != 0 && empty(colours, sx, sy, sz, x + fx, y, z)) face(g, screen, x, y, z, 0, fx, colour, fx > 0 ? EAST_FACE : WEST_FACE, outline);
                     if (fz != 0 && empty(colours, sx, sy, sz, x, y, z + fz)) face(g, screen, x, y, z, 2, fz, colour, fz > 0 ? SOUTH_FACE : NORTH_FACE, outline);
-                    if (fy != 0 && empty(colours, sx, sy, sz, x, y + fy, z)) face(g, screen, x, y, z, 1, fy, colour, fy > 0 ? TOP : BOTTOM, outline);
+                    if (fy != 0 && empty(colours, sx, sy, sz, x, y + fy, z)) face(g, screen, x, y, z, 1, fy, painted(fy > 0 ? top[index] : bottom[index], colour), fy > 0 ? TOP : BOTTOM, outline);
                 }
             }
         }
@@ -103,6 +112,8 @@ public final class VoxelView {
             case WEST -> new double[]{1, 0, 0};
         };
     }
+
+    private static int painted(int wanted, int fallback) { return (wanted >>> 24) == 0 ? fallback : wanted; }
 
     private static boolean empty(int[] colours, int sx, int sy, int sz, int x, int y, int z) {
         return x < 0 || y < 0 || z < 0 || x >= sx || y >= sy || z >= sz || (colours[x + sx * (z + sz * y)] >>> 24) == 0;

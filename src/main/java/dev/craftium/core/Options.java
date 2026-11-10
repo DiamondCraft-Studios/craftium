@@ -136,6 +136,10 @@ public final class Options {
     public boolean transparency;
     /** Whether a big selection waits to be confirmed before it is kept. */
     public boolean largeSelectionWarnings=true;
+    /** Whether deleting a BuildObject together with its blocks asks first (until "Don't show this message again" is ticked). */
+    public boolean warnDeleteBlocks=true;
+    /** Whether the Rulers window has been shown once, the first time a ruler was used: it starts out of the way and is only brought up that once. */
+    public boolean rulersIntroduced;
     /** A selection this many blocks bigger than before is confirmed with the player first, in the editor and in the Builder. */
     public int largeSelectionThreshold=50_000;
     /** Looks at the project's GitHub releases once per game session and says so when a newer build exists. Nothing is downloaded. */
@@ -286,6 +290,8 @@ public final class Options {
     public Point annotationNormal=new Point(0,0,1);
     public boolean mergeBlocks;
     public boolean copyEntities,pasteEntities=true;
+    /** Set for one paste only: the pasted blocks also become a new BuildObject with this name, put after the BuildObject with id {@code pasteAsObjectAfter} (0 for the end of the top level). */
+    public String pasteAsObject="";public int pasteAsObjectAfter;
     public java.util.Map<String,String> scriptVariables=new java.util.LinkedHashMap<>();
     public java.util.Map<String,String> maskVariables=new java.util.LinkedHashMap<>();
     public java.util.List<BlockColour> scriptColours=new java.util.ArrayList<>();

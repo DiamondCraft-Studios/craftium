@@ -14,8 +14,25 @@ final class SavedSelectionActions {
     static String run(Session s,String action){
         var part=action.substring(PREFIX.length()).split(":",3);var saved=s.saved;
         switch(part[0]){
-            case "save"->{var entry=saved.save(s.selection);return "Created "+entry.name();}
+            case "save"->{var entry=saved.create(s.selection);return "Created "+entry.name();}
             case "view"->{saved.view(id(part),s.selection);return "Showing "+saved.active().name();}
+            case "viewset"->{ // viewset:<ids separated by commas>: these BuildObjects, selected together; none lets go
+                var ids=ids(part);
+                saved.viewSet(ids,s.selection);return ids.isEmpty()?"Your selection is back":"Showing "+ids.size()+" BuildObjects";
+            }
+            case "placeset"->{ // placeset:<ids separated by commas>:<parent id, 0 for the top>:<child number among the parent's others>
+                var rest=part.length<3?new String[0]:part[2].split(":");
+                try{if(rest.length!=2)throw new NumberFormatException();saved.placeMany(ids(part),Integer.parseInt(rest[0]),Integer.parseInt(rest[1]));}catch(NumberFormatException e){throw new IllegalArgumentException("Give BuildObjects, a parent and a place");}
+                return "Moved";
+            }
+            case "group"->{var entry=saved.group(ids(part));return "Grouped into "+entry.name();}
+            case "createchild"->{var entry=saved.createChild(id(part),s.selection);return "Created "+entry.name();}
+            case "deleteset"->{var ids=ids(part);saved.deleteMany(ids,s.selection);return "Deleted "+ids.size()+" BuildObjects";}
+            case "colour"->{ // colour:<id>:<argb>
+                var where=part.length<3?"":part[2];
+                try{saved.setColor(id(part),Integer.parseInt(where.strip()));}catch(NumberFormatException e){throw new IllegalArgumentException("Give a colour");}
+                return "Recoloured";
+            }
             case "edit"->{saved.edit(id(part),s.selection);return "Editing "+saved.active().name();}
             case "release"->{saved.release(s.selection);return "Your selection is back";}
             case "delete"->{var entry=saved.delete(id(part),s.selection);return "Deleted "+entry.name();}
@@ -27,6 +44,37 @@ final class SavedSelectionActions {
             case "rename"->{if(part.length<3)throw new IllegalArgumentException("Give a name");saved.rename(id(part),part[2]);return "Renamed";}
             default->throw new IllegalArgumentException("Unknown BuildObject action "+part[0]);
         }
+    }
+    /** Whether the action changes the BuildObjects themselves (and so goes in the history), as against only what is being looked at. */
+    static boolean changesHierarchy(String action){return switch(verb(action)){case "save","delete","deleteset","rename","place","placeset","group","createchild","colour"->true;default->false;};}
+    /** What the action asks permission for (see {@link HierarchyPermissions}), or null for one everybody may do: looking, which changes nothing of the BuildObjects. */
+    static String permission(String action){
+        return switch(verb(action)){
+            case "save","group","createchild"->"create";
+            case "rename"->"rename";
+            case "place","placeset"->"move";
+            case "delete","deleteset"->"delete";
+            case "colour"->"recolour";
+            case "edit"->"edit";
+            default->null;
+        };
+    }
+    /** What the history calls the action: "Undid Create BuildObject". */
+    static String historyName(String action){
+        return switch(verb(action)){case "save","createchild"->"Create BuildObject";case "group"->"Group BuildObjects";case "delete"->"Delete BuildObject";case "deleteset"->"Delete BuildObjects";case "rename"->"Rename BuildObject";case "colour"->"Recolour BuildObject";case "place"->"Move BuildObject";case "placeset"->"Move BuildObjects";default->"BuildObject";};
+    }
+    private static String verb(String action){return action.startsWith(PREFIX)?action.substring(PREFIX.length()).split(":",2)[0]:"";}
+    /** The ids of an action like {@code group:1,2,3}. */
+    /** The ids in text like {@code 1,2,3}. */
+    static List<Integer> idsOf(String text){
+        var out=new java.util.ArrayList<Integer>();
+        try{if(!text.isBlank())for(var t:text.split(","))out.add(Integer.parseInt(t.strip()));}catch(NumberFormatException e){throw new IllegalArgumentException("Pick BuildObjects");}
+        return out;
+    }
+    private static List<Integer> ids(String[] part){
+        var out=new java.util.ArrayList<Integer>();
+        try{if(part.length>1&&!part[1].isBlank())for(var t:part[1].split(","))out.add(Integer.parseInt(t.strip()));}catch(NumberFormatException e){throw new IllegalArgumentException("Pick BuildObjects");}
+        return out;
     }
     private static int id(String[] part){
         if(part.length<2)throw new IllegalArgumentException("Pick a BuildObject");
@@ -40,7 +88,7 @@ final class SavedSelectionActions {
         for(var e:s.saved.entries()){
             Point min=e.points().isEmpty()?new Point(0,0,0):new Point(e.points().stream().mapToInt(Point::x).min().getAsInt(),e.points().stream().mapToInt(Point::y).min().getAsInt(),e.points().stream().mapToInt(Point::z).min().getAsInt());
             Point max=e.points().isEmpty()?min:new Point(e.points().stream().mapToInt(Point::x).max().getAsInt(),e.points().stream().mapToInt(Point::y).max().getAsInt(),e.points().stream().mapToInt(Point::z).max().getAsInt());
-            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,e==s.saved.active(),e==s.saved.active()&&s.saved.editing(),withData?data(s,e):null,e.guid(),e.parentId()));
+            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,s.saved.isViewed(e),e==s.saved.active()&&s.saved.editing(),withData?data(s,e):null,e.guid(),e.parentId(),e.color()));
         }
         return out;
     }

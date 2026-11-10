@@ -559,11 +559,13 @@ public final class AiBridge {
             entry.addProperty("name", s.name());
             if (s.guid() != null) entry.addProperty("guid", s.guid());
             if (s.parent() != 0) for (var other : ClientState.savedSelections()) if (other.id() == s.parent() && other.guid() != null) entry.addProperty("parent", other.guid()); // the GUID of the BuildObject it is under
-            entry.addProperty("blocks", s.size());
-            if (s.size() > 0 && s.min() != null && s.max() != null) {
-                entry.add("min", array(s.min().x(), s.min().y(), s.min().z()));
-                entry.add("max", array(s.max().x(), s.max().y(), s.max().z()));
-                entry.add("dimensions", array(s.max().x() - s.min().x() + 1, s.max().y() - s.min().y() + 1, s.max().z() - s.min().z() + 1));
+            entry.addProperty("blocks", s.size()); // the ones it holds itself
+            var box = ClientState.subtreeBounds(s.id()); // the box and the count with everything under it, which is what selecting it selects
+            if (box != null) {
+                entry.addProperty("blocksIncludingChildren", ClientState.subtreeSize(s.id()));
+                entry.add("min", array(box[0].x(), box[0].y(), box[0].z()));
+                entry.add("max", array(box[1].x(), box[1].y(), box[1].z()));
+                entry.add("dimensions", array(box[1].x() - box[0].x() + 1, box[1].y() - box[0].y() + 1, box[1].z() - box[0].z() + 1));
             }
             if (s.active()) entry.addProperty("shownByPlayer", s.editing() ? "editing" : "viewing");
             saved.add(entry);
