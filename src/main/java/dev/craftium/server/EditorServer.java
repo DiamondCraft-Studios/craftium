@@ -510,6 +510,11 @@ public final class EditorServer {
                         if(!o.pasteAir && value.state().isAir())continue;
                         Point at=origin.add(relative.x(),relative.y(),relative.z());plan.putClipboard(at,value);placed.add(at);
                     }
+                    if(r.action().equals("paste_select")&&o.pasteAsObject!=null&&!o.pasteAsObject.isBlank()){ // asked and checked first: a paste that is refused must not have changed the selection
+                        HierarchyPermissions.require(player,"create");
+                        var kept=s.duplicateNodes;int needed=kept!=null&&s.duplicateEpoch==s.clipboardEpoch?kept.size():1;
+                        if(s.saved.entries().size()+needed>SavedSelections.MAX)throw new IllegalArgumentException("BuildObject limit: "+SavedSelections.MAX);
+                    }
                     Session.SelectionChange selected=null;
                     if(r.action().equals("paste_select")){ // the pasted blocks become the selection, and undo takes it back
                         var before=new ArrayList<>(s.selection.points());
@@ -520,7 +525,6 @@ public final class EditorServer {
                         s.restoreUpdate=dev.craftium.core.Restore.encode(Map.of("corners","none"));
                         selected=new Session.SelectionChange(before,new ArrayList<>(placed),null,null,handlesBefore,Map.of("corners","none"));
                         if(o.pasteAsObject!=null&&!o.pasteAsObject.isBlank()){ // a duplicate or a paste from the Hierarchy: the pasted blocks are also a new BuildObject, in the history with them
-                            HierarchyPermissions.require(player,"create");
                             var hierarchyBefore=s.saved.state();
                             var nodes=s.duplicateNodes;var kept=new HashSet<Point>();if(nodes!=null)for(var n:nodes)kept.addAll(n.relative());
                             List<Integer> shown;
