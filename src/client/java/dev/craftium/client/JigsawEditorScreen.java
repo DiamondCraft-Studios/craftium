@@ -42,6 +42,18 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private int pendingWeight;
     private long pendingAt;
     private String localMessage = "";
+    /** Asking what to do with unapplied changes before leaving, and whether to leave as soon as the server has said it is done. */
+    private boolean confirmLeave, leaveAfter;
+    /** Where the player has dragged pools in the graph, in graph coordinates, by pool being edited and pool; kept while the game runs. */
+    private static final Map<String, int[]> NODE_POS = new HashMap<>();
+    /** What undo and redo take back here: a command the server has its own history of, a move of a pool in the graph, or putting every pool back. */
+    private enum Kind { SERVER, MOVE, RESET }
+    private record Local(Kind kind, String key, int[] from, int[] to, Map<String, int[]> before) {}
+    private final Deque<Local> localUndo = new ArrayDeque<>(), localRedo = new ArrayDeque<>();
+    private String pressNode, pressKey;
+    private boolean pressMissing, dragging;
+    private double pressX, pressY;
+    private int[] pressOrigin, pressFrom;
     private int leftW, rightW, centreX, centreW;
     /** The editor is laid out on a canvas at least 860 by 460 and scaled down to fit a smaller window, like the Studio inspector. */
     private float uiScale = 1;
@@ -80,7 +92,47 @@ final class JigsawEditorScreen extends CraftiumScreen {
         CraftiumClient.send("craftium:jigsaw_edit", null, null);
     }
 
-    private void edit(String op, Object... pairs) { localMessage = ""; send(cmd(op, pairs)); }
+    private void edit(String op, Object... pairs) { localMessage = ""; note(op); send(cmd(op, pairs)); }
+
+    /** Sends a command that was built by hand (a connector edit). */
+    private void change(JsonObject command) { localMessage = ""; note(command.get("op").getAsString()); send(command); }
+
+    /** Notes in this screen's own history that a command changed something on the server, so undo can tell it from a move in the graph. */
+    private void note(String op) {
+        switch (op) {
+            case "open", "templates", "names", "undo", "redo" -> { }
+            case "apply", "discard" -> { localUndo.clear(); localRedo.clear(); }
+            default -> { localUndo.push(new Local(Kind.SERVER, null, null, null, null)); localRedo.clear(); }
+        }
+    }
+
+    private void undo() {
+        if (localUndo.isEmpty()) { send(cmd("undo")); return; }
+        var step = localUndo.pop();
+        localRedo.push(step);
+        switch (step.kind()) {
+            case SERVER -> send(cmd("undo"));
+            case MOVE -> { if (step.from() == null) NODE_POS.remove(step.key()); else NODE_POS.put(step.key(), step.from().clone()); init(); }
+            case RESET -> { NODE_POS.putAll(step.before()); init(); }
+        }
+    }
+
+    private void redo() {
+        if (localRedo.isEmpty()) { send(cmd("redo")); return; }
+        var step = localRedo.pop();
+        localUndo.push(step);
+        switch (step.kind()) {
+            case SERVER -> send(cmd("redo"));
+            case MOVE -> { NODE_POS.put(step.key(), step.to().clone()); init(); }
+            case RESET -> { for (var key : step.before().keySet()) NODE_POS.remove(key); init(); }
+        }
+    }
+
+    private JsonObject unapplied() { return model.has("unapplied") ? model.getAsJsonObject("unapplied") : new JsonObject(); }
+    private int unappliedCount() { return num(unapplied(), "count", 0); }
+    private String nodeKey(String id) { return poolId() + "|" + id; }
+    private void finishClose() { ClientCompat.setScreen(minecraft, parent); }
+
 
     // ---- the model
 
@@ -136,9 +188,14 @@ final class JigsawEditorScreen extends CraftiumScreen {
         rightW = Math.clamp(cw * 3 / 10, 230, 300);
         centreX = SIDE + leftW + 10;
         centreW = Math.max(200, cw - SIDE - rightW - 10 - centreX);
+        int unapplied = unappliedCount();
+        int redoCount = localRedo.isEmpty() ? num(model, "redo", 0) : localRedo.size(), undoCount = localUndo.isEmpty() ? num(model, "undo", 0) : localUndo.size();
         button("Close", cw - SIDE - 70, 10, 70, 20, this::onClose);
-        button("Redo (" + num(model, "redo", 0) + ")", cw - SIDE - 70 - 76, 10, 70, 20, () -> edit("redo")).active = num(model, "redo", 0) > 0;
-        button("Undo (" + num(model, "undo", 0) + ")", cw - SIDE - 70 - 152, 10, 70, 20, () -> edit("undo")).active = num(model, "undo", 0) > 0;
+        button("Redo (" + redoCount + ")", cw - SIDE - 70 - 76, 10, 70, 20, this::redo).active = redoCount > 0;
+        button("Undo (" + undoCount + ")", cw - SIDE - 70 - 152, 10, 70, 20, this::undo).active = undoCount > 0;
+        button("Discard", cw - SIDE - 70 - 152 - 76, 10, 70, 20, () -> edit("discard")).active = unapplied > 0;
+        button("Apply (" + unapplied + ")", cw - SIDE - 70 - 152 - 76 - 102, 10, 96, 20, () -> edit("apply")).lit(unapplied > 0).active = unapplied > 0;
+        if (confirmLeave) { leavePrompt(); applyTips(); return; }
         if (adding) { overlay(); applyTips(); return; }
         leftPane();
         if (pool() != null) { centreHeader(); if (!graph) cards(); }
@@ -151,11 +208,17 @@ final class JigsawEditorScreen extends CraftiumScreen {
         for (var child : children()) {
             if (!(child instanceof FlatButton b) || tips.has(b)) continue;
             String label = b.getMessage().getString();
-            String key = label.startsWith("Undo") ? "Undo" : label.startsWith("Redo") ? "Redo" : label;
+            String key = label.startsWith("Undo") ? "Undo" : label.startsWith("Redo") ? "Redo" : label.startsWith("Apply (") ? "Apply" : label;
             String tip = switch (key) {
-                case "Close" -> adding ? "Closes this panel." : "Back to the planner.";
-                case "Undo" -> "Takes back your last change in the pool editor, in pools and templates alike.";
-                case "Redo" -> "Puts back a change you took back.";
+                case "Close" -> adding ? "Closes this panel." : confirmLeave ? "Keeps editing." : "Back to the planner. If changes are not applied you are asked what to do with them.";
+                case "Apply" -> "Writes the changes you have made here into datapacks/craftium, where the game reads them. Until then they wait in a draft: this editor and the preview use the draft, the datapack does not. Undo history ends here.";
+                case "Discard" -> "Throws away every change made since the last Apply. Undo cannot bring them back.";
+                case "Apply and leave" -> "Applies the waiting changes to datapacks/craftium, then goes back to the planner.";
+                case "Discard and leave" -> "Throws the waiting changes away, then goes back to the planner.";
+                case "Keep editing" -> "Stays in the editor with the changes still waiting.";
+                case "Reset layout" -> "Puts the pools back where the automatic layout places them. You can undo it.";
+                case "Undo" -> "Takes back your last change here: an edit to a pool or template, or a move of a pool in the graph.";
+                case "Redo" -> "Puts back a change you took back, including a move in the graph.";
                 case "New" -> "Makes an empty pool with the name typed above.";
                 case "Copy" -> "Copies the open pool under the name typed above.";
                 case "Rename" -> "Renames the open pool, if it is in the craftium pack. Connectors that point at the old name are not changed.";
@@ -207,6 +270,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         button("Elements", centreX, tabs, 78, 20, () -> { graph = false; init(); }).lit(!graph);
         button("Graph", centreX + 82, tabs, 78, 20, () -> { graph = true; init(); }).lit(graph);
         button("+ Add template", centreX + 166, tabs, 110, 20, () -> { adding = true; query = ""; init(); });
+        if (graph) button("Reset layout", centreX + centreW - 96, tabs, 96, 20, this::resetLayout);
         if (!graph) {
             int pages = Math.max(1, (elements().size() + perPage() - 1) / perPage());
             page = Math.clamp(page, 0, pages - 1);
@@ -275,13 +339,13 @@ final class JigsawEditorScreen extends CraftiumScreen {
             JsonObject base = cmd("jigsaw_set", "template", template);
             base.add("pos", at);
             int half = rightW / 2 - 3;
-            tips.on(box(x + 38, y + 14, rightW - 38, str(jig, "name", ""), 80, null, () -> { var c = base.deepCopy(); c.addProperty("name", focusedText()); send(c); }), "The name of this connector. A connector of another piece joins it when its target is this name. Enter applies.");
-            tips.on(box(x + 38, y + 38, half - 38, str(jig, "pool", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("pool", focusedText()); send(c); }), "The pool the next piece is picked from. minecraft:empty ends the branch here. Enter applies.");
-            tips.on(box(x + half + 4 + 40, y + 38, rightW - (half + 4) - 40, str(jig, "target", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("target", focusedText()); send(c); }), "The name a connector of the next piece must have to join this one. Enter applies.");
+            tips.on(box(x + 38, y + 14, rightW - 38, str(jig, "name", ""), 80, null, () -> { var c = base.deepCopy(); c.addProperty("name", focusedText()); change(c); }), "The name of this connector. A connector of another piece joins it when its target is this name. Enter applies.");
+            tips.on(box(x + 38, y + 38, half - 38, str(jig, "pool", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("pool", focusedText()); change(c); }), "The pool the next piece is picked from. minecraft:empty ends the branch here. Enter applies.");
+            tips.on(box(x + half + 4 + 40, y + 38, rightW - (half + 4) - 40, str(jig, "target", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("target", focusedText()); change(c); }), "The name a connector of the next piece must have to join this one. Enter applies.");
             boolean rollable = str(jig, "joint", "rollable").equals("rollable");
-            button(rollable ? "Rollable" : "Aligned", x, y + 62, 76, 18, () -> { var c = base.deepCopy(); c.addProperty("joint", rollable ? "aligned" : "rollable"); send(c); });
-            tips.on(box(x + 114, y + 62, 40, String.valueOf(num(jig, "placement", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "placement", focusedText()); send(c); }), "Placement priority: when several pieces wait to be attached, those from connectors with a higher number are placed first. Enter applies.");
-            tips.on(box(x + 204, y + 62, 40, String.valueOf(num(jig, "selection", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "selection", focusedText()); send(c); }), "Selection priority: among the connectors of a piece, those with a higher number are tried first. Enter applies.");
+            button(rollable ? "Rollable" : "Aligned", x, y + 62, 76, 18, () -> { var c = base.deepCopy(); c.addProperty("joint", rollable ? "aligned" : "rollable"); change(c); });
+            tips.on(box(x + 114, y + 62, 40, String.valueOf(num(jig, "placement", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "placement", focusedText()); change(c); }), "Placement priority: when several pieces wait to be attached, those from connectors with a higher number are placed first. Enter applies.");
+            tips.on(box(x + 204, y + 62, 40, String.valueOf(num(jig, "selection", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "selection", focusedText()); change(c); }), "Selection priority: among the connectors of a piece, those with a higher number are tried first. Enter applies.");
         }
     }
 
@@ -316,7 +380,10 @@ final class JigsawEditorScreen extends CraftiumScreen {
     @Override protected void drawBackground(Gfx g, int x, int y, float delta) {}
 
     @Override public void tick() {
-        if (ClientState.jigsawModelVersion != seenVersion) init();
+        if (ClientState.jigsawModelVersion != seenVersion) {
+            init();
+            if (leaveAfter) { leaveAfter = false; if (unappliedCount() == 0) { confirmLeave = false; finishClose(); return; } }
+        }
         if (pendingWeightIndex != null && System.currentTimeMillis() - pendingAt > 350
                 && GLFW.glfwGetMouseButton(minecraft.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) != GLFW.GLFW_PRESS) {
             int index = pendingWeightIndex;
@@ -347,8 +414,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
         my = smy;
         g.text(font, "JIGSAW POOLS", SIDE, 12, 0xffb5dcfc, false);
         String message = !localMessage.isEmpty() ? localMessage : str(model, "message", "").isEmpty() ? ClientState.status.message() : str(model, "message", "");
-        g.text(font, font.plainSubstrByWidth(message, cw - 2 * SIDE - 240), SIDE, 28, 0xffffdca8, false);
-        if (model.has("registryError")) g.text(font, font.plainSubstrByWidth("A pool file has a problem: " + str(model, "registryError", ""), cw - 2 * SIDE), SIDE, 38, ERROR, false);
+        g.text(font, font.plainSubstrByWidth(message, cw - 2 * SIDE - 440), SIDE, 28, 0xffffdca8, false);
+        int waiting = unappliedCount();
+        if (waiting > 0) { String note = waiting + (waiting == 1 ? " unapplied change" : " unapplied changes"); g.text(font, note, cw - SIDE - font.width(note), 34, WARN, false); }
+        if (model.has("registryError")) g.text(font, font.plainSubstrByWidth("A pool file has a problem: " + str(model, "registryError", ""), cw - 2 * SIDE - 200), SIDE, 38, ERROR, false);
+        if (confirmLeave) { drawLeavePrompt(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
         if (adding) { drawOverlay(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
         drawPools(g, mx, my);
         if (pool() == null) g.text(font, "Pick a pool on the left, or make a new one.", centreX, TOP + 20, MUTED, false);
@@ -487,6 +557,36 @@ final class JigsawEditorScreen extends CraftiumScreen {
         g.text(font, blocks > 0 ? "Or save your selection (" + blocks + " blocks) as a new template:" : "Or select blocks in the world to save them as a new template.", x + 10, bottom + 4, MUTED, false);
     }
 
+    // ---- leaving with changes that are not applied
+
+    private void leavePrompt() {
+        int w = Math.min(440, cw - 40), x = (cw - w) / 2, y = Math.max(60, ch / 2 - 90);
+        button("Apply and leave", x + 10, y + 128, 130, 22, () -> { leaveAfter = true; edit("apply"); });
+        button("Discard and leave", x + 146, y + 128, 140, 22, () -> { leaveAfter = true; edit("discard"); });
+        button("Keep editing", x + 292, y + 128, w - 302, 22, () -> { confirmLeave = false; init(); });
+    }
+
+    private void drawLeavePrompt(Gfx g) {
+        int w = Math.min(440, cw - 40), x = (cw - w) / 2, y = Math.max(60, ch / 2 - 90);
+        g.fill(0, 0, cw, ch, 0xaa000000);
+        g.fill(x, y, x + w, y + 162, 0xff172330);
+        g.outline(x, y, w, 162, WARN);
+        g.text(font, "UNAPPLIED CHANGES", x + 10, y + 10, WARN, false);
+        int count = unappliedCount(), line = y + 26;
+        for (var row : font.split(Component.literal(count + (count == 1 ? " change is" : " changes are") + " waiting in a draft. The preview uses the draft; the datapack gets it only when you apply."), w - 20)) { g.text(font, row, x + 10, line, MUTED, false); line += 10; }
+        var summary = unapplied();
+        int shown = 0;
+        for (var group : new String[][]{{"pools", "pool"}, {"templates", "template"}, {"deleted", "deleted"}}) {
+            if (!summary.has(group[0])) continue;
+            for (var id : summary.getAsJsonArray(group[0])) {
+                if (shown++ >= 5) break;
+                g.text(font, font.plainSubstrByWidth(group[1] + " " + id.getAsString(), w - 24), x + 14, line + 4, TEXT, false);
+                line += 10;
+            }
+        }
+        if (count > 5) g.text(font, "...and " + (count - 5) + " more", x + 14, line + 4, MUTED, false);
+    }
+
     // ---- the graph
 
     private record Node(String id, boolean missing, int elements, int depth, int row) {}
@@ -496,11 +596,10 @@ final class JigsawEditorScreen extends CraftiumScreen {
         int top = cardsTop() - 4;
         if (graphModel == null || graphModel.getAsJsonArray("nodes").size() == 0) { g.text(font, "Nothing to draw: the pools are not loaded (see the message above).", centreX, top + 6, MUTED, false); return; }
         var nodes = layout(graphModel);
-        int maxDepth = nodes.stream().mapToInt(Node::depth).max().orElse(0);
-        int nodeW = Math.clamp((centreW - 10) / (maxDepth + 1) - 22, 60, 170), nodeH = 18, gap = 20, rowH = nodeH + 5;
+        int nodeW = nodeWidth(nodes), nodeH = 18, gap = 20;
         g.enableScissor(centreX, top, centreX + centreW, ch - FOOT);
         var place = new HashMap<String, int[]>();
-        for (var n : nodes) place.put(n.id(), new int[]{centreX + 4 + n.depth() * (nodeW + gap), top + 4 + n.row() * rowH - (int) graphScroll});
+        for (var n : nodes) place.put(n.id(), placeOf(n, nodeW, top));
         for (var e : graphModel.getAsJsonArray("edges")) {
             var edge = e.getAsJsonObject();
             var a = place.get(str(edge, "from", "")); var b = place.get(str(edge, "to", ""));
@@ -523,7 +622,32 @@ final class JigsawEditorScreen extends CraftiumScreen {
             g.text(font, font.plainSubstrByWidth(label, nodeW - 6), at[0] + 3, at[1] + 5, n.missing() ? ERROR : TEXT, false);
         }
         g.disableScissor();
-        g.text(font, "Arrows go from a pool to the pools its connectors ask for. Click a pool to open it.", centreX, ch - FOOT - 10, 0xff6f8296, false);
+        g.text(font, "Arrows go from a pool to the pools its connectors ask for. Drag a pool to arrange them, click one to open it.", centreX, ch - FOOT - 10, 0xff6f8296, false);
+    }
+
+    private int nodeWidth(List<Node> nodes) {
+        int maxDepth = nodes.stream().mapToInt(Node::depth).max().orElse(0);
+        return Math.clamp((centreW - 10) / (maxDepth + 1) - 22, 60, 170);
+    }
+
+    /** Where a pool is drawn: where the player dragged it, or in its column by the layout. */
+    private int[] placeOf(Node n, int nodeW, int top) {
+        var moved = NODE_POS.get(nodeKey(n.id()));
+        if (moved != null) return new int[]{centreX + 4 + moved[0], top + 4 + moved[1] - (int) graphScroll};
+        return new int[]{centreX + 4 + n.depth() * (nodeW + 20), top + 4 + n.row() * 23 - (int) graphScroll};
+    }
+
+    /** Puts every pool of this graph back where the layout places it, as one step that can be undone. */
+    private void resetLayout() {
+        var before = new HashMap<String, int[]>();
+        String prefix = poolId() + "|";
+        for (var e : NODE_POS.entrySet()) if (e.getKey().startsWith(prefix)) before.put(e.getKey(), e.getValue().clone());
+        if (before.isEmpty()) { localMessage = "The pools are already where the layout puts them"; return; }
+        for (var key : before.keySet()) NODE_POS.remove(key);
+        localUndo.push(new Local(Kind.RESET, null, null, null, before));
+        localRedo.clear();
+        localMessage = "";
+        init();
     }
 
     /** The graph's pools in columns by how many steps they are from the pool being edited. */
@@ -552,9 +676,33 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     private MouseButtonEvent scaled(MouseButtonEvent event) { return new MouseButtonEvent(event.x() / uiScale, event.y() / uiScale, event.buttonInfo()); }
 
-    @Override public boolean mouseReleased(MouseButtonEvent event) { return super.mouseReleased(scaled(event)); }
+    @Override public boolean mouseReleased(MouseButtonEvent raw) {
+        var event = scaled(raw);
+        if (pressNode != null && event.button() == 0) {
+            var id = pressNode;
+            boolean moved = dragging;
+            pressNode = null;
+            dragging = false;
+            if (moved) {
+                var to = NODE_POS.get(pressKey);
+                if (to != null) { localUndo.push(new Local(Kind.MOVE, pressKey, pressFrom, to.clone(), null)); localRedo.clear(); }
+                init();
+            } else if (!pressMissing) { selected = 0; page = 0; edit("open", "pool", id); }
+            return true;
+        }
+        return super.mouseReleased(event);
+    }
 
-    @Override public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) { return super.mouseDragged(scaled(event), dx / uiScale, dy / uiScale); }
+    @Override public boolean mouseDragged(MouseButtonEvent raw, double dx, double dy) {
+        var event = scaled(raw);
+        if (pressNode != null) {
+            double moveX = event.x() - pressX, moveY = event.y() - pressY;
+            if (!dragging && Math.hypot(moveX, moveY) > 3) dragging = true;
+            if (dragging) NODE_POS.put(pressKey, new int[]{Math.max(0, (int) Math.round(pressOrigin[0] + moveX)), Math.max(0, (int) Math.round(pressOrigin[1] + moveY))});
+            return true;
+        }
+        return super.mouseDragged(event, dx / uiScale, dy / uiScale);
+    }
 
     @Override public boolean mouseClicked(MouseButtonEvent raw, boolean twice) {
         var event = scaled(raw);
@@ -571,12 +719,19 @@ final class JigsawEditorScreen extends CraftiumScreen {
             if (index < elements().size()) { selected = index; jigPage = 0; init(); return true; }
         }
         if (pool() != null && graph && model.has("graph")) {
-            var graphModel = model.getAsJsonObject("graph");
-            var nodes = layout(graphModel);
-            int maxDepth = nodes.stream().mapToInt(Node::depth).max().orElse(0), nodeW = Math.clamp((centreW - 10) / (maxDepth + 1) - 22, 60, 170), top = cardsTop() - 4;
+            var nodes = layout(model.getAsJsonObject("graph"));
+            int nodeW = nodeWidth(nodes), top = cardsTop() - 4;
             for (var n : nodes) {
-                int nx = centreX + 4 + n.depth() * (nodeW + 20), ny = top + 4 + n.row() * 23 - (int) graphScroll;
-                if (x >= nx && x < nx + nodeW && y >= Math.max(ny, top) && y < ny + 18) { if (!n.missing()) { selected = 0; page = 0; edit("open", "pool", n.id()); } return true; }
+                var at = placeOf(n, nodeW, top);
+                if (x >= at[0] && x < at[0] + nodeW && y >= Math.max(at[1], top) && y < at[1] + 18) {
+                    // A press on a pool: it opens when let go in place, and moves when dragged.
+                    pressNode = n.id(); pressKey = nodeKey(n.id()); pressMissing = n.missing(); dragging = false;
+                    pressX = x; pressY = y;
+                    var moved = NODE_POS.get(pressKey);
+                    pressFrom = moved == null ? null : moved.clone();
+                    pressOrigin = new int[]{at[0] - (centreX + 4), at[1] - (top + 4) + (int) graphScroll};
+                    return true;
+                }
             }
         }
         return false;
@@ -600,5 +755,9 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     @Override public boolean isPauseScreen() { return false; }
     @Override public void removed() { PoolThumbnails.releaseAll(); }
-    @Override public void onClose() { ClientCompat.setScreen(minecraft, parent); }
+    @Override public void onClose() {
+        if (confirmLeave) { confirmLeave = false; init(); return; } // Escape on the question means keep editing
+        if (unappliedCount() > 0) { confirmLeave = true; init(); return; }
+        finishClose();
+    }
 }
