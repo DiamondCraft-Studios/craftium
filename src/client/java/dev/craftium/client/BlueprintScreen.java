@@ -326,6 +326,7 @@ public final class BlueprintScreen extends CraftiumScreen {
         if(menu!=null){var hit=menuAt(x,y);menu=null;if(hit!=null){if(hit.enabled())hit.action().run();return true;}if(button!=1)return true;}
         if(button==0&&!loading()&&maxScroll()>0&&x>=left+655&&x<left+664&&y>=top+VIEW_TOP&&y<top+VIEW_TOP+VIEW_H){dragBar=true;dragTo(y);return true;}
         if(inContent(x,y)&&!loading()){
+            setFocused(null); // a click on the items leaves the search box, so the keys (Delete, F2, Ctrl+C, the arrows) act on the selection and not on its text
             int index=itemAt(x,y);
             if(button==1){
                 if(index>=0){if(!selected.contains(items.get(index).key()))select(index,false,false);}else selected.clear();
