@@ -26,6 +26,7 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.pools.DimensionPadding;
+import net.minecraft.world.level.levelgen.structure.pools.FeaturePoolElement;
 import net.minecraft.world.level.levelgen.structure.pools.ListPoolElement;
 import net.minecraft.world.level.levelgen.structure.pools.SinglePoolElement;
 import net.minecraft.world.level.levelgen.structure.pools.StructurePoolElement;
@@ -155,6 +156,14 @@ final class JigsawPlanner {
     /** The blocks one piece places, with the processors, rotation and mirror vanilla would use but nothing written to the world. */
     private static void blocksOf(ServerLevel level, StructureTemplateManager templates, net.minecraft.world.level.chunk.ChunkGenerator generator, long seed, PoolElementStructurePiece piece, StructurePoolElement element, Map<Point, BlockSnapshot> out, int[] unsupported) {
         if (element instanceof ListPoolElement list) { for (var inner : list.getElements()) blocksOf(level, templates, generator, seed, piece, inner, out, unsupported); return; }
+        if (element instanceof FeaturePoolElement feature) {
+            // A feature places itself into a level; this one records what it sets instead of writing it, and shows the feature the pieces planned before it.
+            try {
+                feature.place(templates, RecordingLevel.over(level, out), level.structureManager(), generator, piece.getPosition(), piece.getPosition(), piece.getRotation(), piece.getBoundingBox(),
+                        net.minecraft.util.RandomSource.create(seed ^ piece.getPosition().asLong()), LiquidSettings.APPLY_WATERLOGGING, false);
+            } catch (RuntimeException e) { unsupported[0]++; }
+            return;
+        }
         if (!(element instanceof SinglePoolElement single)) { if (!element.toString().contains("Empty")) unsupported[0]++; return; }
         var template = templates.getOrCreate(single.getTemplateLocation());
         if (template.palettes.isEmpty()) return;
