@@ -143,6 +143,7 @@ public final class StudioScreen extends CraftiumScreen {
         button("Apply (Enter)",left,y2,w,22,()->sendJigsaw("craftium:jigsaw_apply"));
         button("Cancel (Esc)",left+(w+gap),y2,w,22,()->sendJigsaw("craftium:jigsaw_cancel"));
         button("List pools",left+2*(w+gap),y2,w,22,()->sendJigsaw("craftium:jigsaw_pools"));
+        button("Pool editor…",left+4*(w+gap),y2+27,w,22,()->JigsawEditorScreen.open(this));
         button("Full report",left+3*(w+gap),y2,w,22,()->ClientCompat.setScreen(minecraft,new ReportScreen(this,ClientState.jigsawReport.isBlank()?"Nothing to report yet. Generate a structure first.":ClientState.jigsawReport)));
         addRenderableWidget(new FlatCheckbox(left+4*(w+gap),y2,2*w+gap,22,"Live: run again on save",ClientState.options.jigsawLive,()->{ClientState.options.jigsawLive=!ClientState.options.jigsawLive;sendJigsaw("craftium:jigsaw_live");init();}));
     }
