@@ -32,7 +32,7 @@ final class HistoryStore {
     }
     static void save(Session session){
         if(session.historyPath==null||!session.historyDirty)return;session.historyDirty=false;
-        Snapshot snapshot=new Snapshot(session.historyPath,session.undo.stream().filter(e->!e.selectionOnly()).toList(),session.redo.stream().filter(e->!e.selectionOnly()).toList());QUEUED.put(snapshot.file,snapshot);
+        Snapshot snapshot=new Snapshot(session.historyPath,session.undo.stream().filter(e->!e.selectionOnly()&&!e.hierarchyOnly()).toList(),session.redo.stream().filter(e->!e.selectionOnly()&&!e.hierarchyOnly()).toList());QUEUED.put(snapshot.file,snapshot);
         synchronized(HistoryStore.class){pending=pending.handle((v,e)->null).thenRunAsync(()->{Snapshot next=QUEUED.remove(snapshot.file);if(next!=null)write(next);},IO);}
     }
     static void flush(){CompletableFuture<Void> task;synchronized(HistoryStore.class){task=pending;}task.join();}

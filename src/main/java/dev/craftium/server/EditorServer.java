@@ -237,7 +237,10 @@ public final class EditorServer {
             }
             if(r.action().startsWith(SavedSelectionActions.PREFIX)){ // the Selections window (before the plugin actions, as "saved_selection:save" has the shape of one): swaps entries in and out of the live selection, never changes a block
                 if(!Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS))throw new IllegalArgumentException("This client does not know BuildObjects");
-                send(player,s,SavedSelectionActions.run(s,r.action()),false);return;
+                var before=SavedSelectionActions.changesHierarchy(r.action())?s.saved.state():null; // what is done in the Hierarchy is in the history, so Undo and Redo reach it
+                String said=SavedSelectionActions.run(s,r.action());
+                if(before!=null){var after=s.saved.state();if(!after.equals(before))s.remember(Session.Edit.selecting(SavedSelectionActions.historyName(r.action()),Session.SelectionChange.hierarchy(before,after)));}
+                send(player,s,said,false);return;
             }
             if(ActionRegistry.isNamespaced(r.action())){ // an action of a plugin's: only the registry answers, and a name nobody registered is an error, never one of the editor's
                 var handler=ActionRegistry.find(r.action());
@@ -448,8 +451,6 @@ public final class EditorServer {
                 }
                 case "undo", "redo" -> {
                     s.historyRemaining=0;
-                    // a saved selection deleted after the last edit comes back first: Undo takes back the most recent thing
-                    if(r.action().equals("undo")&&s.saved.undoDelete(s.undo.isEmpty()?0:s.undo.peekFirst().time())!=null){send(player,s,"BuildObject back",false);return;}
                     if(r.action().equals("undo"))undoAnimated(player,s);else history(player,s,false);
                 }
                 case "fill", "delete" -> {
@@ -974,6 +975,7 @@ public final class EditorServer {
     /** Undo or redo puts back what the edit changed besides blocks: the player's selection and pivot, and client-side state such as the builder's box. */
     private static void handBack(Session s,Session.SelectionChange change,boolean backwards){
         if(change.hasPoints())s.selection.restore(backwards?change.before():change.after());
+        if(change.hasHierarchy())s.saved.restore(backwards?change.hierarchyBefore():change.hierarchyAfter(),s.selection);
         if(change.hasObjects())s.saved.setPoints(backwards?change.objectsBefore():change.objectsAfter()); // the BuildObjects go back with their blocks
         String pivot=backwards?change.pivotBefore():change.pivotAfter();
         if(pivot!=null)s.pivotUpdate=pivot;
@@ -989,7 +991,7 @@ public final class EditorServer {
         var from=backwards?s.undo:s.redo;
         if(from.isEmpty()){s.historyRemaining=0;send(player,s,backwards?"Nothing to undo":"Nothing to redo",false);return;}
         var edit=from.peekFirst();
-        if(edit.selectionOnly()){ // a selection has no blocks: put it back directly
+        if(edit.selectionOnly()||edit.hierarchyOnly()){ // a selection or a change to the Hierarchy has no blocks: put it back directly
             from.removeFirst();
             handBack(s,edit.selection(),backwards);
             (backwards?s.redo:s.undo).addFirst(edit);

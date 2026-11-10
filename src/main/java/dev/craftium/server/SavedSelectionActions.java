@@ -28,6 +28,13 @@ final class SavedSelectionActions {
             default->throw new IllegalArgumentException("Unknown BuildObject action "+part[0]);
         }
     }
+    /** Whether the action changes the BuildObjects themselves (and so goes in the history), as against only what is being looked at. */
+    static boolean changesHierarchy(String action){return switch(verb(action)){case "save","delete","rename","place"->true;default->false;};}
+    /** What the history calls the action: "Undid Create BuildObject". */
+    static String historyName(String action){
+        return switch(verb(action)){case "save"->"Create BuildObject";case "delete"->"Delete BuildObject";case "rename"->"Rename BuildObject";case "place"->"Move BuildObject";default->"BuildObject";};
+    }
+    private static String verb(String action){return action.startsWith(PREFIX)?action.substring(PREFIX.length()).split(":",2)[0]:"";}
     private static int id(String[] part){
         if(part.length<2)throw new IllegalArgumentException("Pick a BuildObject");
         try{return Integer.parseInt(part[1]);}catch(NumberFormatException e){throw new IllegalArgumentException("Pick a BuildObject");}

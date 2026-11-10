@@ -28,13 +28,26 @@ class SavedSelectionsTest {
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);
         saved.rename(two.id(),"Roof");assertEquals("BuildObject (1)",saved.save(s).name());
     }
-    @Test void anEntryBroughtBackWhoseNameWasTakenKeepsItAndTheGuidsTellThemApart(){
-        var saved=new SavedSelections();var s=live(A);var one=saved.save(s);saved.delete(one.id(),s);
-        var again=saved.save(s); // takes "BuildObject" again
-        assertSame(one,saved.undoDelete(0));
-        assertEquals(List.of("BuildObject","BuildObject"),saved.entries().stream().map(SavedSelections.Entry::name).toList());
-        assertNotEquals(one.guid(),again.guid());
-        assertSame(one,saved.find(one.guid()));
+    @Test void aStateWalksBackAndForthWithTheSameEntriesIdsAndGuids(){
+        var saved=new SavedSelections();var s=live(A);var one=saved.save(s);String guid=one.guid();
+        var s0=saved.state();saved.delete(one.id(),s);var s1=saved.state();var again=saved.save(s);var s2=saved.state(); // "BuildObject" is taken again, by another
+        saved.restore(s1,s);assertEquals(List.of(),saved.entries());
+        saved.restore(s0,s);assertEquals(List.of(one),saved.entries());assertSame(one,saved.find(guid));
+        saved.restore(s2,s);assertEquals(List.of(again),saved.entries());assertNotEquals(again.guid(),guid);
+    }
+    @Test void restoringPutsBackNamesParentsOrderAndBlocksNotJustWhatExists(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);
+        var before=saved.state();
+        saved.rename(a.id(),"Roof");saved.place(b.id(),a.id(),0);saved.place(a.id(),0,5);saved.setPoints(Map.of(a.id(),List.of(C)));
+        saved.restore(before,s);
+        assertEquals(List.of(a,b),saved.entries());assertEquals("BuildObject",a.name());assertEquals(0,b.parentId());assertEquals(List.of(A),a.points());
+        assertEquals(saved.state(),before);
+    }
+    @Test void restoringLetsGoOfABuildObjectThatIsNoLongerThere(){
+        var saved=new SavedSelections();var s=live(A);var before=saved.state();var one=saved.save(s);
+        s.restore(List.of(C));saved.view(one.id(),s);
+        saved.restore(before,s);
+        assertNull(saved.active());assertEquals(Set.of(C),set(s),"the player's own selection is back");
     }
     @Test void savingNothingIsRefused(){assertThrows(IllegalArgumentException.class,()->new SavedSelections().save(new Selection()));}
     @Test void viewingSwapsAndReleasingBringsTheOriginalBack(){
@@ -76,16 +89,10 @@ class SavedSelectionsTest {
     }
     @Test void aDeletedEntryComesBackWhereItWas(){
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);saved.save(s);
-        int at=saved.indexOf(one);saved.delete(one.id(),s);saved.restore(one,at);
+        var before=saved.state();saved.delete(one.id(),s);
+        saved.restore(before,s);
         assertEquals(List.of("BuildObject","BuildObject (1)","BuildObject (2)"),saved.entries().stream().map(SavedSelections.Entry::name).toList());
         assertSame(two,saved.find("buildobject (1)"));
-    }
-    @Test void undoBringsBackTheLastDeleteOnlyWhenItIsNewerThanTheLastEdit(){
-        var saved=new SavedSelections();var s=live(A);var one=saved.save(s);saved.save(s);
-        saved.delete(one.id(),s);
-        assertNull(saved.undoDelete(System.currentTimeMillis()+1000),"an edit made after the delete is undone first");
-        assertSame(one,saved.undoDelete(0));assertEquals("BuildObject",saved.entries().getFirst().name());
-        assertNull(saved.undoDelete(0),"nothing left to bring back");
     }
     @Test void renamingMayRepeatANameButNeverEmptiesIt(){
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);
@@ -104,7 +111,7 @@ class SavedSelectionsTest {
     }
     @Test void anEntryKeepsItsGuidAcrossDeletingAndUndoing(){
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);String guid=one.guid();saved.save(s);
-        saved.delete(one.id(),s);assertSame(one,saved.undoDelete(0));assertEquals(guid,saved.find(guid).guid());
+        var before=saved.state();saved.delete(one.id(),s);saved.restore(before,s);assertEquals(guid,saved.find(guid).guid());
     }
     @Test void placingReordersTheTopLevelAndKeepsTheRestInOrder(){
         var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);
@@ -151,11 +158,12 @@ class SavedSelectionsTest {
         saved.release(s);saved.edit(a.id(),s);assertEquals(Set.of(A),set(s),"only its own blocks");
         assertEquals(Set.of(A,B,C),saved.effective(a));assertEquals(Set.of(C),saved.effective(c));
     }
-    @Test void deletingAParentDeletesWhatIsUnderItAndUndoBringsBackTheGroupWhereItWas(){
+    @Test void deletingAParentDeletesWhatIsUnderItAndRestoringBringsBackTheGroupWhereItWas(){
         var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);var d=saved.save(s);
         saved.place(c.id(),b.id(),0); // a, b > c, d
+        var before=saved.state();
         saved.delete(b.id(),s);assertEquals(List.of(a,d),saved.entries(),"c went with b");
-        assertSame(b,saved.undoDelete(0));assertEquals(List.of(a,b,c,d),saved.entries());
+        saved.restore(before,s);assertEquals(List.of(a,b,c,d),saved.entries());
         assertEquals(b.id(),c.parentId(),"c is under b again");
     }
     @Test void deletingWhatIsBeingLookedAtInsideAGroupGivesTheSelectionBack(){

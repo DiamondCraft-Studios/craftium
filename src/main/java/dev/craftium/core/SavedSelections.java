@@ -39,9 +39,6 @@ public final class SavedSelections {
     /** The live selection as it was before looking began; null when not looking. */
     private List<Point> stash;
     private long revision;
-    /** Entries that were deleted, newest last, so Undo can bring the latest back. */
-    private record Deleted(List<Entry> group,int siblingIndex,long time){}
-    private final Deque<Deleted> deleted=new ArrayDeque<>();
 
     /** Every BuildObject, in tree order. */
     public List<Entry> entries(){return Collections.unmodifiableList(entries);}
@@ -177,25 +174,30 @@ public final class SavedSelections {
     /** Removes the entry and everything under it; if one of them was being looked at, the live selection comes back first. Returns the removed entry so a delete can be undone. */
     public Entry delete(int id,Selection live){
         var entry=need(id);if(active!=null&&(active==entry||isUnder(active,entry)))release(live);
-        var group=subtree(entry);int sibling=children(entry.parent).indexOf(entry);
+        var group=subtree(entry);
         entries.removeAll(group);revision++;
-        deleted.addLast(new Deleted(group,sibling,System.currentTimeMillis()));while(deleted.size()>16)deleted.removeFirst();
         return entry;
     }
-    /** Brings back the entry deleted last, when that was after {@code time} (epoch milliseconds: when the newest edit in the history was made, so Undo takes the most recent thing). Returns the entry, or null when there is none to bring back. */
-    public Entry undoDelete(long time){
-        var last=deleted.peekLast();if(last==null||last.time<=time)return null;
-        deleted.removeLast();
-        var root=last.group.getFirst();
-        if(last.group.stream().anyMatch(e->byId(e.id)!=null)||entries.size()+last.group.size()>MAX)return null;
-        if(root.parent!=null&&!entries.contains(root.parent))root.parent=null; // what it was under is gone
-        var parent=root.parent;entries.addAll(last.group);place(root.id,parent==null?0:parent.id,last.siblingIndex);return root;
-    }
-    /** Puts a deleted entry back at {@code index} of the list, with its id and name. It goes to the top level when what it was under is gone. */
-    public void restore(Entry entry,int index){
-        if(byId(entry.id)!=null||entries.size()>=MAX)return;
-        if(entry.parent!=null&&!entries.contains(entry.parent))entry.parent=null;
-        entries.add(Math.clamp(index,0,entries.size()),entry);revision++;
+    /** Everything about the BuildObjects that history has to give back: which there are, in what order, under what, called what, holding which blocks. */
+    public record State(List<Row> rows){}
+    /** One BuildObject as it was: the entry itself (it keeps its id and GUID) with the parts of it that change. */
+    public record Row(Entry entry,String name,int parentId,List<Point> points){}
+    public State state(){var rows=new ArrayList<Row>();for(var e:entries)rows.add(new Row(e,e.name,e.parentId(),e.points));return new State(List.copyOf(rows));}
+    /**
+     * Puts the BuildObjects back as they were in {@code state}: used by Undo and Redo of anything done in the Hierarchy. A BuildObject that is gone in it is
+     * let go of first if it was being looked at. The entries are the same objects, so ids and GUIDs come back as they were.
+     */
+    public void restore(State state,Selection live){
+        var present=new HashSet<Entry>();for(var r:state.rows())present.add(r.entry());
+        if(active!=null&&!present.contains(active))release(live);
+        entries.clear();var byId=new HashMap<Integer,Entry>();
+        for(var r:state.rows()){
+            var e=r.entry();e.name=r.name();
+            if(!e.points.equals(r.points())){e.points=r.points();e.version++;}
+            entries.add(e);byId.put(e.id,e);
+        }
+        for(var r:state.rows())r.entry().parent=r.parentId()==0?null:byId.get(r.parentId());
+        revision++;
     }
     public int indexOf(Entry entry){return entries.indexOf(entry);}
     public void clear(Selection live){release(live);entries.clear();revision++;}
