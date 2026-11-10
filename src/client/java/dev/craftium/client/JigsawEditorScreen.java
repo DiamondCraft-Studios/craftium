@@ -31,6 +31,13 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private String filter = "", name = "", query = "", selectionName = "";
     private double poolScroll, graphScroll;
     private final Map<EditBox, Runnable> commits = new HashMap<>();
+    /** What to say when the pointer rests on a button; drawn inside the scaled canvas, so it sits at the pointer whatever the window size. */
+    private final Map<FlatButton, String> tips = new HashMap<>();
+    private static final String RIGID_TIP = "Rigid: the piece keeps exactly the height the structure grew to and ignores the ground, so it never bends. Use it for buildings, rooms and anything solid."
+            + "\nClick to make it follow the terrain instead.";
+    private static final String FOLLOW_TIP = "Follow terrain (terrain_matching): the piece is bent to the ground, each column of it moving up or down to meet the surface, like village streets and paths."
+            + "\nIn the preview this follows the height the world generated, not blocks you have changed."
+            + "\nClick to make it rigid instead.";
     private Integer pendingWeightIndex;
     private int pendingWeight;
     private long pendingAt;
@@ -124,6 +131,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         cw = Math.round(this.width / uiScale);
         ch = Math.round(this.height / uiScale);
         commits.clear();
+        tips.clear();
         leftW = Math.clamp(cw / 5, 150, 210);
         rightW = Math.clamp(cw * 3 / 10, 230, 300);
         centreX = SIDE + leftW + 10;
@@ -197,6 +205,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
             boolean rigid = str(element, "projection", "rigid").equals("rigid");
             var projection = button(rigid ? "Rigid" : "Follow terrain", tx, y + 48, 96, 18, () -> edit("element_set", "pool", poolId(), "index", index, "projection", rigid ? "terrain_matching" : "rigid"));
             projection.active = editable || element.has("projection");
+            tips.put(projection, rigid ? RIGID_TIP : FOLLOW_TIP);
             if (editable && element.has("processors")) {
                 var processors = box(tx + 100, y + 48, Math.max(40, w - 100), str(element, "processors", "minecraft:empty"), 120, null, () -> edit("element_set", "pool", poolId(), "index", index, "processors", focusedText()));
                 if (str(element, "processors", "").equals("(inline)")) processors.setEditable(false); // a processor list written in the pool file is kept as it is
@@ -313,9 +322,25 @@ final class JigsawEditorScreen extends CraftiumScreen {
         else { drawCentre(g); if (graph) drawGraph(g, mx, my); else drawCards(g, mx, my); }
         drawConnections(g);
         drawWidgets(g, mx, my, delta);
+        drawTip(g, mx, my);
         if (filter.isEmpty()) g.text(font, "filter " + (model.has("pools") ? model.getAsJsonArray("pools").size() : 0) + " pools", SIDE + 5, TOP + 5, 0xff5f7186, false);
         if (name.isEmpty()) g.text(font, "name for New, Copy or Rename", SIDE + 5, ch - FOOT - 66 + 5, 0xff5f7186, false);
         g.pose().popMatrix();
+    }
+
+    /** The tip of the button the pointer is on, in a box beside it. */
+    private void drawTip(Gfx g, int mx, int my) {
+        for (var entry : tips.entrySet()) {
+            if (!entry.getKey().isMouseOver(mx, my)) continue;
+            var rows = font.split(Component.literal(entry.getValue()), 240);
+            int w = 0;
+            for (var row : rows) w = Math.max(w, font.width(row));
+            int h = rows.size() * 10 + 8, x = Math.max(4, Math.min(mx + 12, cw - w - 18)), y = Math.max(4, Math.min(my + 14, ch - h - 4));
+            g.fill(x, y, x + w + 12, y + h, 0xf0101923);
+            g.outline(x, y, w + 12, h, ClientState.options.uiAccent);
+            for (int i = 0; i < rows.size(); i++) g.text(font, rows.get(i), x + 6, y + 5 + i * 10, 0xffdce6ef, false);
+            return;
+        }
     }
 
     private void drawPools(Gfx g, int mx, int my) {
