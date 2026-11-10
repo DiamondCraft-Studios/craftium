@@ -192,7 +192,8 @@ public final class SavedSelectionsGameTest {
         severalAtOnceAndFocus();
         contextMenu();
         duplicateCopyCutExportAndEyes();
-        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu duplicate");
+        sharedPersistentAndPermitted();
+        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu duplicate shared");
     }
 
     // ---- Claude --------------------------------------------------------------------------------------------------------------------------
@@ -595,6 +596,49 @@ public final class SavedSelectionsGameTest {
         undo();
         require(ClientState.savedSelections().size() == 2 && allAre(a(), Blocks.STONE), "and two Undos bring both back: " + ClientState.savedSelections());
     }
+    /** The BuildObjects are written to the world, the colour chosen goes to the server and comes back, and a denied action is refused. */
+    private void sharedPersistentAndPermitted() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        int id = saved(0).id();
+
+        // the colour is the server's: it is sent once the picker is still, and comes back in the list everyone gets
+        c.runOnClient(mc -> ClientState.setSavedColor(id, 0xff112233));
+        c.waitTicks(40);
+        require(saved(0).color() == 0xff112233, "the colour chosen is kept by the server: " + saved(0));
+
+        // written to the world's folder within a few seconds
+        c.waitTicks(220);
+        var file = c.computeOnClient(mc -> mc.getSingleplayerServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).resolve("craftium/buildobjects/minecraft_overworld.nbt"));
+        require(java.nio.file.Files.exists(file) && fileSize(file) > 20, "the BuildObjects were written to the world: " + file);
+
+        // a denied action is refused, with a reason, and changes nothing
+        var config = dev.craftium.runtime.ServerPlatform.assets().resolve("hierarchy-permissions.json");
+        try {
+            writeFile(config, "{\"everyone\":{\"delete\":false},\"operatorsBypass\":false}");
+            sleepMillis(2300); // the server looks at the file every couple of seconds
+            sleep();
+            c.runOnClient(mc -> CraftiumClient.send("saved_selection:delete:" + id, null, null));
+            c.waitTicks(15);
+            var refusal = c.computeOnClient(mc -> ClientState.status.message());
+            require(refusal.contains("permission") && ClientState.savedSelections().size() == 1, "delete was refused: " + refusal + " " + ClientState.savedSelections());
+            sleep();
+            c.runOnClient(mc -> CraftiumClient.send("saved_selection:rename:" + id + ":Allowed", null, null));
+            settle();
+            require(saved(0).name().equals("Allowed"), "and what was not denied still works");
+        } finally {
+            writeFile(config, "{\"everyone\":{},\"operatorsBypass\":true}");
+            sleepMillis(2300);
+        }
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:delete:" + id, null, null));
+        settle();
+        require(ClientState.savedSelections().isEmpty(), "allowed again once the file says so");
+    }
+    private static void writeFile(java.nio.file.Path file, String text) { try { java.nio.file.Files.writeString(file, text); } catch (java.io.IOException e) { throw new AssertionError(e); } }
+    private static long fileSize(java.nio.file.Path file) { try { return java.nio.file.Files.size(file); } catch (java.io.IOException e) { return -1; } }
+    private static void sleepMillis(long ms) { try { Thread.sleep(ms); } catch (InterruptedException e) { throw new AssertionError(e); } }
     /** The n-th row of the Hierarchy, as an area. */
     private int[] row(int n) {
         int seen = 0;
