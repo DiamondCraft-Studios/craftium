@@ -221,6 +221,8 @@ public final class Options {
     public int jigsawDepth=5,jigsawDistance=80;
     public long jigsawSeed=1;
     public boolean jigsawLive=true;
+    /** One command of the jigsaw pool editor, as JSON (see the server's JigsawEditor); empty when none. */
+    public String jigsawEdit="";
     /** Whether the client listens on this computer for an AI client (the craftium-mcp shim) to drive the editor. Off until the player turns it on. */
     public boolean aiBridge;
     /** Whether to draw the AI previews other players are holding, in a colour of their own with the owner's name. */
@@ -344,7 +346,7 @@ public final class Options {
         aiSession=AiSessions.cleanId(aiSession);aiLabel=AiSessions.cleanLabel(aiLabel);
         if(jigsawPool==null)jigsawPool="";if(jigsawStart==null)jigsawStart="";
         if(jigsawPool.length()>200||jigsawStart.length()>200)throw new IllegalArgumentException("A jigsaw name is at most 200 characters");
-        jigsawDepth=Math.clamp(jigsawDepth,1,20);jigsawDistance=Math.clamp(jigsawDistance,1,128);
+        if(jigsawEdit==null)jigsawEdit="";if(jigsawEdit.length()>32_768)throw new IllegalArgumentException("A pool editor command is at most 32 KB");jigsawDepth=Math.clamp(jigsawDepth,1,20);jigsawDistance=Math.clamp(jigsawDistance,1,128);
         if(pinned==null)pinned=new java.util.ArrayList<>();
         if(pinned.size()>256||pinned.stream().anyMatch(name->name==null||name.length()>64))throw new IllegalArgumentException("Invalid pinned properties");
         radius = Math.clamp(radius,1,BrushMath.MAX_RADIUS);

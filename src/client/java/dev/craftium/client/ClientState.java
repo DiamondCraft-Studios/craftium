@@ -51,7 +51,10 @@ public final class ClientState {
     /** Takes in the saved selections a status carries. A status that does not carry them (null) leaves them as they were. */
     /** What the jigsaw planner said about its last run, as the server last sent it. */
     public static String jigsawReport="";
-    static void updateJigsawReport(Packets.Status status){if(status.jigsawReport()!=null)jigsawReport=status.jigsawReport();}
+    static void updateJigsawReport(Packets.Status status){if(status.jigsawReport()!=null)jigsawReport=status.jigsawReport();if(status.jigsawModel()!=null){jigsawModel=status.jigsawModel();jigsawModelVersion++;}}
+    /** The pool editor's model as the server last sent it (JSON text), and a number that changes with each one. */
+    public static String jigsawModel="";
+    public static int jigsawModelVersion;
     static void updateSavedSelections(Packets.Status status){
         if(status.savedSelections()==null)return;
         savedSelections=List.copyOf(status.savedSelections());

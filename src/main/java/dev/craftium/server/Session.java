@@ -57,6 +57,10 @@ final class Session {
     private String jigsawReport="";private boolean jigsawReportDirty;
     void jigsawReport(String report){jigsawReport=report;jigsawReportDirty=true;}
     String takeJigsawReport(){if(!jigsawReportDirty)return null;jigsawReportDirty=false;return jigsawReport;}
+    /** The pool editor's model, sent once to the client when it changes (see {@link #takeJigsawModel}). */
+    private String jigsawModel="";private boolean jigsawModelDirty;
+    void jigsawModel(String model){jigsawModel=model;jigsawModelDirty=true;}
+    String takeJigsawModel(){if(!jigsawModelDirty)return null;jigsawModelDirty=false;return jigsawModel;}
     /** The {@link PluginTools#version} of the list of plugin tools this player was last sent, or -1 when they have not been sent one. */
     int pluginToolsSent=-1;
     /** The selections this player saved, and the {@link dev.craftium.core.SavedSelections#revision} of them that was last sent, or -1 when none has been. */
