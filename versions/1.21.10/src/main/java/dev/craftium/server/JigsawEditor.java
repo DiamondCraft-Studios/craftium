@@ -50,6 +50,8 @@ final class JigsawEditor {
         String pool = "", query = "", message = "";
         /** Set by the names command: the next model carries only the list of pools, which is all an autocomplete wants. */
         boolean names;
+        /** What a retarget would change, for the player to confirm: set by the check, shown in the next model, forgotten by any other command. */
+        JsonObject retarget;
         final Deque<List<Snap>> undo = new ArrayDeque<>(), redo = new ArrayDeque<>();
     }
     private static final Map<UUID, Memory> MEMORY = new ConcurrentHashMap<>();
@@ -97,7 +99,9 @@ final class JigsawEditor {
     }
 
     private static String run(ServerPlayer player, JigsawPlanner.Env env, Memory memory, Edit edit, JsonObject c) throws IOException {
-        switch (text(c, "op")) {
+        String op = text(c, "op");
+        if (!op.equals("retarget_check")) memory.retarget = null;
+        switch (op) {
             case "open" -> { if (c.has("pool")) memory.pool = poolId(text(c, "pool")).toString(); return ""; }
             case "templates" -> { memory.query = c.has("query") ? text(c, "query") : ""; return ""; }
             case "undo" -> { return restore(memory.undo, memory.redo, "Undid the last change"); }
@@ -202,6 +206,8 @@ final class JigsawEditor {
             }
             case "jigsaw_set" -> { return setJigsaw(env, edit, c); }
             case "names" -> { memory.names = true; return ""; }
+            case "retarget_check" -> { memory.retarget = retargetCheck(env, c); return ""; }
+            case "retarget" -> { return retarget(env, edit, c); }
             case "apply" -> { return apply(env, memory); }
             case "discard" -> { return discard(env, memory); }
             default -> throw new IllegalArgumentException("Unknown pool editor command: " + text(c, "op"));
@@ -301,6 +307,142 @@ final class JigsawEditor {
         var bytes = new ByteArrayOutputStream();
         NbtIo.writeCompressed(tag, bytes);
         edit.write(draftTemplateFile(env, id), bytes.toByteArray());
+    }
+
+    // ---- retargeting: pointing the connectors that lead to one pool at another
+
+    /** The templates a pool uses, as its JSON names them, the elements of a list element included. */
+    private static Set<String> templatesOf(JsonObject pool) {
+        var out = new LinkedHashSet<String>();
+        for (var e : pool.getAsJsonArray("elements")) if (e.isJsonObject()) collectTemplates(e.getAsJsonObject().get("element"), out);
+        return out;
+    }
+    private static void collectTemplates(JsonElement element, Set<String> out) {
+        if (element == null || !element.isJsonObject()) return;
+        var o = element.getAsJsonObject();
+        if (o.has("location") && o.get("location").isJsonPrimitive()) out.add(poolId(o.get("location").getAsString()).toString());
+        if (o.has("elements") && o.get("elements").isJsonArray()) for (var inner : o.getAsJsonArray("elements")) collectTemplates(inner, out);
+    }
+
+    /** A template as NBT: from the draft, else the craftium pack, else as the game has it; null when there is no such template. */
+    private static CompoundTag readTag(JigsawPlanner.Env env, ResourceLocation id) throws IOException {
+        var draft = draftTemplateFile(env, id);
+        var file = templateFile(env, id);
+        if (Files.exists(draft)) return NbtIo.readCompressed(draft, NbtAccounter.unlimitedHeap());
+        if (Files.exists(file)) return NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
+        var template = env.templates().get(id);
+        if (template.isEmpty() || template.get().palettes.isEmpty()) return null;
+        return template.get().save(new CompoundTag());
+    }
+
+    /** The names the connectors of a template that lead to a pool ask for. */
+    private static List<String> connectorsTo(CompoundTag tag, String pool) {
+        var names = new ArrayList<String>();
+        var blocks = tag.getListOrEmpty("blocks");
+        for (int i = 0; i < blocks.size(); i++) {
+            var nbt = blocks.getCompoundOrEmpty(i).getCompoundOrEmpty("nbt");
+            if (nbt.getStringOr("id", "").equals("minecraft:jigsaw") && nbt.getStringOr("pool", "").equals(pool)) names.add(nbt.getStringOr("target", "minecraft:empty"));
+        }
+        return names;
+    }
+
+    /** Points the connectors of a template that lead to one pool at another, and says how many. */
+    private static int retargetIn(CompoundTag tag, String from, String to) {
+        int changed = 0;
+        var blocks = tag.getListOrEmpty("blocks");
+        for (int i = 0; i < blocks.size(); i++) {
+            var block = blocks.getCompoundOrEmpty(i);
+            var nbt = block.getCompoundOrEmpty("nbt");
+            if (!nbt.getStringOr("id", "").equals("minecraft:jigsaw") || !nbt.getStringOr("pool", "").equals(from)) continue;
+            nbt.putString("pool", to);
+            block.put("nbt", nbt);
+            blocks.set(i, block);
+            changed++;
+        }
+        if (changed > 0) tag.put("blocks", blocks);
+        return changed;
+    }
+
+    /** What pointing the connectors of a pool that lead to one pool at another would change, so the player can see it before it is done. */
+    private static JsonObject retargetCheck(JigsawPlanner.Env env, JsonObject c) throws IOException {
+        var pool = poolId(text(c, "pool"));
+        var from = poolId(text(c, "from")).toString();
+        var to = poolId(text(c, "to")).toString();
+        if (from.equals(to)) throw new IllegalArgumentException("Those connectors already point at " + to);
+        var affected = new JsonArray();
+        var affectedIds = new ArrayList<String>();
+        var asked = new TreeSet<String>();
+        var counts = new HashMap<String, Integer>();
+        int connectors = 0;
+        for (var id : templatesOf(readPool(env, pool))) {
+            var tag = readTag(env, ResourceLocation.parse(id));
+            if (tag == null) continue;
+            var names = connectorsTo(tag, from);
+            if (names.isEmpty()) continue;
+            connectors += names.size();
+            affected.add(id);
+            affectedIds.add(id);
+            for (var name : names) { asked.add(name); counts.merge(name, 1, Integer::sum); }
+        }
+        if (connectors == 0) throw new IllegalArgumentException("No connector of " + pool + " points at " + from);
+        var out = new JsonObject();
+        out.addProperty("pool", pool.toString());
+        out.addProperty("from", from);
+        out.addProperty("to", to);
+        out.addProperty("connectors", connectors);
+        out.add("templates", affected);
+        var shared = new JsonArray();
+        int unmatched = 0;
+        boolean toMissing = false;
+        try {
+            Registry<StructureTemplatePool> pools = JigsawPlanner.loadPools(env.server(), env.manager()).lookupOrThrow(Registries.TEMPLATE_POOL);
+            var all = pools.listElements().toList();
+            for (var template : affectedIds) {
+                var users = new TreeSet<String>();
+                for (var holder : all) {
+                    if (holder.key().location().equals(pool)) continue;
+                    for (var pair : holder.value().getTemplates())
+                        for (var single : singles(pair.getFirst())) if (single.getTemplateLocation().toString().equals(template)) users.add(holder.key().location().toString());
+                }
+                if (users.isEmpty()) continue;
+                var item = new JsonObject();
+                item.addProperty("template", template);
+                var list = new JsonArray();
+                users.stream().limit(4).forEach(list::add);
+                item.add("pools", list);
+                item.addProperty("more", Math.max(0, users.size() - 4));
+                shared.add(item);
+            }
+            if (!to.equals("minecraft:empty")) {
+                var target = pools.get(ResourceKey.create(Registries.TEMPLATE_POOL, ResourceLocation.parse(to)));
+                if (target.isEmpty()) toMissing = true;
+                else for (var name : asked) if (JigsawDiagnostics.fits(pools, env.templates(), target.get().value(), ResourceLocation.parse(name)) == 0) unmatched += counts.get(name);
+            }
+        } catch (RuntimeException e) { /* without the pools there is nothing to say about sharing or fit */ }
+        out.add("shared", shared);
+        out.addProperty("unmatched", unmatched);
+        out.addProperty("toMissing", toMissing);
+        return out;
+    }
+
+    /** Points every connector in the templates of a pool that leads to one pool at another, as one undo step. */
+    private static String retarget(JigsawPlanner.Env env, Edit edit, JsonObject c) throws IOException {
+        var pool = poolId(text(c, "pool"));
+        var from = poolId(text(c, "from")).toString();
+        var to = poolId(text(c, "to")).toString();
+        if (from.equals(to)) throw new IllegalArgumentException("Those connectors already point at " + to);
+        int total = 0, templates = 0;
+        for (var id : templatesOf(readPool(env, pool))) {
+            var tag = readTag(env, ResourceLocation.parse(id));
+            if (tag == null) continue;
+            int changed = retargetIn(tag, from, to);
+            if (changed == 0) continue;
+            writeTemplate(env, edit, ResourceLocation.parse(id), tag);
+            total += changed;
+            templates++;
+        }
+        if (total == 0) throw new IllegalArgumentException("No connector of " + pool + " points at " + from);
+        return "Pointed " + total + (total == 1 ? " connector" : " connectors") + " of " + pool + " in " + templates + (templates == 1 ? " template" : " templates") + " at " + to + " instead of " + from;
     }
 
     // ---- applying and discarding
@@ -431,6 +573,7 @@ final class JigsawEditor {
         root.addProperty("redo", memory.redo.size());
         root.addProperty("selection", EditorServer.session(player).selection.size());
         root.add("unapplied", unapplied(env));
+        if (memory.retarget != null) root.add("retarget", memory.retarget);
         Registry<StructureTemplatePool> pools = null;
         try { pools = JigsawPlanner.loadPools(env.server(), env.manager()).lookupOrThrow(Registries.TEMPLATE_POOL); }
         catch (RuntimeException e) { root.addProperty("registryError", String.valueOf(e.getMessage())); }
