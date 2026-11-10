@@ -194,8 +194,9 @@ public final class SavedSelectionsGameTest {
         blocksLeaveTheirObjects();
         multiDragAndKeptView();
         duplicateCopyCutExportAndEyes();
+        duplicateKeepsStructureAndDeselect();
         sharedPersistentAndPermitted();
-        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu duplicate shared prune view");
+        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu duplicate shared prune view structure deselect");
     }
 
     // ---- Claude --------------------------------------------------------------------------------------------------------------------------
@@ -677,6 +678,47 @@ public final class SavedSelectionsGameTest {
         require(ClientState.savedSelections().isEmpty() && allAre(a(), Blocks.STONE), "deleting from the Hierarchy removes the grouping and leaves every block");
         undo();
         require(ClientState.savedSelections().size() == 1, "and Undo brings the grouping back");
+    }
+    /** Duplicating a hierarchy makes the same hierarchy again, and a click on empty space or Alt+D lets go of the BuildObjects shown. */
+    private void duplicateKeepsStructureAndDeselect() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        drag(row(1), row(0), 0.5); // the second under the first
+        int parent = saved(0).id();
+        require(saved(1).parent() == parent, "nested to duplicate: " + ClientState.savedSelections());
+        click(row(0)); // shows the parent, so its blocks and its child's
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_D, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        c.waitFor(mc -> PlacementPreview.active(), 200);
+        c.waitTicks(5);
+        String asObject = c.computeOnClient(mc -> String.valueOf(PlacementPreview.asObject) + " busy=" + ClientState.status.busy() + " active=" + PlacementPreview.active());
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        c.waitTicks(10);
+        require(ClientState.savedSelections().size() == 4, "the parent and its child were each copied (" + asObject + " then " + c.computeOnClient(mc -> "active=" + PlacementPreview.active()) + "): [" + c.computeOnClient(mc -> ClientState.status.message()) + " / " + c.computeOnClient(mc -> ClientState.status.error()) + "] " + ClientState.savedSelections());
+        require(saved(2).name().equals("BuildObject (copy)") && saved(2).parent() == 0 && saved(2).size() == 8, "the copy of the parent follows it: " + ClientState.savedSelections());
+        require(saved(3).name().equals(saved(1).name()) && saved(3).parent() == saved(2).id() && saved(3).size() == 3, "and the copy of the child is under it, with the same name: " + ClientState.savedSelections());
+        require(saved(0).parent() == 0 && saved(1).parent() == saved(0).id(), "the original is as it was");
+        undo();
+        require(ClientState.savedSelections().size() == 2, "Undo takes the whole copy back: " + ClientState.savedSelections());
+        redo();
+        require(ClientState.savedSelections().size() == 4, "and Redo makes it again");
+
+        // Alt+D lets go of the BuildObjects shown, with the selection
+        if (!saved(0).active()) click(row(0)); // a click on the one shown would let it go
+        require(saved(0).active(), "shown");
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_D, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_ALT); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        settle();
+        require(c.computeOnClient(mc -> ClientState.savedSelections().stream().noneMatch(e -> e.active())) && live().isEmpty(), "Alt+D lets go of them and clears the selection: " + ClientState.savedSelections());
+
+        // so does a click on empty space in the Hierarchy
+        click(row(0));
+        require(saved(0).active(), "shown again");
+        var last = row(3);
+        click(new int[]{last[0] + 20, last[1] + last[3] + 40, 10, 10});
+        settle();
+        require(c.computeOnClient(mc -> ClientState.savedSelections().stream().noneMatch(e -> e.active())), "a click on empty space lets go of the one shown: " + ClientState.savedSelections());
     }
     /** The BuildObjects are written to the world, the colour chosen goes to the server and comes back, and a denied action is refused. */
     private void sharedPersistentAndPermitted() {
