@@ -203,23 +203,24 @@ public final class EditorServer {
             if(r.action().equals("pending_confirm")){
                 var edit=s.pendingEdit;
                 if(edit==null){send(player,s,"Nothing to confirm",false);return;}
-                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingDirty=true;start(player,s,edit);return;
+                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingDirty=true;start(player,s,edit);return;
             }
             if(r.action().equals("stroke_end")){ // a Sculpt stroke was released: build what it staged, with nothing said when it staged nothing
                 var edit=s.pendingEdit;
                 if(edit==null)return;
-                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingDirty=true;start(player,s,edit);return;
+                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingDirty=true;start(player,s,edit);return;
             }
             if(r.action().equals("pending_cancel")){
                 if(s.pendingEdit!=null){
                     s.pendingEdit=null;s.pendingDirty=true;
                     if(s.pendingSelectionBefore!=null){s.selection.restore(s.pendingSelectionBefore);s.pendingSelectionBefore=null;}
+                    if(s.pendingObjectsBefore!=null){s.saved.setPoints(s.pendingObjectsBefore);s.pendingObjectsBefore=null;}
                     send(player,s,"Edit cancelled",false);
                 }
                 return;
             }
             if(r.action().equals("editor_reset")){ // the way out of a stuck editor: forgets whatever is half done, but never an edit being applied
-                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingChain=null;s.pendingChainBase=s.pendingChainEdit=null;s.pendingDirty=true;s.selectionBefore=null;s.queued.clear();
+                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingChain=null;s.pendingChainBase=s.pendingChainEdit=null;s.pendingDirty=true;s.selectionBefore=null;s.queued.clear();
                 s.selection.clear();s.corner=s.ruler=s.line=null;s.selectedEntity=null;s.historyRemaining=0;s.pulse="";
                 if((job==null||!job.owner.equals(player.getUUID()))&&!AnimatedRebuild.owned(player.getUUID()))s.busy=false;
                 send(player,s,"Editor reset",false);return;
@@ -350,15 +351,21 @@ public final class EditorServer {
                     var priorBefore=s.pendingSelectionBefore;
                     var original=confirming&&priorBefore!=null?priorBefore:before; // undo puts back the selection from before the whole run
                     if(confirming&&priorBefore==null)s.pendingSelectionBefore=before;
-                    s.selection.combine(moved,Selection.Mode.REPLACE);
+                    // The BuildObjects' blocks follow their blocks: each is worked out again from where it began, so a run of transforms is never remapped twice over.
+                    var objectsNow=s.saved.snapshot();var priorObjects=s.pendingObjectsBefore;
+                    var objectsStart=confirming&&priorObjects!=null?priorObjects:objectsNow;
+                    if(confirming&&priorObjects==null)s.pendingObjectsBefore=objectsNow;
+                    var objectsAfter=new LinkedHashMap<Integer,List<Point>>();
+                    for(var e:objectsStart.entrySet())objectsAfter.put(e.getKey(),ObjectRemap.apply(e.getValue(),result.chain().source().keySet(),result.origin()));
+                    s.selection.combine(moved,Selection.Mode.REPLACE);s.saved.setPoints(objectsAfter);
                     try{
-                        var edit=plan.finish("Transform selection").withSelection(new Session.SelectionChange(original,new ArrayList<>(moved),pivotText(o,0,0,0),pivotText(o,o.offsetX,o.offsetY,o.offsetZ)));
+                        var edit=plan.finish("Transform selection").withSelection(new Session.SelectionChange(original,new ArrayList<>(moved),pivotText(o,0,0,0),pivotText(o,o.offsetX,o.offsetY,o.offsetZ)).withObjects(objectsStart,objectsAfter));
                         if(base!=null)edit=new Session.Edit(edit.name(),edit.changes(),base.biomes(),edit.flags(),base.entities(),base.annotations(),edit.selection());
                         if(confirming)s.pendingEdit=null; // the new edit already holds what was staged, so it replaces it
                         start(player,s,edit);
                         if(confirming&&s.pendingEdit!=null){s.pendingChain=result.chain();s.pendingChainBase=base;s.pendingChainEdit=s.pendingEdit;}
                     }
-                    catch(RuntimeException e){s.selection.restore(before);s.pendingSelectionBefore=priorBefore;if(confirming)s.pendingEdit=staged;throw e;}
+                    catch(RuntimeException e){s.selection.restore(before);s.saved.setPoints(objectsNow);s.pendingSelectionBefore=priorBefore;s.pendingObjectsBefore=priorObjects;if(confirming)s.pendingEdit=staged;throw e;}
                 }
                 case "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo" -> {var plan=new EditPlanner(player.level(),s,o);s.selection.combine(SelectionTransforms.apply(r.action(),plan),Selection.Mode.REPLACE);send(player,s,"Selection updated: "+s.selection.size()+" blocks",false);}
                 case "clear" -> {s.selection.clear();s.corner=null;s.line=null;s.ruler=null;send(player,s,"Selection cleared",false);}
@@ -967,6 +974,7 @@ public final class EditorServer {
     /** Undo or redo puts back what the edit changed besides blocks: the player's selection and pivot, and client-side state such as the builder's box. */
     private static void handBack(Session s,Session.SelectionChange change,boolean backwards){
         if(change.hasPoints())s.selection.restore(backwards?change.before():change.after());
+        if(change.hasObjects())s.saved.setPoints(backwards?change.objectsBefore():change.objectsAfter()); // the BuildObjects go back with their blocks
         String pivot=backwards?change.pivotBefore():change.pivotAfter();
         if(pivot!=null)s.pivotUpdate=pivot;
         var values=backwards?change.restoreBefore():change.restoreAfter();

@@ -26,7 +26,8 @@ final class ModelTransform {
      * or scaling again and again never builds on a shape that has already been resampled.
      */
     record Chain(Map<Point,BlockSnapshot> source,Point min,Point max,List<Step> steps){}
-    record Result(LinkedHashSet<Point> moved,Chain chain){}
+    /** {@code origin} gives, for each cell that was landed in, the cell its block came from. */
+    record Result(LinkedHashSet<Point> moved,Chain chain,Map<Point,Point> origin){}
 
     /**
      * Queues the changes in {@code plan} and returns the cells the blocks end up in, with the chain that made them. With a {@code prior}
@@ -53,22 +54,23 @@ final class ModelTransform {
             :new Geometry.Vector((now.x()+end.x()+1)/2d,(now.y()+end.y()+1)/2d,(now.z()+end.z()+1)/2d);
         steps.add(new Step(o,pivot,sx,sy,sz));
 
-        var landed=place(source,min,max,steps);
+        var origin=new LinkedHashMap<Point,Point>();
+        var landed=place(source,min,max,steps,origin);
         // A quarter turn about a point that is not on the right half-block loses cells: their centres fall on the
         // edges between blocks. Try pivots half a block away, nearest first, and keep the first that loses none.
         if(landed.size()<source.size()&&steps.stream().allMatch(ModelTransform::quarterTurn)){
             for(var shift:SHIFTS){
                 var trialSteps=new ArrayList<>(steps);
                 trialSteps.set(trialSteps.size()-1,steps.getLast().withPivot(new Geometry.Vector(pivot.x()+shift[0],pivot.y()+shift[1],pivot.z()+shift[2])));
-                var trial=place(source,min,max,trialSteps);
-                if(trial.size()>=source.size()){landed=trial;steps=new ArrayList<>(trialSteps);break;}
+                var trialOrigin=new LinkedHashMap<Point,Point>();var trial=place(source,min,max,trialSteps,trialOrigin);
+                if(trial.size()>=source.size()){landed=trial;origin=trialOrigin;steps=new ArrayList<>(trialSteps);break;}
             }
         }
         if(landed.size()>Selection.LIMIT)throw new IllegalArgumentException("Selection exceeds limit");
 
         for(Point at:source.keySet())if(!landed.containsKey(at))plan.put(at,Blocks.AIR.defaultBlockState());
         for(var entry:landed.entrySet()){plan.validate(entry.getKey());plan.put(entry.getKey(),entry.getValue());}
-        return new Result(new LinkedHashSet<>(landed.keySet()),new Chain(source,min,max,List.copyOf(steps)));
+        return new Result(new LinkedHashSet<>(landed.keySet()),new Chain(source,min,max,List.copyOf(steps)),origin);
     }
 
     /** Pivot shifts to try, smallest first. */
@@ -100,7 +102,7 @@ final class ModelTransform {
     }
 
     /** Every cell the transformed shape covers, each with the block that lands there. */
-    private static LinkedHashMap<Point,BlockSnapshot> place(Map<Point,BlockSnapshot> source,Point min,Point max,List<Step> steps){
+    private static LinkedHashMap<Point,BlockSnapshot> place(Map<Point,BlockSnapshot> source,Point min,Point max,List<Step> steps,Map<Point,Point> origin){
         // Where the corners of the original box go, to know which cells to look at.
         double lx=Double.POSITIVE_INFINITY,ly=lx,lz=lx,hx=-lx,hy=-lx,hz=-lx;
         for(double x:new double[]{min.x(),max.x()+1})for(double y:new double[]{min.y(),max.y()+1})for(double z:new double[]{min.z(),max.z()+1}){
@@ -116,8 +118,9 @@ final class ModelTransform {
             // Back through every step without rounding in between, so the original blocks are sampled once.
             var from=new Geometry.Vector(x+.5,y+.5,z+.5);
             for(int i=steps.size()-1;i>=0;i--)from=backward(from,steps.get(i));
-            var block=source.get(new Point((int)Math.floor(from.x()+1e-9),(int)Math.floor(from.y()+1e-9),(int)Math.floor(from.z()+1e-9)));
-            if(block!=null){for(var step:steps)if(step.o().turnBlocks)block=turned(block,step.o());landed.put(new Point(x,y,z),block);}
+            var came=new Point((int)Math.floor(from.x()+1e-9),(int)Math.floor(from.y()+1e-9),(int)Math.floor(from.z()+1e-9));
+            var block=source.get(came);
+            if(block!=null){for(var step:steps)if(step.o().turnBlocks)block=turned(block,step.o());landed.put(new Point(x,y,z),block);origin.put(new Point(x,y,z),came);}
         }
         return landed;
     }

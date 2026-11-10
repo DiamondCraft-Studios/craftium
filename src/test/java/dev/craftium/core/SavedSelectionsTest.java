@@ -163,6 +163,15 @@ class SavedSelectionsTest {
         s.restore(List.of(C));saved.view(b.id(),s);saved.delete(a.id(),s);
         assertNull(saved.active());assertEquals(Set.of(C),set(s));
     }
+    @Test void aSnapshotOfTheBlocksCanBePutBackAndOnlyWhatChangedCountsAsChanged(){
+        var saved=new SavedSelections();var s=live(A);var one=saved.save(s);s.restore(List.of(B));var two=saved.save(s);
+        var before=saved.snapshot();long revision=saved.revision();int version=two.version();
+        assertFalse(saved.setPoints(before),"the same blocks change nothing");assertEquals(revision,saved.revision());
+        assertTrue(saved.setPoints(Map.of(two.id(),List.of(C))));
+        assertEquals(List.of(C),two.points());assertEquals(List.of(A),one.points());assertEquals(version+1,two.version());
+        assertTrue(saved.setPoints(before));assertEquals(List.of(B),two.points());
+        assertFalse(saved.setPoints(Map.of(999,List.of(C))),"an id that is gone is skipped");
+    }
     @Test void theLimitIsEnforced(){
         var saved=new SavedSelections();var s=live(A);for(int i=0;i<SavedSelections.MAX;i++)saved.save(s);
         assertThrows(IllegalArgumentException.class,()->saved.save(s));

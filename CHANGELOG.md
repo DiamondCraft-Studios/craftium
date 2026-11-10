@@ -10,6 +10,7 @@ Changes since 1.5.0-beta.1.
 - BuildObjects form a hierarchy: drag a row onto the middle of another to put it under that one, to any depth, or onto the top or bottom edge of a row to place it before or after it. The row you carry follows the pointer, a line or frame shows where it will land, and an arrow folds what is under a BuildObject. Looking at a parent shows everything under it; editing one changes only its own blocks; deleting one deletes what is under it, and Ctrl+Z brings the group back. Hovering a row shows no tooltip any more.
 - Saved selections are BuildObjects everywhere: in the window, in messages and in what the AI is told. Two BuildObjects may now share a name; each has a unique GUID, which the AI tools list and accept in place of the name.
 - The outline of a BuildObject only shows in the world while its eye is open or while it is selected, and every new BuildObject starts with its eye closed.
+- BuildObjects follow their blocks: when you move, rotate, flip or scale the selected blocks (the Edit menu, the Move, Rotate and Scale tools and nudging), every BuildObject that holds those blocks takes them along, and Ctrl+Z puts the blocks and the BuildObjects back together. Scaling up keeps a BuildObject whole; scaling down loses the blocks it drops.
 - Target info moved to the bottom of the left column, under Tool options.
 - The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
 - Your saved window layout is reset once, to the new places.

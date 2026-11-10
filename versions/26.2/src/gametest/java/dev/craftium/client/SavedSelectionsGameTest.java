@@ -186,7 +186,8 @@ public final class SavedSelectionsGameTest {
         settle();
 
         screenshot();
-        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude");
+        transformsCarryObjects();
+        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow");
     }
 
     // ---- Claude --------------------------------------------------------------------------------------------------------------------------
@@ -346,6 +347,52 @@ public final class SavedSelectionsGameTest {
             var event = new MouseButtonEvent((area[0] + area[2] / 2.0) * scale, (area[1] + area[3] / 2.0) * scale, new MouseButtonInfo(0, 0));
             screen.mouseClicked(event, false); screen.mouseReleased(event);
             screen.mouseClicked(event, true); screen.mouseReleased(event);
+        });
+        settle();
+    }
+    /** Moving or scaling the selected blocks takes the BuildObjects they belong to along, and Undo gives both back. */
+    private void transformsCarryObjects() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        var minA = saved(0).min();
+        var minB = saved(1).min();
+
+        selectOnly(a());
+        transform(10, 1, 1, 1);
+        require(saved(0).min().equals(minA.add(10, 0, 0)) && saved(1).min().equals(minB), "moving the first one's blocks moves it and not the other: " + ClientState.savedSelections());
+        undo();
+        require(saved(0).min().equals(minA), "Undo puts the BuildObject back with its blocks: " + ClientState.savedSelections());
+
+        var both = new ArrayList<>(a());
+        both.addAll(b());
+        selectOnly(both);
+        transform(10, 1, 1, 1);
+        require(saved(0).min().equals(minA.add(10, 0, 0)) && saved(1).min().equals(minB.add(10, 0, 0)), "moving both takes both: " + ClientState.savedSelections());
+        undo();
+        require(saved(0).min().equals(minA) && saved(1).min().equals(minB), "and Undo puts both back");
+
+        selectOnly(a());
+        transform(0, 2, 1, 1); // twice as wide
+        require(saved(0).max().x() - saved(0).min().x() + 1 == 4 && saved(0).size() == 16, "scaling up keeps the BuildObject whole: " + saved(0));
+        undo();
+        require(saved(0).size() == 8 && saved(0).min().equals(minA), "and Undo shrinks it back");
+    }
+    /** Transforms the selected blocks as the Edit menu does: an offset along x and a size along each axis. */
+    private void transform(int offsetX, double sizeX, double sizeY, double sizeZ) {
+        sleep();
+        c.runOnClient(mc -> {
+            Options original = ClientState.options;
+            var request = dev.craftium.net.Packets.JSON.fromJson(dev.craftium.net.Packets.JSON.toJson(original), Options.class);
+            try {
+                ClientState.options = request;
+                request.yaw = 0; request.pitch = request.roll = 0;
+                request.sizeX = sizeX; request.sizeY = sizeY; request.sizeZ = sizeZ;
+                request.offsetX = offsetX; request.offsetY = request.offsetZ = 0; request.aboutSet = false; request.turnBlocks = true;
+                CraftiumClient.send("selection_transform", null, null);
+            } finally { ClientState.options = original; }
         });
         settle();
     }
