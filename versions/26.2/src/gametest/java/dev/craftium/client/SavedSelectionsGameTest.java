@@ -79,13 +79,13 @@ public final class SavedSelectionsGameTest {
 
         // click an entry: it replaces the selection, and clicking again gives the selection back
         selectOnly(cell());
-        click(control("Show this BuildObject", 0));
+        click(control("Select this BuildObject", 0));
         require(liveIs(a()) && saved(0).active() && !saved(0).editing(), "clicking BuildObject shows it in place of the selection");
         click(control("Let go", 0));
         require(liveIs(cell()) && ClientState.activeSaved() == null, "clicking it again gives the selection back");
 
         // changes made while an entry is only shown never reach it
-        click(control("Show this BuildObject", 1));
+        click(control("Select this BuildObject", 1));
         require(liveIs(b()), "BuildObject (1) is shown");
         addToLive(cellAt(7));
         require(liveCount() == 4 && saved(1).size() == 3, "an entry that is only shown keeps its blocks when the selection is changed");
@@ -105,10 +105,11 @@ public final class SavedSelectionsGameTest {
 
         // the eye
         int eyed = saved(0).id();
-        click(control("Hide this BuildObject in the world", 0));
-        require(ClientState.savedHidden(eyed), "the eye hides the entry");
-        click(control("Show this BuildObject in the world", 0));
-        require(!ClientState.savedHidden(eyed), "the eye shows it again");
+        require(ClientState.savedHidden(eyed), "a new BuildObject starts with its eye closed");
+        click(control("Show this BuildObject's outline", 0));
+        require(!ClientState.savedHidden(eyed), "opening the eye shows its outline");
+        click(control("Hide this BuildObject's outline", 0));
+        require(ClientState.savedHidden(eyed), "closing it hides the outline again");
 
         // the colour survives deleting and bringing an entry back
         int coloured = saved(1).id();
@@ -132,44 +133,44 @@ public final class SavedSelectionsGameTest {
         claude();
 
         // a double click on a row renames it where it stands: the name is selected, so typing replaces it, and Enter keeps it
-        doubleClick(control("Show this BuildObject", 0));
+        doubleClick(control("Select this BuildObject", 0));
         typeText("Roof");press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
         require(saved(0).name().equals("Roof") && saved(1).name().equals("BuildObject (1)"), "a double click renames the row, got " + ClientState.savedSelections());
         doubleClick(control("Let go", 0)); // the first click of the pair let go of it again
         press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
         require(saved(0).name().equals("Roof"), "Esc keeps the old name");
-        doubleClick(control("Show this BuildObject", 0));
+        doubleClick(control("Select this BuildObject", 0));
         typeText("Wall");press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
         require(saved(0).name().equals("Roof"), "Esc drops what was typed, got " + saved(0).name());
         click(control("Let go", 0)); // the double click showed it; let go before the picture
 
         // dragging a row to the top edge of another puts it before that row, to the bottom edge after it
         String top = saved(0).guid(), below = saved(1).guid();
-        drag(control("Show this BuildObject", 1), control("Show this BuildObject", 0), 0.1);
+        drag(control("Select this BuildObject", 1), control("Select this BuildObject", 0), 0.1);
         require(saved(0).guid().equals(below) && saved(1).guid().equals(top), "dragging the second row onto the top edge of the first moves it to the top: " + ClientState.savedSelections());
-        drag(control("Show this BuildObject", 0), control("Show this BuildObject", 1), 0.9);
+        drag(control("Select this BuildObject", 0), control("Select this BuildObject", 1), 0.9);
         require(saved(0).guid().equals(top) && saved(1).guid().equals(below), "and onto the bottom edge of the last puts it back");
 
         // dropping on the middle of a row makes it a child, and a folded BuildObject lists nothing under it
-        drag(control("Show this BuildObject", 1), control("Show this BuildObject", 0), 0.5);
+        drag(control("Select this BuildObject", 1), control("Select this BuildObject", 0), 0.5);
         require(saved(1).parent() == saved(0).id() && saved(0).parent() == 0, "the middle of a row makes a child: " + ClientState.savedSelections());
         click(control("Fold what is under this BuildObject", 0));
-        require(control("Show this BuildObject", 1) == null, "a folded BuildObject lists nothing under it");
+        require(control("Select this BuildObject", 1) == null, "a folded BuildObject lists nothing under it");
         click(control("Show what is under this BuildObject", 0));
-        require(control("Show this BuildObject", 1) != null, "and unfolding lists it again");
-        drag(control("Show this BuildObject", 1), control("Show this BuildObject", 0), 0.1);
+        require(control("Select this BuildObject", 1) != null, "and unfolding lists it again");
+        drag(control("Select this BuildObject", 1), control("Select this BuildObject", 0), 0.1);
         require(saved(0).guid().equals(below) && saved(0).parent() == 0 && saved(1).parent() == 0, "dragging a child to the top edge of its parent brings it out: " + ClientState.savedSelections());
 
         // names may repeat: the GUID tells two of a name apart
-        doubleClick(control("Show this BuildObject", 1));
+        doubleClick(control("Select this BuildObject", 1));
         typeText(saved(0).name());press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
         require(saved(0).name().equals(saved(1).name()) && !saved(0).guid().equals(saved(1).guid()), "a second BuildObject may take the name of the first: " + ClientState.savedSelections());
         click(control("Let go", 0));
 
         // for a person to look at: one nested under the other, and the picture taken while a row is being carried
-        drag(control("Show this BuildObject", 1), control("Show this BuildObject", 0), 0.5);
+        drag(control("Select this BuildObject", 1), control("Select this BuildObject", 0), 0.5);
         require(saved(1).parent() == saved(0).id(), "nested for the picture");
-        var from = control("Show this BuildObject", 1);
+        var from = control("Select this BuildObject", 1);
         c.runOnClient(mc -> {
             var screen = (EditorScreen) mc.gui.screen();
             double scale;
@@ -385,7 +386,7 @@ public final class SavedSelectionsGameTest {
 
     private void screenshot() {
         // two entries drawn in their own colours beside the selection, one shown in full: for a person to look at
-        click(control("Show this BuildObject", 1));
+        click(control("Select this BuildObject", 1));
         c.runOnClient(mc -> { mc.player.setPos(baseX + 3.5, baseY + 2, baseZ - 6); mc.player.setYRot(0f); mc.player.setXRot(15f); mc.player.setOldPosAndRot(); });
         c.waitTicks(15);
         c.takeScreenshot("saved-selections");

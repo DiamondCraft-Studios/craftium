@@ -65,13 +65,14 @@ public final class ClientState {
             if(savedColors.containsKey(saved.id()))continue;
             var used=new HashSet<Integer>();for(var other:savedSelections){var at=savedIndex.get(other.id());if(at!=null)used.add(at);}
             int index=0;while(used.contains(index))index++;
+            savedHidden.add(saved.id()); // a new BuildObject starts with its eye closed: it shows only while it is selected, until the eye is opened
             savedIndex.put(saved.id(),index);savedColors.put(saved.id(),dev.craftium.core.SavedSelectionColors.forIndex(options.selectionColor,index));
         }
     }
     /** The outline of each saved selection by id, drawn in the selection style. A selection with none is drawn as a box. */
     private static final Map<Integer,OutlineShape> savedShapes=new HashMap<>();
     static OutlineShape savedShape(int id){return savedShapes.get(id);}
-    /** The saved selections the player hid with the eye. Like the colours, they are kept by id when an entry is deleted, so Undo brings one back as it was. */
+    /** The BuildObjects whose eye is closed, which is every new one: the outline of one shows in the world only with its eye open, or while it is selected. Like the colours, they are kept by id when an entry is deleted, so Undo brings one back as it was. */
     private static final Set<Integer> savedHidden=new HashSet<>();
     public static boolean savedHidden(int id){return savedHidden.contains(id);}
     public static void toggleSavedHidden(int id){if(!savedHidden.remove(id))savedHidden.add(id);}

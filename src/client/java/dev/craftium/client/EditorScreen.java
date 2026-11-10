@@ -2105,14 +2105,14 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             }else text(g,shorten(entry.name(),pw-112-indent-12),nameX,ry+6,entry.active()?TEXT:MUTED);
             if(rowDragMoved&&rowDragId==id)g.fill(x+9,ry,x+pw-9,ry+rowHeight,0xaa141c26); // the one being dragged is left looking emptied
             // later controls win where they overlap, so the row comes first and the cells and buttons on it after
-            var rowControl=new Control(x+9,ry,pw-18,rowHeight,()->action(entry.active()&&!entry.editing()?"saved_selection:release":"saved_selection:view:"+id),HIDDEN_TIP+savedSpan(entry)+" blocks · "+(entry.active()&&!entry.editing()?"Let go":"Show this BuildObject")); controls.add(rowControl);renameAreas.add(new RenameArea(rowControl,id));
+            var rowControl=new Control(x+9,ry,pw-18,rowHeight,()->action(entry.active()&&!entry.editing()?"saved_selection:release":"saved_selection:view:"+id),HIDDEN_TIP+savedSpan(entry)+" blocks · "+(entry.active()&&!entry.editing()?"Let go":"Select this BuildObject")); controls.add(rowControl);renameAreas.add(new RenameArea(rowControl,id));
             if(parents.contains(id)){ // something is under it: an arrow folds it
                 boolean folded=ClientState.savedFolded(id);text(g,folded?"▸":"▾",x+14+indent,ry+6,MUTED);
                 controls.add(new Control(x+11+indent,ry,14,rowHeight,()->ClientState.toggleSavedFolded(id),folded?"Show what is under this BuildObject":"Fold what is under this BuildObject"));
             }
             controls.add(new Control(swatch,ry+2,18,rowHeight-4,()->ColourPickerScreen.open(this,entry.name()+" colour",()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0)),"Change this BuildObject's outline colour"));
             int eye=x+pw-72,pencil=x+pw-50,cross=x+pw-28;boolean hidden=ClientState.savedHidden(id);
-            button(g,eye,ry+2,18,rowHeight-4,"",false,()->ClientState.toggleSavedHidden(id),hidden?"Show this BuildObject in the world":"Hide this BuildObject in the world · It stays, and shows while you look at it or edit it");
+            button(g,eye,ry+2,18,rowHeight-4,"",false,()->ClientState.toggleSavedHidden(id),hidden?"Show this BuildObject's outline in the world · It shows while it is selected, whatever the eye":"Hide this BuildObject's outline in the world · It still shows while it is selected");
             glyph(g,eye,ry+2,18,rowHeight-4,EYE,hidden?0xff56606e:TEXT);
             if(hidden){int ox=eye+(18-9)/2,oy=ry+2+(rowHeight-4-5)/2;for(int k=0;k<9;k++)g.fill(ox+k,oy+4-k/2,ox+k+1,oy+5-k/2,0xffe07070);} // a slash through it
             button(g,pencil,ry+2,18,rowHeight-4,"",entry.editing(),()->action(entry.editing()?"saved_selection:release":"saved_selection:edit:"+id),entry.editing()?"Stop editing: your own selection comes back":"Edit: show this BuildObject in place of your selection, then add to it or take from it with any selection tool. Changes are kept");

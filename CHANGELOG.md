@@ -9,6 +9,7 @@ Changes since 1.5.0-beta.1.
 - The Hierarchy window has a "+" button along the bottom that creates a BuildObject from what is selected, replacing the Save selection button. New ones are named BuildObject, BuildObject (1), BuildObject (2) and so on, and double-clicking a row renames it where it stands (Enter keeps the name, Esc drops it). The colour moved to the right of each row, beside the show, edit and delete buttons.
 - BuildObjects form a hierarchy: drag a row onto the middle of another to put it under that one, to any depth, or onto the top or bottom edge of a row to place it before or after it. The row you carry follows the pointer, a line or frame shows where it will land, and an arrow folds what is under a BuildObject. Looking at a parent shows everything under it; editing one changes only its own blocks; deleting one deletes what is under it, and Ctrl+Z brings the group back. Hovering a row shows no tooltip any more.
 - Saved selections are BuildObjects everywhere: in the window, in messages and in what the AI is told. Two BuildObjects may now share a name; each has a unique GUID, which the AI tools list and accept in place of the name.
+- The outline of a BuildObject only shows in the world while its eye is open or while it is selected, and every new BuildObject starts with its eye closed.
 - Target info moved to the bottom of the left column, under Tool options.
 - The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
 - Your saved window layout is reset once, to the new places.
