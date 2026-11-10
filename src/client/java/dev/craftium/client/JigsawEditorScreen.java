@@ -509,7 +509,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
             g.fill(x + 6, y + 6, x + 6 + PoolThumbnails.WIDTH, y + 6 + PoolThumbnails.HEIGHT, 0xff2a3441);
             var tex = PoolThumbnails.of(str(element, "template", "?"), element.has("thumb") ? element.getAsJsonObject("thumb") : null);
             if (tex != null) g.blit(tex, x + 6, y + 6, 0, 0, PoolThumbnails.WIDTH, PoolThumbnails.HEIGHT, PoolThumbnails.WIDTH, PoolThumbnails.HEIGHT, PoolThumbnails.WIDTH, PoolThumbnails.HEIGHT, 0xffffffff);
-            else g.centeredText(font, element.has("missing") ? "missing" : "no picture", x + 6 + PoolThumbnails.WIDTH / 2, y + 6 + PoolThumbnails.HEIGHT / 2 - 4, element.has("missing") ? ERROR : 0xff7e8fa0);
+            else g.centeredText(font, noPicture(element), x + 6 + PoolThumbnails.WIDTH / 2, y + 6 + PoolThumbnails.HEIGHT / 2 - 4, element.has("missing") ? ERROR : 0xff7e8fa0);
             int tx = x + 6 + PoolThumbnails.WIDTH + 8, w = centreW - (tx - x) - 8;
             int jigsaws = element.has("jigsaws") ? element.getAsJsonArray("jigsaws").size() : 0, issues = issues(element);
             String verdict = issues > 0 ? issues + (issues == 1 ? " problem" : " problems") : jigsaws == 0 ? (element.has("template") ? "no connectors" : "") : jigsaws + (jigsaws == 1 ? " connector, ok" : " connectors, ok");
@@ -521,6 +521,15 @@ final class JigsawEditorScreen extends CraftiumScreen {
             var size = element.has("size") ? element.getAsJsonArray("size") : null;
             if (size != null) g.text(font, size.get(0) + " × " + size.get(1) + " × " + size.get(2) + " blocks", x + 6, y + 6 + PoolThumbnails.HEIGHT + 4, MUTED, false);
         }
+    }
+
+    /** What stands in for the picture of an element that has none, and why: a feature, an empty element and a list have no template of their own. */
+    private static String noPicture(JsonObject element) {
+        if (element.has("missing")) return "missing";
+        String type = str(element, "type", "");
+        if (!element.has("template")) return switch (type) { case "feature" -> "feature, no blocks"; case "empty" -> "empty space"; case "list" -> "a list of pieces"; default -> "no picture"; };
+        if (!element.has("thumb")) return element.has("size") ? "too big to picture" : "no picture yet";
+        return "no picture";
     }
 
     private static int issues(JsonObject element) {

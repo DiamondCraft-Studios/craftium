@@ -38,6 +38,32 @@ final class PoolThumbnails {
         return entry == null ? null : entry.tex();
     }
 
+    /**
+     * The picture of the blocks, at most WIDTH by HEIGHT. The renderer wants a pixel for every block, so a template wider than about 60 blocks cannot be
+     * drawn that small: it is drawn on a larger canvas, up to four times the size, and shrunk to fit.
+     */
+    private static java.awt.image.BufferedImage render(int sx, int sy, int sz, int[] colours) {
+        for (int k = 1; ; k++) {
+            try {
+                var picture = VoxelView.render(sx, sy, sz, colours, VoxelView.Angle.SE, WIDTH * k, HEIGHT * k).image();
+                return k == 1 ? picture : shrink(picture);
+            } catch (IllegalArgumentException tooLarge) {
+                if (k >= 4) throw tooLarge;
+            }
+        }
+    }
+
+    private static java.awt.image.BufferedImage shrink(java.awt.image.BufferedImage picture) {
+        double scale = Math.min((double) WIDTH / picture.getWidth(), (double) HEIGHT / picture.getHeight());
+        int w = Math.max(1, (int) Math.round(picture.getWidth() * scale)), h = Math.max(1, (int) Math.round(picture.getHeight() * scale));
+        var out = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        var g = out.createGraphics();
+        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(picture.getScaledInstance(w, h, java.awt.Image.SCALE_AREA_AVERAGING), 0, 0, null);
+        g.dispose();
+        return out;
+    }
+
     static void releaseAll() {
         for (var entry : CACHE.values()) Minecraft.getInstance().getTextureManager().release(entry.tex().id());
         CACHE.clear();
@@ -58,7 +84,7 @@ final class PoolThumbnails {
             boolean any = false;
             for (int i = 0; i < cells.length; i++) { int slot = cells[i] & 255; if (slot > 0 && slot < palette.length) { colours[i] = palette[slot]; any |= colours[i] != 0; } }
             if (!any) return null;
-            var picture = VoxelView.render(sx, sy, sz, colours, VoxelView.Angle.SE, WIDTH, HEIGHT).image();
+            var picture = render(sx, sy, sz, colours);
             var image = new NativeImage(WIDTH, HEIGHT, false);
             int ox = (WIDTH - picture.getWidth()) / 2, oy = (HEIGHT - picture.getHeight()) / 2;
             for (int y = 0; y < HEIGHT; y++)
