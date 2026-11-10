@@ -78,7 +78,9 @@ public final class Packets {
                                  /** The BuildObject's GUID: null from a server that predates it. */
                                  String guid,
                                  /** The id of the BuildObject this one is under, or 0 at the top level (and from a server that predates hierarchy). The list is in tree order. */
-                                 int parent) {}
+                                 int parent,
+                                 /** The colour everyone sees its outline in (ARGB), or 0 when none was chosen: the client then takes the next one from the wheel. */
+                                 int color) {}
     /** A status that carries only the list of plugin tools, sent when it changes: not a reply to anything, so the client takes the list and nothing else from it. */
     public static Status toolsOnly(List<PluginTool> tools) {
         return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,null,tools,null);
@@ -87,6 +89,11 @@ public final class Packets {
     /** A status that carries only the ghost a plugin's tool is showing: not a reply to anything, so the client takes the ghost and nothing else from it. */
     public static Status pluginOnly(String ghost) {
         return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,ghost,null,null);
+    }
+
+    /** A status that carries only the list of BuildObjects, sent when someone else changed them: not a reply to anything, so the client takes the list and nothing else from it. */
+    public static Status savedOnly(List<SavedSelection> saved) {
+        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,null,null,saved);
     }
 
     /** A status that carries only the other players' AI previews, sent when one of them changes. */

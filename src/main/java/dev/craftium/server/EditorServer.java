@@ -102,6 +102,7 @@ public final class EditorServer {
         for(var entry:SESSIONS.entrySet()){var player=server.getPlayerList().getPlayer(entry.getKey());if(player!=null)restoreMode(player,entry.getValue());}
         if(job!=null){var j=job;rememberInterrupted(j);j.session.busy=false;endJob();}
         for(var session:SESSIONS.values())HistoryStore.save(session);try{HistoryStore.flush();}catch(java.util.concurrent.CompletionException e){ServerPlatform.LOG.error("Could not finish writing editor history during shutdown",e);}
+        BuildObjectStore.shutdown();
     }
     private static void rememberInterrupted(Job j){rememberInterrupted(j.session,j.edit,j.applied,j.backwards,j.history);}
     static void rememberInterrupted(Session session,Session.Edit edit,List<Session.Change> applied,boolean backwards,boolean history){
@@ -184,7 +185,7 @@ public final class EditorServer {
                 s=new Session();SESSIONS.put(player.getUUID(),s);
             }
             s.dimension=player.level().dimension();
-            HistoryStore.attach(player,s);
+            HistoryStore.attach(player,s);BuildObjectStore.attach(player,s); // the BuildObjects of this dimension, shared with everyone there
             if(o.noClip&&!s.noClip&&player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}
             s.reach=o.reach==null?Options.ReachMode.NORMAL:o.reach;s.farReach=Math.clamp(o.farReach,6,64);s.noClip=o.noClip;s.blockStep=o.blockStep;s.options=o;
             s.confirmEdits=o.confirmEdits;
@@ -237,6 +238,7 @@ public final class EditorServer {
             }
             if(r.action().startsWith(SavedSelectionActions.PREFIX)){ // the Selections window (before the plugin actions, as "saved_selection:save" has the shape of one): swaps entries in and out of the live selection, never changes a block
                 if(!Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS))throw new IllegalArgumentException("This client does not know BuildObjects");
+                var needs=SavedSelectionActions.permission(r.action());if(needs!=null)HierarchyPermissions.require(player,needs);
                 var before=SavedSelectionActions.changesHierarchy(r.action())?s.saved.state():null; // what is done in the Hierarchy is in the history, so Undo and Redo reach it
                 String said=SavedSelectionActions.run(s,r.action());
                 if(before!=null){var after=s.saved.state();if(!after.equals(before))s.remember(Session.Edit.selecting(SavedSelectionActions.historyName(r.action()),Session.SelectionChange.hierarchy(before,after)));}
@@ -487,6 +489,7 @@ public final class EditorServer {
                         s.restoreUpdate=dev.craftium.core.Restore.encode(Map.of("corners","none"));
                         selected=new Session.SelectionChange(before,new ArrayList<>(placed),null,null,handlesBefore,Map.of("corners","none"));
                         if(o.pasteAsObject!=null&&!o.pasteAsObject.isBlank()){ // a duplicate or a paste from the Hierarchy: the pasted blocks are also a new BuildObject, in the history with them
+                            HierarchyPermissions.require(player,"create");
                             var hierarchyBefore=s.saved.state();s.saved.createFrom(o.pasteAsObject,placed,o.pasteAsObjectAfter);
                             selected=selected.withHierarchy(hierarchyBefore,s.saved.state());
                         }
@@ -671,6 +674,19 @@ public final class EditorServer {
             var s=SESSIONS.get(player.getUUID());if(s==null||!ServerPlatform.canSend(player))continue;
             var tools=pluginToolsFor(player,s);if(tools==null)continue;
             ServerPlatform.send(player,new Packets.Update(StatusFit.fit(Packets.JSON.toJson(Packets.toolsOnly(tools)),STATUS_LIMIT,"")));
+        }
+    }
+    /** Sends each player the list of BuildObjects when someone else changed it, and lets go of what a player was looking at when somebody deleted it. */
+    static void pushBuildObjects(MinecraftServer server){
+        for(var player:server.getPlayerList().getPlayers()){
+            var s=SESSIONS.get(player.getUUID());
+            if(s==null||!s.savedAttached||!ServerPlatform.canSend(player)||!Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS))continue;
+            if(s.savedSent==s.saved.revision())continue;
+            boolean looking=!s.saved.viewed().isEmpty();
+            s.saved.reconcileView(s.selection);
+            if(looking&&s.saved.viewed().isEmpty()){send(player,s,"A BuildObject you were looking at was deleted by someone else",false);continue;} // the selection changed too, so the whole status goes
+            var list=SavedSelectionActions.forStatus(s,true);if(list==null)continue;
+            ServerPlatform.send(player,new Packets.Update(StatusFit.fit(Packets.JSON.toJson(Packets.savedOnly(list)),STATUS_LIMIT,"")));
         }
     }
     static void refreshShared(MinecraftServer server){
@@ -998,6 +1014,10 @@ public final class EditorServer {
         var from=backwards?s.undo:s.redo;
         if(from.isEmpty()){s.historyRemaining=0;send(player,s,backwards?"Nothing to undo":"Nothing to redo",false);return;}
         var edit=from.peekFirst();
+        if(edit.selection()!=null&&edit.selection().hasHierarchy()&&!s.saved.structureMatches(backwards?edit.selection().hierarchyAfter():edit.selection().hierarchyBefore())){
+            from.removeFirst();s.recalculateBytes();s.historyDirty=true; // someone else has changed the BuildObjects since: putting this back would undo their work too
+            send(player,s,"Someone else changed the BuildObjects since, so that cannot be "+(backwards?"undone":"redone")+" and was dropped",true);return;
+        }
         if(edit.selectionOnly()||edit.hierarchyOnly()){ // a selection or a change to the Hierarchy has no blocks: put it back directly
             from.removeFirst();
             handBack(s,edit.selection(),backwards);
@@ -1013,6 +1033,7 @@ public final class EditorServer {
     }
     public static void tick(MinecraftServer server) {
         refreshPluginTools(server);
+        BuildObjectStore.tick(server);pushBuildObjects(server);
         if(!AI_SESSIONS.isEmpty()&&server.getTickCount()%20==0){expireAi(server);refreshShared(server);} // an owner who changed dimension, or whose build has applied, without doing anything else
         AnimatedRebuild.tick(server);
         if(++historyTicks%100==0)for(var session:SESSIONS.values())HistoryStore.save(session);

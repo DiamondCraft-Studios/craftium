@@ -16,8 +16,9 @@ public final class SavedSelections {
     public static final int MAX=64;
     /** A BuildObject: it keeps its id, its GUID and its name when the others come and go. Names may repeat; the GUID never does, and is what tells two of the same name apart. */
     public static final class Entry {
-        private final int id;private final String guid=java.util.UUID.randomUUID().toString();private String name;private List<Point> points;private int version;private Entry parent;
-        Entry(int id,String name,Collection<Point> points){this.id=id;this.name=name;this.points=List.copyOf(points);}
+        private final int id;private final String guid;private String name;private List<Point> points;private int version;private Entry parent;private int color;
+        Entry(int id,String name,Collection<Point> points){this(id,java.util.UUID.randomUUID().toString(),name,points);}
+        Entry(int id,String guid,String name,Collection<Point> points){this.id=id;this.guid=guid;this.name=name;this.points=List.copyOf(points);}
         public int id(){return id;}
         /** The unique, lasting identity of this BuildObject, for anything that has to name one exactly (the AI, a saved world). */
         public String guid(){return guid;}
@@ -25,21 +26,60 @@ public final class SavedSelections {
         /** The id of the BuildObject this one is under, or 0 when it is at the top. */
         public int parentId(){return parent==null?0:parent.id;}
         public Entry parent(){return parent;}
+        /** The outline colour everyone sees it in (ARGB), or 0 when none was chosen and each client takes the next one from the wheel. */
+        public int color(){return color;}
         /** The blocks it holds itself; see {@link SavedSelections#effective} for those with everything under it. */
         public List<Point> points(){return points;}
         public int size(){return points.size();}
         /** Goes up whenever the blocks change, so what was sent of them can be told from what is there now. */
         public int version(){return version;}
     }
-    private final List<Entry> entries=new ArrayList<>();
-    private int nextId=1;
+    /**
+     * The BuildObjects of a world's dimension, which everyone who builds there shares: the list in tree order, the next id, and two counters.
+     * {@code revision} goes up for anything, a change of what someone is looking at too, so each player's client is sent what is new;
+     * {@code mutations} only for a change to the BuildObjects themselves, so they are written to disk only when they changed.
+     */
+    public static final class Tree {
+        private final List<Entry> entries=new ArrayList<>();private int nextId=1;private long revision,mutations;
+        public Tree(){}
+        public long mutations(){return mutations;}
+        public int nextId(){return nextId;}
+        /** Everything to write to disk, in tree order. */
+        public List<Saved> saved(){var out=new ArrayList<Saved>();for(var e:entries)out.add(new Saved(e.id,e.guid,e.name,e.parentId(),e.color,e.points));return out;}
+        /**
+         * A tree as it was saved. A BuildObject whose parent is not before it in the list (a file that was edited by hand, or damaged) goes to the top level, so the list is
+         * always a tree and in tree order; ids and GUIDs that repeat are dropped.
+         */
+        public static Tree load(int nextId,List<Saved> rows){
+            var tree=new Tree();var byId=new HashMap<Integer,Entry>();var guids=new HashSet<String>();
+            for(var r:rows){
+                if(tree.entries.size()>=MAX||r.id()<=0||byId.containsKey(r.id())||!guids.add(r.guid()))continue;
+                var e=new Entry(r.id(),r.guid(),r.name().isBlank()?"BuildObject":r.name(),r.points());e.color=r.color();
+                e.parent=byId.get(r.parentId());byId.put(e.id,e);tree.entries.add(e);
+            }
+            tree.nextId=Math.max(nextId,tree.entries.stream().mapToInt(e->e.id).max().orElse(0)+1);
+            return tree;
+        }
+    }
+    /** One BuildObject as it is saved. */
+    public record Saved(int id,String guid,String name,int parentId,int color,List<Point> points){}
+    private final Tree tree;
+    private final List<Entry> entries;
+    /** A player's own set of BuildObjects, not shared with anyone (what tests and anything without a world use). */
+    public SavedSelections(){this(new Tree());}
+    /** One player's view of the BuildObjects in {@code tree}: the tree is shared, what is being looked at is this player's own. */
+    public SavedSelections(Tree tree){this.tree=tree;this.entries=tree.entries;}
+    public Tree tree(){return tree;}
+    /** Something about the BuildObjects themselves changed: every client is sent the list, and the tree is written to disk. */
+    private void changed(){tree.revision++;tree.mutations++;}
+    /** Only what is being looked at changed. */
+    private void lookChanged(){tree.revision++;}
     private static final java.util.regex.Pattern NUMBERED=java.util.regex.Pattern.compile("BuildObject(?: \\((\\d{1,9})\\))?");
     /** The BuildObject being looked at or edited, or null. */
     /** The BuildObjects being looked at (several when selected together), and {@code active}, the last of them: the one editing is about. */
     private Entry active;private final List<Entry> viewed=new ArrayList<>();private boolean editing;
     /** The live selection as it was before looking began; null when not looking. */
     private List<Point> stash;
-    private long revision;
 
     /** Every BuildObject, in tree order. */
     public List<Entry> entries(){return Collections.unmodifiableList(entries);}
@@ -65,7 +105,7 @@ public final class SavedSelections {
             if(next==null||e.points.equals(next))continue;
             e.points=List.copyOf(next);e.version++;changed=true;
         }
-        if(changed)revision++;
+        if(changed)changed();
         return changed;
     }
     /** The blocks of the BuildObject and of everything under it: what looking at it shows. */
@@ -76,7 +116,7 @@ public final class SavedSelections {
     public List<Entry> viewed(){return Collections.unmodifiableList(viewed);}
     public boolean isViewed(Entry entry){return viewed.contains(entry);}
     /** Changes whenever the list, the names or the looking changes, so the client is only sent what is new. */
-    public long revision(){return revision;}
+    public long revision(){return tree.revision;}
     public Entry byId(int id){for(var e:entries)if(e.id==id)return e;return null;}
     /**
      * The BuildObject a reference means: its GUID, or its name ignoring case ("buildobject (1)" finds "BuildObject (1)"). Null when there is none. Names may repeat, so
@@ -106,7 +146,7 @@ public final class SavedSelections {
         if(live.size()==0)throw new IllegalArgumentException("Nothing is selected to make a BuildObject from");
         if(entries.size()>=MAX)throw new IllegalArgumentException("BuildObject limit: "+MAX);
         // while looking at one, the live selection is the saved one, so what a player means by saving is what they see: the tweaked copy
-        var entry=new Entry(nextId++,freeName(),live.points());entries.add(entry);revision++;return entry;
+        var entry=new Entry(tree.nextId++,freeName(),live.points());entries.add(entry);changed();return entry;
     }
     /**
      * Makes a BuildObject from the live selection, as the + button does. It works like selecting several BuildObjects at once and putting them in one: any
@@ -124,9 +164,9 @@ public final class SavedSelections {
         var taken=touched.stream().filter(e->touched.stream().noneMatch(o->o!=e&&isUnder(e,o))).toList(); // tree order, the outermost only
         var held=new HashSet<Point>();for(var t:taken)held.addAll(effective(t));
         var own=new ArrayList<Point>();for(var p:cells)if(!held.contains(p))own.add(p);
-        var entry=new Entry(nextId++,freeName(),own);entries.add(entry);
+        var entry=new Entry(tree.nextId++,freeName(),own);entries.add(entry);
         adopt(entry,taken);
-        revision++;return entry;
+        changed();return entry;
     }
     /** Puts {@code taken} (in tree order, none under another) inside the new top-level {@code entry}, which takes the place of the first of them. */
     private void adopt(Entry entry,List<Entry> taken){
@@ -140,10 +180,10 @@ public final class SavedSelections {
         if(cells.isEmpty())throw new IllegalArgumentException("Nothing was pasted to make a BuildObject from");
         if(entries.size()>=MAX)throw new IllegalArgumentException("BuildObject limit: "+MAX);
         var clean=name==null?"":name.strip();if(clean.length()>40)clean=clean.substring(0,40);
-        var entry=new Entry(nextId++,clean.isEmpty()?freeName():clean,cells);entries.add(entry);
+        var entry=new Entry(tree.nextId++,clean.isEmpty()?freeName():clean,cells);entries.add(entry);
         var after=afterId==0?null:byId(afterId);
         if(after!=null)place(entry.id,after.parentId(),children(after.parent).indexOf(after)+1);
-        revision++;return entry;
+        changed();return entry;
     }
     /** Makes an empty BuildObject around these ones (each with everything under it), in the place of the first of them: grouping them. One that is under another listed one stays under it. */
     public Entry group(List<Integer> ids){
@@ -151,16 +191,16 @@ public final class SavedSelections {
         if(picked.isEmpty())throw new IllegalArgumentException("Pick the BuildObjects to group");
         if(entries.size()>=MAX)throw new IllegalArgumentException("BuildObject limit: "+MAX);
         var taken=entries.stream().filter(e->picked.contains(e)&&picked.stream().noneMatch(o->o!=e&&isUnder(e,o))).toList(); // tree order, the outermost only
-        var entry=new Entry(nextId++,freeName(),List.of());entries.add(entry);
-        adopt(entry,taken);revision++;return entry;
+        var entry=new Entry(tree.nextId++,freeName(),List.of());entries.add(entry);
+        adopt(entry,taken);changed();return entry;
     }
     /** Makes a BuildObject from the live selection as the last child of {@code parentId}. Unlike {@link #create}, it takes nothing in. */
     public Entry createChild(int parentId,Selection live){
         var parent=need(parentId);
         if(live.size()==0)throw new IllegalArgumentException("Nothing is selected to make a BuildObject from");
         if(entries.size()>=MAX)throw new IllegalArgumentException("BuildObject limit: "+MAX);
-        var entry=new Entry(nextId++,freeName(),live.points());entries.add(entry);
-        place(entry.id,parent.id,children(parent).size());revision++;return entry;
+        var entry=new Entry(tree.nextId++,freeName(),live.points());entries.add(entry);
+        place(entry.id,parent.id,children(parent).size());changed();return entry;
     }
     /** Deletes these BuildObjects, each with everything under it (one already gone with another is skipped). */
     public void deleteMany(List<Integer> ids,Selection live){
@@ -169,7 +209,7 @@ public final class SavedSelections {
     public void rename(int id,String name){
         var entry=need(id);var clean=name==null?"":name.strip();
         if(clean.isEmpty()||clean.length()>40)throw new IllegalArgumentException("A name is 1 to 40 characters");
-        entry.name=clean;revision++; // names may repeat: the GUID tells them apart
+        entry.name=clean;changed(); // names may repeat: the GUID tells them apart
     }
     /**
      * Puts the entry, with everything under it, under the BuildObject {@code parentId} (0 for the top level) as its child number {@code index}, counted
@@ -185,7 +225,7 @@ public final class SavedSelections {
         if(k<siblings.size())at=entries.indexOf(siblings.get(k));
         else if(parent==null)at=entries.size();
         else{at=entries.indexOf(parent)+1;while(at<entries.size()&&isUnder(entries.get(at),parent))at++;}
-        entry.parent=parent;entries.addAll(at,moving);revision++;
+        entry.parent=parent;entries.addAll(at,moving);changed();
     }
     /** Swaps the entry in for the live selection. Looking at another while looking keeps the first live selection aside, not the one just seen. */
     public void view(int id,Selection live){look(id,live,false);}
@@ -195,7 +235,7 @@ public final class SavedSelections {
         var entry=need(id);
         if(active!=null&&editing)sync(live); // leaving an edit for another entry keeps what was done
         if(stash==null)stash=List.copyOf(live.points());
-        live.restore(edit?entry.points:effective(entry));active=entry;viewed.clear();viewed.add(entry);editing=edit;revision++;
+        live.restore(edit?entry.points:effective(entry));active=entry;viewed.clear();viewed.add(entry);editing=edit;lookChanged();
     }
     /**
      * Swaps several BuildObjects in for the live selection at once, as selecting them together: the selection is all of their blocks, each with everything under it.
@@ -207,32 +247,43 @@ public final class SavedSelections {
         if(active!=null&&editing)sync(live);
         if(stash==null)stash=List.copyOf(live.points());
         var union=new LinkedHashSet<Point>();for(var e:picked)union.addAll(effective(e));
-        live.restore(union);viewed.clear();viewed.addAll(picked);active=viewed.getLast();editing=false;revision++;
+        live.restore(union);viewed.clear();viewed.addAll(picked);active=viewed.getLast();editing=false;lookChanged();
     }
     /** Gives back the live selection from before looking. Whatever was done to the live selection while only viewing is dropped. Does nothing when not looking. */
     public void release(Selection live){
         if(active==null)return;
         if(editing)sync(live);
-        live.restore(stash);stash=null;active=null;viewed.clear();editing=false;revision++;
+        live.restore(stash);stash=null;active=null;viewed.clear();editing=false;lookChanged();
     }
     /** While editing, writes the live selection to the entry being edited. Call it after anything changed the live selection. */
     public boolean sync(Selection live){
         if(!editing()||live.size()==0)return false; // an emptied selection (Clear, Delete) never empties the saved one; delete it from the window instead
         if(active.points.size()==live.size()&&new HashSet<>(active.points).equals(live.points()))return false;
-        active.points=List.copyOf(live.points());active.version++;revision++;return true;
+        active.points=List.copyOf(live.points());active.version++;changed();return true;
     }
     /** Removes the entry and everything under it; if one of them was being looked at, the live selection comes back first. Returns the removed entry so a delete can be undone. */
     public Entry delete(int id,Selection live){
         var entry=need(id);if(viewed.stream().anyMatch(v->v==entry||isUnder(v,entry)))release(live);
         var group=subtree(entry);
-        entries.removeAll(group);revision++;
+        entries.removeAll(group);changed();
         return entry;
     }
     /** Everything about the BuildObjects that history has to give back: which there are, in what order, under what, called what, holding which blocks. */
     public record State(List<Row> rows){}
     /** One BuildObject as it was: the entry itself (it keeps its id and GUID) with the parts of it that change. */
-    public record Row(Entry entry,String name,int parentId,List<Point> points){}
-    public State state(){var rows=new ArrayList<Row>();for(var e:entries)rows.add(new Row(e,e.name,e.parentId(),e.points));return new State(List.copyOf(rows));}
+    public record Row(Entry entry,String name,int parentId,List<Point> points,int color){}
+    public State state(){var rows=new ArrayList<Row>();for(var e:entries)rows.add(new Row(e,e.name,e.parentId(),e.points,e.color));return new State(List.copyOf(rows));}
+    /** Whether the BuildObjects are, apart from the blocks they hold, as they were in {@code state}: the same ones in the same order, under the same parents, named and coloured the same. */
+    public boolean structureMatches(State state){
+        var now=state().rows();var then=state.rows();
+        if(now.size()!=then.size())return false;
+        for(int i=0;i<now.size();i++){var a=now.get(i);var b=then.get(i);if(a.entry()!=b.entry()||!a.name().equals(b.name())||a.parentId()!=b.parentId()||a.color()!=b.color())return false;}
+        return true;
+    }
+    /** Sets the colour of a BuildObject (ARGB; 0 puts it back to the next one from the wheel). */
+    public void setColor(int id,int color){need(id).color=color;changed();}
+    /** Lets go of what is being looked at when one of it is gone, deleted by someone else. */
+    public void reconcileView(Selection live){if(viewed.stream().anyMatch(v->!entries.contains(v)))release(live);}
     /**
      * Puts the BuildObjects back as they were in {@code state}: used by Undo and Redo of anything done in the Hierarchy. A BuildObject that is gone in it is
      * let go of first if it was being looked at. The entries are the same objects, so ids and GUIDs come back as they were.
@@ -242,14 +293,14 @@ public final class SavedSelections {
         if(viewed.stream().anyMatch(v->!present.contains(v)))release(live);
         entries.clear();var byId=new HashMap<Integer,Entry>();
         for(var r:state.rows()){
-            var e=r.entry();e.name=r.name();
+            var e=r.entry();e.name=r.name();e.color=r.color();
             if(!e.points.equals(r.points())){e.points=r.points();e.version++;}
             entries.add(e);byId.put(e.id,e);
         }
         for(var r:state.rows())r.entry().parent=r.parentId()==0?null:byId.get(r.parentId());
-        revision++;
+        changed();
     }
     public int indexOf(Entry entry){return entries.indexOf(entry);}
-    public void clear(Selection live){release(live);entries.clear();revision++;}
+    public void clear(Selection live){release(live);entries.clear();changed();}
     private Entry need(int id){var e=byId(id);if(e==null)throw new IllegalArgumentException("No BuildObject with that id");return e;}
 }

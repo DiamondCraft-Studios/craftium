@@ -55,6 +55,7 @@ public final class ClientState {
         var present=new HashSet<Integer>();
         for(var saved:savedSelections){
             present.add(saved.id());
+            if(saved.color()!=0&&!savedColorPending.containsKey(saved.id()))savedColors.put(saved.id(),saved.color()); // the colour everyone sees it in, unless this player is in the middle of changing it
             if(saved.data()==null)continue; // unchanged: the outline already made for it is still right
             if(saved.data().isEmpty())savedShapes.remove(saved.id()); // left out because the status was too big: nothing is drawn for it
             else savedShapes.put(saved.id(),OutlineShape.ofLater(SelectionCodec.decode(saved.data())));
@@ -93,9 +94,20 @@ public final class ClientState {
     private static final Set<Integer> savedFolded=new HashSet<>();
     public static boolean savedFolded(int id){return savedFolded.contains(id);}
     public static void toggleSavedFolded(int id){if(!savedFolded.remove(id))savedFolded.add(id);}
-    static void clearSavedSelections(){savedSelections=List.of();savedColors.clear();savedHidden.clear();savedFolded.clear();savedShapes.clear();savedIndex.clear();}
+    static void clearSavedSelections(){savedSelections=List.of();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedIndex.clear();}
     public static int savedColor(int id){return savedColors.getOrDefault(id,options.selectionColor);}
-    public static void setSavedColor(int id,int color){savedColors.put(id,color);}
+    public static void setSavedColor(int id,int color){savedColors.put(id,color);savedColorPending.put(id,color);savedColorChanged=System.currentTimeMillis();}
+    /** Colours this player changed that the server has not been told: sent once the picker has been still for a moment, a request at a time (the server drops those that come too close together). */
+    private static final Map<Integer,Integer> savedColorPending=new LinkedHashMap<>();private static long savedColorChanged,savedColorSent;
+    static void flushSavedColours(){
+        if(savedColorPending.isEmpty()||!ClientHandshake.serverHas(dev.craftium.core.Handshake.SAVED_SELECTIONS))return;
+        long now=System.currentTimeMillis();if(now-savedColorChanged<350||now-savedColorSent<150)return;
+        var present=new HashSet<Integer>();for(var e:savedSelections)present.add(e.id());
+        savedColorPending.keySet().retainAll(present); // one deleted since is nothing to tell the server
+        if(savedColorPending.isEmpty())return;
+        var first=savedColorPending.entrySet().iterator().next();savedColorPending.remove(first.getKey());savedColorSent=now;
+        CraftiumClient.send("saved_selection:colour:"+first.getKey()+":"+first.getValue(),null,null);
+    }
     /** The saved selection being looked at or edited, or null. */
     public static Packets.SavedSelection activeSaved(){for(var saved:savedSelections)if(saved.active())return saved;return null;}
     /** How many blocks the ghost of the plugin tool in use has; 0 when there is none. */

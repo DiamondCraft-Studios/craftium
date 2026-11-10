@@ -54,7 +54,8 @@ final class Session {
     /** The {@link PluginTools#version} of the list of plugin tools this player was last sent, or -1 when they have not been sent one. */
     int pluginToolsSent=-1;
     /** The selections this player saved, and the {@link dev.craftium.core.SavedSelections#revision} of them that was last sent, or -1 when none has been. */
-    final dev.craftium.core.SavedSelections saved=new dev.craftium.core.SavedSelections();long savedSent=-1;
+    /** This player's view of the BuildObjects of the dimension they are in (see {@link BuildObjectStore}): the tree is shared, what is looked at is theirs. Until the session is attached to a world it is a private one. */
+    dev.craftium.core.SavedSelections saved=new dev.craftium.core.SavedSelections();boolean savedAttached;long savedSent=-1;
     /** The {@link dev.craftium.core.SavedSelections.Entry#version} of each saved selection's blocks that this player was last sent, by id. */
     final Map<Integer,Integer> savedDataSent=new HashMap<>();
     /** What the last AI spec planned looked wrong in (see BuildSpec.Result#warnings), for the reply that describes its preview. */

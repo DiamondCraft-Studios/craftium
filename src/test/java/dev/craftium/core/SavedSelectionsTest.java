@@ -294,6 +294,63 @@ class SavedSelectionsTest {
         assertEquals(40,saved.createFrom("x".repeat(60),List.of(A),0).name().length());
         assertThrows(IllegalArgumentException.class,()->saved.createFrom("x",List.of(),0));
     }
+    @Test void twoPlayersShareOneTreeAndEachLooksAtTheirOwn(){
+        var tree=new SavedSelections.Tree();var alex=new SavedSelections(tree);var sam=new SavedSelections(tree);
+        var a=alex.save(live(A));var b=alex.save(live(B));
+        assertEquals(List.of(a,b),sam.entries(),"what one makes the other sees");assertSame(a,sam.byId(a.id()));
+        var samLive=live(C);sam.view(a.id(),samLive);
+        assertTrue(sam.isViewed(a));assertFalse(alex.isViewed(a),"what is looked at is each player's own");assertEquals(Set.of(A),set(samLive));
+        sam.rename(b.id(),"Roof");assertEquals("Roof",b.name());
+        assertEquals(3,new SavedSelections(tree).create(live(D)).id(),"ids go on from one counter");
+    }
+    @Test void aChangeToTheTreeBumpsTheRevisionOfEveryViewAndOnlyThatCountsAsSomethingToWrite(){
+        var tree=new SavedSelections.Tree();var alex=new SavedSelections(tree);var sam=new SavedSelections(tree);
+        var a=alex.save(live(A));long revision=sam.revision(),written=tree.mutations();
+        var l=live(C);sam.view(a.id(),l);
+        assertTrue(sam.revision()>revision,"looking changes what is sent");assertEquals(written,tree.mutations(),"but it is nothing to write to disk");
+        alex.rename(a.id(),"Roof");assertTrue(tree.mutations()>written);
+    }
+    @Test void whenSomeoneDeletesWhatYouLookAtYouLetGoOfIt(){
+        var tree=new SavedSelections.Tree();var alex=new SavedSelections(tree);var sam=new SavedSelections(tree);
+        var a=alex.save(live(A));var samLive=live(C);sam.view(a.id(),samLive);
+        alex.delete(a.id(),live(D));
+        sam.reconcileView(samLive);
+        assertTrue(sam.viewed().isEmpty());assertEquals(Set.of(C),set(samLive),"their own selection is back");
+    }
+    @Test void aTreeComesBackFromWhatWasSavedWithIdsGuidsParentsColoursAndBlocks(){
+        var saved=new SavedSelections();var a=saved.save(live(A,B));var b=saved.save(live(C));saved.place(b.id(),a.id(),0);saved.setColor(b.id(),0xff112233);saved.rename(a.id(),"Roof");
+        var back=new SavedSelections(SavedSelections.Tree.load(saved.tree().nextId(),saved.tree().saved()));
+        assertEquals(2,back.entries().size());
+        var a2=back.byId(a.id());var b2=back.byId(b.id());
+        assertEquals(a.guid(),a2.guid());assertEquals("Roof",a2.name());assertEquals(List.of(A,B),a2.points());
+        assertSame(a2,b2.parent());assertEquals(0xff112233,b2.color());
+        assertEquals(saved.tree().nextId(),back.tree().nextId(),"new ids do not reuse old ones");
+    }
+    @Test void aDamagedTreeStillLoadsAsATreeInOrder(){
+        var rows=List.of(
+            new SavedSelections.Saved(1,"g1","A",9,0,List.of(A)),         // a parent that is not there: the top level
+            new SavedSelections.Saved(2,"g2","B",1,0,List.of(B)),
+            new SavedSelections.Saved(2,"g3","dup id",0,0,List.of(C)),    // an id that repeats
+            new SavedSelections.Saved(3,"g1","dup guid",0,0,List.of(C)),  // a GUID that repeats
+            new SavedSelections.Saved(4,"g4","",3,0,List.of(D)));        // a parent that comes later or is gone, and no name
+        var tree=SavedSelections.Tree.load(1,rows);var saved=new SavedSelections(tree);
+        assertEquals(List.of(1,2,4),saved.entries().stream().map(SavedSelections.Entry::id).toList());
+        assertEquals(0,saved.byId(1).parentId());assertEquals(1,saved.byId(2).parentId());assertEquals(0,saved.byId(4).parentId());assertEquals("BuildObject",saved.byId(4).name());
+        assertTrue(tree.nextId()>4);
+    }
+    @Test void structureIgnoresBlocksButNotNamesParentsOrColours(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var state=saved.state();
+        saved.setPoints(Map.of(a.id(),List.of(C)));assertTrue(saved.structureMatches(state),"the blocks a BuildObject holds are not its structure");
+        saved.rename(a.id(),"Roof");assertFalse(saved.structureMatches(state));
+        saved.restore(state,s);assertTrue(saved.structureMatches(state));
+        saved.setColor(b.id(),0xff000001);assertFalse(saved.structureMatches(state));
+        saved.restore(state,s);saved.place(b.id(),a.id(),0);assertFalse(saved.structureMatches(state));
+    }
+    @Test void aColourIsPartOfWhatHistoryGivesBack(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var before=saved.state();
+        saved.setColor(a.id(),0xff123456);assertEquals(0xff123456,a.color());
+        saved.restore(before,s);assertEquals(0,a.color());
+    }
     @Test void theLimitIsEnforced(){
         var saved=new SavedSelections();var s=live(A);for(int i=0;i<SavedSelections.MAX;i++)saved.save(s);
         assertThrows(IllegalArgumentException.class,()->saved.save(s));
