@@ -163,7 +163,7 @@ public final class BlueprintFiles {
 
     private static void moveEntry(Path from, Path to) throws IOException {
         Files.move(from, to);
-        if (!Files.isDirectory(to)) { Path side = sidecar(from); if (Files.exists(side)) Files.move(side, sidecar(to)); retitle(to, from); }
+        if (!Files.isDirectory(to)) { Path side = sidecar(from); if (Files.exists(side)) Files.move(side, sidecar(to), StandardCopyOption.REPLACE_EXISTING); else Files.deleteIfExists(sidecar(to)); retitle(to, from); } // an orphan sidecar already at the target does not describe this file
     }
 
     private static void copyEntry(Path from, Path to) throws IOException {
@@ -173,7 +173,7 @@ public final class BlueprintFiles {
         }
         Files.copy(from, to);
         Path side = sidecar(from);
-        if (Files.exists(side)) Files.copy(side, sidecar(to));
+        if (Files.exists(side)) Files.copy(side, sidecar(to), StandardCopyOption.REPLACE_EXISTING); else Files.deleteIfExists(sidecar(to)); // an orphan sidecar already at the target does not describe this file
         retitle(to, from);
     }
 

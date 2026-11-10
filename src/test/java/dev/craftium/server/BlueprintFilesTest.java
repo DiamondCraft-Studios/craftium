@@ -89,6 +89,18 @@ class BlueprintFilesTest {
         assertTrue(Files.exists(root.resolve("a.nbt")));
     }
 
+    @Test void anOrphanSidecarAtTheTargetDoesNotStopAPasteOrDescribeTheFile() throws IOException {
+        blueprint("a.nbt", "a"); Files.createDirectories(root.resolve("dest"));
+        Files.writeString(root.resolve("dest/a.nbt.json"), "{\"name\":\"stale\"}"); // left behind by a delete outside the game
+        run("copy", "dest", List.of("a.nbt"), null);
+        assertEquals("a", Packets.JSON.fromJson(Files.readString(root.resolve("dest/a.nbt.json")), BlueprintInfo.class).name());
+        Files.writeString(root.resolve("dest/b.nbt"), "x"); Files.writeString(root.resolve("b.nbt"), "no sidecar");
+        Files.writeString(root.resolve("dest2.json"), "{}"); Files.createDirectories(root.resolve("dest2"));
+        Files.writeString(root.resolve("dest2/b.nbt.json"), "{\"name\":\"stale\"}");
+        run("cut", "dest2", List.of("b.nbt"), null); // a file with no sidecar of its own leaves none at the target either
+        assertTrue(Files.exists(root.resolve("dest2/b.nbt"))); assertFalse(Files.exists(root.resolve("dest2/b.nbt.json")));
+    }
+
     @Test void aFolderCannotGoIntoItselfAndACopyBringsItsContents() throws IOException {
         blueprint("dir/a.nbt", "a"); Files.createDirectories(root.resolve("dir/sub")); Files.createDirectories(root.resolve("other"));
         assertThrows(IllegalArgumentException.class, () -> run("cut", "dir/sub", List.of("dir/"), null));
