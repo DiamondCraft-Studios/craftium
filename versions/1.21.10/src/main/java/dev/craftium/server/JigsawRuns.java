@@ -176,7 +176,7 @@ final class JigsawRuns {
     /** A number that changes when a file the planner reads is added, removed or saved: the craftium datapack and the structures the game saved. */
     static long fingerprint(MinecraftServer server) {
         long sum = 0;
-        for (var root : new Path[]{server.getWorldPath(LevelResource.DATAPACK_DIR).resolve(JigsawPlanner.PACK), server.getWorldPath(LevelResource.GENERATED_DIR)}) {
+        for (var root : new Path[]{server.getWorldPath(LevelResource.DATAPACK_DIR).resolve(JigsawPlanner.PACK), server.getWorldPath(LevelResource.GENERATED_DIR), JigsawPlanner.draftFolder(server)}) {
             if (!Files.isDirectory(root)) continue;
             try (var files = Files.walk(root, 12)) {
                 for (var file : (Iterable<Path>) files.filter(Files::isRegularFile)::iterator) {

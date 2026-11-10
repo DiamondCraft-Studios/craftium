@@ -71,6 +71,12 @@ final class JigsawPlanner {
         return folder;
     }
 
+    /**
+     * Where the pool editor keeps changes that have not been applied: a pack folder of its own, layered over the craftium pack, so the editor and the
+     * preview see them while the datapack itself stays as it was until the player applies them. It is not under datapacks, so the game never loads it.
+     */
+    static Path draftFolder(MinecraftServer server) { return server.getWorldPath(LevelResource.ROOT).resolve("craftium-draft"); }
+
     /** Every pool the planner can start from, read fresh, for the command's suggestions. */
     static List<String> poolNames(MinecraftServer server) {
         try (var packs = open(server)) {
@@ -119,7 +125,7 @@ final class JigsawPlanner {
     }
 
     /** What a piece of work on the pools and templates is given: this run's packs, the folder of the craftium pack, and the server's template manager pointed at them. */
-    record Env(MinecraftServer server, MultiPackResourceManager manager, Path folder, StructureTemplateManager templates) {}
+    record Env(MinecraftServer server, MultiPackResourceManager manager, Path folder, Path draft, StructureTemplateManager templates) {}
     @FunctionalInterface interface Work<T> { T run(Env env) throws IOException; }
 
     /** Does the work with the template manager pointed at this run's packs (so edited templates are read again), and points it back afterwards. */
@@ -127,7 +133,7 @@ final class JigsawPlanner {
         try (var packs = open(server)) {
             var templates = server.getStructureManager();
             templates.onResourceManagerReload(packs.manager());
-            try { return work.run(new Env(server, packs.manager(), packs.folder(), templates)); }
+            try { return work.run(new Env(server, packs.manager(), packs.folder(), draftFolder(server), templates)); }
             finally { templates.onResourceManagerReload(server.getResourceManager()); }
         }
     }
@@ -175,6 +181,8 @@ final class JigsawPlanner {
         var packs = new ArrayList<PackResources>(server.getResourceManager().listPacks().toList());
         if (packs.stream().noneMatch(p -> p.packId().equals("file/" + PACK)))
             packs.add(new PathPackResources(new PackLocationInfo("file/" + PACK, Component.literal(PACK), PackSource.WORLD, Optional.empty()), folder));
+        var draft = draftFolder(server);
+        if (Files.isDirectory(draft)) packs.add(new PathPackResources(new PackLocationInfo("file/craftium-draft", Component.literal("craftium draft"), PackSource.WORLD, Optional.empty()), draft));
         return new Packs(new MultiPackResourceManager(PackType.SERVER_DATA, packs), folder);
     }
 

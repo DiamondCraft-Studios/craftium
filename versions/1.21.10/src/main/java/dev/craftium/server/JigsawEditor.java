@@ -48,6 +48,8 @@ final class JigsawEditor {
 
     static final class Memory {
         String pool = "", query = "", message = "";
+        /** Set by the names command: the next model carries only the list of pools, which is all an autocomplete wants. */
+        boolean names;
         final Deque<List<Snap>> undo = new ArrayDeque<>(), redo = new ArrayDeque<>();
     }
     private static final Map<UUID, Memory> MEMORY = new ConcurrentHashMap<>();
@@ -77,13 +79,16 @@ final class JigsawEditor {
         try { command = JsonParser.parseString(json.isBlank() ? "{\"op\":\"open\"}" : json).getAsJsonObject(); }
         catch (RuntimeException e) { throw new IllegalArgumentException("The pool editor could not read that command"); }
         try {
-            return JigsawPlanner.withPacks(player.level().getServer(), env -> {
+            var server = player.level().getServer();
+            JigsawPlanner.withPacks(server, env -> {
                 var edit = new Edit();
                 memory.message = run(player, env, memory, edit, command);
                 if (!edit.snaps.isEmpty()) { memory.undo.push(edit.snaps); memory.redo.clear(); }
-                EditorServer.session(player).jigsawModel(model(player, env, memory));
-                return memory.message;
+                return null;
             });
+            // The answer is worked out with the packs opened again, so a draft this command has just made is part of what the player is shown.
+            JigsawPlanner.withPacks(server, env -> { EditorServer.session(player).jigsawModel(model(player, env, memory)); return null; });
+            return memory.message;
         } catch (IOException e) {
             throw new IllegalArgumentException("The pool editor could not read or write its files: " + e.getMessage());
         } catch (JsonParseException | IllegalStateException | ClassCastException e) {
@@ -99,7 +104,7 @@ final class JigsawEditor {
             case "redo" -> { return restore(memory.redo, memory.undo, "Redid the change"); }
             case "pool_new" -> {
                 var id = poolId(text(c, "id"));
-                if (Files.exists(poolFile(env, id)) || env.manager().getResource(resource(id)).isPresent()) throw new IllegalArgumentException("A pool called " + id + " already exists");
+                if (exists(env, id)) throw new IllegalArgumentException("A pool called " + id + " already exists");
                 var pool = new JsonObject();
                 pool.addProperty("fallback", "minecraft:empty");
                 pool.add("elements", new JsonArray());
@@ -109,26 +114,26 @@ final class JigsawEditor {
             }
             case "pool_copy" -> {
                 var from = poolId(text(c, "from")); var to = poolId(text(c, "to"));
-                if (Files.exists(poolFile(env, to)) || env.manager().getResource(resource(to)).isPresent()) throw new IllegalArgumentException("A pool called " + to + " already exists");
+                if (exists(env, to)) throw new IllegalArgumentException("A pool called " + to + " already exists");
                 writePool(env, edit, to, readPool(env, from));
                 memory.pool = to.toString();
                 return "Copied " + from + " to " + to;
             }
             case "pool_rename" -> {
                 var from = poolId(text(c, "from")); var to = poolId(text(c, "to"));
-                if (!Files.exists(poolFile(env, from))) throw new IllegalArgumentException("Only a pool in the craftium pack can be renamed; copy it first");
-                if (Files.exists(poolFile(env, to)) || env.manager().getResource(resource(to)).isPresent()) throw new IllegalArgumentException("A pool called " + to + " already exists");
+                if (!ours(env, from)) throw new IllegalArgumentException("Only a pool in the craftium pack can be renamed; copy it first");
+                if (exists(env, to)) throw new IllegalArgumentException("A pool called " + to + " already exists");
                 writePool(env, edit, to, readPool(env, from));
-                edit.delete(poolFile(env, from));
+                removePool(env, edit, from);
                 memory.pool = to.toString();
                 return "Renamed " + from + " to " + to + ". Connectors that point at the old name are not changed";
             }
             case "pool_delete" -> {
                 var id = poolId(text(c, "id"));
-                if (!Files.exists(poolFile(env, id))) throw new IllegalArgumentException("Only a pool in the craftium pack can be deleted");
-                edit.delete(poolFile(env, id));
+                if (!ours(env, id)) throw new IllegalArgumentException("Only a pool in the craftium pack can be deleted");
+                removePool(env, edit, id);
                 if (memory.pool.equals(id.toString())) memory.pool = "";
-                return "Deleted " + id + " from the craftium pack";
+                return "Deleted " + id + " (final when you apply)";
             }
             case "fallback_set" -> {
                 var id = poolId(text(c, "pool"));
@@ -196,6 +201,9 @@ final class JigsawEditor {
                 return "Changed element " + (index(c, elements) + 1) + " of " + id;
             }
             case "jigsaw_set" -> { return setJigsaw(env, edit, c); }
+            case "names" -> { memory.names = true; return ""; }
+            case "apply" -> { return apply(env, memory); }
+            case "discard" -> { return discard(env, memory); }
             default -> throw new IllegalArgumentException("Unknown pool editor command: " + text(c, "op"));
         }
     }
@@ -231,16 +239,54 @@ final class JigsawEditor {
         return id;
     }
     private static ResourceLocation resource(ResourceLocation id) { return ResourceLocation.fromNamespaceAndPath(id.getNamespace(), POOLS + id.getPath() + ".json"); }
-    private static Path poolFile(JigsawPlanner.Env env, ResourceLocation id) { return env.folder().resolve("data").resolve(id.getNamespace()).resolve("worldgen").resolve("template_pool").resolve(id.getPath() + ".json"); }
-    private static Path templateFile(JigsawPlanner.Env env, ResourceLocation id) { return env.folder().resolve("data").resolve(id.getNamespace()).resolve("structure").resolve(id.getPath() + ".nbt"); }
+    private static String relPool(ResourceLocation id) { return "data/" + id.getNamespace() + "/worldgen/template_pool/" + id.getPath() + ".json"; }
+    private static String relTemplate(ResourceLocation id) { return "data/" + id.getNamespace() + "/structure/" + id.getPath() + ".nbt"; }
+    /** The file in the craftium pack, which the game reads, and the one in the draft, which holds the changes not applied yet. */
+    private static Path poolFile(JigsawPlanner.Env env, ResourceLocation id) { return env.folder().resolve(relPool(id)); }
+    private static Path templateFile(JigsawPlanner.Env env, ResourceLocation id) { return env.folder().resolve(relTemplate(id)); }
+    private static Path draftPoolFile(JigsawPlanner.Env env, ResourceLocation id) { return env.draft().resolve(relPool(id)); }
+    private static Path draftTemplateFile(JigsawPlanner.Env env, ResourceLocation id) { return env.draft().resolve(relTemplate(id)); }
 
-    /** A pool's JSON: from the craftium pack when it is there, otherwise from the pack that has it. */
+    /** Files deleted in the draft but still in the pack, one path a line; they go when the changes are applied. */
+    private static final String TOMBSTONES = "deleted.txt";
+    private static Set<String> tombstones(JigsawPlanner.Env env) throws IOException {
+        var file = env.draft().resolve(TOMBSTONES);
+        var out = new LinkedHashSet<String>();
+        if (Files.exists(file)) for (var line : Files.readAllLines(file, StandardCharsets.UTF_8)) if (!line.isBlank()) out.add(line.strip());
+        return out;
+    }
+    private static void addTombstone(JigsawPlanner.Env env, Edit edit, String relative) throws IOException {
+        var all = tombstones(env);
+        if (!all.add(relative)) return;
+        edit.write(env.draft().resolve(TOMBSTONES), (String.join("\n", all) + "\n").getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Whether a pool is the craftium pack's own (or changed in the draft), and not deleted there. */
+    private static boolean ours(JigsawPlanner.Env env, ResourceLocation id) throws IOException {
+        return Files.exists(draftPoolFile(env, id)) || Files.exists(poolFile(env, id)) && !tombstones(env).contains(relPool(id));
+    }
+    /** Whether a pool of this name exists in any pack, counting the draft and not counting a pool deleted in it. */
+    private static boolean exists(JigsawPlanner.Env env, ResourceLocation id) throws IOException {
+        return Files.exists(draftPoolFile(env, id)) || !tombstones(env).contains(relPool(id)) && env.manager().getResource(resource(id)).isPresent();
+    }
+    /** Takes a pool out: its draft file goes, and its file in the pack is marked to go when the changes are applied. */
+    private static void removePool(JigsawPlanner.Env env, Edit edit, ResourceLocation id) throws IOException {
+        edit.delete(draftPoolFile(env, id));
+        if (Files.exists(poolFile(env, id))) addTombstone(env, edit, relPool(id));
+    }
+
+    private static JsonObject parse(Path file) throws IOException { return JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject(); }
+
+    /** A pool's JSON: from the draft when it has been changed there, else from the craftium pack, else from the pack that has it. */
     private static JsonObject readPool(JigsawPlanner.Env env, ResourceLocation id) throws IOException {
+        var draft = draftPoolFile(env, id);
         var file = poolFile(env, id);
+        boolean deleted = tombstones(env).contains(relPool(id));
         JsonObject pool;
-        if (Files.exists(file)) pool = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
+        if (Files.exists(draft)) pool = parse(draft);
+        else if (Files.exists(file) && !deleted) pool = parse(file);
         else {
-            var found = env.manager().getResource(resource(id));
+            var found = deleted ? java.util.Optional.<net.minecraft.server.packs.resources.Resource>empty() : env.manager().getResource(resource(id));
             if (found.isEmpty()) throw new IllegalArgumentException("No pool called " + id);
             try (var reader = found.get().openAsReader()) { pool = JsonParser.parseReader(reader).getAsJsonObject(); }
         }
@@ -249,13 +295,85 @@ final class JigsawEditor {
         return pool;
     }
     private static void writePool(JigsawPlanner.Env env, Edit edit, ResourceLocation id, JsonObject pool) throws IOException {
-        edit.write(poolFile(env, id), PRETTY.toJson(pool).getBytes(StandardCharsets.UTF_8));
+        edit.write(draftPoolFile(env, id), PRETTY.toJson(pool).getBytes(StandardCharsets.UTF_8));
     }
     private static void writeTemplate(JigsawPlanner.Env env, Edit edit, ResourceLocation id, CompoundTag tag) throws IOException {
         var bytes = new ByteArrayOutputStream();
         NbtIo.writeCompressed(tag, bytes);
-        edit.write(templateFile(env, id), bytes.toByteArray());
+        edit.write(draftTemplateFile(env, id), bytes.toByteArray());
     }
+
+    // ---- applying and discarding
+
+    private static String idOf(String relative) {
+        var parts = relative.split("/", 3);
+        if (parts.length < 3) return relative;
+        var rest = parts[2];
+        rest = rest.startsWith("worldgen/template_pool/") ? rest.substring(23) : rest.startsWith("structure/") ? rest.substring(10) : rest;
+        int dot = rest.lastIndexOf('.');
+        return parts[1] + ":" + (dot > 0 ? rest.substring(0, dot) : rest);
+    }
+    private static String relative(JigsawPlanner.Env env, Path file) { return env.draft().relativize(file).toString().replace(java.io.File.separatorChar, '/'); }
+
+    /** What the draft holds: the pools and templates changed and the pools deleted. */
+    private static JsonObject unapplied(JigsawPlanner.Env env) throws IOException {
+        var pools = new JsonArray(); var templates = new JsonArray(); var deleted = new JsonArray();
+        if (Files.isDirectory(env.draft()))
+            try (var walk = Files.walk(env.draft())) {
+                for (var file : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
+                    var rel = relative(env, file);
+                    if (rel.equals(TOMBSTONES)) continue;
+                    if (rel.contains("/worldgen/template_pool/")) pools.add(idOf(rel)); else if (rel.contains("/structure/")) templates.add(idOf(rel));
+                }
+            }
+        for (var rel : tombstones(env)) deleted.add(idOf(rel));
+        var out = new JsonObject();
+        out.add("pools", pools);
+        out.add("templates", templates);
+        out.add("deleted", deleted);
+        out.addProperty("count", pools.size() + templates.size() + deleted.size());
+        return out;
+    }
+
+    private static void deleteTree(Path folder) throws IOException {
+        if (!Files.isDirectory(folder)) return;
+        try (var walk = Files.walk(folder)) {
+            for (var path : (Iterable<Path>) walk.sorted(Comparator.reverseOrder())::iterator) Files.deleteIfExists(path);
+        }
+    }
+
+    /** Moves the draft into the craftium pack, deletes what was deleted, and starts again with an empty draft. The undo history ends here. */
+    private static String apply(JigsawPlanner.Env env, Memory memory) throws IOException {
+        int count = unapplied(env).get("count").getAsInt();
+        if (count == 0) throw new IllegalArgumentException("There is nothing to apply");
+        var dead = tombstones(env);
+        if (Files.isDirectory(env.draft()))
+            try (var walk = Files.walk(env.draft())) {
+                for (var file : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
+                    var rel = relative(env, file);
+                    if (rel.equals(TOMBSTONES)) continue;
+                    var target = env.folder().resolve(rel);
+                    Files.createDirectories(target.getParent());
+                    Files.copy(file, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    dead.remove(rel);
+                }
+            }
+        for (var rel : dead) Files.deleteIfExists(env.folder().resolve(rel));
+        deleteTree(env.draft());
+        memory.undo.clear();
+        memory.redo.clear();
+        return "Applied " + count + (count == 1 ? " change" : " changes") + " to datapacks/craftium";
+    }
+
+    /** Throws the draft away, so the pools and templates are as they were when the changes were last applied. */
+    private static String discard(JigsawPlanner.Env env, Memory memory) throws IOException {
+        int count = unapplied(env).get("count").getAsInt();
+        deleteTree(env.draft());
+        memory.undo.clear();
+        memory.redo.clear();
+        return count == 0 ? "There was nothing to discard" : "Discarded " + count + (count == 1 ? " change" : " changes");
+    }
+
     private static JsonObject single(String template, int weight, String projection) {
         var element = new JsonObject();
         element.addProperty("element_type", "minecraft:single_pool_element");
@@ -271,7 +389,7 @@ final class JigsawEditor {
     /** Changes one connector of a template in its NBT; a template from another pack or the game's saved structures is first copied to the craftium pack. */
     private static String setJigsaw(JigsawPlanner.Env env, Edit edit, JsonObject c) throws IOException {
         var id = poolId(text(c, "template"));
-        var file = templateFile(env, id);
+        var file = Files.exists(draftTemplateFile(env, id)) ? draftTemplateFile(env, id) : templateFile(env, id);
         CompoundTag tag;
         if (Files.exists(file)) tag = NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
         else {
@@ -298,7 +416,7 @@ final class JigsawEditor {
             blocks.set(i, block);
             tag.put("blocks", blocks);
             writeTemplate(env, edit, id, tag);
-            return "Changed a connector of " + id + (Files.exists(templateFile(env, id)) ? "" : "");
+            return "Changed a connector of " + id;
         }
         throw new IllegalArgumentException("There is no connector at that place in " + id);
     }
@@ -312,6 +430,7 @@ final class JigsawEditor {
         root.addProperty("undo", memory.undo.size());
         root.addProperty("redo", memory.redo.size());
         root.addProperty("selection", EditorServer.session(player).selection.size());
+        root.add("unapplied", unapplied(env));
         Registry<StructureTemplatePool> pools = null;
         try { pools = JigsawPlanner.loadPools(env.server(), env.manager()).lookupOrThrow(Registries.TEMPLATE_POOL); }
         catch (RuntimeException e) { root.addProperty("registryError", String.valueOf(e.getMessage())); }
@@ -323,10 +442,12 @@ final class JigsawEditor {
             var path = entry.getKey().getPath();
             ids.put(ResourceLocation.fromNamespaceAndPath(entry.getKey().getNamespace(), path.substring(POOLS.length(), path.length() - 5)), entry.getValue().sourcePackId());
         }
+        var gone = tombstones(env);
         for (var entry : ids.entrySet()) {
+            if (gone.contains(relPool(entry.getKey())) && !Files.exists(draftPoolFile(env, entry.getKey()))) continue; // deleted in the draft
             var item = new JsonObject();
             item.addProperty("id", entry.getKey().toString());
-            boolean ours = Files.exists(poolFile(env, entry.getKey()));
+            boolean ours = ours(env, entry.getKey());
             item.addProperty("source", ours ? "craftium" : entry.getValue().equals("vanilla") ? "vanilla" : "pack");
             if (ours && pools != null) {
                 int errors = 0, warnings = 0;
@@ -337,6 +458,7 @@ final class JigsawEditor {
             list.add(item);
         }
         root.add("pools", list);
+        if (memory.names) { memory.names = false; return PRETTY.toJson(root); }
 
         var templates = new JsonArray();
         var query = memory.query.toLowerCase(Locale.ROOT);
@@ -358,7 +480,7 @@ final class JigsawEditor {
         var raw = readPool(env, id);
         var model = new JsonObject();
         model.addProperty("id", id.toString());
-        model.addProperty("overridden", Files.exists(poolFile(env, id)));
+        model.addProperty("overridden", ours(env, id));
         model.addProperty("fallback", raw.get("fallback").isJsonPrimitive() ? raw.get("fallback").getAsString() : "(inline)");
         var elements = new JsonArray();
         var entries = raw.getAsJsonArray("elements");
