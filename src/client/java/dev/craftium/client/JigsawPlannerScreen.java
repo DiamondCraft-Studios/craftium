@@ -23,6 +23,7 @@ final class JigsawPlannerScreen extends CraftiumScreen {
     private final Screen parent;
     private float uiScale = 1;
     private int cw, ch;
+    private final Tips tips = new Tips();
     private double reportScroll;
     private int reportContent, reportRoom;
     private String seedText = "";
@@ -60,42 +61,43 @@ final class JigsawPlannerScreen extends CraftiumScreen {
         cw = Math.round(this.width / uiScale);
         ch = Math.round(this.height / uiScale);
         clearWidgets();
+        tips.clear();
         var o = ClientState.options;
         if (seedText.isEmpty()) seedText = String.valueOf(o.jigsawSeed);
-        button("Close", cw - SIDE - 70, 10, 70, 20, this::onClose);
-        button("Pool editor…", cw - SIDE - 70 - 6 - 110, 10, 110, 20, () -> JigsawEditorScreen.open(this));
+        tips.on(button("Close", cw - SIDE - 70, 10, 70, 20, this::onClose), "Back to the editor. Your settings are kept.");
+        tips.on(button("Pool editor…", cw - SIDE - 70 - 6 - 110, 10, 110, 20, () -> JigsawEditorScreen.open(this)), "Opens the pool editor: the pools, their elements and connectors, and how the pools lead to each other.");
 
         int x = SIDE, y = TOP + 14;
-        box(x, y, FORM, o.jigsawPool, 200, v -> o.jigsawPool = v.strip());
-        box(x, y + 40, FORM, o.jigsawStart, 200, v -> o.jigsawStart = v.strip());
+        tips.on(box(x, y, FORM, o.jigsawPool, 200, v -> o.jigsawPool = v.strip()), "The template pool to start from, such as minecraft:village/plains/town_centers. List pools shows the ones that exist. Enter generates.");
+        tips.on(box(x, y + 40, FORM, o.jigsawStart, 200, v -> o.jigsawStart = v.strip()), "The name of the jigsaw in the start piece to grow from. Leave it empty to let the planner choose.");
         var depth = new FlatSlider(x, y + 80, FORM, 18, Component.empty(), (o.jigsawDepth - 1) / 19.0) {
             private int units() { return 1 + (int) Math.round(value * 19); }
             @Override protected void updateMessage() { setMessage(Component.literal("Depth " + units())); }
             @Override protected void applyValue() { ClientState.options.jigsawDepth = units(); }
         }.range(1, 20, 5);
         depth.setRaw((o.jigsawDepth - 1) / 19.0);
-        addRenderableWidget(depth);
+        addRenderableWidget(tips.on(depth, "How many pieces deep the structure grows from the start piece, 1 to 20. Ctrl-click to type a number."));
         var distance = new FlatSlider(x, y + 108, FORM, 18, Component.empty(), (o.jigsawDistance - 1) / 127.0) {
             private int units() { return 1 + (int) Math.round(value * 127); }
             @Override protected void updateMessage() { setMessage(Component.literal("Distance " + units() + " blocks")); }
             @Override protected void applyValue() { ClientState.options.jigsawDistance = units(); }
         }.range(1, 128, 80);
         distance.setRaw((o.jigsawDistance - 1) / 127.0);
-        addRenderableWidget(distance);
-        box(x, y + 148, FORM - 100, seedText, 20, v -> { seedText = v; try { o.jigsawSeed = Long.parseLong(v.strip()); } catch (NumberFormatException ignored) { /* kept as it was until it is a number */ } });
-        button("Random seed", x + FORM - 94, y + 147, 94, 20, () -> { o.jigsawSeed = (long) (Math.random() * 1_000_000); seedText = String.valueOf(o.jigsawSeed); init(); });
-        addRenderableWidget(new FlatCheckbox(x, y + 178, FORM, 20, "Live: run again when pool or template files change", o.jigsawLive, () -> { o.jigsawLive = !o.jigsawLive; send("live"); init(); }));
+        addRenderableWidget(tips.on(distance, "How far from the start, in blocks, pieces may be placed, 1 to 128. Ctrl-click to type a number."));
+        tips.on(box(x, y + 148, FORM - 100, seedText, 20, v -> { seedText = v; try { o.jigsawSeed = Long.parseLong(v.strip()); } catch (NumberFormatException ignored) { /* kept as it was until it is a number */ } }), "The same seed always gives the same layout from the same files. Change it, or press Random seed, to try another layout.");
+        tips.on(button("Random seed", x + FORM - 94, y + 147, 94, 20, () -> { o.jigsawSeed = (long) (Math.random() * 1_000_000); seedText = String.valueOf(o.jigsawSeed); init(); }), "Puts a random number in the Seed box. The next Generate uses it.");
+        addRenderableWidget(tips.on(new FlatCheckbox(x, y + 178, FORM, 20, "Live: run again when pool or template files change", o.jigsawLive, () -> { o.jigsawLive = !o.jigsawLive; send("live"); init(); }), "When on, the preview runs again by itself, with the same seed, as soon as a pool or template file in datapacks/craftium changes, or a structure you saved does. Edit a file and watch the layout change."));
 
         int by = y + 210, third = (FORM - 8) / 3;
-        button("Generate", x, by, FORM, 26, () -> send("generate")).lit(true);
-        button("Reroll", x, by + 32, third, 22, () -> send("reroll"));
-        button("‹ Back", x + third + 4, by + 32, third, 22, () -> send("back"));
-        button("Next ›", x + 2 * (third + 4), by + 32, third, 22, () -> send("next"));
-        button("Pin seed", x, by + 58, third, 22, () -> send("pin"));
-        button("View", x + third + 4, by + 58, third, 22, () -> send("view"));
-        button("List pools", x + 2 * (third + 4), by + 58, third, 22, () -> send("pools"));
-        button("Apply (Enter)", x, by + 90, (FORM - 4) / 2, 24, () -> send("apply"));
-        button("Cancel (Esc)", x + (FORM - 4) / 2 + 4, by + 90, (FORM - 4) / 2, 24, () -> send("cancel"));
+        tips.on(button("Generate", x, by, FORM, 26, () -> send("generate")).lit(true), "Lays the pool out with the game jigsaw placement and shows it as a preview, at the middle of your selection on its lowest layer, or at your feet. It uses the pool, depth, distance and seed here.");
+        tips.on(button("Reroll", x, by + 32, third, 22, () -> send("reroll")), "Runs the same pool again with a new random seed, in the same place.");
+        tips.on(button("‹ Back", x + third + 4, by + 32, third, 22, () -> send("back")), "Goes back to the run before this one. The last 20 runs are kept.");
+        tips.on(button("Next ›", x + 2 * (third + 4), by + 32, third, 22, () -> send("next")), "Goes forward to the run after this one, after stepping back.");
+        tips.on(button("Pin seed", x, by + 58, third, 22, () -> send("pin")), "Keeps the seed of the run on show. The status line lists the pinned seeds; type one in the Seed box to bring its layout back.");
+        tips.on(button("View", x + third + 4, by + 58, third, 22, () -> send("view")), "Changes what the preview draws, one step each click: outlines and blocks, then outlines only (cheap for very large structures), then blocks only.");
+        tips.on(button("List pools", x + 2 * (third + 4), by + 58, third, 22, () -> send("pools")), "Lists every pool the planner can start from in the report: those of the datapacks the world uses and of datapacks/craftium.");
+        tips.on(button("Apply (Enter)", x, by + 90, (FORM - 4) / 2, 24, () -> send("apply")), "Builds the preview in the world as one edit. You can undo it like any other edit.");
+        tips.on(button("Cancel (Esc)", x + (FORM - 4) / 2 + 4, by + 90, (FORM - 4) / 2, 24, () -> send("cancel")), "Throws the preview away without building anything.");
     }
 
     // ---- drawing
@@ -117,6 +119,7 @@ final class JigsawPlannerScreen extends CraftiumScreen {
         g.text(font, "Seed", x, y + 137, MUTED, false);
         drawReport(g);
         drawWidgets(g, (int) (mx / uiScale), (int) (my / uiScale), delta);
+        tips.draw(g, font, (int) (mx / uiScale), (int) (my / uiScale), cw, ch);
         g.pose().popMatrix();
     }
 

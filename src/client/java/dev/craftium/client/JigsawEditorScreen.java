@@ -32,7 +32,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private double poolScroll, graphScroll;
     private final Map<EditBox, Runnable> commits = new HashMap<>();
     /** What to say when the pointer rests on a button; drawn inside the scaled canvas, so it sits at the pointer whatever the window size. */
-    private final Map<FlatButton, String> tips = new HashMap<>();
+    private final Tips tips = new Tips();
     private static final String RIGID_TIP = "Rigid: the piece keeps exactly the height the structure grew to and ignores the ground, so it never bends. Use it for buildings, rooms and anything solid."
             + "\nClick to make it follow the terrain instead.";
     private static final String FOLLOW_TIP = "Follow terrain (terrain_matching): the piece is bent to the ground, each column of it moving up or down to meet the surface, like village streets and paths."
@@ -139,16 +139,49 @@ final class JigsawEditorScreen extends CraftiumScreen {
         button("Close", cw - SIDE - 70, 10, 70, 20, this::onClose);
         button("Redo (" + num(model, "redo", 0) + ")", cw - SIDE - 70 - 76, 10, 70, 20, () -> edit("redo")).active = num(model, "redo", 0) > 0;
         button("Undo (" + num(model, "undo", 0) + ")", cw - SIDE - 70 - 152, 10, 70, 20, () -> edit("undo")).active = num(model, "undo", 0) > 0;
-        if (adding) { overlay(); return; }
+        if (adding) { overlay(); applyTips(); return; }
         leftPane();
         if (pool() != null) { centreHeader(); if (!graph) cards(); }
         rightPane();
+        applyTips();
+    }
+
+    /** Gives each button its tip by what it says, so the buttons whose label changes (Undo, Rollable, a template name) are covered where they are made. */
+    private void applyTips() {
+        for (var child : children()) {
+            if (!(child instanceof FlatButton b) || tips.has(b)) continue;
+            String label = b.getMessage().getString();
+            String key = label.startsWith("Undo") ? "Undo" : label.startsWith("Redo") ? "Redo" : label;
+            String tip = switch (key) {
+                case "Close" -> adding ? "Closes this panel." : "Back to the planner.";
+                case "Undo" -> "Takes back your last change in the pool editor, in pools and templates alike.";
+                case "Redo" -> "Puts back a change you took back.";
+                case "New" -> "Makes an empty pool with the name typed above.";
+                case "Copy" -> "Copies the open pool under the name typed above.";
+                case "Rename" -> "Renames the open pool, if it is in the craftium pack. Connectors that point at the old name are not changed.";
+                case "Delete" -> "Deletes the open pool from the craftium pack. A pool of another pack that it overrode shows again. You can undo it.";
+                case "Preview from here" -> "Runs the planner with this pool as the start pool, using the depth, distance and seed of the planner.";
+                case "Elements" -> "Shows the elements of this pool as cards.";
+                case "Graph" -> "Shows how this pool leads to other pools through the connectors of its templates. Click a pool to open it.";
+                case "+ Add template" -> "Adds a template to this pool: search the templates of every pack, or save your selection as a new one.";
+                case "‹" -> "Previous page.";
+                case "›" -> "Next page.";
+                case "↑" -> "Moves this element up the list. The order does not change how often it is chosen; the weight does.";
+                case "↓" -> "Moves this element down the list. The order does not change how often it is chosen; the weight does.";
+                case "Remove" -> "Removes this element from the pool. The template itself is kept.";
+                case "Rollable" -> "Rollable: a piece joined to a vertical connector may be turned any way round it. Click to make it aligned.";
+                case "Aligned" -> "Aligned: the joined piece is turned to line up with the top of this connector. Click to make it rollable.";
+                case "Save selection" -> "Saves the blocks you selected as a new template, and adds it to this pool.";
+                default -> adding ? "Adds this template to the pool." : null;
+            };
+            if (tip != null) tips.on(b, tip);
+        }
     }
 
     private void leftPane() {
-        box(SIDE, TOP, leftW, filter, 64, v -> { filter = v; poolScroll = 0; }, null);
+        tips.on(box(SIDE, TOP, leftW, filter, 64, v -> { filter = v; poolScroll = 0; }, null), "Type part of a pool name to narrow the list.");
         int y = ch - FOOT - 66;
-        box(SIDE, y, leftW, name, 120, v -> name = v, () -> action("pool_new"));
+        tips.on(box(SIDE, y, leftW, name, 120, v -> name = v, () -> action("pool_new")), "The name for New, Copy or Rename. Without a namespace it goes in craftium, so my_pool means craftium:my_pool. Enter makes a new pool.");
         int half = leftW / 2 - 2;
         button("New", SIDE, y + 22, half, 18, () -> action("pool_new"));
         button("Copy", SIDE + half + 4, y + 22, half, 18, () -> action("pool_copy"));
@@ -168,7 +201,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     private void centreHeader() {
         int y = TOP + 16;
-        box(centreX + 54, y, Math.min(260, centreW - 54 - 130), str(pool(), "fallback", "minecraft:empty"), 120, null, () -> edit("fallback_set", "pool", poolId(), "fallback", focusedText()));
+        tips.on(box(centreX + 54, y, Math.min(260, centreW - 54 - 130), str(pool(), "fallback", "minecraft:empty"), 120, null, () -> edit("fallback_set", "pool", poolId(), "fallback", focusedText())), "The pool used when no element can be attached, usually minecraft:empty. Enter applies.");
         button("Preview from here", centreX + centreW - 124, y - 1, 124, 20, () -> { ClientState.options.jigsawPool = poolId(); CraftiumClient.send("craftium:jigsaw_generate", null, null); });
         int tabs = y + 28;
         button("Elements", centreX, tabs, 78, 20, () -> { graph = false; init(); }).lit(!graph);
@@ -201,13 +234,13 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 @Override protected void applyValue() { pendingWeightIndex = index; pendingWeight = units(); pendingAt = System.currentTimeMillis(); }
             }.range(1, 150, weight);
             slider.setRaw((weight - 1) / 149.0);
-            addRenderableWidget(slider);
+            addRenderableWidget(tips.on(slider, "How often this element is chosen compared with the others in the pool, 1 to 150. The percentage is its share. Ctrl-click to type a number."));
             boolean rigid = str(element, "projection", "rigid").equals("rigid");
             var projection = button(rigid ? "Rigid" : "Follow terrain", tx, y + 48, 96, 18, () -> edit("element_set", "pool", poolId(), "index", index, "projection", rigid ? "terrain_matching" : "rigid"));
             projection.active = editable || element.has("projection");
-            tips.put(projection, rigid ? RIGID_TIP : FOLLOW_TIP);
+            tips.on(projection, rigid ? RIGID_TIP : FOLLOW_TIP);
             if (editable && element.has("processors")) {
-                var processors = box(tx + 100, y + 48, Math.max(40, w - 100), str(element, "processors", "minecraft:empty"), 120, null, () -> edit("element_set", "pool", poolId(), "index", index, "processors", focusedText()));
+                var processors = tips.on(box(tx + 100, y + 48, Math.max(40, w - 100), str(element, "processors", "minecraft:empty"), 120, null, () -> edit("element_set", "pool", poolId(), "index", index, "processors", focusedText())), "The processor list applied to this element when it is placed, such as minecraft:mossify_10_percent. Enter applies.");
                 if (str(element, "processors", "").equals("(inline)")) processors.setEditable(false); // a processor list written in the pool file is kept as it is
             }
             button("↑", tx, y + 70, 22, 20, () -> edit("element_move", "pool", poolId(), "index", index, "to", index - 1)).active = index > 0;
@@ -242,13 +275,13 @@ final class JigsawEditorScreen extends CraftiumScreen {
             JsonObject base = cmd("jigsaw_set", "template", template);
             base.add("pos", at);
             int half = rightW / 2 - 3;
-            box(x + 38, y + 14, rightW - 38, str(jig, "name", ""), 80, null, () -> { var c = base.deepCopy(); c.addProperty("name", focusedText()); send(c); });
-            box(x + 38, y + 38, half - 38, str(jig, "pool", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("pool", focusedText()); send(c); });
-            box(x + half + 4 + 40, y + 38, rightW - (half + 4) - 40, str(jig, "target", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("target", focusedText()); send(c); });
+            tips.on(box(x + 38, y + 14, rightW - 38, str(jig, "name", ""), 80, null, () -> { var c = base.deepCopy(); c.addProperty("name", focusedText()); send(c); }), "The name of this connector. A connector of another piece joins it when its target is this name. Enter applies.");
+            tips.on(box(x + 38, y + 38, half - 38, str(jig, "pool", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("pool", focusedText()); send(c); }), "The pool the next piece is picked from. minecraft:empty ends the branch here. Enter applies.");
+            tips.on(box(x + half + 4 + 40, y + 38, rightW - (half + 4) - 40, str(jig, "target", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("target", focusedText()); send(c); }), "The name a connector of the next piece must have to join this one. Enter applies.");
             boolean rollable = str(jig, "joint", "rollable").equals("rollable");
             button(rollable ? "Rollable" : "Aligned", x, y + 62, 76, 18, () -> { var c = base.deepCopy(); c.addProperty("joint", rollable ? "aligned" : "rollable"); send(c); });
-            box(x + 114, y + 62, 40, String.valueOf(num(jig, "placement", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "placement", focusedText()); send(c); });
-            box(x + 204, y + 62, 40, String.valueOf(num(jig, "selection", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "selection", focusedText()); send(c); });
+            tips.on(box(x + 114, y + 62, 40, String.valueOf(num(jig, "placement", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "placement", focusedText()); send(c); }), "Placement priority: when several pieces wait to be attached, those from connectors with a higher number are placed first. Enter applies.");
+            tips.on(box(x + 204, y + 62, 40, String.valueOf(num(jig, "selection", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "selection", focusedText()); send(c); }), "Selection priority: among the connectors of a piece, those with a higher number are tried first. Enter applies.");
         }
     }
 
@@ -260,7 +293,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     /** The panel that adds a template to the pool: a search of the templates the server knows, or the player's selection saved as a new one. */
     private void overlay() {
         int w = Math.min(460, cw - 40), x = (cw - w) / 2, y = 40;
-        box(x + 10, y + 34, w - 20, query, 80, v -> query = v, () -> edit("templates", "query", query));
+        tips.on(box(x + 10, y + 34, w - 20, query, 80, v -> query = v, () -> edit("templates", "query", query)), "Part of a template name. Press Enter to search the templates of every pack and the structures you saved.");
         var found = model.has("templates") ? model.getAsJsonArray("templates") : new JsonArray();
         int rows = Math.max(1, (ch - 40 - 150 - 40) / 20);
         for (int i = 0; i < Math.min(found.size(), rows); i++) {
@@ -268,7 +301,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
             button(id, x + 10, y + 58 + i * 20, w - 20, 18, () -> { edit("element_add", "pool", poolId(), "template", id); adding = false; });
         }
         int bottom = Math.min(ch - 40 - 80, y + 58 + rows * 20 + 8);
-        box(x + 10, bottom + 18, w - 130, selectionName, 80, v -> selectionName = v, null);
+        tips.on(box(x + 10, bottom + 18, w - 130, selectionName, 80, v -> selectionName = v, null), "A name for the new template, for example craftium:my_room.");
         var save = button("Save selection", x + w - 114, bottom + 17, 104, 20, () -> {
             if (selectionName.isBlank()) { localMessage = "Name the template first"; return; }
             edit("element_from_selection", "pool", poolId(), "name", selectionName.strip());
@@ -316,31 +349,16 @@ final class JigsawEditorScreen extends CraftiumScreen {
         String message = !localMessage.isEmpty() ? localMessage : str(model, "message", "").isEmpty() ? ClientState.status.message() : str(model, "message", "");
         g.text(font, font.plainSubstrByWidth(message, cw - 2 * SIDE - 240), SIDE, 28, 0xffffdca8, false);
         if (model.has("registryError")) g.text(font, font.plainSubstrByWidth("A pool file has a problem: " + str(model, "registryError", ""), cw - 2 * SIDE), SIDE, 38, ERROR, false);
-        if (adding) { drawOverlay(g); drawWidgets(g, mx, my, delta); g.pose().popMatrix(); return; }
+        if (adding) { drawOverlay(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
         drawPools(g, mx, my);
         if (pool() == null) g.text(font, "Pick a pool on the left, or make a new one.", centreX, TOP + 20, MUTED, false);
         else { drawCentre(g); if (graph) drawGraph(g, mx, my); else drawCards(g, mx, my); }
         drawConnections(g);
         drawWidgets(g, mx, my, delta);
-        drawTip(g, mx, my);
+        tips.draw(g, font, mx, my, cw, ch);
         if (filter.isEmpty()) g.text(font, "filter " + (model.has("pools") ? model.getAsJsonArray("pools").size() : 0) + " pools", SIDE + 5, TOP + 5, 0xff5f7186, false);
         if (name.isEmpty()) g.text(font, "name for New, Copy or Rename", SIDE + 5, ch - FOOT - 66 + 5, 0xff5f7186, false);
         g.pose().popMatrix();
-    }
-
-    /** The tip of the button the pointer is on, in a box beside it. */
-    private void drawTip(Gfx g, int mx, int my) {
-        for (var entry : tips.entrySet()) {
-            if (!entry.getKey().isMouseOver(mx, my)) continue;
-            var rows = font.split(Component.literal(entry.getValue()), 240);
-            int w = 0;
-            for (var row : rows) w = Math.max(w, font.width(row));
-            int h = rows.size() * 10 + 8, x = Math.max(4, Math.min(mx + 12, cw - w - 18)), y = Math.max(4, Math.min(my + 14, ch - h - 4));
-            g.fill(x, y, x + w + 12, y + h, 0xf0101923);
-            g.outline(x, y, w + 12, h, ClientState.options.uiAccent);
-            for (int i = 0; i < rows.size(); i++) g.text(font, rows.get(i), x + 6, y + 5 + i * 10, 0xffdce6ef, false);
-            return;
-        }
     }
 
     private void drawPools(Gfx g, int mx, int my) {
