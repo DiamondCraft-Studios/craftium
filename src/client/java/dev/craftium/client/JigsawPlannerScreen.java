@@ -27,6 +27,13 @@ final class JigsawPlannerScreen extends CraftiumScreen {
     private double reportScroll;
     private int reportContent, reportRoom;
     private String seedText = "";
+    private EditBox poolBox;
+    /** The pools the server knows, as id and the pack each comes from, and the ones that fit what is typed in the pool box. */
+    private final List<String[]> pools = new java.util.ArrayList<>();
+    private final List<String[]> matches = new java.util.ArrayList<>();
+    private boolean suggesting, accepting, asked, wasFocused;
+    private int highlight = -1, seenModel = -1;
+    private static final int ROWS = 8, ROW = 15;
 
     JigsawPlannerScreen(Screen parent) {
         super(Component.literal("Craftium jigsaw planner"));
@@ -63,12 +70,14 @@ final class JigsawPlannerScreen extends CraftiumScreen {
         clearWidgets();
         tips.clear();
         var o = ClientState.options;
+        if (!asked) { asked = true; o.jigsawEdit = "{\"op\":\"names\"}"; CraftiumClient.send("craftium:jigsaw_edit", null, null); }
         if (seedText.isEmpty()) seedText = String.valueOf(o.jigsawSeed);
         tips.on(button("Close", cw - SIDE - 70, 10, 70, 20, this::onClose), "Back to the editor. Your settings are kept.");
         tips.on(button("Pool editor…", cw - SIDE - 70 - 6 - 110, 10, 110, 20, () -> JigsawEditorScreen.open(this)), "Opens the pool editor: the pools, their elements and connectors, and how the pools lead to each other.");
 
         int x = SIDE, y = TOP + 14;
-        tips.on(box(x, y, FORM, o.jigsawPool, 200, v -> o.jigsawPool = v.strip()), "The template pool to start from, such as minecraft:village/plains/town_centers. List pools shows the ones that exist. Enter generates.");
+        poolBox = box(x, y, FORM, o.jigsawPool, 200, v -> { o.jigsawPool = v.strip(); if (!accepting) { suggesting = true; refreshMatches(); } });
+        tips.on(poolBox, "The template pool to start from, such as minecraft:village/plains/town_centers. Pools that fit what you type are suggested: click one, or use the arrow keys with Enter or Tab. List pools shows them all. Enter generates.");
         tips.on(box(x, y + 40, FORM, o.jigsawStart, 200, v -> o.jigsawStart = v.strip()), "The name of the jigsaw in the start piece to grow from. Leave it empty to let the planner choose.");
         var depth = new FlatSlider(x, y + 80, FORM, 18, Component.empty(), (o.jigsawDepth - 1) / 19.0) {
             private int units() { return 1 + (int) Math.round(value * 19); }
@@ -121,7 +130,8 @@ final class JigsawPlannerScreen extends CraftiumScreen {
         g.text(font, "Seed", x, y + 137, MUTED, false);
         drawReport(g);
         drawWidgets(g, (int) (mx / uiScale), (int) (my / uiScale), delta);
-        tips.draw(g, font, (int) (mx / uiScale), (int) (my / uiScale), cw, ch);
+        drawSuggestions(g, (int) (mx / uiScale), (int) (my / uiScale));
+        if (!showing()) tips.draw(g, font, (int) (mx / uiScale), (int) (my / uiScale), cw, ch);
         g.pose().popMatrix();
     }
 
@@ -163,7 +173,18 @@ final class JigsawPlannerScreen extends CraftiumScreen {
 
     private MouseButtonEvent scaled(MouseButtonEvent event) { return new MouseButtonEvent(event.x() / uiScale, event.y() / uiScale, event.buttonInfo()); }
 
-    @Override public boolean mouseClicked(MouseButtonEvent event, boolean twice) { return super.mouseClicked(scaled(event), twice); }
+    @Override public boolean mouseClicked(MouseButtonEvent raw, boolean twice) {
+        var event = scaled(raw);
+        if (showing() && event.button() == 0) {
+            int x = SIDE, y = listTop();
+            if (event.x() >= x && event.x() < x + FORM && event.y() >= y && event.y() < y + matches.size() * ROW + 4) {
+                int i = (int) ((event.y() - y - 2) / ROW);
+                if (i >= 0 && i < matches.size()) accept(matches.get(i)[0]);
+                return true;
+            }
+        }
+        return super.mouseClicked(event, twice);
+    }
 
     @Override public boolean mouseReleased(MouseButtonEvent event) { return super.mouseReleased(scaled(event)); }
 
@@ -176,8 +197,95 @@ final class JigsawPlannerScreen extends CraftiumScreen {
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
+        if (showing()) {
+            switch (event.key()) {
+                case GLFW.GLFW_KEY_DOWN -> { highlight = Math.min(matches.size() - 1, highlight + 1); return true; }
+                case GLFW.GLFW_KEY_UP -> { highlight = highlight <= 0 ? matches.size() - 1 : highlight - 1; return true; }
+                case GLFW.GLFW_KEY_TAB -> { accept(matches.get(Math.max(0, highlight))[0]); return true; }
+                case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> { if (highlight >= 0) { accept(matches.get(highlight)[0]); return true; } }
+                case GLFW.GLFW_KEY_ESCAPE -> { suggesting = false; return true; }
+                default -> { }
+            }
+        }
         if ((event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER) && getFocused() instanceof EditBox) { send("generate"); return true; }
         return super.keyPressed(event);
+    }
+
+    // ---- the pool box's suggestions
+
+    @Override public void tick() {
+        if (ClientState.jigsawModelVersion != seenModel) { seenModel = ClientState.jigsawModelVersion; readPools(); refreshMatches(); }
+        boolean focused = poolBox != null && poolBox.isFocused();
+        if (focused && !wasFocused) { suggesting = true; refreshMatches(); }
+        wasFocused = focused;
+    }
+
+    private void readPools() {
+        pools.clear();
+        try {
+            var model = com.google.gson.JsonParser.parseString(ClientState.jigsawModel).getAsJsonObject();
+            if (model.has("pools")) for (var e : model.getAsJsonArray("pools")) { var p = e.getAsJsonObject(); pools.add(new String[]{p.get("id").getAsString(), p.has("source") ? p.get("source").getAsString() : ""}); }
+        } catch (RuntimeException ignored) { /* no list, no suggestions */ }
+    }
+
+    /** The pools that contain what is typed: those that start with it first, then the craftium pack's, then other packs', then vanilla's. */
+    private void refreshMatches() {
+        matches.clear();
+        highlight = -1;
+        if (poolBox == null) return;
+        String text = poolBox.getValue().strip().toLowerCase(java.util.Locale.ROOT);
+        var found = new java.util.ArrayList<String[]>();
+        for (var p : pools) if (text.isEmpty() || p[0].contains(text)) found.add(p);
+        found.sort(java.util.Comparator.<String[]>comparingInt(p -> rank(p, text)).thenComparing(p -> p[0]));
+        for (int i = 0; i < Math.min(ROWS, found.size()); i++) matches.add(found.get(i));
+    }
+
+    private static int rank(String[] pool, String text) {
+        String path = pool[0].substring(pool[0].indexOf(':') + 1);
+        int fit = pool[0].startsWith(text) ? 0 : path.startsWith(text) ? 1 : 2;
+        return fit * 3 + (pool[1].equals("craftium") ? 0 : pool[1].equals("pack") ? 1 : 2);
+    }
+
+    /** Whether the list is open: the box has the focus, something fits, and what is typed is not already the only fit. */
+    private boolean showing() {
+        if (!suggesting || poolBox == null || !poolBox.isFocused() || matches.isEmpty()) return false;
+        return !(matches.size() == 1 && matches.get(0)[0].equals(poolBox.getValue().strip()));
+    }
+
+    private int listTop() { return TOP + 14 + 20; }
+
+    private void accept(String id) {
+        accepting = true;
+        poolBox.setValue(id);
+        accepting = false;
+        ClientState.options.jigsawPool = id;
+        suggesting = false;
+        matches.clear();
+    }
+
+    private void drawSuggestions(Gfx g, int mx, int my) {
+        if (!showing()) return;
+        int x = SIDE, y = listTop(), h = matches.size() * ROW + 4;
+        g.fill(x, y, x + FORM, y + h, 0xf0101923);
+        g.outline(x, y, FORM, h, ClientState.options.uiAccent);
+        String typed = poolBox.getValue().strip().toLowerCase(java.util.Locale.ROOT);
+        for (int i = 0; i < matches.size(); i++) {
+            int ry = y + 2 + i * ROW;
+            boolean hot = i == highlight || highlight < 0 && mx >= x && mx < x + FORM && my >= ry && my < ry + ROW;
+            if (hot) g.fill(x + 1, ry, x + FORM - 1, ry + ROW, 0xff315473);
+            var pool = matches.get(i);
+            g.fill(x + 5, ry + 4, x + 10, ry + 9, pool[1].equals("craftium") ? 0xff8fe3a0 : pool[1].equals("pack") ? 0xff8fd3ff : 0xff5a6b7d);
+            String shown = font.plainSubstrByWidth(pool[0], FORM - 24);
+            int at = typed.isEmpty() ? -1 : shown.toLowerCase(java.util.Locale.ROOT).indexOf(typed);
+            if (at >= 0) { // the part that was typed is picked out
+                int px = x + 14;
+                g.text(font, shown.substring(0, at), px, ry + 4, 0xffdce6ef, false);
+                px += font.width(shown.substring(0, at));
+                g.text(font, shown.substring(at, at + typed.length()), px, ry + 4, 0xffffdca8, false);
+                px += font.width(shown.substring(at, at + typed.length()));
+                g.text(font, shown.substring(at + typed.length()), px, ry + 4, 0xffdce6ef, false);
+            } else g.text(font, shown, x + 14, ry + 4, 0xffdce6ef, false);
+        }
     }
 
     @Override public boolean isPauseScreen() { return false; }
