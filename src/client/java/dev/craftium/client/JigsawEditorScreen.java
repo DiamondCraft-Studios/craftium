@@ -280,7 +280,9 @@ final class JigsawEditorScreen extends CraftiumScreen {
         int y = TOP + 16;
         tips.on(box(centreX + 54, y, Math.min(260, centreW - 54 - 130), str(pool(), "fallback", "minecraft:empty"), 120, null, () -> edit("fallback_set", "pool", poolId(), "fallback", focusedText())), "The pool used when no element can be attached, usually minecraft:empty. Enter applies.");
         button("Preview from here", centreX + centreW - 124, y - 1, 124, 20, () -> { ClientState.options.jigsawPool = poolId(); CraftiumClient.send("craftium:jigsaw_generate", null, null); });
-        int tabs = y + 28;
+        tips.on(box(centreX + 70, y + 24, centreW - 70, str(pool(), "description", ""), 300, null, () -> edit("description_set", "pool", poolId(), "text", focusedText())),
+                "A note about this pool, saved in its file as $comment. The game ignores that key, so it is safe, and the editor keeps it. Enter applies; empty removes it.");
+        int tabs = y + 50;
         button("Elements", centreX, tabs, 78, 20, () -> { graph = false; init(); }).lit(!graph);
         button("Graph", centreX + 82, tabs, 78, 20, () -> { graph = true; init(); }).lit(graph);
         button("+ Add template", centreX + 166, tabs, 110, 20, () -> { adding = true; query = ""; init(); });
@@ -294,7 +296,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     }
 
     private String focusedText() { return getFocused() instanceof EditBox e ? e.getValue() : ""; }
-    private int cardsTop() { return TOP + 70; }
+    private int cardsTop() { return TOP + 92; }
     private int perPage() { return Math.max(1, (ch - FOOT - cardsTop() + CARD_GAP) / (CARD_H + CARD_GAP)); }
 
     private void cards() {
@@ -487,12 +489,13 @@ final class JigsawEditorScreen extends CraftiumScreen {
         g.text(font, tag, centreX + centreW - font.width(tag), TOP, ours ? OK : MUTED, false);
         g.text(font, font.plainSubstrByWidth(p.get("id").getAsString(), centreW - font.width(tag) - 12), centreX, TOP, 0xffffffff, false);
         g.text(font, "Fallback", centreX + 2, TOP + 21, MUTED, false);
+        g.text(font, "Description", centreX + 2, TOP + 45, MUTED, false);
         if (!graph) {
             int pages = Math.max(1, (elements().size() + perPage() - 1) / perPage());
             String label = (page + 1) + "/" + pages;
-            g.text(font, label, centreX + centreW - 60 - font.width(label) / 2, TOP + 16 + 28 + 6, MUTED, false);
+            g.text(font, label, centreX + centreW - 60 - font.width(label) / 2, TOP + 16 + 50 + 6, MUTED, false);
             String count = elements().size() + (elements().size() == 1 ? " element" : " elements");
-            g.text(font, count, centreX + centreW - 150 - font.width(count), TOP + 16 + 28 + 6, MUTED, false);
+            g.text(font, count, centreX + centreW - 150 - font.width(count), TOP + 16 + 50 + 6, MUTED, false);
         }
     }
 

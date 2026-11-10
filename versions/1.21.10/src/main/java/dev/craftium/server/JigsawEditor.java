@@ -139,6 +139,18 @@ final class JigsawEditor {
                 if (memory.pool.equals(id.toString())) memory.pool = "";
                 return "Deleted " + id + " (final when you apply)";
             }
+            case "description_set" -> {
+                var id = poolId(text(c, "pool"));
+                var pool = readPool(env, id);
+                var note = text(c, "text").strip();
+                if (note.length() > 1000) throw new IllegalArgumentException("A description is at most 1,000 characters");
+                // Kept as $comment, which the game ignores, and written first so it is the first thing a person reading the file sees.
+                var ordered = new JsonObject();
+                if (!note.isEmpty()) ordered.addProperty("$comment", note);
+                for (var entry : pool.entrySet()) if (!entry.getKey().equals("$comment")) ordered.add(entry.getKey(), entry.getValue());
+                writePool(env, edit, id, ordered);
+                return note.isEmpty() ? "Removed the description of " + id : "Described " + id;
+            }
             case "fallback_set" -> {
                 var id = poolId(text(c, "pool"));
                 var pool = readPool(env, id);
@@ -623,6 +635,7 @@ final class JigsawEditor {
         var raw = readPool(env, id);
         var model = new JsonObject();
         model.addProperty("id", id.toString());
+        model.addProperty("description", raw.has("$comment") && raw.get("$comment").isJsonPrimitive() ? raw.get("$comment").getAsString() : "");
         model.addProperty("overridden", ours(env, id));
         model.addProperty("fallback", raw.get("fallback").isJsonPrimitive() ? raw.get("fallback").getAsString() : "(inline)");
         var elements = new JsonArray();
