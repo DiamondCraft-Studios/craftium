@@ -16,6 +16,11 @@ final class SavedSelectionActions {
         switch(part[0]){
             case "save"->{var entry=saved.create(s.selection);return "Created "+entry.name();}
             case "view"->{saved.view(id(part),s.selection);return "Showing "+saved.active().name();}
+            case "viewset"->{ // viewset:<ids separated by commas>: these BuildObjects, selected together; none lets go
+                var ids=new java.util.ArrayList<Integer>();
+                try{if(part.length>1&&!part[1].isBlank())for(var t:part[1].split(","))ids.add(Integer.parseInt(t.strip()));}catch(NumberFormatException e){throw new IllegalArgumentException("Pick BuildObjects");}
+                saved.viewSet(ids,s.selection);return ids.isEmpty()?"Your selection is back":"Showing "+ids.size()+" BuildObjects";
+            }
             case "edit"->{saved.edit(id(part),s.selection);return "Editing "+saved.active().name();}
             case "release"->{saved.release(s.selection);return "Your selection is back";}
             case "delete"->{var entry=saved.delete(id(part),s.selection);return "Deleted "+entry.name();}
@@ -47,7 +52,7 @@ final class SavedSelectionActions {
         for(var e:s.saved.entries()){
             Point min=e.points().isEmpty()?new Point(0,0,0):new Point(e.points().stream().mapToInt(Point::x).min().getAsInt(),e.points().stream().mapToInt(Point::y).min().getAsInt(),e.points().stream().mapToInt(Point::z).min().getAsInt());
             Point max=e.points().isEmpty()?min:new Point(e.points().stream().mapToInt(Point::x).max().getAsInt(),e.points().stream().mapToInt(Point::y).max().getAsInt(),e.points().stream().mapToInt(Point::z).max().getAsInt());
-            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,e==s.saved.active(),e==s.saved.active()&&s.saved.editing(),withData?data(s,e):null,e.guid(),e.parentId()));
+            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,s.saved.isViewed(e),e==s.saved.active()&&s.saved.editing(),withData?data(s,e):null,e.guid(),e.parentId()));
         }
         return out;
     }

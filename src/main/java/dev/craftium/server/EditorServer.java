@@ -792,7 +792,7 @@ public final class EditorServer {
         var points=savedByName(player,name);var mine=SESSIONS.get(player.getUUID());var entry=mine.saved.find(name);
         var extra=new com.google.gson.JsonObject();
         extra.addProperty("name",entry.name());extra.addProperty("guid",entry.guid());extra.addProperty("saved",true);
-        if(mine.saved.active()==entry)extra.addProperty("shownByPlayer",mine.saved.editing()?"editing":"viewing");
+        if(mine.saved.isViewed(entry))extra.addProperty("shownByPlayer",mine.saved.editing()?"editing":"viewing");
         return AiWorld.selection(player,points,extra);
     }
     /** What a player's session tells the client about each of that player's AI sessions; ghost data only when a preview is new to this player. */

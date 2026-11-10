@@ -221,6 +221,30 @@ class SavedSelectionsTest {
         var saved=new SavedSelections();for(int i=0;i<SavedSelections.MAX;i++)saved.save(live(new Point(i+10,0,0)));
         assertThrows(IllegalArgumentException.class,()->saved.create(live(E)));
     }
+    @Test void severalEntriesCanBeShownTogetherAsOneSelection(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);s.restore(List.of(B));var b=saved.save(s);s.restore(List.of(C));var c=saved.save(s);
+        s.restore(List.of(new Point(9,9,9)));
+        saved.viewSet(List.of(a.id(),c.id()),s);
+        assertEquals(Set.of(A,C),set(s));assertEquals(List.of(a,c),saved.viewed());assertTrue(saved.isViewed(a)&&!saved.isViewed(b));
+        assertFalse(saved.editing(),"only one can be edited");
+        saved.viewSet(List.of(a.id(),b.id(),c.id()),s);assertEquals(Set.of(A,B,C),set(s));
+        saved.viewSet(List.of(),s);assertNull(saved.active());assertTrue(saved.viewed().isEmpty());assertEquals(Set.of(new Point(9,9,9)),set(s),"the player's own selection is back");
+    }
+    @Test void showingSeveralTakesEachOnesWholeSubtree(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);s.restore(List.of(B));var b=saved.save(s);s.restore(List.of(C));var c=saved.save(s);
+        saved.place(b.id(),a.id(),0);
+        saved.viewSet(List.of(a.id(),c.id()),s);assertEquals(Set.of(A,B,C),set(s));
+    }
+    @Test void deletingOneOfTheShownLetsGoOfAll(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);s.restore(List.of(B));var b=saved.save(s);s.restore(List.of(C));
+        saved.viewSet(List.of(a.id(),b.id()),s);saved.delete(b.id(),s);
+        assertTrue(saved.viewed().isEmpty());assertEquals(Set.of(C),set(s));
+    }
+    @Test void aSingleViewIsStillOneViewedAndEditable(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);
+        saved.view(a.id(),s);assertEquals(List.of(a),saved.viewed());saved.edit(a.id(),s);assertTrue(saved.editing());
+        saved.viewSet(List.of(a.id()),s);assertFalse(saved.editing(),"showing it as a set is looking, not editing");
+    }
     @Test void theLimitIsEnforced(){
         var saved=new SavedSelections();var s=live(A);for(int i=0;i<SavedSelections.MAX;i++)saved.save(s);
         assertThrows(IllegalArgumentException.class,()->saved.save(s));

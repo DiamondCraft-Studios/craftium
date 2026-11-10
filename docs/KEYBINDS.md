@@ -20,6 +20,8 @@ This matches published defaults. A running copy of Axiom was not used for compar
 | Editor | LMB / MMB / RMB | Camera / pick block / tool |
 | Editor | Ctrl + LMB / RMB / MMB drag | Orbit / pan / radius |
 | Editor | Ctrl + Z / Y | Undo / redo |
+| Editor | F | With exactly one BuildObject shown, face the middle of it from far enough back to see all of it |
+| Hierarchy | Ctrl + click / Shift + Ctrl + click | Add or remove a BuildObject from those shown / add every row from the last one clicked |
 | Editor | Ctrl + C / X / V / J | Copy / cut / paste / duplicate |
 | Editor | Ctrl + Shift + V | Paste in place: start a placement where the blocks were copied from |
 | Editor | Ctrl + P / B | Save blueprint / biome borders |

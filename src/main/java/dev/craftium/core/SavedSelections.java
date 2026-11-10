@@ -35,7 +35,8 @@ public final class SavedSelections {
     private int nextId=1;
     private static final java.util.regex.Pattern NUMBERED=java.util.regex.Pattern.compile("BuildObject(?: \\((\\d{1,9})\\))?");
     /** The BuildObject being looked at or edited, or null. */
-    private Entry active;private boolean editing;
+    /** The BuildObjects being looked at (several when selected together), and {@code active}, the last of them: the one editing is about. */
+    private Entry active;private final List<Entry> viewed=new ArrayList<>();private boolean editing;
     /** The live selection as it was before looking began; null when not looking. */
     private List<Point> stash;
     private long revision;
@@ -70,7 +71,10 @@ public final class SavedSelections {
     /** The blocks of the BuildObject and of everything under it: what looking at it shows. */
     public Set<Point> effective(Entry entry){var out=new LinkedHashSet<Point>();for(var e:subtree(entry))out.addAll(e.points);return out;}
     public Entry active(){return active;}
-    public boolean editing(){return editing&&active!=null;}
+    public boolean editing(){return editing&&active!=null&&viewed.size()==1;}
+    /** Every BuildObject being looked at: one, or several selected together. */
+    public List<Entry> viewed(){return Collections.unmodifiableList(viewed);}
+    public boolean isViewed(Entry entry){return viewed.contains(entry);}
     /** Changes whenever the list, the names or the looking changes, so the client is only sent what is new. */
     public long revision(){return revision;}
     public Entry byId(int id){for(var e:entries)if(e.id==id)return e;return null;}
@@ -157,13 +161,25 @@ public final class SavedSelections {
         var entry=need(id);
         if(active!=null&&editing)sync(live); // leaving an edit for another entry keeps what was done
         if(stash==null)stash=List.copyOf(live.points());
-        live.restore(edit?entry.points:effective(entry));active=entry;editing=edit;revision++;
+        live.restore(edit?entry.points:effective(entry));active=entry;viewed.clear();viewed.add(entry);editing=edit;revision++;
+    }
+    /**
+     * Swaps several BuildObjects in for the live selection at once, as selecting them together: the selection is all of their blocks, each with everything under it.
+     * An empty list lets go. Editing is only ever of one, so this is looking.
+     */
+    public void viewSet(List<Integer> ids,Selection live){
+        var picked=new LinkedHashSet<Entry>();for(int id:ids)picked.add(need(id));
+        if(picked.isEmpty()){release(live);return;}
+        if(active!=null&&editing)sync(live);
+        if(stash==null)stash=List.copyOf(live.points());
+        var union=new LinkedHashSet<Point>();for(var e:picked)union.addAll(effective(e));
+        live.restore(union);viewed.clear();viewed.addAll(picked);active=viewed.getLast();editing=false;revision++;
     }
     /** Gives back the live selection from before looking. Whatever was done to the live selection while only viewing is dropped. Does nothing when not looking. */
     public void release(Selection live){
         if(active==null)return;
         if(editing)sync(live);
-        live.restore(stash);stash=null;active=null;editing=false;revision++;
+        live.restore(stash);stash=null;active=null;viewed.clear();editing=false;revision++;
     }
     /** While editing, writes the live selection to the entry being edited. Call it after anything changed the live selection. */
     public boolean sync(Selection live){
@@ -173,7 +189,7 @@ public final class SavedSelections {
     }
     /** Removes the entry and everything under it; if one of them was being looked at, the live selection comes back first. Returns the removed entry so a delete can be undone. */
     public Entry delete(int id,Selection live){
-        var entry=need(id);if(active!=null&&(active==entry||isUnder(active,entry)))release(live);
+        var entry=need(id);if(viewed.stream().anyMatch(v->v==entry||isUnder(v,entry)))release(live);
         var group=subtree(entry);
         entries.removeAll(group);revision++;
         return entry;
@@ -189,7 +205,7 @@ public final class SavedSelections {
      */
     public void restore(State state,Selection live){
         var present=new HashSet<Entry>();for(var r:state.rows())present.add(r.entry());
-        if(active!=null&&!present.contains(active))release(live);
+        if(viewed.stream().anyMatch(v->!present.contains(v)))release(live);
         entries.clear();var byId=new HashMap<Integer,Entry>();
         for(var r:state.rows()){
             var e=r.entry();e.name=r.name();

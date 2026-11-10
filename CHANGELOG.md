@@ -13,6 +13,8 @@ Changes since 1.5.0-beta.1.
 - BuildObjects follow their blocks: when you move, rotate, flip or scale the selected blocks (the Edit menu, the Move, Rotate and Scale tools and nudging), every BuildObject that holds those blocks takes them along, and Ctrl+Z puts the blocks and the BuildObjects back together. Scaling up keeps a BuildObject whole; scaling down loses the blocks it drops.
 - Creating a BuildObject from a selection that touches existing ones takes them in whole, as children of the new one, even where the selection only reaches part of them. The new one holds only the blocks that no taken BuildObject holds. A selection made while one is shown makes a parent around it.
 - Everything you do in the Hierarchy is in the history: Ctrl+Z and Ctrl+Y take back and redo making a BuildObject with +, renaming, dragging it to a new place or parent, and deleting it, in order with your block edits.
+- Ctrl + click on a row of the Hierarchy adds or removes that BuildObject from the ones shown, and Shift + Ctrl + click adds every row from the last one clicked to this one. The ones shown together are one selection, so any tool works on all of them.
+- F, with exactly one BuildObject shown, moves the view to face the middle of it from far enough back that all of it fits between the panels. It is bound in the controls like the other shortcuts.
 - Target info moved to the bottom of the left column, under Tool options.
 - The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
 - Your saved window layout is reset once, to the new places.

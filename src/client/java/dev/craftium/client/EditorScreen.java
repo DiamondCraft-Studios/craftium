@@ -1915,6 +1915,7 @@ public final class EditorScreen extends CraftiumScreen {
             case CONFIRM -> {if(ClientState.hasPending())CraftiumClient.send("pending_confirm",null,null);else if(ShapeObject.active())ShapeObject.confirm();else if(PlacementPreview.active())PlacementPreview.confirm();else action(Interactions.of(o().tool).confirmAction());}
             case UNDO,UNDO_ALT -> action("undo");
             case DESELECT -> action("clear");
+            case FOCUS_OBJECT -> {if(!focusBuildObject())return false;}
             case TOGGLE_MOVE -> toggleTool(Tool.MOVE);case TOGGLE_ROTATE -> toggleTool(Tool.ROTATE);case TOGGLE_SCALE -> toggleTool(Tool.SCALE);case TOGGLE_PIVOT -> toggleTool(Tool.PIVOT);
 case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut");case DUPLICATE -> action("duplicate");case PASTE -> action("paste");case PASTE_IN_PLACE -> PlacementPreview.beginInPlace();
             case COPY_AIR -> {boolean old=o().pasteAir;o().pasteAir=true;action("copy");o().pasteAir=old;}
@@ -2105,7 +2106,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             }else text(g,shorten(entry.name(),pw-112-indent-12),nameX,ry+6,entry.active()?TEXT:MUTED);
             if(rowDragMoved&&rowDragId==id)g.fill(x+9,ry,x+pw-9,ry+rowHeight,0xaa141c26); // the one being dragged is left looking emptied
             // later controls win where they overlap, so the row comes first and the cells and buttons on it after
-            var rowControl=new Control(x+9,ry,pw-18,rowHeight,()->action(entry.active()&&!entry.editing()?"saved_selection:release":"saved_selection:view:"+id),HIDDEN_TIP+savedSpan(entry)+" blocks · "+(entry.active()&&!entry.editing()?"Let go":"Select this BuildObject")); controls.add(rowControl);renameAreas.add(new RenameArea(rowControl,id));
+            var rowControl=new Control(x+9,ry,pw-18,rowHeight,()->rowClick(entry),HIDDEN_TIP+savedSpan(entry)+" blocks · "+(entry.active()&&!entry.editing()?"Let go":"Select this BuildObject")); controls.add(rowControl);renameAreas.add(new RenameArea(rowControl,id));
             if(parents.contains(id)){ // something is under it: an arrow folds it
                 boolean folded=ClientState.savedFolded(id);text(g,folded?"▸":"▾",x+14+indent,ry+6,MUTED);
                 controls.add(new Control(x+11+indent,ry,14,rowHeight,()->ClientState.toggleSavedFolded(id),folded?"Show what is under this BuildObject":"Fold what is under this BuildObject"));
@@ -2141,6 +2142,46 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         g.fill(x+1,y+ph-30,x+pw-1,y+ph-29,LINE); // the buttons along the bottom
         button(g,x+10,y+ph-25,24,20,"",false,()->action("saved_selection:save"),looking?"Create a BuildObject from what is selected now · While one is shown, the new one goes around it":"Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole");
         glyph(g,x+10,y+ph-25,24,20,PLUS,TEXT);
+    }
+    /** The row a span selection starts from: the one last clicked. */
+    private int hierarchyAnchor;
+    /**
+     * A click on a row of the Hierarchy. A plain click shows that BuildObject alone (and lets go if it is the one shown); Ctrl adds it to the ones shown or takes it away;
+     * Shift and Ctrl together add every row shown from the last one clicked to this one. The editor's selection is all of the BuildObjects shown, together.
+     */
+    private void rowClick(dev.craftium.net.Packets.SavedSelection entry){
+        boolean ctrl=minecraft.hasControlDown(),shift=minecraft.hasShiftDown();
+        var chosen=new ArrayList<Integer>();for(var e:hierarchyAll)if(e.active())chosen.add(e.id());
+        if(ctrl&&shift){
+            int from=-1,to=-1;for(int i=0;i<hierarchyRows.size();i++){int id=hierarchyRows.get(i).id();if(id==hierarchyAnchor)from=i;if(id==entry.id())to=i;}
+            if(from<0)from=to;
+            for(int i=Math.min(from,to);i<=Math.max(from,to);i++){int id=hierarchyRows.get(i).id();if(!chosen.contains(id))chosen.add(id);}
+        }else if(ctrl){
+            if(!chosen.remove((Integer)entry.id()))chosen.add(entry.id());hierarchyAnchor=entry.id();
+        }else{
+            hierarchyAnchor=entry.id();
+            action(entry.active()&&!entry.editing()&&chosen.size()==1?"saved_selection:release":"saved_selection:view:"+entry.id());return;
+        }
+        action("saved_selection:viewset:"+String.join(",",chosen.stream().map(String::valueOf).toList()));
+    }
+    /** F with exactly one BuildObject shown: the view goes back along the way it is looking until the middle of that BuildObject is in the middle of the screen and all of it fits between the panels. */
+    private boolean focusBuildObject(){
+        int shown=0;for(var e:ClientState.savedSelections())if(e.active())shown++;
+        if(shown!=1||minecraft.player==null)return false;
+        if(ClientState.status.selectionSize()==0){ClientState.notify("That BuildObject has no blocks to look at");return true;}
+        var lo=ClientState.status.min();var hi=ClientState.status.max();
+        double sx=hi.x()-lo.x()+1,sy=hi.y()-lo.y()+1,sz=hi.z()-lo.z()+1;
+        var centre=new Vec3(lo.x()+sx/2,lo.y()+sy/2,lo.z()+sz/2);
+        double radius=Math.max(1,.5*Math.sqrt(sx*sx+sy*sy+sz*sz)); // a sphere round all of it, so it fits whichever way it is seen
+        double half=Math.tan(Math.toRadians(ClientCompat.fov(minecraft,ClientCompat.camera(minecraft)))/2);
+        double t=Math.min(half*(h-52)/h,half*(w-LEFT-RIGHT)/h); // how wide a view is left between the panels and the bars, as the tangent of its half angle
+        double distance=Math.max(radius+1.5,radius*Math.sqrt(1+t*t)/t*1.08);
+        var eye=centre.subtract(minecraft.player.getLookAngle().scale(distance));
+        var to=new Vec3(eye.x,eye.y-minecraft.player.getEyeHeight(),eye.z);
+        var from=minecraft.player.position();double away=to.distanceTo(from),limit=CraftiumClient.stepLimit();
+        if(away>limit){to=from.add(to.subtract(from).scale(limit/away));ClientState.notify("That is further than this server lets you move at once: press F again");}
+        minecraft.player.setPos(to.x,to.y,to.z);minecraft.player.setDeltaMovement(Vec3.ZERO);minecraft.player.setOldPosAndRot();
+        return true;
     }
     /** A row of the Hierarchy that a double click renames: the row's own control, so a click on a button of the row is not a rename. */
     private record RenameArea(Control row,int id){}
