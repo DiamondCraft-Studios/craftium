@@ -54,6 +54,16 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private boolean pressMissing, dragging;
     private double pressX, pressY;
     private int[] pressOrigin, pressFrom;
+    private static final int NODE_H = 22, GRAPH_ROW = 27;
+    private static final String HINT = "Arrows go from a pool to the pools its connectors ask for. Drag an arrow's square onto another pool to retarget its connectors, or into the red box to disconnect them. Drag a pool to arrange it, click one to open it.";
+    /** The red box an arrow is dropped in to disconnect it sits just above the hint, whatever the hint's length. */
+    private int disconnectY() { return ch - FOOT - 8 - font.split(Component.literal(HINT), centreW).size() * 10 - 24; }
+    /** An arrow of the graph, from where it leaves its pool to where it ends, with how many connectors stand behind it. */
+    private record Edge(String from, String to, int count, int x1, int y1, int x2, int y2) {}
+    private Edge pressEdge;
+    private double edgePressX, edgePressY, edgeX, edgeY;
+    private boolean edgeDragging, retargetPrompt, alignAfter;
+    private int awaitTicks;
     private int leftW, rightW, centreX, centreW;
     /** The editor is laid out on a canvas at least 860 by 460 and scaled down to fit a smaller window, like the Studio inspector. */
     private float uiScale = 1;
@@ -100,7 +110,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     /** Notes in this screen's own history that a command changed something on the server, so undo can tell it from a move in the graph. */
     private void note(String op) {
         switch (op) {
-            case "open", "templates", "names", "undo", "redo" -> { }
+            case "open", "templates", "names", "undo", "redo", "retarget_check" -> { }
             case "apply", "discard" -> { localUndo.clear(); localRedo.clear(); }
             default -> { localUndo.push(new Local(Kind.SERVER, null, null, null, null)); localRedo.clear(); }
         }
@@ -195,6 +205,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         button("Undo (" + undoCount + ")", cw - SIDE - 70 - 152, 10, 70, 20, this::undo).active = undoCount > 0;
         button("Discard", cw - SIDE - 70 - 152 - 76, 10, 70, 20, () -> edit("discard")).active = unapplied > 0;
         button("Apply (" + unapplied + ")", cw - SIDE - 70 - 152 - 76 - 102, 10, 96, 20, () -> edit("apply")).lit(unapplied > 0).active = unapplied > 0;
+        if (retargetPrompt) { retargetButtons(); applyTips(); return; }
         if (confirmLeave) { leavePrompt(); applyTips(); return; }
         if (adding) { overlay(); applyTips(); return; }
         leftPane();
@@ -216,7 +227,9 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 case "Apply and leave" -> "Applies the waiting changes to datapacks/craftium, then goes back to the planner.";
                 case "Discard and leave" -> "Throws the waiting changes away, then goes back to the planner.";
                 case "Keep editing" -> "Stays in the editor with the changes still waiting.";
-                case "Reset layout" -> "Puts the pools back where the automatic layout places them. You can undo it.";
+                case "Auto-align" -> "Puts every pool back in its column and row, as the automatic layout places them. You can undo it.";
+                case "Retarget" -> "Points those connectors at the new pool. It is one undo step, and nothing reaches the datapack until you Apply.";
+                case "Cancel" -> "Leaves the connectors as they are.";
                 case "Undo" -> "Takes back your last change here: an edit to a pool or template, or a move of a pool in the graph.";
                 case "Redo" -> "Puts back a change you took back, including a move in the graph.";
                 case "New" -> "Makes an empty pool with the name typed above.";
@@ -270,7 +283,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         button("Elements", centreX, tabs, 78, 20, () -> { graph = false; init(); }).lit(!graph);
         button("Graph", centreX + 82, tabs, 78, 20, () -> { graph = true; init(); }).lit(graph);
         button("+ Add template", centreX + 166, tabs, 110, 20, () -> { adding = true; query = ""; init(); });
-        if (graph) button("Reset layout", centreX + centreW - 96, tabs, 96, 20, this::resetLayout);
+        if (graph) button("Auto-align", centreX + centreW - 96, tabs, 96, 20, this::resetLayout);
         if (!graph) {
             int pages = Math.max(1, (elements().size() + perPage() - 1) / perPage());
             page = Math.clamp(page, 0, pages - 1);
@@ -380,8 +393,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
     @Override protected void drawBackground(Gfx g, int x, int y, float delta) {}
 
     @Override public void tick() {
+        if (awaitTicks > 0) awaitTicks--;
         if (ClientState.jigsawModelVersion != seenVersion) {
             init();
+            if (awaitTicks > 0 && model.has("retarget")) { awaitTicks = 0; retargetPrompt = true; init(); }
+            if (alignAfter) { alignAfter = false; clearLayout(); init(); }
             if (leaveAfter) { leaveAfter = false; if (unappliedCount() == 0) { confirmLeave = false; finishClose(); return; } }
         }
         if (pendingWeightIndex != null && System.currentTimeMillis() - pendingAt > 350
@@ -418,6 +434,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         int waiting = unappliedCount();
         if (waiting > 0) { String note = waiting + (waiting == 1 ? " unapplied change" : " unapplied changes"); g.text(font, note, cw - SIDE - font.width(note), 34, WARN, false); }
         if (model.has("registryError")) g.text(font, font.plainSubstrByWidth("A pool file has a problem: " + str(model, "registryError", ""), cw - 2 * SIDE - 200), SIDE, 38, ERROR, false);
+        if (retargetPrompt) { drawRetargetPrompt(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
         if (confirmLeave) { drawLeavePrompt(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
         if (adding) { drawOverlay(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
         drawPools(g, mx, my);
@@ -557,6 +574,64 @@ final class JigsawEditorScreen extends CraftiumScreen {
         g.text(font, blocks > 0 ? "Or save your selection (" + blocks + " blocks) as a new template:" : "Or select blocks in the world to save them as a new template.", x + 10, bottom + 4, MUTED, false);
     }
 
+    // ---- pointing the connectors behind an arrow at another pool
+
+    private JsonObject retarget() { return model.has("retarget") ? model.getAsJsonObject("retarget") : new JsonObject(); }
+
+    private void retargetButtons() {
+        int w = Math.min(470, cw - 40), x = (cw - w) / 2, y = Math.max(50, ch / 2 - 120);
+        var info = retarget();
+        boolean usable = info.has("pool") && !(info.has("toMissing") && info.get("toMissing").getAsBoolean());
+        button("Retarget", x + 10, y + 196, 110, 22, () -> {
+            retargetPrompt = false;
+            alignAfter = true;
+            edit("retarget", "pool", str(info, "pool", ""), "from", str(info, "from", ""), "to", str(info, "to", ""));
+        }).active = usable;
+        button("Cancel", x + 126, y + 196, 100, 22, () -> { retargetPrompt = false; init(); });
+    }
+
+    private void drawRetargetPrompt(Gfx g) {
+        int w = Math.min(470, cw - 40), x = (cw - w) / 2, y = Math.max(50, ch / 2 - 120);
+        var info = retarget();
+        g.fill(0, 0, cw, ch, 0xaa000000);
+        g.fill(x, y, x + w, y + 228, 0xff172330);
+        g.outline(x, y, w, 228, ClientState.options.uiAccent);
+        g.text(font, "RETARGET CONNECTORS", x + 10, y + 10, 0xffb5dcfc, false);
+        int line = y + 26;
+        int connectors = num(info, "connectors", 0), templates = info.has("templates") ? info.getAsJsonArray("templates").size() : 0;
+        String to = str(info, "to", "");
+        var summary = connectors + (connectors == 1 ? " connector" : " connectors") + " in " + templates + (templates == 1 ? " template" : " templates") + " of " + shortName(str(info, "pool", "")) + " lead to "
+                + shortName(str(info, "from", "")) + ". " + (to.equals("minecraft:empty") ? "They would lead nowhere: nothing would grow from them." : "They would lead to " + shortName(to) + " instead.");
+        for (var row : font.split(Component.literal(summary), w - 20)) { g.text(font, row, x + 10, line, TEXT, false); line += 10; }
+        line += 4;
+        if (info.has("templates")) {
+            int shown = 0;
+            for (var id : info.getAsJsonArray("templates")) {
+                if (shown++ >= 4) { g.text(font, "...and " + (templates - 4) + " more templates", x + 14, line, MUTED, false); line += 10; break; }
+                g.text(font, font.plainSubstrByWidth(shortName(id.getAsString()), w - 28), x + 14, line, MUTED, false);
+                line += 10;
+            }
+        }
+        line += 4;
+        if (info.has("toMissing") && info.get("toMissing").getAsBoolean()) { g.text(font, shortName(to) + " does not exist, so this cannot be done.", x + 10, line, ERROR, false); line += 12; }
+        if (info.has("shared") && info.getAsJsonArray("shared").size() > 0) {
+            var shared = info.getAsJsonArray("shared");
+            for (var row : font.split(Component.literal("Shared templates: other pools use them too, so those pools change as well."), w - 20)) { g.text(font, row, x + 10, line, WARN, false); line += 10; }
+            int shown = 0;
+            for (var item : shared) {
+                if (shown++ >= 3) break;
+                var o = item.getAsJsonObject();
+                var pools = new ArrayList<String>();
+                for (var p : o.getAsJsonArray("pools")) pools.add(shortName(p.getAsString()));
+                int more = num(o, "more", 0);
+                g.text(font, font.plainSubstrByWidth(shortName(str(o, "template", "")).replaceAll("^.*/", "") + " is in " + String.join(", ", pools) + (more > 0 ? " and " + more + " more" : ""), w - 28), x + 14, line, WARN, false);
+                line += 10;
+            }
+        }
+        int unmatched = num(info, "unmatched", 0);
+        if (unmatched > 0) { line += 2; for (var row : font.split(Component.literal(unmatched + " of them ask for a name that no element of " + shortName(to) + " offers, so they would be dead ends."), w - 20)) { g.text(font, row, x + 10, line, WARN, false); line += 10; } }
+    }
+
     // ---- leaving with changes that are not applied
 
     private void leavePrompt() {
@@ -596,33 +671,55 @@ final class JigsawEditorScreen extends CraftiumScreen {
         int top = cardsTop() - 4;
         if (graphModel == null || graphModel.getAsJsonArray("nodes").size() == 0) { g.text(font, "Nothing to draw: the pools are not loaded (see the message above).", centreX, top + 6, MUTED, false); return; }
         var nodes = layout(graphModel);
-        int nodeW = nodeWidth(nodes), nodeH = 18, gap = 20;
+        int nodeW = nodeWidth(nodes), nodeH = NODE_H, gap = 20;
         g.enableScissor(centreX, top, centreX + centreW, ch - FOOT);
         var place = new HashMap<String, int[]>();
         for (var n : nodes) place.put(n.id(), placeOf(n, nodeW, top));
-        for (var e : graphModel.getAsJsonArray("edges")) {
-            var edge = e.getAsJsonObject();
-            var a = place.get(str(edge, "from", "")); var b = place.get(str(edge, "to", ""));
-            if (a == null || b == null || a == b) continue;
-            int x1 = a[0] + nodeW, y1 = a[1] + nodeH / 2, x2 = b[0], y2 = b[1] + nodeH / 2;
+        Edge hovered = null;
+        for (var edge : edgeShapes(nodes, graphModel.getAsJsonArray("edges"), nodeW, top)) {
+            boolean lifted = edgeDragging && pressEdge != null && edge.from().equals(pressEdge.from()) && edge.to().equals(pressEdge.to());
+            int x1 = edge.x1(), y1 = edge.y1(), x2 = edge.x2(), y2 = edge.y2();
             int mid = x2 > x1 ? (x1 + x2) / 2 : x1 + gap / 2;
-            int colour = 0xff4a6585;
+            int colour = lifted ? 0xff2f4358 : 0xff4a6585;
             g.fill(x1, y1, mid + 1, y1 + 1, colour);
             g.fill(mid, Math.min(y1, y2), mid + 1, Math.max(y1, y2) + 1, colour);
-            if (x2 > mid) g.fill(mid, y2, x2 - 2, y2 + 1, colour);
-            g.fill(x2 - 3, y2 - 2, x2 - 2, y2 + 3, 0xff8fd3ff);
-            g.fill(x2 - 2, y2 - 1, x2, y2 + 2, 0xff8fd3ff);
+            if (x2 > mid) g.fill(mid, y2, x2 - 9, y2 + 1, colour);
+            boolean over = !edgeDragging && mx >= x2 - 11 && mx < x2 + 1 && my >= y2 - 5 && my < y2 + 5 && my >= top;
+            if (over) hovered = edge;
+            int handle = over ? 0xffffdca8 : lifted ? 0xff5a6f85 : 0xff8fd3ff;
+            g.fill(x2 - 9, y2 - 3, x2 - 2, y2 + 4, handle); // the square to take hold of
+            g.fill(x2 - 2, y2 - 1, x2, y2 + 2, handle);
         }
         for (var n : nodes) {
             var at = place.get(n.id());
             boolean current = n.id().equals(poolId()), hover = mx >= at[0] && mx < at[0] + nodeW && my >= at[1] && my < at[1] + nodeH && my >= top;
+            boolean target = edgeDragging && pressEdge != null && hover && !n.missing() && !n.id().equals(pressEdge.to());
             g.fill(at[0], at[1], at[0] + nodeW, at[1] + nodeH, n.missing() ? 0xff5a2a2a : current ? 0xff315473 : hover ? 0xff2f4663 : CARD);
-            g.outline(at[0], at[1], nodeW, nodeH, current ? ClientState.options.uiAccent : ClientState.options.uiBorder);
+            g.outline(at[0], at[1], nodeW, nodeH, target ? OK : current ? ClientState.options.uiAccent : ClientState.options.uiBorder);
             String label = shortName(n.id()).replaceAll("^.*/", "") + (n.missing() ? " (missing)" : " · " + n.elements());
             g.text(font, font.plainSubstrByWidth(label, nodeW - 6), at[0] + 3, at[1] + 5, n.missing() ? ERROR : TEXT, false);
         }
+        if (hovered != null) {
+            String tip = hovered.count() + (hovered.count() == 1 ? " connector" : " connectors") + " · drag the square onto a pool to retarget";
+            int lx = Math.max(centreX + 4, hovered.x2() - font.width(tip) - 12), ly = hovered.y2() - 20;
+            g.fill(lx - 3, ly - 2, lx + font.width(tip) + 3, ly + 10, 0xf0101923);
+            g.text(font, tip, lx, ly, TEXT, false);
+        }
+        if (edgeDragging && pressEdge != null) { // an arrow being dragged: a line to the pointer, and a box that disconnects it
+            int x1 = pressEdge.x1(), y1 = pressEdge.y1(), x2 = (int) edgeX, y2 = (int) edgeY, mid = (x1 + x2) / 2;
+            g.fill(x1, y1, mid + 1, y1 + 1, 0xffffdca8);
+            g.fill(mid, Math.min(y1, y2), mid + 1, Math.max(y1, y2) + 1, 0xffffdca8);
+            g.fill(mid, y2, x2 + 1, y2 + 1, 0xffffdca8);
+            g.fill(x2 - 4, y2 - 4, x2 + 3, y2 + 3, 0xffffdca8);
+            int zx = centreX + 4, zy = disconnectY();
+            boolean over = edgeX >= zx && edgeX < zx + 180 && edgeY >= zy && edgeY < zy + 22;
+            g.fill(zx, zy, zx + 180, zy + 22, over ? 0xff6a3a2a : 0xff3a2a28);
+            g.outline(zx, zy, 180, 22, over ? ERROR : 0xff8a5a4a);
+            g.centeredText(font, "Drop here to disconnect", zx + 90, zy + 7, TEXT);
+        }
         g.disableScissor();
-        g.text(font, "Arrows go from a pool to the pools its connectors ask for. Drag a pool to arrange them, click one to open it.", centreX, ch - FOOT - 10, 0xff6f8296, false);
+        var hint = font.split(Component.literal(HINT), centreW);
+        for (int i = 0; i < hint.size(); i++) g.text(font, hint.get(i), centreX, ch - FOOT - 4 - (hint.size() - i) * 10, 0xff6f8296, false);
     }
 
     private int nodeWidth(List<Node> nodes) {
@@ -634,7 +731,74 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private int[] placeOf(Node n, int nodeW, int top) {
         var moved = NODE_POS.get(nodeKey(n.id()));
         if (moved != null) return new int[]{centreX + 4 + moved[0], top + 4 + moved[1] - (int) graphScroll};
-        return new int[]{centreX + 4 + n.depth() * (nodeW + 20), top + 4 + n.row() * 23 - (int) graphScroll};
+        return new int[]{centreX + 4 + n.depth() * (nodeW + 20), top + 4 + n.row() * GRAPH_ROW - (int) graphScroll};
+    }
+
+    /** The arrows of the graph with where each leaves and ends: the ends of the arrows that meet at a pool are spread down its side, so each can be taken hold of. */
+    private List<Edge> edgeShapes(List<Node> nodes, JsonArray edges, int nodeW, int top) {
+        var place = new HashMap<String, int[]>();
+        for (var n : nodes) place.put(n.id(), placeOf(n, nodeW, top));
+        var incoming = new HashMap<String, List<JsonObject>>();
+        for (var e : edges) {
+            var edge = e.getAsJsonObject();
+            String from = str(edge, "from", ""), to = str(edge, "to", "");
+            if (from.equals(to) || !place.containsKey(from) || !place.containsKey(to)) continue;
+            incoming.computeIfAbsent(to, k -> new ArrayList<>()).add(edge);
+        }
+        var out = new ArrayList<Edge>();
+        for (var entry : incoming.entrySet()) {
+            var list = entry.getValue();
+            list.sort(Comparator.<JsonObject>comparingInt(edge -> place.get(str(edge, "from", ""))[1]));
+            var b = place.get(entry.getKey());
+            for (int i = 0; i < list.size(); i++) {
+                var edge = list.get(i);
+                var a = place.get(str(edge, "from", ""));
+                int y2 = list.size() == 1 ? b[1] + NODE_H / 2 : b[1] + 5 + i * (NODE_H - 10) / (list.size() - 1);
+                out.add(new Edge(str(edge, "from", ""), entry.getKey(), num(edge, "count", 0), a[0] + nodeW, a[1] + NODE_H / 2, b[0], y2));
+            }
+        }
+        return out;
+    }
+
+    /** Where a moved pool lands: on the grid the layout uses, in a place no other pool has. */
+    private int[] snap(String id, int[] at) {
+        if (!model.has("graph")) return at;
+        var nodes = layout(model.getAsJsonObject("graph"));
+        int cellW = nodeWidth(nodes) + 20, cellH = GRAPH_ROW;
+        int x = Math.max(0, Math.round((float) at[0] / cellW) * cellW), y = Math.max(0, Math.round((float) at[1] / cellH) * cellH);
+        boolean free;
+        do {
+            free = true;
+            for (var n : nodes) {
+                if (n.id().equals(id)) continue;
+                var moved = NODE_POS.get(nodeKey(n.id()));
+                int nx = moved != null ? moved[0] : n.depth() * cellW, ny = moved != null ? moved[1] : n.row() * cellH;
+                if (nx == x && ny == y) { y += cellH; free = false; break; }
+            }
+        } while (!free);
+        return new int[]{x, y};
+    }
+
+    /** Forgets where the player put the pools of this graph, so the layout places them: after a retarget the columns have changed. */
+    private void clearLayout() {
+        String prefix = poolId() + "|";
+        NODE_POS.keySet().removeIf(key -> key.startsWith(prefix));
+    }
+
+    /** An arrow was dropped: asks the server what pointing its connectors at the pool under it would change, which is then put to the player. */
+    private void dropEdge(Edge edge, double x, double y) {
+        var nodes = layout(model.getAsJsonObject("graph"));
+        int nodeW = nodeWidth(nodes), top = cardsTop() - 4;
+        String to = null;
+        if (x >= centreX + 4 && x < centreX + 4 + 180 && y >= disconnectY() && y < disconnectY() + 22) to = "minecraft:empty";
+        else for (var n : nodes) {
+            var at = placeOf(n, nodeW, top);
+            if (!n.missing() && x >= at[0] && x < at[0] + nodeW && y >= Math.max(at[1], top) && y < at[1] + NODE_H) to = n.id();
+        }
+        if (to == null) { localMessage = "Drop the arrow on a pool, or in the red box"; init(); return; }
+        if (to.equals(edge.to())) { localMessage = "That arrow already ends there"; init(); return; }
+        awaitTicks = 40;
+        edit("retarget_check", "pool", edge.from(), "from", edge.to(), "to", to);
     }
 
     /** Puts every pool of this graph back where the layout places it, as one step that can be undone. */
@@ -678,6 +842,14 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     @Override public boolean mouseReleased(MouseButtonEvent raw) {
         var event = scaled(raw);
+        if (pressEdge != null && event.button() == 0) {
+            var edge = pressEdge;
+            boolean carried = edgeDragging;
+            pressEdge = null;
+            edgeDragging = false;
+            if (carried) dropEdge(edge, event.x(), event.y());
+            return true;
+        }
         if (pressNode != null && event.button() == 0) {
             var id = pressNode;
             boolean moved = dragging;
@@ -685,7 +857,12 @@ final class JigsawEditorScreen extends CraftiumScreen {
             dragging = false;
             if (moved) {
                 var to = NODE_POS.get(pressKey);
-                if (to != null) { localUndo.push(new Local(Kind.MOVE, pressKey, pressFrom, to.clone(), null)); localRedo.clear(); }
+                if (to != null) {
+                    to = snap(id, to);
+                    NODE_POS.put(pressKey, to);
+                    localUndo.push(new Local(Kind.MOVE, pressKey, pressFrom, to.clone(), null));
+                    localRedo.clear();
+                }
                 init();
             } else if (!pressMissing) { selected = 0; page = 0; edit("open", "pool", id); }
             return true;
@@ -695,6 +872,12 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     @Override public boolean mouseDragged(MouseButtonEvent raw, double dx, double dy) {
         var event = scaled(raw);
+        if (pressEdge != null) {
+            if (!edgeDragging && Math.hypot(event.x() - edgePressX, event.y() - edgePressY) > 3) edgeDragging = true;
+            edgeX = event.x();
+            edgeY = event.y();
+            return true;
+        }
         if (pressNode != null) {
             double moveX = event.x() - pressX, moveY = event.y() - pressY;
             if (!dragging && Math.hypot(moveX, moveY) > 3) dragging = true;
@@ -721,9 +904,15 @@ final class JigsawEditorScreen extends CraftiumScreen {
         if (pool() != null && graph && model.has("graph")) {
             var nodes = layout(model.getAsJsonObject("graph"));
             int nodeW = nodeWidth(nodes), top = cardsTop() - 4;
+            for (var edge : edgeShapes(nodes, model.getAsJsonObject("graph").getAsJsonArray("edges"), nodeW, top)) {
+                if (x >= edge.x2() - 11 && x < edge.x2() + 1 && y >= edge.y2() - 5 && y < edge.y2() + 5 && y >= top) {
+                    pressEdge = edge; edgePressX = x; edgePressY = y; edgeX = x; edgeY = y; edgeDragging = false;
+                    return true;
+                }
+            }
             for (var n : nodes) {
                 var at = placeOf(n, nodeW, top);
-                if (x >= at[0] && x < at[0] + nodeW && y >= Math.max(at[1], top) && y < at[1] + 18) {
+                if (x >= at[0] && x < at[0] + nodeW && y >= Math.max(at[1], top) && y < at[1] + NODE_H) {
                     // A press on a pool: it opens when let go in place, and moves when dragged.
                     pressNode = n.id(); pressKey = nodeKey(n.id()); pressMissing = n.missing(); dragging = false;
                     pressX = x; pressY = y;
@@ -756,6 +945,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     @Override public boolean isPauseScreen() { return false; }
     @Override public void removed() { PoolThumbnails.releaseAll(); }
     @Override public void onClose() {
+        if (retargetPrompt) { retargetPrompt = false; init(); return; }
         if (confirmLeave) { confirmLeave = false; init(); return; } // Escape on the question means keep editing
         if (unappliedCount() > 0) { confirmLeave = true; init(); return; }
         finishClose();
