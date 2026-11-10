@@ -238,6 +238,15 @@ public final class EditorServer {
             }
             if(r.action().startsWith(SavedSelectionActions.PREFIX)){ // the Selections window (before the plugin actions, as "saved_selection:save" has the shape of one): swaps entries in and out of the live selection, never changes a block
                 if(!Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS))throw new IllegalArgumentException("This client does not know BuildObjects");
+                if(r.action().equals(SavedSelectionActions.PREFIX+"duplicate")){ // copies the blocks shown and remembers the BuildObjects they belong to, for the paste that follows
+                    HierarchyPermissions.require(player,"create");
+                    requireSelection(s);
+                    if(s.saved.viewed().isEmpty())throw new IllegalArgumentException("Show a BuildObject to duplicate it");
+                    var nodes=s.saved.captureCopy(s.selection.min());
+                    copy(player,s,o,false);
+                    s.duplicateNodes=nodes;s.duplicateEpoch=s.clipboardEpoch;
+                    return;
+                }
                 var needs=SavedSelectionActions.permission(r.action());if(needs!=null)HierarchyPermissions.require(player,needs);
                 var before=SavedSelectionActions.changesHierarchy(r.action())?s.saved.state():null; // what is done in the Hierarchy is in the history, so Undo and Redo reach it
                 String said=SavedSelectionActions.run(s,r.action());
@@ -373,7 +382,7 @@ public final class EditorServer {
                     catch(RuntimeException e){s.selection.restore(before);s.saved.setPoints(objectsNow);s.pendingSelectionBefore=priorBefore;s.pendingObjectsBefore=priorObjects;if(confirming)s.pendingEdit=staged;throw e;}
                 }
                 case "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo" -> {var plan=new EditPlanner(player.level(),s,o);s.selection.combine(SelectionTransforms.apply(r.action(),plan),Selection.Mode.REPLACE);send(player,s,"Selection updated: "+s.selection.size()+" blocks",false);}
-                case "clear" -> {s.selection.clear();s.corner=null;s.line=null;s.ruler=null;send(player,s,"Selection cleared",false);}
+                case "clear" -> {s.saved.release(s.selection);s.selection.clear();s.corner=null;s.line=null;s.ruler=null;send(player,s,"Selection cleared",false);}
                 case "ruler_clear" -> {s.ruler=null;send(player,s,"Measurement cleared",false);}
                 case "asset_upload","blueprint_list","blueprint_save","blueprint_load","blueprint_data","structure_export","schematic_export","schematic_import","selection_csv" -> {
                     var plan=new EditPlanner(player.level(),s,o);String result=BlueprintLibrary.act(r.action(),plan);if(Set.of("blueprint_save","structure_export","schematic_export","selection_csv","blueprint_data").contains(r.action()))result+=BlueprintLibrary.download(r.action(),plan,player);send(player,s,result,false);
@@ -387,7 +396,7 @@ public final class EditorServer {
                     new EditPlanner(player.level(),s,o).validate(EditPlanner.point(entity.blockPosition()));
                     var before=EntityEdits.snapshot(entity,player.level());var saved=before.copy();ClipboardEntities.offset(saved,-entity.getBlockX(),-entity.getBlockY(),-entity.getBlockZ());
                     if(saved.toString().length()>1_000_000)throw new IllegalArgumentException("Entity clipboard exceeds the data limit");
-                    s.selectedEntity=entity.getUUID();s.clipboard.clear();s.clipboardOrigin=null;s.clipboardEntities.clear();s.clipboardEntities.add(saved);s.clipboardDirty=true;
+                    s.selectedEntity=entity.getUUID();s.clipboardEpoch++;s.clipboard.clear();s.clipboardOrigin=null;s.clipboardEntities.clear();s.clipboardEntities.add(saved);s.clipboardDirty=true;
                     if(r.action().equals("entity_cut"))start(player,s,new Session.Edit("Cut entity",List.of(),List.of(),2,List.of(new Session.EntityChange(entity.getUUID(),before,null))));
                     else send(player,s,"Copied entity to clipboard",false);
                 }
@@ -499,7 +508,11 @@ public final class EditorServer {
                         selected=new Session.SelectionChange(before,new ArrayList<>(placed),null,null,handlesBefore,Map.of("corners","none"));
                         if(o.pasteAsObject!=null&&!o.pasteAsObject.isBlank()){ // a duplicate or a paste from the Hierarchy: the pasted blocks are also a new BuildObject, in the history with them
                             HierarchyPermissions.require(player,"create");
-                            var hierarchyBefore=s.saved.state();s.saved.createFrom(o.pasteAsObject,placed,o.pasteAsObjectAfter);
+                            var hierarchyBefore=s.saved.state();
+                            var nodes=s.duplicateNodes;var kept=new HashSet<Point>();if(nodes!=null)for(var n:nodes)kept.addAll(n.relative());
+                            if(nodes!=null&&s.duplicateEpoch==s.clipboardEpoch&&kept.equals(s.clipboard.keySet()))s.saved.createCopies(nodes,origin,placed,o.pasteAsObjectAfter); // the structure of what was duplicated, made again
+                            else s.saved.createFrom(o.pasteAsObject,placed,o.pasteAsObjectAfter); // the clipboard is not what was duplicated any more (turned, or something else was copied): one BuildObject
+                            s.duplicateNodes=null;
                             selected=selected.withHierarchy(hierarchyBefore,s.saved.state());
                         }
                     }
@@ -597,7 +610,7 @@ public final class EditorServer {
         }
         var entities=o.copyEntities?ClipboardEntities.capture(player,s):new ClipboardEntities.Capture(List.of(),List.of());
         for(var tag:entities.relative()){bytes+=tag.toString().length()*2;if(bytes>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Clipboard exceeds "+Selection.HISTORY_BYTES/1024/1024+" MiB including entities");}
-        s.clipboard.clear();s.clipboard.putAll(next);s.clipboardEntities.clear();s.clipboardEntities.addAll(entities.relative());
+        s.clipboardEpoch++;s.clipboard.clear();s.clipboard.putAll(next);s.clipboardEntities.clear();s.clipboardEntities.addAll(entities.relative());
         s.clipboardOrigin=min;
         s.clipboardDirty=true;
         if(cut){var plan=new EditPlanner(player.level(),s,o);for(Point p:s.selection.points())plan.put(p,Blocks.AIR.defaultBlockState());var edit=plan.finish("Cut selection");start(player,s,new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),entities.removals()));}
@@ -612,7 +625,7 @@ public final class EditorServer {
             next.put(at,new BlockSnapshot(state,v.data()));
         }
         int minX=next.keySet().stream().mapToInt(Point::x).min().orElse(0),minY=next.keySet().stream().mapToInt(Point::y).min().orElse(0),minZ=next.keySet().stream().mapToInt(Point::z).min().orElse(0);
-        s.clipboard.clear();next.forEach((p,v)->s.clipboard.put(p.add(-minX,-minY,-minZ),v));
+        s.clipboardEpoch++;s.clipboard.clear();next.forEach((p,v)->s.clipboard.put(p.add(-minX,-minY,-minZ),v));
         ClipboardEntities.transform(s,v->rotate?new Geometry.Vector(1-v.z()-minX,v.y()-minY,v.x()-minZ):new Geometry.Vector((axis==0?1-v.x():v.x())-minX,(axis==1?1-v.y():v.y())-minY,(axis==2?1-v.z():v.z())-minZ),rotate?90:axis==2?180:0,!rotate&&axis!=1);
         if(!rotate&&axis==1)for(var root:s.clipboardEntities)ClipboardEntities.walk(root,tag->{var old=tag.getListOrEmpty("Rotation");var rotation=new net.minecraft.nbt.ListTag();rotation.add(net.minecraft.nbt.FloatTag.valueOf(old.getFloatOr(0,0)));rotation.add(net.minecraft.nbt.FloatTag.valueOf(-old.getFloatOr(1,0)));tag.put("Rotation",rotation);});
         s.clipboardDirty=true;

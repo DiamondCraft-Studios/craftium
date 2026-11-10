@@ -369,6 +369,50 @@ class SavedSelectionsTest {
         assertThrows(IllegalArgumentException.class,()->saved.placeMany(List.of(),0,0));
         assertEquals(List.of(a,b),saved.entries(),"a refused move changes nothing");
     }
+    private static final Point ORIGIN=new Point(0,0,0);
+    @Test void aCopyOfAHierarchyHasTheSameStructureNamesOrderAndColours(){
+        var saved=new SavedSelections();var s=live(A);
+        var p=saved.save(live(A));var x=saved.save(live(B));var y=saved.save(live(C));var q=saved.save(live(D));
+        saved.place(x.id(),p.id(),0);saved.place(y.id(),p.id(),1);saved.setColor(x.id(),0xff112233);
+        saved.viewSet(List.of(p.id()),s);
+        var nodes=saved.captureCopy(ORIGIN);
+        assertEquals(3,nodes.size());assertEquals(List.of(-1,0,0),nodes.stream().map(SavedSelections.Copy::parentIndex).toList());
+        var shifted=new Point(100,0,0);var placed=new HashSet<Point>();for(var n:nodes)for(var r:n.relative())placed.add(shifted.add(r.x(),r.y(),r.z()));
+        var made=saved.createCopies(nodes,shifted,placed,p.id());
+        assertEquals(3,made.size());
+        assertEquals(List.of(p,x,y,made.get(0),made.get(1),made.get(2),q),saved.entries(),"the copy follows the original, with its own children under it, before whatever came next");
+        assertEquals(List.of("BuildObject (copy)","BuildObject (1)","BuildObject (2)"),made.stream().map(SavedSelections.Entry::name).toList(),"only the top one is marked as a copy");
+        assertEquals(made.get(0).id(),made.get(1).parentId());assertEquals(made.get(0).id(),made.get(2).parentId());assertEquals(0,made.get(0).parentId());
+        assertEquals(0xff112233,made.get(1).color(),"colours are copied");
+        assertEquals(List.of(new Point(101,0,0)),made.get(1).points(),"the blocks are where the copy was put");
+        assertNotEquals(x.guid(),made.get(1).guid());
+    }
+    @Test void onlyTheOutermostShownAreCopiedAndEachWithItsSubtree(){
+        var saved=new SavedSelections();var s=live(A);var p=saved.save(live(A));var x=saved.save(live(B));saved.place(x.id(),p.id(),0);var y=saved.save(live(C));
+        saved.viewSet(List.of(p.id(),x.id(),y.id()),s);
+        var nodes=saved.captureCopy(ORIGIN);
+        assertEquals(3,nodes.size(),"x is under p, so it comes with p and not again");
+        assertEquals(List.of(-1,0,-1),nodes.stream().map(SavedSelections.Copy::parentIndex).toList());
+    }
+    @Test void copiesOfSeveralTopOnesKeepTheirOrderAfterTheOriginal(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(live(A));var b=saved.save(live(B));var c=saved.save(live(C));
+        saved.viewSet(List.of(a.id(),b.id()),s);
+        var made=saved.createCopies(saved.captureCopy(ORIGIN),ORIGIN,new HashSet<>(List.of(A,B)),b.id());
+        assertEquals(List.of(a,b,made.get(0),made.get(1),c),saved.entries());
+    }
+    @Test void aCopyOnlyHoldsTheCellsThatWerePlaced(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(live(A,B));saved.viewSet(List.of(a.id()),s);
+        var made=saved.createCopies(saved.captureCopy(ORIGIN),ORIGIN,new HashSet<>(List.of(A)),a.id()); // B was air and was not pasted
+        assertEquals(List.of(A),made.getFirst().points());
+    }
+    @Test void aCopyWithNoPlaceOrAGoneOneGoesAtTheEndAndTheLimitIsKept(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(live(A));var b=saved.save(live(B));saved.viewSet(List.of(a.id()),s);
+        var made=saved.createCopies(saved.captureCopy(ORIGIN),ORIGIN,new HashSet<>(List.of(A)),0);
+        assertSame(made.getFirst(),saved.entries().getLast());
+        var full=new SavedSelections();for(int i=0;i<SavedSelections.MAX;i++)full.save(live(new Point(i+10,0,0)));
+        full.viewSet(List.of(full.entries().getFirst().id()),s);
+        assertThrows(IllegalArgumentException.class,()->full.createCopies(full.captureCopy(ORIGIN),ORIGIN,new HashSet<>(),0));
+    }
     @Test void theLimitIsEnforced(){
         var saved=new SavedSelections();var s=live(A);for(int i=0;i<SavedSelections.MAX;i++)saved.save(s);
         assertThrows(IllegalArgumentException.class,()->saved.save(s));

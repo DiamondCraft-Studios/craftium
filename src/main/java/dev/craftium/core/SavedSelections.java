@@ -175,6 +175,41 @@ public final class SavedSelections {
         place(entry.id,parent==null?0:parent.id,index);
         int k=0;for(var t:taken)place(t.id,entry.id,k++);
     }
+    /** One BuildObject of a copy that is waiting to be pasted: its name, which one of the copy it is under (-1 at the top), its colour, and its own blocks relative to where the copy was taken from. */
+    public record Copy(String name,int parentIndex,int color,List<Point> relative){}
+    /**
+     * What a duplicate has to remember of the BuildObjects shown: each outermost one with everything under it, in tree order, with each one's blocks relative to
+     * {@code origin} (the corner the clipboard was copied from), so they can be made again wherever the copy is put down.
+     */
+    public List<Copy> captureCopy(Point origin){
+        var roots=entries.stream().filter(e->viewed.contains(e)&&viewed.stream().noneMatch(o->o!=e&&isUnder(e,o))).toList();
+        var out=new ArrayList<Copy>();var index=new HashMap<Entry,Integer>();
+        for(var r:roots)for(var e:subtree(r)){
+            var relative=new ArrayList<Point>(e.points.size());for(var p:e.points)relative.add(p.subtract(origin));
+            index.put(e,out.size());out.add(new Copy(e.name,e==r?-1:index.get(e.parent),e.color,List.copyOf(relative)));
+        }
+        return out;
+    }
+    /**
+     * Makes the BuildObjects of {@code nodes} again with the same structure: the same names (the top ones with " (copy)" added), parents, order and colours, each holding
+     * the cells of {@code placed} that its relative blocks land on at {@code origin}. The copies of the top ones go right after the BuildObject {@code afterId}, in
+     * order (the end of the top level when 0 or gone). Returns the new ones, in tree order.
+     */
+    public List<Entry> createCopies(List<Copy> nodes,Point origin,Set<Point> placed,int afterId){
+        if(nodes.isEmpty())throw new IllegalArgumentException("Nothing to copy");
+        if(entries.size()+nodes.size()>MAX)throw new IllegalArgumentException("BuildObject limit: "+MAX);
+        var made=new ArrayList<Entry>();
+        for(var n:nodes){
+            var cells=new ArrayList<Point>();
+            for(var r:n.relative()){var at=origin.add(r.x(),r.y(),r.z());if(placed.contains(at))cells.add(at);}
+            String name=n.name();if(n.parentIndex()<0){name=name+" (copy)";if(name.length()>40)name=name.substring(0,40);}
+            var e=new Entry(tree.nextId++,name,cells);e.color=n.color();entries.add(e);made.add(e);
+        }
+        for(int i=0;i<nodes.size();i++)if(nodes.get(i).parentIndex()>=0){var parent=made.get(nodes.get(i).parentIndex());place(made.get(i).id,parent.id,children(parent).size());}
+        var after=afterId==0?null:byId(afterId);
+        if(after!=null){int j=0;for(int i=0;i<nodes.size();i++)if(nodes.get(i).parentIndex()<0)place(made.get(i).id,after.parentId(),children(after.parent).indexOf(after)+1+j++);}
+        changed();return made;
+    }
     /** Makes a BuildObject holding exactly these blocks, right after the BuildObject {@code afterId} on its level (the end of the top level when 0 or gone). Used when something was pasted as one. */
     public Entry createFrom(String name,Collection<Point> cells,int afterId){
         if(cells.isEmpty())throw new IllegalArgumentException("Nothing was pasted to make a BuildObject from");

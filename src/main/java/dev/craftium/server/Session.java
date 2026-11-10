@@ -42,6 +42,10 @@ final class Session {
     net.minecraft.world.level.GameType previousMode;
     /** Where the clipboard's blocks were copied from (its minimum corner), or null when they came from elsewhere, like a blueprint. */
     Point clipboardOrigin;
+    /** Goes up whenever the clipboard is replaced or turned, so something kept about the blocks as they were copied can tell they still are. */
+    long clipboardEpoch;
+    /** The BuildObjects a duplicate copied (see {@link dev.craftium.core.SavedSelections#captureCopy}) and the clipboard epoch they go with, until the copy is pasted. */
+    java.util.List<dev.craftium.core.SavedSelections.Copy> duplicateNodes;long duplicateEpoch;
     /** An edit worked out but not yet applied, waiting for the player to confirm it. Null when there is none. */
     Edit pendingEdit;
     /** Which preview this AI workspace is holding, numbered as each is made, so another player's client can tell it changed. */

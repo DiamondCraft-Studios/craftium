@@ -28,6 +28,8 @@ Changes since 1.5.0-beta.1.
 - A block that is deleted, cut or otherwise turned into air leaves the BuildObjects that held it, and Ctrl+Z puts it back into them. Replacing a block with another keeps it. Edit > Move selection takes the BuildObjects along with the blocks; Clone and Stack make copies that belong to no BuildObject. Deleting a BuildObject in the Hierarchy only removes the grouping: every block stays.
 - The eye and the fold of each BuildObject are kept for you by GUID in `config/craftium/hierarchy-view.json`, so they are as you left them after a rejoin or a restart, in any world.
 - Dragging one of several shown rows carries all of them together, in their order, and the drag shows how many.
+- Duplicate makes the whole hierarchy again: the same names, order, parents and colours, with the top one marked "(copy)", each holding its own blocks at the new place. If the copy is turned or something else is copied before it is placed, it falls back to one BuildObject.
+- A click on empty space in the Hierarchy, and Alt + D, let go of the BuildObjects shown (Alt + D also clears the selection).
 - Target info moved to the bottom of the left column, under Tool options.
 - The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
 - Your saved window layout is reset once, to the new places.

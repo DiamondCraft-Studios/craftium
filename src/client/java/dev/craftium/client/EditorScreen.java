@@ -1717,6 +1717,10 @@ public final class EditorScreen extends CraftiumScreen {
                 id=WorkspaceLayout.hit(x,y,false);if(!id.isBlank()){var r=WorkspaceLayout.windows.get(id);if(!r.folded&&x>r.x+r.w-12&&y>r.y+r.h-12){draggedPanel=id;resizePanel=true;dragOriginX=r.w;dragOriginY=r.h;dragPointerX=x;dragPointerY=y;return true;}}
             }
         }
+        if(event.button()==0&&panels&&!help&&!transform&&menu<0&&inHierarchyBody(x,y)){ // empty space in the Hierarchy: nothing is picked
+            for(var e:ClientState.savedSelections())if(e.active()){action("saved_selection:release");break;}
+            return true;
+        }
         if(event.button()==1&&!help&&!transform&&menu<0)for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(!c.contains(x,y))continue;for(var area:renameAreas)if(area.row()==c){openRowMenu(area.id(),(int)x,(int)y);return true;}break;} // a right click on a row of the Hierarchy opens its menu
         if(event.button()==1&&!help&&!transform&&menu<0)for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(c.contains(x,y)){if(c.back!=null){c.back.run();return true;}break;}} // a cycling button steps back
         if(help||transform||menu>=0)return true;
@@ -2198,7 +2202,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         if(shown.isEmpty()){ClientState.notify("Show a BuildObject first: click one in the Hierarchy");return;}
         String name=shown.size()==1?(shown.getFirst().name()+" (copy)"):"BuildObject";if(name.length()>40)name=name.substring(0,40);
         final String made=name;final int after=shown.getLast().id();
-        action("copy");
+        action("saved_selection:duplicate");
         afterNextStatus(()->{
             if(ClientState.status.error())return;
             PlacementPreview.beginInPlace();
@@ -2214,6 +2218,11 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     private void pasteAsObject(int after){
         PlacementPreview.beginInPlace();
         if(PlacementPreview.active()){PlacementPreview.asObject="BuildObject";PlacementPreview.asObjectAfter=after;}
+    }
+    /** Whether the point is in the body of the Hierarchy window: under its title and over its buttons, where no control was hit. */
+    private boolean inHierarchyBody(double x,double y){
+        var r=WorkspaceLayout.windows.get("hierarchy");
+        return r!=null&&r.visible&&!r.folded&&x>=r.x&&x<r.x+r.w&&y>=r.y+19&&y<r.y+r.h-30;
     }
     /** The row a span selection starts from: the one last clicked. */
     private int hierarchyAnchor;
