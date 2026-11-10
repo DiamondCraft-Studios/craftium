@@ -485,6 +485,37 @@ public final class SavedSelectionsGameTest {
         require(menuControl("Focus") != null && menuControl("Hide outline") != null, "a BuildObject with blocks offers Focus, and the eye item now offers to hide");
         c.takeScreenshot("hierarchy-menu"); // for a person to look at
         press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE); // closes the menu
+
+        // F2 renames the BuildObject shown, in its row
+        click(row(0));
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(291, 0, 0); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        c.waitTicks(2);
+        typeText("Gate");press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        require(saved(0).name().equals("Gate"), "F2 renames the BuildObject shown: " + saved(0).name());
+        click(control("Let go", 0));
+
+        // the open menu is the pointer's: a click on it that is off its items does nothing behind it, and a click away closes it
+        rightClick(row(0));
+        c.waitTicks(2);
+        var top = menuControl("Select");
+        require(top != null, "the menu is open");
+        int before = ClientState.savedSelections().size();
+        click(new int[]{top[0], top[1] - 2, top[2], 1}); // the padding above the first item
+        require(ClientState.savedSelections().size() == before, "the padding of the menu does not act on what is behind it");
+        click(new int[]{20, 600, 20, 20}); // somewhere else
+        c.waitTicks(2);
+        require(menuControl("Select") == null, "a click away closes the menu");
+
+        // Ctrl+G groups the BuildObjects shown into an empty parent
+        int a1 = saved(0).id(), a2 = saved(1).id();
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:viewset:" + a1 + "," + a2, null, null));
+        settle();
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_G, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        settle();
+        require(ClientState.savedSelections().size() == 3 && saved(0).size() == 0 && saved(1).parent() == saved(0).id() && saved(2).parent() == saved(0).id(), "Ctrl+G groups both shown into an empty parent: " + ClientState.savedSelections());
+        undo();
+        require(ClientState.savedSelections().size() == 2, "and Undo takes it back");
     }
     /** The n-th row of the Hierarchy, as an area. */
     private int[] row(int n) {
