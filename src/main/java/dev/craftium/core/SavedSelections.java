@@ -135,6 +135,16 @@ public final class SavedSelections {
         place(entry.id,parent==null?0:parent.id,index);
         int k=0;for(var t:taken)place(t.id,entry.id,k++);
     }
+    /** Makes a BuildObject holding exactly these blocks, right after the BuildObject {@code afterId} on its level (the end of the top level when 0 or gone). Used when something was pasted as one. */
+    public Entry createFrom(String name,Collection<Point> cells,int afterId){
+        if(cells.isEmpty())throw new IllegalArgumentException("Nothing was pasted to make a BuildObject from");
+        if(entries.size()>=MAX)throw new IllegalArgumentException("BuildObject limit: "+MAX);
+        var clean=name==null?"":name.strip();if(clean.length()>40)clean=clean.substring(0,40);
+        var entry=new Entry(nextId++,clean.isEmpty()?freeName():clean,cells);entries.add(entry);
+        var after=afterId==0?null:byId(afterId);
+        if(after!=null)place(entry.id,after.parentId(),children(after.parent).indexOf(after)+1);
+        revision++;return entry;
+    }
     /** Makes an empty BuildObject around these ones (each with everything under it), in the place of the first of them: grouping them. One that is under another listed one stays under it. */
     public Entry group(List<Integer> ids){
         var picked=new LinkedHashSet<Entry>();for(int id:ids)picked.add(need(id));

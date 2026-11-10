@@ -272,6 +272,28 @@ class SavedSelectionsTest {
         saved.deleteMany(List.of(a.id(),b.id(),c.id()),s);
         assertTrue(saved.entries().isEmpty());
     }
+    @Test void anObjectMadeFromPastedBlocksGoesRightAfterTheOneItCameFrom(){
+        var saved=new SavedSelections();var a=saved.save(live(A));var b=saved.save(live(B));
+        var copy=saved.createFrom("Tower (copy)",List.of(C,D),a.id());
+        assertEquals(List.of(a,copy,b),saved.entries());assertEquals(List.of(C,D),copy.points());assertEquals("Tower (copy)",copy.name());
+    }
+    @Test void aCopyOfAChildGoesAfterItUnderTheSameParent(){
+        var saved=new SavedSelections();var p=saved.save(live(A));var x=saved.save(live(B));saved.place(x.id(),p.id(),0);
+        var copy=saved.createFrom("x (copy)",List.of(C),x.id());
+        assertEquals(List.of(x,copy),saved.children(p));
+    }
+    @Test void aPastedObjectWithNoPlaceOrAGonePlaceIsAtTheEndOfTheTopLevel(){
+        var saved=new SavedSelections();var a=saved.save(live(A));var b=saved.save(live(B));
+        assertEquals(List.of(a,b),saved.entries().subList(0,2));
+        assertSame(saved.createFrom("",List.of(C),0),saved.entries().getLast(),"an empty name is the next default");
+        assertEquals("BuildObject (2)",saved.entries().getLast().name());
+        assertSame(saved.createFrom("x",List.of(D),999),saved.entries().getLast());
+    }
+    @Test void aLongNameIsCutAndNothingPastedIsRefused(){
+        var saved=new SavedSelections();
+        assertEquals(40,saved.createFrom("x".repeat(60),List.of(A),0).name().length());
+        assertThrows(IllegalArgumentException.class,()->saved.createFrom("x",List.of(),0));
+    }
     @Test void theLimitIsEnforced(){
         var saved=new SavedSelections();var s=live(A);for(int i=0;i<SavedSelections.MAX;i++)saved.save(s);
         assertThrows(IllegalArgumentException.class,()->saved.save(s));

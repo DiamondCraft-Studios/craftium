@@ -382,7 +382,8 @@ public final class CraftiumClient implements ClientModInitializer {
     /** The saved selections that are not swapped in, each drawn like the selection (its style, width and fills) in its own colour, unless it is hidden with the eye. They only show while the editor is open. The one being looked at is the live selection and is drawn by the selection overlay, in its colour. */
     private static void drawSavedSelections(){
         for(var saved:ClientState.savedSelections()){
-            if(saved.active()||saved.size()==0||ClientState.savedHidden(saved.id()))continue;
+            boolean hovered=ClientState.hoverSaved!=0&&ClientState.savedUnder(saved,ClientState.hoverSaved); // the one the pointer is on in the Hierarchy shows, with what is under it
+            if(saved.active()||saved.size()==0||ClientState.savedHidden(saved.id())&&!hovered)continue;
             int colour=ClientState.savedColor(saved.id());var o=ClientState.options;
             var shape=ClientState.savedShape(saved.id());if(shape==null)continue; // its blocks have not arrived: nothing is drawn, never a box in their place
             // the same style, width and fills as the selection, in the entry's colour

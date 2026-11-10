@@ -198,6 +198,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(!suspended){fly();syncCursor();}
         BG=o().uiBackground;PANEL=o().uiPanel;LINE=o().uiBorder;ACCENT=o().uiAccent;TEXT=o().uiText;MUTED=o().uiMuted;
         if(!suspended&&layoutKey!=layoutKey())init();
+        runAfterStatus();
         pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();renameAreas.clear();sliderAreas.clear();dragSources.clear();dropTargets.clear();PanelLog.frame();
         syncCrosshair();
         SelectionOverlay.tint(g); // under the panels, so only the world is washed
@@ -1679,7 +1680,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(menu==ROW_MENU&&event.button()<=1){ // the open menu takes the click: one of its items does it, and any other place closes the menu with nothing behind it hearing
             for(int i=controls.size()-1;i>=rowMenuFrom;i--){var c=controls.get(i);if(c.contains(x,y)){c.action.run();return true;}}
-            menu=-1;return true;
+            menu=-1;if(event.button()==0)return true; // a left click elsewhere only closes it; a right click goes on, so it can open the menu of another row
         }
         if(shapeMenu){shapeMenu=false;var picked=event.button()==0?shapeAt(x,y):null;if(picked!=null)o().shape=picked;return true;} // any click closes the picker
         if(ctxCell>=0){int cell=ctxCell;ctxCell=-1;if(x>=ctxX&&x<ctxX+MASK_MENU_WIDTH&&y>=ctxY&&y<ctxY+BLOCK_MENU_LABELS.length*MASK_MENU_ROW&&cell<blocksOf(ctxList).size()){switch((int)((y-ctxY)/MASK_MENU_ROW)){case 0->changeBlock(ctxList,cell);case 1->editBlockState(ctxList,cell);default->removeBlock(ctxList,cell);}}return true;}
@@ -1935,6 +1936,7 @@ public final class EditorScreen extends CraftiumScreen {
                 savedScroll=Math.clamp(savedScroll,Math.max(0,at-hierarchyRowCount+1),at); // and in view
                 startRename(new RenameArea(null,id));
             }
+            case DUPLICATE_OBJECT -> duplicateObjects();
             case GROUP_OBJECTS -> {
                 var shown=new ArrayList<String>();for(var e:ClientState.savedSelections())if(e.active())shown.add(String.valueOf(e.id()));
                 if(shown.isEmpty())ClientState.notify("Show a BuildObject first: click one in the Hierarchy");
@@ -2117,6 +2119,12 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         int top=y+28,bottom=y+ph-36,rowHeight=20,rows=Math.max(1,(bottom-top)/rowHeight),total=saved.size();
         g.fill(x+8,top-2,x+pw-8,top+rows*rowHeight+1,0xff141c26);g.outline(x+8,top-2,pw-16,rows*rowHeight+3,LINE);
         boolean renameShown=false;hierarchyTop=top;hierarchyRow=rowHeight;hierarchyRowCount=rows;
+        ClientState.hoverSaved=0; // the row the pointer is on is drawn in the world, with what is under it
+        if(menu==ROW_MENU)ClientState.hoverSaved=rowMenuRow;
+        else if(menu<0&&pointerFree()&&rowDragId<0&&WorkspaceLayout.visible("hierarchy")&&!WorkspaceLayout.folded("hierarchy")){
+            var at=WorkspaceLayout.inverse("hierarchy",mx,my);
+            if(at[0]>=x+8&&at[0]<x+pw-8&&at[1]>=top&&at[1]<top+rows*rowHeight){int over=savedScroll+(int)((at[1]-top)/rowHeight);if(over<saved.size())ClientState.hoverSaved=saved.get(over).id();}
+        }
         savedScroll=Math.clamp(savedScroll,0,Math.max(0,total-rows));
         if(total==0)text(g,"No BuildObjects yet",x+16,top+6,MUTED);
         for(int i=0;i<rows&&savedScroll+i<total;i++){
@@ -2137,7 +2145,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             }
             controls.add(new Control(swatch,ry+2,18,rowHeight-4,()->ColourPickerScreen.open(this,entry.name()+" colour",()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0)),"Change this BuildObject's outline colour"));
             int eye=x+pw-72,pencil=x+pw-50,cross=x+pw-28;boolean hidden=ClientState.savedHidden(id);
-            button(g,eye,ry+2,18,rowHeight-4,"",false,()->ClientState.toggleSavedHidden(id),hidden?"Show this BuildObject's outline in the world · It shows while it is selected, whatever the eye":"Hide this BuildObject's outline in the world · It still shows while it is selected");
+            button(g,eye,ry+2,18,rowHeight-4,"",false,()->eyeClick(entry,minecraft.hasControlDown()),hidden?"Show this BuildObject's outline in the world · It shows while it is selected, whatever the eye · Ctrl+click does the same for everything under it":"Hide this BuildObject's outline in the world · It still shows while it is selected · Ctrl+click does the same for everything under it");
             glyph(g,eye,ry+2,18,rowHeight-4,EYE,hidden?0xff56606e:TEXT);
             if(hidden){int ox=eye+(18-9)/2,oy=ry+2+(rowHeight-4-5)/2;for(int k=0;k<9;k++)g.fill(ox+k,oy+4-k/2,ox+k+1,oy+5-k/2,0xffe07070);} // a slash through it
             button(g,pencil,ry+2,18,rowHeight-4,"",entry.editing(),()->action(entry.editing()?"saved_selection:release":"saved_selection:edit:"+id),entry.editing()?"Stop editing: your own selection comes back":"Edit: show this BuildObject in place of your selection, then add to it or take from it with any selection tool. Changes are kept");
@@ -2166,6 +2174,46 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         g.fill(x+1,y+ph-30,x+pw-1,y+ph-29,LINE); // the buttons along the bottom
         button(g,x+10,y+ph-25,24,20,"",false,()->action("saved_selection:save"),looking?"Create a BuildObject from what is selected now · While one is shown, the new one goes around it":"Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole");
         glyph(g,x+10,y+ph-25,24,20,PLUS,TEXT);
+    }
+    /** Opens or closes the eye of a BuildObject; with Ctrl, of everything under it as well, all to the new state. */
+    private void eyeClick(dev.craftium.net.Packets.SavedSelection entry,boolean below){
+        boolean hide=!ClientState.savedHidden(entry.id());
+        for(var e:hierarchyAll)if(e.id()==entry.id()||below&&isUnder(e,entry.id()))ClientState.setSavedHidden(e.id(),hide);
+    }
+    /** What happens next, once the server has answered what was just sent and the answer has settled: a copy that a duplicate waits for, a cut that is followed by a delete. */
+    private Runnable afterStatus;private dev.craftium.net.Packets.Status statusWas;private long afterFrom,afterUntil;
+    private void afterNextStatus(Runnable run){
+        statusWas=ClientState.status;long now=System.currentTimeMillis();afterFrom=now+150;afterUntil=now+5000; // the server drops requests that come too close together
+        afterStatus=run;
+    }
+    private void runAfterStatus(){
+        if(afterStatus==null)return;
+        long now=System.currentTimeMillis();
+        if(now>afterUntil){afterStatus=null;return;}
+        if(now>=afterFrom&&ClientState.status!=statusWas&&!ClientState.status.busy()){var run=afterStatus;afterStatus=null;run.run();}
+    }
+    /** Ctrl+D: copies the blocks of the BuildObjects shown (with everything under them), then starts a placement where they were copied from; confirming it pastes them as a selection and makes a new BuildObject of them. Move the placement first to put the copy somewhere else. */
+    private void duplicateObjects(){
+        var shown=new ArrayList<dev.craftium.net.Packets.SavedSelection>();for(var e:ClientState.savedSelections())if(e.active())shown.add(e);
+        if(shown.isEmpty()){ClientState.notify("Show a BuildObject first: click one in the Hierarchy");return;}
+        String name=shown.size()==1?(shown.getFirst().name()+" (copy)"):"BuildObject";if(name.length()>40)name=name.substring(0,40);
+        final String made=name;final int after=shown.getLast().id();
+        action("copy");
+        afterNextStatus(()->{
+            if(ClientState.status.error())return;
+            PlacementPreview.beginInPlace();
+            if(PlacementPreview.active()){PlacementPreview.asObject=made;PlacementPreview.asObjectAfter=after;}
+        });
+    }
+    /** Cuts the blocks of the BuildObjects shown, and then the BuildObjects themselves, so a paste is where they live now. */
+    private void cutObjects(List<Integer> ids){
+        action("cut");
+        afterNextStatus(()->{if(!ClientState.status.error())action("saved_selection:deleteset:"+String.join(",",ids.stream().map(String::valueOf).toList()));});
+    }
+    /** Starts a placement of the clipboard where it was copied from, and confirming it also makes a BuildObject of the pasted blocks, after {@code after}. */
+    private void pasteAsObject(int after){
+        PlacementPreview.beginInPlace();
+        if(PlacementPreview.active()){PlacementPreview.asObject="BuildObject";PlacementPreview.asObjectAfter=after;}
     }
     /** The row a span selection starts from: the one last clicked. */
     private int hierarchyAnchor;
@@ -2211,7 +2259,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         return true;
     }
     // ---- the right-click menu of a row ---------------------------------------------------------------------------------------------------
-    private List<MenuItem> rowMenu=List.of();private int rowMenuX,rowMenuY,rowMenuFrom;
+    private List<MenuItem> rowMenu=List.of();private int rowMenuX,rowMenuY,rowMenuFrom,rowMenuRow;
     /** A tip that marks a control as a surface: it takes the pointer, shows no tooltip and no hover look. */
     private static final String BLOCK_TIP="";
     /** The BuildObjects the menu works on: the ones shown when the row is one of them, else the row alone, which the click has just chosen. */
@@ -2234,7 +2282,12 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         if(ClientState.status.selectionSize()>0&&!row.active())items.add(item("Create child from selection","",()->action("saved_selection:createchild:"+id)));
         items.add(divider());
         items.add(item("Rename",n==1&&row.active()?"F2":"",()->startRename(new RenameArea(null,id))));
+        items.add(item("Duplicate","Ctrl+D",this::duplicateObjects));
+        items.add(item("Copy","Ctrl+C",()->action("copy")));
+        items.add(item("Cut","Ctrl+X",()->cutObjects(targets)));
+        if(ClientState.status.clipboardSize()>0&&ClientState.status.clipboardOrigin()!=null)items.add(item("Paste","",()->pasteAsObject(id)));
         items.add(n>1?item("Delete selected ("+n+")","",()->action("saved_selection:deleteset:"+csv)):item("Delete","",()->action("saved_selection:delete:"+id)));
+        items.add(item("Export…","",()->exportStructure(StructureSettings.SELECTION))); // the blocks shown, which are everything under each BuildObject
         var moves=new ArrayList<MenuItem>();
         int at=siblingIndex(row);int siblings=childCount(row.parent());
         if(at>0)moves.add(item("Move up","",()->action("saved_selection:place:"+id+":"+row.parent()+":"+(at-1))));
@@ -2248,7 +2301,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         if(n==1)items.add(item("Change colour…","",()->ColourPickerScreen.open(this,row.name()+" colour",()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0))));
         var box=subtreeBounds(id);
         if(box!=null)items.add(item("Focus","F",()->focusOn(box[0],box[1])));
-        rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;menu=ROW_MENU;openSub="";openSub2="";
+        rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=id;menu=ROW_MENU;openSub="";openSub2="";
     }
     /** The corners of the box round the blocks of the BuildObject and everything under it, or null when there are none. */
     private Point[] subtreeBounds(int id){

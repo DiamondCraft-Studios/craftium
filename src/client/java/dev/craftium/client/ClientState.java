@@ -77,6 +77,18 @@ public final class ClientState {
     public static boolean savedHidden(int id){return savedHidden.contains(id);}
     public static void toggleSavedHidden(int id){if(!savedHidden.remove(id))savedHidden.add(id);}
     public static void setSavedHidden(int id,boolean hidden){if(hidden)savedHidden.add(id);else savedHidden.remove(id);}
+    /** The BuildObject the pointer is on in the Hierarchy (or whose menu is open), or 0: it and what is under it are drawn in the world whatever their eyes say. */
+    public static int hoverSaved;
+    /** Whether {@code saved} is the BuildObject {@code ancestor} or somewhere under it. */
+    public static boolean savedUnder(Packets.SavedSelection saved,int ancestor){
+        int steps=0;var at=saved;
+        while(at!=null&&steps++<64){
+            if(at.id()==ancestor)return true;
+            Packets.SavedSelection next=null;for(var e:savedSelections)if(e.id()==at.parent()){next=e;break;}
+            at=next;
+        }
+        return false;
+    }
     /** The BuildObjects folded in the Hierarchy, so what is under them is not listed. A fold belongs to the client. */
     private static final Set<Integer> savedFolded=new HashSet<>();
     public static boolean savedFolded(int id){return savedFolded.contains(id);}

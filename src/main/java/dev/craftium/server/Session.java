@@ -132,6 +132,10 @@ final class Session {
         /** A change to the Hierarchy alone: the player's selection and everything else are left as they are. */
         static SelectionChange hierarchy(dev.craftium.core.SavedSelections.State before,dev.craftium.core.SavedSelections.State after){return new SelectionChange(null,null,null,null,Map.of(),Map.of(),Map.of(),Map.of(),before,after);}
         boolean hasHierarchy(){return hierarchyBefore!=null&&hierarchyAfter!=null;}
+        /** The same change, also giving back the BuildObjects as they were before and after (a paste that made one). */
+        SelectionChange withHierarchy(dev.craftium.core.SavedSelections.State before,dev.craftium.core.SavedSelections.State after){
+            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,objectsBefore,objectsAfter,before,after);
+        }
         SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter,Map<String,String> restoreBefore,Map<String,String> restoreAfter){this(before,after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,Map.of(),Map.of());}
         SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter){this(before,after,pivotBefore,pivotAfter,Map.of(),Map.of());}
         /** The same change, also moving these BuildObjects' blocks (only those that differ are kept). */

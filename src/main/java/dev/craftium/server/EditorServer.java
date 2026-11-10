@@ -486,6 +486,10 @@ public final class EditorServer {
                         s.corner=null;s.cornersNow=s.cornersHistory="none";s.historySelection=new ArrayList<>(placed);s.historyRevision=s.selection.revision();
                         s.restoreUpdate=dev.craftium.core.Restore.encode(Map.of("corners","none"));
                         selected=new Session.SelectionChange(before,new ArrayList<>(placed),null,null,handlesBefore,Map.of("corners","none"));
+                        if(o.pasteAsObject!=null&&!o.pasteAsObject.isBlank()){ // a duplicate or a paste from the Hierarchy: the pasted blocks are also a new BuildObject, in the history with them
+                            var hierarchyBefore=s.saved.state();s.saved.createFrom(o.pasteAsObject,placed,o.pasteAsObjectAfter);
+                            selected=selected.withHierarchy(hierarchyBefore,s.saved.state());
+                        }
                     }
                     var edit=plan.finish("Paste clipboard");start(player,s,new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),o.pasteEntities?ClipboardEntities.paste(player,s,origin):List.of(),List.of(),selected));
                 }
@@ -934,6 +938,9 @@ public final class EditorServer {
         if(s.shapeAtRequest!=null&&!edit.changes().isEmpty()){ // a shape that was built goes back to waiting to be built when it is undone
             var change=edit.selection()==null?Session.SelectionChange.restoring(Map.of(),Map.of()):edit.selection();
             edit=edit.withSelection(change.with(Map.of("shape",s.shapeAtRequest),Map.of("shape","none")));
+        }
+        if(edit.changes().isEmpty()&&edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()&&edit.selection()!=null&&edit.selection().hasHierarchy()){
+            s.remember(edit);send(player,s,"Pasted the same blocks as a new BuildObject",false);return; // nothing to build, as when a copy is put back in place, but the BuildObject it made is in the history
         }
         if(edit.changes().isEmpty() && edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()){var why=s.nothingChangedBecause;s.nothingChangedBecause=null;send(player,s,why==null?"No matching blocks changed":"No matching blocks changed: "+why,false);return;}
         EditGate.check(player,edit);

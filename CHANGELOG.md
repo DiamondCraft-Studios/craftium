@@ -19,6 +19,9 @@ Changes since 1.5.0-beta.1.
 - Ctrl + G makes an empty parent around the BuildObjects shown, in the place of the first of them. It is in the controls like the other shortcuts, and in the right-click menu.
 - F2 renames the BuildObject shown, in its row.
 - An open Hierarchy menu takes the pointer: nothing behind it is lit up or clicked through it, and a click anywhere else closes it.
+- Duplicate (Ctrl + D, or in the Hierarchy menu) copies the blocks of the BuildObjects shown, with everything under them, and starts a placement where they were copied from; Enter pastes them as the selection and makes a new BuildObject of them, after the original. Move the placement first to put the copy somewhere else. The menu also has Copy, Cut (which takes the BuildObjects along with their blocks), Paste (a placement that makes a BuildObject) and Export, which exports the blocks shown from each BuildObject down, however they are spread over the hierarchy.
+- Hovering a row of the Hierarchy draws that BuildObject and everything under it in the world, whatever their eyes say. Ctrl + click on an eye opens or closes it for everything under it too.
+- A right click on another row while a Hierarchy menu is open opens that row's menu.
 - Target info moved to the bottom of the left column, under Tool options.
 - The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
 - Your saved window layout is reset once, to the new places.

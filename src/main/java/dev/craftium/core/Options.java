@@ -286,6 +286,8 @@ public final class Options {
     public Point annotationNormal=new Point(0,0,1);
     public boolean mergeBlocks;
     public boolean copyEntities,pasteEntities=true;
+    /** Set for one paste only: the pasted blocks also become a new BuildObject with this name, put after the BuildObject with id {@code pasteAsObjectAfter} (0 for the end of the top level). */
+    public String pasteAsObject="";public int pasteAsObjectAfter;
     public java.util.Map<String,String> scriptVariables=new java.util.LinkedHashMap<>();
     public java.util.Map<String,String> maskVariables=new java.util.LinkedHashMap<>();
     public java.util.List<BlockColour> scriptColours=new java.util.ArrayList<>();
