@@ -1,0 +1,6 @@
+accessWidener v2 named
+
+# The jigsaw planner builds a piece's blocks without placing them in the world, so it needs the settings vanilla would place the piece with
+# and the template's palette.
+accessible method net/minecraft/world/level/levelgen/structure/pools/SinglePoolElement getSettings (Lnet/minecraft/world/level/block/Rotation;Lnet/minecraft/world/level/levelgen/structure/BoundingBox;Lnet/minecraft/world/level/levelgen/structure/templatesystem/LiquidSettings;Z)Lnet/minecraft/world/level/levelgen/structure/templatesystem/StructurePlaceSettings;
+accessible field net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplate palettes Ljava/util/List;
