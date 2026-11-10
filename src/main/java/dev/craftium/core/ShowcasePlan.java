@@ -57,7 +57,7 @@ public final class ShowcasePlan {
     }
 
     /**
-     * A copy of the request in which every room that names a saved selection ({@code "selection": "Selection 1"}) has that selection's box as
+     * A copy of the request in which every room that names a saved selection ({@code "selection": "BuildObject"}) has that selection's box as
      * its "from" and "to", and takes the selection's name for its own when it has none. A room gives a selection or a box, not both. The box is
      * the selection's bounding box: an irregular selection is framed by the solid blocks inside it, as any room is.
      */

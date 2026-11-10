@@ -11,9 +11,9 @@ class SavedSelectionActionsTest {
 
     @Test void savingListsTheEntryWithItsBoundsAndSendsTheListOnlyWhenItChanged(){
         var s=session();
-        assertEquals("Saved as Selection 1",SavedSelectionActions.run(s,"saved_selection:save"));
+        assertEquals("Created BuildObject",SavedSelectionActions.run(s,"saved_selection:save"));
         var list=SavedSelectionActions.forStatus(s,true);
-        assertEquals(1,list.size());assertEquals("Selection 1",list.getFirst().name());assertEquals(24,list.getFirst().size());
+        assertEquals(1,list.size());assertEquals("BuildObject",list.getFirst().name());assertEquals(24,list.getFirst().size());
         assertEquals(new Point(2,3,1),list.getFirst().max());assertFalse(list.getFirst().active());
         assertNull(SavedSelectionActions.forStatus(s,true),"nothing new to say");
         assertNull(SavedSelectionActions.forStatus(new Session(),false),"a client that does not know them is sent nothing");

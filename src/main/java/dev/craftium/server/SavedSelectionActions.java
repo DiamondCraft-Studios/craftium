@@ -5,7 +5,7 @@ import dev.craftium.core.SavedSelections;
 import dev.craftium.net.Packets;
 import java.util.List;
 
-/** The actions of the Selections window, named {@code saved_selection:<verb>[:<id>[:<name>]]}. They only ever touch the saved selections and swap the live one in and out; no block is changed. */
+/** The actions of the Hierarchy window, named {@code saved_selection:<verb>[:<id>[:<name>]]}. They only ever touch the saved selections and swap the live one in and out; no block is changed. */
 final class SavedSelectionActions {
     private SavedSelectionActions(){}
     static final String PREFIX="saved_selection:";
@@ -14,7 +14,7 @@ final class SavedSelectionActions {
     static String run(Session s,String action){
         var part=action.substring(PREFIX.length()).split(":",3);var saved=s.saved;
         switch(part[0]){
-            case "save"->{var entry=saved.save(s.selection);return "Saved as "+entry.name();}
+            case "save"->{var entry=saved.save(s.selection);return "Created "+entry.name();}
             case "view"->{saved.view(id(part),s.selection);return "Showing "+saved.active().name();}
             case "edit"->{saved.edit(id(part),s.selection);return "Editing "+saved.active().name();}
             case "release"->{saved.release(s.selection);return "Your selection is back";}

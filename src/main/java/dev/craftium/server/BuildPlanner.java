@@ -20,7 +20,7 @@ final class BuildPlanner {
     }
 
     /**
-     * As above, and {@code named} finds one of the player's saved selections by the name an operation gave ("Selection 1"), or throws saying
+     * As above, and {@code named} finds one of the player's saved selections by the name an operation gave ("BuildObject"), or throws saying
      * which names there are. Operations that name none work on {@code selection}, so one spec can work on several selections at once.
      */
     static Session.Edit plan(net.minecraft.server.level.ServerPlayer player, Session ai, Options o, java.util.Set<Point> selection, Session.Edit onto, java.util.function.Function<String, java.util.Set<Point>> named) {

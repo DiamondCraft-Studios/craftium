@@ -23,7 +23,7 @@ public final class SavedSelections {
     }
     private final List<Entry> entries=new ArrayList<>();
     private int nextId=1;
-    private static final java.util.regex.Pattern NUMBERED=java.util.regex.Pattern.compile("Selection (\\d{1,9})");
+    private static final java.util.regex.Pattern NUMBERED=java.util.regex.Pattern.compile("BuildObject(?: \\((\\d{1,9})\\))?");
     /** The saved selection being looked at or edited, or null. */
     private Entry active;private boolean editing;
     /** The live selection as it was before looking began; null when not looking. */
@@ -39,20 +39,19 @@ public final class SavedSelections {
     /** Changes whenever the list, the names or the looking changes, so the client is only sent what is new. */
     public long revision(){return revision;}
     public Entry byId(int id){for(var e:entries)if(e.id==id)return e;return null;}
-    /** An entry by its name, ignoring case, so "selection 1" finds "Selection 1"; null when there is none. */
+    /** An entry by its name, ignoring case, so "buildobject (1)" finds "BuildObject (1)"; null when there is none. */
     public Entry byName(String name){if(name==null)return null;var wanted=name.strip();for(var e:entries)if(e.name.equalsIgnoreCase(wanted))return e;return null;}
 
     /**
-     * The next default name: one more than the highest "Selection N" there is, so the count starts again at 1 when none are left, and a number
-     * freed at the end is used again. A gap in the middle is not filled, and a renamed entry does not count.
+     * The next default name: "BuildObject" when there is none, then "BuildObject (1)", "BuildObject (2)" and so on, one more than the highest there is. The count starts
+     * again when none are left, and a number freed at the end is used again. A gap in the middle is not filled, and a renamed entry does not count.
      */
     private String freeName(){
-        int highest=0;
-        for(var e:entries){var m=NUMBERED.matcher(e.name);if(m.matches())highest=Math.max(highest,Integer.parseInt(m.group()
-            .substring("Selection ".length())));}
-        return "Selection "+(highest+1);
+        int highest=0;boolean any=false;
+        for(var e:entries){var m=NUMBERED.matcher(e.name);if(m.matches()){any=true;if(m.group(1)!=null)highest=Math.max(highest,Integer.parseInt(m.group(1)));}}
+        return any?"BuildObject ("+(highest+1)+")":"BuildObject";
     }
-    /** Saves the live selection as a new entry, "Selection 1", "Selection 2", and so on (see {@link #freeName}). */
+    /** Saves the live selection as a new entry, "BuildObject", "BuildObject (1)", and so on (see {@link #freeName}). */
     public Entry save(Selection live){
         if(live.size()==0)throw new IllegalArgumentException("Nothing is selected to save");
         if(entries.size()>=MAX)throw new IllegalArgumentException("Saved selection limit: "+MAX);

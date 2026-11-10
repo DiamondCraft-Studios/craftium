@@ -79,8 +79,8 @@ corners needed. An irregular selection is framed by its bounding box and the blo
 
 ```json
 {"job": "my-builds", "rooms": [
-  {"selection": "Selection 1", "shots": ["hero", "south"]},
-  {"selection": "Selection 2", "name": "windmill", "shots": ["hero", "top"]}
+  {"selection": "BuildObject", "shots": ["hero", "south"]},
+  {"selection": "BuildObject (1)", "name": "windmill", "shots": ["hero", "top"]}
 ]}
 ```
 
