@@ -83,6 +83,8 @@ final class Session {
     List<Point> historySelection=List.of();long historyRevision;boolean recordSelection;String currentAction="";
     /** The selection before a transform that is waiting for confirmation moved it, so cancelling can put it back. */
     List<Point> pendingSelectionBefore;
+    /** The BuildObjects' own blocks before the run of transforms that is waiting for confirmation, so cancelling can put them back with the selection. */
+    Map<Integer,List<Point>> pendingObjectsBefore;
     /**
      * The transforms behind {@link #pendingEdit} when it holds a run of them, the edit that was staged before the first of them, and the
      * pending edit they produced (to tell that nothing else has been added to it since). A further transform starts again from the
@@ -121,8 +123,18 @@ final class Session {
     record BiomeChange(Point cell, Holder<Biome> before, Holder<Biome> after) {}
     record EntityChange(UUID id,net.minecraft.nbt.CompoundTag before,net.minecraft.nbt.CompoundTag after,boolean moving){EntityChange(UUID id,net.minecraft.nbt.CompoundTag before,net.minecraft.nbt.CompoundTag after){this(id,before,after,false);}}
     /** What a selection action changed: the selection before and after, so undo and redo can put either back. */
-    record SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter,Map<String,String> restoreBefore,Map<String,String> restoreAfter){
+    record SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter,Map<String,String> restoreBefore,Map<String,String> restoreAfter,
+                           /** The own blocks of the BuildObjects an edit moved, by id, before and after, so undo and redo move them back with the blocks. */
+                           Map<Integer,List<Point>> objectsBefore,Map<Integer,List<Point>> objectsAfter){
+        SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter,Map<String,String> restoreBefore,Map<String,String> restoreAfter){this(before,after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,Map.of(),Map.of());}
         SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter){this(before,after,pivotBefore,pivotAfter,Map.of(),Map.of());}
+        /** The same change, also moving these BuildObjects' blocks (only those that differ are kept). */
+        SelectionChange withObjects(Map<Integer,List<Point>> before,Map<Integer,List<Point>> after){
+            var b=new LinkedHashMap<Integer,List<Point>>();var a=new LinkedHashMap<Integer,List<Point>>();
+            for(var e:after.entrySet()){var was=before.get(e.getKey());if(was!=null&&!was.equals(e.getValue())){b.put(e.getKey(),was);a.put(e.getKey(),e.getValue());}}
+            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,b,a);
+        }
+        boolean hasObjects(){return !objectsBefore.isEmpty();}
         SelectionChange(List<Point> before,List<Point> after){this(before,after,null,null);}
         /** A change to client-side state alone (see {@link dev.craftium.core.Restore}): the player's own selection is left as it is. */
         static SelectionChange restoring(Map<String,String> before,Map<String,String> after){return new SelectionChange(null,null,null,null,before,after);}
@@ -131,12 +143,14 @@ final class Session {
         /** The same change, also handing back these values of client-side state. */
         SelectionChange with(Map<String,String> before,Map<String,String> after){
             var b=new LinkedHashMap<>(restoreBefore);b.putAll(before);var a=new LinkedHashMap<>(restoreAfter);a.putAll(after);
-            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,b,a);
+            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,b,a,objectsBefore,objectsAfter);
         }
         /** This change followed by a later one, as one: it starts where this began and ends where the later one did. */
         SelectionChange then(SelectionChange later){
             var b=new LinkedHashMap<>(later.restoreBefore);b.putAll(restoreBefore);var a=new LinkedHashMap<>(restoreAfter);a.putAll(later.restoreAfter);
-            return new SelectionChange(before!=null?before:later.before,later.after!=null?later.after:after,pivotBefore,later.pivotAfter,b,a);
+            var ob=new LinkedHashMap<>(later.objectsBefore);ob.putAll(objectsBefore); // the earlier change's blocks are where it began
+            var oa=new LinkedHashMap<>(objectsAfter);oa.putAll(later.objectsAfter);
+            return new SelectionChange(before!=null?before:later.before,later.after!=null?later.after:after,pivotBefore,later.pivotAfter,b,a,ob,oa);
         }
     }
     /** {@code time} is when the edit was made, in epoch milliseconds, or 0 when unknown (history from before it was kept). */
@@ -157,6 +171,7 @@ final class Session {
         int estimatedBytes() {
             int size = changes.size()*128 + biomes.size()*96;
             if(selection!=null&&selection.hasPoints())size+=(selection.before().size()+selection.after().size())*24;
+            if(selection!=null)for(var list:selection.objectsBefore().values())size+=list.size()*48; // before and after of each BuildObject moved
             for (var c : changes) {
                 if(c.before.data()!=null) size += c.before.data().toString().length()*2;
                 if(c.after.data()!=null) size += c.after.data().toString().length()*2;

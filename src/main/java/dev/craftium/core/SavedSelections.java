@@ -57,6 +57,19 @@ public final class SavedSelections {
         for(int i=entries.indexOf(root)+1;i<entries.size()&&isUnder(entries.get(i),root);i++)out.add(entries.get(i));
         return out;
     }
+    /** The blocks every BuildObject holds itself, by id, as they are now: what a transform remaps from, and what undo puts back. */
+    public Map<Integer,List<Point>> snapshot(){var out=new LinkedHashMap<Integer,List<Point>>();for(var e:entries)out.put(e.id,e.points);return out;}
+    /** Sets the own blocks of the BuildObjects named in {@code points} (an id that is gone is skipped). Returns whether any changed. */
+    public boolean setPoints(Map<Integer,List<Point>> points){
+        boolean changed=false;
+        for(var e:entries){
+            var next=points.get(e.id);
+            if(next==null||e.points.equals(next))continue;
+            e.points=List.copyOf(next);e.version++;changed=true;
+        }
+        if(changed)revision++;
+        return changed;
+    }
     /** The blocks of the BuildObject and of everything under it: what looking at it shows. */
     public Set<Point> effective(Entry entry){var out=new LinkedHashSet<Point>();for(var e:subtree(entry))out.addAll(e.points);return out;}
     public Entry active(){return active;}
