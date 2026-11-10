@@ -326,6 +326,15 @@ class SavedSelectionsTest {
         assertTrue(sam.revision()>revision,"looking changes what is sent");assertEquals(written,tree.mutations(),"but it is nothing to write to disk");
         alex.rename(a.id(),"Roof");assertTrue(tree.mutations()>written);
     }
+    @Test void whatOnePlayerLooksAtIsNothingNewForTheOthers(){
+        var tree=new SavedSelections.Tree();var alex=new SavedSelections(tree);var sam=new SavedSelections(tree);
+        var a=alex.save(live(A));long alexSaw=alex.revision(),samSaw=sam.revision();
+        var l=live(C);sam.view(a.id(),l);sam.release(l);
+        assertEquals(alexSaw,alex.revision(),"Alex is not sent anything because Sam clicked a row");
+        assertTrue(sam.revision()>samSaw,"Sam is, for what Sam looks at");
+        alex.rename(a.id(),"Roof");
+        assertTrue(alex.revision()>alexSaw&&sam.revision()>samSaw,"a change to the BuildObjects is new to both");
+    }
     @Test void whenSomeoneDeletesWhatYouLookAtYouLetGoOfIt(){
         var tree=new SavedSelections.Tree();var alex=new SavedSelections(tree);var sam=new SavedSelections(tree);
         var a=alex.save(live(A));var samLive=live(C);sam.view(a.id(),samLive);

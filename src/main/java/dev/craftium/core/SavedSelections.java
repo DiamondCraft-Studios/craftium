@@ -36,7 +36,7 @@ public final class SavedSelections {
     }
     /**
      * The BuildObjects of a world's dimension, which everyone who builds there shares: the list in tree order, the next id, and two counters.
-     * {@code revision} goes up for anything, a change of what someone is looking at too, so each player's client is sent what is new;
+     * {@code revision} goes up for a change to the BuildObjects, so each player's client is sent what is new (what a player looks at is counted in their own view);
      * {@code mutations} only for a change to the BuildObjects themselves, so they are written to disk only when they changed.
      */
     public static final class Tree {
@@ -65,6 +65,8 @@ public final class SavedSelections {
     public record Saved(int id,String guid,String name,int parentId,int color,List<Point> points){}
     private final Tree tree;
     private final List<Entry> entries;
+    /** Counts what this player has looked at, which no one else is sent anything about. */
+    private long viewRevision;
     /** A player's own set of BuildObjects, not shared with anyone (what tests and anything without a world use). */
     public SavedSelections(){this(new Tree());}
     /** One player's view of the BuildObjects in {@code tree}: the tree is shared, what is being looked at is this player's own. */
@@ -73,7 +75,7 @@ public final class SavedSelections {
     /** Something about the BuildObjects themselves changed: every client is sent the list, and the tree is written to disk. */
     private void changed(){tree.revision++;tree.mutations++;}
     /** Only what is being looked at changed. */
-    private void lookChanged(){tree.revision++;}
+    private void lookChanged(){viewRevision++;}
     private static final java.util.regex.Pattern NUMBERED=java.util.regex.Pattern.compile("BuildObject(?: \\((\\d{1,9})\\))?");
     /** The BuildObject being looked at or edited, or null. */
     /** The BuildObjects being looked at (several when selected together), and {@code active}, the last of them: the one editing is about. */
@@ -116,7 +118,7 @@ public final class SavedSelections {
     public List<Entry> viewed(){return Collections.unmodifiableList(viewed);}
     public boolean isViewed(Entry entry){return viewed.contains(entry);}
     /** Changes whenever the list, the names or the looking changes, so the client is only sent what is new. */
-    public long revision(){return tree.revision;}
+    public long revision(){return tree.revision+viewRevision;}
     public Entry byId(int id){for(var e:entries)if(e.id==id)return e;return null;}
     /**
      * The BuildObject a reference means: its GUID, or its name ignoring case ("buildobject (1)" finds "BuildObject (1)"). Null when there is none. Names may repeat, so
