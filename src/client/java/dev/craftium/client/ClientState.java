@@ -49,6 +49,9 @@ public final class ClientState {
     /** The place in the hue wheel each entry's starting colour was taken from. */
     private static final Map<Integer,Integer> savedIndex=new HashMap<>();
     /** Takes in the saved selections a status carries. A status that does not carry them (null) leaves them as they were. */
+    /** What the jigsaw planner said about its last run, as the server last sent it. */
+    public static String jigsawReport="";
+    static void updateJigsawReport(Packets.Status status){if(status.jigsawReport()!=null)jigsawReport=status.jigsawReport();}
     static void updateSavedSelections(Packets.Status status){
         if(status.savedSelections()==null)return;
         savedSelections=List.copyOf(status.savedSelections());

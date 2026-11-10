@@ -53,6 +53,10 @@ final class Session {
     Edit pluginPreview;String pluginPreviewData="";boolean pluginPreviewDirty;
     /** A jigsaw preview's layout and how it is drawn, which only apply while {@link #pendingEdit} is still the edit it was made for. */
     Edit layoutFor;GhostCodec.Layout layout;boolean layoutBlocks=true;
+    /** What the jigsaw planner last said about its run, sent once to the client when it changes (see {@link #takeJigsawReport}). */
+    private String jigsawReport="";private boolean jigsawReportDirty;
+    void jigsawReport(String report){jigsawReport=report;jigsawReportDirty=true;}
+    String takeJigsawReport(){if(!jigsawReportDirty)return null;jigsawReportDirty=false;return jigsawReport;}
     /** The {@link PluginTools#version} of the list of plugin tools this player was last sent, or -1 when they have not been sent one. */
     int pluginToolsSent=-1;
     /** The selections this player saved, and the {@link dev.craftium.core.SavedSelections#revision} of them that was last sent, or -1 when none has been. */
