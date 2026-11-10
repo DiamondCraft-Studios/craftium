@@ -88,6 +88,7 @@ public final class StudioScreen extends CraftiumScreen {
             button("Load blueprint",left+190,top+223,180,24,()->send("blueprint_load"));
             labels.add(new Label("Presets: "+String.join(", ",ClientLibrary.list("presets")),left,top+270));
             labels.add(new Label("Palettes: "+String.join(", ",ClientLibrary.list("palettes")),left,top+286));
+            actionRow(new String[]{"Browse blueprints"},new Runnable[]{()->ClientCompat.setScreen(minecraft,new BlueprintScreen(this))});
         }else if(tab.equals("Assets")){
             actionRow(new String[]{"Import asset…","Import schematic","Export schematic","Structure NBT","Selection CSV"},new Runnable[]{()->AssetPicker.open(this::init),()->send("schematic_import"),()->send("schematic_export"),()->send("structure_export"),()->send("selection_csv")});
         }else if(tab.equals("Paint")){

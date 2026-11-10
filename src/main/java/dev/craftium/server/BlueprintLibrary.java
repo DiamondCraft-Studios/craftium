@@ -22,10 +22,6 @@ final class BlueprintLibrary {
             String name=p.o.name;
             switch(action){
                 case "blueprint_list" -> {p.session.library=list();return "Blueprint library · "+p.session.library.size()+" files";}
-                case "blueprint_op" -> {
-                    Path root=ServerPlatform.assets().resolve("blueprints");Files.createDirectories(root);
-                    String result=BlueprintFiles.run(root,dev.craftium.net.Packets.JSON.fromJson(p.o.assetData,BlueprintFiles.Op.class));p.session.library=list();return "Blueprint library · "+result; // the client takes the list from a reply that starts like this
-                }
                 case "asset_upload" -> {
                     if(!name.matches("(?i).+\\.(schem|schematic|nbt|png|ttf|otf)"))throw new IllegalArgumentException("Unsupported asset extension");
                     String lower=name.toLowerCase(Locale.ROOT);String folder=lower.endsWith(".png")?"heightmaps":lower.endsWith(".ttf")||lower.endsWith(".otf")?"fonts":"blueprints";
@@ -63,17 +59,8 @@ final class BlueprintLibrary {
         int sx=1,sy=1,sz=1;for(Point at:p.session.clipboard.keySet()){sx=Math.max(sx,at.x()+1);sy=Math.max(sy,at.y()+1);sz=Math.max(sz,at.z()+1);}
         int[] pixels=new int[256],heights=new int[256];Arrays.fill(heights,Integer.MIN_VALUE);
         for(var entry:p.session.clipboard.entrySet()){Point at=entry.getKey();if(entry.getValue().state().isAir())continue;int x=Math.clamp(at.x()*16/sx,0,15),z=Math.clamp(at.z()*16/sz,0,15),index=z*16+x;if(at.y()<heights[index])continue;heights[index]=at.y();pixels[index]=0xff000000|entry.getValue().state().getMapColor(p.level,EditPlanner.pos(at)).col;}
-        var thumbnail=new ArrayList<Integer>();for(int value:pixels)thumbnail.add(value);var packed=voxels(p,sx,sy,sz);
-        String title=name.substring(name.lastIndexOf('/')+1).replaceFirst("\\.[^.]+$","");return new BlueprintInfo(name,title,p.o.author,p.o.tags,p.session.clipboard.size(),new Point(sx,sy,sz),thumbnail).withVoxels(packed);
-    }
-    /** The blocks of the clipboard for the browser's picture; a big one is shrunk to fit, so there is always one unless the clipboard is empty. */
-    private static BlueprintVoxels.Packed voxels(EditPlanner p,int sx,int sy,int sz){
-        var builder=new BlueprintVoxels.Builder();var ids=new HashMap<net.minecraft.world.level.block.Block,String>();
-        for(var entry:p.session.clipboard.entrySet()){
-            var state=entry.getValue().state();if(state.isAir())continue;Point at=entry.getKey();
-            builder.add(at.x(),at.y(),at.z(),ids.computeIfAbsent(state.getBlock(),block->net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).toString()));
-        }
-        return builder.pack(sx,sy,sz);
+        var thumbnail=new ArrayList<Integer>();for(int value:pixels)thumbnail.add(value);
+        String title=name.substring(name.lastIndexOf('/')+1).replaceFirst("\\.[^.]+$","");return new BlueprintInfo(name,title,p.o.author,p.o.tags,p.session.clipboard.size(),new Point(sx,sy,sz),thumbnail);
     }
     static String download(String action,EditPlanner p,net.minecraft.server.level.ServerPlayer player)throws IOException{
         if(!p.o.downloadExports&&!action.equals("blueprint_data"))return "";String folder=action.equals("selection_csv")?"exports":"blueprints",name=p.o.name;byte[] bytes;String metadata="";
@@ -82,17 +69,13 @@ final class BlueprintLibrary {
         ServerPlatform.send(player,new dev.craftium.net.Packets.Download(folder,name,Base64.getEncoder().encodeToString(bytes),metadata));return " · downloaded to client";
     }
     private static List<BlueprintInfo> list()throws IOException{
-        Path root=ServerPlatform.assets().resolve("blueprints");if(!Files.isDirectory(root))return List.of();var results=new ArrayList<BlueprintInfo>();int budget=700_000;
-        try(var files=Files.walk(root,BlueprintFiles.DEPTH)){for(Path path:files.filter(Files::isRegularFile).filter(p->p.getFileName().toString().matches("(?i).*\\.(nbt|schem|schematic)")).sorted().limit(256).toList()){
+        Path root=ServerPlatform.assets().resolve("blueprints");if(!Files.isDirectory(root))return List.of();var results=new ArrayList<BlueprintInfo>();
+        try(var files=Files.walk(root,5)){for(Path path:files.filter(Files::isRegularFile).filter(p->p.getFileName().toString().matches("(?i).*\\.(nbt|schem|schematic)")).sorted().limit(256).toList()){
             String relative=root.relativize(path).toString().replace('\\','/');Path sidecar=path.resolveSibling(path.getFileName()+".json");BlueprintInfo info=null;
-            try{if(Files.exists(sidecar)&&Files.size(sidecar)<32768)info=dev.craftium.net.Packets.JSON.fromJson(Files.readString(sidecar),BlueprintInfo.class);}catch(Exception ignored){}
+            try{if(Files.exists(sidecar)&&Files.size(sidecar)<16384)info=dev.craftium.net.Packets.JSON.fromJson(Files.readString(sidecar),BlueprintInfo.class);}catch(Exception ignored){}
             if(info==null)info=new BlueprintInfo(relative,path.getFileName().toString(),"","",-1,new Point(0,0,0),List.of());
-            // A file with no picture data (imported, or saved before pictures existed) is read for it; the sidecar is rewritten so that happens once.
-            if(!info.hasVoxels()){var described=BlueprintFileVoxels.read(path);if(described!=null){info=new BlueprintInfo(relative,info.name(),info.author(),info.tags(),described.blocks(),described.size(),info.thumbnail()==null?List.of():info.thumbnail(),null,null,1).withVoxels(described.packed());try{Files.writeString(sidecar,dev.craftium.net.Packets.JSON.toJson(info));}catch(IOException ignored){}}}
-            // A status packet has a size limit and this list is not cut down for it: past a budget the pictures are left out, and those listings keep the flat thumbnail.
-            if(info.hasVoxels()&&(budget-=info.cells().length()+info.palette().stream().mapToInt(String::length).sum())<0)info=info.withVoxels(null);
-            results.add(info.at(relative));
-        }}results.addAll(BlueprintFiles.emptyFolders(root));return List.copyOf(results);
+            results.add(new BlueprintInfo(relative,info.name(),info.author(),info.tags(),info.blocks(),info.size(),info.thumbnail()));
+        }}return List.copyOf(results);
     }
     private static ListTag ints(int... values){var list=new ListTag();for(int i:values)list.add(IntTag.valueOf(i));return list;}
     private static CompoundTag structure(EditPlanner p){
