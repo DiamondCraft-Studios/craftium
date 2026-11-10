@@ -55,7 +55,7 @@ final class JigsawPlanner {
     static final String PACK = "craftium";
     /** Pieces and blocks are described in world coordinates; a piece names its template, where it went and how it was turned. The first piece is the start. */
     record Piece(ResourceLocation template, BlockPos pos, String rotation, BoundingBox box) {}
-    record Result(Map<Point, BlockState> blocks, List<Piece> pieces, long seed, int unsupported, ResourceLocation start) {}
+    record Result(Map<Point, BlockState> blocks, List<Piece> pieces, long seed, int unsupported, ResourceLocation start, List<String> report) {}
 
     /** What the planner reads from: the folder of the craftium datapack, made (with its pack.mcmeta) when it is not there yet. */
     static Path packFolder(MinecraftServer server) throws IOException {
@@ -108,11 +108,26 @@ final class JigsawPlanner {
                     pieces.add(new Piece(templateOf(piece.getElement()), piece.getPosition(), piece.getRotation().name().toLowerCase(Locale.ROOT), piece.getBoundingBox()));
                     blocksOf(level, templates, piece, piece.getElement(), blocks, unsupported);
                 }
-                return new Result(blocks, pieces, seed, unsupported[0], poolId);
+                var placed = container.pieces().stream().filter(PoolElementStructurePiece.class::isInstance).map(PoolElementStructurePiece.class::cast).toList();
+                return new Result(blocks, pieces, seed, unsupported[0], poolId, report(pools, templates, poolId, placed));
             } finally {
                 templates.onResourceManagerReload(server.getResourceManager());
             }
         }
+    }
+
+    /** The pool check and the connectors left open, as text lines. A problem in the diagnostics themselves is reported, never allowed to lose the run. */
+    private static List<String> report(Registry<StructureTemplatePool> pools, StructureTemplateManager templates, ResourceLocation start, List<PoolElementStructurePiece> placed) {
+        var lines = new ArrayList<String>();
+        try {
+            var problems = JigsawDiagnostics.lint(pools, templates, start);
+            lines.add(problems.isEmpty() ? "Pool check: no problems found." : "Pool check:");
+            lines.addAll(problems);
+            lines.addAll(JigsawDiagnostics.openConnectors(pools, templates, placed));
+        } catch (RuntimeException e) {
+            lines.add("The diagnostics failed: " + e);
+        }
+        return lines;
     }
 
     /** The blocks one piece places, with the processors, rotation and mirror vanilla would use but nothing written to the world. */
