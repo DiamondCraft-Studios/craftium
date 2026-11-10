@@ -52,6 +52,8 @@ final class JigsawEditor {
         boolean names;
         /** What a retarget would change, for the player to confirm: set by the check, shown in the next model, forgotten by any other command. */
         JsonObject retarget;
+        /** Set by the features command: the next model carries the placed features that fit it. */
+        String featureQuery;
         final Deque<List<Snap>> undo = new ArrayDeque<>(), redo = new ArrayDeque<>();
     }
     private static final Map<UUID, Memory> MEMORY = new ConcurrentHashMap<>();
@@ -169,7 +171,9 @@ final class JigsawEditor {
                 var selection = EditorServer.session(player).selection;
                 if (selection.size() == 0) throw new IllegalArgumentException("Select the blocks to turn into a template first");
                 var min = selection.min(); var max = selection.max();
-                var name = poolId(text(c, "name"));
+                var home = poolId(text(c, "pool"));
+                var typed = text(c, "name").strip();
+                var name = poolId(typed.contains(":") ? typed : home.getNamespace() + ":" + typed); // a bare name goes in the namespace of the pool
                 var size = new Vec3i(max.x() - min.x() + 1, max.y() - min.y() + 1, max.z() - min.z() + 1);
                 var template = new StructureTemplate();
                 template.fillFromWorld((ServerLevel) player.level(), new BlockPos(min.x(), min.y(), min.z()), size, false, List.of(Blocks.STRUCTURE_VOID));
@@ -179,6 +183,36 @@ final class JigsawEditor {
                 pool.getAsJsonArray("elements").add(single(name.toString(), 1, "rigid"));
                 writePool(env, edit, id, pool);
                 return "Saved the selection as " + name + " and added it to " + id;
+            }
+            case "features" -> { memory.featureQuery = c.has("query") ? text(c, "query") : ""; return ""; }
+            case "element_add_empty" -> {
+                var id = poolId(text(c, "pool"));
+                var pool = readPool(env, id);
+                var empty = new JsonObject();
+                empty.addProperty("element_type", "minecraft:empty_pool_element");
+                var entry = new JsonObject();
+                entry.addProperty("weight", c.has("weight") ? Math.clamp(c.get("weight").getAsInt(), 1, 150) : 1);
+                entry.add("element", empty);
+                pool.getAsJsonArray("elements").add(entry);
+                writePool(env, edit, id, pool);
+                return "Added an empty slot to " + id;
+            }
+            case "element_add_feature" -> {
+                var id = poolId(text(c, "pool"));
+                var feature = poolId(text(c, "feature"));
+                if (env.server().registryAccess().lookupOrThrow(Registries.PLACED_FEATURE).get(ResourceKey.create(Registries.PLACED_FEATURE, feature)).isEmpty())
+                    throw new IllegalArgumentException("There is no placed feature called " + feature);
+                var pool = readPool(env, id);
+                var element = new JsonObject();
+                element.addProperty("element_type", "minecraft:feature_pool_element");
+                element.addProperty("feature", feature.toString());
+                element.addProperty("projection", "rigid");
+                var entry = new JsonObject();
+                entry.addProperty("weight", 1);
+                entry.add("element", element);
+                pool.getAsJsonArray("elements").add(entry);
+                writePool(env, edit, id, pool);
+                return "Added the feature " + feature + " to " + id;
             }
             case "element_remove" -> {
                 var id = poolId(text(c, "pool"));
@@ -621,6 +655,13 @@ final class JigsawEditor {
                 .sorted(Comparator.comparing((ResourceLocation id) -> id.getNamespace().equals("minecraft")).thenComparing(ResourceLocation::toString))
                 .limit(MAX_TEMPLATES).forEach(id -> templates.add(id.toString()));
         root.add("templates", templates);
+        if (memory.featureQuery != null) {
+            var features = new JsonArray();
+            var wanted = memory.featureQuery.toLowerCase(Locale.ROOT);
+            env.server().registryAccess().lookupOrThrow(Registries.PLACED_FEATURE).keySet().stream().map(ResourceLocation::toString).filter(id -> id.contains(wanted))
+                    .sorted(Comparator.comparing((String id) -> id.startsWith("minecraft:")).thenComparing(id -> id)).limit(MAX_TEMPLATES).forEach(features::add);
+            root.add("features", features);
+        }
         root.addProperty("query", memory.query);
 
         if (!memory.pool.isEmpty()) {
@@ -690,6 +731,7 @@ final class JigsawEditor {
             item.addProperty("joint", jigsaw.jointType().getSerializedName());
             item.addProperty("placement", jigsaw.placementPriority());
             item.addProperty("selection", jigsaw.selectionPriority());
+            item.addProperty("vertical", net.minecraft.world.level.block.JigsawBlock.getFrontFacing(jigsaw.info().state()).getAxis() == net.minecraft.core.Direction.Axis.Y);
             item.addProperty("final", jigsaw.info().nbt() == null ? "minecraft:air" : jigsaw.info().nbt().getStringOr("final_state", "minecraft:air"));
             var at = jigsaw.info().pos();
             item.add("pos", ints(at.getX(), at.getY(), at.getZ()));
