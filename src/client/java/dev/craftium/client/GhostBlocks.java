@@ -127,9 +127,11 @@ final class GhostBlocks {
             int line=hue<0?0xffffffff:rainbow(hue,0xff),fill=hue<0?0x22ffffff:rainbow(hue,0x22);
             var box=new net.minecraft.world.phys.AABB(l[i]+origin.x,l[i+1]+origin.y,l[i+2]+origin.z,l[i+3]+1+origin.x,l[i+4]+1+origin.y,l[i+5]+1+origin.z);
             Overlay.box(box,line,2f,fill);
-            if(camera!=null&&names!=null&&piece<names.size()&&box.getCenter().distanceToSqr(camera)<48*48&&box.getCenter().distanceToSqr(camera)>8*8){
+            if(camera!=null&&names!=null&&piece<names.size()){
                 var top=new Vec3((box.minX+box.maxX)/2,box.maxY+.6,(box.minZ+box.maxZ)/2);
-                Overlay.text(names.get(piece),top,line,0xbb151c26,.04f);
+                double distance=Math.sqrt(top.distanceToSqr(camera));
+                // A label is as big in the world as it is told to be, so close up it would fill the screen: its size follows the distance, which keeps it readable at every range.
+                if(distance<64)Overlay.text(names.get(piece),top,line,0xbb151c26,(float)Math.clamp(distance*.0016,.008,.04));
             }
         }
     }
