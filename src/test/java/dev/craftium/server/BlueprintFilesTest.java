@@ -153,20 +153,48 @@ class BlueprintFilesTest {
 
     @Test void aListingHasTheBlueprintsWithTheirPathsAndTheEmptyFolders() throws IOException {
         blueprint("b.nbt", "b"); blueprint("dir/a.nbt", "a"); Files.createDirectories(root.resolve("empty/inside")); Files.writeString(root.resolve("notes.txt"), "x");
-        var found = BlueprintFiles.list(root, Integer.MAX_VALUE);
+        var found = BlueprintFiles.list(root, Integer.MAX_VALUE, Long.MAX_VALUE / 2).files();
         assertEquals(List.of("b.nbt", "dir/a.nbt", "empty/inside/"), found.stream().map(BlueprintInfo::file).toList());
         assertEquals(-2, found.get(2).blocks());
-        assertEquals(List.of(), BlueprintFiles.list(root.resolve("missing"), 10));
+        assertEquals(List.of(), BlueprintFiles.list(root.resolve("missing"), 10, 10).files());
     }
 
     @Test void aListingKeepsPicturesWithinItsBudget() throws IOException {
         blueprintWithPicture("a.nbt", 2); blueprintWithPicture("b.nbt", 1);
-        var all = BlueprintFiles.list(root, Integer.MAX_VALUE);
+        var all = BlueprintFiles.list(root, Integer.MAX_VALUE, Long.MAX_VALUE / 2).files();
         assertTrue(all.get(0).hasVoxels()); assertTrue(all.get(1).hasVoxels());
         int first = all.get(0).cells().length() + all.get(0).palette().stream().mapToInt(String::length).sum();
-        var tight = BlueprintFiles.list(root, first + 1);
+        var tight = BlueprintFiles.list(root, first + 1, Long.MAX_VALUE / 2).files();
         assertTrue(tight.get(0).hasVoxels()); assertFalse(tight.get(1).hasVoxels()); // the second is past the budget: flat thumbnail only
         assertEquals("b.nbt", tight.get(1).file());
+    }
+
+    @Test void aFileThatCannotBePicturedIsReadOnceAndNotAgain() throws IOException {
+        Files.writeString(root.resolve("raw.nbt"), "not nbt");
+        var first = BlueprintFiles.list(root, Integer.MAX_VALUE, Long.MAX_VALUE / 2).files().get(0);
+        assertTrue(first.hasVoxels()); assertNull(first.voxels()); // written down as having no picture: the browser draws the flat view
+        Path sidecar = root.resolve("raw.nbt.json");
+        assertTrue(Files.exists(sidecar));
+        Files.writeString(sidecar, Files.readString(sidecar).replace("\"name\":\"raw.nbt\"", "\"name\":\"kept\"")); // a later listing keeps what the sidecar says
+        assertEquals("raw.nbt", BlueprintFiles.list(root, Integer.MAX_VALUE, Long.MAX_VALUE / 2).files().get(0).file());
+        assertTrue(Files.readString(sidecar).contains("\"name\":\"kept\""));
+    }
+
+    @Test void aListingStopsReadingFilesWhenItsTimeIsUp() throws IOException {
+        Files.writeString(root.resolve("a.nbt"), "x"); Files.writeString(root.resolve("b.nbt"), "x");
+        var late = BlueprintFiles.list(root, Integer.MAX_VALUE, 0);
+        assertEquals(2, late.pending());
+        assertFalse(Files.exists(root.resolve("a.nbt.json"))); // nothing was read, so nothing was written
+        assertEquals(0, BlueprintFiles.list(root, Integer.MAX_VALUE, Long.MAX_VALUE / 2).pending());
+        assertTrue(Files.exists(root.resolve("a.nbt.json")));
+    }
+
+    @Test void aFileNewerThanItsSidecarIsReadAgain() throws IOException {
+        blueprintWithPicture("a.nbt", 2);
+        assertNotNull(BlueprintFiles.list(root, Integer.MAX_VALUE, Long.MAX_VALUE / 2).files().get(0).voxels());
+        Path file = root.resolve("a.nbt");
+        Files.setLastModifiedTime(file, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() + 60_000)); // replaced from outside, later
+        assertNull(BlueprintFiles.list(root, Integer.MAX_VALUE, Long.MAX_VALUE / 2).files().get(0).voxels()); // "data" is not a blueprint, so the old picture is gone
     }
 
     @Test void anUnknownActionIsRefused() {

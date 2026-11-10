@@ -19,10 +19,10 @@ final class BlueprintLibrary {
         try{
             String name=p.o.name;
             switch(action){
-                case "blueprint_list" -> {p.session.library=list();return "Blueprint library · "+p.session.library.size()+" files";}
+                case "blueprint_list" -> {var found=list();p.session.library=found.files();return "Blueprint library · "+found.files().size()+" files"+(found.pending()>0?" · "+found.pending()+" pictures still to read: Refresh again":"");}
                 case "blueprint_op" -> {
                     Path root=ServerPlatform.assets().resolve("blueprints");Files.createDirectories(root);
-                    String result=BlueprintFiles.run(root,dev.craftium.net.Packets.JSON.fromJson(p.o.assetData,BlueprintFiles.Op.class));p.session.library=list();return "Blueprint library · "+result; // the client takes the list from a reply that starts like this
+                    String result=BlueprintFiles.run(root,dev.craftium.net.Packets.JSON.fromJson(p.o.assetData,BlueprintFiles.Op.class));p.session.library=list().files();return "Blueprint library · "+result; // the client takes the list from a reply that starts like this
                 }
                 case "asset_upload" -> {
                     if(!name.matches("(?i).+\\.(schem|schematic|nbt|png|ttf|otf)"))throw new IllegalArgumentException("Unsupported asset extension");
@@ -79,7 +79,8 @@ final class BlueprintLibrary {
         else{String extension=action.equals("selection_csv")?".csv":action.equals("schematic_export")?".schem":".nbt";if(!name.endsWith(extension))name+=extension;Path path=file(folder,name);if(Files.size(path)>1_048_576)return " · too large for client download; saved on server";bytes=Files.readAllBytes(path);Path sidecar=path.resolveSibling(path.getFileName()+".json");if(!action.equals("selection_csv")&&Files.exists(sidecar))metadata=Files.readString(sidecar);}
         ServerPlatform.send(player,new dev.craftium.net.Packets.Download(folder,name,Base64.getEncoder().encodeToString(bytes),metadata));return " · downloaded to client";
     }
-    private static List<BlueprintInfo> list()throws IOException{return BlueprintFiles.list(ServerPlatform.assets().resolve("blueprints"),700_000);} // a status packet has a size limit, so the pictures have a budget
+    /** The listing for a player: the pictures have a size budget (a status packet has a limit) and the reading of files a time budget (the game thread must not stall). */
+    private static BlueprintFiles.Listing list()throws IOException{return BlueprintFiles.list(ServerPlatform.assets().resolve("blueprints"),700_000,40_000_000L);}
     private static ListTag ints(int... values){var list=new ListTag();for(int i:values)list.add(IntTag.valueOf(i));return list;}
     private static CompoundTag structure(EditPlanner p){
         var root=new CompoundTag();var palette=new ListTag();var indices=new LinkedHashMap<net.minecraft.world.level.block.state.BlockState,Integer>();var blocks=new ListTag();int sx=1,sy=1,sz=1;

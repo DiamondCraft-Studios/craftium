@@ -105,44 +105,62 @@ public final class BlueprintFiles {
         }
     }
 
+    /** A listing, and how many files were left unread because the time for reading them ran out. */
+    public record Listing(List<BlueprintInfo> files, int pending) {}
+
+    /** {@link #describe(Path, Path, long)} with no limit on the time it may spend reading the file. */
+    public static BlueprintInfo describe(Path root, Path file) { return describe(root, file, System.nanoTime() + Long.MAX_VALUE / 2); }
+
     /**
-     * What the browser lists for one blueprint file: its sidecar, or what the file itself says when there is none or the sidecar has no picture data (an import, or
-     * a file saved before pictures existed); the sidecar is then written, so the file is read once. {@code root} is the library folder, as {@link #list} gives it.
+     * What the browser lists for one blueprint file: its sidecar, or what the file itself says when there is none, when the sidecar has no picture data (an
+     * import, or a file saved before pictures existed) or when the file is newer than the sidecar (replaced from outside). The file is then read and the sidecar
+     * written, so that happens once: a file that cannot be pictured is written down as having no picture, and is not read again. A file that is due a read when
+     * the {@code until} time (a {@link System#nanoTime()} value) has passed is left as it is, to be read by a later listing.
      */
-    public static BlueprintInfo describe(Path root, Path file) {
+    public static BlueprintInfo describe(Path root, Path file, long until) {
         String relative = root.relativize(file).toString().replace('\\', '/');
         Path sidecar = sidecar(file);
         BlueprintInfo info = null;
-        try { if (Files.exists(sidecar) && Files.size(sidecar) <= 32768) info = Packets.JSON.fromJson(Files.readString(sidecar), BlueprintInfo.class); } catch (Exception ignored) {}
-        if (info == null) info = new BlueprintInfo(relative, file.getFileName().toString(), "", "", -1, new Point(0, 0, 0), List.of());
-        if (!info.hasVoxels()) {
-            var described = BlueprintFileVoxels.read(file);
-            if (described != null) {
-                info = new BlueprintInfo(relative, info.name(), info.author(), info.tags(), described.blocks(), described.size(), info.thumbnail() == null ? List.of() : info.thumbnail(), null, null, 1).withVoxels(described.packed());
-                try { write(sidecar, info); } catch (IOException ignored) {}
+        boolean current = false;
+        try {
+            if (Files.exists(sidecar) && Files.size(sidecar) <= 32768) {
+                info = Packets.JSON.fromJson(Files.readString(sidecar), BlueprintInfo.class);
+                current = Files.getLastModifiedTime(sidecar).compareTo(Files.getLastModifiedTime(file)) >= 0;
             }
+        } catch (Exception ignored) {}
+        if (info == null) { info = new BlueprintInfo(relative, file.getFileName().toString(), "", "", -1, new Point(0, 0, 0), List.of()); current = false; }
+        if ((!info.hasVoxels() || !current) && System.nanoTime() - until < 0) {
+            var described = BlueprintFileVoxels.read(file);
+            var thumbnail = info.thumbnail() == null ? List.<Integer>of() : info.thumbnail();
+            info = described != null
+                ? new BlueprintInfo(relative, info.name(), info.author(), info.tags(), described.blocks(), described.size(), thumbnail, null, null, 1).withVoxels(described.packed())
+                : new BlueprintInfo(relative, info.name(), info.author(), info.tags(), info.blocks(), info.size(), thumbnail, List.of(), "", 1); // no picture, and the next listing knows it
+            try { write(sidecar, info); } catch (IOException ignored) {}
         }
         return info.at(relative);
     }
 
     /**
      * Everything a library folder lists: its blueprints (at most 256, {@link #DEPTH} levels down) and its empty folders. A listing that travels to a player has a size
-     * limit, so once the pictures of the blueprints so far take more than {@code pictureBudget} characters, the rest keep only their flat thumbnail.
+     * limit, so once the pictures of the blueprints so far take more than {@code pictureBudget} characters, the rest keep only their flat thumbnail; and it should not
+     * stall the game, so after {@code readNanos} spent reading files, the rest are left for a later listing (counted in {@code pending}).
      */
-    public static List<BlueprintInfo> list(Path root, int pictureBudget) throws IOException {
-        if (!Files.isDirectory(root)) return List.of();
+    public static Listing list(Path root, int pictureBudget, long readNanos) throws IOException {
+        if (!Files.isDirectory(root)) return new Listing(List.of(), 0);
         root = root.toAbsolutePath().normalize();
         var results = new ArrayList<BlueprintInfo>();
-        int budget = pictureBudget;
+        int budget = pictureBudget, pending = 0;
+        long until = System.nanoTime() + readNanos;
         try (Stream<Path> files = Files.walk(root, DEPTH)) {
             for (Path path : files.filter(Files::isRegularFile).filter(p -> p.getFileName().toString().matches(EXTENSIONS)).sorted().limit(256).toList()) {
-                BlueprintInfo info = describe(root, path);
-                if (info.hasVoxels() && (budget -= info.cells().length() + info.palette().stream().mapToInt(String::length).sum()) < 0) info = info.withVoxels(null);
+                BlueprintInfo info = describe(root, path, until);
+                if (!info.hasVoxels()) pending++;
+                else if ((budget -= info.cells().length() + info.palette().stream().mapToInt(String::length).sum()) < 0) info = info.withVoxels(null);
                 results.add(info);
             }
         }
         results.addAll(emptyFolders(root));
-        return List.copyOf(results);
+        return new Listing(List.copyOf(results), pending);
     }
 
     /** Folders with nothing in them, as listing entries ending in "/" (blocks -2), so the browser can show a folder that has no file yet. */
