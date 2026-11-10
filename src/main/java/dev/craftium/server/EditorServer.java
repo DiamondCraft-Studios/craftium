@@ -935,6 +935,27 @@ public final class EditorServer {
         send(player,s,"Applying "+edit.name()+"…",false);
     }
     /** Holds the edit as a ghost for the player to confirm; edits made while one is waiting are added to it. */
+    /** The player's session, for commands that work on their selection and waiting preview. */
+    static Session session(ServerPlayer player){return playerSession(player);}
+    /** Holds an edit as the player's waiting preview in place of whatever waited before; Enter builds it and Esc cancels it, like any staged edit. */
+    static void preview(ServerPlayer player,Session.Edit edit,String message){
+        var s=playerSession(player);
+        s.pendingEdit=edit;s.pendingSelectionBefore=null;s.pendingDirty=true;
+        send(player,s,message,false);
+    }
+    /** Builds the waiting preview, as the Enter key does. */
+    static void applyPreview(ServerPlayer player){
+        var s=playerSession(player);var edit=s.pendingEdit;
+        if(edit==null){send(player,s,"Nothing to confirm",false);return;}
+        s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingDirty=true;start(player,s,edit);
+    }
+    /** Drops the waiting preview, as the Escape key does. */
+    static void cancelPreview(ServerPlayer player){
+        var s=playerSession(player);
+        if(s.pendingEdit==null){send(player,s,"Nothing to cancel",false);return;}
+        s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingDirty=true;
+        send(player,s,"Edit cancelled",false);
+    }
     private static void stage(ServerPlayer player,Session s,Session.Edit edit){
         s.pendingEdit=s.pendingEdit==null?edit:merge(s.pendingEdit,edit);s.pendingDirty=true;
         send(player,s,"Edit ready: "+s.pendingEdit.changes().size()+" blocks · Enter to apply, Esc to cancel",false);

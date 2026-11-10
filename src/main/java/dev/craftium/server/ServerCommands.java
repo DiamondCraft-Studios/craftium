@@ -12,5 +12,6 @@ public final class ServerCommands {
         var gamerule=Commands.literal("gamerule").requires(source->dev.craftium.compat.Compat.isGamemaster(source));
         for(var entry:RULES.entrySet())gamerule.then(Commands.literal(entry.getKey()).then(Commands.argument("value",BoolArgumentType.bool()).executes(context->{String result=WorldRules.set(context.getSource().getLevel(),entry.getValue(),BoolArgumentType.getBool(context,"value"));context.getSource().sendSuccess(()->dev.craftium.core.Chat.say(result),true);return 1;})));
         dispatcher.register(Commands.literal("craftium").then(gamerule));
+        JigsawCommand.register(dispatcher);
     });}
 }
