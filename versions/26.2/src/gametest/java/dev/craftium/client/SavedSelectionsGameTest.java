@@ -187,7 +187,8 @@ public final class SavedSelectionsGameTest {
 
         screenshot();
         transformsCarryObjects();
-        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow");
+        overlapTakesObjectsWhole();
+        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap");
     }
 
     // ---- Claude --------------------------------------------------------------------------------------------------------------------------
@@ -379,6 +380,24 @@ public final class SavedSelectionsGameTest {
         require(saved(0).max().x() - saved(0).min().x() + 1 == 4 && saved(0).size() == 16, "scaling up keeps the BuildObject whole: " + saved(0));
         undo();
         require(saved(0).size() == 8 && saved(0).min().equals(minA), "and Undo shrinks it back");
+    }
+    /** A selection that touches BuildObjects makes a new one with them inside it, whole, whatever part of them it reached. */
+    private void overlapTakesObjectsWhole() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        var reach = new ArrayList<>(a());
+        reach.add(b().get(0)); // all of the first, one block of the second
+        reach.add(cell().get(0)); // and a block that belongs to none
+        selectOnly(reach);
+        click(control("Create a BuildObject from what is selected now", 0));
+        require(ClientState.savedSelections().size() == 3, "one new BuildObject: " + ClientState.savedSelections());
+        var around = saved(0);
+        require(saved(1).parent() == around.id() && saved(2).parent() == around.id() && around.parent() == 0, "both went inside it, in their order: " + ClientState.savedSelections());
+        require(saved(1).size() == 8 && saved(2).size() == 3, "each whole, though the selection reached one block of the second: " + ClientState.savedSelections());
+        require(around.size() == 1, "and it holds only the block that belonged to none: " + around);
     }
     /** Transforms the selected blocks as the Edit menu does: an offset along x and a size along each axis. */
     private void transform(int offsetX, double sizeX, double sizeY, double sizeZ) {
