@@ -256,7 +256,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     }
 
     private void leftPane() {
-        tips.on(box(SIDE, TOP, leftW, filter, 64, v -> { filter = v; poolScroll = 0; }, null), "Type part of a pool name to narrow the list.");
+        tips.on(box(SIDE, TOP, leftW, filter, 64, v -> { filter = v; poolScroll = 0; }, null), "Type part of a pool name to narrow the list. Start a word with @ to narrow by namespace: @minecraft shows only the pools of minecraft, and @craftium town only the town pools of craftium.");
         int y = ch - FOOT - 66;
         tips.on(box(SIDE, y, leftW, name, 120, v -> name = v, () -> action("pool_new")), "The name for New, Copy or Rename. Without a namespace it goes in craftium, so my_pool means craftium:my_pool. Enter makes a new pool.");
         int half = leftW / 2 - 2;
@@ -414,8 +414,19 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private List<JsonObject> visiblePools() {
         var out = new ArrayList<JsonObject>();
         if (!model.has("pools")) return out;
-        String needle = filter.toLowerCase(Locale.ROOT);
-        for (var e : model.getAsJsonArray("pools")) { var p = e.getAsJsonObject(); if (needle.isEmpty() || p.get("id").getAsString().contains(needle)) out.add(p); }
+        // Words narrow by name (all of them have to be in it); a word that starts with @ narrows by namespace (any of those named), so "@minecraft town" is the town pools of minecraft.
+        var namespaces = new ArrayList<String>();
+        var words = new ArrayList<String>();
+        for (var word : filter.toLowerCase(Locale.ROOT).strip().split("\\s+")) {
+            if (word.startsWith("@")) { if (word.length() > 1) namespaces.add(word.substring(1)); }
+            else if (!word.isEmpty()) words.add(word);
+        }
+        for (var e : model.getAsJsonArray("pools")) {
+            var p = e.getAsJsonObject();
+            String id = p.get("id").getAsString(), namespace = id.substring(0, Math.max(0, id.indexOf(':')));
+            if (!namespaces.isEmpty() && namespaces.stream().noneMatch(namespace::startsWith)) continue;
+            if (words.stream().allMatch(id::contains)) out.add(p);
+        }
         out.sort(Comparator.comparingInt(p -> str(p, "source", "").equals("craftium") ? 0 : 1));
         return out;
     }
@@ -446,7 +457,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         drawConnections(g);
         drawWidgets(g, mx, my, delta);
         tips.draw(g, font, mx, my, cw, ch);
-        if (filter.isEmpty()) g.text(font, "filter " + (model.has("pools") ? model.getAsJsonArray("pools").size() : 0) + " pools", SIDE + 5, TOP + 5, 0xff5f7186, false);
+        if (filter.isEmpty()) g.text(font, "filter " + (model.has("pools") ? model.getAsJsonArray("pools").size() : 0) + " pools · @namespace", SIDE + 5, TOP + 5, 0xff5f7186, false);
         if (name.isEmpty()) g.text(font, "name for New, Copy or Rename", SIDE + 5, ch - FOOT - 66 + 5, 0xff5f7186, false);
         g.pose().popMatrix();
     }
