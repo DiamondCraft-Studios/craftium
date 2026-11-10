@@ -351,6 +351,24 @@ class SavedSelectionsTest {
         saved.setColor(a.id(),0xff123456);assertEquals(0xff123456,a.color());
         saved.restore(before,s);assertEquals(0,a.color());
     }
+    @Test void severalEntriesAreMovedTogetherInTheirOrderIntoOnePlace(){
+        var saved=new SavedSelections();var a=saved.save(live(A));var b=saved.save(live(B));var c=saved.save(live(C));var d=saved.save(live(D));
+        saved.placeMany(List.of(d.id(),b.id()),0,1); // b and d, which sit apart, go between a and c; the place is counted without them
+        assertEquals(List.of(a,b,d,c),saved.entries(),"in the order they were in, not the order they were named");
+    }
+    @Test void severalGoUnderAParentTakingTheirSubtreesAndSkippingOnesInsideAnother(){
+        var saved=new SavedSelections();var p=saved.save(live(A));var x=saved.save(live(B));var y=saved.save(live(C));var z=saved.save(live(D));
+        saved.place(z.id(),y.id(),0); // p, x, y > z
+        saved.placeMany(List.of(x.id(),y.id(),z.id()),p.id(),0);
+        assertEquals(List.of(x,y),saved.children(p),"z is under y, so it is not placed on its own");
+        assertEquals(y.id(),z.parentId());assertEquals(List.of(p,x,y,z),saved.entries());
+    }
+    @Test void severalCannotGoInsideThemselves(){
+        var saved=new SavedSelections();var a=saved.save(live(A));var b=saved.save(live(B));saved.place(b.id(),a.id(),0);
+        assertThrows(IllegalArgumentException.class,()->saved.placeMany(List.of(a.id()),b.id(),0));
+        assertThrows(IllegalArgumentException.class,()->saved.placeMany(List.of(),0,0));
+        assertEquals(List.of(a,b),saved.entries(),"a refused move changes nothing");
+    }
     @Test void theLimitIsEnforced(){
         var saved=new SavedSelections();var s=live(A);for(int i=0;i<SavedSelections.MAX;i++)saved.save(s);
         assertThrows(IllegalArgumentException.class,()->saved.save(s));

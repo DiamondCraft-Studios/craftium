@@ -153,7 +153,7 @@ public final class CraftiumClient implements ClientModInitializer {
         });}catch(RuntimeException e){ClientState.notify("Craftium connection: "+e.getMessage());}
     }
     private void tick(Minecraft mc) {
-        ClientState.flushSavedColours(); // colours chosen for BuildObjects go to the server once the picker is still
+        ClientState.flushView();ClientState.flushSavedColours(); // colours chosen for BuildObjects go to the server once the picker is still
         EditorBindings.migrate(mc);
         if(mc.player==null || mc.level==null){hadWorld=false;toolCursor=false;return;}
         ClientCommands.tick();

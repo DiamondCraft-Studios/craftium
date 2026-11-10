@@ -227,6 +227,25 @@ public final class SavedSelections {
         else{at=entries.indexOf(parent)+1;while(at<entries.size()&&isUnder(entries.get(at),parent))at++;}
         entry.parent=parent;entries.addAll(at,moving);changed();
     }
+    /**
+     * As {@link #place} for several at once, in the order they are in the list: each with everything under it goes under {@code parentId} as the children from number
+     * {@code index} on, counted among the children without any of them. One that is under another listed one comes along with it and is not placed by itself.
+     */
+    public void placeMany(List<Integer> ids,int parentId,int index){
+        var picked=new LinkedHashSet<Entry>();for(int id:ids)picked.add(need(id));
+        var parent=parentId==0?null:need(parentId);
+        var roots=entries.stream().filter(e->picked.contains(e)&&picked.stream().noneMatch(o->o!=e&&isUnder(e,o))).toList(); // list order, the outermost only
+        if(roots.isEmpty())throw new IllegalArgumentException("Pick the BuildObjects to move");
+        for(var r:roots)if(parent==r||parent!=null&&isUnder(parent,r))throw new IllegalArgumentException("A BuildObject cannot go inside itself");
+        var moving=new ArrayList<Entry>();for(var r:roots)moving.addAll(subtree(r));
+        entries.removeAll(moving);
+        var siblings=children(parent);int k=Math.clamp(index,0,siblings.size()),at;
+        if(k<siblings.size())at=entries.indexOf(siblings.get(k));
+        else if(parent==null)at=entries.size();
+        else{at=entries.indexOf(parent)+1;while(at<entries.size()&&isUnder(entries.get(at),parent))at++;}
+        for(var r:roots)r.parent=parent;
+        entries.addAll(at,moving);changed();
+    }
     /** Swaps the entry in for the live selection. Looking at another while looking keeps the first live selection aside, not the one just seen. */
     public void view(int id,Selection live){look(id,live,false);}
     /** As {@link #view}, and changes to the live selection are written back by {@link #sync}. */

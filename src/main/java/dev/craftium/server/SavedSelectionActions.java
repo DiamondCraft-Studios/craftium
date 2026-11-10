@@ -20,6 +20,11 @@ final class SavedSelectionActions {
                 var ids=ids(part);
                 saved.viewSet(ids,s.selection);return ids.isEmpty()?"Your selection is back":"Showing "+ids.size()+" BuildObjects";
             }
+            case "placeset"->{ // placeset:<ids separated by commas>:<parent id, 0 for the top>:<child number among the parent's others>
+                var rest=part.length<3?new String[0]:part[2].split(":");
+                try{if(rest.length!=2)throw new NumberFormatException();saved.placeMany(ids(part),Integer.parseInt(rest[0]),Integer.parseInt(rest[1]));}catch(NumberFormatException e){throw new IllegalArgumentException("Give BuildObjects, a parent and a place");}
+                return "Moved";
+            }
             case "group"->{var entry=saved.group(ids(part));return "Grouped into "+entry.name();}
             case "createchild"->{var entry=saved.createChild(id(part),s.selection);return "Created "+entry.name();}
             case "deleteset"->{var ids=ids(part);saved.deleteMany(ids,s.selection);return "Deleted "+ids.size()+" BuildObjects";}
@@ -41,13 +46,13 @@ final class SavedSelectionActions {
         }
     }
     /** Whether the action changes the BuildObjects themselves (and so goes in the history), as against only what is being looked at. */
-    static boolean changesHierarchy(String action){return switch(verb(action)){case "save","delete","deleteset","rename","place","group","createchild","colour"->true;default->false;};}
+    static boolean changesHierarchy(String action){return switch(verb(action)){case "save","delete","deleteset","rename","place","placeset","group","createchild","colour"->true;default->false;};}
     /** What the action asks permission for (see {@link HierarchyPermissions}), or null for one everybody may do: looking, which changes nothing of the BuildObjects. */
     static String permission(String action){
         return switch(verb(action)){
             case "save","group","createchild"->"create";
             case "rename"->"rename";
-            case "place"->"move";
+            case "place","placeset"->"move";
             case "delete","deleteset"->"delete";
             case "colour"->"recolour";
             case "edit"->"edit";
@@ -56,7 +61,7 @@ final class SavedSelectionActions {
     }
     /** What the history calls the action: "Undid Create BuildObject". */
     static String historyName(String action){
-        return switch(verb(action)){case "save","createchild"->"Create BuildObject";case "group"->"Group BuildObjects";case "delete"->"Delete BuildObject";case "deleteset"->"Delete BuildObjects";case "rename"->"Rename BuildObject";case "colour"->"Recolour BuildObject";case "place"->"Move BuildObject";default->"BuildObject";};
+        return switch(verb(action)){case "save","createchild"->"Create BuildObject";case "group"->"Group BuildObjects";case "delete"->"Delete BuildObject";case "deleteset"->"Delete BuildObjects";case "rename"->"Rename BuildObject";case "colour"->"Recolour BuildObject";case "place"->"Move BuildObject";case "placeset"->"Move BuildObjects";default->"BuildObject";};
     }
     private static String verb(String action){return action.startsWith(PREFIX)?action.substring(PREFIX.length()).split(":",2)[0]:"";}
     /** The ids of an action like {@code group:1,2,3}. */

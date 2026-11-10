@@ -1710,7 +1710,7 @@ public final class EditorScreen extends CraftiumScreen {
             }
             if(!help&&!transform&&menu<0)for(int i=dragSources.size()-1;i>=0;i--){var d=dragSources.get(i);if(d.area().contains(x,y)){dragBlock=d.block();dragClick=d.area().action();dragStartX=event.x();dragStartY=event.y();dragMoved=false;return true;}}
             if(doubleClick&&!help&&!transform&&menu<0)for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(!c.contains(x,y))continue;for(var area:renameAreas)if(area.row()==c){startRename(area);return true;}break;} // the second click of a double click on a row renames it
-            if(!help&&!transform&&menu<0)for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(!c.contains(x,y))continue;for(var area:renameAreas)if(area.row()==c){rowDragId=area.id();rowDragX=event.x();rowDragY=event.y();rowDragMoved=false;rowDragClick=c.action;return true;}break;} // a row acts when let go, so it can be dragged first
+            if(!help&&!transform&&menu<0)for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(!c.contains(x,y))continue;for(var area:renameAreas)if(area.row()==c){rowDragId=area.id();rowDragIds=draggedSet(area.id());rowDragX=event.x();rowDragY=event.y();rowDragMoved=false;rowDragClick=c.action;return true;}break;} // a row acts when let go, so it can be dragged first
             for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(c.contains(x,y)){c.action.run();return true;}}
             if(help||transform)return true;if(menu>=0){menu=-1;return true;}
             if(panels){String id=WorkspaceLayout.hit(x,y,true);if(!id.isBlank()){var r=WorkspaceLayout.windows.get(id);draggedPanel=id;resizePanel=false;dragOriginX=r.x;dragOriginY=r.y;dragPointerX=x;dragPointerY=y;return true;}
@@ -2136,7 +2136,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             if(renaming==id){
                 renameShown=true;var box=renameBox(entry.name());box.setX(nameX);box.setY(ry+4);box.setWidth(x+pw-98-nameX);
             }else text(g,shorten(entry.name(),pw-112-indent-12),nameX,ry+6,entry.active()?TEXT:MUTED);
-            if(rowDragMoved&&rowDragId==id)g.fill(x+9,ry,x+pw-9,ry+rowHeight,0xaa141c26); // the one being dragged is left looking emptied
+            if(rowDragMoved&&rowDragIds.contains(id))g.fill(x+9,ry,x+pw-9,ry+rowHeight,0xaa141c26); // the one being dragged is left looking emptied
             // later controls win where they overlap, so the row comes first and the cells and buttons on it after
             var rowControl=new Control(x+9,ry,pw-18,rowHeight,()->rowClick(entry),HIDDEN_TIP+savedSpan(entry)+" blocks · "+(entry.active()&&!entry.editing()?"Let go":"Select this BuildObject")); controls.add(rowControl);renameAreas.add(new RenameArea(rowControl,id));
             if(parents.contains(id)){ // something is under it: an arrow folds it
@@ -2339,6 +2339,15 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     /** A row of the Hierarchy that a double click renames: the row's own control, so a click on a button of the row is not a rename. */
     private record RenameArea(Control row,int id){}
     /** The row being pressed to click or to drag to another place, how far the pointer has gone, and where the list of rows is drawn. */
+    /** The BuildObjects a drag carries: the pressed row, or all the rows shown when it is one of several (the outermost of them, in list order). */
+    private List<Integer> rowDragIds=List.of();
+    private List<Integer> draggedSet(int pressed){
+        var shown=new ArrayList<Integer>();for(var e:hierarchyAll)if(e.active())shown.add(e.id());
+        if(shown.size()<2||!shown.contains(pressed))return List.of(pressed);
+        var roots=new ArrayList<Integer>();
+        for(var e:hierarchyAll){if(!shown.contains(e.id()))continue;boolean inner=false;for(int other:shown)if(other!=e.id()&&isUnder(e,other))inner=true;if(!inner)roots.add(e.id());}
+        return roots;
+    }
     private int rowDragId=-1,hierarchyTop,hierarchyRow=20,hierarchyRowCount=1;private double rowDragX,rowDragY;private boolean rowDragMoved;private Runnable rowDragClick;
     /** The BuildObjects as the client has them, and the rows listed of them (those not under a folded one), for the drag to work out where it lands. */
     private List<dev.craftium.net.Packets.SavedSelection> hierarchyAll=List.of(),hierarchyRows=List.of();
@@ -2362,7 +2371,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         int row=(int)at+savedScroll;
         if(row>=total)return new Drop(0,childCount(0),DROP_END,total-1);
         var target=hierarchyRows.get(Math.max(row,0));
-        if(target.id()==rowDragId||isUnder(target,rowDragId))return null;
+        for(int dragged:rowDragIds)if(target.id()==dragged||isUnder(target,dragged))return null; // not onto what is being carried, nor onto what is under it
         double f=py<0?0:py/hierarchyRow-at;
         if(f<.25)return new Drop(target.parent(),siblingIndex(target),DROP_ABOVE,Math.max(row,0));
         if(f>.75){boolean open=childCount(target.id())>0&&!ClientState.savedFolded(target.id());return open?new Drop(target.id(),0,DROP_FIRST_CHILD,row):new Drop(target.parent(),siblingIndex(target)+1,DROP_BELOW,row);}
@@ -2370,11 +2379,13 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     }
     /** Lets go of a pressed row: where it was dropped moves it, and a press that never moved is the click it always was. */
     private void finishRowDrag(){
-        int id=rowDragId;boolean moved=rowDragMoved;var click=rowDragClick;var drop=moved?dropAt():null;var dragged=savedById(id);rowDragId=-1;rowDragMoved=false;rowDragClick=null;
+        int id=rowDragId;var ids=rowDragIds;boolean moved=rowDragMoved;var click=rowDragClick;var drop=moved?dropAt():null;var dragged=savedById(id);rowDragId=-1;rowDragIds=List.of();rowDragMoved=false;rowDragClick=null;
         if(!moved){if(click!=null)click.run();return;}
         if(drop==null||dragged==null)return;
-        int index=drop.index();if(dragged.parent()==drop.parent()&&siblingIndex(dragged)<index)index--; // the place is counted without the row itself
-        action("saved_selection:place:"+id+":"+drop.parent()+":"+index);
+        int index=drop.index();
+        for(int carried:ids){var row=savedById(carried);if(row!=null&&row.parent()==drop.parent()&&siblingIndex(row)<drop.index())index--;} // the place is counted without the rows carried
+        if(ids.size()>1)action("saved_selection:placeset:"+String.join(",",ids.stream().map(String::valueOf).toList())+":"+drop.parent()+":"+index);
+        else action("saved_selection:place:"+id+":"+drop.parent()+":"+index);
     }
     /** The dragged row, following the pointer so it is plain that it is being carried. */
     private void rowDragGhost(Gfx g){
@@ -2382,7 +2393,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         int gw=140,gh=18,gx=Math.min(mx+12,w-gw-4),gy=my-9;
         g.fill(gx,gy,gx+gw,gy+gh,0xe0315b84);g.outline(gx,gy,gw,gh,ACCENT);
         g.fill(gx+4,gy+4,gx+14,gy+gh-4,0xff000000|ClientState.savedColor(e.id())&0xffffff);
-        text(g,shorten(e.name(),gw-26),gx+20,gy+5,TEXT);
+        text(g,rowDragIds.size()>1?rowDragIds.size()+" BuildObjects":shorten(e.name(),gw-26),gx+20,gy+5,TEXT);
     }
     private final List<RenameArea> renameAreas=new ArrayList<>();
     /** The id of the entry being renamed in place, or -1. */
