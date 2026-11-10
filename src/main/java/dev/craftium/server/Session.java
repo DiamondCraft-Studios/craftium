@@ -146,6 +146,16 @@ final class Session {
             return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,b,a,hierarchyBefore,hierarchyAfter);
         }
         boolean hasObjects(){return !objectsBefore.isEmpty();}
+        /**
+         * The same change, also moving these BuildObjects' blocks (only the ones named in {@code after}, which are the ones that changed), after the blocks it already moved:
+         * where an object began is where this change's own earlier part left it, and where it ends is the new place.
+         */
+        SelectionChange andObjects(Map<Integer,List<Point>> before,Map<Integer,List<Point>> after){
+            var ob=new LinkedHashMap<Integer,List<Point>>();for(var id:after.keySet())if(before.containsKey(id))ob.put(id,before.get(id));
+            ob.putAll(objectsBefore); // the earlier part's start is where it began
+            var oa=new LinkedHashMap<>(objectsAfter);oa.putAll(after);
+            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,ob,oa,hierarchyBefore,hierarchyAfter);
+        }
         SelectionChange(List<Point> before,List<Point> after){this(before,after,null,null);}
         /** A change to client-side state alone (see {@link dev.craftium.core.Restore}): the player's own selection is left as it is. */
         static SelectionChange restoring(Map<String,String> before,Map<String,String> after){return new SelectionChange(null,null,null,null,before,after);}
@@ -219,6 +229,8 @@ final class Session {
                 biomeMap.put(c.cell(),old==null?c:new BiomeChange(c.cell(),old.before(),c.after()));
             }
             var merged=new Edit(previous.name(),List.copyOf(combined.values()),List.copyOf(biomeMap.values()),edit.flags()).withBuilder(previous.builder());
+            var kept=previous.selection()!=null&&edit.selection()!=null?previous.selection().then(edit.selection()):previous.selection()!=null?previous.selection():edit.selection();
+            if(kept!=null)merged=merged.withSelection(kept); // what a stroke did to the BuildObjects goes with it
             if(merged.estimatedBytes()<=Selection.HISTORY_BYTES && merged.changes().size()+merged.biomes().size()<=Selection.LIMIT)edit=merged;
             else undo.addFirst(previous);
         }

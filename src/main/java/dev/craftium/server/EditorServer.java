@@ -444,7 +444,16 @@ public final class EditorServer {
                         var p=e.getKey();if(e.getValue().state().isAir()&&!o.pasteAir)continue;
                         plan.put(p.add(o.offsetX*i,o.offsetY*i,o.offsetZ*i),e.getValue());
                     }
-                    start(player,s,plan.finish(r.action().equals("move")?"Move selection":r.action().equals("clone")?"Clone selection":"Stack selection"));
+                    var moveEdit=plan.finish(r.action().equals("move")?"Move selection":r.action().equals("clone")?"Clone selection":"Stack selection");
+                    if(!r.action().equals("move")||moveEdit.changes().isEmpty()){start(player,s,moveEdit);return;} // a clone or a stack makes copies, which belong to no BuildObject
+                    // A move takes the BuildObjects' blocks along, as a transform does, and Undo, Redo and cancelling give them back with the blocks.
+                    var origin=new LinkedHashMap<Point,Point>();for(Point p:source.keySet())origin.put(p.add(o.offsetX,o.offsetY,o.offsetZ),p);
+                    var objectsNow=s.saved.snapshot();var objectsAfter=new LinkedHashMap<Integer,List<Point>>();
+                    for(var e:objectsNow.entrySet())objectsAfter.put(e.getKey(),ObjectRemap.apply(e.getValue(),source.keySet(),origin));
+                    boolean staging=s.confirmEdits&&!s.bypassConfirm;var priorObjects=s.pendingObjectsBefore;
+                    s.saved.setPoints(objectsAfter);if(staging&&priorObjects==null)s.pendingObjectsBefore=objectsNow;
+                    try{start(player,s,moveEdit.withSelection(Session.SelectionChange.restoring(Map.of(),Map.of()).withObjects(objectsNow,objectsAfter)));}
+                    catch(RuntimeException ex){s.saved.setPoints(objectsNow);s.pendingObjectsBefore=priorObjects;throw ex;}
                 }
                 case "builder_undo", "builder_redo" -> { // the chords outside the builder reach only what the builder made; the editor's own edits stay with the editor
                     boolean back=r.action().equals("builder_undo");var top=(back?s.undo:s.redo).peekFirst();
@@ -996,6 +1005,25 @@ public final class EditorServer {
         try{history(player,s,true);}catch(IllegalArgumentException e){s.pulse="";throw e;}
     }
     /** Undo or redo puts back what the edit changed besides blocks: the player's selection and pivot, and client-side state such as the builder's box. */
+    /**
+     * A block that became air is no longer a block of its BuildObject: it is taken out of each BuildObject that held it, and the edit remembers that, so Undo puts the
+     * block back into them and Redo takes it out again. Only air does this: a block replaced with another stays where it was. It is done for what was actually applied.
+     */
+    static Session.Edit pruneObjects(Session s,Session.Edit edit){
+        if(s.saved.entries().isEmpty())return edit;
+        var gone=new HashSet<Point>();for(var c:edit.changes())if(c.after().state().isAir())gone.add(c.pos());
+        if(gone.isEmpty())return edit;
+        var before=s.saved.snapshot();var after=new LinkedHashMap<Integer,List<Point>>();
+        for(var e:before.entrySet()){
+            var points=e.getValue();var kept=new ArrayList<Point>(points.size());
+            for(var p:points)if(!gone.contains(p))kept.add(p);
+            if(kept.size()!=points.size())after.put(e.getKey(),kept);
+        }
+        if(after.isEmpty())return edit;
+        s.saved.setPoints(after);
+        var change=edit.selection()==null?Session.SelectionChange.restoring(Map.of(),Map.of()):edit.selection();
+        return edit.withSelection(change.andObjects(before,after));
+    }
     private static void handBack(Session s,Session.SelectionChange change,boolean backwards){
         if(change.hasPoints())s.selection.restore(backwards?change.before():change.after());
         if(change.hasHierarchy())s.saved.restore(backwards?change.hierarchyBefore():change.hierarchyAfter(),s.selection);
@@ -1085,6 +1113,7 @@ public final class EditorServer {
                 j.session.historyDirty=true;
                 j.session.event((j.backwards?"Undo ":"Redo ")+j.edit.name());
             } else if(j.record){
+                actual=pruneObjects(j.session,actual);
                 j.session.remember(actual,j.strokeId);
                 if(actual.name().equals(DELETE_SELECTION)&&actual.selection()!=null)letGoOfSelection(j.session);
             }
