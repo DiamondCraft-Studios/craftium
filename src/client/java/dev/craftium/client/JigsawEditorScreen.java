@@ -21,7 +21,7 @@ import java.util.*;
  * (so the live preview follows) and answering with a model; every change is one undo step. A text box applies what is typed when Enter is pressed.
  */
 final class JigsawEditorScreen extends CraftiumScreen {
-    private static final int SIDE = 12, TOP = 50, FOOT = 12, CARD_H = 98, CARD_GAP = 6, ROW_H = 134, LIST_ROW = 20;
+    private static final int SIDE = 12, TOP = 50, FOOT = 12, CARD_H = 98, CARD_GAP = 6, ROW_H = 160, FOLDED_H = 22, LIST_ROW = 20;
     private static final int PANEL = 0xe0172330, CARD = 0xff223247, MUTED = 0xff9db5cb, TEXT = 0xffdce6ef, WARN = 0xffffd479, ERROR = 0xffff8a80, OK = 0xff8fe3a0;
 
     private final Screen parent;
@@ -361,46 +361,69 @@ final class JigsawEditorScreen extends CraftiumScreen {
         return total == 0 ? 0 : (int) Math.round(weight * 100.0 / total);
     }
 
-    private int jigsawsPerPage() { return Math.max(1, (ch - FOOT - (TOP + 52)) / ROW_H); }
+    /** The connectors whose fields are folded away; kept by template and place, so a fold survives a redraw. */
+    private final Set<String> foldedConnectors = new HashSet<>();
+
+    private static String foldKey(String template, JsonObject jig) { return template + "@" + jig.getAsJsonArray("pos"); }
+
+    /** The connectors that fit on each page, as from (included) and to (excluded): a folded one is short, so more of them fit. */
+    private List<int[]> jigPages(JsonArray jigsaws, String template) {
+        int room = ch - FOOT - (TOP + 52), used = 0, start = 0;
+        var pages = new ArrayList<int[]>();
+        for (int i = 0; i < jigsaws.size(); i++) {
+            int height = foldedConnectors.contains(foldKey(template, jigsaws.get(i).getAsJsonObject())) ? FOLDED_H : ROW_H;
+            if (used + height > room && i > start) { pages.add(new int[]{start, i}); start = i; used = 0; }
+            used += height;
+        }
+        pages.add(new int[]{start, jigsaws.size()});
+        return pages;
+    }
 
     private void rightPane() {
         int x = cw - SIDE - rightW;
         var element = element(selected);
         if (element == null || !element.has("jigsaws")) return;
         var jigsaws = element.getAsJsonArray("jigsaws");
-        int per = jigsawsPerPage(), pages = Math.max(1, (jigsaws.size() + per - 1) / per);
+        String template = str(element, "template", "");
+        var pageList = jigPages(jigsaws, template);
+        int pages = pageList.size();
         jigPage = Math.clamp(jigPage, 0, pages - 1);
         button("‹", x + rightW - 56, TOP, 24, 18, () -> { jigPage = Math.max(0, jigPage - 1); init(); });
         button("›", x + rightW - 28, TOP, 24, 18, () -> { jigPage = Math.min(pages - 1, jigPage + 1); init(); });
-        String template = str(element, "template", "");
-        for (int slot = 0; slot < per && jigPage * per + slot < jigsaws.size(); slot++) {
-            var jig = jigsaws.get(jigPage * per + slot).getAsJsonObject();
-            int y = TOP + 52 + slot * ROW_H;
+        int cursor = TOP + 52;
+        for (int index = pageList.get(jigPage)[0]; index < pageList.get(jigPage)[1]; index++) {
+            var jig = jigsaws.get(index).getAsJsonObject();
+            String key = foldKey(template, jig);
+            boolean isFolded = foldedConnectors.contains(key);
+            int y = cursor;
+            cursor += isFolded ? FOLDED_H : ROW_H;
+            tips.on(button(isFolded ? "+" : "-", x, y - 1, 16, 14, () -> { if (!foldedConnectors.remove(key)) foldedConnectors.add(key); init(); }), isFolded ? "Show the fields of this connector." : "Fold this connector away, leaving only its heading.");
+            if (isFolded) continue;
             var at = jig.getAsJsonArray("pos");
             JsonObject base = cmd("jigsaw_set", "template", template);
             base.add("pos", at);
             int half = rightW / 2 - 3;
             tips.on(box(x + 52, y + 14, rightW - 52, str(jig, "name", ""), 80, null, () -> { var c = base.deepCopy(); c.addProperty("name", focusedText()); change(c); }), "Name: the name of this connector. When another piece asks for a connector with this name, this is the one it joins. Enter applies.");
-            var poolBox = box(x + 52, y + 38, half - 52, str(jig, "pool", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("pool", focusedText()); change(c); });
+            var poolBox = box(x + 52, y + 38, rightW - 52, str(jig, "pool", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("pool", focusedText()); change(c); });
             tips.on(poolBox, "Pool: the pool the next piece is chosen from, by chance. minecraft:empty means nothing attaches here. Type to see the loaded pools; a pool that another mod adds can be typed in even though it is not loaded here. Enter applies.");
             suggestSources.put(poolBox, poolIds());
             var offered = new ArrayList<String>();
             if (jig.has("offered")) for (var n : jig.getAsJsonArray("offered")) offered.add(n.getAsString());
             if (!offered.contains("minecraft:empty")) offered.add("minecraft:empty");
-            var targetBox = box(x + half + 4 + 40, y + 38, rightW - (half + 4) - 40, str(jig, "target", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("target", focusedText()); change(c); });
+            var targetBox = box(x + 52, y + 62, rightW - 52, str(jig, "target", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("target", focusedText()); change(c); });
             tips.on(targetBox, "Target: the name the connector of the next piece must have to join this one. Suggestions are the names the pieces of the pool offer. Enter applies.");
             suggestSources.put(targetBox, offered);
             boolean vertical = !jig.has("vertical") || jig.get("vertical").getAsBoolean(); // only a connector that faces up or down has a joint that matters
             boolean rollable = str(jig, "joint", "rollable").equals("rollable");
-            button(rollable ? "Rollable" : "Aligned", x, y + 62, 76, 18, () -> { var c = base.deepCopy(); c.addProperty("joint", rollable ? "aligned" : "rollable"); change(c); }).active = vertical; // greyed out for a connector that faces sideways
-            tips.on(box(x + 114, y + 62, 40, String.valueOf(num(jig, "placement", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "placement", focusedText()); change(c); }), "Placement priority: when several pieces wait to be attached, those from connectors with a higher number are placed first. Enter applies.");
-            tips.on(box(x + 204, y + 62, 40, String.valueOf(num(jig, "selection", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "selection", focusedText()); change(c); }), "Selection priority: among the connectors of a piece, those with a higher number are tried first. Enter applies.");
-            var turns = box(x + 58, y + 84, rightW - 58, str(jig, "final", "minecraft:air"), 120, null, () -> { var c = base.deepCopy(); c.addProperty("final", focusedText()); change(c); });
+            button(rollable ? "Rollable" : "Aligned", x, y + 86, 76, 18, () -> { var c = base.deepCopy(); c.addProperty("joint", rollable ? "aligned" : "rollable"); change(c); }).active = vertical; // greyed out for a connector that faces sideways
+            tips.on(box(x + 114, y + 86, 40, String.valueOf(num(jig, "placement", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "placement", focusedText()); change(c); }), "Placement priority: when several pieces wait to be attached, those from connectors with a higher number are placed first. Enter applies.");
+            tips.on(box(x + 204, y + 86, 40, String.valueOf(num(jig, "selection", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "selection", focusedText()); change(c); }), "Selection priority: among the connectors of a piece, those with a higher number are tried first. Enter applies.");
+            var turns = box(x + 58, y + 110, rightW - 58, str(jig, "final", "minecraft:air"), 120, null, () -> { var c = base.deepCopy(); c.addProperty("final", focusedText()); change(c); });
             suggestSources.put(turns, blocks());
             tips.on(turns, "Turns into: the block this connector is replaced with once the structure has grown, such as minecraft:stone_bricks, or minecraft:air to leave a gap. Type to see matching blocks; Enter picks the highlighted one, Enter again applies. A block state may follow in brackets.");
             if (str(jig, "issue", "").endsWith("is not loaded")) {
                 String missing = str(jig, "pool", "");
-                button("Create pool " + shortName(missing), x, y + 108, rightW, 18, () -> edit("pool_new", "id", missing));
+                button("Create pool " + shortName(missing), x, y + 134, rightW, 18, () -> edit("pool_new", "id", missing));
             }
         }
     }
@@ -767,26 +790,32 @@ final class JigsawEditorScreen extends CraftiumScreen {
         g.text(font, font.plainSubstrByWidth(str(element, "template", ""), rightW), x, TOP + 18, TEXT, false);
         g.text(font, font.plainSubstrByWidth("Enter applies what you typed.", rightW), x, TOP + 30, 0xff6f8296, false);
         if (jigsaws.size() == 0) { g.text(font, "This template has no connectors, so nothing grows from it.", x, TOP + 52, MUTED, false); return; }
-        int per = jigsawsPerPage();
-        for (int slot = 0; slot < per && jigPage * per + slot < jigsaws.size(); slot++) {
-            var jig = jigsaws.get(jigPage * per + slot).getAsJsonObject();
-            int y = TOP + 52 + slot * ROW_H;
+        String template = str(element, "template", "");
+        var pageList = jigPages(jigsaws, template);
+        int pages = pageList.size();
+        jigPage = Math.clamp(jigPage, 0, pages - 1);
+        int cursor = TOP + 52;
+        for (int index = pageList.get(jigPage)[0]; index < pageList.get(jigPage)[1]; index++) {
+            var jig = jigsaws.get(index).getAsJsonObject();
+            boolean isFolded = foldedConnectors.contains(foldKey(template, jig));
+            int y = cursor;
+            cursor += isFolded ? FOLDED_H : ROW_H;
             var at = jig.getAsJsonArray("pos");
             String issue = str(jig, "issue", "");
             int fits = num(jig, "fits", -1);
             boolean notLoaded = issue.endsWith("is not loaded"); // fine when another mod adds the pool
-            g.fill(x - 2, y - 2, x + rightW + 2, y + ROW_H - 8, issue.isEmpty() ? 0x40223247 : notLoaded ? 0x40ffc857 : 0x40ff5a4d);
-            g.text(font, "#" + (jigPage * per + slot + 1) + " at " + at.get(0) + " " + at.get(1) + " " + at.get(2), x, y + 2, MUTED, false);
+            g.fill(x - 2, y - 2, x + rightW + 2, y + (isFolded ? FOLDED_H - 6 : ROW_H - 8), issue.isEmpty() ? 0x40223247 : notLoaded ? 0x40ffc857 : 0x40ff5a4d);
+            g.text(font, "#" + (index + 1) + " at " + at.get(0) + " " + at.get(1) + " " + at.get(2), x + 22, y + 2, MUTED, false);
             String verdict = notLoaded ? issue + " (fine if a mod adds it)" : !issue.isEmpty() ? issue : fits < 0 ? "ends here (empty pool)" : "meets " + fits + (fits == 1 ? " element" : " elements");
-            g.text(font, font.plainSubstrByWidth(verdict, rightW - 100), x + rightW - 4 - Math.min(font.width(verdict), rightW - 100), y + 2, notLoaded ? WARN : !issue.isEmpty() ? ERROR : fits < 0 ? MUTED : OK, false);
+            g.text(font, font.plainSubstrByWidth(verdict, rightW - 130), x + rightW - 4 - Math.min(font.width(verdict), rightW - 130), y + 2, notLoaded ? WARN : !issue.isEmpty() ? ERROR : fits < 0 ? MUTED : OK, false);
+            if (isFolded) continue;
             g.text(font, "Name", x, y + 18, MUTED, false);
             g.text(font, "Pool", x, y + 42, MUTED, false);
-            g.text(font, "Target", x + (rightW / 2 - 3) + 4, y + 42, MUTED, false);
-            g.text(font, "Turns into", x, y + 88, MUTED, false);
-            g.text(font, "place", x + 82, y + 66, MUTED, false);
-            g.text(font, "select", x + 160, y + 66, MUTED, false);
+            g.text(font, "Target", x, y + 66, MUTED, false);
+            g.text(font, "Turns into", x, y + 114, MUTED, false);
+            g.text(font, "place", x + 82, y + 90, MUTED, false);
+            g.text(font, "select", x + 160, y + 90, MUTED, false);
         }
-        int pages = Math.max(1, (jigsaws.size() + per - 1) / per);
         g.text(font, (jigPage + 1) + "/" + pages, x + rightW - 62 - font.width((jigPage + 1) + "/" + pages), TOP + 4, MUTED, false);
     }
 
