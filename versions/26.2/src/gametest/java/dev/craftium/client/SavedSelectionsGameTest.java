@@ -191,9 +191,10 @@ public final class SavedSelectionsGameTest {
         hierarchyIsInHistory();
         severalAtOnceAndFocus();
         contextMenu();
+        blocksLeaveTheirObjects();
         duplicateCopyCutExportAndEyes();
         sharedPersistentAndPermitted();
-        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu duplicate shared");
+        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu duplicate shared prune");
     }
 
     // ---- Claude --------------------------------------------------------------------------------------------------------------------------
@@ -595,6 +596,53 @@ public final class SavedSelectionsGameTest {
         undo();
         undo();
         require(ClientState.savedSelections().size() == 2 && allAre(a(), Blocks.STONE), "and two Undos bring both back: " + ClientState.savedSelections());
+    }
+    /** A block that is deleted or cut leaves its BuildObject (and Undo puts it back); Move takes the BuildObject along; deleting from the Hierarchy leaves the blocks. */
+    private void blocksLeaveTheirObjects() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        var minA = saved(0).min();
+        require(saved(0).size() == 8, "the BuildObject holds its eight blocks");
+
+        var three = a().subList(0, 3);
+        selectOnly(three);
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_DELETE);
+        c.waitTicks(10);
+        require(allAre(three, Blocks.AIR) && saved(0).size() == 5, "deleting three blocks takes them out of the BuildObject: " + saved(0));
+        undo();
+        require(allAre(three, Blocks.STONE) && saved(0).size() == 8, "Undo puts the blocks back into it: " + saved(0));
+        redo();
+        require(allAre(three, Blocks.AIR) && saved(0).size() == 5, "and Redo takes them out again: " + saved(0));
+        undo();
+
+        selectOnly(a().subList(0, 2));
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("cut", null, null));
+        settle();
+        c.waitTicks(10);
+        require(saved(0).size() == 6, "cutting two takes them out of it: " + saved(0));
+        undo();
+        require(saved(0).size() == 8 && allAre(a(), Blocks.STONE), "and Undo brings them back: " + saved(0));
+
+        selectOnly(a());
+        sleep();
+        c.runOnClient(mc -> {
+            Options original = ClientState.options;
+            var request = dev.craftium.net.Packets.JSON.fromJson(dev.craftium.net.Packets.JSON.toJson(original), Options.class);
+            try { ClientState.options = request; request.offsetX = 10; request.offsetY = request.offsetZ = 0; CraftiumClient.send("move", null, null); }
+            finally { ClientState.options = original; }
+        });
+        settle();
+        c.waitTicks(10);
+        require(saved(0).min().equals(minA.add(10, 0, 0)) && saved(0).size() == 8, "Move takes the BuildObject with its blocks: " + saved(0));
+        undo();
+        require(saved(0).min().equals(minA) && allAre(a(), Blocks.STONE), "and Undo puts both back: " + saved(0));
+
+        click(control("Delete this BuildObject", 0));
+        require(ClientState.savedSelections().isEmpty() && allAre(a(), Blocks.STONE), "deleting from the Hierarchy removes the grouping and leaves every block");
+        undo();
+        require(ClientState.savedSelections().size() == 1, "and Undo brings the grouping back");
     }
     /** The BuildObjects are written to the world, the colour chosen goes to the server and comes back, and a denied action is refused. */
     private void sharedPersistentAndPermitted() {
