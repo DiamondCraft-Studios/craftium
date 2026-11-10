@@ -381,5 +381,6 @@ public final class BlueprintScreen extends CraftiumScreen {
         return super.keyPressed(event);
     }
     @Override public boolean isPauseScreen(){return false;}
-    @Override public void onClose(){BlueprintThumbnails.releaseAll();ClientCompat.setScreen(minecraft,parent);}
+    @Override public void removed(){BlueprintThumbnails.releaseAll();} // whichever way the screen goes (closed, a disconnect, another screen), its pictures are freed
+    @Override public void onClose(){ClientCompat.setScreen(minecraft,parent);}
 }
