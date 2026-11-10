@@ -83,7 +83,7 @@ final class BlueprintLibrary {
     }
     private static List<BlueprintInfo> list()throws IOException{
         Path root=ServerPlatform.assets().resolve("blueprints");if(!Files.isDirectory(root))return List.of();var results=new ArrayList<BlueprintInfo>();int budget=700_000;
-        try(var files=Files.walk(root,5)){for(Path path:files.filter(Files::isRegularFile).filter(p->p.getFileName().toString().matches("(?i).*\\.(nbt|schem|schematic)")).sorted().limit(256).toList()){
+        try(var files=Files.walk(root,BlueprintFiles.DEPTH)){for(Path path:files.filter(Files::isRegularFile).filter(p->p.getFileName().toString().matches("(?i).*\\.(nbt|schem|schematic)")).sorted().limit(256).toList()){
             String relative=root.relativize(path).toString().replace('\\','/');Path sidecar=path.resolveSibling(path.getFileName()+".json");BlueprintInfo info=null;
             try{if(Files.exists(sidecar)&&Files.size(sidecar)<32768)info=dev.craftium.net.Packets.JSON.fromJson(Files.readString(sidecar),BlueprintInfo.class);}catch(Exception ignored){}
             if(info==null)info=new BlueprintInfo(relative,path.getFileName().toString(),"","",-1,new Point(0,0,0),List.of());

@@ -63,20 +63,17 @@ public final class ClientState {
         var present=new HashSet<Integer>();
         for(var saved:savedSelections){
             present.add(saved.id());
-            if(saved.color()!=0&&!savedColorPending.containsKey(saved.id()))savedColors.put(saved.id(),saved.color()); // the colour everyone sees it in, unless this player is in the middle of changing it
+            if(!savedColorPending.containsKey(saved.id())){ // the colour everyone sees it in, unless this player is in the middle of changing it; none chosen is the selection colour
+                if(saved.color()!=0)savedColors.put(saved.id(),saved.color());else savedColors.remove(saved.id());
+            }
             if(saved.data()==null)continue; // unchanged: the outline already made for it is still right
             if(saved.data().isEmpty())savedShapes.remove(saved.id()); // left out because the status was too big: nothing is drawn for it
             else savedShapes.put(saved.id(),OutlineShape.ofLater(SelectionCodec.decode(saved.data())));
         }
         savedShapes.keySet().retainAll(present);
-        // an entry seen for the first time takes the lowest place on the wheel that no entry here uses, so colours are reused as entries go and the first one is the selection colour again
-        for(var saved:savedSelections){
-            if(savedColors.containsKey(saved.id()))continue;
-            var used=new HashSet<Integer>();for(var other:savedSelections){var at=savedIndex.get(other.id());if(at!=null)used.add(at);}
-            int index=0;while(used.contains(index))index++;
-            if(saved.guid()==null)savedHidden.add(saved.id()); // an older server sends no GUID, so there is nothing to keep it by: closed until the eye is opened
-            savedIndex.put(saved.id(),index);savedColors.put(saved.id(),dev.craftium.core.SavedSelectionColors.forIndex(options.selectionColor,index));
-        }
+        // an older server sends no GUID, so there is nothing to keep an eye by: a BuildObject seen for the first time starts closed
+        for(var saved:savedSelections)if(saved.guid()==null&&savedWithoutGuid.add(saved.id()))savedHidden.add(saved.id());
+        savedWithoutGuid.retainAll(present);
     }
     /** The outline of each saved selection by id, drawn in the selection style. A selection with none is drawn as a box. */
     private static final Map<Integer,OutlineShape> savedShapes=new HashMap<>();
@@ -127,6 +124,11 @@ public final class ClientState {
     }
     static void clearSavedSelections(){savedSelections=List.of();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedIndex.clear();}
     public static int savedColor(int id){return savedColors.getOrDefault(id,options.selectionColor);}
+    private static final Set<Integer> savedWithoutGuid=new HashSet<>();
+    /** Whether a colour was chosen for it: every BuildObject is drawn in the selection colour until one is. */
+    public static boolean hasSavedColor(int id){return savedColors.containsKey(id);}
+    /** Back to the selection colour. */
+    public static void resetSavedColor(int id){savedColors.remove(id);savedColorPending.put(id,0);savedColorChanged=System.currentTimeMillis();}
     public static void setSavedColor(int id,int color){savedColors.put(id,color);savedColorPending.put(id,color);savedColorChanged=System.currentTimeMillis();}
     /** Colours this player changed that the server has not been told: sent once the picker has been still for a moment, a request at a time (the server drops those that come too close together). */
     private static final Map<Integer,Integer> savedColorPending=new LinkedHashMap<>();private static long savedColorChanged,savedColorSent;

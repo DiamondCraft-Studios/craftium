@@ -138,6 +138,8 @@ public final class Options {
     public boolean largeSelectionWarnings=true;
     /** Whether deleting a BuildObject together with its blocks asks first (until "Don't show this message again" is ticked). */
     public boolean warnDeleteBlocks=true;
+    /** Whether the Rulers window has been shown once, the first time a ruler was used: it starts out of the way and is only brought up that once. */
+    public boolean rulersIntroduced;
     /** A selection this many blocks bigger than before is confirmed with the player first, in the editor and in the Builder. */
     public int largeSelectionThreshold=50_000;
     /** Looks at the project's GitHub releases once per game session and says so when a newer build exists. Nothing is downloaded. */

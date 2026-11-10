@@ -524,9 +524,13 @@ public final class EditorServer {
                             HierarchyPermissions.require(player,"create");
                             var hierarchyBefore=s.saved.state();
                             var nodes=s.duplicateNodes;var kept=new HashSet<Point>();if(nodes!=null)for(var n:nodes)kept.addAll(n.relative());
-                            if(nodes!=null&&s.duplicateEpoch==s.clipboardEpoch&&kept.equals(s.clipboard.keySet()))s.saved.createCopies(nodes,origin,placed,o.pasteAsObjectAfter); // the structure of what was duplicated, made again
-                            else s.saved.createFrom(o.pasteAsObject,placed,o.pasteAsObjectAfter); // the clipboard is not what was duplicated any more (turned, or something else was copied): one BuildObject
+                            List<Integer> shown;
+                            if(nodes!=null&&s.duplicateEpoch==s.clipboardEpoch&&kept.equals(s.clipboard.keySet())){ // the structure of what was duplicated, made again
+                                var copies=s.saved.createCopies(nodes,origin,placed,o.pasteAsObjectAfter);
+                                shown=copies.stream().filter(e->!copies.contains(e.parent())).map(SavedSelections.Entry::id).toList();
+                            }else shown=List.of(s.saved.createFrom(o.pasteAsObject,placed,o.pasteAsObjectAfter).id()); // the clipboard is not what was duplicated any more (turned, or something else was copied): one BuildObject
                             s.duplicateNodes=null;
+                            s.saved.viewSet(shown,s.selection);s.historyRevision=s.selection.revision(); // the new ones are what is shown now, not the originals; the selection is the same cells, so it is not a new step
                             selected=selected.withHierarchy(hierarchyBefore,s.saved.state());
                         }
                     }
@@ -1052,8 +1056,8 @@ public final class EditorServer {
         return edit.withSelection(change.andObjects(before,after));
     }
     private static void handBack(Session s,Session.SelectionChange change,boolean backwards){
+        if(change.hasHierarchy())s.saved.restore(backwards?change.hierarchyBefore():change.hierarchyAfter(),s.selection); // first: letting go of a BuildObject that is gone puts back a selection, which the next line then replaces
         if(change.hasPoints())s.selection.restore(backwards?change.before():change.after());
-        if(change.hasHierarchy())s.saved.restore(backwards?change.hierarchyBefore():change.hierarchyAfter(),s.selection);
         if(change.hasObjects())s.saved.setPoints(backwards?change.objectsBefore():change.objectsAfter()); // the BuildObjects go back with their blocks
         String pivot=backwards?change.pivotBefore():change.pivotAfter();
         if(pivot!=null)s.pivotUpdate=pivot;

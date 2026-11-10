@@ -16,7 +16,7 @@ import java.util.stream.Stream;
  */
 public final class BlueprintFiles {
     /** The deepest a file may sit below the root, counting the file itself: what the listing walks. */
-    public static final int DEPTH = 5;
+    public static final int DEPTH = 8;
     private static final String EXTENSIONS = "(?i).*\\.(nbt|schem|schematic)";
     private BlueprintFiles() {}
 
@@ -40,7 +40,10 @@ public final class BlueprintFiles {
     private static int depth(Path root, Path path) { return path.equals(root) ? 0 : root.relativize(path).getNameCount(); }
 
     /** Runs a request against a library folder and says what happened. */
-    public static String run(Path root, Op op) throws IOException {
+    public static String run(Path root, Op op) throws IOException { return run(root, root.toAbsolutePath().normalize().resolveSibling("blueprints-archive"), op); }
+
+    /** As above, with the folder that deleted items are moved to (outside the library, so the browser never lists them). */
+    public static String run(Path root, Path archive, Op op) throws IOException {
         root = root.toAbsolutePath().normalize();
         if (op == null || op.op() == null) throw new IllegalArgumentException("Unknown library action");
         List<String> paths = op.paths() == null ? List.of() : op.paths();
@@ -67,9 +70,13 @@ public final class BlueprintFiles {
                 return "Renamed to " + leaf;
             }
             case "delete" -> {
-                int count = 0;
-                for (String p : paths) { delete(existing(root, p)); count++; }
-                return "Deleted " + count + (count == 1 ? " item" : " items");
+                var picked = new ArrayList<Path>();
+                for (String p : paths) picked.add(existing(root, p));
+                picked.removeIf(a -> picked.stream().anyMatch(b -> b != a && a.startsWith(b))); // inside a folder that goes too
+                if (picked.isEmpty()) throw new IllegalArgumentException("Choose a file or folder");
+                Path stamped = archive.toAbsolutePath().normalize().resolve(java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")));
+                for (Path path : picked) archive(root, stamped, path);
+                return "Archived " + picked.size() + (picked.size() == 1 ? " item" : " items") + " to " + archive.getFileName() + "/" + stamped.getFileName();
             }
             case "cut", "copy" -> {
                 boolean move = op.op().equals("cut");
@@ -181,6 +188,16 @@ public final class BlueprintFiles {
             if (info == null || !old.equals(info.name())) return;
             write(side, new BlueprintInfo(info.file(), now.getFileName().toString().replaceFirst("\\.[^.]+$", ""), info.author(), info.tags(), info.blocks(), info.size(), info.thumbnail(), info.palette(), info.cells(), info.scale()));
         } catch (Exception ignored) {}
+    }
+
+    /** Moves an item, and its sidecar, to the same relative place under the archive folder. */
+    private static void archive(Path root, Path stamped, Path path) throws IOException {
+        Path to = stamped.resolve(root.relativize(path).toString());
+        Files.createDirectories(to.getParent());
+        if (Files.exists(to)) to = free(to.getParent(), to.getFileName().toString(), Files.isDirectory(path));
+        try { Files.move(path, to); }
+        catch (IOException elsewhere) { copyEntry(path, to); delete(path); return; } // another drive: copy, then remove
+        if (!Files.isDirectory(to)) { Path side = sidecar(path); if (Files.exists(side)) Files.move(side, sidecar(to), StandardCopyOption.REPLACE_EXISTING); }
     }
 
     private static void delete(Path path) throws IOException {

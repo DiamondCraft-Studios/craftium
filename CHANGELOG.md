@@ -31,6 +31,11 @@ Changes since 1.5.0-beta.1.
 - Duplicate makes the whole hierarchy again: the same names, order, parents and colours, with the top one marked "(copy)", each holding its own blocks at the new place. If the copy is turned or something else is copied before it is placed, it falls back to one BuildObject.
 - A click on empty space in the Hierarchy, and Alt + D, let go of the BuildObjects shown (Alt + D also clears the selection).
 - "Delete blocks" in the Hierarchy menu (next to Delete, which still only removes the grouping) deletes the BuildObject, everything under it and all the blocks they hold, as one step: Ctrl+Z brings back the blocks and the BuildObjects together. It asks the first time, with a "Don't show this message again" tick box.
+- After a duplicate or a paste from the Hierarchy the new BuildObjects are the ones shown, not the originals.
+- The Hierarchy rows keep only the eye: Edit blocks and Delete are in the right-click menu (which also has Stop editing), and the eye stays clear of the scrollbar, which now gets its own space when the list scrolls.
+- BuildObjects are all drawn in your selection colour, with no colour taken from a wheel; the colour swatch on the rows is gone. Change colour and Reset colour are in the right-click menu.
+- Ctrl + X with BuildObjects shown takes them along with the blocks, like Cut in the menu. Ctrl + V with no block under the pointer (the pointer is over a panel, or the sky) starts the placement where the blocks were copied from instead of doing nothing. A click with any mouse button now takes the keyboard back from a text box, so the shortcuts work after a right click.
+- The Rulers window starts closed and comes up the first time a ruler is used; after that it stays as you leave it.
 - Target info moved to the bottom of the left column, under Tool options.
 - The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
 - Your saved window layout is reset once, to the new places.
