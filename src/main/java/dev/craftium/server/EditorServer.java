@@ -947,7 +947,9 @@ public final class EditorServer {
     static void applyPreview(ServerPlayer player){
         var s=playerSession(player);var edit=s.pendingEdit;
         if(edit==null){send(player,s,"Nothing to confirm",false);return;}
-        s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingDirty=true;start(player,s,edit);
+        s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingDirty=true;
+        s.bypassConfirm=true; // confirming is the confirmation, so the edit is built and not held again
+        try{start(player,s,edit);}finally{s.bypassConfirm=false;}
     }
     /** Drops the waiting preview, as the Escape key does. */
     static void cancelPreview(ServerPlayer player){
