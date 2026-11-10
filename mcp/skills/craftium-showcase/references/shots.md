@@ -74,7 +74,7 @@ names.)
 }
 ```
 
-Photographing the player's saved selections (`get_state` lists them as `savedSelections`): one room each, by name, no
+Photographing the player's BuildObjects (`get_state` lists them as `savedSelections`): one room each, by name, no
 corners needed. An irregular selection is framed by its bounding box and the blocks inside it.
 
 ```json

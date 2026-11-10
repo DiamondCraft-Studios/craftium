@@ -19,13 +19,14 @@ final class SavedSelectionActions {
             case "edit"->{saved.edit(id(part),s.selection);return "Editing "+saved.active().name();}
             case "release"->{saved.release(s.selection);return "Your selection is back";}
             case "delete"->{var entry=saved.delete(id(part),s.selection);return "Deleted "+entry.name();}
+            case "move"->{if(part.length<3)throw new IllegalArgumentException("Give a place");try{saved.move(id(part),Integer.parseInt(part[2]));}catch(NumberFormatException e){throw new IllegalArgumentException("Give a place");}return "Moved";}
             case "rename"->{if(part.length<3)throw new IllegalArgumentException("Give a name");saved.rename(id(part),part[2]);return "Renamed";}
-            default->throw new IllegalArgumentException("Unknown saved selection action "+part[0]);
+            default->throw new IllegalArgumentException("Unknown BuildObject action "+part[0]);
         }
     }
     private static int id(String[] part){
-        if(part.length<2)throw new IllegalArgumentException("Pick a saved selection");
-        try{return Integer.parseInt(part[1]);}catch(NumberFormatException e){throw new IllegalArgumentException("Pick a saved selection");}
+        if(part.length<2)throw new IllegalArgumentException("Pick a BuildObject");
+        try{return Integer.parseInt(part[1]);}catch(NumberFormatException e){throw new IllegalArgumentException("Pick a BuildObject");}
     }
 
     /** What the client is shown of them: the list in order, with where each one is and which is being looked at. */
@@ -35,7 +36,7 @@ final class SavedSelectionActions {
         for(var e:s.saved.entries()){
             Point min=e.points().isEmpty()?new Point(0,0,0):new Point(e.points().stream().mapToInt(Point::x).min().getAsInt(),e.points().stream().mapToInt(Point::y).min().getAsInt(),e.points().stream().mapToInt(Point::z).min().getAsInt());
             Point max=e.points().isEmpty()?min:new Point(e.points().stream().mapToInt(Point::x).max().getAsInt(),e.points().stream().mapToInt(Point::y).max().getAsInt(),e.points().stream().mapToInt(Point::z).max().getAsInt());
-            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,e==s.saved.active(),e==s.saved.active()&&s.saved.editing(),withData?data(s,e):null));
+            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,e==s.saved.active(),e==s.saved.active()&&s.saved.editing(),withData?data(s,e):null,e.guid()));
         }
         return out;
     }

@@ -28,12 +28,13 @@ class SavedSelectionsTest {
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);
         saved.rename(two.id(),"Roof");assertEquals("BuildObject (1)",saved.save(s).name());
     }
-    @Test void anEntryBroughtBackWhoseNumberWasTakenGetsTheNextFreeName(){
+    @Test void anEntryBroughtBackWhoseNameWasTakenKeepsItAndTheGuidsTellThemApart(){
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);saved.delete(one.id(),s);
-        saved.save(s); // takes "BuildObject" again
+        var again=saved.save(s); // takes "BuildObject" again
         assertSame(one,saved.undoDelete(0));
-        assertEquals(List.of("BuildObject","BuildObject (1)"),saved.entries().stream().map(SavedSelections.Entry::name).sorted().toList());
-        assertEquals("BuildObject (1)",one.name(),"the one that came back, not the new one, is renamed");
+        assertEquals(List.of("BuildObject","BuildObject"),saved.entries().stream().map(SavedSelections.Entry::name).toList());
+        assertNotEquals(one.guid(),again.guid());
+        assertSame(one,saved.find(one.guid()));
     }
     @Test void savingNothingIsRefused(){assertThrows(IllegalArgumentException.class,()->new SavedSelections().save(new Selection()));}
     @Test void viewingSwapsAndReleasingBringsTheOriginalBack(){
@@ -77,7 +78,7 @@ class SavedSelectionsTest {
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);saved.save(s);
         int at=saved.indexOf(one);saved.delete(one.id(),s);saved.restore(one,at);
         assertEquals(List.of("BuildObject","BuildObject (1)","BuildObject (2)"),saved.entries().stream().map(SavedSelections.Entry::name).toList());
-        assertSame(two,saved.byName("buildobject (1)"));
+        assertSame(two,saved.find("buildobject (1)"));
     }
     @Test void undoBringsBackTheLastDeleteOnlyWhenItIsNewerThanTheLastEdit(){
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);saved.save(s);
@@ -86,11 +87,32 @@ class SavedSelectionsTest {
         assertSame(one,saved.undoDelete(0));assertEquals("BuildObject",saved.entries().getFirst().name());
         assertNull(saved.undoDelete(0),"nothing left to bring back");
     }
-    @Test void renamingKeepsNamesUniqueAndNonEmpty(){
+    @Test void renamingMayRepeatANameButNeverEmptiesIt(){
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);
-        saved.rename(one.id(),"Roof");assertSame(one,saved.byName("roof"));
-        assertThrows(IllegalArgumentException.class,()->saved.rename(two.id(),"ROOF"));
+        saved.rename(one.id(),"Roof");assertSame(one,saved.find("roof"));
+        saved.rename(two.id(),"ROOF");assertEquals("ROOF",two.name(),"two may share a name");
         assertThrows(IllegalArgumentException.class,()->saved.rename(two.id(),"  "));
+    }
+    @Test void everyEntryHasItsOwnGuidThatFindsItWhateverItIsCalled(){
+        var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);
+        saved.rename(one.id(),"Roof");saved.rename(two.id(),"Roof");
+        assertNotEquals(one.guid(),two.guid());assertEquals(36,one.guid().length());
+        assertSame(two,saved.find(two.guid().toUpperCase()),"a GUID finds it, in any case");
+        var error=assertThrows(IllegalArgumentException.class,()->saved.find("roof"));
+        assertTrue(error.getMessage().contains(one.guid())&&error.getMessage().contains(two.guid()),"a name two share says which GUIDs there are: "+error.getMessage());
+        assertNull(saved.find("Walls"));
+    }
+    @Test void anEntryKeepsItsGuidAcrossDeletingAndUndoing(){
+        var saved=new SavedSelections();var s=live(A);var one=saved.save(s);String guid=one.guid();saved.save(s);
+        saved.delete(one.id(),s);assertSame(one,saved.undoDelete(0));assertEquals(guid,saved.find(guid).guid());
+    }
+    @Test void movingAnEntryReordersTheOthersAroundIt(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);
+        saved.move(c.id(),0);assertEquals(List.of(c,a,b),saved.entries());
+        saved.move(c.id(),2);assertEquals(List.of(a,b,c),saved.entries());
+        saved.move(a.id(),99);assertEquals(List.of(b,c,a),saved.entries(),"past the end is the end");
+        saved.move(a.id(),-5);assertEquals(List.of(a,b,c),saved.entries(),"before the start is the start");
+        long revision=saved.revision();saved.move(b.id(),1);assertEquals(revision,saved.revision(),"staying put changes nothing");
     }
     @Test void theLimitIsEnforced(){
         var saved=new SavedSelections();var s=live(A);for(int i=0;i<SavedSelections.MAX;i++)saved.save(s);

@@ -47,9 +47,9 @@ public final class ShowcasePlan {
         java.util.Map.entry("ne", new double[]{45, 30}), java.util.Map.entry("nw", new double[]{315, 30}),
         java.util.Map.entry("top", new double[]{180, 89}), java.util.Map.entry("ground", new double[]{150, -4}));
 
-    /** The player's saved selections, as the game knows them. */
+    /** The player's BuildObjects, as the game knows them. */
     public interface Selections {
-        /** The box (min, max) of the saved selection called {@code name} (any case), or null if there is none or it is empty. */
+        /** The box (min, max) of the BuildObject called {@code name} (any case), or null if there is none or it is empty. */
         Point[] find(String name);
 
         /** The names the player has saved, for the error when one is not found. */
@@ -57,7 +57,7 @@ public final class ShowcasePlan {
     }
 
     /**
-     * A copy of the request in which every room that names a saved selection ({@code "selection": "BuildObject"}) has that selection's box as
+     * A copy of the request in which every room that names a BuildObject ({@code "selection": "BuildObject"}) has that selection's box as
      * its "from" and "to", and takes the selection's name for its own when it has none. A room gives a selection or a box, not both. The box is
      * the selection's bounding box: an irregular selection is framed by the solid blocks inside it, as any room is.
      */
@@ -69,13 +69,13 @@ public final class ShowcasePlan {
             if (!rooms.get(r).isJsonObject() || !rooms.get(r).getAsJsonObject().has("selection")) continue;
             var room = rooms.get(r).getAsJsonObject();
             String where = "rooms[" + r + "]";
-            if (!room.get("selection").isJsonPrimitive() || room.get("selection").getAsString().isBlank()) throw new IllegalArgumentException(where + " \"selection\" must be the name of one of the player's saved selections");
-            if (room.has("from") || room.has("to")) throw new IllegalArgumentException(where + " gives both a saved selection and \"from\" and \"to\"; give one or the other");
+            if (!room.get("selection").isJsonPrimitive() || room.get("selection").getAsString().isBlank()) throw new IllegalArgumentException(where + " \"selection\" must be the name or GUID of one of the player's BuildObjects");
+            if (room.has("from") || room.has("to")) throw new IllegalArgumentException(where + " gives both a BuildObject and \"from\" and \"to\"; give one or the other");
             String name = room.get("selection").getAsString().trim();
             Point[] box = saved.find(name);
             if (box == null) {
                 var names = saved.names();
-                throw new IllegalArgumentException("The player has no saved selection called \"" + name + "\" with blocks in it" + (names.isEmpty() ? " (they have saved none: ask them to save one in the Selections window, or give \"from\" and \"to\")" : "; their saved selections are " + String.join(", ", names)));
+                throw new IllegalArgumentException("The player has no BuildObject called \"" + name + "\" with blocks in it" + (names.isEmpty() ? " (they have saved none: ask them to save one in the Hierarchy window, or give \"from\" and \"to\")" : "; their BuildObjects are " + String.join(", ", names)));
             }
             var from = new JsonArray();
             var to = new JsonArray();
