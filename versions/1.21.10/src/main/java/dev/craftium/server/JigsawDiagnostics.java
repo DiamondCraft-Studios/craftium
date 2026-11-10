@@ -63,6 +63,13 @@ final class JigsawDiagnostics {
         return count;
     }
 
+    /** Every jigsaw name the elements of a pool offer, sorted: what a connector pointing at the pool can ask for. */
+    static java.util.SortedSet<String> offered(StructureTemplateManager templates, StructureTemplatePool pool) {
+        var names = new java.util.TreeSet<String>();
+        for (var pair : pool.getTemplates()) for (var name : offers(templates, pair.getFirst())) names.add(name.toString());
+        return names;
+    }
+
     /** The jigsaw names one element offers: those of its template, or its own connector when it is a feature. */
     static Set<ResourceLocation> offers(StructureTemplateManager templates, StructurePoolElement element) {
         var names = new HashSet<ResourceLocation>();
@@ -103,7 +110,7 @@ final class JigsawDiagnostics {
                         var target = jigsaw.pool().location();
                         if (target.equals(EMPTY)) continue;
                         var targetHolder = pools.get(jigsaw.pool());
-                        if (targetHolder.isEmpty()) { lines.add("ERROR " + shortName(location) + " connector '" + jigsaw.name().getPath() + "' points to pool " + target + ", which does not exist"); continue; }
+                        if (targetHolder.isEmpty()) { lines.add("WARN  " + shortName(location) + " connector '" + jigsaw.name().getPath() + "' points to pool " + target + ", which is not loaded (fine if another mod adds it)"); continue; }
                         if (follow) queue.add(target);
                         var wanted = jigsaw.target();
                         if (!namesIn(pools, templates, targetHolder.get().value(), names).contains(wanted))

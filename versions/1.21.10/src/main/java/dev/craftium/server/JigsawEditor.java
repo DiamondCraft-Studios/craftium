@@ -763,8 +763,11 @@ final class JigsawEditor {
             int fits = -1;
             if (!jigsaw.pool().location().equals(ResourceLocation.fromNamespaceAndPath("minecraft", "empty")) && pools != null) {
                 var target = pools.get(jigsaw.pool());
-                if (target.isEmpty()) issue = "pool " + jigsaw.pool().location() + " does not exist";
+                if (target.isEmpty()) issue = "pool " + jigsaw.pool().location() + " is not loaded";
                 else {
+                    var offered = new JsonArray();
+                    JigsawDiagnostics.offered(env.templates(), target.get().value()).forEach(offered::add);
+                    item.add("offered", offered);
                     fits = JigsawDiagnostics.fits(pools, env.templates(), target.get().value(), jigsaw.target());
                     if (fits == 0) issue = "no element of " + jigsaw.pool().location() + " offers '" + jigsaw.target().getPath() + "'";
                 }

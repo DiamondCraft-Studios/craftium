@@ -69,14 +69,16 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private int addTab;
 
     // ---- the block suggestions of "Turns into"
-    private static final int BLOCK_ROW = 12, BLOCK_ROWS = 7;
+    private static final int SUGGEST_ROW = 12, SUGGEST_ROWS = 7;
     private static List<String> allBlocks;
-    private final List<EditBox> finalBoxes = new ArrayList<>();
-    private final List<String> blockMatches = new ArrayList<>();
-    private int blockHighlight = -1, blockScroll, lastMouseX = -1, lastMouseY = -1;
-    private boolean blockSuggesting;
-    private String blockTyped = "";
-    private EditBox blockBox;
+    /** The boxes that suggest, with what each suggests from: blocks, pools or connector names. */
+    private final Map<EditBox, List<String>> suggestSources = new HashMap<>();
+    private List<String> suggestSource = List.of();
+    private final List<String> suggestMatches = new ArrayList<>();
+    private int suggestHighlight = -1, suggestScroll, lastMouseX = -1, lastMouseY = -1;
+    private boolean suggesting;
+    private String suggestTyped = "";
+    private EditBox suggestBox;
     private static final String SIDEWAYS = "This connector faces sideways, and a joint only matters for a connector that faces up or down, so there is nothing to set here.";
     private String featureQuery = "";
     private boolean helpOpen;
@@ -210,7 +212,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         cw = Math.round(this.width / uiScale);
         ch = Math.round(this.height / uiScale);
         commits.clear();
-        finalBoxes.clear();
+        suggestSources.clear();
         tips.clear();
         leftW = Math.clamp(cw / 5, 150, 210);
         rightW = Math.clamp(cw * 3 / 10, 230, 300);
@@ -379,17 +381,24 @@ final class JigsawEditorScreen extends CraftiumScreen {
             base.add("pos", at);
             int half = rightW / 2 - 3;
             tips.on(box(x + 52, y + 14, rightW - 52, str(jig, "name", ""), 80, null, () -> { var c = base.deepCopy(); c.addProperty("name", focusedText()); change(c); }), "Name: the name of this connector. When another piece asks for a connector with this name, this is the one it joins. Enter applies.");
-            tips.on(box(x + 52, y + 38, half - 52, str(jig, "pool", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("pool", focusedText()); change(c); }), "Pool: the pool the next piece is chosen from, by chance. minecraft:empty means nothing attaches here. Enter applies.");
-            tips.on(box(x + half + 4 + 40, y + 38, rightW - (half + 4) - 40, str(jig, "target", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("target", focusedText()); change(c); }), "Target: the name the connector of the next piece must have to join this one. Enter applies.");
+            var poolBox = box(x + 52, y + 38, half - 52, str(jig, "pool", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("pool", focusedText()); change(c); });
+            tips.on(poolBox, "Pool: the pool the next piece is chosen from, by chance. minecraft:empty means nothing attaches here. Type to see the loaded pools; a pool that another mod adds can be typed in even though it is not loaded here. Enter applies.");
+            suggestSources.put(poolBox, poolIds());
+            var offered = new ArrayList<String>();
+            if (jig.has("offered")) for (var n : jig.getAsJsonArray("offered")) offered.add(n.getAsString());
+            if (!offered.contains("minecraft:empty")) offered.add("minecraft:empty");
+            var targetBox = box(x + half + 4 + 40, y + 38, rightW - (half + 4) - 40, str(jig, "target", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("target", focusedText()); change(c); });
+            tips.on(targetBox, "Target: the name the connector of the next piece must have to join this one. Suggestions are the names the pieces of the pool offer. Enter applies.");
+            suggestSources.put(targetBox, offered);
             boolean vertical = !jig.has("vertical") || jig.get("vertical").getAsBoolean(); // only a connector that faces up or down has a joint that matters
             boolean rollable = str(jig, "joint", "rollable").equals("rollable");
             button(rollable ? "Rollable" : "Aligned", x, y + 62, 76, 18, () -> { var c = base.deepCopy(); c.addProperty("joint", rollable ? "aligned" : "rollable"); change(c); }).active = vertical; // greyed out for a connector that faces sideways
             tips.on(box(x + 114, y + 62, 40, String.valueOf(num(jig, "placement", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "placement", focusedText()); change(c); }), "Placement priority: when several pieces wait to be attached, those from connectors with a higher number are placed first. Enter applies.");
             tips.on(box(x + 204, y + 62, 40, String.valueOf(num(jig, "selection", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "selection", focusedText()); change(c); }), "Selection priority: among the connectors of a piece, those with a higher number are tried first. Enter applies.");
             var turns = box(x + 58, y + 84, rightW - 58, str(jig, "final", "minecraft:air"), 120, null, () -> { var c = base.deepCopy(); c.addProperty("final", focusedText()); change(c); });
-            finalBoxes.add(turns);
+            suggestSources.put(turns, blocks());
             tips.on(turns, "Turns into: the block this connector is replaced with once the structure has grown, such as minecraft:stone_bricks, or minecraft:air to leave a gap. Type to see matching blocks; Enter picks the highlighted one, Enter again applies. A block state may follow in brackets.");
-            if (str(jig, "issue", "").endsWith("does not exist")) {
+            if (str(jig, "issue", "").endsWith("is not loaded")) {
                 String missing = str(jig, "pool", "");
                 button("Create pool " + shortName(missing), x, y + 108, rightW, 18, () -> edit("pool_new", "id", missing));
             }
@@ -443,101 +452,113 @@ final class JigsawEditorScreen extends CraftiumScreen {
         button("Close", x + w - 80, y + 6, 70, 20, () -> { adding = false; init(); });
     }
 
+    /** The ids of the loaded pools, those of the craftium pack first, with minecraft:empty (which always means nothing attaches). */
+    private List<String> poolIds() {
+        var pools = new ArrayList<JsonObject>();
+        if (model.has("pools")) for (var e : model.getAsJsonArray("pools")) pools.add(e.getAsJsonObject());
+        pools.sort(Comparator.<JsonObject>comparingInt(p -> str(p, "source", "").equals("craftium") ? 0 : 1).thenComparing(p -> p.get("id").getAsString()));
+        var ids = new ArrayList<String>();
+        for (var p : pools) ids.add(p.get("id").getAsString());
+        if (!ids.contains("minecraft:empty")) ids.add("minecraft:empty");
+        return ids;
+    }
+
     private static List<String> blocks() {
         if (allBlocks == null) {
             var list = new ArrayList<String>();
             for (var id : net.minecraft.core.registries.BuiltInRegistries.BLOCK.keySet()) list.add(id.toString());
-            Collections.sort(list);
+            list.sort(Comparator.<String>comparingInt(id -> id.startsWith("minecraft:") ? 0 : 1).thenComparing(id -> id));
             allBlocks = list;
         }
         return allBlocks;
     }
 
     /** Watches which "Turns into" box has the focus and what it holds, and works out the blocks that fit. */
-    private void followBlockBox() {
+    private void followSuggestBox() {
         EditBox focused = null;
-        for (var b : finalBoxes) if (b.isFocused()) focused = b;
-        if (focused != blockBox) { blockBox = focused; blockTyped = null; blockSuggesting = focused != null; }
-        if (focused == null) { blockMatches.clear(); return; }
+        for (var b : suggestSources.keySet()) if (b.isFocused()) focused = b;
+        if (focused != suggestBox) { suggestBox = focused; suggestTyped = null; suggesting = focused != null; suggestSource = focused == null ? List.of() : suggestSources.get(focused); }
+        if (focused == null) { suggestMatches.clear(); return; }
         String value = focused.getValue();
-        if (!value.equals(blockTyped)) {
-            if (blockTyped != null) blockSuggesting = true; // typing opens the list again
-            blockTyped = value;
-            refreshBlocks(value);
+        if (!value.equals(suggestTyped)) {
+            if (suggestTyped != null) suggesting = true; // typing opens the list again
+            suggestTyped = value;
+            refreshSuggestions(value);
         }
     }
 
     /** The blocks that contain what is typed: those that start with it first, then those whose name (without the namespace) does, then the rest; minecraft's before others'. */
-    private void refreshBlocks(String value) {
-        blockMatches.clear();
-        blockHighlight = -1;
-        blockScroll = 0;
+    private void refreshSuggestions(String value) {
+        suggestMatches.clear();
+        suggestHighlight = -1;
+        suggestScroll = 0;
         String text = value.strip().toLowerCase(Locale.ROOT);
-        if (text.contains("[")) return; // a state is being written: nothing to suggest
-        var found = new ArrayList<String>();
-        for (var id : blocks()) if (text.isEmpty() || id.contains(text)) found.add(id);
-        found.sort(Comparator.<String>comparingInt(id -> (id.startsWith(text) ? 0 : id.substring(id.indexOf(':') + 1).startsWith(text) ? 1 : 2) * 2 + (id.startsWith("minecraft:") ? 0 : 1)).thenComparing(id -> id));
-        blockMatches.addAll(found);
+        if (text.contains("[") && suggestSource == allBlocks) return; // a block state is being written: nothing to suggest
+        // The source is in the order it should be shown in; what starts with the text comes before what only contains it.
+        var found = new ArrayList<Integer>();
+        for (int i = 0; i < suggestSource.size(); i++) if (text.isEmpty() || suggestSource.get(i).contains(text)) found.add(i);
+        found.sort(Comparator.<Integer>comparingInt(i -> { var id = suggestSource.get(i); return id.startsWith(text) ? 0 : id.substring(id.indexOf(':') + 1).startsWith(text) ? 1 : 2; }).thenComparingInt(i -> i));
+        for (int i : found) suggestMatches.add(suggestSource.get(i));
     }
 
-    private boolean blockListShowing() {
-        if (!blockSuggesting || blockBox == null || !blockBox.isFocused() || blockMatches.isEmpty() || adding || helpOpen || dialogMode != null || confirmLeave || retargetPrompt) return false;
-        return !(blockMatches.size() == 1 && blockMatches.get(0).equals(blockBox.getValue().strip()));
+    private boolean suggestionsShowing() {
+        if (!suggesting || suggestBox == null || !suggestBox.isFocused() || suggestMatches.isEmpty() || adding || helpOpen || dialogMode != null || confirmLeave || retargetPrompt) return false;
+        return !(suggestMatches.size() == 1 && suggestMatches.get(0).equals(suggestBox.getValue().strip()));
     }
 
     /** Where the list is: below its box, or above it when there is no room below. */
-    private int[] blockListBox() {
-        int rows = Math.min(BLOCK_ROWS, blockMatches.size()), h = rows * BLOCK_ROW + 4;
-        int x = blockBox.getX(), y = blockBox.getY() + blockBox.getHeight() + 1;
-        if (y + h > ch - 4) y = blockBox.getY() - h - 1;
-        return new int[]{x, y, blockBox.getWidth(), h};
+    private int[] suggestionBox() {
+        int rows = Math.min(SUGGEST_ROWS, suggestMatches.size()), h = rows * SUGGEST_ROW + 4;
+        int x = suggestBox.getX(), y = suggestBox.getY() + suggestBox.getHeight() + 1;
+        if (y + h > ch - 4) y = suggestBox.getY() - h - 1;
+        return new int[]{x, y, suggestBox.getWidth(), h};
     }
 
-    private boolean overBlockList(double mx, double my) {
-        var r = blockListBox();
+    private boolean overSuggestions(double mx, double my) {
+        var r = suggestionBox();
         return mx >= r[0] && mx < r[0] + r[2] && my >= r[1] && my < r[1] + r[3];
     }
 
-    private boolean clickBlockSuggestion(double mx, double my) {
-        if (!blockListShowing() || !overBlockList(mx, my)) return false;
-        var r = blockListBox();
-        int row = (int) ((my - r[1] - 2) / BLOCK_ROW), i = blockScroll + row;
-        if (row >= 0 && i < blockMatches.size()) acceptBlock(blockMatches.get(i));
+    private boolean clickSuggestion(double mx, double my) {
+        if (!suggestionsShowing() || !overSuggestions(mx, my)) return false;
+        var r = suggestionBox();
+        int row = (int) ((my - r[1] - 2) / SUGGEST_ROW), i = suggestScroll + row;
+        if (row >= 0 && i < suggestMatches.size()) acceptSuggestion(suggestMatches.get(i));
         return true;
     }
 
-    private void acceptBlock(String id) {
-        blockBox.setValue(id);
-        blockTyped = id;
-        blockSuggesting = false;
-        blockMatches.clear();
+    private void acceptSuggestion(String id) {
+        suggestBox.setValue(id);
+        suggestTyped = id;
+        suggesting = false;
+        suggestMatches.clear();
     }
 
-    private void keepBlockVisible() {
-        if (blockHighlight < blockScroll) blockScroll = blockHighlight;
-        else if (blockHighlight >= blockScroll + BLOCK_ROWS) blockScroll = blockHighlight - BLOCK_ROWS + 1;
-        blockScroll = Math.clamp(blockScroll, 0, Math.max(0, blockMatches.size() - BLOCK_ROWS));
+    private void keepSuggestionVisible() {
+        if (suggestHighlight < suggestScroll) suggestScroll = suggestHighlight;
+        else if (suggestHighlight >= suggestScroll + SUGGEST_ROWS) suggestScroll = suggestHighlight - SUGGEST_ROWS + 1;
+        suggestScroll = Math.clamp(suggestScroll, 0, Math.max(0, suggestMatches.size() - SUGGEST_ROWS));
     }
 
-    private void drawBlockSuggestions(Gfx g, int mx, int my) {
-        if (!blockListShowing()) return;
-        var r = blockListBox();
-        int rows = Math.min(BLOCK_ROWS, blockMatches.size());
-        boolean bar = blockMatches.size() > BLOCK_ROWS;
+    private void drawSuggestions(Gfx g, int mx, int my) {
+        if (!suggestionsShowing()) return;
+        var r = suggestionBox();
+        int rows = Math.min(SUGGEST_ROWS, suggestMatches.size());
+        boolean bar = suggestMatches.size() > SUGGEST_ROWS;
         if (mx != lastMouseX || my != lastMouseY) { // the highlight goes where the pointer goes, once it moves
             lastMouseX = mx;
             lastMouseY = my;
-            if (overBlockList(mx, my)) blockHighlight = Math.min(blockMatches.size() - 1, blockScroll + (my - r[1] - 2) / BLOCK_ROW);
+            if (overSuggestions(mx, my)) suggestHighlight = Math.min(suggestMatches.size() - 1, suggestScroll + (my - r[1] - 2) / SUGGEST_ROW);
         }
         g.fill(r[0], r[1], r[0] + r[2], r[1] + r[3], 0xf0101923);
         g.outline(r[0], r[1], r[2], r[3], ClientState.options.uiAccent);
-        String typed = blockBox.getValue().strip().toLowerCase(Locale.ROOT);
+        String typed = suggestBox.getValue().strip().toLowerCase(Locale.ROOT);
         int room = r[2] - 10 - (bar ? Scrollbars.WIDTH + 2 : 0);
         for (int row = 0; row < rows; row++) {
-            int i = blockScroll + row, ry = r[1] + 2 + row * BLOCK_ROW;
-            if (i >= blockMatches.size()) break;
-            if (i == blockHighlight) g.fill(r[0] + 1, ry, r[0] + r[2] - 1 - (bar ? Scrollbars.WIDTH + 2 : 0), ry + BLOCK_ROW, 0xff315473);
-            String shown = font.plainSubstrByWidth(blockMatches.get(i), room);
+            int i = suggestScroll + row, ry = r[1] + 2 + row * SUGGEST_ROW;
+            if (i >= suggestMatches.size()) break;
+            if (i == suggestHighlight) g.fill(r[0] + 1, ry, r[0] + r[2] - 1 - (bar ? Scrollbars.WIDTH + 2 : 0), ry + SUGGEST_ROW, 0xff315473);
+            String shown = font.plainSubstrByWidth(suggestMatches.get(i), room);
             int at = typed.isEmpty() ? -1 : shown.toLowerCase(Locale.ROOT).indexOf(typed);
             int px = r[0] + 5;
             if (at >= 0) { // the part that was typed is picked out
@@ -548,7 +569,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 g.text(font, shown.substring(at + typed.length()), px, ry + 2, TEXT, false);
             } else g.text(font, shown, px, ry + 2, TEXT, false);
         }
-        if (bar) Scrollbars.draw(g, r[0] + r[2] - Scrollbars.WIDTH - 2, r[1] + 2, rows * BLOCK_ROW, blockScroll * BLOCK_ROW, blockMatches.size() * BLOCK_ROW, false);
+        if (bar) Scrollbars.draw(g, r[0] + r[2] - Scrollbars.WIDTH - 2, r[1] + 2, rows * SUGGEST_ROW, suggestScroll * SUGGEST_ROW, suggestMatches.size() * SUGGEST_ROW, false);
     }
 
     private void importStructure() {
@@ -574,7 +595,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     @Override public void tick() {
         if (awaitTicks > 0) awaitTicks--;
-        followBlockBox();
+        followSuggestBox();
         if (ClientState.jigsawModelVersion != seenVersion) {
             init();
             if (awaitTicks > 0 && model.has("retarget")) { awaitTicks = 0; retargetPrompt = true; init(); }
@@ -636,7 +657,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         else { drawCentre(g); if (graph) drawGraph(g, mx, my); else drawCards(g, mx, my); }
         drawConnections(g);
         drawWidgets(g, mx, my, delta);
-        drawBlockSuggestions(g, mx, my);
+        drawSuggestions(g, mx, my);
         tips.draw(g, font, mx, my, cw, ch);
         if (filter.isEmpty()) g.text(font, "filter " + (model.has("pools") ? model.getAsJsonArray("pools").size() : 0) + " pools · @namespace", SIDE + 5, TOP + 5, 0xff5f7186, false);
         g.pose().popMatrix();
@@ -732,7 +753,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private static int issues(JsonObject element) {
         if (!element.has("jigsaws")) return 0;
         int n = 0;
-        for (var j : element.getAsJsonArray("jigsaws")) if (!str(j.getAsJsonObject(), "issue", "").isEmpty()) n++;
+        for (var j : element.getAsJsonArray("jigsaws")) { var issue = str(j.getAsJsonObject(), "issue", ""); if (!issue.isEmpty() && !issue.endsWith("is not loaded")) n++; }
         return n;
     }
 
@@ -753,10 +774,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
             var at = jig.getAsJsonArray("pos");
             String issue = str(jig, "issue", "");
             int fits = num(jig, "fits", -1);
-            g.fill(x - 2, y - 2, x + rightW + 2, y + ROW_H - 8, issue.isEmpty() ? 0x40223247 : 0x40ff5a4d);
+            boolean notLoaded = issue.endsWith("is not loaded"); // fine when another mod adds the pool
+            g.fill(x - 2, y - 2, x + rightW + 2, y + ROW_H - 8, issue.isEmpty() ? 0x40223247 : notLoaded ? 0x40ffc857 : 0x40ff5a4d);
             g.text(font, "#" + (jigPage * per + slot + 1) + " at " + at.get(0) + " " + at.get(1) + " " + at.get(2), x, y + 2, MUTED, false);
-            String verdict = !issue.isEmpty() ? issue : fits < 0 ? "ends here (empty pool)" : "meets " + fits + (fits == 1 ? " element" : " elements");
-            g.text(font, font.plainSubstrByWidth(verdict, rightW - 100), x + rightW - 4 - Math.min(font.width(verdict), rightW - 100), y + 2, !issue.isEmpty() ? ERROR : fits < 0 ? MUTED : OK, false);
+            String verdict = notLoaded ? issue + " (fine if a mod adds it)" : !issue.isEmpty() ? issue : fits < 0 ? "ends here (empty pool)" : "meets " + fits + (fits == 1 ? " element" : " elements");
+            g.text(font, font.plainSubstrByWidth(verdict, rightW - 100), x + rightW - 4 - Math.min(font.width(verdict), rightW - 100), y + 2, notLoaded ? WARN : !issue.isEmpty() ? ERROR : fits < 0 ? MUTED : OK, false);
             g.text(font, "Name", x, y + 18, MUTED, false);
             g.text(font, "Pool", x, y + 42, MUTED, false);
             g.text(font, "Target", x + (rightW / 2 - 3) + 4, y + 42, MUTED, false);
@@ -1221,7 +1243,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     @Override public boolean mouseClicked(MouseButtonEvent raw, boolean twice) {
         var event = scaled(raw);
-        if (event.button() == 0 && clickBlockSuggestion(event.x(), event.y())) return true;
+        if (event.button() == 0 && clickSuggestion(event.x(), event.y())) return true;
         if (super.mouseClicked(event, twice)) return true;
         if (event.button() != 0 || adding) return false;
         double x = event.x(), y = event.y();
@@ -1266,22 +1288,22 @@ final class JigsawEditorScreen extends CraftiumScreen {
     @Override public boolean mouseScrolled(double rawX, double rawY, double horizontal, double vertical) {
         double x = rawX / uiScale;
         if (adding) return false;
-        if (blockListShowing() && overBlockList(x, rawY / uiScale)) { blockScroll = Math.clamp(blockScroll - (int) Math.signum(vertical) * 3, 0, Math.max(0, blockMatches.size() - BLOCK_ROWS)); return true; }
+        if (suggestionsShowing() && overSuggestions(x, rawY / uiScale)) { suggestScroll = Math.clamp(suggestScroll - (int) Math.signum(vertical) * 3, 0, Math.max(0, suggestMatches.size() - SUGGEST_ROWS)); return true; }
         if (x < SIDE + leftW + 6) { poolScroll = Math.clamp(poolScroll - vertical * 30, 0, Math.max(0, visiblePools().size() * LIST_ROW - (listBottom() - listTop()))); return true; }
         if (graph && x < cw - SIDE - rightW) { var bar = graphBar(); graphScroll = Math.clamp(graphScroll - vertical * 30, 0, bar == null ? 0 : bar[3] - bar[2]); return true; }
         return false;
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
-        if (blockListShowing()) {
+        if (suggestionsShowing()) {
             switch (event.key()) {
-                case GLFW.GLFW_KEY_DOWN -> { blockHighlight = Math.min(blockMatches.size() - 1, blockHighlight + 1); keepBlockVisible(); return true; }
-                case GLFW.GLFW_KEY_UP -> { blockHighlight = blockHighlight <= 0 ? blockMatches.size() - 1 : blockHighlight - 1; keepBlockVisible(); return true; }
-                case GLFW.GLFW_KEY_PAGE_DOWN -> { blockHighlight = Math.min(blockMatches.size() - 1, Math.max(0, blockHighlight) + BLOCK_ROWS); keepBlockVisible(); return true; }
-                case GLFW.GLFW_KEY_PAGE_UP -> { blockHighlight = Math.max(0, Math.max(0, blockHighlight) - BLOCK_ROWS); keepBlockVisible(); return true; }
-                case GLFW.GLFW_KEY_TAB -> { acceptBlock(blockMatches.get(Math.max(0, blockHighlight))); return true; }
-                case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> { if (blockHighlight >= 0) { acceptBlock(blockMatches.get(blockHighlight)); return true; } }
-                case GLFW.GLFW_KEY_ESCAPE -> { blockSuggesting = false; return true; }
+                case GLFW.GLFW_KEY_DOWN -> { suggestHighlight = Math.min(suggestMatches.size() - 1, suggestHighlight + 1); keepSuggestionVisible(); return true; }
+                case GLFW.GLFW_KEY_UP -> { suggestHighlight = suggestHighlight <= 0 ? suggestMatches.size() - 1 : suggestHighlight - 1; keepSuggestionVisible(); return true; }
+                case GLFW.GLFW_KEY_PAGE_DOWN -> { suggestHighlight = Math.min(suggestMatches.size() - 1, Math.max(0, suggestHighlight) + SUGGEST_ROWS); keepSuggestionVisible(); return true; }
+                case GLFW.GLFW_KEY_PAGE_UP -> { suggestHighlight = Math.max(0, Math.max(0, suggestHighlight) - SUGGEST_ROWS); keepSuggestionVisible(); return true; }
+                case GLFW.GLFW_KEY_TAB -> { acceptSuggestion(suggestMatches.get(Math.max(0, suggestHighlight))); return true; }
+                case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> { if (suggestHighlight >= 0) { acceptSuggestion(suggestMatches.get(suggestHighlight)); return true; } }
+                case GLFW.GLFW_KEY_ESCAPE -> { suggesting = false; return true; }
                 default -> { }
             }
         }
