@@ -192,9 +192,10 @@ public final class SavedSelectionsGameTest {
         severalAtOnceAndFocus();
         contextMenu();
         blocksLeaveTheirObjects();
+        multiDragAndKeptView();
         duplicateCopyCutExportAndEyes();
         sharedPersistentAndPermitted();
-        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu duplicate shared prune");
+        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu duplicate shared prune view");
     }
 
     // ---- Claude --------------------------------------------------------------------------------------------------------------------------
@@ -596,6 +597,39 @@ public final class SavedSelectionsGameTest {
         undo();
         undo();
         require(ClientState.savedSelections().size() == 2 && allAre(a(), Blocks.STONE), "and two Undos bring both back: " + ClientState.savedSelections());
+    }
+    /** Dragging one of several shown rows carries them all; and the eye and fold of a BuildObject are kept by GUID, so they hold when the list comes again. */
+    private void multiDragAndKeptView() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(cell());
+        click(control("Create a BuildObject from what is selected now", 0));
+        int x = saved(0).id(), y = saved(1).id(), z = saved(2).id();
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:viewset:" + x + "," + z, null, null));
+        settle();
+        drag(row(0), row(1), 0.5); // the first of the two shown, onto the middle of the one that is not
+        require(saved(0).id() == y && saved(1).parent() == y && saved(2).parent() == y && saved(1).id() == x && saved(2).id() == z,
+            "dragging one of two shown rows carries both under the row it was dropped on: " + ClientState.savedSelections());
+
+        // the eye and the fold are this player's, kept by GUID: they come back when the list does
+        c.runOnClient(mc -> { ClientState.setSavedHidden(y, false); ClientState.toggleSavedFolded(y); });
+        c.waitTicks(40);
+        var file = net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("craftium/hierarchy-view.json");
+        require(java.nio.file.Files.exists(file), "the choices were written to " + file);
+        c.runOnClient(mc -> ClientState.clearSavedSelections()); // as on joining a world: the client knows nothing
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:view:" + y, null, null));
+        settle();
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:release", null, null));
+        settle();
+        require(c.computeOnClient(mc -> !ClientState.savedHidden(y) && ClientState.savedFolded(y) && ClientState.savedHidden(x) && ClientState.savedHidden(z) && !ClientState.savedFolded(x)),
+            "the open eye and the fold of the parent come back, and the others stay closed");
+        c.runOnClient(mc -> ClientState.toggleSavedFolded(y)); // unfolded again for what follows
     }
     /** A block that is deleted or cut leaves its BuildObject (and Undo puts it back); Move takes the BuildObject along; deleting from the Hierarchy leaves the blocks. */
     private void blocksLeaveTheirObjects() {
