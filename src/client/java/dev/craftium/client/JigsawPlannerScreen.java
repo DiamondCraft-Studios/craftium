@@ -119,7 +119,7 @@ final class JigsawPlannerScreen extends CraftiumScreen {
         g.fill(0, 0, this.width, this.height, 0xf2101923);
         g.pose().pushMatrix();
         g.pose().scale(uiScale, uiScale);
-        g.text(font, "JIGSAW PLANNER", SIDE, 12, 0xffb5dcfc, false);
+        g.text(font, "Jigsaw planner", SIDE, 12, 0xffb5dcfc, false);
         g.text(font, font.plainSubstrByWidth(ClientState.status.message(), cw - 2 * SIDE - 240), SIDE, 28, 0xffffdca8, false);
 
         int x = SIDE, y = TOP + 14;
@@ -138,7 +138,7 @@ final class JigsawPlannerScreen extends CraftiumScreen {
     private void drawReport(Gfx g) {
         int x = SIDE + FORM + 14, w = cw - SIDE - x, top = TOP - 4, bottom = ch - FOOT + 2;
         g.fill(x - 4, top, x + w + 4, bottom, PANEL);
-        g.text(font, "REPORT", x, TOP, 0xffb5dcfc, false);
+        g.text(font, "Report", x, TOP, 0xffb5dcfc, false);
         var report = ClientState.jigsawReport;
         int y0 = TOP + 18;
         reportRoom = bottom - 6 - y0;

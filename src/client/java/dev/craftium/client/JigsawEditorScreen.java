@@ -428,7 +428,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         int smx = (int) (mx / uiScale), smy = (int) (my / uiScale);
         mx = smx;
         my = smy;
-        g.text(font, "JIGSAW POOLS", SIDE, 12, 0xffb5dcfc, false);
+        g.text(font, "Jigsaw pools", SIDE, 12, 0xffb5dcfc, false);
         String message = !localMessage.isEmpty() ? localMessage : str(model, "message", "").isEmpty() ? ClientState.status.message() : str(model, "message", "");
         g.text(font, font.plainSubstrByWidth(message, cw - 2 * SIDE - 440), SIDE, 28, 0xffffdca8, false);
         int waiting = unappliedCount();
@@ -531,7 +531,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         int x = cw - SIDE - rightW;
         g.fill(x - 4, TOP - 4, x + rightW + 4, ch - FOOT + 2, PANEL);
         var element = element(selected);
-        g.text(font, "CONNECTIONS", x, TOP + 4, 0xffb5dcfc, false);
+        g.text(font, "Connections", x, TOP + 4, 0xffb5dcfc, false);
         if (element == null || !element.has("jigsaws")) { g.text(font, "Select an element to see its connectors.", x, TOP + 24, MUTED, false); return; }
         var jigsaws = element.getAsJsonArray("jigsaws");
         g.text(font, font.plainSubstrByWidth(str(element, "template", ""), rightW), x, TOP + 18, TEXT, false);
@@ -563,7 +563,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         g.fill(0, 0, cw, ch, 0xaa000000);
         g.fill(x, y, x + w, ch - 40, 0xff172330);
         g.outline(x, y, w, ch - 80, ClientState.options.uiAccent);
-        g.text(font, "ADD A TEMPLATE TO " + shortName(poolId()).toUpperCase(Locale.ROOT), x + 10, y + 10, 0xffb5dcfc, false);
+        g.text(font, "Add a template to " + shortName(poolId()), x + 10, y + 10, 0xffb5dcfc, false);
         g.text(font, "Search (Enter): templates of every pack and the structures you saved", x + 10, y + 24, MUTED, false);
         int rows = Math.max(1, (ch - 40 - 150 - 40) / 20);
         int found = model.has("templates") ? model.getAsJsonArray("templates").size() : 0;
@@ -596,7 +596,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         g.fill(0, 0, cw, ch, 0xaa000000);
         g.fill(x, y, x + w, y + 228, 0xff172330);
         g.outline(x, y, w, 228, ClientState.options.uiAccent);
-        g.text(font, "RETARGET CONNECTORS", x + 10, y + 10, 0xffb5dcfc, false);
+        g.text(font, "Retarget connectors", x + 10, y + 10, 0xffb5dcfc, false);
         int line = y + 26;
         int connectors = num(info, "connectors", 0), templates = info.has("templates") ? info.getAsJsonArray("templates").size() : 0;
         String to = str(info, "to", "");
@@ -646,7 +646,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         g.fill(0, 0, cw, ch, 0xaa000000);
         g.fill(x, y, x + w, y + 162, 0xff172330);
         g.outline(x, y, w, 162, WARN);
-        g.text(font, "UNAPPLIED CHANGES", x + 10, y + 10, WARN, false);
+        g.text(font, "Unapplied changes", x + 10, y + 10, WARN, false);
         int count = unappliedCount(), line = y + 26;
         for (var row : font.split(Component.literal(count + (count == 1 ? " change is" : " changes are") + " waiting in a draft. The preview uses the draft; the datapack gets it only when you apply."), w - 20)) { g.text(font, row, x + 10, line, MUTED, false); line += 10; }
         var summary = unapplied();
