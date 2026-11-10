@@ -116,6 +116,20 @@ final class JigsawPlanner {
         }
     }
 
+    /** What a piece of work on the pools and templates is given: this run's packs, the folder of the craftium pack, and the server's template manager pointed at them. */
+    record Env(MinecraftServer server, MultiPackResourceManager manager, Path folder, StructureTemplateManager templates) {}
+    @FunctionalInterface interface Work<T> { T run(Env env) throws IOException; }
+
+    /** Does the work with the template manager pointed at this run's packs (so edited templates are read again), and points it back afterwards. */
+    static <T> T withPacks(MinecraftServer server, Work<T> work) throws IOException {
+        try (var packs = open(server)) {
+            var templates = server.getStructureManager();
+            templates.onResourceManagerReload(packs.manager());
+            try { return work.run(new Env(server, packs.manager(), packs.folder(), templates)); }
+            finally { templates.onResourceManagerReload(server.getResourceManager()); }
+        }
+    }
+
     /** The pool check and the connectors left open, as text lines. A problem in the diagnostics themselves is reported, never allowed to lose the run. */
     private static List<String> report(Registry<StructureTemplatePool> pools, StructureTemplateManager templates, ResourceLocation start, List<PoolElementStructurePiece> placed) {
         var lines = new ArrayList<String>();
@@ -163,7 +177,7 @@ final class JigsawPlanner {
     }
 
     /** All template pools of the packs, decoded by vanilla's loader against the world's other registries (processor lists and the like). */
-    private static net.minecraft.core.RegistryAccess.Frozen loadPools(MinecraftServer server, MultiPackResourceManager packs) {
+    static net.minecraft.core.RegistryAccess.Frozen loadPools(MinecraftServer server, MultiPackResourceManager packs) {
         var wanted = RegistryDataLoader.WORLDGEN_REGISTRIES.stream().filter(data -> data.key().equals(Registries.TEMPLATE_POOL)).toList();
         var context = new ArrayList<HolderLookup.RegistryLookup<?>>();
         server.registryAccess().registries().forEach(entry -> { if (!entry.key().equals(Registries.TEMPLATE_POOL)) context.add(entry.value()); });

@@ -227,6 +227,7 @@ final class JigsawRuns {
         action("view", use -> { var memory = memory(use.player()); say(use, view(use.player(), View.values()[(memory.view.ordinal() + 1) % View.values().length])); });
         action("live", use -> say(use, live(use.player(), use.options().jigsawLive)));
         action("pools", use -> say(use, pools(use.player())));
+        action("edit", use -> say(use, JigsawEditor.act(use.player(), use.options().jigsawEdit)));
     }
 
     private static void action(String name, ActionHandler handler) { ActionRegistry.register("craftium:jigsaw_" + name, handler); }

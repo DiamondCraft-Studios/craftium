@@ -56,12 +56,31 @@ final class JigsawDiagnostics {
         return names;
     }
 
+    /** How many elements of a pool offer a jigsaw with this name, for a connector that asks for it. */
+    static int fits(Registry<StructureTemplatePool> pools, StructureTemplateManager templates, StructureTemplatePool pool, ResourceLocation name) {
+        int count = 0;
+        for (var pair : pool.getTemplates()) if (offers(templates, pair.getFirst()).contains(name)) count++;
+        return count;
+    }
+
+    /** The jigsaw names one element offers: those of its template, or its own connector when it is a feature. */
+    static Set<ResourceLocation> offers(StructureTemplateManager templates, StructurePoolElement element) {
+        var names = new HashSet<ResourceLocation>();
+        var inside = singles(element);
+        if (inside.isEmpty()) for (var jigsaw : element.getShuffledJigsawBlocks(templates, net.minecraft.core.BlockPos.ZERO, net.minecraft.world.level.block.Rotation.NONE, RandomSource.create(0))) names.add(jigsaw.name());
+        for (var single : inside) for (var jigsaw : jigsawsOf(templates, single)) names.add(jigsaw.name());
+        return names;
+    }
+
     private static boolean onlyEmpty(StructureTemplatePool pool) {
         return pool.getTemplates().stream().allMatch(pair -> pair.getFirst().getClass().getSimpleName().equals("EmptyPoolElement"));
     }
 
     /** Problems in the pools a start pool can reach, one line each. */
-    static List<String> lint(Registry<StructureTemplatePool> pools, StructureTemplateManager templates, ResourceLocation start) {
+    static List<String> lint(Registry<StructureTemplatePool> pools, StructureTemplateManager templates, ResourceLocation start) { return lint(pools, templates, start, true); }
+
+    /** As above; without {@code follow} only the pool itself is looked at, not the pools its connectors lead to. */
+    static List<String> lint(Registry<StructureTemplatePool> pools, StructureTemplateManager templates, ResourceLocation start, boolean follow) {
         var lines = new ArrayList<String>();
         var seen = new HashSet<ResourceLocation>();
         var queue = new ArrayDeque<ResourceLocation>(List.of(start));
@@ -85,7 +104,7 @@ final class JigsawDiagnostics {
                         if (target.equals(EMPTY)) continue;
                         var targetHolder = pools.get(jigsaw.pool());
                         if (targetHolder.isEmpty()) { lines.add("ERROR " + shortName(location) + " connector '" + jigsaw.name().getPath() + "' points to pool " + target + ", which does not exist"); continue; }
-                        queue.add(target);
+                        if (follow) queue.add(target);
                         var wanted = jigsaw.target();
                         if (!namesIn(pools, templates, targetHolder.get().value(), names).contains(wanted))
                             lines.add("WARN  " + shortName(location) + " connector '" + jigsaw.name().getPath() + "' wants target '" + wanted.getPath() + "', which no element of " + target + " offers");
