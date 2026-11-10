@@ -2139,7 +2139,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         if(renaming>=0&&!renameShown)cancelRename(); // scrolled out of view or deleted
         else if(renaming>=0&&fields.get("rename")!=null&&!fields.get("rename").isFocused())commitRename(); // a click elsewhere keeps the name
         g.fill(x+1,y+ph-30,x+pw-1,y+ph-29,LINE); // the buttons along the bottom
-        button(g,x+10,y+ph-25,24,20,"",false,()->action("saved_selection:save"),looking?"Create a BuildObject from what is selected now. While one is shown, that is a copy of it":"Create a BuildObject from what is selected now");
+        button(g,x+10,y+ph-25,24,20,"",false,()->action("saved_selection:save"),looking?"Create a BuildObject from what is selected now · While one is shown, the new one goes around it":"Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole");
         glyph(g,x+10,y+ph-25,24,20,PLUS,TEXT);
     }
     /** A row of the Hierarchy that a double click renames: the row's own control, so a click on a button of the row is not a rename. */

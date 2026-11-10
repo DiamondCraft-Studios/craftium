@@ -14,7 +14,7 @@ final class SavedSelectionActions {
     static String run(Session s,String action){
         var part=action.substring(PREFIX.length()).split(":",3);var saved=s.saved;
         switch(part[0]){
-            case "save"->{var entry=saved.save(s.selection);return "Created "+entry.name();}
+            case "save"->{var entry=saved.create(s.selection);return "Created "+entry.name();}
             case "view"->{saved.view(id(part),s.selection);return "Showing "+saved.active().name();}
             case "edit"->{saved.edit(id(part),s.selection);return "Editing "+saved.active().name();}
             case "release"->{saved.release(s.selection);return "Your selection is back";}

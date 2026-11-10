@@ -172,6 +172,47 @@ class SavedSelectionsTest {
         assertTrue(saved.setPoints(before));assertEquals(List.of(B),two.points());
         assertFalse(saved.setPoints(Map.of(999,List.of(C))),"an id that is gone is skipped");
     }
+    private static final Point D=new Point(3,0,0),E=new Point(4,0,0);
+    @Test void aSelectionThatTouchesNothingMakesAnObjectAtTheTopLevel(){
+        var saved=new SavedSelections();var one=saved.create(live(A));var two=saved.create(live(B));
+        assertEquals(List.of(one,two),saved.entries());assertEquals(0,two.parentId());assertEquals(List.of(B),two.points());
+    }
+    @Test void aSelectionThatTouchesAnObjectTakesItInWholeAsAChild(){
+        var saved=new SavedSelections();var one=saved.create(live(A,B));
+        var around=saved.create(live(B,C)); // reaches only half of one
+        assertEquals(List.of(around,one),saved.entries(),"the new one takes the place of the one it took");
+        assertEquals(around.id(),one.parentId());assertEquals(List.of(A,B),one.points(),"the one it took is left whole");
+        assertEquals(List.of(C),around.points(),"and the new one holds only what no taken object holds");
+    }
+    @Test void aSelectionInsideAnObjectMakesAnEmptyParentAroundIt(){
+        var saved=new SavedSelections();var one=saved.create(live(A,B));var around=saved.create(live(A,B));
+        assertEquals(List.of(),around.points());assertEquals(around.id(),one.parentId());
+        assertEquals(Set.of(A,B),saved.effective(around));
+    }
+    @Test void severalObjectsTouchedAreAllTakenInTheOrderTheyWereIn(){
+        var saved=new SavedSelections();var a=saved.create(live(A));var b=saved.create(live(B));var c=saved.create(live(C));
+        var around=saved.create(live(A,C,D));
+        assertEquals(List.of(around,a,c,b),saved.entries(),"the new one first, with a and c under it, then b");
+        assertEquals(List.of(a,c),saved.children(around),"a and c, and b was not touched");
+        assertEquals(0,b.parentId());assertEquals(List.of(D),around.points());
+    }
+    @Test void anObjectUnderAnotherThatIsAlsoTouchedComesInWithItAndNotByItself(){
+        var saved=new SavedSelections();var parent=saved.create(live(A));var child=saved.create(live(B));saved.place(child.id(),parent.id(),0);
+        var around=saved.create(live(A,B));
+        assertEquals(List.of(parent),saved.children(around),"only the outer one is a child of the new one");
+        assertEquals(parent.id(),child.parentId(),"and the inner one is still under it");
+    }
+    @Test void touchingAnObjectInsideAParentPutsTheNewOneThereAndNotAtTheTop(){
+        var saved=new SavedSelections();var parent=saved.create(live(A));var one=saved.create(live(B));var two=saved.create(live(C));
+        saved.place(one.id(),parent.id(),0);saved.place(two.id(),parent.id(),1);
+        var around=saved.create(live(B,D));
+        assertEquals(List.of(around,two),saved.children(parent),"it sits where the one it took was");
+        assertEquals(List.of(one),saved.children(around));
+    }
+    @Test void creatingStillHonoursTheLimit(){
+        var saved=new SavedSelections();for(int i=0;i<SavedSelections.MAX;i++)saved.save(live(new Point(i+10,0,0)));
+        assertThrows(IllegalArgumentException.class,()->saved.create(live(E)));
+    }
     @Test void theLimitIsEnforced(){
         var saved=new SavedSelections();var s=live(A);for(int i=0;i<SavedSelections.MAX;i++)saved.save(s);
         assertThrows(IllegalArgumentException.class,()->saved.save(s));

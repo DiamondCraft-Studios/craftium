@@ -107,6 +107,30 @@ public final class SavedSelections {
         // while looking at one, the live selection is the saved one, so what a player means by saving is what they see: the tweaked copy
         var entry=new Entry(nextId++,freeName(),live.points());entries.add(entry);revision++;return entry;
     }
+    /**
+     * Makes a BuildObject from the live selection, as the + button does. It works like selecting several BuildObjects at once and putting them in one: any
+     * BuildObject that has a block in the selection is taken in whole, as a child of the new one, wherever the selection reaches only part of it. A
+     * BuildObject under another that is also touched comes in with it and not by itself. The new one holds the blocks of the selection that no taken
+     * BuildObject holds, so no block is held twice by what it creates, and it takes the place of the first one it took (under the same parent). With
+     * nothing touched it is a new BuildObject at the top level, last.
+     */
+    public Entry create(Selection live){
+        if(live.size()==0)throw new IllegalArgumentException("Nothing is selected to make a BuildObject from");
+        if(entries.size()>=MAX)throw new IllegalArgumentException("BuildObject limit: "+MAX);
+        var cells=live.points();
+        var touched=new ArrayList<Entry>();
+        for(var e:entries)if(e.points.stream().anyMatch(cells::contains))touched.add(e);
+        var taken=touched.stream().filter(e->touched.stream().noneMatch(o->o!=e&&isUnder(e,o))).toList(); // tree order, the outermost only
+        var held=new HashSet<Point>();for(var t:taken)held.addAll(effective(t));
+        var own=new ArrayList<Point>();for(var p:cells)if(!held.contains(p))own.add(p);
+        var entry=new Entry(nextId++,freeName(),own);entries.add(entry);
+        if(!taken.isEmpty()){
+            var first=taken.getFirst();var parent=first.parent;int index=children(parent).indexOf(first);
+            place(entry.id,parent==null?0:parent.id,index);
+            int k=0;for(var t:taken)place(t.id,entry.id,k++);
+        }
+        revision++;return entry;
+    }
     public void rename(int id,String name){
         var entry=need(id);var clean=name==null?"":name.strip();
         if(clean.isEmpty()||clean.length()>40)throw new IllegalArgumentException("A name is 1 to 40 characters");
