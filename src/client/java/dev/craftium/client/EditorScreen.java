@@ -208,6 +208,7 @@ public final class EditorScreen extends CraftiumScreen {
         axisGizmo(g);
         for(int i=1;i<lasso.size();i++)ToolIcons.line(g,(int)(lasso.get(i-1).x()/scale),(int)(lasso.get(i-1).y()/scale),(int)(lasso.get(i).x()/scale),(int)(lasso.get(i).y()/scale),0xffffd66d);
         statusbar(g);
+        rowDragGhost(g);
         if(menu>=0)dropdown(g);
         if(ctxCell>=0)maskMenu(g);
         if(shapeMenu)shapeMenu(g);
@@ -2080,7 +2081,11 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     private static String savedSpan(dev.craftium.net.Packets.SavedSelection s){return (s.max().x()-s.min().x()+1)+" x "+(s.max().y()-s.min().y()+1)+" x "+(s.max().z()-s.min().z()+1);}
     /** The Hierarchy panel, the top of the right column: every selection saved by name, to look at (click), edit (pencil) or delete (cross). The player's own selection is only swapped out while one is looked at, and given back when it is let go. It is the list BuildObjects will grow into. */
     private void hierarchyPanel(Gfx g){
-        var saved=ClientState.savedSelections();
+        hierarchyAll=ClientState.savedSelections();
+        var saved=new ArrayList<dev.craftium.net.Packets.SavedSelection>(); // the rows shown: everything but what is under a folded BuildObject
+        for(var e:hierarchyAll){boolean shown=true;int n=0;for(var p=savedById(e.parent());p!=null&&n<64;p=savedById(p.parent()),n++)if(ClientState.savedFolded(p.id())){shown=false;break;}if(shown)saved.add(e);}
+        hierarchyRows=saved;
+        var parents=new HashSet<Integer>();for(var e:hierarchyAll)parents.add(e.parent());
         int x=w-RIGHT,y=27;
         panel(g,x,y,RIGHT,Math.max(90,groupTop()-6-y),"Hierarchy");
         boolean looking=ClientState.activeSaved()!=null;
@@ -2091,14 +2096,20 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         if(total==0)text(g,"No BuildObjects yet",x+16,top+6,MUTED);
         for(int i=0;i<rows&&savedScroll+i<total;i++){
             var entry=saved.get(savedScroll+i);int ry=top+i*rowHeight,id=entry.id();
+            int indent=Math.min(depthOf(entry),6)*12,nameX=x+14+indent+12; // a level in is 12 further right; the arrow takes the first 12
             if(entry.active())g.fill(x+9,ry,x+pw-9,ry+rowHeight,entry.editing()?0xff5b4a84:0xff315b84);
             int colour=ClientState.savedColor(id),swatch=x+pw-94; // the colour is the leftmost of the buttons on the right
             g.fill(swatch+1,ry+4,swatch+17,ry+rowHeight-4,0xff000000|colour&0xffffff);g.outline(swatch+1,ry+4,16,rowHeight-8,LINE);
             if(renaming==id){
-                renameShown=true;var box=renameBox(entry.name());box.setX(x+14);box.setY(ry+4);box.setWidth(pw-114);
-            }else text(g,shorten(entry.name(),pw-112),x+14,ry+6,entry.active()?TEXT:MUTED);
+                renameShown=true;var box=renameBox(entry.name());box.setX(nameX);box.setY(ry+4);box.setWidth(x+pw-98-nameX);
+            }else text(g,shorten(entry.name(),pw-112-indent-12),nameX,ry+6,entry.active()?TEXT:MUTED);
+            if(rowDragMoved&&rowDragId==id)g.fill(x+9,ry,x+pw-9,ry+rowHeight,0xaa141c26); // the one being dragged is left looking emptied
             // later controls win where they overlap, so the row comes first and the cells and buttons on it after
             var rowControl=new Control(x+9,ry,pw-18,rowHeight,()->action(entry.active()&&!entry.editing()?"saved_selection:release":"saved_selection:view:"+id),HIDDEN_TIP+savedSpan(entry)+" blocks · "+(entry.active()&&!entry.editing()?"Let go":"Show this BuildObject")); controls.add(rowControl);renameAreas.add(new RenameArea(rowControl,id));
+            if(parents.contains(id)){ // something is under it: an arrow folds it
+                boolean folded=ClientState.savedFolded(id);text(g,folded?"▸":"▾",x+14+indent,ry+6,MUTED);
+                controls.add(new Control(x+11+indent,ry,14,rowHeight,()->ClientState.toggleSavedFolded(id),folded?"Show what is under this BuildObject":"Fold what is under this BuildObject"));
+            }
             controls.add(new Control(swatch,ry+2,18,rowHeight-4,()->ColourPickerScreen.open(this,entry.name()+" colour",()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0)),"Change this BuildObject's outline colour"));
             int eye=x+pw-72,pencil=x+pw-50,cross=x+pw-28;boolean hidden=ClientState.savedHidden(id);
             button(g,eye,ry+2,18,rowHeight-4,"",false,()->ClientState.toggleSavedHidden(id),hidden?"Show this BuildObject in the world":"Hide this BuildObject in the world · It stays, and shows while you look at it or edit it");
@@ -2113,10 +2124,17 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             int track=rows*rowHeight,thumb=Math.max(10,track*rows/total),thumbY=top+(track-thumb)*savedScroll/Math.max(1,total-rows);
             g.fill(x+pw-14,top,x+pw-10,top+track,0xff1b2b40);g.fill(x+pw-14,thumbY,x+pw-10,thumbY+thumb,ACCENT);
         }
-        if(rowDragMoved){ // where the dragged row would land: a line between rows
-            int from=0;for(int i=0;i<total;i++)if(saved.get(i).id()==rowDragId)from=i;
-            int to=rowDropIndex(total),at=top+(to-savedScroll)*rowHeight+(to>from?rowHeight:0);
-            if(at>=top-1&&at<=top+rows*rowHeight+1){g.fill(x+9,at-1,x+pw-9,at+1,ACCENT);}
+        if(rowDragMoved){ // where the dragged row would land: a line between rows, or a frame round the row it would go under
+            var drop=dropAt();
+            if(drop!=null&&total>0){
+                int at=drop.row()-savedScroll,ry=top+at*rowHeight,indentTo=x+14+Math.min(depthOf(saved.get(Math.clamp(drop.row(),0,total-1))),6)*12;
+                if(at>=0&&at<rows)switch(drop.kind()){
+                    case DROP_INTO->g.outline(x+9,ry,pw-18,rowHeight,ACCENT);
+                    case DROP_ABOVE->g.fill(indentTo,ry-1,x+pw-9,ry+1,ACCENT);
+                    case DROP_FIRST_CHILD->g.fill(indentTo+12,ry+rowHeight-1,x+pw-9,ry+rowHeight+1,ACCENT);
+                    default->g.fill(indentTo,ry+rowHeight-1,x+pw-9,ry+rowHeight+1,ACCENT);
+                }
+            }
         }
         if(renaming>=0&&!renameShown)cancelRename(); // scrolled out of view or deleted
         else if(renaming>=0&&fields.get("rename")!=null&&!fields.get("rename").isFocused())commitRename(); // a click elsewhere keeps the name
@@ -2128,15 +2146,49 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     private record RenameArea(Control row,int id){}
     /** The row being pressed to click or to drag to another place, how far the pointer has gone, and where the list of rows is drawn. */
     private int rowDragId=-1,hierarchyTop,hierarchyRow=20;private double rowDragX,rowDragY;private boolean rowDragMoved;private Runnable rowDragClick;
-    /** The place in the list the dragged row would take, from where the pointer is. */
-    private int rowDropIndex(int total){
-        double py=WorkspaceLayout.inverse("hierarchy",mx,my)[1];
-        return Math.clamp(savedScroll+(int)Math.floor((py-hierarchyTop)/hierarchyRow),0,Math.max(0,total-1));
+    /** The BuildObjects as the client has them, and the rows listed of them (those not under a folded one), for the drag to work out where it lands. */
+    private List<dev.craftium.net.Packets.SavedSelection> hierarchyAll=List.of(),hierarchyRows=List.of();
+    private dev.craftium.net.Packets.SavedSelection savedById(int id){if(id==0)return null;for(var e:hierarchyAll)if(e.id()==id)return e;return null;}
+    private int depthOf(dev.craftium.net.Packets.SavedSelection e){int d=0;for(var p=savedById(e.parent());p!=null&&d<64;p=savedById(p.parent()))d++;return d;}
+    private boolean isUnder(dev.craftium.net.Packets.SavedSelection e,int ancestor){int n=0;for(var p=savedById(e.parent());p!=null&&n<64;p=savedById(p.parent()),n++)if(p.id()==ancestor)return true;return false;}
+    /** Which child of its parent the row is, counting the others before it. */
+    private int siblingIndex(dev.craftium.net.Packets.SavedSelection e){int k=0;for(var o:hierarchyAll){if(o.id()==e.id())return k;if(o.parent()==e.parent())k++;}return k;}
+    private int childCount(int id){int k=0;for(var o:hierarchyAll)if(o.parent()==id)k++;return k;}
+    /** What dropping a dragged row here does: under {@code parent} (0 for the top) as child number {@code index}, shown by {@code kind} at {@code row}. */
+    private record Drop(int parent,int index,int kind,int row){}
+    private static final int DROP_ABOVE=0,DROP_BELOW=1,DROP_INTO=2,DROP_FIRST_CHILD=3,DROP_END=4;
+    /**
+     * Where the dragged row would land, from the pointer: the top quarter of a row puts it before that row, the bottom quarter after it (or first
+     * under it when it is open), the middle makes it a child, and below the last row it goes to the end of the top level. Null where it cannot go: on itself
+     * or on what is under it.
+     */
+    private Drop dropAt(){
+        int total=hierarchyRows.size();if(total==0)return null;
+        double py=WorkspaceLayout.inverse("hierarchy",mx,my)[1]-hierarchyTop,at=Math.floor(py/hierarchyRow);
+        int row=(int)at+savedScroll;
+        if(row>=total)return new Drop(0,childCount(0),DROP_END,total-1);
+        var target=hierarchyRows.get(Math.max(row,0));
+        if(target.id()==rowDragId||isUnder(target,rowDragId))return null;
+        double f=py<0?0:py/hierarchyRow-at;
+        if(f<.25)return new Drop(target.parent(),siblingIndex(target),DROP_ABOVE,Math.max(row,0));
+        if(f>.75){boolean open=childCount(target.id())>0&&!ClientState.savedFolded(target.id());return open?new Drop(target.id(),0,DROP_FIRST_CHILD,row):new Drop(target.parent(),siblingIndex(target)+1,DROP_BELOW,row);}
+        return new Drop(target.id(),childCount(target.id()),DROP_INTO,row);
     }
     /** Lets go of a pressed row: where it was dropped moves it, and a press that never moved is the click it always was. */
     private void finishRowDrag(){
-        int id=rowDragId;boolean moved=rowDragMoved;var click=rowDragClick;rowDragId=-1;rowDragMoved=false;rowDragClick=null;
-        if(moved)action("saved_selection:move:"+id+":"+rowDropIndex(ClientState.savedSelections().size()));else if(click!=null)click.run();
+        int id=rowDragId;boolean moved=rowDragMoved;var click=rowDragClick;var drop=moved?dropAt():null;var dragged=savedById(id);rowDragId=-1;rowDragMoved=false;rowDragClick=null;
+        if(!moved){if(click!=null)click.run();return;}
+        if(drop==null||dragged==null)return;
+        int index=drop.index();if(dragged.parent()==drop.parent()&&siblingIndex(dragged)<index)index--; // the place is counted without the row itself
+        action("saved_selection:place:"+id+":"+drop.parent()+":"+index);
+    }
+    /** The dragged row, following the pointer so it is plain that it is being carried. */
+    private void rowDragGhost(Gfx g){
+        if(!rowDragMoved)return;var e=savedById(rowDragId);if(e==null)return;
+        int gw=140,gh=18,gx=Math.min(mx+12,w-gw-4),gy=my-9;
+        g.fill(gx,gy,gx+gw,gy+gh,0xe0315b84);g.outline(gx,gy,gw,gh,ACCENT);
+        g.fill(gx+4,gy+4,gx+14,gy+gh-4,0xff000000|ClientState.savedColor(e.id())&0xffffff);
+        text(g,shorten(e.name(),gw-26),gx+20,gy+5,TEXT);
     }
     private final List<RenameArea> renameAreas=new ArrayList<>();
     /** The id of the entry being renamed in place, or -1. */

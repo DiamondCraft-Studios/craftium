@@ -143,18 +143,46 @@ public final class SavedSelectionsGameTest {
         require(saved(0).name().equals("Roof"), "Esc drops what was typed, got " + saved(0).name());
         click(control("Let go", 0)); // the double click showed it; let go before the picture
 
-        // dragging a row to another place reorders the list
+        // dragging a row to the top edge of another puts it before that row, to the bottom edge after it
         String top = saved(0).guid(), below = saved(1).guid();
-        drag(control("Show this BuildObject", 1), control("Show this BuildObject", 0));
-        require(saved(0).guid().equals(below) && saved(1).guid().equals(top), "dragging the second row onto the first moves it to the top: " + ClientState.savedSelections());
-        drag(control("Show this BuildObject", 0), control("Show this BuildObject", 1));
-        require(saved(0).guid().equals(top) && saved(1).guid().equals(below), "and back down again");
+        drag(control("Show this BuildObject", 1), control("Show this BuildObject", 0), 0.1);
+        require(saved(0).guid().equals(below) && saved(1).guid().equals(top), "dragging the second row onto the top edge of the first moves it to the top: " + ClientState.savedSelections());
+        drag(control("Show this BuildObject", 0), control("Show this BuildObject", 1), 0.9);
+        require(saved(0).guid().equals(top) && saved(1).guid().equals(below), "and onto the bottom edge of the last puts it back");
+
+        // dropping on the middle of a row makes it a child, and a folded BuildObject lists nothing under it
+        drag(control("Show this BuildObject", 1), control("Show this BuildObject", 0), 0.5);
+        require(saved(1).parent() == saved(0).id() && saved(0).parent() == 0, "the middle of a row makes a child: " + ClientState.savedSelections());
+        click(control("Fold what is under this BuildObject", 0));
+        require(control("Show this BuildObject", 1) == null, "a folded BuildObject lists nothing under it");
+        click(control("Show what is under this BuildObject", 0));
+        require(control("Show this BuildObject", 1) != null, "and unfolding lists it again");
+        drag(control("Show this BuildObject", 1), control("Show this BuildObject", 0), 0.1);
+        require(saved(0).guid().equals(below) && saved(0).parent() == 0 && saved(1).parent() == 0, "dragging a child to the top edge of its parent brings it out: " + ClientState.savedSelections());
 
         // names may repeat: the GUID tells two of a name apart
         doubleClick(control("Show this BuildObject", 1));
         typeText(saved(0).name());press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
         require(saved(0).name().equals(saved(1).name()) && !saved(0).guid().equals(saved(1).guid()), "a second BuildObject may take the name of the first: " + ClientState.savedSelections());
         click(control("Let go", 0));
+
+        // for a person to look at: one nested under the other, and the picture taken while a row is being carried
+        drag(control("Show this BuildObject", 1), control("Show this BuildObject", 0), 0.5);
+        require(saved(1).parent() == saved(0).id(), "nested for the picture");
+        var from = control("Show this BuildObject", 1);
+        c.runOnClient(mc -> {
+            var screen = (EditorScreen) mc.gui.screen();
+            double scale;
+            try { var f = EditorScreen.class.getDeclaredField("scale"); f.setAccessible(true); scale = f.getFloat(screen); } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            var down = new MouseButtonEvent((from[0] + from[2] / 2.0) * scale, (from[1] + from[3] / 2.0) * scale, new MouseButtonInfo(0, 0));
+            var up = new MouseButtonEvent((from[0] + from[2] / 2.0) * scale, (from[1] - 4) * scale, new MouseButtonInfo(0, 0));
+            screen.mouseClicked(down, false);
+            screen.mouseDragged(up, 0, -10);
+        });
+        c.waitTicks(4);
+        c.takeScreenshot("hierarchy-drag");
+        c.runOnClient(mc -> { var screen = (EditorScreen) mc.gui.screen(); screen.mouseReleased(new MouseButtonEvent(0, 0, new MouseButtonInfo(0, 0))); });
+        settle();
 
         screenshot();
         System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude");
@@ -320,8 +348,8 @@ public final class SavedSelectionsGameTest {
         });
         settle();
     }
-    /** Presses on the middle of one control, drags to the middle of another and lets go there. */
-    private void drag(int[] from, int[] to) {
+    /** Presses on the middle of one control, drags to a place {@code at} of the way down another (0 is its top edge) and lets go there. */
+    private void drag(int[] from, int[] to, double at) {
         require(from != null && to != null, "the rows to drag are not in the window");
         sleep();
         c.runOnClient(mc -> {
@@ -329,7 +357,7 @@ public final class SavedSelectionsGameTest {
             double scale;
             try { var f = EditorScreen.class.getDeclaredField("scale"); f.setAccessible(true); scale = f.getFloat(screen); } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
             var down = new MouseButtonEvent((from[0] + from[2] / 2.0) * scale, (from[1] + from[3] / 2.0) * scale, new MouseButtonInfo(0, 0));
-            var up = new MouseButtonEvent((to[0] + to[2] / 2.0) * scale, (to[1] + to[3] / 2.0) * scale, new MouseButtonInfo(0, 0));
+            var up = new MouseButtonEvent((to[0] + to[2] / 2.0) * scale, (to[1] + to[3] * at) * scale, new MouseButtonInfo(0, 0));
             screen.mouseClicked(down, false);
             screen.mouseDragged(up, up.x() - down.x(), up.y() - down.y());
             screen.mouseReleased(up);
