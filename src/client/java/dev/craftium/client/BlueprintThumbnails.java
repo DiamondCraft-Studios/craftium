@@ -13,8 +13,13 @@ import java.util.*;
 final class BlueprintThumbnails {
     /** Pictures made in one frame, so opening a page of them does not stall it. */
     private static final int PER_FRAME = 2;
-    private static final Map<String, AiThumbnails.Entry> CACHE = new HashMap<>();
-    private static final Set<String> NONE = new HashSet<>();
+    /** A made picture with a hash of the data it was made from, so a blueprint saved again under its name (the same file, other blocks) is drawn again. */
+    private record Held(int content, AiThumbnails.Entry entry) {}
+    private static final Map<String, Held> CACHE = new HashMap<>();
+    /** Files whose data could not be drawn, with the hash of that data. */
+    private static final Map<String, Integer> NONE = new HashMap<>();
+    /** The hash of each listing entry's data, worked out once per entry (the browser asks every frame). */
+    private static final Map<BlueprintInfo, Integer> HASHES = new IdentityHashMap<>();
     private static int builtThisFrame;
     private BlueprintThumbnails() {}
 
@@ -23,20 +28,26 @@ final class BlueprintThumbnails {
     /** The picture for this listing, or null while it is waiting to be drawn or when it has none. */
     static Tex of(BlueprintInfo info) {
         if (info.cells() == null || info.palette() == null) return null;
-        String key = info.file() + "#" + info.cells().hashCode();
-        var entry = CACHE.get(key);
-        if (entry == null && !NONE.contains(key) && builtThisFrame < PER_FRAME) {
-            builtThisFrame++;
-            entry = build(info);
-            if (entry == null) NONE.add(key); else CACHE.put(key, entry);
-        }
-        return entry == null ? null : entry.tex();
+        if (HASHES.size() > 1024) HASHES.clear();
+        int content = HASHES.computeIfAbsent(info, i -> Objects.hash(i.cells(), i.palette(), i.size(), i.scale()));
+        var held = CACHE.get(info.file());
+        if (held != null && held.content() == content) return held.entry().tex();
+        if (held != null) { AiThumbnails.release(held.entry()); CACHE.remove(info.file()); } // the blueprint has changed since: its old picture goes
+        Integer failed = NONE.get(info.file());
+        if ((failed != null && failed == content) || builtThisFrame >= PER_FRAME) return null;
+        builtThisFrame++;
+        var entry = build(info);
+        if (entry == null) { NONE.put(info.file(), content); return null; }
+        NONE.remove(info.file());
+        CACHE.put(info.file(), new Held(content, entry));
+        return entry.tex();
     }
 
     static void releaseAll() {
-        for (var entry : CACHE.values()) AiThumbnails.release(entry);
+        for (var held : CACHE.values()) AiThumbnails.release(held.entry());
         CACHE.clear();
         NONE.clear();
+        HASHES.clear();
     }
 
     private static AiThumbnails.Entry build(BlueprintInfo info) {
