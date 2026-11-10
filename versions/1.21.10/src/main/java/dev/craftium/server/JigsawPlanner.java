@@ -53,8 +53,8 @@ final class JigsawPlanner {
     private JigsawPlanner() {}
 
     static final String PACK = "craftium";
-    /** Pieces and blocks are described in world coordinates; a piece names its template, where it went and how it was turned. */
-    record Piece(ResourceLocation pool, ResourceLocation template, BlockPos pos, String rotation, BoundingBox box, int depth) {}
+    /** Pieces and blocks are described in world coordinates; a piece names its template, where it went and how it was turned. The first piece is the start. */
+    record Piece(ResourceLocation template, BlockPos pos, String rotation, BoundingBox box) {}
     record Result(Map<Point, BlockState> blocks, List<Piece> pieces, long seed, int unsupported, ResourceLocation start) {}
 
     /** What the planner reads from: the folder of the craftium datapack, made (with its pack.mcmeta) when it is not there yet. */
@@ -105,7 +105,7 @@ final class JigsawPlanner {
                 int[] unsupported = {0};
                 for (var generated : container.pieces()) {
                     if (!(generated instanceof PoolElementStructurePiece piece)) continue;
-                    pieces.add(new Piece(poolId, templateOf(piece.getElement()), piece.getPosition(), piece.getRotation().name().toLowerCase(Locale.ROOT), piece.getBoundingBox(), piece.getGroundLevelDelta()));
+                    pieces.add(new Piece(templateOf(piece.getElement()), piece.getPosition(), piece.getRotation().name().toLowerCase(Locale.ROOT), piece.getBoundingBox()));
                     blocksOf(level, templates, piece, piece.getElement(), blocks, unsupported);
                 }
                 return new Result(blocks, pieces, seed, unsupported[0], poolId);
@@ -163,6 +163,22 @@ final class JigsawPlanner {
         var message = String.valueOf(e.getMessage());
         int cut = message.indexOf('\n');
         return cut < 0 ? message : message.substring(0, cut);
+    }
+
+    /** One box per piece for the client to outline, coloured by template (the start piece white), with the template's last name part as its label. */
+    static GhostCodec.Layout layout(Result result) {
+        var boxes = new int[result.pieces().size() * 7];
+        var names = new ArrayList<String>();
+        int at = 0;
+        for (var piece : result.pieces()) {
+            var box = piece.box();
+            boxes[at++] = box.minX(); boxes[at++] = box.minY(); boxes[at++] = box.minZ();
+            boxes[at++] = box.maxX(); boxes[at++] = box.maxY(); boxes[at++] = box.maxZ();
+            boxes[at++] = names.isEmpty() ? -1 : Math.floorMod(piece.template().toString().hashCode() * 31, 360);
+            var path = piece.template().getPath();
+            names.add(path.substring(path.lastIndexOf('/') + 1));
+        }
+        return new GhostCodec.Layout(boxes, names);
     }
 
     /** A planned edit from a result: every block goes exactly where vanilla put it, whatever the player's brush settings. */
