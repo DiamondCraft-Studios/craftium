@@ -1854,7 +1854,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(CraftiumClient.editorKey.matches(event)){onClose();return true;}
         if(repeat&&(event.modifiers()&7)!=0)return true; // flying right with D, then pressing Ctrl, must not fire Ctrl+D (Deselect)
         if(event.key()==GLFW.GLFW_KEY_ESCAPE&&pipetting){pipetting=false;return true;}
-        if(event.key()==GLFW.GLFW_KEY_ESCAPE){if(ClientState.hasPending())CraftiumClient.send("pending_cancel",null,null);else if(ShapeObject.active())ShapeObject.cancel();else if(PlacementPreview.active())PlacementPreview.cancel();else if(shapeMenu)shapeMenu=false;else if(ctxCell>=0)ctxCell=-1;else if(help)help=false;else if(transform){transform=false;init();}else if(menu>=0)menu=-1;else onClose();return true;}
+        if(event.key()==GLFW.GLFW_KEY_ESCAPE){if(ClientState.escapeCancelsPending())CraftiumClient.send("pending_cancel",null,null);else if(ShapeObject.active())ShapeObject.cancel();else if(PlacementPreview.active())PlacementPreview.cancel();else if(shapeMenu)shapeMenu=false;else if(ctxCell>=0)ctxCell=-1;else if(help)help=false;else if(transform){transform=false;init();}else if(menu>=0)menu=-1;else onClose();return true;}
         if(EditorBindings.matches(Action.HELP,event)){perform(Action.HELP);return true;}
         if(help||transform)return true;
         // With a gizmo showing, plain X, Y and Z lock its axes, as in the Builder; they are not the editor's hotkeys then.
@@ -2113,5 +2113,5 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     }
     private int key(long handle,int key){return GLFW.glfwGetKey(handle,key)==GLFW.GLFW_PRESS?1:0;}
     @Override public void removed(){BlockDragCursor.release();keysDown.clear();pipetting=false;releaseCursor();TransformGizmo.cancel();draggingNode=draggingPlacement=false;cameraGesture=CameraGesture.NONE;syncCursor();if(hudHidden){if(ClientCompat.hudHidden(minecraft)!=previousHideGui)ClientCompat.toggleHud(minecraft);hudHidden=false;}ClientState.strokeId=0;ClientState.save();super.removed();}
-    @Override public void onClose(){ClientState.save();if(ClientState.largeSelection>0)confirmLargeSelection();ClientCompat.setScreen(minecraft,null);if(ClientState.hasPending()&&CraftiumClient.supported())CraftiumClient.send("pending_cancel",null,null);if(CraftiumClient.supported()&&minecraft.player!=null&&minecraft.player.isSpectator())CraftiumClient.send("gamemode_restore",null,null);}
+    @Override public void onClose(){ClientState.save();if(ClientState.largeSelection>0)confirmLargeSelection();ClientCompat.setScreen(minecraft,null);if(ClientState.escapeCancelsPending()&&CraftiumClient.supported())CraftiumClient.send("pending_cancel",null,null);if(CraftiumClient.supported()&&minecraft.player!=null&&minecraft.player.isSpectator())CraftiumClient.send("gamemode_restore",null,null);}
 }

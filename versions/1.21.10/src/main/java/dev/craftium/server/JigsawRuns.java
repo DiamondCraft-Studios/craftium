@@ -154,7 +154,7 @@ final class JigsawRuns {
             var layout = memory.view == View.BLOCKS ? new GhostCodec.Layout(new int[0], List.of()) : JigsawPlanner.layout(result);
             var message = "Jigsaw: " + result.pieces().size() + " pieces, " + edit.changes().size() + " blocks, seed " + run.seed() + ", depth " + run.depth()
                     + " (" + ms + " ms)" + (note == null ? "" : ", " + note) + (result.unsupported() > 0 ? "; " + result.unsupported() + " feature pieces are not shown" : "");
-            EditorServer.preview(player, edit, message + " · Enter to build, Esc to cancel", layout, memory.view != View.LAYOUT);
+            EditorServer.preview(player, edit, message + " · Enter to build", layout, memory.view != View.LAYOUT);
             return message;
         } catch (IOException e) {
             ServerPlatform.LOG.error("The jigsaw planner failed", e);

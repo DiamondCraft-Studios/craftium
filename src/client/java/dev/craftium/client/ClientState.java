@@ -90,6 +90,8 @@ public final class ClientState {
     public static int pluginPreviewBlocks(){return pluginPending.total();}
     static void clearPluginPreview(){pluginPending=GhostBlocks.EMPTY;pluginPendingData="";}
     public static boolean hasPending(){return pending.total()>0;}
+    /** Whether Escape, and leaving the editor, cancel the waiting edit: not a jigsaw preview, which is cancelled in the planner. */
+    public static boolean escapeCancelsPending(){return hasPending()&&!pending.keepsOnEscape();}
     /**
      * One of the player's AI sessions as the server last described it, with the build it holds as a preview (kept apart from the player's own and
      * drawn in a colour of its own) and when that description arrived.

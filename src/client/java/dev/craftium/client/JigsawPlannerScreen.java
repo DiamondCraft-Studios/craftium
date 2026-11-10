@@ -97,7 +97,7 @@ final class JigsawPlannerScreen extends CraftiumScreen {
         tips.on(button("View", x + third + 4, by + 58, third, 22, () -> send("view")), "Changes what the preview draws, one step each click: outlines and blocks, then outlines only (cheap for very large structures), then blocks only.");
         tips.on(button("List pools", x + 2 * (third + 4), by + 58, third, 22, () -> send("pools")), "Lists every pool the planner can start from in the report: those of the datapacks the world uses and of datapacks/craftium.");
         tips.on(button("Apply (Enter)", x, by + 90, (FORM - 4) / 2, 24, () -> send("apply")), "Builds the preview in the world as one edit. You can undo it like any other edit.");
-        tips.on(button("Cancel (Esc)", x + (FORM - 4) / 2 + 4, by + 90, (FORM - 4) / 2, 24, () -> send("cancel")), "Throws the preview away without building anything.");
+        tips.on(button("Cancel preview", x + (FORM - 4) / 2 + 4, by + 90, (FORM - 4) / 2, 24, () -> send("cancel")), "Throws the preview away without building anything. Escape does not: it keeps the preview, so you can leave the editor and walk around it.");
     }
 
     // ---- drawing

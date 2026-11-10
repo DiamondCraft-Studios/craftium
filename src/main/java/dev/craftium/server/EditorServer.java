@@ -211,6 +211,7 @@ public final class EditorServer {
                 s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingDirty=true;start(player,s,edit);return;
             }
             if(r.action().equals("pending_cancel")){
+                if(s.pendingEdit!=null&&s.pendingEdit==s.layoutFor)return; // a jigsaw preview stays until it is built or cancelled in the planner
                 if(s.pendingEdit!=null){
                     s.pendingEdit=null;s.pendingDirty=true;
                     if(s.pendingSelectionBefore!=null){s.selection.restore(s.pendingSelectionBefore);s.pendingSelectionBefore=null;}

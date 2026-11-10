@@ -111,6 +111,9 @@ final class GhostBlocks {
         return out;
     }
 
+    /** Whether Escape leaves this preview alone: a jigsaw preview stays until it is built or cancelled in the planner, so the editor can be left to look at it. */
+    boolean keepsOnEscape(){return data!=null&&data.large();}
+
     /** Whether this is a jigsaw preview, which carries the outline of each piece. */
     boolean hasLayout(){return data!=null&&data.layout()!=null&&data.layout().length>=7;}
 
