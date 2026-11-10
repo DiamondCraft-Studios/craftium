@@ -777,7 +777,7 @@ public final class EditorServer {
             var names=mine==null?List.<String>of():mine.saved.entries().stream().map(e->e.name()).toList();
             throw new IllegalArgumentException("The player has no BuildObject named \""+name+"\". "+(names.isEmpty()?"They have none: ask them to select the blocks and press + in the Hierarchy window":"They have: "+String.join(", ",names)));
         }
-        return new LinkedHashSet<>(entry.points());
+        return new LinkedHashSet<>(mine.saved.effective(entry)); // with everything under it
     }
     /** What read_selection answers for a saved selection: the same report as for the selection itself, with its name, and where the player has it. */
     private static String aiSelectionNamed(ServerPlayer player,String name){

@@ -558,6 +558,7 @@ public final class AiBridge {
             var entry = new JsonObject();
             entry.addProperty("name", s.name());
             if (s.guid() != null) entry.addProperty("guid", s.guid());
+            if (s.parent() != 0) for (var other : ClientState.savedSelections()) if (other.id() == s.parent() && other.guid() != null) entry.addProperty("parent", other.guid()); // the GUID of the BuildObject it is under
             entry.addProperty("blocks", s.size());
             if (s.size() > 0 && s.min() != null && s.max() != null) {
                 entry.add("min", array(s.min().x(), s.min().y(), s.min().z()));

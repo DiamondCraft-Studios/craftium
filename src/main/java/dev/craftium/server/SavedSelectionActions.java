@@ -19,7 +19,11 @@ final class SavedSelectionActions {
             case "edit"->{saved.edit(id(part),s.selection);return "Editing "+saved.active().name();}
             case "release"->{saved.release(s.selection);return "Your selection is back";}
             case "delete"->{var entry=saved.delete(id(part),s.selection);return "Deleted "+entry.name();}
-            case "move"->{if(part.length<3)throw new IllegalArgumentException("Give a place");try{saved.move(id(part),Integer.parseInt(part[2]));}catch(NumberFormatException e){throw new IllegalArgumentException("Give a place");}return "Moved";}
+            case "place"->{ // place:<id>:<parent id, 0 for the top>:<child number among the parent's others>
+                var where=part.length<3?new String[0]:part[2].split(":");
+                try{if(where.length!=2)throw new NumberFormatException();saved.place(id(part),Integer.parseInt(where[0]),Integer.parseInt(where[1]));}catch(NumberFormatException e){throw new IllegalArgumentException("Give a parent and a place");}
+                return "Moved";
+            }
             case "rename"->{if(part.length<3)throw new IllegalArgumentException("Give a name");saved.rename(id(part),part[2]);return "Renamed";}
             default->throw new IllegalArgumentException("Unknown BuildObject action "+part[0]);
         }
@@ -36,7 +40,7 @@ final class SavedSelectionActions {
         for(var e:s.saved.entries()){
             Point min=e.points().isEmpty()?new Point(0,0,0):new Point(e.points().stream().mapToInt(Point::x).min().getAsInt(),e.points().stream().mapToInt(Point::y).min().getAsInt(),e.points().stream().mapToInt(Point::z).min().getAsInt());
             Point max=e.points().isEmpty()?min:new Point(e.points().stream().mapToInt(Point::x).max().getAsInt(),e.points().stream().mapToInt(Point::y).max().getAsInt(),e.points().stream().mapToInt(Point::z).max().getAsInt());
-            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,e==s.saved.active(),e==s.saved.active()&&s.saved.editing(),withData?data(s,e):null,e.guid()));
+            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,e==s.saved.active(),e==s.saved.active()&&s.saved.editing(),withData?data(s,e):null,e.guid(),e.parentId()));
         }
         return out;
     }

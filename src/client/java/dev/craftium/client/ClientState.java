@@ -75,7 +75,11 @@ public final class ClientState {
     private static final Set<Integer> savedHidden=new HashSet<>();
     public static boolean savedHidden(int id){return savedHidden.contains(id);}
     public static void toggleSavedHidden(int id){if(!savedHidden.remove(id))savedHidden.add(id);}
-    static void clearSavedSelections(){savedSelections=List.of();savedColors.clear();savedHidden.clear();savedShapes.clear();savedIndex.clear();}
+    /** The BuildObjects folded in the Hierarchy, so what is under them is not listed. A fold belongs to the client. */
+    private static final Set<Integer> savedFolded=new HashSet<>();
+    public static boolean savedFolded(int id){return savedFolded.contains(id);}
+    public static void toggleSavedFolded(int id){if(!savedFolded.remove(id))savedFolded.add(id);}
+    static void clearSavedSelections(){savedSelections=List.of();savedColors.clear();savedHidden.clear();savedFolded.clear();savedShapes.clear();savedIndex.clear();}
     public static int savedColor(int id){return savedColors.getOrDefault(id,options.selectionColor);}
     public static void setSavedColor(int id,int color){savedColors.put(id,color);}
     /** The saved selection being looked at or edited, or null. */

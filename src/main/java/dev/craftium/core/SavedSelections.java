@@ -3,21 +3,29 @@ package dev.craftium.core;
 import java.util.*;
 
 /**
- * The selections a player saved by name, kept beside the live selection without ever changing it on their own.
+ * The BuildObjects a player made from selections, kept beside the live selection without ever changing it on their own.
  * Looking at one swaps it in for the live selection and keeps the live one aside; looking away gives it back.
  * Editing is looking with the changes written back to the saved one.
+ * <p>
+ * They form a hierarchy: each has at most one parent, to any depth. The list is always in tree order (a parent, then everything under it, then the next
+ * of its level), so a subtree is the run of entries after its root. Looking at a parent shows its blocks and those of everything under it; editing one
+ * changes only the blocks it holds itself.
  */
 public final class SavedSelections {
     /** The most selections one player may save. */
     public static final int MAX=64;
     /** A BuildObject: it keeps its id, its GUID and its name when the others come and go. Names may repeat; the GUID never does, and is what tells two of the same name apart. */
     public static final class Entry {
-        private final int id;private final String guid=java.util.UUID.randomUUID().toString();private String name;private List<Point> points;private int version;
+        private final int id;private final String guid=java.util.UUID.randomUUID().toString();private String name;private List<Point> points;private int version;private Entry parent;
         Entry(int id,String name,Collection<Point> points){this.id=id;this.name=name;this.points=List.copyOf(points);}
         public int id(){return id;}
         /** The unique, lasting identity of this BuildObject, for anything that has to name one exactly (the AI, a saved world). */
         public String guid(){return guid;}
         public String name(){return name;}
+        /** The id of the BuildObject this one is under, or 0 when it is at the top. */
+        public int parentId(){return parent==null?0:parent.id;}
+        public Entry parent(){return parent;}
+        /** The blocks it holds itself; see {@link SavedSelections#effective} for those with everything under it. */
         public List<Point> points(){return points;}
         public int size(){return points.size();}
         /** Goes up whenever the blocks change, so what was sent of them can be told from what is there now. */
@@ -32,10 +40,25 @@ public final class SavedSelections {
     private List<Point> stash;
     private long revision;
     /** Entries that were deleted, newest last, so Undo can bring the latest back. */
-    private record Deleted(Entry entry,int index,long time){}
+    private record Deleted(List<Entry> group,int siblingIndex,long time){}
     private final Deque<Deleted> deleted=new ArrayDeque<>();
 
+    /** Every BuildObject, in tree order. */
     public List<Entry> entries(){return Collections.unmodifiableList(entries);}
+    /** The BuildObjects directly under {@code parent} (null for the top level), in order. */
+    public List<Entry> children(Entry parent){var out=new ArrayList<Entry>();for(var e:entries)if(e.parent==parent)out.add(e);return out;}
+    /** Whether {@code entry} is somewhere under {@code ancestor}, at any depth. */
+    public boolean isUnder(Entry entry,Entry ancestor){for(var p=entry.parent;p!=null;p=p.parent)if(p==ancestor)return true;return false;}
+    /** How many BuildObjects there are above this one: 0 at the top level. */
+    public int depth(Entry entry){int d=0;for(var p=entry.parent;p!=null;p=p.parent)d++;return d;}
+    /** The entry and everything under it, in tree order. */
+    private List<Entry> subtree(Entry root){
+        var out=new ArrayList<Entry>();out.add(root);
+        for(int i=entries.indexOf(root)+1;i<entries.size()&&isUnder(entries.get(i),root);i++)out.add(entries.get(i));
+        return out;
+    }
+    /** The blocks of the BuildObject and of everything under it: what looking at it shows. */
+    public Set<Point> effective(Entry entry){var out=new LinkedHashSet<Point>();for(var e:subtree(entry))out.addAll(e.points);return out;}
     public Entry active(){return active;}
     public boolean editing(){return editing&&active!=null;}
     /** Changes whenever the list, the names or the looking changes, so the client is only sent what is new. */
@@ -76,11 +99,21 @@ public final class SavedSelections {
         if(clean.isEmpty()||clean.length()>40)throw new IllegalArgumentException("A name is 1 to 40 characters");
         entry.name=clean;revision++; // names may repeat: the GUID tells them apart
     }
-    /** Moves the entry to the place {@code index} in the list (0 is the top), the others keeping their order. An index past either end goes to that end. */
-    public void move(int id,int index){
-        var entry=need(id);int from=entries.indexOf(entry),to=Math.clamp(index,0,entries.size()-1);
-        if(from==to)return;
-        entries.remove(from);entries.add(to,entry);revision++;
+    /**
+     * Puts the entry, with everything under it, under the BuildObject {@code parentId} (0 for the top level) as its child number {@code index}, counted
+     * among the children without the entry (0 is the first). An index past the end is the end. A BuildObject cannot go under itself or under anything
+     * that is under it.
+     */
+    public void place(int id,int parentId,int index){
+        var entry=need(id);var parent=parentId==0?null:need(parentId);
+        if(parent!=null&&(parent==entry||isUnder(parent,entry)))throw new IllegalArgumentException("A BuildObject cannot go inside itself");
+        var moving=subtree(entry);
+        entries.removeAll(moving);
+        var siblings=children(parent);int k=Math.clamp(index,0,siblings.size()),at;
+        if(k<siblings.size())at=entries.indexOf(siblings.get(k));
+        else if(parent==null)at=entries.size();
+        else{at=entries.indexOf(parent)+1;while(at<entries.size()&&isUnder(entries.get(at),parent))at++;}
+        entry.parent=parent;entries.addAll(at,moving);revision++;
     }
     /** Swaps the entry in for the live selection. Looking at another while looking keeps the first live selection aside, not the one just seen. */
     public void view(int id,Selection live){look(id,live,false);}
@@ -90,7 +123,7 @@ public final class SavedSelections {
         var entry=need(id);
         if(active!=null&&editing)sync(live); // leaving an edit for another entry keeps what was done
         if(stash==null)stash=List.copyOf(live.points());
-        live.restore(entry.points);active=entry;editing=edit;revision++;
+        live.restore(edit?entry.points:effective(entry));active=entry;editing=edit;revision++;
     }
     /** Gives back the live selection from before looking. Whatever was done to the live selection while only viewing is dropped. Does nothing when not looking. */
     public void release(Selection live){
@@ -104,23 +137,27 @@ public final class SavedSelections {
         if(active.points.size()==live.size()&&new HashSet<>(active.points).equals(live.points()))return false;
         active.points=List.copyOf(live.points());active.version++;revision++;return true;
     }
-    /** Removes the entry; if it was being looked at, the live selection comes back first. Returns the removed entry so a delete can be undone. */
+    /** Removes the entry and everything under it; if one of them was being looked at, the live selection comes back first. Returns the removed entry so a delete can be undone. */
     public Entry delete(int id,Selection live){
-        var entry=need(id);if(active==entry)release(live);
-        int index=entries.indexOf(entry);entries.remove(entry);revision++;
-        deleted.addLast(new Deleted(entry,index,System.currentTimeMillis()));while(deleted.size()>16)deleted.removeFirst();
+        var entry=need(id);if(active!=null&&(active==entry||isUnder(active,entry)))release(live);
+        var group=subtree(entry);int sibling=children(entry.parent).indexOf(entry);
+        entries.removeAll(group);revision++;
+        deleted.addLast(new Deleted(group,sibling,System.currentTimeMillis()));while(deleted.size()>16)deleted.removeFirst();
         return entry;
     }
     /** Brings back the entry deleted last, when that was after {@code time} (epoch milliseconds: when the newest edit in the history was made, so Undo takes the most recent thing). Returns the entry, or null when there is none to bring back. */
     public Entry undoDelete(long time){
         var last=deleted.peekLast();if(last==null||last.time<=time)return null;
         deleted.removeLast();
-        if(byId(last.entry.id)!=null||entries.size()>=MAX)return null;
-        entries.add(Math.clamp(last.index,0,entries.size()),last.entry);revision++;return last.entry;
+        var root=last.group.getFirst();
+        if(last.group.stream().anyMatch(e->byId(e.id)!=null)||entries.size()+last.group.size()>MAX)return null;
+        if(root.parent!=null&&!entries.contains(root.parent))root.parent=null; // what it was under is gone
+        var parent=root.parent;entries.addAll(last.group);place(root.id,parent==null?0:parent.id,last.siblingIndex);return root;
     }
-    /** Puts a deleted entry back where it was, with its id and name. */
+    /** Puts a deleted entry back at {@code index} of the list, with its id and name. It goes to the top level when what it was under is gone. */
     public void restore(Entry entry,int index){
         if(byId(entry.id)!=null||entries.size()>=MAX)return;
+        if(entry.parent!=null&&!entries.contains(entry.parent))entry.parent=null;
         entries.add(Math.clamp(index,0,entries.size()),entry);revision++;
     }
     public int indexOf(Entry entry){return entries.indexOf(entry);}

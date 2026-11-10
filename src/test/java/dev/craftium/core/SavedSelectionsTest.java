@@ -106,13 +106,62 @@ class SavedSelectionsTest {
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);String guid=one.guid();saved.save(s);
         saved.delete(one.id(),s);assertSame(one,saved.undoDelete(0));assertEquals(guid,saved.find(guid).guid());
     }
-    @Test void movingAnEntryReordersTheOthersAroundIt(){
+    @Test void placingReordersTheTopLevelAndKeepsTheRestInOrder(){
         var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);
-        saved.move(c.id(),0);assertEquals(List.of(c,a,b),saved.entries());
-        saved.move(c.id(),2);assertEquals(List.of(a,b,c),saved.entries());
-        saved.move(a.id(),99);assertEquals(List.of(b,c,a),saved.entries(),"past the end is the end");
-        saved.move(a.id(),-5);assertEquals(List.of(a,b,c),saved.entries(),"before the start is the start");
-        long revision=saved.revision();saved.move(b.id(),1);assertEquals(revision,saved.revision(),"staying put changes nothing");
+        saved.place(c.id(),0,0);assertEquals(List.of(c,a,b),saved.entries());
+        saved.place(c.id(),0,2);assertEquals(List.of(a,b,c),saved.entries());
+        saved.place(a.id(),0,99);assertEquals(List.of(b,c,a),saved.entries(),"past the end is the end");
+        saved.place(a.id(),0,-5);assertEquals(List.of(a,b,c),saved.entries(),"before the start is the start");
+    }
+    @Test void anEntryGoesUnderAnotherAtAnyDepthAndTheListStaysInTreeOrder(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);var d=saved.save(s);
+        saved.place(b.id(),a.id(),0);saved.place(c.id(),b.id(),0);saved.place(d.id(),c.id(),0);
+        assertEquals(List.of(a,b,c,d),saved.entries());
+        assertEquals(List.of(0,1,2,3),List.of(saved.depth(a),saved.depth(b),saved.depth(c),saved.depth(d)));
+        assertEquals(a.id(),b.parentId());assertEquals(c.id(),d.parentId());assertEquals(0,a.parentId());
+        assertTrue(saved.isUnder(d,a)&&!saved.isUnder(a,d));
+        assertEquals(List.of(b),saved.children(a));
+    }
+    @Test void movingAParentTakesEverythingUnderItAlong(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);var e=saved.save(s);
+        saved.place(c.id(),b.id(),0);saved.place(e.id(),c.id(),0); // a, b > c > e
+        saved.place(b.id(),0,0);assertEquals(List.of(b,c,e,a),saved.entries(),"b, with c and e under it, goes before a");
+        saved.place(b.id(),a.id(),0);assertEquals(List.of(a,b,c,e),saved.entries(),"and under a, the three still one run");
+        assertEquals(List.of(0,1,2,3),List.of(saved.depth(a),saved.depth(b),saved.depth(c),saved.depth(e)));
+    }
+    @Test void childrenKeepTheirOrderAmongThemselves(){
+        var saved=new SavedSelections();var s=live(A);var p=saved.save(s);var x=saved.save(s);var y=saved.save(s);var z=saved.save(s);
+        saved.place(x.id(),p.id(),0);saved.place(y.id(),p.id(),1);saved.place(z.id(),p.id(),1);
+        assertEquals(List.of(x,z,y),saved.children(p),"z went in as the second child");
+        assertEquals(List.of(p,x,z,y),saved.entries());
+        saved.place(y.id(),p.id(),0);assertEquals(List.of(y,x,z),saved.children(p));
+    }
+    @Test void anEntryCannotGoUnderItselfOrUnderWhatIsUnderIt(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);
+        saved.place(b.id(),a.id(),0);
+        assertThrows(IllegalArgumentException.class,()->saved.place(a.id(),a.id(),0));
+        assertThrows(IllegalArgumentException.class,()->saved.place(a.id(),b.id(),0));
+        assertEquals(List.of(a,b),saved.entries(),"a refused place changes nothing");
+    }
+    @Test void lookingAtAParentShowsEverythingUnderItAndEditingOnlyItsOwn(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);s.restore(List.of(B));var b=saved.save(s);s.restore(List.of(C));var c=saved.save(s);
+        saved.place(b.id(),a.id(),0);saved.place(c.id(),b.id(),0);
+        s.restore(List.of(new Point(9,9,9)));
+        saved.view(a.id(),s);assertEquals(Set.of(A,B,C),set(s),"the whole subtree");
+        saved.release(s);saved.edit(a.id(),s);assertEquals(Set.of(A),set(s),"only its own blocks");
+        assertEquals(Set.of(A,B,C),saved.effective(a));assertEquals(Set.of(C),saved.effective(c));
+    }
+    @Test void deletingAParentDeletesWhatIsUnderItAndUndoBringsBackTheGroupWhereItWas(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);var d=saved.save(s);
+        saved.place(c.id(),b.id(),0); // a, b > c, d
+        saved.delete(b.id(),s);assertEquals(List.of(a,d),saved.entries(),"c went with b");
+        assertSame(b,saved.undoDelete(0));assertEquals(List.of(a,b,c,d),saved.entries());
+        assertEquals(b.id(),c.parentId(),"c is under b again");
+    }
+    @Test void deletingWhatIsBeingLookedAtInsideAGroupGivesTheSelectionBack(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);s.restore(List.of(B));var b=saved.save(s);saved.place(b.id(),a.id(),0);
+        s.restore(List.of(C));saved.view(b.id(),s);saved.delete(a.id(),s);
+        assertNull(saved.active());assertEquals(Set.of(C),set(s));
     }
     @Test void theLimitIsEnforced(){
         var saved=new SavedSelections();var s=live(A);for(int i=0;i<SavedSelections.MAX;i++)saved.save(s);
