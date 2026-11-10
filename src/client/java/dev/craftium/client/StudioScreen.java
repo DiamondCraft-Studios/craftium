@@ -52,7 +52,8 @@ public final class StudioScreen extends CraftiumScreen {
         if(!initialized){previousHud=ClientCompat.hudHidden(minecraft);if(!previousHud)ClientCompat.toggleHud(minecraft);initialized=true;}
         uiScale=Math.min(1f,Math.min(width/680f,height/440f));canvasW=Math.round(width/uiScale);canvasH=Math.round(height/uiScale);
         clearWidgets();labels.clear();left=Math.max(12,(canvasW-640)/2);top=30;rows=Math.max(2,(canvasH-(tab.equals("Entities")?250:170))/46);
-        int tx=left,ty=top;for(String name:GROUPS.keySet()){int bw=font.width(name)+13;if(tx+bw>canvasW-18){tx=left;ty+=22;}button(name,tx,ty,bw,18,()->{tab=name;page=0;init();}).lit(name.equals("AI")&&AiBridge.running());tx+=bw+3;}
+        int tx=left,ty=top;for(String name:GROUPS.keySet()){if(name.equals("Jigsaw"))continue; // opened from Structure → Jigsaw planner, not from the tab row
+            int bw=font.width(name)+13;if(tx+bw>canvasW-18){tx=left;ty+=22;}button(name,tx,ty,bw,18,()->{tab=name;page=0;init();}).lit(name.equals("AI")&&AiBridge.running());tx+=bw+3;}
         List<String> names=tab.equals("Script")?List.of():GROUPS.get(tab);int count=rows*columns,total=Math.max(1,(names.size()+count-1)/count);page=Math.clamp(page,0,total-1);
         for(int i=page*count;i<Math.min(names.size(),(page+1)*count);i++){
             String name=names.get(i);int index=i-page*count,x=left+(index%columns)*316,y=top+70+(index/columns)*46;
@@ -150,7 +151,7 @@ public final class StudioScreen extends CraftiumScreen {
     private void sendJigsaw(String action){try{CraftiumClient.send(action,null,null);message="";}catch(Exception e){message=String.valueOf(e.getMessage());}}
     /** What the planner said about its last run, a line each: problems in the pools, and the connectors left open. */
     private void drawJigsaw(Gfx g){
-        int y=jigsawReportY()+27;
+        int y=jigsawReportY()+55;
         g.text(font,"REPORT",left,y,0xffb5dcfc,false);y+=JIGSAW_LINE+3;
         var report=ClientState.jigsawReport;
         if(report==null||report.isBlank()){g.text(font,"Generate a structure to see problems in its pools and the connectors left open. Pools are read from the world's datapacks and from datapacks/craftium.",left,y,0xff7f93a8,false);return;}
@@ -251,7 +252,7 @@ public final class StudioScreen extends CraftiumScreen {
     @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
     @Override protected void draw(Gfx g,int x,int y,float delta){
         g.pose().pushMatrix();g.pose().scale(uiScale,uiScale);
-        g.fill(0,0,canvasW,canvasH,0xee101923);g.fill(left-12,top-13,Math.min(canvasW-5,left+640),canvasH-25,0xff172330);g.text(font,tab.toUpperCase(Locale.ROOT),left,top-25,0xffb5dcfc,false);
+        g.fill(0,0,canvasW,canvasH,0xee101923);g.fill(left-12,top-13,Math.min(canvasW-5,left+640),canvasH-25,0xff172330);g.text(font,tab.equals("Jigsaw")?"JIGSAW PLANNER":tab.toUpperCase(Locale.ROOT),left,top-25,0xffb5dcfc,false);
         for(Label label:labels)g.text(font,font.plainSubstrByWidth(label.text,625),label.x,label.y,0xff9db5cb,false);
         if(tab.equals("AI"))drawAi(g);
         if(tab.equals("Jigsaw"))drawJigsaw(g);
