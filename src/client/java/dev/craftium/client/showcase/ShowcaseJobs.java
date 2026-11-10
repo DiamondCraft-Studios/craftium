@@ -53,7 +53,7 @@ public final class ShowcaseJobs {
         var plan = ShowcasePlan.parse(ShowcasePlan.resolveSelections(args, new ShowcasePlan.Selections() {
             @Override public dev.craftium.core.Point[] find(String name) {
                 var s = dev.craftium.core.SavedSelections.find(name, dev.craftium.client.ClientState.savedSelections(), e -> e.guid(), e -> e.name());
-                return s != null && s.size() > 0 && s.min() != null && s.max() != null ? new dev.craftium.core.Point[]{s.min(), s.max()} : null;
+                return s == null ? null : dev.craftium.client.ClientState.subtreeBounds(s.id()); // with everything under it: a parent that holds none of its own is still a room
             }
             @Override public List<String> names() {
                 var names = new ArrayList<String>();

@@ -104,6 +104,22 @@ public final class ClientState {
     }
     /** The BuildObject the pointer is on in the Hierarchy (or whose menu is open), or 0: it and what is under it are drawn in the world whatever their eyes say. */
     public static int hoverSaved;
+    /**
+     * The corners of the box round the blocks of the BuildObject and of everything under it (not only the blocks it holds itself, which an empty parent has none of), or null
+     * when there are none.
+     */
+    public static dev.craftium.core.Point[] subtreeBounds(int id){
+        dev.craftium.core.Point lo=null,hi=null;
+        for(var e:savedSelections){
+            if(e.id()!=id&&!savedUnder(e,id))continue;
+            if(e.size()==0||e.min()==null||e.max()==null)continue;
+            lo=lo==null?e.min():new dev.craftium.core.Point(Math.min(lo.x(),e.min().x()),Math.min(lo.y(),e.min().y()),Math.min(lo.z(),e.min().z()));
+            hi=hi==null?e.max():new dev.craftium.core.Point(Math.max(hi.x(),e.max().x()),Math.max(hi.y(),e.max().y()),Math.max(hi.z(),e.max().z()));
+        }
+        return lo==null?null:new dev.craftium.core.Point[]{lo,hi};
+    }
+    /** How many blocks the BuildObject holds with everything under it. */
+    public static int subtreeSize(int id){int n=0;for(var e:savedSelections)if(e.id()==id||savedUnder(e,id))n+=e.size();return n;}
     /** Whether {@code saved} is the BuildObject {@code ancestor} or somewhere under it. */
     public static boolean savedUnder(Packets.SavedSelection saved,int ancestor){
         int steps=0;var at=saved;

@@ -2340,16 +2340,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=id;menu=ROW_MENU;openSub="";openSub2="";
     }
     /** The corners of the box round the blocks of the BuildObject and everything under it, or null when there are none. */
-    private Point[] subtreeBounds(int id){
-        Point lo=null,hi=null;
-        for(var e:hierarchyAll){
-            if(e.id()!=id&&!isUnder(e,id))continue;
-            if(e.size()==0||e.min()==null||e.max()==null)continue;
-            lo=lo==null?e.min():new Point(Math.min(lo.x(),e.min().x()),Math.min(lo.y(),e.min().y()),Math.min(lo.z(),e.min().z()));
-            hi=hi==null?e.max():new Point(Math.max(hi.x(),e.max().x()),Math.max(hi.y(),e.max().y()),Math.max(hi.z(),e.max().z()));
-        }
-        return lo==null?null:new Point[]{lo,hi};
-    }
+    private Point[] subtreeBounds(int id){return ClientState.subtreeBounds(id);}
     /** Folds or unfolds the BuildObject and everything under it that has something under it. */
     private void foldBelow(int id,boolean fold){
         var parents=new HashSet<Integer>();for(var e:hierarchyAll)parents.add(e.parent());
