@@ -188,7 +188,8 @@ public final class SavedSelectionsGameTest {
         screenshot();
         transformsCarryObjects();
         overlapTakesObjectsWhole();
-        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap");
+        hierarchyIsInHistory();
+        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history");
     }
 
     // ---- Claude --------------------------------------------------------------------------------------------------------------------------
@@ -281,6 +282,7 @@ public final class SavedSelectionsGameTest {
         settle();
         c.runOnClient(mc -> ClientState.options.mode = Selection.Mode.REPLACE);
     }
+    private void redo() { sleep(); c.runOnClient(mc -> CraftiumClient.send("redo", null, null)); settle(); }
     private void undo() { sleep(); c.runOnClient(mc -> CraftiumClient.send("undo", null, null)); settle(); }
     private void deleteAll() { while (!ClientState.savedSelections().isEmpty()) click(control("Delete this BuildObject", 0)); }
 
@@ -398,6 +400,47 @@ public final class SavedSelectionsGameTest {
         require(saved(1).parent() == around.id() && saved(2).parent() == around.id() && around.parent() == 0, "both went inside it, in their order: " + ClientState.savedSelections());
         require(saved(1).size() == 8 && saved(2).size() == 3, "each whole, though the selection reached one block of the second: " + ClientState.savedSelections());
         require(around.size() == 1, "and it holds only the block that belonged to none: " + around);
+    }
+    /** Everything done in the Hierarchy is in the history: Undo takes it back and Redo does it again. */
+    private void hierarchyIsInHistory() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        String guid = saved(0).guid();
+        require(ClientState.savedSelections().size() == 1, "one BuildObject made");
+        undo();
+        require(ClientState.savedSelections().isEmpty(), "Undo takes the + back");
+        redo();
+        require(ClientState.savedSelections().size() == 1 && saved(0).guid().equals(guid), "Redo makes the same BuildObject again: " + ClientState.savedSelections());
+
+        doubleClick(control("Select this BuildObject", 0));
+        typeText("Tower");press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        require(saved(0).name().equals("Tower"), "renamed");
+        click(control("Let go", 0));
+        undo();
+        require(saved(0).name().equals("BuildObject"), "Undo takes the rename back: " + saved(0).name());
+        redo();
+        require(saved(0).name().equals("Tower"), "and Redo does it again");
+
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        drag(control("Select this BuildObject", 1), control("Select this BuildObject", 0), 0.5);
+        require(saved(1).parent() == saved(0).id(), "dropped into the first: " + ClientState.savedSelections());
+        undo();
+        require(saved(1).parent() == 0 && saved(0).guid().equals(guid), "Undo takes the move back: " + ClientState.savedSelections());
+        redo();
+        require(saved(1).parent() == saved(0).id(), "and Redo does it again");
+
+        click(control("Delete this BuildObject", 0));
+        require(ClientState.savedSelections().isEmpty(), "the parent took its child with it");
+        undo();
+        require(ClientState.savedSelections().size() == 2 && saved(1).parent() == saved(0).id() && saved(0).name().equals("Tower"), "Undo brings back both, as they were: " + ClientState.savedSelections());
+        redo();
+        require(ClientState.savedSelections().isEmpty(), "and Redo deletes them again");
+        undo();
+        undo(); // the move
+        undo(); // the second +
+        require(ClientState.savedSelections().size() == 1, "and the stack goes back through all of it: " + ClientState.savedSelections());
     }
     /** Transforms the selected blocks as the Edit menu does: an offset along x and a size along each axis. */
     private void transform(int offsetX, double sizeX, double sizeY, double sizeZ) {
