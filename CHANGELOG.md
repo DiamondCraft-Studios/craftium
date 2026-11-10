@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Changes since 1.5.0-beta.1.
+
+### Interface
+- New Hierarchy window at the top of the right column, where the Selections window was: it lists your saved selections. The Block palette and Tool masks sit together below it and take 3/8 of the column.
+- Target info moved to the bottom of the left column, under Tool options.
+- The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
+- Your saved window layout is reset once, to the new places.
+
 ## 1.5.0-beta.1
 
 Changes since 1.4.0-beta.1.
