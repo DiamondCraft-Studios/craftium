@@ -10,6 +10,8 @@ public record BlueprintInfo(String file,String name,String author,String tags,in
     public BlueprintInfo(String file,String name,String author,String tags,int blocks,Point size,List<Integer> thumbnail){this(file,name,author,tags,blocks,size,thumbnail,null,null,1);}
     /** The same listing with these blocks for the picture (or none, when {@code packed} is null). */
     public BlueprintInfo withVoxels(BlueprintVoxels.Packed packed){return new BlueprintInfo(file,name,author,tags,blocks,size,thumbnail,packed==null?null:packed.palette(),packed==null?null:packed.cells(),packed==null?1:packed.scale());}
+    /** The same listing with another name, author and tags. */
+    public BlueprintInfo withDetails(String name,String author,String tags){return new BlueprintInfo(file,name,author,tags,blocks,size,thumbnail,palette,cells,scale);}
     /** The same listing under another file name. */
     public BlueprintInfo at(String path){return new BlueprintInfo(path,name,author,tags,blocks,size,thumbnail,palette,cells,scale);}
     public boolean hasVoxels(){return palette!=null&&cells!=null;}

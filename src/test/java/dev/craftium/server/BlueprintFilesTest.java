@@ -144,6 +144,31 @@ class BlueprintFilesTest {
         assertEquals("Raw", Packets.JSON.fromJson(Files.readString(root.resolve("raw.nbt.json")), BlueprintInfo.class).name());
     }
 
+    private void blueprintWithPicture(String path, int x) throws IOException {
+        var builder = new dev.craftium.core.BlueprintVoxels.Builder(); builder.add(x, 0, 0, "minecraft:stone"); builder.add(0, 0, 0, "minecraft:dirt");
+        Path file = root.resolve(path); Files.createDirectories(file.getParent()); Files.writeString(file, "data");
+        var info = new BlueprintInfo(path, path, "", "", 2, new Point(3, 1, 1), List.of()).withVoxels(builder.pack(3, 1, 1));
+        Files.writeString(file.resolveSibling(file.getFileName() + ".json"), Packets.JSON.toJson(info));
+    }
+
+    @Test void aListingHasTheBlueprintsWithTheirPathsAndTheEmptyFolders() throws IOException {
+        blueprint("b.nbt", "b"); blueprint("dir/a.nbt", "a"); Files.createDirectories(root.resolve("empty/inside")); Files.writeString(root.resolve("notes.txt"), "x");
+        var found = BlueprintFiles.list(root, Integer.MAX_VALUE);
+        assertEquals(List.of("b.nbt", "dir/a.nbt", "empty/inside/"), found.stream().map(BlueprintInfo::file).toList());
+        assertEquals(-2, found.get(2).blocks());
+        assertEquals(List.of(), BlueprintFiles.list(root.resolve("missing"), 10));
+    }
+
+    @Test void aListingKeepsPicturesWithinItsBudget() throws IOException {
+        blueprintWithPicture("a.nbt", 2); blueprintWithPicture("b.nbt", 1);
+        var all = BlueprintFiles.list(root, Integer.MAX_VALUE);
+        assertTrue(all.get(0).hasVoxels()); assertTrue(all.get(1).hasVoxels());
+        int first = all.get(0).cells().length() + all.get(0).palette().stream().mapToInt(String::length).sum();
+        var tight = BlueprintFiles.list(root, first + 1);
+        assertTrue(tight.get(0).hasVoxels()); assertFalse(tight.get(1).hasVoxels()); // the second is past the budget: flat thumbnail only
+        assertEquals("b.nbt", tight.get(1).file());
+    }
+
     @Test void anUnknownActionIsRefused() {
         assertThrows(IllegalArgumentException.class, () -> run("format", null, null, null));
     }

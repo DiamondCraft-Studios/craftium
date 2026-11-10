@@ -95,21 +95,54 @@ public final class BlueprintFiles {
             case "edit" -> {
                 Path file = existing(root, op.target());
                 if (Files.isDirectory(file) || !file.getFileName().toString().matches(EXTENSIONS)) throw new IllegalArgumentException("Only blueprints have properties");
-                Path sidecar = sidecar(file);
-                BlueprintInfo info = null;
-                try { if (Files.exists(sidecar) && Files.size(sidecar) <= 32768) info = Packets.JSON.fromJson(Files.readString(sidecar), BlueprintInfo.class); } catch (Exception ignored) {}
-                if (info == null) {
-                    var described = BlueprintFileVoxels.read(file);
-                    info = described == null ? new BlueprintInfo(root.relativize(file).toString().replace('\\', '/'), file.getFileName().toString(), "", "", -1, new Point(0, 0, 0), List.of())
-                        : new BlueprintInfo(root.relativize(file).toString().replace('\\', '/'), file.getFileName().toString(), "", "", described.blocks(), described.size(), List.of()).withVoxels(described.packed());
-                }
+                BlueprintInfo info = describe(root, file);
                 String name = clean(op.name(), 64), author = clean(op.author(), 64), tags = clean(op.tags(), 256);
                 if (name.isEmpty()) name = info.name();
-                write(sidecar, new BlueprintInfo(info.file(), name, author, tags, info.blocks(), info.size(), info.thumbnail(), info.palette(), info.cells(), info.scale()));
+                write(sidecar(file), info.withDetails(name, author, tags));
                 return "Saved the properties of " + file.getFileName();
             }
             default -> throw new IllegalArgumentException("Unknown library action");
         }
+    }
+
+    /**
+     * What the browser lists for one blueprint file: its sidecar, or what the file itself says when there is none or the sidecar has no picture data (an import, or
+     * a file saved before pictures existed); the sidecar is then written, so the file is read once. {@code root} is the library folder, as {@link #list} gives it.
+     */
+    public static BlueprintInfo describe(Path root, Path file) {
+        String relative = root.relativize(file).toString().replace('\\', '/');
+        Path sidecar = sidecar(file);
+        BlueprintInfo info = null;
+        try { if (Files.exists(sidecar) && Files.size(sidecar) <= 32768) info = Packets.JSON.fromJson(Files.readString(sidecar), BlueprintInfo.class); } catch (Exception ignored) {}
+        if (info == null) info = new BlueprintInfo(relative, file.getFileName().toString(), "", "", -1, new Point(0, 0, 0), List.of());
+        if (!info.hasVoxels()) {
+            var described = BlueprintFileVoxels.read(file);
+            if (described != null) {
+                info = new BlueprintInfo(relative, info.name(), info.author(), info.tags(), described.blocks(), described.size(), info.thumbnail() == null ? List.of() : info.thumbnail(), null, null, 1).withVoxels(described.packed());
+                try { write(sidecar, info); } catch (IOException ignored) {}
+            }
+        }
+        return info.at(relative);
+    }
+
+    /**
+     * Everything a library folder lists: its blueprints (at most 256, {@link #DEPTH} levels down) and its empty folders. A listing that travels to a player has a size
+     * limit, so once the pictures of the blueprints so far take more than {@code pictureBudget} characters, the rest keep only their flat thumbnail.
+     */
+    public static List<BlueprintInfo> list(Path root, int pictureBudget) throws IOException {
+        if (!Files.isDirectory(root)) return List.of();
+        root = root.toAbsolutePath().normalize();
+        var results = new ArrayList<BlueprintInfo>();
+        int budget = pictureBudget;
+        try (Stream<Path> files = Files.walk(root, DEPTH)) {
+            for (Path path : files.filter(Files::isRegularFile).filter(p -> p.getFileName().toString().matches(EXTENSIONS)).sorted().limit(256).toList()) {
+                BlueprintInfo info = describe(root, path);
+                if (info.hasVoxels() && (budget -= info.cells().length() + info.palette().stream().mapToInt(String::length).sum()) < 0) info = info.withVoxels(null);
+                results.add(info);
+            }
+        }
+        results.addAll(emptyFolders(root));
+        return List.copyOf(results);
     }
 
     /** Folders with nothing in them, as listing entries ending in "/" (blocks -2), so the browser can show a folder that has no file yet. */
@@ -190,7 +223,7 @@ public final class BlueprintFiles {
             var info = Packets.JSON.fromJson(Files.readString(side), BlueprintInfo.class);
             String old = before.getFileName().toString().replaceFirst("\\.[^.]+$", "");
             if (info == null || !old.equals(info.name())) return;
-            write(side, new BlueprintInfo(info.file(), now.getFileName().toString().replaceFirst("\\.[^.]+$", ""), info.author(), info.tags(), info.blocks(), info.size(), info.thumbnail(), info.palette(), info.cells(), info.scale()));
+            write(side, info.withDetails(now.getFileName().toString().replaceFirst("\\.[^.]+$", ""), info.author(), info.tags()));
         } catch (Exception ignored) {}
     }
 

@@ -12,10 +12,8 @@ import java.util.*;
 final class BlueprintLibrary {
     private BlueprintLibrary(){}
     static Path file(String folder,String name){
-        if(name.length()>160||!name.matches("[A-Za-z0-9 _./-]+"))throw new IllegalArgumentException("Use a plain asset filename");
-        for(String segment:name.split("/",-1))if(segment.isBlank()||segment.equals(".")||segment.equals(".."))throw new IllegalArgumentException("Invalid asset folder");
-        Path root=ServerPlatform.assets().resolve(folder).toAbsolutePath().normalize(),path=root.resolve(name).normalize();
-        if(!path.startsWith(root))throw new IllegalArgumentException("Asset path leaves its library");return path;
+        if(name.isEmpty()||name.endsWith("/"))throw new IllegalArgumentException("Use a plain asset filename");
+        return BlueprintFiles.resolve(ServerPlatform.assets().resolve(folder).toAbsolutePath().normalize(),name);
     }
     static String act(String action,EditPlanner p) {
         try{
@@ -81,19 +79,7 @@ final class BlueprintLibrary {
         else{String extension=action.equals("selection_csv")?".csv":action.equals("schematic_export")?".schem":".nbt";if(!name.endsWith(extension))name+=extension;Path path=file(folder,name);if(Files.size(path)>1_048_576)return " · too large for client download; saved on server";bytes=Files.readAllBytes(path);Path sidecar=path.resolveSibling(path.getFileName()+".json");if(!action.equals("selection_csv")&&Files.exists(sidecar))metadata=Files.readString(sidecar);}
         ServerPlatform.send(player,new dev.craftium.net.Packets.Download(folder,name,Base64.getEncoder().encodeToString(bytes),metadata));return " · downloaded to client";
     }
-    private static List<BlueprintInfo> list()throws IOException{
-        Path root=ServerPlatform.assets().resolve("blueprints");if(!Files.isDirectory(root))return List.of();var results=new ArrayList<BlueprintInfo>();int budget=700_000;
-        try(var files=Files.walk(root,BlueprintFiles.DEPTH)){for(Path path:files.filter(Files::isRegularFile).filter(p->p.getFileName().toString().matches("(?i).*\\.(nbt|schem|schematic)")).sorted().limit(256).toList()){
-            String relative=root.relativize(path).toString().replace('\\','/');Path sidecar=path.resolveSibling(path.getFileName()+".json");BlueprintInfo info=null;
-            try{if(Files.exists(sidecar)&&Files.size(sidecar)<32768)info=dev.craftium.net.Packets.JSON.fromJson(Files.readString(sidecar),BlueprintInfo.class);}catch(Exception ignored){}
-            if(info==null)info=new BlueprintInfo(relative,path.getFileName().toString(),"","",-1,new Point(0,0,0),List.of());
-            // A file with no picture data (imported, or saved before pictures existed) is read for it; the sidecar is rewritten so that happens once.
-            if(!info.hasVoxels()){var described=BlueprintFileVoxels.read(path);if(described!=null){info=new BlueprintInfo(relative,info.name(),info.author(),info.tags(),described.blocks(),described.size(),info.thumbnail()==null?List.of():info.thumbnail(),null,null,1).withVoxels(described.packed());try{Files.writeString(sidecar,dev.craftium.net.Packets.JSON.toJson(info));}catch(IOException ignored){}}}
-            // A status packet has a size limit and this list is not cut down for it: past a budget the pictures are left out, and those listings keep the flat thumbnail.
-            if(info.hasVoxels()&&(budget-=info.cells().length()+info.palette().stream().mapToInt(String::length).sum())<0)info=info.withVoxels(null);
-            results.add(info.at(relative));
-        }}results.addAll(BlueprintFiles.emptyFolders(root));return List.copyOf(results);
-    }
+    private static List<BlueprintInfo> list()throws IOException{return BlueprintFiles.list(ServerPlatform.assets().resolve("blueprints"),700_000);} // a status packet has a size limit, so the pictures have a budget
     private static ListTag ints(int... values){var list=new ListTag();for(int i:values)list.add(IntTag.valueOf(i));return list;}
     private static CompoundTag structure(EditPlanner p){
         var root=new CompoundTag();var palette=new ListTag();var indices=new LinkedHashMap<net.minecraft.world.level.block.state.BlockState,Integer>();var blocks=new ListTag();int sx=1,sy=1,sz=1;
