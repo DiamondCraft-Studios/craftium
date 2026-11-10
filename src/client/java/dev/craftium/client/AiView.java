@@ -181,6 +181,23 @@ final class AiView {
         return colour;
     }
 
+    /** The colours of the top, the sides and the underside of a block state, as 0xAARRGGBB; all 0 for the ones nothing is drawn for. */
+    static int[] faceColours(String state, Map<String, int[]> cache) {
+        String id = baseId(state);
+        var known = cache.get(id);
+        if (known != null) return known;
+        int[] colours;
+        if (EMPTY.contains(id)) colours = new int[]{0, 0, 0};
+        else if (FLUIDS.containsKey(id)) { int c = 0xff000000 | FLUIDS.get(id); colours = new int[]{c, c, c}; }
+        else {
+            var faces = BlockColours.faces(id);
+            if (faces != null) colours = new int[]{0xff000000 | faces.top(), 0xff000000 | faces.side(), 0xff000000 | faces.bottom()};
+            else { int c = colour(state, new HashMap<>()); colours = new int[]{c, c, c}; }
+        }
+        cache.put(id, colours);
+        return colours;
+    }
+
     /** A block with no texture to average (a chest, a banner) gets a steady colour of its own from its name, so it still shows. */
     private static int fallback(String id) {
         return 0xff000000 | java.awt.Color.HSBtoRGB((id.hashCode() & 0xffff) / 65535f, 0.35f, 0.75f) & 0xffffff;

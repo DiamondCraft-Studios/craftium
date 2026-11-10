@@ -42,10 +42,10 @@ final class PoolThumbnails {
      * The picture of the blocks, at most WIDTH by HEIGHT. The renderer wants a pixel for every block, so a template wider than about 60 blocks cannot be
      * drawn that small: it is drawn on a larger canvas, up to four times the size, and shrunk to fit.
      */
-    private static java.awt.image.BufferedImage render(int sx, int sy, int sz, int[] colours) {
+    private static java.awt.image.BufferedImage render(int sx, int sy, int sz, int[] top, int[] side, int[] bottom) {
         for (int k = 1; ; k++) {
             try {
-                var picture = VoxelView.render(sx, sy, sz, colours, VoxelView.Angle.SE, WIDTH * k, HEIGHT * k).image();
+                var picture = VoxelView.render(sx, sy, sz, top, side, bottom, VoxelView.Angle.SE, WIDTH * k, HEIGHT * k).image();
                 return k == 1 ? picture : shrink(picture);
             } catch (IllegalArgumentException tooLarge) {
                 if (k >= 4) throw tooLarge;
@@ -77,14 +77,18 @@ final class PoolThumbnails {
             try (var in = new InflaterInputStream(new ByteArrayInputStream(Base64.getDecoder().decode(thumb.get("data").getAsString())))) { cells = in.readAllBytes(); }
             if (cells.length != sx * sy * sz) return null;
             var names = thumb.getAsJsonArray("palette");
-            var cache = new HashMap<String, Integer>();
-            int[] palette = new int[names.size() + 1];
-            for (int i = 0; i < names.size(); i++) palette[i + 1] = AiView.colour(names.get(i).getAsString(), cache);
-            int[] colours = new int[cells.length];
+            var cache = new HashMap<String, int[]>();
+            int[][] palette = new int[names.size() + 1][];
+            palette[0] = new int[3];
+            for (int i = 0; i < names.size(); i++) palette[i + 1] = AiView.faceColours(names.get(i).getAsString(), cache);
+            int[] top = new int[cells.length], side = new int[cells.length], bottom = new int[cells.length];
             boolean any = false;
-            for (int i = 0; i < cells.length; i++) { int slot = cells[i] & 255; if (slot > 0 && slot < palette.length) { colours[i] = palette[slot]; any |= colours[i] != 0; } }
+            for (int i = 0; i < cells.length; i++) {
+                int slot = cells[i] & 255;
+                if (slot > 0 && slot < palette.length) { top[i] = palette[slot][0]; side[i] = palette[slot][1]; bottom[i] = palette[slot][2]; any |= side[i] != 0; }
+            }
             if (!any) return null;
-            var picture = render(sx, sy, sz, colours);
+            var picture = render(sx, sy, sz, top, side, bottom);
             var image = new NativeImage(WIDTH, HEIGHT, false);
             int ox = (WIDTH - picture.getWidth()) / 2, oy = (HEIGHT - picture.getHeight()) / 2;
             for (int y = 0; y < HEIGHT; y++)
