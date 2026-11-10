@@ -34,7 +34,8 @@ final class JigsawPlannerScreen extends CraftiumScreen {
     private final List<String[]> pools = new java.util.ArrayList<>();
     private final List<String[]> matches = new java.util.ArrayList<>();
     private boolean suggesting, accepting, asked, wasFocused;
-    private int highlight = -1, seenModel = -1;
+    private int highlight = -1, seenModel = -1, listScroll, lastMouseX = -1, lastMouseY = -1;
+    private boolean draggingList;
     private static final int ROWS = 8, ROW = 15;
 
     JigsawPlannerScreen(Screen parent) {
@@ -176,10 +177,15 @@ final class JigsawPlannerScreen extends CraftiumScreen {
     @Override public boolean mouseClicked(MouseButtonEvent raw, boolean twice) {
         var event = scaled(raw);
         if (showing() && event.button() == 0) {
-            int x = SIDE, y = listTop();
-            if (event.x() >= x && event.x() < x + FORM && event.y() >= y && event.y() < y + matches.size() * ROW + 4) {
-                int i = (int) ((event.y() - y - 2) / ROW);
-                if (i >= 0 && i < matches.size()) accept(matches.get(i)[0]);
+            int x = SIDE, y = listTop(), rows = visibleRows();
+            if (matches.size() > ROWS && Scrollbars.hit(event.x(), event.y(), x + FORM - Scrollbars.WIDTH - 2, y + 2, rows * ROW)) {
+                draggingList = true;
+                listScroll = (int) Math.round(Scrollbars.scrollAt(event.y(), y + 2, rows * ROW, matches.size() * ROW) / ROW);
+                return true;
+            }
+            if (event.x() >= x && event.x() < x + FORM && event.y() >= y && event.y() < y + rows * ROW + 4) {
+                int i = listScroll + (int) ((event.y() - y - 2) / ROW);
+                if (i >= listScroll && i < matches.size()) accept(matches.get(i)[0]);
                 return true;
             }
         }
@@ -192,17 +198,28 @@ final class JigsawPlannerScreen extends CraftiumScreen {
     }
 
     @Override public boolean mouseReleased(MouseButtonEvent raw) {
+        if (draggingList) { draggingList = false; return true; }
         if (draggingReport) { draggingReport = false; return true; }
         return super.mouseReleased(scaled(raw));
     }
 
     @Override public boolean mouseDragged(MouseButtonEvent raw, double dx, double dy) {
         var event = scaled(raw);
+        if (draggingList) {
+            listScroll = (int) Math.round(Scrollbars.scrollAt(event.y(), listTop() + 2, visibleRows() * ROW, matches.size() * ROW) / ROW);
+            if (highlight >= 0) highlight = Math.clamp(highlight, listScroll, listScroll + ROWS - 1);
+            return true;
+        }
         if (draggingReport) { reportScroll = Scrollbars.scrollAt(event.y(), reportBarY, reportRoom, reportContent); return true; }
         return super.mouseDragged(event, dx / uiScale, dy / uiScale);
     }
 
     @Override public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
+        if (showing() && x / uiScale >= SIDE && x / uiScale < SIDE + FORM && y / uiScale >= listTop() && y / uiScale < listTop() + visibleRows() * ROW + 4) {
+            listScroll = Math.clamp(listScroll - (int) Math.signum(vertical) * 2, 0, Math.max(0, matches.size() - ROWS));
+            if (highlight >= 0) highlight = Math.clamp(highlight, listScroll, listScroll + ROWS - 1); // the highlight stays in the window, and moves with it
+            return true;
+        }
         if (x / uiScale < SIDE + FORM + 10) return false;
         reportScroll = Math.clamp(reportScroll - vertical * 33, 0, Math.max(0, reportContent - reportRoom));
         return true;
@@ -211,8 +228,10 @@ final class JigsawPlannerScreen extends CraftiumScreen {
     @Override public boolean keyPressed(KeyEvent event) {
         if (showing()) {
             switch (event.key()) {
-                case GLFW.GLFW_KEY_DOWN -> { highlight = Math.min(matches.size() - 1, highlight + 1); return true; }
-                case GLFW.GLFW_KEY_UP -> { highlight = highlight <= 0 ? matches.size() - 1 : highlight - 1; return true; }
+                case GLFW.GLFW_KEY_DOWN -> { highlight = Math.min(matches.size() - 1, highlight + 1); keepHighlightVisible(); return true; }
+                case GLFW.GLFW_KEY_UP -> { highlight = highlight <= 0 ? matches.size() - 1 : highlight - 1; keepHighlightVisible(); return true; }
+                case GLFW.GLFW_KEY_PAGE_DOWN -> { highlight = Math.min(matches.size() - 1, Math.max(0, highlight) + ROWS); keepHighlightVisible(); return true; }
+                case GLFW.GLFW_KEY_PAGE_UP -> { highlight = Math.max(0, Math.max(0, highlight) - ROWS); keepHighlightVisible(); return true; }
                 case GLFW.GLFW_KEY_TAB -> { accept(matches.get(Math.max(0, highlight))[0]); return true; }
                 case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> { if (highlight >= 0) { accept(matches.get(highlight)[0]); return true; } }
                 case GLFW.GLFW_KEY_ESCAPE -> { suggesting = false; return true; }
@@ -249,7 +268,8 @@ final class JigsawPlannerScreen extends CraftiumScreen {
         var found = new java.util.ArrayList<String[]>();
         for (var p : pools) if (text.isEmpty() || p[0].contains(text)) found.add(p);
         found.sort(java.util.Comparator.<String[]>comparingInt(p -> rank(p, text)).thenComparing(p -> p[0]));
-        for (int i = 0; i < Math.min(ROWS, found.size()); i++) matches.add(found.get(i));
+        matches.addAll(found); // all of them: the list scrolls
+        listScroll = 0;
     }
 
     private static int rank(String[] pool, String text) {
@@ -273,21 +293,39 @@ final class JigsawPlannerScreen extends CraftiumScreen {
         ClientState.options.jigsawPool = id;
         suggesting = false;
         matches.clear();
+        listScroll = 0;
+    }
+
+    private int visibleRows() { return Math.min(ROWS, matches.size()); }
+
+    /** Brings the highlighted row into the window. */
+    private void keepHighlightVisible() {
+        if (highlight < listScroll) listScroll = highlight;
+        else if (highlight >= listScroll + ROWS) listScroll = highlight - ROWS + 1;
+        listScroll = Math.clamp(listScroll, 0, Math.max(0, matches.size() - ROWS));
     }
 
     private void drawSuggestions(Gfx g, int mx, int my) {
         if (!showing()) return;
-        int x = SIDE, y = listTop(), h = matches.size() * ROW + 4;
+        int x = SIDE, y = listTop(), rows = visibleRows(), h = rows * ROW + 4;
+        boolean bar = matches.size() > ROWS;
+        // The highlight goes where the pointer goes, once the pointer moves; the arrow keys move it too.
+        if ((mx != lastMouseX || my != lastMouseY)) {
+            lastMouseX = mx;
+            lastMouseY = my;
+            if (mx >= x && mx < x + FORM && my >= y + 2 && my < y + 2 + rows * ROW) highlight = listScroll + (my - y - 2) / ROW;
+        }
         g.fill(x, y, x + FORM, y + h, 0xf0101923);
         g.outline(x, y, FORM, h, ClientState.options.uiAccent);
         String typed = poolBox.getValue().strip().toLowerCase(java.util.Locale.ROOT);
-        for (int i = 0; i < matches.size(); i++) {
-            int ry = y + 2 + i * ROW;
-            boolean hot = i == highlight || highlight < 0 && mx >= x && mx < x + FORM && my >= ry && my < ry + ROW;
-            if (hot) g.fill(x + 1, ry, x + FORM - 1, ry + ROW, 0xff315473);
+        int room = FORM - 24 - (bar ? Scrollbars.WIDTH + 2 : 0);
+        for (int row = 0; row < rows; row++) {
+            int i = listScroll + row, ry = y + 2 + row * ROW;
+            if (i >= matches.size()) break;
+            if (i == highlight) g.fill(x + 1, ry, x + FORM - 1 - (bar ? Scrollbars.WIDTH + 2 : 0), ry + ROW, 0xff315473);
             var pool = matches.get(i);
             g.fill(x + 5, ry + 4, x + 10, ry + 9, pool[1].equals("craftium") ? 0xff8fe3a0 : pool[1].equals("pack") ? 0xff8fd3ff : 0xff5a6b7d);
-            String shown = font.plainSubstrByWidth(pool[0], FORM - 24);
+            String shown = font.plainSubstrByWidth(pool[0], room);
             int at = typed.isEmpty() ? -1 : shown.toLowerCase(java.util.Locale.ROOT).indexOf(typed);
             if (at >= 0) { // the part that was typed is picked out
                 int px = x + 14;
@@ -298,6 +336,7 @@ final class JigsawPlannerScreen extends CraftiumScreen {
                 g.text(font, shown.substring(at + typed.length()), px, ry + 4, 0xffdce6ef, false);
             } else g.text(font, shown, x + 14, ry + 4, 0xffdce6ef, false);
         }
+        if (bar) Scrollbars.draw(g, x + FORM - Scrollbars.WIDTH - 2, y + 2, rows * ROW, listScroll * ROW, matches.size() * ROW, draggingList);
     }
 
     @Override public boolean isPauseScreen() { return false; }
