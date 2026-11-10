@@ -190,7 +190,8 @@ public final class SavedSelectionsGameTest {
         overlapTakesObjectsWhole();
         hierarchyIsInHistory();
         severalAtOnceAndFocus();
-        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus");
+        contextMenu();
+        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu");
     }
 
     // ---- Claude --------------------------------------------------------------------------------------------------------------------------
@@ -432,6 +433,103 @@ public final class SavedSelectionsGameTest {
 
         click(control("Let go", 0));
         c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_F, 0, 0); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+    }
+    /** The right-click menu of a row: each item does what it says, and what it changes is in the history. */
+    private void contextMenu() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        int first = saved(0).id(), second = saved(1).id();
+
+        rightClick(row(0));
+        menuClick("Create empty parent");
+        require(ClientState.savedSelections().size() == 3 && saved(0).size() == 0 && saved(1).id() == first && saved(1).parent() == saved(0).id() && saved(2).id() == second, "Create empty parent puts a new one around the row: " + ClientState.savedSelections());
+        rightClick(row(1));
+        menuClick("Move out of parent");
+        require(saved(1).id() == first && saved(1).parent() == 0, "Move out of parent: " + ClientState.savedSelections());
+        rightClick(row(0));
+        menuClick("Delete");
+        require(ClientState.savedSelections().size() == 2 && saved(0).id() == first && saved(1).id() == second, "Delete from the menu: " + ClientState.savedSelections());
+        undo();
+        require(ClientState.savedSelections().size() == 3, "and it is in the history: " + ClientState.savedSelections());
+        redo();
+
+        rightClick(row(0));
+        menuClick("Move down");
+        require(saved(0).id() == second && saved(1).id() == first, "Move down: " + ClientState.savedSelections());
+        rightClick(row(1));
+        menuClick("Move up");
+        require(saved(0).id() == first && saved(1).id() == second, "Move up: " + ClientState.savedSelections());
+
+        sleep();
+        c.runOnClient(mc -> CraftiumClient.send("saved_selection:viewset:" + first + "," + second, null, null));
+        settle();
+        rightClick(row(0));
+        menuClick("Group selected (2)");
+        require(ClientState.savedSelections().size() == 3 && saved(1).parent() == saved(0).id() && saved(2).parent() == saved(0).id(), "Group selected puts both in a new parent: " + ClientState.savedSelections());
+        undo();
+        require(ClientState.savedSelections().size() == 2 && saved(0).parent() == 0 && saved(1).parent() == 0, "and Undo takes the group back: " + ClientState.savedSelections());
+
+        rightClick(row(0));
+        menuClick("Rename");
+        typeText("Wall");press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        require(saved(0).name().equals("Wall"), "Rename from the menu: " + saved(0).name());
+
+        rightClick(row(0));
+        menuClick("Show outline");
+        require(!ClientState.savedHidden(saved(0).id()), "Show outline opens the eye");
+        rightClick(row(0));
+        c.waitTicks(2);
+        require(menuControl("Focus") != null && menuControl("Hide outline") != null, "a BuildObject with blocks offers Focus, and the eye item now offers to hide");
+        c.takeScreenshot("hierarchy-menu"); // for a person to look at
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE); // closes the menu
+    }
+    /** The n-th row of the Hierarchy, as an area. */
+    private int[] row(int n) {
+        int seen = 0;
+        for (String line : lines()) {
+            if (!line.startsWith("control hierarchy ")) continue;
+            int quote = line.indexOf('\'');
+            if (quote < 0) continue;
+            String tip = line.substring(quote + 1).replaceFirst("^[0-9]+ x [0-9]+ x [0-9]+ blocks · ", "");
+            if (!tip.startsWith("Select this BuildObject") && !tip.startsWith("Let go")) continue;
+            if (seen++ != n) continue;
+            var parts = line.substring("control hierarchy ".length(), quote).trim().split(" ");
+            var at = parts[0].split(","); var size = parts[1].split("x");
+            return new int[]{Integer.parseInt(at[0]), Integer.parseInt(at[1]), Integer.parseInt(size[0]), Integer.parseInt(size[1])};
+        }
+        return null;
+    }
+    /** The menu button with this label, as an area, or null. */
+    private int[] menuControl(String label) {
+        for (String line : lines()) {
+            if (!line.startsWith("control  ")) continue;
+            int quote = line.indexOf('\'');
+            if (quote < 0 || !line.substring(quote + 1).startsWith("menu " + label)) continue;
+            var parts = line.substring("control  ".length(), quote).trim().split(" ");
+            var at = parts[0].split(","); var size = parts[1].split("x");
+            return new int[]{Integer.parseInt(at[0]), Integer.parseInt(at[1]), Integer.parseInt(size[0]), Integer.parseInt(size[1])};
+        }
+        return null;
+    }
+    private void menuClick(String label) {
+        c.waitTicks(2);
+        click(menuControl(label));
+    }
+    /** A right click on the middle of an area. */
+    private void rightClick(int[] area) {
+        require(area != null, "the row to right click is not in the window");
+        sleep();
+        c.runOnClient(mc -> {
+            var screen = (EditorScreen) mc.gui.screen();
+            double scale;
+            try { var f = EditorScreen.class.getDeclaredField("scale"); f.setAccessible(true); scale = f.getFloat(screen); } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            var event = new MouseButtonEvent((area[0] + area[2] / 2.0) * scale, (area[1] + area[3] / 2.0) * scale, new MouseButtonInfo(1, 0));
+            screen.mouseClicked(event, false); screen.mouseReleased(event);
+        });
+        settle();
     }
     /** Everything done in the Hierarchy is in the history: Undo takes it back and Redo does it again. */
     private void hierarchyIsInHistory() {
