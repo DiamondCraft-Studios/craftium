@@ -199,6 +199,7 @@ final class Session {
             int size = changes.size()*128 + biomes.size()*96;
             if(selection!=null&&selection.hasPoints())size+=(selection.before().size()+selection.after().size())*24;
             if(selection!=null)for(var list:selection.objectsBefore().values())size+=list.size()*48; // before and after of each BuildObject moved
+            if(selection!=null&&selection.hasHierarchy())size+=(selection.hierarchyBefore().rows().size()+selection.hierarchyAfter().rows().size())*96; // the rows of the snapshots (the blocks in them are shared with the BuildObjects)
             for (var c : changes) {
                 if(c.before.data()!=null) size += c.before.data().toString().length()*2;
                 if(c.after.data()!=null) size += c.after.data().toString().length()*2;

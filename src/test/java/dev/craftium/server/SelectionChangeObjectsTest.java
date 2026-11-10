@@ -36,4 +36,11 @@ class SelectionChangeObjectsTest {
         assertTrue(change.hasObjects());assertEquals(List.of(A,B),change.objectsBefore().get(1));assertEquals(List.of(B),change.objectsAfter().get(1));
         assertFalse(change.hasPoints(),"the player's own selection is left as it is");
     }
+    @Test void aHierarchyStepIsCountedInTheSizeOfTheHistory(){
+        var saved=new dev.craftium.core.SavedSelections();var sel=new dev.craftium.core.Selection();sel.combine(List.of(A),dev.craftium.core.Selection.Mode.REPLACE);
+        saved.save(sel);saved.save(sel);var before=saved.state();saved.rename(saved.entries().getFirst().id(),"Roof");
+        var edit=Session.Edit.selecting("Rename BuildObject",Session.SelectionChange.hierarchy(before,saved.state()));
+        assertTrue(edit.hierarchyOnly());assertFalse(edit.selectionOnly(),"a Hierarchy step is its own kind, labelled by name alone");
+        assertTrue(edit.estimatedBytes()>=4*96,"two snapshots of two rows each: "+edit.estimatedBytes());
+    }
 }
