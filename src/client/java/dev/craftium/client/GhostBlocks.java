@@ -126,8 +126,8 @@ final class GhostBlocks {
             int hue=l[i+6];
             int line=hue<0?0xffffffff:rainbow(hue,0xff),fill=hue<0?0x22ffffff:rainbow(hue,0x22);
             var box=new net.minecraft.world.phys.AABB(l[i]+origin.x,l[i+1]+origin.y,l[i+2]+origin.z,l[i+3]+1+origin.x,l[i+4]+1+origin.y,l[i+5]+1+origin.z);
-            Overlay.box(box,line,2f,fill);
-            if(camera!=null&&names!=null&&piece<names.size()){
+            if(ClientState.options.jigsawBoxes)Overlay.box(box,line,2f,fill);
+            if(ClientState.options.jigsawNames&&camera!=null&&names!=null&&piece<names.size()){
                 var top=new Vec3((box.minX+box.maxX)/2,box.maxY+.6,(box.minZ+box.maxZ)/2);
                 double distance=Math.sqrt(top.distanceToSqr(camera));
                 // A label is as big in the world as it is told to be, so close up it would fill the screen: its size follows the distance, which keeps it readable at every range.

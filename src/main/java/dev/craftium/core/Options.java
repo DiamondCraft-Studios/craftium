@@ -221,6 +221,8 @@ public final class Options {
     public int jigsawDepth=5,jigsawDistance=80;
     public long jigsawSeed=1;
     public boolean jigsawLive=true;
+    /** Whether a jigsaw preview draws a box around each piece, and the name of the template above it. Only the client reads them. */
+    public boolean jigsawBoxes=true,jigsawNames=true;
     /** One command of the jigsaw pool editor, as JSON (see the server's JigsawEditor); empty when none. */
     public String jigsawEdit="";
     /** Whether the client listens on this computer for an AI client (the craftium-mcp shim) to drive the editor. Off until the player turns it on. */

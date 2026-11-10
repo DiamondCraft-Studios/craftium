@@ -88,7 +88,9 @@ final class JigsawPlannerScreen extends CraftiumScreen {
         tips.on(button("Random seed", x + FORM - 94, y + 147, 94, 20, () -> { o.jigsawSeed = (long) (Math.random() * 1_000_000); seedText = String.valueOf(o.jigsawSeed); init(); }), "Puts a random number in the Seed box. The next Generate uses it.");
         addRenderableWidget(tips.on(new FlatCheckbox(x, y + 178, FORM, 20, "Live: run again when pool or template files change", o.jigsawLive, () -> { o.jigsawLive = !o.jigsawLive; send("live"); init(); }), "When on, the preview runs again by itself, with the same seed, as soon as a pool or template file in datapacks/craftium changes, or a structure you saved does. Edit a file and watch the layout change."));
 
-        int by = y + 210, third = (FORM - 8) / 3;
+        addRenderableWidget(tips.on(new FlatCheckbox(x, y + 200, FORM / 2, 20, "Show piece boxes", o.jigsawBoxes, () -> { o.jigsawBoxes = !o.jigsawBoxes; ClientState.save(); init(); }), "Draws a coloured box around each piece of the preview. Turn it off when the boxes are in the way, to see only the blocks."));
+        addRenderableWidget(tips.on(new FlatCheckbox(x + FORM / 2, y + 200, FORM / 2, 20, "Show piece names", o.jigsawNames, () -> { o.jigsawNames = !o.jigsawNames; ClientState.save(); init(); }), "Draws the name of each piece template above it. Independent of the boxes."));
+        int by = y + 232, third = (FORM - 8) / 3;
         tips.on(button("Generate", x, by, FORM, 26, () -> send("generate")).lit(true), "Lays the pool out with the game jigsaw placement and shows it as a preview, at the middle of your selection on its lowest layer, or at your feet. It uses the pool, depth, distance and seed here.");
         tips.on(button("Reroll", x, by + 32, third, 22, () -> send("reroll")), "Runs the same pool again with a new random seed, in the same place.");
         tips.on(button("‹ Back", x + third + 4, by + 32, third, 22, () -> send("back")), "Goes back to the run before this one. The last 20 runs are kept.");
