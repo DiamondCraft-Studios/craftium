@@ -25,6 +25,8 @@ final class JigsawPlannerScreen extends CraftiumScreen {
     private int cw, ch;
     private final Tips tips = new Tips();
     private double reportScroll;
+    private boolean draggingReport;
+    private int reportBarX = -100, reportBarY;
     private int reportContent, reportRoom;
     private String seedText = "";
     private EditBox poolBox;
@@ -162,11 +164,9 @@ final class JigsawPlannerScreen extends CraftiumScreen {
             g.text(font, (net.minecraft.util.FormattedCharSequence) wrapped.get(i)[0], x, y, (Integer) wrapped.get(i)[1], false);
         }
         g.disableScissor();
-        if (reportContent > reportRoom) {
-            int thumb = Math.max(16, reportRoom * reportRoom / reportContent), thumbY = y0 + (int) ((reportRoom - thumb) * (reportScroll / (reportContent - reportRoom)));
-            g.fill(x + w, y0, x + w + 3, y0 + reportRoom, 0xff1b2838);
-            g.fill(x + w, thumbY, x + w + 3, thumbY + thumb, 0xff4a6585);
-        }
+        reportBarX = x + w - 2;
+        reportBarY = y0;
+        Scrollbars.draw(g, reportBarX, y0, reportRoom, reportScroll, reportContent, draggingReport);
     }
 
     // ---- input
@@ -183,12 +183,24 @@ final class JigsawPlannerScreen extends CraftiumScreen {
                 return true;
             }
         }
+        if (event.button() == 0 && reportContent > reportRoom && Scrollbars.hit(event.x(), event.y(), reportBarX, reportBarY, reportRoom)) {
+            draggingReport = true;
+            reportScroll = Scrollbars.scrollAt(event.y(), reportBarY, reportRoom, reportContent);
+            return true;
+        }
         return super.mouseClicked(event, twice);
     }
 
-    @Override public boolean mouseReleased(MouseButtonEvent event) { return super.mouseReleased(scaled(event)); }
+    @Override public boolean mouseReleased(MouseButtonEvent raw) {
+        if (draggingReport) { draggingReport = false; return true; }
+        return super.mouseReleased(scaled(raw));
+    }
 
-    @Override public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) { return super.mouseDragged(scaled(event), dx / uiScale, dy / uiScale); }
+    @Override public boolean mouseDragged(MouseButtonEvent raw, double dx, double dy) {
+        var event = scaled(raw);
+        if (draggingReport) { reportScroll = Scrollbars.scrollAt(event.y(), reportBarY, reportRoom, reportContent); return true; }
+        return super.mouseDragged(event, dx / uiScale, dy / uiScale);
+    }
 
     @Override public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
         if (x / uiScale < SIDE + FORM + 10) return false;

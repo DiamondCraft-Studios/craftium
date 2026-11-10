@@ -30,6 +30,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private boolean graph, adding;
     private String filter = "", name = "", query = "", selectionName = "";
     private double poolScroll, graphScroll;
+    private boolean draggingPoolBar, draggingGraphBar;
     private final Map<EditBox, Runnable> commits = new HashMap<>();
     /** What to say when the pointer rests on a button; drawn inside the scaled canvas, so it sits at the pointer whatever the window size. */
     private final Tips tips = new Tips();
@@ -452,21 +453,23 @@ final class JigsawEditorScreen extends CraftiumScreen {
         g.fill(SIDE - 4, TOP - 4, SIDE + leftW + 4, ch - FOOT + 2, PANEL);
         g.enableScissor(SIDE, listTop(), SIDE + leftW, listBottom());
         var pools = visiblePools();
+        int rowW = leftW - Scrollbars.WIDTH - 3; // the bar has its own strip
         for (int i = 0; i < pools.size(); i++) {
             int y = listTop() + i * LIST_ROW - (int) poolScroll;
             if (y + LIST_ROW < listTop() || y > listBottom()) continue;
             var p = pools.get(i);
-            boolean current = p.get("id").getAsString().equals(poolId()), hover = mx >= SIDE && mx < SIDE + leftW && my >= Math.max(y, listTop()) && my < Math.min(y + LIST_ROW, listBottom());
-            g.fill(SIDE, y, SIDE + leftW, y + LIST_ROW - 2, current ? 0xff315473 : hover ? 0xff2a3d55 : CARD);
+            boolean current = p.get("id").getAsString().equals(poolId()), hover = mx >= SIDE && mx < SIDE + rowW && my >= Math.max(y, listTop()) && my < Math.min(y + LIST_ROW, listBottom());
+            g.fill(SIDE, y, SIDE + rowW, y + LIST_ROW - 2, current ? 0xff315473 : hover ? 0xff2a3d55 : CARD);
             String source = str(p, "source", "");
             g.fill(SIDE, y, SIDE + 3, y + LIST_ROW - 2, source.equals("craftium") ? OK : source.equals("pack") ? 0xff8fd3ff : 0xff5a6b7d);
             int errors = num(p, "errors", 0), warnings = num(p, "warnings", 0);
             String badge = errors > 0 ? errors + "!" : warnings > 0 ? warnings + "?" : "";
-            int room = leftW - 12 - (badge.isEmpty() ? 0 : font.width(badge) + 6);
+            int room = rowW - 12 - (badge.isEmpty() ? 0 : font.width(badge) + 6);
             g.text(font, font.plainSubstrByWidth(shortName(p.get("id").getAsString()), room), SIDE + 7, y + 5, TEXT, false);
-            if (!badge.isEmpty()) g.text(font, badge, SIDE + leftW - font.width(badge) - 4, y + 5, errors > 0 ? ERROR : WARN, false);
+            if (!badge.isEmpty()) g.text(font, badge, SIDE + rowW - font.width(badge) - 4, y + 5, errors > 0 ? ERROR : WARN, false);
         }
         g.disableScissor();
+        Scrollbars.draw(g, SIDE + leftW - Scrollbars.WIDTH, listTop(), listBottom() - listTop(), poolScroll, pools.size() * LIST_ROW, draggingPoolBar);
         int ly = ch - FOOT - 90;
         int lx = SIDE;
         for (var key : new String[][]{{"craftium", "" + OK}, {"pack", "" + 0xff8fd3ff}, {"vanilla", "" + 0xff5a6b7d}}) {
@@ -672,7 +675,8 @@ final class JigsawEditorScreen extends CraftiumScreen {
         if (graphModel == null || graphModel.getAsJsonArray("nodes").size() == 0) { g.text(font, "Nothing to draw: the pools are not loaded (see the message above).", centreX, top + 6, MUTED, false); return; }
         var nodes = layout(graphModel);
         int nodeW = nodeWidth(nodes), nodeH = NODE_H, gap = 20;
-        g.enableScissor(centreX, top, centreX + centreW, ch - FOOT);
+        graphScroll = Math.clamp(graphScroll, 0, Math.max(0, graphContent(nodes) - (graphBottom() - top)));
+        g.enableScissor(centreX, top, centreX + centreW, graphBottom());
         var place = new HashMap<String, int[]>();
         for (var n : nodes) place.put(n.id(), placeOf(n, nodeW, top));
         Edge hovered = null;
@@ -711,15 +715,35 @@ final class JigsawEditorScreen extends CraftiumScreen {
             g.fill(mid, Math.min(y1, y2), mid + 1, Math.max(y1, y2) + 1, 0xffffdca8);
             g.fill(mid, y2, x2 + 1, y2 + 1, 0xffffdca8);
             g.fill(x2 - 4, y2 - 4, x2 + 3, y2 + 3, 0xffffdca8);
+        }
+        g.disableScissor();
+        if (edgeDragging && pressEdge != null) { // the box that disconnects an arrow stays visible however the graph is scrolled
             int zx = centreX + 4, zy = disconnectY();
             boolean over = edgeX >= zx && edgeX < zx + 180 && edgeY >= zy && edgeY < zy + 22;
             g.fill(zx, zy, zx + 180, zy + 22, over ? 0xff6a3a2a : 0xff3a2a28);
             g.outline(zx, zy, 180, 22, over ? ERROR : 0xff8a5a4a);
             g.centeredText(font, "Drop here to disconnect", zx + 90, zy + 7, TEXT);
         }
-        g.disableScissor();
+        var bar = graphBar();
+        if (bar != null) Scrollbars.draw(g, bar[0], bar[1], bar[2], graphScroll, bar[3], draggingGraphBar);
         var hint = font.split(Component.literal(HINT), centreW);
         for (int i = 0; i < hint.size(); i++) g.text(font, hint.get(i), centreX, ch - FOOT - 4 - (hint.size() - i) * 10, 0xff6f8296, false);
+    }
+
+    /** Where the graph shows, down to just above the hint, and how tall the pools in it stand together. */
+    private int graphBottom() { return disconnectY() - 4; }
+
+    private int graphContent(List<Node> nodes) {
+        int bottom = 0;
+        for (var n : nodes) { var moved = NODE_POS.get(nodeKey(n.id())); bottom = Math.max(bottom, (moved != null ? moved[1] : n.row() * GRAPH_ROW) + NODE_H + 8); }
+        return bottom + 4;
+    }
+
+    /** The graph's scrollbar as x, y, room and content, or null when the graph is not shown or all of it fits. */
+    private int[] graphBar() {
+        if (!graph || pool() == null || !model.has("graph")) return null;
+        int top = cardsTop() - 4, room = graphBottom() - top, content = graphContent(layout(model.getAsJsonObject("graph")));
+        return content > room ? new int[]{centreX + centreW - Scrollbars.WIDTH, top, room, content} : null;
     }
 
     private int nodeWidth(List<Node> nodes) {
@@ -842,6 +866,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     @Override public boolean mouseReleased(MouseButtonEvent raw) {
         var event = scaled(raw);
+        if (draggingPoolBar || draggingGraphBar) { draggingPoolBar = false; draggingGraphBar = false; return true; }
         if (pressEdge != null && event.button() == 0) {
             var edge = pressEdge;
             boolean carried = edgeDragging;
@@ -872,6 +897,8 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     @Override public boolean mouseDragged(MouseButtonEvent raw, double dx, double dy) {
         var event = scaled(raw);
+        if (draggingPoolBar) { poolScroll = Scrollbars.scrollAt(event.y(), listTop(), listBottom() - listTop(), visiblePools().size() * LIST_ROW); return true; }
+        if (draggingGraphBar) { var bar = graphBar(); if (bar != null) graphScroll = Scrollbars.scrollAt(event.y(), bar[1], bar[2], bar[3]); return true; }
         if (pressEdge != null) {
             if (!edgeDragging && Math.hypot(event.x() - edgePressX, event.y() - edgePressY) > 3) edgeDragging = true;
             edgeX = event.x();
@@ -892,7 +919,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
         if (super.mouseClicked(event, twice)) return true;
         if (event.button() != 0 || adding) return false;
         double x = event.x(), y = event.y();
-        if (x >= SIDE && x < SIDE + leftW && y >= listTop() && y < listBottom()) {
+        int poolRoom = listBottom() - listTop(), poolContent = visiblePools().size() * LIST_ROW;
+        if (poolContent > poolRoom && Scrollbars.hit(x, y, SIDE + leftW - Scrollbars.WIDTH, listTop(), poolRoom)) { draggingPoolBar = true; poolScroll = Scrollbars.scrollAt(y, listTop(), poolRoom, poolContent); return true; }
+        var graphBar = graphBar();
+        if (graphBar != null && Scrollbars.hit(x, y, graphBar[0], graphBar[1], graphBar[2])) { draggingGraphBar = true; graphScroll = Scrollbars.scrollAt(y, graphBar[1], graphBar[2], graphBar[3]); return true; }
+        if (x >= SIDE && x < SIDE + leftW - Scrollbars.WIDTH - 3 && y >= listTop() && y < listBottom()) {
             int i = (int) ((y - listTop() + poolScroll) / LIST_ROW);
             var pools = visiblePools();
             if (i >= 0 && i < pools.size()) { selected = 0; page = 0; jigPage = 0; edit("open", "pool", pools.get(i).get("id").getAsString()); return true; }
@@ -905,14 +936,14 @@ final class JigsawEditorScreen extends CraftiumScreen {
             var nodes = layout(model.getAsJsonObject("graph"));
             int nodeW = nodeWidth(nodes), top = cardsTop() - 4;
             for (var edge : edgeShapes(nodes, model.getAsJsonObject("graph").getAsJsonArray("edges"), nodeW, top)) {
-                if (x >= edge.x2() - 11 && x < edge.x2() + 1 && y >= edge.y2() - 5 && y < edge.y2() + 5 && y >= top) {
+                if (x >= edge.x2() - 11 && x < edge.x2() + 1 && y >= edge.y2() - 5 && y < edge.y2() + 5 && y >= top && y < graphBottom()) {
                     pressEdge = edge; edgePressX = x; edgePressY = y; edgeX = x; edgeY = y; edgeDragging = false;
                     return true;
                 }
             }
             for (var n : nodes) {
                 var at = placeOf(n, nodeW, top);
-                if (x >= at[0] && x < at[0] + nodeW && y >= Math.max(at[1], top) && y < at[1] + NODE_H) {
+                if (x >= at[0] && x < at[0] + nodeW && y >= Math.max(at[1], top) && y < Math.min(at[1] + NODE_H, graphBottom())) {
                     // A press on a pool: it opens when let go in place, and moves when dragged.
                     pressNode = n.id(); pressKey = nodeKey(n.id()); pressMissing = n.missing(); dragging = false;
                     pressX = x; pressY = y;
@@ -930,7 +961,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         double x = rawX / uiScale;
         if (adding) return false;
         if (x < SIDE + leftW + 6) { poolScroll = Math.clamp(poolScroll - vertical * 30, 0, Math.max(0, visiblePools().size() * LIST_ROW - (listBottom() - listTop()))); return true; }
-        if (graph && x < cw - SIDE - rightW) { graphScroll = Math.max(0, graphScroll - vertical * 30); return true; }
+        if (graph && x < cw - SIDE - rightW) { var bar = graphBar(); graphScroll = Math.clamp(graphScroll - vertical * 30, 0, bar == null ? 0 : bar[3] - bar[2]); return true; }
         return false;
     }
 
