@@ -201,6 +201,7 @@ public final class SavedSelectionsGameTest {
         ctrlShortcutsInTheHierarchy();
         rulersWindowComesUpOnce();
         sharedPersistentAndPermitted();
+        refusedPasteKeepsTheSelection();
         System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu duplicate shared prune view structure deselect delete-blocks transfer shortcuts rulers");
     }
 
@@ -461,6 +462,9 @@ public final class SavedSelectionsGameTest {
         rightClick(row(0));
         menuClick("Create empty parent");
         require(ClientState.savedSelections().size() == 3 && saved(0).size() == 0 && saved(1).id() == first && saved(1).parent() == saved(0).id() && saved(2).id() == second, "Create empty parent puts a new one around the row: " + ClientState.savedSelections());
+        var parentBox = ClientState.subtreeBounds(saved(0).id());
+        require(parentBox != null && parentBox[0].equals(saved(1).min()) && parentBox[1].equals(saved(1).max()) && ClientState.subtreeSize(saved(0).id()) == saved(1).size(),
+            "an empty parent is framed by what is under it, for the showcase and the AI: " + java.util.Arrays.toString(parentBox));
         rightClick(row(1));
         menuClick("Move out of parent");
         require(saved(1).id() == first && saved(1).parent() == 0, "Move out of parent: " + ClientState.savedSelections());
@@ -838,6 +842,32 @@ public final class SavedSelectionsGameTest {
         c.waitTicks(6);
         require(c.computeOnClient(mc -> !WorkspaceLayout.windows.get("rulers").visible), "and it stays closed the next time");
         c.runOnClient(mc -> ((EditorScreen) mc.gui.screen()).select(dev.craftium.core.Tool.BOX_SELECT));
+    }
+    /** A paste as a BuildObject that is refused (the permission goes between the duplicate and the Enter) leaves the player's selection as it was. */
+    private void refusedPasteKeepsTheSelection() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        click(row(0));
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_D, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        c.waitFor(mc -> PlacementPreview.active(), 200);
+        c.waitTicks(5);
+        var config = dev.craftium.runtime.ServerPlatform.assets().resolve("hierarchy-permissions.json");
+        try {
+            writeFile(config, "{\"everyone\":{\"create\":false},\"operatorsBypass\":false}");
+            sleepMillis(2300);
+            c.runOnClient(mc -> PlacementPreview.nudge(6)); // the copy goes elsewhere, so what it would have selected is not what is selected now
+            var selectionBefore = live();
+            c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER, 0, 0); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); }); // not press(): that insists on no error
+            c.waitTicks(15);
+            var message = c.computeOnClient(mc -> ClientState.status.message());
+            require(message.contains("permission"), "the paste was refused, and said why: " + message);
+            require(ClientState.savedSelections().size() == 1 && live().equals(selectionBefore), "and the selection is as it was: " + ClientState.savedSelections());
+        } finally {
+            writeFile(config, "{\"everyone\":{},\"operatorsBypass\":true}");
+            sleepMillis(2300);
+            c.runOnClient(mc -> PlacementPreview.cancel());
+        }
     }
     /** The BuildObjects are written to the world, the colour chosen goes to the server and comes back, and a denied action is refused. */
     private void sharedPersistentAndPermitted() {
