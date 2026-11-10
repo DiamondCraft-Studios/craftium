@@ -195,8 +195,9 @@ public final class SavedSelectionsGameTest {
         multiDragAndKeptView();
         duplicateCopyCutExportAndEyes();
         duplicateKeepsStructureAndDeselect();
+        deleteWithBlocksAndWarning();
         sharedPersistentAndPermitted();
-        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu duplicate shared prune view structure deselect");
+        System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude follow overlap history multi focus menu duplicate shared prune view structure deselect delete-blocks");
     }
 
     // ---- Claude --------------------------------------------------------------------------------------------------------------------------
@@ -719,6 +720,63 @@ public final class SavedSelectionsGameTest {
         click(new int[]{last[0] + 20, last[1] + last[3] + 40, 10, 10});
         settle();
         require(c.computeOnClient(mc -> ClientState.savedSelections().stream().noneMatch(e -> e.active())), "a click on empty space lets go of the one shown: " + ClientState.savedSelections());
+    }
+    /** "Delete blocks" deletes the BuildObject and its blocks as one step, asks the first time, and stops asking when told to. */
+    private void deleteWithBlocksAndWarning() {
+        deleteAll();
+        selectOnly(a());
+        click(control("Create a BuildObject from what is selected now", 0));
+        selectOnly(b());
+        click(control("Create a BuildObject from what is selected now", 0));
+        drag(row(1), row(0), 0.5);
+        require(saved(1).parent() == saved(0).id(), "a parent with a child");
+        require(c.computeOnClient(mc -> ClientState.options.warnDeleteBlocks), "the warning is on until it is turned off");
+
+        rightClick(row(0));
+        menuClick("Delete blocks");
+        require(confirmShown(), "the first time it asks");
+        c.takeScreenshot("delete-blocks-warning"); // for a person to look at
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
+        require(!confirmShown() && ClientState.savedSelections().size() == 2 && allAre(a(), Blocks.STONE), "cancelling changes nothing");
+
+        rightClick(row(0));
+        menuClick("Delete blocks");
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        c.waitTicks(15);
+        settle();
+        require(ClientState.savedSelections().isEmpty() && allAre(a(), Blocks.AIR) && allAre(b(), Blocks.AIR), "confirming deletes the BuildObject, its child and all their blocks: " + ClientState.savedSelections());
+        undo();
+        require(ClientState.savedSelections().size() == 2 && saved(1).parent() == saved(0).id() && allAre(a(), Blocks.STONE) && allAre(b(), Blocks.STONE), "one Undo brings back the BuildObjects, as they were, and the blocks: " + ClientState.savedSelections());
+        redo();
+        require(ClientState.savedSelections().isEmpty() && allAre(a(), Blocks.AIR), "and Redo deletes them again");
+        undo();
+
+        // ticking the box turns the warning off for good
+        rightClick(row(0));
+        menuClick("Delete blocks");
+        click(menuControl("Don't show this message again"));
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        c.waitTicks(15);
+        settle();
+        require(ClientState.savedSelections().isEmpty() && c.computeOnClient(mc -> !ClientState.options.warnDeleteBlocks), "it deleted, and the warning is off now");
+        undo();
+        rightClick(row(0));
+        menuClick("Delete blocks");
+        c.waitTicks(15);
+        settle();
+        require(!confirmShown() && ClientState.savedSelections().isEmpty(), "and it no longer asks");
+        undo();
+        c.runOnClient(mc -> ClientState.options.warnDeleteBlocks = true);
+        require(allAre(a(), Blocks.STONE) && allAre(b(), Blocks.STONE), "the world is as it was");
+    }
+    private boolean confirmShown() {
+        return c.computeOnClient(mc -> {
+            try {
+                var f = EditorScreen.class.getDeclaredField("confirm");
+                f.setAccessible(true);
+                return f.get(mc.gui.screen()) != null;
+            } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+        });
     }
     /** The BuildObjects are written to the world, the colour chosen goes to the server and comes back, and a denied action is refused. */
     private void sharedPersistentAndPermitted() {
