@@ -124,7 +124,7 @@ public final class EditorScreen extends CraftiumScreen {
         lastFlightNanos=0;
         if(!hudHidden){previousHideGui=ClientCompat.hudHidden(minecraft);hudHidden=true;if(!previousHideGui)ClientCompat.toggleHud(minecraft);}
         scale=Math.min(1f,Math.min(width/1000f,height/562f));w=Math.round(width/scale);h=Math.round(height/scale);
-        fields.clear();suspended=false;
+        fields.clear();renaming=-1;suspended=false;
         int masksW=WorkspaceLayout.width("masks",RIGHT),masksH=WorkspaceLayout.height("masks",masksHeight()),masksY=masksTop();
         layoutKey=layoutKey();
         if(maskLimitsOpen){
@@ -194,7 +194,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(!suspended){fly();syncCursor();}
         BG=o().uiBackground;PANEL=o().uiPanel;LINE=o().uiBorder;ACCENT=o().uiAccent;TEXT=o().uiText;MUTED=o().uiMuted;
         if(!suspended&&layoutKey!=layoutKey())init();
-        pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();sliderAreas.clear();dragSources.clear();dropTargets.clear();PanelLog.frame();
+        pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();renameAreas.clear();sliderAreas.clear();dragSources.clear();dropTargets.clear();PanelLog.frame();
         syncCrosshair();
         SelectionOverlay.tint(g); // under the panels, so only the world is washed
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
@@ -1696,6 +1696,7 @@ public final class EditorScreen extends CraftiumScreen {
                 if(selected!=null){selected.setFocused(true);String id="";for(var entry:fields.entrySet())if(entry.getValue()==selected)id=entry.getKey();var point=WorkspaceLayout.inverse(WorkspaceLayout.fieldPanel(id),x,y);selected.mouseClicked(new MouseButtonEvent(point[0],point[1],event.buttonInfo()),doubleClick);return true;}
             }
             if(!help&&!transform&&menu<0)for(int i=dragSources.size()-1;i>=0;i--){var d=dragSources.get(i);if(d.area().contains(x,y)){dragBlock=d.block();dragClick=d.area().action();dragStartX=event.x();dragStartY=event.y();dragMoved=false;return true;}}
+            if(doubleClick&&!help&&!transform&&menu<0)for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(!c.contains(x,y))continue;for(var area:renameAreas)if(area.row()==c){startRename(area);return true;}break;} // the second click of a double click on a row renames it
             for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(c.contains(x,y)){c.action.run();return true;}}
             if(help||transform)return true;if(menu>=0){menu=-1;return true;}
             if(panels){String id=WorkspaceLayout.hit(x,y,true);if(!id.isBlank()){var r=WorkspaceLayout.windows.get(id);draggedPanel=id;resizePanel=false;dragOriginX=r.x;dragOriginY=r.y;dragPointerX=x;dragPointerY=y;return true;}
@@ -1848,6 +1849,10 @@ public final class EditorScreen extends CraftiumScreen {
             return true;
         }
         for(EditBox field:fields.values())if(field.isFocused()){
+            if(renaming>=0&&field==fields.get("rename")){
+                if(event.key()==GLFW.GLFW_KEY_ESCAPE){cancelRename();return true;}
+                if(event.key()==GLFW.GLFW_KEY_ENTER||event.key()==GLFW.GLFW_KEY_KP_ENTER){commitRename();return true;}
+            }
             if(event.key()==GLFW.GLFW_KEY_ESCAPE||event.key()==GLFW.GLFW_KEY_ENTER){field.setFocused(false);return true;}
             return field.keyPressed(event);
         }
@@ -2059,6 +2064,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     }
     private int savedScroll;
     private static final String[] PENCIL={"......XX.",".....XXXX","....XXXX.","...XXXX..","..XXXX...",".XXXX....",".XXX.....","XX......."};
+    private static final String[] PLUS={"....X....","....X....","....X....","....X....","XXXXXXXXX","....X....","....X....","....X....","....X...."};
     private static final String[] EYE={"..XXXXX..",".X.....X.","X..XXX..X",".X.....X.","..XXXXX.."};
     private static final String[] CROSS={"X.......X",".X.....X.","..X...X..","...X.X...","....X....","...X.X...","..X...X..",".X.....X.","X.......X"};
     /** A small picture drawn pixel by pixel from rows of X, centred on the given box. */
@@ -2074,21 +2080,22 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         int x=w-RIGHT,y=27;
         panel(g,x,y,RIGHT,Math.max(90,groupTop()-6-y),"Hierarchy");
         boolean looking=ClientState.activeSaved()!=null;
-        button(g,x+10,y+24,pw-20,19,"Save selection",false,()->action("saved_selection:save"),looking?"Save what is selected now as a new entry. While one is shown, that is a copy of it":"Save what is selected now as a new entry, under the name Selection 1, 2 and so on");
-        int top=y+50,bottom=y+ph-8,rowHeight=20,rows=Math.max(1,(bottom-top)/rowHeight),total=saved.size();
+        int top=y+28,bottom=y+ph-36,rowHeight=20,rows=Math.max(1,(bottom-top)/rowHeight),total=saved.size();
         g.fill(x+8,top-2,x+pw-8,top+rows*rowHeight+1,0xff141c26);g.outline(x+8,top-2,pw-16,rows*rowHeight+3,LINE);
+        boolean renameShown=false;
         savedScroll=Math.clamp(savedScroll,0,Math.max(0,total-rows));
-        if(total==0)text(g,"Nothing saved yet",x+16,top+6,MUTED);
+        if(total==0)text(g,"No BuildObjects yet",x+16,top+6,MUTED);
         for(int i=0;i<rows&&savedScroll+i<total;i++){
             var entry=saved.get(savedScroll+i);int ry=top+i*rowHeight,id=entry.id();
             if(entry.active())g.fill(x+9,ry,x+pw-9,ry+rowHeight,entry.editing()?0xff5b4a84:0xff315b84);
-            int colour=ClientState.savedColor(id);
-            g.fill(x+14,ry+4,x+28,ry+rowHeight-4,0xff000000|colour&0xffffff);g.outline(x+14,ry+4,14,rowHeight-8,LINE);
-            String label=entry.name();
-            text(g,shorten(label,pw-124),x+34,ry+6,entry.active()?TEXT:MUTED);
+            int colour=ClientState.savedColor(id),swatch=x+pw-94; // the colour is the leftmost of the buttons on the right
+            g.fill(swatch+1,ry+4,swatch+17,ry+rowHeight-4,0xff000000|colour&0xffffff);g.outline(swatch+1,ry+4,16,rowHeight-8,LINE);
+            if(renaming==id){
+                renameShown=true;var box=renameBox(entry.name());box.setX(x+14);box.setY(ry+4);box.setWidth(pw-114);
+            }else text(g,shorten(entry.name(),pw-112),x+14,ry+6,entry.active()?TEXT:MUTED);
             // later controls win where they overlap, so the row comes first and the cells and buttons on it after
-            controls.add(new Control(x+9,ry,pw-18,rowHeight,()->action(entry.active()&&!entry.editing()?"saved_selection:release":"saved_selection:view:"+id),savedSpan(entry)+" blocks · "+(entry.active()&&!entry.editing()?"Let go: your own selection comes back":"Show this selection in place of yours. Click it again to get yours back · It is a copy: changes you make while it is shown are not kept")));
-            controls.add(new Control(x+14,ry+4,14,rowHeight-8,()->ColourPickerScreen.open(this,entry.name()+" colour",()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0)),"Change this selection's outline colour"));
+            var rowControl=new Control(x+9,ry,pw-18,rowHeight,()->action(entry.active()&&!entry.editing()?"saved_selection:release":"saved_selection:view:"+id),savedSpan(entry)+" blocks · "+(entry.active()&&!entry.editing()?"Let go: your own selection comes back":"Show this selection in place of yours. Click it again to get yours back · It is a copy: changes you make while it is shown are not kept")); controls.add(rowControl);renameAreas.add(new RenameArea(rowControl,id));
+            controls.add(new Control(swatch,ry+2,18,rowHeight-4,()->ColourPickerScreen.open(this,entry.name()+" colour",()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0)),"Change this selection's outline colour"));
             int eye=x+pw-72,pencil=x+pw-50,cross=x+pw-28;boolean hidden=ClientState.savedHidden(id);
             button(g,eye,ry+2,18,rowHeight-4,"",false,()->ClientState.toggleSavedHidden(id),hidden?"Show this selection in the world":"Hide this selection in the world · It stays saved, and shows while you look at it or edit it");
             glyph(g,eye,ry+2,18,rowHeight-4,EYE,hidden?0xff56606e:TEXT);
@@ -2102,6 +2109,32 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
             int track=rows*rowHeight,thumb=Math.max(10,track*rows/total),thumbY=top+(track-thumb)*savedScroll/Math.max(1,total-rows);
             g.fill(x+pw-14,top,x+pw-10,top+track,0xff1b2b40);g.fill(x+pw-14,thumbY,x+pw-10,thumbY+thumb,ACCENT);
         }
+        if(renaming>=0&&!renameShown)cancelRename(); // scrolled out of view or deleted
+        else if(renaming>=0&&fields.get("rename")!=null&&!fields.get("rename").isFocused())commitRename(); // a click elsewhere keeps the name
+        g.fill(x+1,y+ph-30,x+pw-1,y+ph-29,LINE); // the buttons along the bottom
+        button(g,x+10,y+ph-25,24,20,"",false,()->action("saved_selection:save"),looking?"Create a BuildObject from what is selected now. While one is shown, that is a copy of it":"Create a BuildObject from what is selected now");
+        glyph(g,x+10,y+ph-25,24,20,PLUS,TEXT);
+    }
+    /** A row of the Hierarchy that a double click renames: the row's own control, so a click on a button of the row is not a rename. */
+    private record RenameArea(Control row,int id){}
+    private final List<RenameArea> renameAreas=new ArrayList<>();
+    /** The id of the entry being renamed in place, or -1. */
+    private int renaming=-1;
+    private EditBox renameBox(String name){
+        var box=fields.get("rename");
+        if(box==null){
+            field("rename",0,0,100,name,s->{});box=fields.get("rename");box.setMaxLength(40);
+            box.moveCursorToEnd(false);box.setHighlightPos(0);box.setFocused(true); // the whole name is selected, so typing replaces it
+        }
+        return box;
+    }
+    private void startRename(RenameArea area){fields.remove("rename");renaming=area.id();}
+    private void cancelRename(){renaming=-1;fields.remove("rename");}
+    private void commitRename(){
+        var box=fields.get("rename");int id=renaming;cancelRename();
+        if(box==null)return;
+        String name=box.getValue().strip();var current=ClientState.savedSelections().stream().filter(e->e.id()==id).findFirst();
+        if(!name.isEmpty()&&current.isPresent()&&!current.get().name().equals(name))action("saved_selection:rename:"+id+":"+name);
     }
     public void moveHandle(Point point){if(selectedNode>=0&&selectedNode<handleNodes().size())handleNodes().set(selectedNode,point);}
     private double[] project(Point p){return project(p,0);}

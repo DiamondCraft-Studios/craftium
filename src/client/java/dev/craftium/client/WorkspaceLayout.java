@@ -43,5 +43,5 @@ final class WorkspaceLayout {
         if(!Set.of("tools","options","target","clipboard","palette","history","masks","rulers","hierarchy").contains(e.getKey()))continue;
         var r=Packets.JSON.fromJson(e.getValue(),Rect.class);r.x=Math.clamp(r.x,0,4000);r.y=Math.clamp(r.y,24,3000);r.w=Math.clamp(r.w,110,1600);r.h=Math.clamp(r.h,60,1600);next.put(e.getKey(),r);
     }windows.clear();windows.putAll(next);}
-    static String fieldPanel(String field){return switch(field){case "block"->"palette";case "mask","minY","maxY"->"masks";case "offsetX","offsetY","offsetZ","copies"->"";default->"options";};}
+    static String fieldPanel(String field){return switch(field){case "block"->"palette";case "mask","minY","maxY"->"masks";case "rename"->"hierarchy";case "offsetX","offsetY","offsetZ","copies"->"";default->"options";};}
 }

@@ -57,36 +57,36 @@ public final class SavedSelectionsGameTest {
         w.getServer().runCommand("setblock " + (baseX + 9) + " " + baseY + " " + baseZ + " stone");
         c.waitTicks(10);
 
-        require(control("Save what is selected now", 0) != null, "the Hierarchy window is always shown, empty at first");
+        require(control("Create a BuildObject from what is selected now", 0) != null, "the Hierarchy window is always shown, empty at first");
 
         selectOnly(a());
-        require(control("Save what is selected now", 0) != null, "the window should still be there once something is selected");
-        click(control("Save what is selected now", 0));
+        require(control("Create a BuildObject from what is selected now", 0) != null, "the window should still be there once something is selected");
+        click(control("Create a BuildObject from what is selected now", 0));
         var one = saved(0);
-        require(ClientState.savedSelections().size() == 1 && one.name().equals("Selection 1"), "Save selection should make Selection 1, got " + ClientState.savedSelections());
+        require(ClientState.savedSelections().size() == 1 && one.name().equals("BuildObject"), "Save selection should make BuildObject, got " + ClientState.savedSelections());
         require(one.size() == 8 && !one.active(), "an entry holds the 8 blocks and is not shown yet");
         require(liveIs(a()), "saving must leave the selection as it was");
-        require(panelShows("Selection 1") && tipHas("'2 x 2 x 2 blocks"), "the entry reads its name, and its size is in the tip: " + texts());
+        require(panelShows("BuildObject") && tipHas("'2 x 2 x 2 blocks"), "the entry reads its name, and its size is in the tip: " + texts());
         require(ClientState.savedColor(one.id()) == ClientState.options.selectionColor, "the first entry starts as the selection colour");
 
         selectOnly(b());
-        click(control("Save what is selected now", 0));
+        click(control("Create a BuildObject from what is selected now", 0));
         var two = saved(1);
-        require(two.name().equals("Selection 2") && two.size() == 3, "the second entry is Selection 2 with 3 blocks, got " + ClientState.savedSelections());
-        require(panelShows("Selection 2") && tipHas("'3 x 1 x 1 blocks"), "the second entry has its size in the tip: " + texts());
+        require(two.name().equals("BuildObject (1)") && two.size() == 3, "the second entry is BuildObject (1) with 3 blocks, got " + ClientState.savedSelections());
+        require(panelShows("BuildObject (1)") && tipHas("'3 x 1 x 1 blocks"), "the second entry has its size in the tip: " + texts());
         require(ClientState.savedColor(two.id()) != ClientState.savedColor(one.id()), "each entry starts with its own colour");
         require(liveIs(b()), "saving the second must not change the selection either");
 
         // click an entry: it replaces the selection, and clicking again gives the selection back
         selectOnly(cell());
         click(control("Show this selection in place of yours", 0));
-        require(liveIs(a()) && saved(0).active() && !saved(0).editing(), "clicking Selection 1 shows it in place of the selection");
+        require(liveIs(a()) && saved(0).active() && !saved(0).editing(), "clicking BuildObject shows it in place of the selection");
         click(control("Let go", 0));
         require(liveIs(cell()) && ClientState.activeSaved() == null, "clicking it again gives the selection back");
 
         // changes made while an entry is only shown never reach it
         click(control("Show this selection in place of yours", 1));
-        require(liveIs(b()), "Selection 2 is shown");
+        require(liveIs(b()), "BuildObject (1) is shown");
         addToLive(cellAt(7));
         require(liveCount() == 4 && saved(1).size() == 3, "an entry that is only shown keeps its blocks when the selection is changed");
         click(control("Let go", 0));
@@ -115,21 +115,34 @@ public final class SavedSelectionsGameTest {
         ClientState.setSavedColor(coloured, 0xffaa3366);
         click(control("Delete this selection", 1));
         require(ClientState.savedSelections().size() == 1, "the cross deletes without asking");
-        require(!panelShows("Selection 2"), "the deleted entry leaves the window");
+        require(!panelShows("BuildObject (1)"), "the deleted entry leaves the window");
         undo();
-        require(ClientState.savedSelections().size() == 2 && saved(1).name().equals("Selection 2") && saved(1).size() == 3, "Ctrl+Z brings the entry back where it was, with its blocks");
+        require(ClientState.savedSelections().size() == 2 && saved(1).name().equals("BuildObject (1)") && saved(1).size() == 3, "Ctrl+Z brings the entry back where it was, with its blocks");
         require(ClientState.savedColor(saved(1).id()) == 0xffaa3366, "and with its colour");
 
         deleteAll();
         require(ClientState.savedSelections().isEmpty(), "everything deleted");
         selectOnly(a());
-        click(control("Save what is selected now", 0));
-        require(saved(0).name().equals("Selection 1"), "the numbers start again at 1, got " + saved(0).name());
+        click(control("Create a BuildObject from what is selected now", 0));
+        require(saved(0).name().equals("BuildObject"), "the numbers start again at 1, got " + saved(0).name());
         require(ClientState.savedColor(saved(0).id()) == ClientState.options.selectionColor, "and so does the colour");
         selectOnly(b());
-        click(control("Save what is selected now", 0));
+        click(control("Create a BuildObject from what is selected now", 0));
 
         claude();
+
+        // a double click on a row renames it where it stands: the name is selected, so typing replaces it, and Enter keeps it
+        doubleClick(control("Show this selection in place of yours", 0));
+        typeText("Roof");press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        require(saved(0).name().equals("Roof") && saved(1).name().equals("BuildObject (1)"), "a double click renames the row, got " + ClientState.savedSelections());
+        doubleClick(control("Let go", 0)); // the first click of the pair let go of it again
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
+        require(saved(0).name().equals("Roof"), "Esc keeps the old name");
+        doubleClick(control("Show this selection in place of yours", 0));
+        typeText("Wall");press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
+        require(saved(0).name().equals("Roof"), "Esc drops what was typed, got " + saved(0).name());
+        click(control("Let go", 0)); // the double click showed it; let go before the picture
+
         screenshot();
         System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude");
     }
@@ -139,25 +152,25 @@ public final class SavedSelectionsGameTest {
     /** Reads the saved selections by name and builds on two of them in one spec, through the same call the MCP server makes. */
     private void claude() {
         selectOnly(cell());
-        var read = bridge("read_selection", "{\"name\":\"selection 1\"}");
-        require(read.get("selected").getAsInt() == 8 && read.get("name").getAsString().equals("Selection 1"), "read_selection by name reads that selection (any case): " + read);
-        var other = bridge("read_selection", "{\"name\":\"Selection 2\"}");
-        require(other.get("selected").getAsInt() == 3 && other.get("name").getAsString().equals("Selection 2"), "and a second read stays apart from the first: " + other);
+        var read = bridge("read_selection", "{\"name\":\"buildobject\"}");
+        require(read.get("selected").getAsInt() == 8 && read.get("name").getAsString().equals("BuildObject"), "read_selection by name reads that selection (any case): " + read);
+        var other = bridge("read_selection", "{\"name\":\"BuildObject (1)\"}");
+        require(other.get("selected").getAsInt() == 3 && other.get("name").getAsString().equals("BuildObject (1)"), "and a second read stays apart from the first: " + other);
         require(bridge("read_selection", "{}").get("selected").getAsInt() == 1, "without a name it still reads the player's own selection");
         String unknown = failure("read_selection", "{\"name\":\"Nope\"}");
-        require(unknown.contains("Selection 1") && unknown.contains("Selection 2"), "an unknown name lists the names there are: " + unknown);
+        require(unknown.contains("BuildObject") && unknown.contains("BuildObject (1)"), "an unknown name lists the names there are: " + unknown);
 
         // one spec, two selections: each op names its own
         bridge("get_state", "{}");
-        var spec = "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"selection\":\"Selection 1\",\"block\":\"gold_block\"},{\"op\":\"replace_selection\",\"selection\":\"selection 2\",\"block\":\"diamond_block\"}]}}";
-        String refused = failure("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"selection\":\"Selection 1\",\"block\":\"gold_block\"},{\"op\":\"replace_selection\",\"selection\":\"Nope\",\"block\":\"diamond_block\"}]}}");
-        require(refused.contains("Nope") && refused.contains("Selection 2"), "a spec naming an unknown selection is refused, listing the names: " + refused);
+        var spec = "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"selection\":\"BuildObject\",\"block\":\"gold_block\"},{\"op\":\"replace_selection\",\"selection\":\"buildobject (1)\",\"block\":\"diamond_block\"}]}}";
+        String refused = failure("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"selection\":\"BuildObject\",\"block\":\"gold_block\"},{\"op\":\"replace_selection\",\"selection\":\"Nope\",\"block\":\"diamond_block\"}]}}");
+        require(refused.contains("Nope") && refused.contains("BuildObject (1)"), "a spec naming an unknown selection is refused, listing the names: " + refused);
         require(count(Blocks.GOLD_BLOCK) == 0, "and nothing was built by the refused one");
         bridge("preview_build", spec);
         bridge("apply_preview", "{}");
         c.waitTicks(20);
-        require(allAre(a(), Blocks.GOLD_BLOCK), "Selection 1 was changed to gold");
-        require(allAre(b(), Blocks.DIAMOND_BLOCK), "Selection 2 was changed to diamond in the same build");
+        require(allAre(a(), Blocks.GOLD_BLOCK), "BuildObject was changed to gold");
+        require(allAre(b(), Blocks.DIAMOND_BLOCK), "BuildObject (1) was changed to diamond in the same build");
         require(allAre(cell(), Blocks.STONE), "the player's own selection, which no op named, was not touched");
         bridge("undo", "{}");
         c.waitTicks(20);
@@ -277,6 +290,28 @@ public final class SavedSelectionsGameTest {
             var event = new MouseButtonEvent(x, y, new MouseButtonInfo(0, 0));
             screen.mouseClicked(event, false); screen.mouseReleased(event);
         });
+        settle();
+    }
+
+    /** A click and a second click of a double click on the middle of a control. */
+    private void doubleClick(int[] area) {
+        require(area != null, "the control to double click is not in the window");
+        sleep();
+        c.runOnClient(mc -> {
+            var screen = (EditorScreen) mc.gui.screen();
+            double scale;
+            try { var f = EditorScreen.class.getDeclaredField("scale"); f.setAccessible(true); scale = f.getFloat(screen); } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            var event = new MouseButtonEvent((area[0] + area[2] / 2.0) * scale, (area[1] + area[3] / 2.0) * scale, new MouseButtonInfo(0, 0));
+            screen.mouseClicked(event, false); screen.mouseReleased(event);
+            screen.mouseClicked(event, true); screen.mouseReleased(event);
+        });
+        settle();
+    }
+    private void typeText(String text) {
+        c.runOnClient(mc -> { for (char ch : text.toCharArray()) mc.gui.screen().charTyped(new net.minecraft.client.input.CharacterEvent(ch)); });
+    }
+    private void press(int key) {
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(key, 0, 0); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
         settle();
     }
 
