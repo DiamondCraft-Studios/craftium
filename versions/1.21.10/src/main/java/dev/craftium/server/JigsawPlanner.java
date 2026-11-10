@@ -55,7 +55,7 @@ final class JigsawPlanner {
     static final String PACK = "craftium";
     /** Pieces and blocks are described in world coordinates; a piece names its template, where it went and how it was turned. The first piece is the start. */
     record Piece(ResourceLocation template, BlockPos pos, String rotation, BoundingBox box) {}
-    record Result(Map<Point, BlockState> blocks, List<Piece> pieces, long seed, int unsupported, ResourceLocation start, List<String> report) {}
+    record Result(Map<Point, BlockSnapshot> blocks, List<Piece> pieces, long seed, int unsupported, ResourceLocation start, List<String> report) {}
 
     /** What the planner reads from: the folder of the craftium datapack, made (with its pack.mcmeta) when it is not there yet. */
     static Path packFolder(MinecraftServer server) throws IOException {
@@ -109,12 +109,12 @@ final class JigsawPlanner {
                 if (stub.isEmpty()) throw new IllegalArgumentException("Nothing was generated. The start pool may be empty, the start jigsaw name may not match, or the start is too close to the world's height limits");
                 var container = stub.get().getPiecesBuilder().build();
                 var pieces = new ArrayList<Piece>();
-                var blocks = new LinkedHashMap<Point, BlockState>();
+                var blocks = new LinkedHashMap<Point, BlockSnapshot>();
                 int[] unsupported = {0};
                 for (var generated : container.pieces()) {
                     if (!(generated instanceof PoolElementStructurePiece piece)) continue;
                     pieces.add(new Piece(templateOf(piece.getElement()), piece.getPosition(), piece.getRotation().name().toLowerCase(Locale.ROOT), piece.getBoundingBox()));
-                    blocksOf(level, templates, piece, piece.getElement(), blocks, unsupported);
+                    blocksOf(level, templates, generator, seed, piece, piece.getElement(), blocks, unsupported);
                 }
                 var placed = container.pieces().stream().filter(PoolElementStructurePiece.class::isInstance).map(PoolElementStructurePiece.class::cast).toList();
                 return new Result(blocks, pieces, seed, unsupported[0], poolId, report(pools, templates, poolId, placed));
@@ -153,8 +153,8 @@ final class JigsawPlanner {
     }
 
     /** The blocks one piece places, with the processors, rotation and mirror vanilla would use but nothing written to the world. */
-    private static void blocksOf(ServerLevel level, StructureTemplateManager templates, PoolElementStructurePiece piece, StructurePoolElement element, Map<Point, BlockState> out, int[] unsupported) {
-        if (element instanceof ListPoolElement list) { for (var inner : list.getElements()) blocksOf(level, templates, piece, inner, out, unsupported); return; }
+    private static void blocksOf(ServerLevel level, StructureTemplateManager templates, net.minecraft.world.level.chunk.ChunkGenerator generator, long seed, PoolElementStructurePiece piece, StructurePoolElement element, Map<Point, BlockSnapshot> out, int[] unsupported) {
+        if (element instanceof ListPoolElement list) { for (var inner : list.getElements()) blocksOf(level, templates, generator, seed, piece, inner, out, unsupported); return; }
         if (!(element instanceof SinglePoolElement single)) { if (!element.toString().contains("Empty")) unsupported[0]++; return; }
         var template = templates.getOrCreate(single.getTemplateLocation());
         if (template.palettes.isEmpty()) return;
@@ -163,7 +163,7 @@ final class JigsawPlanner {
         var box = settings.getBoundingBox();
         for (var info : StructureTemplate.processBlockInfos(level, piece.getPosition(), piece.getPosition(), settings, blocks)) {
             if (box != null && !box.isInside(info.pos())) continue;
-            out.put(new Point(info.pos().getX(), info.pos().getY(), info.pos().getZ()), info.state().mirror(settings.getMirror()).rotate(settings.getRotation()));
+            out.put(new Point(info.pos().getX(), info.pos().getY(), info.pos().getZ()), new BlockSnapshot(info.state().mirror(settings.getMirror()).rotate(settings.getRotation()), info.nbt())); // the block entity data comes along: loot tables, spawners, signs
         }
     }
 
