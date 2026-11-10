@@ -617,7 +617,13 @@ final class JigsawEditor {
             if (c.has("joint")) { var joint = text(c, "joint"); if (!joint.equals("rollable") && !joint.equals("aligned")) throw new IllegalArgumentException("A joint is rollable or aligned"); nbt.putString("joint", joint); }
             if (c.has("placement")) nbt.putInt("placement_priority", Math.clamp(c.get("placement").getAsInt(), 0, 1000));
             if (c.has("selection")) nbt.putInt("selection_priority", Math.clamp(c.get("selection").getAsInt(), 0, 1000));
-            if (c.has("final")) nbt.putString("final_state", text(c, "final"));
+            if (c.has("final")) {
+                var state = text(c, "final").strip();
+                if (state.isEmpty()) state = "minecraft:air";
+                try { BlockStateParser.parseForBlock(env.server().registryAccess().lookupOrThrow(Registries.BLOCK), state, false); }
+                catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) { throw new IllegalArgumentException("\"" + state + "\" is not a block the game knows: " + e.getMessage()); }
+                nbt.putString("final_state", state);
+            }
             block.put("nbt", nbt);
             blocks.set(i, block);
             tag.put("blocks", blocks);
