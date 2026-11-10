@@ -16,6 +16,9 @@ Changes since 1.5.0-beta.1.
 - Ctrl + click on a row of the Hierarchy adds or removes that BuildObject from the ones shown, and Shift + Ctrl + click adds every row from the last one clicked to this one. The ones shown together are one selection, so any tool works on all of them.
 - F, with exactly one BuildObject shown, moves the view to face the middle of it from far enough back that all of it fits between the panels. It is bound in the controls like the other shortcuts.
 - Right-clicking a row of the Hierarchy opens a menu: Select, Select children only, Edit blocks; Create empty parent (or Group selected for several), Create child from selection; Rename, Delete (or Delete selected); Move up, Move down, Move out of parent, Fold or Unfold all below; Show or Hide outline, Change colour, Focus. Every item that changes the hierarchy is in the undo history.
+- Ctrl + G makes an empty parent around the BuildObjects shown, in the place of the first of them. It is in the controls like the other shortcuts, and in the right-click menu.
+- F2 renames the BuildObject shown, in its row.
+- An open Hierarchy menu takes the pointer: nothing behind it is lit up or clicked through it, and a click anywhere else closes it.
 - Target info moved to the bottom of the left column, under Tool options.
 - The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
 - Your saved window layout is reset once, to the new places.

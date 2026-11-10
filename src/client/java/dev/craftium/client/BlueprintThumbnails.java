@@ -2,6 +2,7 @@ package dev.craftium.client;
 
 import dev.craftium.client.compat.Tex;
 import dev.craftium.core.BlueprintInfo;
+import dev.craftium.core.BlueprintVoxels;
 import java.util.*;
 
 /**
@@ -49,7 +50,8 @@ final class BlueprintThumbnails {
             if (cells[i] < 0) continue;
             top[i] = palette[cells[i]][0]; side[i] = palette[cells[i]][1]; bottom[i] = palette[cells[i]][2];
         }
-        try { return AiThumbnails.draw(info.size().x(), info.size().y(), info.size().z(), top, side, bottom, 0); }
+        int scale = Math.max(1, info.scale());
+        try { return AiThumbnails.draw(BlueprintVoxels.cells(info.size().x(), scale), BlueprintVoxels.cells(info.size().y(), scale), BlueprintVoxels.cells(info.size().z(), scale), top, side, bottom, 0); }
         catch (IllegalArgumentException tooLarge) { return null; } // a box the small picture cannot hold: it keeps its flat thumbnail
     }
 }

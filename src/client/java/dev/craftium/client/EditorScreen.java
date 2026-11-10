@@ -56,7 +56,7 @@ public final class EditorScreen extends CraftiumScreen {
     /** A control whose tip opens with this is recorded by its text for tests but shows no tooltip: the rows of the Hierarchy. */
     private static final String HIDDEN_TIP="\u0001";
     private record Control(int x,int y,int width,int height,Runnable action,Runnable back,String tip,String panel,int clipTop,int clipBottom) {
-        Control{PanelLog.control(x,y,width,height,tip.startsWith(HIDDEN_TIP)?tip.substring(1):tip,panel);}
+        Control{PanelLog.control(x,y,width,height,tip.startsWith(HIDDEN_TIP)||tip.startsWith(BLOCK_TIP)?tip.substring(1):tip,panel);}
         Control(int x,int y,int width,int height,Runnable action,String tip){this(x,placed(y,height),width,height,action,null,tip,drawingPanel,scrollClipTop,scrollClipBottom);}
         Control(int x,int y,int width,int height,Runnable action,Runnable back,String tip){this(x,placed(y,height),width,height,action,back,tip,drawingPanel,scrollClipTop,scrollClipBottom);}
         boolean contains(double px,double py){if(!WorkspaceLayout.visible(panel))return false;var point=WorkspaceLayout.inverse(panel,px,py);return point[0]>=x&&point[1]>=y&&point[0]<x+width&&point[1]<y+height&&point[1]>=clipTop&&point[1]<clipBottom&&!WorkspaceLayout.hiddenByFold(panel,point[1]);}
@@ -228,7 +228,7 @@ public final class EditorScreen extends CraftiumScreen {
         pipettePreview(g);
         selectionModeBadge(g);
         if(!help&&menu<0&&ctxCell<0&&!shapeMenu&&confirm==null) { // an open menu or pop-up is what the pointer is for, so no tooltip over it
-            String tooltip="";for(var c:controls)if(c.contains(mx,my)&&!c.tip.isEmpty()&&!c.tip.startsWith(HIDDEN_TIP))tooltip=c.tip;
+            String tooltip="";for(var c:controls)if(c.contains(mx,my)&&!c.tip.isEmpty()&&!c.tip.startsWith(HIDDEN_TIP)&&!c.tip.startsWith(BLOCK_TIP))tooltip=c.tip;
             if(!tooltip.isEmpty()) {
                 // A new line starts a new paragraph; each is wrapped to the pane, and a pane with a title shows it brighter than what follows.
                 var pane=tooltipPane(tooltip);var rows=pane.rows();
@@ -268,7 +268,9 @@ public final class EditorScreen extends CraftiumScreen {
         if(!pointerFree())return;
         for(int i=controls.size()-1;i>=0;i--){
             var c=controls.get(i);
+            if(menu==ROW_MENU&&i<rowMenuFrom)return; // an open menu is what the pointer is on: nothing behind it takes the hover look
             if(!c.contains(mx,my))continue;
+            if(c.tip.startsWith(BLOCK_TIP))return; // the menu's own surface
             g.pose().pushMatrix();WorkspaceLayout.apply(g,c.panel());
             boolean clipped=c.clipTop()!=Integer.MIN_VALUE;if(clipped)g.enableScissor(0,c.clipTop(),w,c.clipBottom()); // a control half scrolled out of view stays inside its area
             g.fill(c.x(),c.y(),c.x()+c.width(),c.y()+c.height(),Hover.OVERLAY);g.outline(c.x(),c.y(),c.width(),c.height(),ACCENT);
@@ -1675,6 +1677,10 @@ public final class EditorScreen extends CraftiumScreen {
             }
             finishTyping(true);return true;
         }
+        if(menu==ROW_MENU&&event.button()<=1){ // the open menu takes the click: one of its items does it, and any other place closes the menu with nothing behind it hearing
+            for(int i=controls.size()-1;i>=rowMenuFrom;i--){var c=controls.get(i);if(c.contains(x,y)){c.action.run();return true;}}
+            menu=-1;return true;
+        }
         if(shapeMenu){shapeMenu=false;var picked=event.button()==0?shapeAt(x,y):null;if(picked!=null)o().shape=picked;return true;} // any click closes the picker
         if(ctxCell>=0){int cell=ctxCell;ctxCell=-1;if(x>=ctxX&&x<ctxX+MASK_MENU_WIDTH&&y>=ctxY&&y<ctxY+BLOCK_MENU_LABELS.length*MASK_MENU_ROW&&cell<blocksOf(ctxList).size()){switch((int)((y-ctxY)/MASK_MENU_ROW)){case 0->changeBlock(ctxList,cell);case 1->editBlockState(ctxList,cell);default->removeBlock(ctxList,cell);}}return true;}
         if(event.button()==2&&!help&&!transform&&menu<0)for(int i=sliderAreas.size()-1;i>=0;i--){var a=sliderAreas.get(i);if(a.control().contains(x,y)){a.slider().reset();return true;}} // back to the default, at once
@@ -1920,6 +1926,20 @@ public final class EditorScreen extends CraftiumScreen {
             case UNDO,UNDO_ALT -> action("undo");
             case DESELECT -> action("clear");
             case FOCUS_OBJECT -> {if(!focusBuildObject())return false;}
+            case RENAME_OBJECT -> {
+                var shown=new ArrayList<dev.craftium.net.Packets.SavedSelection>();for(var e:ClientState.savedSelections())if(e.active())shown.add(e);
+                if(shown.size()!=1){ClientState.notify(shown.isEmpty()?"Show a BuildObject first: click one in the Hierarchy":"Rename one BuildObject at a time");return true;}
+                int id=shown.getFirst().id();
+                for(var p=savedById(shown.getFirst().parent());p!=null;p=savedById(p.parent()))if(ClientState.savedFolded(p.id()))ClientState.toggleSavedFolded(p.id()); // it has to be a row to be renamed in
+                int at=0;for(int i=0;i<hierarchyRows.size();i++)if(hierarchyRows.get(i).id()==id)at=i;
+                savedScroll=Math.clamp(savedScroll,Math.max(0,at-hierarchyRowCount+1),at); // and in view
+                startRename(new RenameArea(null,id));
+            }
+            case GROUP_OBJECTS -> {
+                var shown=new ArrayList<String>();for(var e:ClientState.savedSelections())if(e.active())shown.add(String.valueOf(e.id()));
+                if(shown.isEmpty())ClientState.notify("Show a BuildObject first: click one in the Hierarchy");
+                else action("saved_selection:group:"+String.join(",",shown)); // an empty parent around the BuildObjects shown
+            }
             case TOGGLE_MOVE -> toggleTool(Tool.MOVE);case TOGGLE_ROTATE -> toggleTool(Tool.ROTATE);case TOGGLE_SCALE -> toggleTool(Tool.SCALE);case TOGGLE_PIVOT -> toggleTool(Tool.PIVOT);
 case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut");case DUPLICATE -> action("duplicate");case PASTE -> action("paste");case PASTE_IN_PLACE -> PlacementPreview.beginInPlace();
             case COPY_AIR -> {boolean old=o().pasteAir;o().pasteAir=true;action("copy");o().pasteAir=old;}
@@ -2096,7 +2116,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         boolean looking=ClientState.activeSaved()!=null;
         int top=y+28,bottom=y+ph-36,rowHeight=20,rows=Math.max(1,(bottom-top)/rowHeight),total=saved.size();
         g.fill(x+8,top-2,x+pw-8,top+rows*rowHeight+1,0xff141c26);g.outline(x+8,top-2,pw-16,rows*rowHeight+3,LINE);
-        boolean renameShown=false;hierarchyTop=top;hierarchyRow=rowHeight;
+        boolean renameShown=false;hierarchyTop=top;hierarchyRow=rowHeight;hierarchyRowCount=rows;
         savedScroll=Math.clamp(savedScroll,0,Math.max(0,total-rows));
         if(total==0)text(g,"No BuildObjects yet",x+16,top+6,MUTED);
         for(int i=0;i<rows&&savedScroll+i<total;i++){
@@ -2191,7 +2211,9 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         return true;
     }
     // ---- the right-click menu of a row ---------------------------------------------------------------------------------------------------
-    private List<MenuItem> rowMenu=List.of();private int rowMenuX,rowMenuY;
+    private List<MenuItem> rowMenu=List.of();private int rowMenuX,rowMenuY,rowMenuFrom;
+    /** A tip that marks a control as a surface: it takes the pointer, shows no tooltip and no hover look. */
+    private static final String BLOCK_TIP="";
     /** The BuildObjects the menu works on: the ones shown when the row is one of them, else the row alone, which the click has just chosen. */
     private List<Integer> rowMenuTargets(int id){
         var shown=new ArrayList<Integer>();for(var e:hierarchyAll)if(e.active())shown.add(e.id());
@@ -2208,10 +2230,10 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         if(!kids.isEmpty())items.add(item("Select children only","",()->action("saved_selection:viewset:"+String.join(",",kids.stream().map(String::valueOf).toList()))));
         items.add(item("Edit blocks","",()->action("saved_selection:edit:"+id)));
         items.add(divider());
-        items.add(n>1?item("Group selected ("+n+")","",()->action("saved_selection:group:"+csv)):item("Create empty parent","",()->action("saved_selection:group:"+id)));
+        items.add(n>1?item("Group selected ("+n+")","Ctrl+G",()->action("saved_selection:group:"+csv)):item("Create empty parent",row.active()?"Ctrl+G":"",()->action("saved_selection:group:"+id)));
         if(ClientState.status.selectionSize()>0&&!row.active())items.add(item("Create child from selection","",()->action("saved_selection:createchild:"+id)));
         items.add(divider());
-        items.add(item("Rename","",()->startRename(new RenameArea(null,id))));
+        items.add(item("Rename",n==1&&row.active()?"F2":"",()->startRename(new RenameArea(null,id))));
         items.add(n>1?item("Delete selected ("+n+")","",()->action("saved_selection:deleteset:"+csv)):item("Delete","",()->action("saved_selection:delete:"+id)));
         var moves=new ArrayList<MenuItem>();
         int at=siblingIndex(row);int siblings=childCount(row.parent());
@@ -2248,6 +2270,8 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
         int width=226,height=4;for(var item:rowMenu)height+=item.action==null?9:25;
         int x=Math.max(0,rowMenuX+width>w?rowMenuX-width:rowMenuX),y=Math.clamp(rowMenuY,27,Math.max(27,h-25-height));
         g.fill(x,y,x+width,y+height,0xff1c2735);g.outline(x,y,width,height,LINE);
+        rowMenuFrom=controls.size();
+        controls.add(new Control(x,y,width,height,()->{},BLOCK_TIP)); // the menu as a whole: under its items, over everything else, so nothing behind it is hovered or clicked through it
         menuAlign=true;
         try{
             int row=y+3;
@@ -2262,7 +2286,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> action("cut"
     /** A row of the Hierarchy that a double click renames: the row's own control, so a click on a button of the row is not a rename. */
     private record RenameArea(Control row,int id){}
     /** The row being pressed to click or to drag to another place, how far the pointer has gone, and where the list of rows is drawn. */
-    private int rowDragId=-1,hierarchyTop,hierarchyRow=20;private double rowDragX,rowDragY;private boolean rowDragMoved;private Runnable rowDragClick;
+    private int rowDragId=-1,hierarchyTop,hierarchyRow=20,hierarchyRowCount=1;private double rowDragX,rowDragY;private boolean rowDragMoved;private Runnable rowDragClick;
     /** The BuildObjects as the client has them, and the rows listed of them (those not under a folded one), for the drag to work out where it lands. */
     private List<dev.craftium.net.Packets.SavedSelection> hierarchyAll=List.of(),hierarchyRows=List.of();
     private dev.craftium.net.Packets.SavedSelection savedById(int id){if(id==0)return null;for(var e:hierarchyAll)if(e.id()==id)return e;return null;}
