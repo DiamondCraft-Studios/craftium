@@ -35,13 +35,29 @@ class SavedSelectionsTest {
         saved.restore(s0,s);assertEquals(List.of(one),saved.entries());assertSame(one,saved.find(guid));
         saved.restore(s2,s);assertEquals(List.of(again),saved.entries());assertNotEquals(again.guid(),guid);
     }
-    @Test void restoringPutsBackNamesParentsOrderAndBlocksNotJustWhatExists(){
+    @Test void restoringPutsBackNamesParentsAndOrderButLeavesTheBlocksOfOnesThatAreStillHere(){
         var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);
         var before=saved.state();
         saved.rename(a.id(),"Roof");saved.place(b.id(),a.id(),0);saved.place(a.id(),0,5);saved.setPoints(Map.of(a.id(),List.of(C)));
         saved.restore(before,s);
-        assertEquals(List.of(a,b),saved.entries());assertEquals("BuildObject",a.name());assertEquals(0,b.parentId());assertEquals(List.of(A),a.points());
-        assertEquals(saved.state(),before);
+        assertEquals(List.of(a,b),saved.entries());assertEquals("BuildObject",a.name());assertEquals(0,b.parentId());
+        assertEquals(List.of(C),a.points(),"its blocks followed the blocks in the world since, and this step was not about them");
+        assertTrue(saved.structureMatches(before));
+    }
+    @Test void aBuildObjectThatComesBackAfterBeingDeletedTakesTheBlocksItHad(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(live(A,B));var b=saved.save(live(C));
+        var before=saved.state();saved.delete(a.id(),s);
+        saved.restore(before,s);
+        assertEquals(List.of(a,b),saved.entries());assertEquals(List.of(A,B),a.points());
+    }
+    @Test void undoingAStepNeverUndoesAnotherPlayersBlocksInTheSharedTree(){
+        var tree=new SavedSelections.Tree();var alex=new SavedSelections(tree);var sam=new SavedSelections(tree);var s=live(A);
+        var x=alex.save(live(A,B));var before=alex.state();
+        alex.rename(x.id(),"Roof");
+        sam.setPoints(Map.of(x.id(),List.of(B))); // Sam's edit turned one of its blocks into air meanwhile
+        assertTrue(alex.structureMatches(alex.state()));
+        alex.restore(before,s);
+        assertEquals("BuildObject",x.name(),"Alex's rename is undone");assertEquals(List.of(B),x.points(),"and Sam's change to the blocks is kept");
     }
     @Test void restoringLetsGoOfABuildObjectThatIsNoLongerThere(){
         var saved=new SavedSelections();var s=live(A);var before=saved.state();var one=saved.save(s);

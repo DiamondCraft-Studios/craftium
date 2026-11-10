@@ -340,15 +340,19 @@ public final class SavedSelections {
     public void reconcileView(Selection live){if(viewed.stream().anyMatch(v->!entries.contains(v)))release(live);}
     /**
      * Puts the BuildObjects back as they were in {@code state}: used by Undo and Redo of anything done in the Hierarchy. A BuildObject that is gone in it is
-     * let go of first if it was being looked at. The entries are the same objects, so ids and GUIDs come back as they were.
+     * let go of first if it was being looked at. The entries are the same objects, so ids and GUIDs come back as they were; their blocks are left as they are
+     * now, except for one that comes back after being deleted.
      */
     public void restore(State state,Selection live){
         var present=new HashSet<Entry>();for(var r:state.rows())present.add(r.entry());
         if(viewed.stream().anyMatch(v->!present.contains(v)))release(live);
+        var there=new HashSet<>(entries);
         entries.clear();var byId=new HashMap<Integer,Entry>();
         for(var r:state.rows()){
             var e=r.entry();e.name=r.name();e.color=r.color();
-            if(!e.points.equals(r.points())){e.points=r.points();e.version++;}
+            // The blocks of one that is still here are what they are now: they follow the blocks in the world (and have their own history), and this step is not about them.
+            // Only one that comes back after being deleted takes the blocks it had.
+            if(!there.contains(e)&&!e.points.equals(r.points())){e.points=r.points();e.version++;}
             entries.add(e);byId.put(e.id,e);
         }
         for(var r:state.rows())r.entry().parent=r.parentId()==0?null:byId.get(r.parentId());
