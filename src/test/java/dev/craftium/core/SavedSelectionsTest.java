@@ -11,29 +11,30 @@ class SavedSelectionsTest {
 
     @Test void savingNamesThemInOrderAndLeavesTheLiveSelectionAlone(){
         var saved=new SavedSelections();var s=live(A,B);
-        assertEquals("Selection 1",saved.save(s).name());assertEquals("Selection 2",saved.save(s).name());
+        assertEquals("BuildObject",saved.save(s).name());assertEquals("BuildObject (1)",saved.save(s).name());
         assertEquals(Set.of(A,B),set(s));assertNull(saved.active());
     }
     @Test void aNumberFreedAtTheEndIsUsedAgainButAGapIsNotFilled(){
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);saved.save(s);
-        saved.delete(two.id(),s);assertEquals("Selection 4",saved.save(s).name(),"the gap at 2 stays, the count goes on from the highest");
-        var last=saved.entries().getLast();saved.delete(last.id(),s);assertEquals("Selection 4",saved.save(s).name(),"the freed end comes round again");
+        saved.delete(two.id(),s);assertEquals("BuildObject (3)",saved.save(s).name(),"the gap at 2 stays, the count goes on from the highest");
+        var last=saved.entries().getLast();saved.delete(last.id(),s);assertEquals("BuildObject (3)",saved.save(s).name(),"the freed end comes round again");
     }
     @Test void deletingEverythingStartsTheCountAgainAtOne(){
         var saved=new SavedSelections();var s=live(A);saved.save(s);saved.save(s);
         for(var e:List.copyOf(saved.entries()))saved.delete(e.id(),s);
-        assertEquals("Selection 1",saved.save(s).name());
+        assertEquals("BuildObject",saved.save(s).name());
     }
     @Test void aRenamedEntryDoesNotCountTowardsTheNumbers(){
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);
-        saved.rename(two.id(),"Roof");assertEquals("Selection 2",saved.save(s).name());
+        saved.rename(two.id(),"Roof");assertEquals("BuildObject (1)",saved.save(s).name());
     }
-    @Test void anEntryBroughtBackWhoseNumberWasTakenGetsTheNextFreeName(){
+    @Test void anEntryBroughtBackWhoseNameWasTakenKeepsItAndTheGuidsTellThemApart(){
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);saved.delete(one.id(),s);
-        saved.save(s); // takes "Selection 1" again
+        var again=saved.save(s); // takes "BuildObject" again
         assertSame(one,saved.undoDelete(0));
-        assertEquals(List.of("Selection 1","Selection 2"),saved.entries().stream().map(SavedSelections.Entry::name).sorted().toList());
-        assertEquals("Selection 2",one.name(),"the one that came back, not the new one, is renamed");
+        assertEquals(List.of("BuildObject","BuildObject"),saved.entries().stream().map(SavedSelections.Entry::name).toList());
+        assertNotEquals(one.guid(),again.guid());
+        assertSame(one,saved.find(one.guid()));
     }
     @Test void savingNothingIsRefused(){assertThrows(IllegalArgumentException.class,()->new SavedSelections().save(new Selection()));}
     @Test void viewingSwapsAndReleasingBringsTheOriginalBack(){
@@ -76,21 +77,91 @@ class SavedSelectionsTest {
     @Test void aDeletedEntryComesBackWhereItWas(){
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);saved.save(s);
         int at=saved.indexOf(one);saved.delete(one.id(),s);saved.restore(one,at);
-        assertEquals(List.of("Selection 1","Selection 2","Selection 3"),saved.entries().stream().map(SavedSelections.Entry::name).toList());
-        assertSame(two,saved.byName("selection 2"));
+        assertEquals(List.of("BuildObject","BuildObject (1)","BuildObject (2)"),saved.entries().stream().map(SavedSelections.Entry::name).toList());
+        assertSame(two,saved.find("buildobject (1)"));
     }
     @Test void undoBringsBackTheLastDeleteOnlyWhenItIsNewerThanTheLastEdit(){
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);saved.save(s);
         saved.delete(one.id(),s);
         assertNull(saved.undoDelete(System.currentTimeMillis()+1000),"an edit made after the delete is undone first");
-        assertSame(one,saved.undoDelete(0));assertEquals("Selection 1",saved.entries().getFirst().name());
+        assertSame(one,saved.undoDelete(0));assertEquals("BuildObject",saved.entries().getFirst().name());
         assertNull(saved.undoDelete(0),"nothing left to bring back");
     }
-    @Test void renamingKeepsNamesUniqueAndNonEmpty(){
+    @Test void renamingMayRepeatANameButNeverEmptiesIt(){
         var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);
-        saved.rename(one.id(),"Roof");assertSame(one,saved.byName("roof"));
-        assertThrows(IllegalArgumentException.class,()->saved.rename(two.id(),"ROOF"));
+        saved.rename(one.id(),"Roof");assertSame(one,saved.find("roof"));
+        saved.rename(two.id(),"ROOF");assertEquals("ROOF",two.name(),"two may share a name");
         assertThrows(IllegalArgumentException.class,()->saved.rename(two.id(),"  "));
+    }
+    @Test void everyEntryHasItsOwnGuidThatFindsItWhateverItIsCalled(){
+        var saved=new SavedSelections();var s=live(A);var one=saved.save(s);var two=saved.save(s);
+        saved.rename(one.id(),"Roof");saved.rename(two.id(),"Roof");
+        assertNotEquals(one.guid(),two.guid());assertEquals(36,one.guid().length());
+        assertSame(two,saved.find(two.guid().toUpperCase()),"a GUID finds it, in any case");
+        var error=assertThrows(IllegalArgumentException.class,()->saved.find("roof"));
+        assertTrue(error.getMessage().contains(one.guid())&&error.getMessage().contains(two.guid()),"a name two share says which GUIDs there are: "+error.getMessage());
+        assertNull(saved.find("Walls"));
+    }
+    @Test void anEntryKeepsItsGuidAcrossDeletingAndUndoing(){
+        var saved=new SavedSelections();var s=live(A);var one=saved.save(s);String guid=one.guid();saved.save(s);
+        saved.delete(one.id(),s);assertSame(one,saved.undoDelete(0));assertEquals(guid,saved.find(guid).guid());
+    }
+    @Test void placingReordersTheTopLevelAndKeepsTheRestInOrder(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);
+        saved.place(c.id(),0,0);assertEquals(List.of(c,a,b),saved.entries());
+        saved.place(c.id(),0,2);assertEquals(List.of(a,b,c),saved.entries());
+        saved.place(a.id(),0,99);assertEquals(List.of(b,c,a),saved.entries(),"past the end is the end");
+        saved.place(a.id(),0,-5);assertEquals(List.of(a,b,c),saved.entries(),"before the start is the start");
+    }
+    @Test void anEntryGoesUnderAnotherAtAnyDepthAndTheListStaysInTreeOrder(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);var d=saved.save(s);
+        saved.place(b.id(),a.id(),0);saved.place(c.id(),b.id(),0);saved.place(d.id(),c.id(),0);
+        assertEquals(List.of(a,b,c,d),saved.entries());
+        assertEquals(List.of(0,1,2,3),List.of(saved.depth(a),saved.depth(b),saved.depth(c),saved.depth(d)));
+        assertEquals(a.id(),b.parentId());assertEquals(c.id(),d.parentId());assertEquals(0,a.parentId());
+        assertTrue(saved.isUnder(d,a)&&!saved.isUnder(a,d));
+        assertEquals(List.of(b),saved.children(a));
+    }
+    @Test void movingAParentTakesEverythingUnderItAlong(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);var e=saved.save(s);
+        saved.place(c.id(),b.id(),0);saved.place(e.id(),c.id(),0); // a, b > c > e
+        saved.place(b.id(),0,0);assertEquals(List.of(b,c,e,a),saved.entries(),"b, with c and e under it, goes before a");
+        saved.place(b.id(),a.id(),0);assertEquals(List.of(a,b,c,e),saved.entries(),"and under a, the three still one run");
+        assertEquals(List.of(0,1,2,3),List.of(saved.depth(a),saved.depth(b),saved.depth(c),saved.depth(e)));
+    }
+    @Test void childrenKeepTheirOrderAmongThemselves(){
+        var saved=new SavedSelections();var s=live(A);var p=saved.save(s);var x=saved.save(s);var y=saved.save(s);var z=saved.save(s);
+        saved.place(x.id(),p.id(),0);saved.place(y.id(),p.id(),1);saved.place(z.id(),p.id(),1);
+        assertEquals(List.of(x,z,y),saved.children(p),"z went in as the second child");
+        assertEquals(List.of(p,x,z,y),saved.entries());
+        saved.place(y.id(),p.id(),0);assertEquals(List.of(y,x,z),saved.children(p));
+    }
+    @Test void anEntryCannotGoUnderItselfOrUnderWhatIsUnderIt(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);
+        saved.place(b.id(),a.id(),0);
+        assertThrows(IllegalArgumentException.class,()->saved.place(a.id(),a.id(),0));
+        assertThrows(IllegalArgumentException.class,()->saved.place(a.id(),b.id(),0));
+        assertEquals(List.of(a,b),saved.entries(),"a refused place changes nothing");
+    }
+    @Test void lookingAtAParentShowsEverythingUnderItAndEditingOnlyItsOwn(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);s.restore(List.of(B));var b=saved.save(s);s.restore(List.of(C));var c=saved.save(s);
+        saved.place(b.id(),a.id(),0);saved.place(c.id(),b.id(),0);
+        s.restore(List.of(new Point(9,9,9)));
+        saved.view(a.id(),s);assertEquals(Set.of(A,B,C),set(s),"the whole subtree");
+        saved.release(s);saved.edit(a.id(),s);assertEquals(Set.of(A),set(s),"only its own blocks");
+        assertEquals(Set.of(A,B,C),saved.effective(a));assertEquals(Set.of(C),saved.effective(c));
+    }
+    @Test void deletingAParentDeletesWhatIsUnderItAndUndoBringsBackTheGroupWhereItWas(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);var d=saved.save(s);
+        saved.place(c.id(),b.id(),0); // a, b > c, d
+        saved.delete(b.id(),s);assertEquals(List.of(a,d),saved.entries(),"c went with b");
+        assertSame(b,saved.undoDelete(0));assertEquals(List.of(a,b,c,d),saved.entries());
+        assertEquals(b.id(),c.parentId(),"c is under b again");
+    }
+    @Test void deletingWhatIsBeingLookedAtInsideAGroupGivesTheSelectionBack(){
+        var saved=new SavedSelections();var s=live(A);var a=saved.save(s);s.restore(List.of(B));var b=saved.save(s);saved.place(b.id(),a.id(),0);
+        s.restore(List.of(C));saved.view(b.id(),s);saved.delete(a.id(),s);
+        assertNull(saved.active());assertEquals(Set.of(C),set(s));
     }
     @Test void theLimitIsEnforced(){
         var saved=new SavedSelections();var s=live(A);for(int i=0;i<SavedSelections.MAX;i++)saved.save(s);

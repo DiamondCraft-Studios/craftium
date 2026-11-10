@@ -231,11 +231,11 @@ public final class EditorServer {
             if(!replaying&&!r.action().equals("builder_commit")&&now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             if(!popup)s.lastRequest=now;
             if(r.action().equals("tool_preview")){toolPreview(player,s,o,r.target(),r.normal());return;} // the ghost of a plugin's tool, which is not an edit and answers with the ghost alone
-            if(r.action().startsWith("ai_selection_named:")){ // one of the player's saved selections, read by the name it has in the Selections window
+            if(r.action().startsWith("ai_selection_named:")){ // one of the player's BuildObjects, read by the GUID or the name it has in the Hierarchy window
                 ServerPlatform.send(player,new Packets.AiReply(aiSelectionNamed(player,r.action().substring("ai_selection_named:".length()))));return;
             }
             if(r.action().startsWith(SavedSelectionActions.PREFIX)){ // the Selections window (before the plugin actions, as "saved_selection:save" has the shape of one): swaps entries in and out of the live selection, never changes a block
-                if(!Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS))throw new IllegalArgumentException("This client does not know saved selections");
+                if(!Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS))throw new IllegalArgumentException("This client does not know BuildObjects");
                 send(player,s,SavedSelectionActions.run(s,r.action()),false);return;
             }
             if(ActionRegistry.isNamespaced(r.action())){ // an action of a plugin's: only the registry answers, and a name nobody registered is an error, never one of the editor's
@@ -442,7 +442,7 @@ public final class EditorServer {
                 case "undo", "redo" -> {
                     s.historyRemaining=0;
                     // a saved selection deleted after the last edit comes back first: Undo takes back the most recent thing
-                    if(r.action().equals("undo")&&s.saved.undoDelete(s.undo.isEmpty()?0:s.undo.peekFirst().time())!=null){send(player,s,"Saved selection back",false);return;}
+                    if(r.action().equals("undo")&&s.saved.undoDelete(s.undo.isEmpty()?0:s.undo.peekFirst().time())!=null){send(player,s,"BuildObject back",false);return;}
                     if(r.action().equals("undo"))undoAnimated(player,s);else history(player,s,false);
                 }
                 case "fill", "delete" -> {
@@ -770,20 +770,20 @@ public final class EditorServer {
         }
         return AiWorld.selection(player,ai.pinned,extra);
     }
-    /** The blocks of the player's saved selection with that name (any case), or an error that says which names there are. */
+    /** The blocks of the player's BuildObject with that GUID or name (any case), or an error that says which names there are. */
     private static Set<Point> savedByName(ServerPlayer player,String name){
-        var mine=SESSIONS.get(player.getUUID());var entry=mine==null?null:mine.saved.byName(name);
+        var mine=SESSIONS.get(player.getUUID());var entry=mine==null?null:mine.saved.find(name);
         if(entry==null){
             var names=mine==null?List.<String>of():mine.saved.entries().stream().map(e->e.name()).toList();
-            throw new IllegalArgumentException("The player has no saved selection named \""+name+"\". "+(names.isEmpty()?"They have saved none: ask them to select the blocks and press Save selection in the Selections window":"They have: "+String.join(", ",names)));
+            throw new IllegalArgumentException("The player has no BuildObject named \""+name+"\". "+(names.isEmpty()?"They have none: ask them to select the blocks and press + in the Hierarchy window":"They have: "+String.join(", ",names)));
         }
-        return new LinkedHashSet<>(entry.points());
+        return new LinkedHashSet<>(mine.saved.effective(entry)); // with everything under it
     }
     /** What read_selection answers for a saved selection: the same report as for the selection itself, with its name, and where the player has it. */
     private static String aiSelectionNamed(ServerPlayer player,String name){
-        var points=savedByName(player,name);var mine=SESSIONS.get(player.getUUID());var entry=mine.saved.byName(name);
+        var points=savedByName(player,name);var mine=SESSIONS.get(player.getUUID());var entry=mine.saved.find(name);
         var extra=new com.google.gson.JsonObject();
-        extra.addProperty("name",entry.name());extra.addProperty("saved",true);
+        extra.addProperty("name",entry.name());extra.addProperty("guid",entry.guid());extra.addProperty("saved",true);
         if(mine.saved.active()==entry)extra.addProperty("shownByPlayer",mine.saved.editing()?"editing":"viewing");
         return AiWorld.selection(player,points,extra);
     }

@@ -52,7 +52,7 @@ to see what is in it, then use a `replace_selection` op (see the `preview_build`
 replaced stair keeps the way it faces and its half, and it never changes the selection. Preview it like any build.
 Say what you understood in one line ("changing the 48 spruce stairs you selected to deepslate tile stairs").
 
-The player can also save selections by name in the Selections window ("Selection 1", "Selection 2", which they may
+The player can also save selections by name in the Hierarchy window ("BuildObject", "BuildObject (1)", which they may
 rename). `get_state` lists them as `savedSelections`. When they say "on selection 1 do this, then on selection 2 do
 that", each name is its own selection: call `read_selection` with that `name` for each one you need, and give each
 `replace_selection` op a `selection` name, so one build changes several. An op without a name works on the selection

@@ -297,7 +297,7 @@ test("the build tool explains how to work on several saved selections in one spe
   const client = await connect(bridge.file);
   const tools = (await client.listTools()).tools;
   const text = JSON.stringify(tools);
-  assert.match(text, /\\"selection\\":\\"Selection 1\\"/);
+  assert.match(text, /\\"selection\\":\\"BuildObject\\"/);
   assert.match(text, /savedSelections/);
   await bridge.close();
 });

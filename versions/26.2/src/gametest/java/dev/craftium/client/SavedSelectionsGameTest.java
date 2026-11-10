@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * The Selections window and the saved selections behind it, end to end on a real server: Save selection, showing an entry in place of the
+ * The Hierarchy window and the saved selections behind it, end to end on a real server: Save selection, showing an entry in place of the
  * selection and getting yours back, editing, the eye, deleting and bringing it back with Ctrl+Z, the numbers starting again, and Claude reading
  * and building on two selections by name in one spec. The window is driven through its own controls, found where the panel says it laid them
  * out (see {@link PanelLog}), so a button that moved or stopped answering fails here.
@@ -57,36 +57,36 @@ public final class SavedSelectionsGameTest {
         w.getServer().runCommand("setblock " + (baseX + 9) + " " + baseY + " " + baseZ + " stone");
         c.waitTicks(10);
 
-        require(control("Save what is selected now", 0) == null, "the Selections window should stay out of the way with nothing selected and nothing saved");
+        require(control("Create a BuildObject from what is selected now", 0) != null, "the Hierarchy window is always shown, empty at first");
 
         selectOnly(a());
-        require(control("Save what is selected now", 0) != null, "the window should appear once something is selected");
-        click(control("Save what is selected now", 0));
+        require(control("Create a BuildObject from what is selected now", 0) != null, "the window should still be there once something is selected");
+        click(control("Create a BuildObject from what is selected now", 0));
         var one = saved(0);
-        require(ClientState.savedSelections().size() == 1 && one.name().equals("Selection 1"), "Save selection should make Selection 1, got " + ClientState.savedSelections());
+        require(ClientState.savedSelections().size() == 1 && one.name().equals("BuildObject"), "Save selection should make BuildObject, got " + ClientState.savedSelections());
         require(one.size() == 8 && !one.active(), "an entry holds the 8 blocks and is not shown yet");
         require(liveIs(a()), "saving must leave the selection as it was");
-        require(panelShows("Selection 1 • 2 x 2 x 2"), "the entry reads its name and its size: " + texts());
+        require(panelShows("BuildObject") && tipHas("'2 x 2 x 2 blocks"), "the entry reads its name, and its size is in the tip: " + texts());
         require(ClientState.savedColor(one.id()) == ClientState.options.selectionColor, "the first entry starts as the selection colour");
 
         selectOnly(b());
-        click(control("Save what is selected now", 0));
+        click(control("Create a BuildObject from what is selected now", 0));
         var two = saved(1);
-        require(two.name().equals("Selection 2") && two.size() == 3, "the second entry is Selection 2 with 3 blocks, got " + ClientState.savedSelections());
-        require(panelShows("Selection 2 • 3 x 1 x 1"), "the second entry reads its size: " + texts());
+        require(two.name().equals("BuildObject (1)") && two.size() == 3, "the second entry is BuildObject (1) with 3 blocks, got " + ClientState.savedSelections());
+        require(panelShows("BuildObject (1)") && tipHas("'3 x 1 x 1 blocks"), "the second entry has its size in the tip: " + texts());
         require(ClientState.savedColor(two.id()) != ClientState.savedColor(one.id()), "each entry starts with its own colour");
         require(liveIs(b()), "saving the second must not change the selection either");
 
         // click an entry: it replaces the selection, and clicking again gives the selection back
         selectOnly(cell());
-        click(control("Show this selection in place of yours", 0));
-        require(liveIs(a()) && saved(0).active() && !saved(0).editing(), "clicking Selection 1 shows it in place of the selection");
+        click(control("Select this BuildObject", 0));
+        require(liveIs(a()) && saved(0).active() && !saved(0).editing(), "clicking BuildObject shows it in place of the selection");
         click(control("Let go", 0));
         require(liveIs(cell()) && ClientState.activeSaved() == null, "clicking it again gives the selection back");
 
         // changes made while an entry is only shown never reach it
-        click(control("Show this selection in place of yours", 1));
-        require(liveIs(b()), "Selection 2 is shown");
+        click(control("Select this BuildObject", 1));
+        require(liveIs(b()), "BuildObject (1) is shown");
         addToLive(cellAt(7));
         require(liveCount() == 4 && saved(1).size() == 3, "an entry that is only shown keeps its blocks when the selection is changed");
         click(control("Let go", 0));
@@ -105,31 +105,86 @@ public final class SavedSelectionsGameTest {
 
         // the eye
         int eyed = saved(0).id();
-        click(control("Hide this selection in the world", 0));
-        require(ClientState.savedHidden(eyed), "the eye hides the entry");
-        click(control("Show this selection in the world", 0));
-        require(!ClientState.savedHidden(eyed), "the eye shows it again");
+        require(ClientState.savedHidden(eyed), "a new BuildObject starts with its eye closed");
+        click(control("Show this BuildObject's outline", 0));
+        require(!ClientState.savedHidden(eyed), "opening the eye shows its outline");
+        click(control("Hide this BuildObject's outline", 0));
+        require(ClientState.savedHidden(eyed), "closing it hides the outline again");
 
         // the colour survives deleting and bringing an entry back
         int coloured = saved(1).id();
         ClientState.setSavedColor(coloured, 0xffaa3366);
-        click(control("Delete this selection", 1));
+        click(control("Delete this BuildObject", 1));
         require(ClientState.savedSelections().size() == 1, "the cross deletes without asking");
-        require(!panelShows("Selection 2"), "the deleted entry leaves the window");
+        require(!panelShows("BuildObject (1)"), "the deleted entry leaves the window");
         undo();
-        require(ClientState.savedSelections().size() == 2 && saved(1).name().equals("Selection 2") && saved(1).size() == 3, "Ctrl+Z brings the entry back where it was, with its blocks");
+        require(ClientState.savedSelections().size() == 2 && saved(1).name().equals("BuildObject (1)") && saved(1).size() == 3, "Ctrl+Z brings the entry back where it was, with its blocks");
         require(ClientState.savedColor(saved(1).id()) == 0xffaa3366, "and with its colour");
 
         deleteAll();
         require(ClientState.savedSelections().isEmpty(), "everything deleted");
         selectOnly(a());
-        click(control("Save what is selected now", 0));
-        require(saved(0).name().equals("Selection 1"), "the numbers start again at 1, got " + saved(0).name());
+        click(control("Create a BuildObject from what is selected now", 0));
+        require(saved(0).name().equals("BuildObject"), "the numbers start again at 1, got " + saved(0).name());
         require(ClientState.savedColor(saved(0).id()) == ClientState.options.selectionColor, "and so does the colour");
         selectOnly(b());
-        click(control("Save what is selected now", 0));
+        click(control("Create a BuildObject from what is selected now", 0));
 
         claude();
+
+        // a double click on a row renames it where it stands: the name is selected, so typing replaces it, and Enter keeps it
+        doubleClick(control("Select this BuildObject", 0));
+        typeText("Roof");press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        require(saved(0).name().equals("Roof") && saved(1).name().equals("BuildObject (1)"), "a double click renames the row, got " + ClientState.savedSelections());
+        doubleClick(control("Let go", 0)); // the first click of the pair let go of it again
+        press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
+        require(saved(0).name().equals("Roof"), "Esc keeps the old name");
+        doubleClick(control("Select this BuildObject", 0));
+        typeText("Wall");press(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
+        require(saved(0).name().equals("Roof"), "Esc drops what was typed, got " + saved(0).name());
+        click(control("Let go", 0)); // the double click showed it; let go before the picture
+
+        // dragging a row to the top edge of another puts it before that row, to the bottom edge after it
+        String top = saved(0).guid(), below = saved(1).guid();
+        drag(control("Select this BuildObject", 1), control("Select this BuildObject", 0), 0.1);
+        require(saved(0).guid().equals(below) && saved(1).guid().equals(top), "dragging the second row onto the top edge of the first moves it to the top: " + ClientState.savedSelections());
+        drag(control("Select this BuildObject", 0), control("Select this BuildObject", 1), 0.9);
+        require(saved(0).guid().equals(top) && saved(1).guid().equals(below), "and onto the bottom edge of the last puts it back");
+
+        // dropping on the middle of a row makes it a child, and a folded BuildObject lists nothing under it
+        drag(control("Select this BuildObject", 1), control("Select this BuildObject", 0), 0.5);
+        require(saved(1).parent() == saved(0).id() && saved(0).parent() == 0, "the middle of a row makes a child: " + ClientState.savedSelections());
+        click(control("Fold what is under this BuildObject", 0));
+        require(control("Select this BuildObject", 1) == null, "a folded BuildObject lists nothing under it");
+        click(control("Show what is under this BuildObject", 0));
+        require(control("Select this BuildObject", 1) != null, "and unfolding lists it again");
+        drag(control("Select this BuildObject", 1), control("Select this BuildObject", 0), 0.1);
+        require(saved(0).guid().equals(below) && saved(0).parent() == 0 && saved(1).parent() == 0, "dragging a child to the top edge of its parent brings it out: " + ClientState.savedSelections());
+
+        // names may repeat: the GUID tells two of a name apart
+        doubleClick(control("Select this BuildObject", 1));
+        typeText(saved(0).name());press(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER);
+        require(saved(0).name().equals(saved(1).name()) && !saved(0).guid().equals(saved(1).guid()), "a second BuildObject may take the name of the first: " + ClientState.savedSelections());
+        click(control("Let go", 0));
+
+        // for a person to look at: one nested under the other, and the picture taken while a row is being carried
+        drag(control("Select this BuildObject", 1), control("Select this BuildObject", 0), 0.5);
+        require(saved(1).parent() == saved(0).id(), "nested for the picture");
+        var from = control("Select this BuildObject", 1);
+        c.runOnClient(mc -> {
+            var screen = (EditorScreen) mc.gui.screen();
+            double scale;
+            try { var f = EditorScreen.class.getDeclaredField("scale"); f.setAccessible(true); scale = f.getFloat(screen); } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            var down = new MouseButtonEvent((from[0] + from[2] / 2.0) * scale, (from[1] + from[3] / 2.0) * scale, new MouseButtonInfo(0, 0));
+            var up = new MouseButtonEvent((from[0] + from[2] / 2.0) * scale, (from[1] - 4) * scale, new MouseButtonInfo(0, 0));
+            screen.mouseClicked(down, false);
+            screen.mouseDragged(up, 0, -10);
+        });
+        c.waitTicks(4);
+        c.takeScreenshot("hierarchy-drag");
+        c.runOnClient(mc -> { var screen = (EditorScreen) mc.gui.screen(); screen.mouseReleased(new MouseButtonEvent(0, 0, new MouseButtonInfo(0, 0))); });
+        settle();
+
         screenshot();
         System.out.println("CRAFTIUM_SAVED_SELECTIONS_PASS save show release edit eye delete undo numbers claude");
     }
@@ -139,25 +194,25 @@ public final class SavedSelectionsGameTest {
     /** Reads the saved selections by name and builds on two of them in one spec, through the same call the MCP server makes. */
     private void claude() {
         selectOnly(cell());
-        var read = bridge("read_selection", "{\"name\":\"selection 1\"}");
-        require(read.get("selected").getAsInt() == 8 && read.get("name").getAsString().equals("Selection 1"), "read_selection by name reads that selection (any case): " + read);
-        var other = bridge("read_selection", "{\"name\":\"Selection 2\"}");
-        require(other.get("selected").getAsInt() == 3 && other.get("name").getAsString().equals("Selection 2"), "and a second read stays apart from the first: " + other);
+        var read = bridge("read_selection", "{\"name\":\"buildobject\"}");
+        require(read.get("selected").getAsInt() == 8 && read.get("name").getAsString().equals("BuildObject"), "read_selection by name reads that selection (any case): " + read);
+        var other = bridge("read_selection", "{\"name\":\"BuildObject (1)\"}");
+        require(other.get("selected").getAsInt() == 3 && other.get("name").getAsString().equals("BuildObject (1)"), "and a second read stays apart from the first: " + other);
         require(bridge("read_selection", "{}").get("selected").getAsInt() == 1, "without a name it still reads the player's own selection");
         String unknown = failure("read_selection", "{\"name\":\"Nope\"}");
-        require(unknown.contains("Selection 1") && unknown.contains("Selection 2"), "an unknown name lists the names there are: " + unknown);
+        require(unknown.contains("BuildObject") && unknown.contains("BuildObject (1)"), "an unknown name lists the names there are: " + unknown);
 
         // one spec, two selections: each op names its own
         bridge("get_state", "{}");
-        var spec = "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"selection\":\"Selection 1\",\"block\":\"gold_block\"},{\"op\":\"replace_selection\",\"selection\":\"selection 2\",\"block\":\"diamond_block\"}]}}";
-        String refused = failure("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"selection\":\"Selection 1\",\"block\":\"gold_block\"},{\"op\":\"replace_selection\",\"selection\":\"Nope\",\"block\":\"diamond_block\"}]}}");
-        require(refused.contains("Nope") && refused.contains("Selection 2"), "a spec naming an unknown selection is refused, listing the names: " + refused);
+        var spec = "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"selection\":\"BuildObject\",\"block\":\"gold_block\"},{\"op\":\"replace_selection\",\"selection\":\"buildobject (1)\",\"block\":\"diamond_block\"}]}}";
+        String refused = failure("preview_build", "{\"spec\":{\"ops\":[{\"op\":\"replace_selection\",\"selection\":\"BuildObject\",\"block\":\"gold_block\"},{\"op\":\"replace_selection\",\"selection\":\"Nope\",\"block\":\"diamond_block\"}]}}");
+        require(refused.contains("Nope") && refused.contains("BuildObject (1)"), "a spec naming an unknown selection is refused, listing the names: " + refused);
         require(count(Blocks.GOLD_BLOCK) == 0, "and nothing was built by the refused one");
         bridge("preview_build", spec);
         bridge("apply_preview", "{}");
         c.waitTicks(20);
-        require(allAre(a(), Blocks.GOLD_BLOCK), "Selection 1 was changed to gold");
-        require(allAre(b(), Blocks.DIAMOND_BLOCK), "Selection 2 was changed to diamond in the same build");
+        require(allAre(a(), Blocks.GOLD_BLOCK), "BuildObject was changed to gold");
+        require(allAre(b(), Blocks.DIAMOND_BLOCK), "BuildObject (1) was changed to diamond in the same build");
         require(allAre(cell(), Blocks.STONE), "the player's own selection, which no op named, was not touched");
         bridge("undo", "{}");
         c.waitTicks(20);
@@ -225,7 +280,7 @@ public final class SavedSelectionsGameTest {
         c.runOnClient(mc -> ClientState.options.mode = Selection.Mode.REPLACE);
     }
     private void undo() { sleep(); c.runOnClient(mc -> CraftiumClient.send("undo", null, null)); settle(); }
-    private void deleteAll() { while (!ClientState.savedSelections().isEmpty()) click(control("Delete this selection", 0)); }
+    private void deleteAll() { while (!ClientState.savedSelections().isEmpty()) click(control("Delete this BuildObject", 0)); }
 
     private Set<Point> live() { return c.computeOnClient(mc -> new HashSet<>(SelectionCodec.decode(ClientState.status.selectionData()))); }
     private int liveCount() { return live().size(); }
@@ -246,18 +301,19 @@ public final class SavedSelectionsGameTest {
         c.waitTicks(3);
         return c.computeOnClient(mc -> { var copy = new ArrayList<>(PanelLog.sink); PanelLog.sink = null; return copy; });
     }
-    private List<String> texts() { return lines().stream().filter(l -> l.startsWith("text selections ")).toList(); }
-    private boolean panelShows(String text) { return lines().stream().anyMatch(l -> l.startsWith("text selections ") && l.contains(text)); }
+    private List<String> texts() { return lines().stream().filter(l -> l.startsWith("text hierarchy ")).toList(); }
+    private boolean panelShows(String text) { return lines().stream().anyMatch(l -> l.startsWith("text hierarchy ") && l.contains(text)); }
 
     /** The area of the n-th control of the Selections window whose tip starts with {@code tip}, as {x, y, width, height}; null when there is none. */
+    private boolean tipHas(String text) { return lines().stream().anyMatch(l -> l.startsWith("control hierarchy ") && l.contains(text)); }
     private int[] control(String tip, int n) {
         int seen = 0;
         for (String line : lines()) {
-            if (!line.startsWith("control selections ")) continue;
+            if (!line.startsWith("control hierarchy ")) continue;
             int quote = line.indexOf('\'');
-            if (quote < 0 || !line.substring(quote + 1).startsWith(tip)) continue;
+            if (quote < 0 || !line.substring(quote + 1).replaceFirst("^[0-9]+ x [0-9]+ x [0-9]+ blocks · ", "").startsWith(tip)) continue; // an entry's tip opens with its size
             if (seen++ != n) continue;
-            var parts = line.substring("control selections ".length(), quote).trim().split(" ");
+            var parts = line.substring("control hierarchy ".length(), quote).trim().split(" ");
             var at = parts[0].split(","); var size = parts[1].split("x");
             return new int[]{Integer.parseInt(at[0]), Integer.parseInt(at[1]), Integer.parseInt(size[0]), Integer.parseInt(size[1])};
         }
@@ -279,6 +335,44 @@ public final class SavedSelectionsGameTest {
         settle();
     }
 
+    /** A click and a second click of a double click on the middle of a control. */
+    private void doubleClick(int[] area) {
+        require(area != null, "the control to double click is not in the window");
+        sleep();
+        c.runOnClient(mc -> {
+            var screen = (EditorScreen) mc.gui.screen();
+            double scale;
+            try { var f = EditorScreen.class.getDeclaredField("scale"); f.setAccessible(true); scale = f.getFloat(screen); } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            var event = new MouseButtonEvent((area[0] + area[2] / 2.0) * scale, (area[1] + area[3] / 2.0) * scale, new MouseButtonInfo(0, 0));
+            screen.mouseClicked(event, false); screen.mouseReleased(event);
+            screen.mouseClicked(event, true); screen.mouseReleased(event);
+        });
+        settle();
+    }
+    /** Presses on the middle of one control, drags to a place {@code at} of the way down another (0 is its top edge) and lets go there. */
+    private void drag(int[] from, int[] to, double at) {
+        require(from != null && to != null, "the rows to drag are not in the window");
+        sleep();
+        c.runOnClient(mc -> {
+            var screen = (EditorScreen) mc.gui.screen();
+            double scale;
+            try { var f = EditorScreen.class.getDeclaredField("scale"); f.setAccessible(true); scale = f.getFloat(screen); } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            var down = new MouseButtonEvent((from[0] + from[2] / 2.0) * scale, (from[1] + from[3] / 2.0) * scale, new MouseButtonInfo(0, 0));
+            var up = new MouseButtonEvent((to[0] + to[2] / 2.0) * scale, (to[1] + to[3] * at) * scale, new MouseButtonInfo(0, 0));
+            screen.mouseClicked(down, false);
+            screen.mouseDragged(up, up.x() - down.x(), up.y() - down.y());
+            screen.mouseReleased(up);
+        });
+        settle();
+    }
+    private void typeText(String text) {
+        c.runOnClient(mc -> { for (char ch : text.toCharArray()) mc.gui.screen().charTyped(new net.minecraft.client.input.CharacterEvent(ch)); });
+    }
+    private void press(int key) {
+        c.runOnClient(mc -> { var e = new net.minecraft.client.input.KeyEvent(key, 0, 0); mc.gui.screen().keyPressed(e); mc.gui.screen().keyReleased(e); });
+        settle();
+    }
+
     /** The server throttles requests by wall-clock time, including in accelerated tests. */
     private static void sleep() { try { Thread.sleep(80); } catch (InterruptedException e) { throw new AssertionError(e); } }
     private void settle() {
@@ -292,7 +386,7 @@ public final class SavedSelectionsGameTest {
 
     private void screenshot() {
         // two entries drawn in their own colours beside the selection, one shown in full: for a person to look at
-        click(control("Show this selection in place of yours", 1));
+        click(control("Select this BuildObject", 1));
         c.runOnClient(mc -> { mc.player.setPos(baseX + 3.5, baseY + 2, baseZ - 6); mc.player.setYRot(0f); mc.player.setXRot(15f); mc.player.setOldPosAndRot(); });
         c.waitTicks(15);
         c.takeScreenshot("saved-selections");
