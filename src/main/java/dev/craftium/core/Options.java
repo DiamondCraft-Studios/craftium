@@ -51,6 +51,8 @@ public final class Options {
     public boolean inSelection;
     /** Whether undo and redo flash the blocks they change. */
     public boolean historyPulse = true;
+    /** How many screen pixels Craftium's screens draw each pixel of their text and icons with, in halves (2 is 1x, 3 is 1.5x); 0 is Auto, the game's own GUI scale (the editor lowers it to fit). */
+    public int interfaceHalves = 2;
     public String block = "minecraft:stone";
     public String secondary = "minecraft:andesite";
     public String mask = "";

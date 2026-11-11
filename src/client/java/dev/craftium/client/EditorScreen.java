@@ -19,7 +19,7 @@ import java.util.function.*;
 
 public final class EditorScreen extends CraftiumScreen {
     private static int BG=0xf510141a,PANEL=0xff10151c,LINE=0xff303b49,ACCENT=0xff5b9fdb,TEXT=0xffdce6ef,MUTED=0xff8595a8;
-    private static final int LEFT=182,RIGHT=200;
+    private static final int LEFT=182,RIGHT=300; // the right-hand column is 50% wider than its first 200
     private float scale=1;
     private long lastFlightNanos;
     private int w,h,mx,my;
@@ -124,10 +124,19 @@ public final class EditorScreen extends CraftiumScreen {
         @Override public void selectNode(int index){selectedNode=index;}
         @Override public boolean hitsPointHandles(Point at,int index,double x,double y){return TransformGizmo.hitsPointHandles(TransformGizmo.nodeAnchor(at,index),x,y);}
     };
+    /** The editor lays itself out on at least 1000 by 562 interface units, so on Auto the scale is lowered until that fits. */
+    @Override protected int[] canvas(){return new int[]{1000,562};}
+    /** Ctrl+= and Ctrl+-: one half step larger or smaller, kept in the preferences and applied at once. */
+    private void resizeInterface(int step){
+        int now=(int)Math.round(InterfaceScale.pixels(minecraft)*2),next=Math.clamp(now+step,2,InterfaceScale.largest(minecraft)*2);
+        if(next==now){ClientState.notify(step>0?"The interface is as large as this window allows ("+InterfaceScale.name(now)+")":"The interface is as small as it goes (1x: one screen pixel per text pixel)");return;}
+        ClientState.options.interfaceHalves=next;ClientState.save();ClientState.notify("Interface size: "+InterfaceScale.name(next));
+        relayout();
+    }
     @Override protected void init() {
         lastFlightNanos=0;
         if(!hudHidden){previousHideGui=ClientCompat.hudHidden(minecraft);hudHidden=true;if(!previousHideGui)ClientCompat.toggleHud(minecraft);}
-        scale=Math.min(1f,Math.min(width/1000f,height/562f));w=Math.round(width/scale);h=Math.round(height/scale);
+        scale=1;w=width;h=height; // the interface size is the window's: CraftiumScreen draws at the zoom and the window counts in unitsWorkspaceLayout.fit(w,h,InterfaceScale.legacyCanvas(minecraft));
         fields.clear();renaming=-1;suspended=false;
         int masksW=WorkspaceLayout.width("masks",RIGHT),masksH=WorkspaceLayout.height("masks",masksHeight()),masksY=masksTop();
         layoutKey=layoutKey();
@@ -158,7 +167,14 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** The options panel's real width and bottom edge, which its text inputs are placed by; they are rebuilt when the panels change size. */
     /** Tool options fills the left column down to the Target info panel, which sits at the bottom with a gap of 6 between them. */
-    private int optionsHeight(){return h-224-(TARGET_HEIGHT+6);}
+    private int optionsHeight(){return h-224-(TARGET_HEIGHT+6)-optionsShift();}
+    /** The Tools window opens tall enough for every tool: the top bar, the section headings and the rows of tools, with a little room below. */
+    private int toolsHeight(){int sum=0;for(var row:toolRows((LEFT-21)/TOOL_PITCH))sum+=row.height();return TOOLS_TOP+sum+6;}
+    /**
+     * How far Tool options starts below where its contents were designed (199, under a Tools window of 166): the contents are laid out against
+     * that top, so the window is moved by this much instead and ends where it did.
+     */
+    private int optionsShift(){return Math.max(0,27+toolsHeight()+6-199);}
     private static final int TARGET_HEIGHT=82;
     private int optionsWidth(){return WorkspaceLayout.width("options",LEFT);}
     private int optionsBottom(){return 199+WorkspaceLayout.height("options",optionsHeight());}
@@ -344,7 +360,7 @@ public final class EditorScreen extends CraftiumScreen {
         while(used>toolsBottom-TOOLS_TOP&&toolScroll<row){used-=toolRows.get(toolScroll).height();toolScroll++;}
     }
     private void tools(Gfx g) {
-        panel(g,0,27,LEFT,166,"Tools");
+        panel(g,0,27,LEFT,toolsHeight(),"Tools");
         toolsBottom=pb-4;int columns=Math.max(1,(pw-21)/TOOL_PITCH);
         if(columns!=toolColumns){toolColumns=columns;toolRows=toolRows(columns);toolScrolledTo=null;}
         if(toolScrolledTo!=o().tool){toolScrolledTo=o().tool;revealTool(o().tool);}
@@ -375,6 +391,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
     }
     private void options(Gfx g) {
+        WorkspaceLayout.shift("options",optionsShift());
         panel(g,0,199,LEFT,optionsHeight(),builder?"Builder controls":"Tool options");
         int[] tab=flex(pw-20,4,1,1,1);
         button(g,10,222,tab[0],19,"Tool",!builder&&!pinnedTab,()->{builder=false;pinnedTab=false;init();},"Options of the active tool");
@@ -1925,6 +1942,9 @@ public final class EditorScreen extends CraftiumScreen {
         if(event.key()==GLFW.GLFW_KEY_BACKSPACE&&(event.modifiers()&7)==0){perform(Action.DELETE);return true;}
         if((event.modifiers()&7)==0)for(var entry:CraftiumClient.toolKeys.entrySet())if(entry.getValue().matches(event)){select(entry.getKey());return true;}
         if((event.modifiers()&7)==0&&event.key()==GLFW.GLFW_KEY_T&&!repeat){toggleTransparency();return true;} // T: transparency, unless a tool has taken the key
+        // The keypad's + and -, and Ctrl+Shift+= (which is +), also resize the interface when the main bindings are the defaults.
+        if((event.modifiers()&7)==EditorControls.CONTROL){int key=event.key();if(key==GLFW.GLFW_KEY_KP_ADD){resizeInterface(1);return true;}if(key==GLFW.GLFW_KEY_KP_SUBTRACT){resizeInterface(-1);return true;}}
+        if((event.modifiers()&7)==(EditorControls.CONTROL|EditorControls.SHIFT)&&event.key()==GLFW.GLFW_KEY_EQUAL){resizeInterface(1);return true;}
         return true;
     }
     /**
@@ -1978,7 +1998,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
             case SHOW_COLLISION -> o().showCollisionMesh=!o().showCollisionMesh;case SHOW_LIGHTS -> o().showLightBlocks=!o().showLightBlocks;case SHOW_VOID -> o().showStructureVoid=!o().showStructureVoid;
             case NUDGE_FORWARD,NUDGE_BACK,NUDGE_LEFT,NUDGE_RIGHT,NUDGE_UP,NUDGE_DOWN -> TransformGizmo.nudge(this,EditorControls.nudge(binding,minecraft.player.getYRot()));
             case PASTE_SELECT -> PlacementPreview.pasteAndSelect();case LAST_TOOL -> select(previousTool);
-            case INSPECTOR -> ClientCompat.setScreen(minecraft,new StudioScreen(this));case HELP -> help=!help;case PANELS -> panels=!panels;
+            case INSPECTOR -> ClientCompat.setScreen(minecraft,new StudioScreen(this));case HELP -> help=!help;case PANELS -> panels=!panels;case INTERFACE_LARGER -> resizeInterface(1);case INTERFACE_SMALLER -> resizeInterface(-1);
             case GIZMO_MOVE -> o().gizmoMode=Options.GizmoMode.MOVE;case GIZMO_ROTATE -> o().gizmoMode=Options.GizmoMode.ROTATE;case GIZMO_SCALE -> o().gizmoMode=Options.GizmoMode.SCALE;case LOCAL_AXES -> o().gizmoLocal=!o().gizmoLocal;
             default -> {return false;}
         }
