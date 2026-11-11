@@ -27,7 +27,8 @@ sourceSets.main {
     java {
         setSrcDirs([sharedPlugin.toPath().resolve('main/java').toFile(), rootProject.file('src/main/java'), rootProject.file("versions/${minecraftVersion}/src/main/java")])
         // Fabric-only entry points and mixins do not belong in a Paper plugin.
-        exclude 'dev/craftium/Craftium.java', 'dev/craftium/mixin/**', 'dev/craftium/compat/FabricCompat.java', 'dev/craftium/server/ServerCommands.java'
+        exclude 'dev/craftium/Craftium.java', 'dev/craftium/mixin/**', 'dev/craftium/compat/FabricCompat.java', 'dev/craftium/server/ServerCommands.java',
+                'dev/craftium/server/Jigsaw*.java' // the jigsaw tools are registered by ServerCommands, so nothing on Paper reaches them, and they use Fabric's tick events
     }
     resources.srcDirs = [sharedPlugin.toPath().resolve('main/resources').toFile(), own.dir('main/resources').asFile]
 }
