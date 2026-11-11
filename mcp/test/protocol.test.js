@@ -15,17 +15,9 @@ test("initialize answers with the version the client asked for, or the newest th
   assert.equal(future.result.protocolVersion, "2025-11-25");
 });
 
-test("the server's version matches the package and the extension manifest", async () => {
+test("the server's version matches the package", async () => {
   const read = async (file) => JSON.parse(await readFile(new URL(`../${file}`, import.meta.url), "utf8"));
   assert.equal((await read("package.json")).version, VERSION);
-  assert.equal((await read("manifest.json")).version, VERSION);
-});
-
-test("every tool in the manifest is served, and none is missing from it", async () => {
-  const handle = createHandler(stub());
-  const served = (await handle({ jsonrpc: "2.0", id: 1, method: "tools/list" })).result.tools.map((t) => t.name).sort();
-  const listed = (await JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"))).tools.map((t) => t.name).sort();
-  assert.deepEqual(served, listed);
 });
 
 test("ping is answered, notifications are not, unknown methods are refused", async () => {

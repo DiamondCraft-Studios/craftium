@@ -152,7 +152,6 @@ public final class StudioScreen extends CraftiumScreen {
         labels.add(new Label("5.  Look at the ghost in your world. Ask for changes, then say \"apply it\", or press Apply preview.",left,steps+67));
         labels.add(new Label("Nothing is built until it is applied. Undo takes a build back, and Redo brings it again.",left,steps+86));
         labels.add(new Label("Game from CurseForge, Modrinth App or Prism? Set the plugin's \"Minecraft folder\" setting to this game's folder, below.",left,steps+99));
-        labels.add(new Label("The craftium.mcpb extension is for Claude Desktop's Chat tab; use one or the other. Details: docs/AI.md",left,steps+112));
         // The folder this game keeps its settings in, which is what the plugin's Minecraft folder has to be when it is not the default .minecraft.
         String folder=AiBridge.gameFolder();
         labels.add(new Label("This game's folder: "+(font.width(folder)>420?"…"+font.plainSubstrByWidth(folder,420,true):folder),left,steps+130));

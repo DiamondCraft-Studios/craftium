@@ -1,6 +1,6 @@
 name: Build craftium-mcp
 
-# Tests the MCP server and packs it as craftium.mcpb, the extension Claude Desktop installs.
+# Tests the MCP server, which ships as the Claude plugin in mcp/.
 on:
   push:
     branches: [main]
@@ -43,13 +43,3 @@ jobs:
 
       - name: Test
         run: npm test
-
-      - name: Pack the extension
-        run: npx --yes @anthropic-ai/mcpb@2.1.2 pack . craftium.mcpb
-
-      - name: Upload the extension
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: craftium-mcpb
-          path: mcp/craftium.mcpb
-          if-no-files-found: error

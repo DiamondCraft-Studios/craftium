@@ -118,7 +118,7 @@ public final class AiBridge {
     public static boolean running() { synchronized (LOCK) { return socket != null; } }
 
     /**
-     * The game folder the AI extension has to be pointed at when this is not the default .minecraft (a launcher profile, or a game
+     * The game folder the Claude plugin has to be pointed at when this is not the default .minecraft (a launcher profile, or a game
      * started from source): the one that holds config/craftium/bridge.json.
      */
     public static String gameFolder() {
@@ -263,7 +263,7 @@ public final class AiBridge {
      */
     private static void warnSessionless(JsonObject result) {
         if (result.has("ok") && !result.get("ok").getAsBoolean()) return; // an old plugin shows only the error text of a refusal
-        result.addProperty("pluginWarning", "This Craftium plugin is older than the game's Craftium and cannot name its session, so every Claude session using an old plugin shares ONE preview and ONE undo list: another session's build can be applied or replaced by you. Tell the player to update the Craftium plugin (or the .mcpb extension) before building with more than one Claude session at a time.");
+        result.addProperty("pluginWarning", "This Craftium plugin is older than the game's Craftium and cannot name its session, so every Claude session using an old plugin shares ONE preview and ONE undo list: another session's build can be applied or replaced by you. Tell the player to update the Craftium plugin before building with more than one Claude session at a time.");
         if (!toldPlayerOfOlderPlugin) {
             toldPlayerOfOlderPlugin = true;
             Minecraft.getInstance().execute(() -> ClientState.notify("An AI app uses an older Craftium plugin: its sessions share one preview. Update the plugin to build in parallel."));

@@ -47,11 +47,9 @@ Privacy: [PRIVACY.md](https://github.com/DiamondCraft-Studios/craftium/blob/main
 
 The plugin finds the game through a small file Craftium writes into the game's own folder (`config/craftium/bridge.json`). It looks in the default `.minecraft` folder unless you say otherwise. If you run Minecraft from a launcher profile, such as CurseForge, Modrinth App or Prism, the game's folder is somewhere else, so set the plugin's **Minecraft folder** setting to it. Choose the profile's game folder, the one that contains `config` and `mods`.
 
-Claude Code asks for this setting when you enable the plugin, and the Claude Desktop extension has the same setting in its settings. To get the exact path, open the game, go to **AI menu > AI status and setup**, and press **Copy game folder**. With the wrong folder, the plugin reports that Craftium is not reachable even while the game is running.
+Claude Code asks for this setting when you enable the plugin. To get the exact path, open the game, go to **AI menu > AI status and setup**, and press **Copy game folder**. With the wrong folder, the plugin reports that Craftium is not reachable even while the game is running.
 
-**Cowork** runs plugins too. **Claude Desktop's Chat tab** does not run a plugin's local server, so use the Craftium
-extension there (`craftium.mcpb`, see the user guide). Install one or the other, not both, so the server is not
-registered twice.
+**Cowork** runs plugins too. Claude Desktop's Chat tab does not run a plugin's local server.
 
 If your game does not use the default `.minecraft` folder (a Prism, Modrinth App or CurseForge profile, for
 example), the plugin asks for a **Minecraft folder** when you enable it. Choose the profile's game folder, the one
@@ -65,7 +63,7 @@ and say when to apply it. You can also apply, discard or undo from the game's **
 ## For developers
 
 The server has **no run-time dependencies**: five small files in `src/` speak the part of MCP it needs. The official
-MCP SDK is a dev dependency used only by the tests, and the packed extension carries no `node_modules`. What the code
+MCP SDK is a dev dependency used only by the tests, and the plugin carries no `node_modules`. What the code
 may and may not do is pinned down in `test/contract.test.js`.
 
 | File | Does |
@@ -82,16 +80,12 @@ may and may not do is pinned down in `test/contract.test.js`.
 ```sh
 npm ci             # once (installs the test-only SDK)
 npm test           # protocol, end-to-end and contract tests
-npm run pack       # builds craftium.mcpb for Claude Desktop (needs network for the packer)
 node test/e2e-client.mjs <path to config/craftium/bridge.json>   # builds a pyramid through a running game
 ```
 
 The server finds the bridge's port and token in `config/craftium/bridge.json` of the default Minecraft folder. Set
 `CRAFTIUM_MINECRAFT_DIR` to a profile's game folder, or `CRAFTIUM_BRIDGE_FILE` to the file itself, for launchers with
 their own folders. The plugin passes its **Minecraft folder** setting as `CRAFTIUM_MINECRAFT_DIR`.
-
-`mcp/` is both the plugin and the source of the `.mcpb`: `.claude-plugin/`, `.mcp.json` and `skills/` belong to the
-plugin and are left out of the extension (see `.mcpbignore`).
 
 ## License
 

@@ -1,38 +1,25 @@
-# AI building with Claude Desktop
+# AI building with Claude
 
-Craftium can be driven from an AI app such as Claude Desktop. You chat in the AI app ("build me an Egyptian pillar here"), Claude looks at the world and describes the build as a handful of shapes, and Craftium shows it as a **ghost preview** in your game. Nothing changes in the world until the build is applied, and every applied build is one undo step.
+Craftium can be driven from Claude through its plugin (Claude Code or Cowork). You chat with Claude ("build me an Egyptian pillar here"), Claude looks at the world and describes the build as a handful of shapes, and Craftium shows it as a **ghost preview** in your game. Nothing changes in the world until the build is applied, and every applied build is one undo step.
 
 It runs on your own Claude subscription through the AI app. Craftium never sees your account and needs no API key.
 
 ```
-Claude Desktop ──stdio──▶ craftium-mcp (Node) ──127.0.0.1──▶ Craftium client mod ──▶ the editor's normal requests
+Claude plugin ──stdio──▶ craftium-mcp (Node) ──127.0.0.1──▶ Craftium client mod ──▶ the editor's normal requests
 ```
 
 ## Set up
 
 1. Install the Craftium mod for your Minecraft version as usual. For multiplayer, Craftium must also be on the server (Fabric, or the Paper/Purpur companion).
-2. Get **craftium.mcpb** (see [Getting the extension](#getting-the-extension)) and install it in Claude Desktop: open the file with Claude Desktop (double-click it), or drag it into Settings → Extensions. It needs Node.js 18 or newer, which Claude Desktop supplies for extensions of this kind.
+2. Install the Craftium plugin in Claude Code or Cowork (see [As a Claude plugin](#as-a-claude-plugin-claude-code-and-cowork)). It needs Node.js 18 or newer on your PATH.
 3. In Minecraft, open a world and the editor (Right Shift), open the **AI** menu in the top bar and choose **Turn on AI building**. The setting is remembered, and a coloured square appears beside the menu while it is on. (The commands `/craftium ai on`, `/craftium ai off` and `/craftium ai` do the same.)
-4. If your game does not use the default `.minecraft` folder (a Prism, Modrinth App or CurseForge profile, for example), open the extension's settings in Claude Desktop and choose the profile's game folder, the one that contains `config` and `mods`.
+4. If your game does not use the default `.minecraft` folder (a Prism, Modrinth App or CurseForge profile, for example), set the plugin's **Minecraft folder** setting to the profile's game folder, the one that contains `config` and `mods`.
 
 A preview made by an AI app is drawn with a **violet** outline, its blocks at half opacity, so it is never mistaken for your own blue edit previews, and the marker reads **AI preview** while one is waiting. Its colours are in **Selection Options**, under **AI preview**.
 
 While AI building is on, a small **AI** marker shows in the bottom right corner of the game: amber while it waits for the AI app, green once the app has connected, and blue while a request is being answered. The **AI** menu also has **Apply AI preview**, **Discard AI preview** and **Undo last AI build**, so you can approve a build without going back to the chat, and **AI status and setup…**, a page with the same status, the last request and the steps above.
 
 Then ask Claude for a build while the game is open. Claude works on the world itself: it does not need you to select anything, never moves or turns you, and can build anywhere in the world (see [Claude's workspace](#claudes-workspace)). If you have selected an area it takes that as a hint of where you want the build, and it can read exactly what you selected: say "I have selected a platform for you to build on" after picking one with the box, lasso or magic wand, and it sees the shape, what it is made of and the room above it instead of hunting for the spot. Nothing makes you do this; you can give coordinates or just describe where. Look at the ghost in the game, ask for changes, and say when to apply it.
-
-## Getting the extension
-
-`craftium.mcpb` is built from the [mcp](../mcp) folder. Until it is attached to a release, you can get it two ways:
-
-- **From CI:** the *Build craftium-mcp* workflow on GitHub packs it on every change to `mcp/`. Open a run and download the `craftium-mcpb` artifact.
-- **Build it yourself** (needs Node.js 18 or newer and a network connection once, to fetch the packer):
-  ```sh
-  cd mcp
-  npm ci
-  npm run pack
-  ```
-  This writes `mcp/craftium.mcpb`. The `mcp` folder pins Node 24 in `.nvmrc` (run `nvm use` or `fnm use` there if your tool does not switch on its own). If `npx` stops with "Yallist is not a constructor", your npm is too old for your Node version (npm 10.8 with Node 25, for example): use Node 24, or update npm with `npm install -g npm@latest`.
 
 ## As a Claude plugin (Claude Code and Cowork)
 
@@ -54,9 +41,9 @@ The [mcp](../mcp) folder is also a Claude plugin: the same server plus the **cra
 
 The plugin finds the game through a small file Craftium writes into the game's own folder (`config/craftium/bridge.json`). It looks in the default `.minecraft` folder unless you say otherwise. If you run Minecraft from a launcher profile, such as CurseForge, Modrinth App or Prism, the game's folder is somewhere else, so set the plugin's **Minecraft folder** setting to it. Choose the profile's game folder, the one that contains `config` and `mods`.
 
-Claude Code asks for this setting when you enable the plugin, and the Claude Desktop extension has the same setting in its settings. To get the exact path, open the game, go to **AI menu > AI status and setup**, and press **Copy game folder**. With the wrong folder, the plugin reports that Craftium is not reachable even while the game is running.
+Claude Code asks for this setting when you enable the plugin. To get the exact path, open the game, go to **AI menu > AI status and setup**, and press **Copy game folder**. With the wrong folder, the plugin reports that Craftium is not reachable even while the game is running.
 
-The plugin needs Node.js 18 or newer on your PATH (an extension gets Node from Claude Desktop, a plugin does not). Claude Desktop's Chat tab does not run a plugin's local server, so use the extension there; install one or the other, not both. Steps 2 and 3 of [Set up](#set-up) apply either way.
+The plugin needs Node.js 18 or newer on your PATH. Steps 2 and 3 of [Set up](#set-up) apply as written.
 
 ## What Claude can do
 
@@ -155,24 +142,24 @@ A build ignores your brush settings (mask, symmetry, height range) and places ex
 - `get_screenshot` sends a picture of your game window (at most 1024 pixels wide) to the AI app, so close anything private on screen first. It is only taken when the AI app asks, and the corner marker shows **AI working…** while it does. `render_view` does not use your screen at all: it draws from block data, so it shows nothing but blocks.
 - `capture_batch` writes picture files to `screenshots/craftium/` in your game folder, only when the AI app asks. It cannot write anywhere else: Claude names a job, rooms and angles, never a path.
 - Builds are always staged as a ghost first, even if you have turned confirmation off for your own edits. Applying is a separate step. The ghost is Claude's own, so it cannot be applied by accident with your own Enter key.
-- The file is deleted when the bridge stops. If Minecraft crashes and leaves it behind, the extension reports that the game is not running.
+- The file is deleted when the bridge stops. If Minecraft crashes and leaves it behind, the plugin reports that the game is not running.
 - Anyone who can read your Minecraft folder or run programs as you can read the token, as with any local app. Turn the bridge off when you are not using it.
 
-## What the extension can do on your computer
+## What the plugin can do on your computer
 
-Claude Desktop warns that installing an extension "will grant this extension access to everything on your computer". That is true of every extension: it runs as an ordinary program with your permissions, and Claude Desktop does not sandbox it. The warning is generic, so here is what this one actually does, and how that is enforced.
+A plugin's server runs as an ordinary program with your permissions, and nothing sandboxes it. Here is what this one actually does, and how that is enforced.
 
-- **It is tiny and has no dependencies.** The packed extension is 9 files and about 27 kB, most of it the licence text: four short scripts (`mcp/src`, around 390 lines), a package file, a manifest, an icon, a readme and the licence. It uses no npm packages at run time, so there is no supply chain behind it to audit. It speaks the small part of the MCP protocol it needs itself.
-- **It reads one file:** `config/craftium/bridge.json`, in the default Minecraft folder or the folder you choose in its settings. That file holds the port and token the game wrote for this launch.
+- **It is tiny and has no dependencies.** The server is a few short scripts (`mcp/src`). It uses no npm packages at run time, so there is no supply chain behind it to audit. It speaks the small part of the MCP protocol it needs itself.
+- **It reads one file:** `config/craftium/bridge.json`, in the default Minecraft folder or the folder you choose in the plugin's settings. That file holds the port and token the game wrote for this launch.
 - **It talks to one place:** `127.0.0.1`, the game's bridge on your own computer. It has no code that contacts the internet, starts programs, evaluates text as code, opens listening sockets or writes files.
 - **It forwards only what each tool names.** A tool call is checked, and only the keys that tool defines are sent to the game, so extra data a model adds goes nowhere.
 - **It does not enlarge what the game allows.** The game applies its own checks to everything it receives (see Safety).
 
-These limits are written as tests in [mcp/test/contract.test.js](../mcp/test/contract.test.js): the build fails if the code gains a dependency, imports another Node module, reads another file or environment variable, makes any network call other than the one loopback `fetch`, or can run a program. A change that widens the extension's reach has to change that file as well, where a reviewer will see it.
+These limits are written as tests in [mcp/test/contract.test.js](../mcp/test/contract.test.js): the build fails if the code gains a dependency, imports another Node module, reads another file or environment variable, makes any network call other than the one loopback `fetch`, or can run a program. A change that widens the server's reach has to change that file as well, where a reviewer will see it.
 
-You do not have to trust the packed file either: it is built from the source in [mcp](../mcp), and you can read it in a few minutes and build it yourself (see Getting the extension). The extension is not signed or verified by Anthropic, which is what the "developer information has not been verified" line in the install dialog means.
+You do not have to trust it on faith: the source is in [mcp](../mcp), and you can read it in a few minutes.
 
-**Fence it in further (optional).** Node can restrict a program to the folders you name. If you set the server up by hand instead of installing the `.mcpb`, use Node 22.13 or newer and list only the extension folder and your Minecraft `config` folder, in `claude_desktop_config.json`:
+**Fence it in further (optional).** Node can restrict a program to the folders you name. If you set the server up by hand instead of installing the plugin, use Node 22.13 or newer and list only the server folder and your Minecraft `config` folder, in your MCP client's server configuration (the example is in `claude_desktop_config.json` style):
 
 ```json
 {
@@ -190,14 +177,14 @@ You do not have to trust the packed file either: it is built from the source in 
 }
 ```
 
-Under `--permission` the process can read only those two folders and cannot start programs or load native add-ons. (Node 24 does not restrict network access, so the loopback-only guarantee still comes from the code and its tests.) Use absolute paths, and if you use a launcher profile, point the second folder at that profile's `config\craftium`. The packed extension does not use this mode, because it cannot know which Node version Claude Desktop runs it with.
+Under `--permission` the process can read only those two folders and cannot start programs or load native add-ons. (Node 24 does not restrict network access, so the loopback-only guarantee still comes from the code and its tests.) Use absolute paths, and if you use a launcher profile, point the second folder at that profile's `config\craftium`. The plugin does not use this mode, because it cannot know which Node version runs it.
 
 ## Troubleshooting
 
-- **"Craftium is not reachable"**: open a world, turn on AI building (AI menu in the editor), and check the Minecraft folder setting in the extension if you use a launcher profile.
-- **"The Craftium mod in Minecraft is older than this Craftium plugin"**: the extension or plugin needs a newer mod. Update the mod, or install the extension that came with your mod. When the mod is the newer one, Claude is told to suggest updating the plugin, and everything still works.
+- **"Craftium is not reachable"**: open a world, turn on AI building (AI menu in the editor), and check the plugin's Minecraft folder setting if you use a launcher profile.
+- **"The Craftium mod in Minecraft is older than this Craftium plugin"**: the plugin needs a newer mod. Update the mod, or install the plugin version that matches your mod. When the mod is the newer one, Claude is told to suggest updating the plugin, and everything still works.
 - **A build is refused with "This server runs Craftium …"**: the server's Craftium predates roofs, groups, mixes and material names. Claude can still build with the plain shapes; ask the server owner to update for the rest.
-- **Running the game from source (`gradlew runClient`) or from a launcher profile**: the game does not use your default `.minecraft` folder, so the extension cannot find it on its own. Open **AI menu → AI status and setup…**, press **Copy game folder**, and paste it into the extension's **Minecraft folder** setting. (For a source run that is `versions/<version>/run` in the checkout you launched from, so make sure you launched from the checkout that has the AI feature.)
+- **Running the game from source (`gradlew runClient`) or from a launcher profile**: the game does not use your default `.minecraft` folder, so the plugin cannot find it on its own. Open **AI menu → AI status and setup…**, press **Copy game folder**, and paste it into the plugin's **Minecraft folder** setting. (For a source run that is `versions/<version>/run` in the checkout you launched from, so make sure you launched from the checkout that has the AI feature.)
 - **"Craftium refused the connection"**: Minecraft restarted and the token changed. Try again, or run `/craftium ai off` then `/craftium ai on`.
 - **"Craftium on the server"**: the world needs Craftium on the server too, as for the editor. In singleplayer this is automatic.
 - **Errors like `ops[2] (cylinder): missing number "radius"`** are the spec's fault, not yours. Claude gets the message and retries.
@@ -210,5 +197,5 @@ Under `--permission` the process can read only those two folders and cannot star
 - Build specs: [BuildSpec.java](../src/main/java/dev/craftium/core/BuildSpec.java) (pure, unit tested) and [BuildPlanner.java](../src/main/java/dev/craftium/server/BuildPlanner.java), reached by the `ai_build_preview` request. `BuildSpec.place()` works out the area from the operations, so no selection is needed. The AI's workspace is a second `Session` per player in `EditorServer` (`AI_SESSIONS`), used through `ai_build_preview`, `ai_apply`, `ai_cancel` and `ai_undo`. Its statuses are described through the player's own session, with the AI's preview and undo count in the status fields `aiPendingData`, `aiUndo` and `aiUndoName`. Jobs for it load chunks as they go (`Job.load`), and `AiWorld.MAX_BUILD_CHUNKS` caps how many a build may make.
 - Pictures: [VoxelView.java](../src/main/java/dev/craftium/core/VoxelView.java) is the pure renderer (unit tested, no game needed) and [AiView.java](../src/client/java/dev/craftium/client/AiView.java) gathers the blocks, block colours and preview for it. `render_view` reuses `ai_blocks` for the data, in 32-block tiles.
 - Server reads: [AiWorld.java](../src/main/java/dev/craftium/server/AiWorld.java) answers the `ai_blocks`, `ai_surface` and `ai_surface_floor` requests with a `Packets.AiReply` (the `ai_reply` message on Paper). Their limits are the constants at the top of that file (`MAX_BLOCKS`, `MAX_COLUMNS`, `MAX_NEW_CHUNKS`, `MAX_REPLY`); change them there and in the tool descriptions in [mcp/src/tools.js](../mcp/src/tools.js), and update this page. These requests carry their two corners in `target` and `normal`, so `EditorServer` handles them before it checks `normal` as a direction.
-- MCP server: [mcp/](../mcp), with no run-time dependencies. `npm test` starts the real server and talks to it with the official MCP client (a test-only dependency) against a fake bridge, and also checks the limits in `contract.test.js`. `npm run pack` builds the `.mcpb`.
+- MCP server: [mcp/](../mcp), with no run-time dependencies. `npm test` starts the real server and talks to it with the official MCP client (a test-only dependency) against a fake bridge, and also checks the limits in `contract.test.js`.
 - Game test: `CRAFTIUM_TEST_SCOPE=ai gradlew :versions:mc-1.21.10:runClientGameTest` enables the bridge in a real world, drives it over HTTP, then runs the real MCP server over stdio to build a pyramid.
