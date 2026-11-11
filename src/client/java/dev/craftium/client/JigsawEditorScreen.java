@@ -21,7 +21,7 @@ import java.util.*;
  * (so the live preview follows) and answering with a model; every change is one undo step. A text box applies what is typed when Enter is pressed.
  */
 final class JigsawEditorScreen extends CraftiumScreen {
-    private static final int SIDE = 12, TOP = 50, FOOT = 12, CARD_H = 72, CARD_GAP = 6, ROW_H = 160, FOLDED_H = 22, LIST_ROW = 20;
+    private static final int SIDE = 12, TOP = 50, FOOT = 12, CARD_H = 98, CARD_GAP = 6, ROW_H = 160, FOLDED_H = 22, LIST_ROW = 20;
     /** The preview of the selected element, at the top of the right column: a label line and then the picture, in canvas pixels. The connectors are below it. */
     private static final int PREVIEW_LABEL = 14, PREVIEW_PICTURE_H = 160, PREVIEW_H = PREVIEW_LABEL + PREVIEW_PICTURE_H + 8;
     private static final String[] SORTS = {"Pool order", "Name", "Weight", "Connectors", "Size", "Type", "Problems"};
@@ -238,6 +238,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         original.clear();
         lastFocusedApply = null;
         parseModel();
+        PoolThumbnails.newFrame();
         clearWidgets();
         uiScale = Math.min(1f, Math.min(this.width / 800f, this.height / 440f));
         cw = Math.round(this.width / uiScale);
@@ -397,20 +398,19 @@ final class JigsawEditorScreen extends CraftiumScreen {
         for (int slot = 0; slot < perPage() && first + slot < list.size(); slot++) {
             int index = order.get(first + slot);
             var element = list.get(index).getAsJsonObject();
-            int x = centreX, y = cardsTop() + slot * (CARD_H + CARD_GAP), tx = x + 8, w = centreW - 16;
+            int x = centreX, y = cardsTop() + slot * (CARD_H + CARD_GAP), tx = x + 6 + PoolThumbnails.WIDTH + 8, w = centreW - (tx - x) - 8;
             boolean editable = element.has("editable") && element.get("editable").getAsBoolean();
             int weight = num(element, "weight", 1);
-            var slider = new FlatSlider(tx, y + 28, w - 116, 16, Component.empty(), (weight - 1) / 149.0) {
+            var slider = new FlatSlider(tx, y + 28, w, 16, Component.empty(), (weight - 1) / 149.0) {
                 private int units() { return 1 + (int) Math.round(value * 149); }
                 @Override protected void updateMessage() { setMessage(Component.literal("weight " + units() + " · " + share(index, units()) + "%")); }
                 @Override protected void applyValue() { pendingWeightIndex = index; pendingWeight = units(); pendingAt = System.currentTimeMillis(); }
             }.range(1, 150, weight);
             slider.setRaw((weight - 1) / 149.0);
             addRenderableWidget(tips.on(slider, "How often this element is chosen compared with the others in the pool, 1 to 150. The percentage is its share. Ctrl-click to type a number."));
-            int bx = x + centreW - 8 - 108;
-            button("↑", bx, y + 26, 22, 20, () -> edit("element_move", "pool", pool0, "index", index, "to", index - 1)).active = poolOrder && index > 0;
-            button("↓", bx + 26, y + 26, 22, 20, () -> edit("element_move", "pool", pool0, "index", index, "to", index + 1)).active = poolOrder && index < list.size() - 1;
-            button("Remove", bx + 52, y + 26, 56, 20, () -> edit("element_remove", "pool", pool0, "index", index));
+            button("↑", tx, y + 70, 22, 20, () -> edit("element_move", "pool", pool0, "index", index, "to", index - 1)).active = poolOrder && index > 0;
+            button("↓", tx + 26, y + 70, 22, 20, () -> edit("element_move", "pool", pool0, "index", index, "to", index + 1)).active = poolOrder && index < list.size() - 1;
+            button("Remove", tx + 52, y + 70, 64, 20, () -> edit("element_remove", "pool", pool0, "index", index));
             boolean rigid = str(element, "projection", "rigid").equals("rigid");
             var projection = button(rigid ? "Rigid" : "Follow terrain", tx, y + 48, 96, 18, () -> edit("element_set", "pool", pool0, "index", index, "projection", rigid ? "terrain_matching" : "rigid"));
             projection.active = editable || element.has("projection");
@@ -766,6 +766,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private int listBottom() { return ch - FOOT - 70; }
 
     @Override protected void draw(Gfx g, int mx, int my, float delta) {
+        PoolThumbnails.newFrame();
         g.fill(0, 0, this.width, this.height, 0xf2101923);
         g.pose().pushMatrix();
         g.pose().scale(uiScale, uiScale);
@@ -856,14 +857,19 @@ final class JigsawEditorScreen extends CraftiumScreen {
             boolean current = index == selected;
             g.fill(x, y, x + centreW, y + CARD_H, current ? 0xff2b4766 : CARD);
             g.outline(x, y, centreW, CARD_H, current ? ClientState.options.uiAccent : ClientState.options.uiBorder);
-            int tx = x + 8, w = centreW - 16;
+            g.fill(x + 6, y + 6, x + 6 + PoolThumbnails.WIDTH, y + 6 + PoolThumbnails.HEIGHT, 0xff2a3441);
+            var tex = PoolThumbnails.of(str(element, "template", "?"), element.has("thumb") ? element.getAsJsonObject("thumb") : null);
+            if (tex != null) g.blit(tex, x + 6, y + 6, 0, 0, PoolThumbnails.WIDTH, PoolThumbnails.HEIGHT, PoolThumbnails.WIDTH * 2, PoolThumbnails.HEIGHT * 2, PoolThumbnails.WIDTH * 2, PoolThumbnails.HEIGHT * 2, 0xffffffff);
+            else g.centeredText(font, noPicture(element), x + 6 + PoolThumbnails.WIDTH / 2, y + 6 + PoolThumbnails.HEIGHT / 2 - 4, element.has("missing") ? ERROR : 0xff7e8fa0);
+            int tx = x + 6 + PoolThumbnails.WIDTH + 8, w = centreW - (tx - x) - 8;
             int jigsaws = element.has("jigsaws") ? element.getAsJsonArray("jigsaws").size() : 0, issues = issues(element);
             String verdict = element.has("missing") ? "template missing" : issues > 0 ? issues + (issues == 1 ? " problem" : " problems") : jigsaws == 0 ? (element.has("template") ? "no connectors" : "") : jigsaws + (jigsaws == 1 ? " connector, ok" : " connectors, ok");
             int verdictW = font.width(verdict) + 6;
             if (!verdict.isEmpty()) g.text(font, verdict, x + centreW - 8 - font.width(verdict), y + 6, element.has("missing") || issues > 0 ? ERROR : jigsaws == 0 ? MUTED : OK, false);
             g.text(font, font.plainSubstrByWidth((index + 1) + ". " + title(element), w - verdictW), tx, y + 6, 0xffffffff, false);
             var size = element.has("size") ? element.getAsJsonArray("size") : null;
-            String sub = str(element, "type", "") + (element.has("template") ? " · " + shortName(str(element, "template", "")) : "") + (size != null ? " · " + size.get(0) + "×" + size.get(1) + "×" + size.get(2) : "");
+            String sub = str(element, "type", "") + (element.has("template") ? " · " + shortName(str(element, "template", "")) : "") + "";
+            if (size != null) g.text(font, size.get(0) + " × " + size.get(1) + " × " + size.get(2) + " blocks", x + 6, y + 6 + PoolThumbnails.HEIGHT + 4, MUTED, false);
             g.text(font, font.plainSubstrByWidth(sub, w), tx, y + 16, MUTED, false);
         }
     }
@@ -1562,7 +1568,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     /** The size this screen is laid out for: at Auto the interface takes the largest whole scale at which it fits, instead of shrinking it to fit. */
     @Override protected int[] canvas() { return new int[]{800, 440}; }
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void removed() { preview.releaseAll(); }
+    @Override public void removed() { preview.releaseAll(); PoolThumbnails.releaseAll(); }
     @Override public void onClose() {
         if (dialogMode != null) { dialogMode = null; init(); return; }
         if (helpOpen) { helpOpen = false; init(); return; }
