@@ -126,13 +126,6 @@ public final class EditorScreen extends CraftiumScreen {
     };
     /** The editor lays itself out on at least 1000 by 562 interface units, so on Auto the scale is lowered until that fits. */
     @Override protected int[] canvas(){return new int[]{1000,562};}
-    /** Ctrl+= and Ctrl+-: one half step larger or smaller, kept in the preferences and applied at once. */
-    private void resizeInterface(int step){
-        int now=(int)Math.round(InterfaceScale.pixels(minecraft)*2),next=Math.clamp(now+step,2,InterfaceScale.largest(minecraft)*2);
-        if(next==now){ClientState.notify(step>0?"The interface is as large as this window allows ("+InterfaceScale.name(now)+")":"The interface is as small as it goes (1x: one screen pixel per text pixel)");return;}
-        ClientState.options.interfaceHalves=next;ClientState.save();ClientState.notify("Interface size: "+InterfaceScale.name(next));
-        relayout();
-    }
     @Override protected void init() {
         lastFlightNanos=0;
         if(!hudHidden){previousHideGui=ClientCompat.hudHidden(minecraft);hudHidden=true;if(!previousHideGui)ClientCompat.toggleHud(minecraft);}
@@ -1899,6 +1892,7 @@ public final class EditorScreen extends CraftiumScreen {
         return (keysDown.contains(GLFW.GLFW_KEY_X)?1:0)|(keysDown.contains(GLFW.GLFW_KEY_Y)?2:0)|(keysDown.contains(GLFW.GLFW_KEY_Z)?4:0);
     }
     @Override public boolean keyPressed(KeyEvent event) {
+        if(interfaceKey(event))return true;
         boolean repeat=!keysDown.add(event.key());
         if(typing!=null){
             switch(entry.key(event)){case APPLY->finishTyping(true);case CANCEL->finishTyping(false);default->{}}
@@ -1942,9 +1936,6 @@ public final class EditorScreen extends CraftiumScreen {
         if(toolActive&&ToolHints.brush(o().tool)&&(event.modifiers()&7)==0&&(event.key()==GLFW.GLFW_KEY_LEFT_BRACKET||event.key()==GLFW.GLFW_KEY_RIGHT_BRACKET)){ // [ and ] shrink and grow the brush
             o().radius=Math.clamp(o().radius+(event.key()==GLFW.GLFW_KEY_RIGHT_BRACKET?1:-1),1,dev.craftium.core.ShapeLimits.maxRadius(o()));return true;
         }
-        // The keypad's + and -, and Ctrl+Shift+= (which is +), also resize the interface when the main bindings are the defaults.
-        if((event.modifiers()&7)==EditorControls.CONTROL){int key=event.key();if(key==GLFW.GLFW_KEY_KP_ADD){resizeInterface(1);return true;}if(key==GLFW.GLFW_KEY_KP_SUBTRACT){resizeInterface(-1);return true;}}
-        if((event.modifiers()&7)==(EditorControls.CONTROL|EditorControls.SHIFT)&&event.key()==GLFW.GLFW_KEY_EQUAL){resizeInterface(1);return true;}
         for(Action binding:Action.values())if(!EditorBindings.get(binding).mouse()&&EditorBindings.matches(binding,event)&&perform(binding))return true;
         if(event.key()==GLFW.GLFW_KEY_BACKSPACE&&(event.modifiers()&7)==0){perform(Action.DELETE);return true;}
         if((event.modifiers()&7)==0)for(var entry:CraftiumClient.toolKeys.entrySet())if(entry.getValue().matches(event)){select(entry.getKey());return true;}

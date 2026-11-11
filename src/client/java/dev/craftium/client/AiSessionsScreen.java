@@ -142,6 +142,7 @@ final class AiSessionsScreen extends CraftiumScreen {
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
+        if (interfaceKey(event)) return true;
         int page = viewBottom() - TOP - CARD_H / 2;
         switch (event.key()) {
             case GLFW.GLFW_KEY_PAGE_DOWN -> scroll = Math.clamp(scroll + page, 0, maxScroll);
