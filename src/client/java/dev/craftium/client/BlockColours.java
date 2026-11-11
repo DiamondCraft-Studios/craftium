@@ -121,6 +121,10 @@ final class BlockColours {
             return out;
         }catch(Exception e){return new int[0];}
     }
+    /** A texture (such as minecraft:block/stone) as 16 by 16 pixels of 0xAARRGGBB; empty when it cannot be read. */
+    static int[] texture(String name){build();return pictures.computeIfAbsent(name,BlockColours::read);}
+    /** The tint the game gives a block (grass, leaves, water), or -1 for one it does not tint. */
+    static int tint(String id){build();var source=sources.get(id);return source==null?-1:source.tint();}
     /** The faces of a block, or null for one with no model to read them from. */
     static Faces faces(String id){build();return faceMap.get(id);}
     private static int average(String texture){return averages.computeIfAbsent(texture,key->{
