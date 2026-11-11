@@ -458,9 +458,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
             }
             case 2 -> {
                 tips.on(button("Import structure", x + 10, top + 44, 150, 22, this::importStructure), "Choose a Java structure file (.nbt) on your computer. It is saved as a template, with its jigsaw blocks as they are, and added to the pool.");
-                var library = button("From blueprint library", x + 10, top + 72, 150, 22, () -> { });
-                library.active = false;
-                tips.on(library, "Coming soon: pick a template from your blueprint library.");
+                tips.on(button("From blueprint library", x + 10, top + 72, 150, 22, this::pickBlueprint), "Open the blueprint library (the server's, or your own) and choose a blueprint. It is saved as a template, with its jigsaw blocks as they are, and added to the pool.");
             }
             case 3 -> {
                 tips.on(box(x + 10, boxY, w - 20, featureQuery, 80, v -> featureQuery = v, () -> edit("features", "query", featureQuery)), "Part of a feature name, such as oak or flower. Press Enter to search.");
@@ -593,6 +591,26 @@ final class JigsawEditorScreen extends CraftiumScreen {
             } else g.text(font, shown, px, ry + 2, TEXT, false);
         }
         if (bar) Scrollbars.draw(g, r[0] + r[2] - Scrollbars.WIDTH - 2, r[1] + 2, rows * SUGGEST_ROW, suggestScroll * SUGGEST_ROW, suggestMatches.size() * SUGGEST_ROW, false);
+    }
+
+    private void pickBlueprint() {
+        ClientCompat.setScreen(minecraft, new BlueprintScreen(this, (client, info) -> {
+            String file = info.file();
+            String base = file.substring(file.lastIndexOf('/') + 1);
+            int dot = base.lastIndexOf('.');
+            String name = (dot > 0 ? base.substring(0, dot) : base).toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]+", "_").replaceAll("^_+|_+$", "");
+            if (name.isEmpty()) name = "blueprint";
+            var o = ClientState.options;
+            String prior = o.assetData;
+            try {
+                if (client) o.assetData = java.util.Base64.getEncoder().encodeToString(ClientAssets.bytes(file)); // the player's own file travels with the request
+                edit("element_from_blueprint", "pool", poolId(), "name", name, "file", file);
+            } catch (IllegalArgumentException e) {
+                localMessage = e.getMessage();
+            } finally { o.assetData = prior; }
+            adding = false;
+            init();
+        }));
     }
 
     private void importStructure() {
@@ -842,7 +860,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
             }
             case 2 -> {
                 int line = top;
-                String text = "Imports a Java structure file (.nbt) from your computer as a new template and adds it to the pool. The jigsaw blocks inside it are kept.";
+                String text = "Imports a Java structure file (.nbt) from your computer, or takes a blueprint from the blueprint library, as a new template and adds it to the pool. The jigsaw blocks inside it are kept.";
                 for (var row : font.split(Component.literal(text), w - 20)) { g.text(font, row, x + 10, line, MUTED, false); line += 10; }
             }
             case 3 -> {

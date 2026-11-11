@@ -101,6 +101,25 @@ final class JigsawEditor {
         }
     }
 
+    private static byte[] fileData(JsonObject c) {
+        try { return Base64.getDecoder().decode(text(c, "data")); }
+        catch (IllegalArgumentException e) { throw new IllegalArgumentException("The file did not arrive whole"); }
+    }
+
+    private static boolean isStructure(CompoundTag tag) { return tag.get("size") != null && (tag.get("palette") != null || tag.get("palettes") != null); }
+
+    /** Saves a structure as a template of the draft, named as the command says (a bare name goes in the pool's namespace), and adds it to the pool. */
+    private static String addTemplate(JigsawPlanner.Env env, Edit edit, JsonObject c, CompoundTag tag, String what) throws IOException {
+        var home = poolId(text(c, "pool"));
+        var typed = text(c, "name").strip();
+        var name = poolId(typed.contains(":") ? typed : home.getNamespace() + ":" + typed);
+        writeTemplate(env, edit, name, tag);
+        var pool = readPool(env, home);
+        pool.getAsJsonArray("elements").add(single(name.toString(), 1, "rigid"));
+        writePool(env, edit, home, pool);
+        return what + " as " + name + " and added it to " + home;
+    }
+
     private static String run(ServerPlayer player, JigsawPlanner.Env env, Memory memory, Edit edit, JsonObject c) throws IOException {
         String op = text(c, "op");
         if (!op.equals("retarget_check")) memory.retarget = null;
@@ -186,21 +205,34 @@ final class JigsawEditor {
                 return "Saved the selection as " + name + " and added it to " + id;
             }
             case "element_from_file" -> {
+                CompoundTag tag;
+                try { tag = NbtIo.readCompressed(new java.io.ByteArrayInputStream(fileData(c)), NbtAccounter.create(32L * 1024 * 1024)); }
+                catch (IOException e) { throw new IllegalArgumentException("That is not a Java structure file (.nbt)"); }
+                if (!isStructure(tag)) throw new IllegalArgumentException("That file is not a Java structure: it has no size or palette");
+                return addTemplate(env, edit, c, tag, "Imported the structure");
+            }
+            case "element_from_blueprint" -> {
+                // A blueprint of the server's library is read here; one of the player's own comes with the request. A structure file is used as it is,
+                // jigsaw blocks and block entities included; a schematic is turned into one through the blocks of a clipboard.
                 byte[] bytes;
-                try { bytes = Base64.getDecoder().decode(text(c, "data")); }
-                catch (IllegalArgumentException e) { throw new IllegalArgumentException("The file did not arrive whole"); }
+                if (c.has("data")) bytes = fileData(c);
+                else {
+                    var path = BlueprintLibrary.file("blueprints", text(c, "file"));
+                    if (!Files.isRegularFile(path)) throw new IllegalArgumentException("There is no blueprint called " + text(c, "file") + " in the server's library");
+                    if (Files.size(path) > 1_048_576) throw new IllegalArgumentException("A blueprint over 1 MiB cannot be used");
+                    bytes = Files.readAllBytes(path);
+                }
                 CompoundTag tag;
                 try { tag = NbtIo.readCompressed(new java.io.ByteArrayInputStream(bytes), NbtAccounter.create(32L * 1024 * 1024)); }
-                catch (IOException e) { throw new IllegalArgumentException("That is not a Java structure file (.nbt)"); }
-                if (tag.get("size") == null || (tag.get("palette") == null && tag.get("palettes") == null)) throw new IllegalArgumentException("That file is not a Java structure: it has no size or palette");
-                var home = poolId(text(c, "pool"));
-                var typed = text(c, "name").strip();
-                var name = poolId(typed.contains(":") ? typed : home.getNamespace() + ":" + typed);
-                writeTemplate(env, edit, name, tag);
-                var pool = readPool(env, home);
-                pool.getAsJsonArray("elements").add(single(name.toString(), 1, "rigid"));
-                writePool(env, edit, home, pool);
-                return "Imported the structure as " + name + " and added it to " + home;
+                catch (IOException e) { throw new IllegalArgumentException("That blueprint could not be read"); }
+                if (!isStructure(tag)) {
+                    var session = new Session();
+                    var planner = new EditPlanner(player.level(), session, new dev.craftium.core.Options());
+                    session.clipboard.putAll(BlueprintLibrary.read(tag, planner));
+                    if (session.clipboard.isEmpty()) throw new IllegalArgumentException("That blueprint has no blocks");
+                    tag = BlueprintLibrary.structure(planner);
+                }
+                return addTemplate(env, edit, c, tag, "Took the blueprint");
             }
             case "features" -> { memory.featureQuery = c.has("query") ? text(c, "query") : ""; return ""; }
             case "element_add_empty" -> {
