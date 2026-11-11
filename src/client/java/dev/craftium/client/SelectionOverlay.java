@@ -24,6 +24,7 @@ final class SelectionOverlay {
     private static void adopt(){var ready=building.poll();if(ready!=null)shape=ready;}
     private static List<BlockPos> blocks=List.of(),moved=List.of();
     private static Point movedBy;
+    private static List<BlockPos> movedFor; // the blocks `moved` was worked out from: a new selection must not be drawn against an old list of places
     private static List<Point> selected=List.of();
     /** The selected blocks as last received; replaced, never changed, so the same list means the same selection. */
     static List<Point> points(){return selected;}
@@ -99,7 +100,7 @@ final class SelectionOverlay {
         if(blocks.isEmpty())return;
         Point moving=TransformGizmo.moveDelta();
         if(moving!=null){ // the blocks being dragged, shown where they would land
-            if(!moving.equals(movedBy)){movedBy=moving;moved=blocks.stream().map(b->b.offset(moving.x(),moving.y(),moving.z())).toList();}
+            if(!moving.equals(movedBy)||movedFor!=blocks){movedBy=moving;movedFor=blocks;moved=blocks.stream().map(b->b.offset(moving.x(),moving.y(),moving.z())).toList();}
             Overlay.blocks(blocks,moved,ClientState.options.previewTint);
         }else if(!transforming&&!ClientState.hasPending()) // a waiting edit shows its own blocks
             Overlay.blocks(blocks,ClientState.options.selectionTint);
