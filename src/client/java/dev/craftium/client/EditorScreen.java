@@ -841,6 +841,8 @@ public final class EditorScreen extends CraftiumScreen {
      * square, add two joined squares, subtract a square with a cut out of it, and intersect two outlines with only where they meet filled.
      */
     private void selectionModeBadge(Gfx g){
+        // The badge belongs to the pointer: with the pointer hidden (a look, an arcball turn, a handle being dragged) or outside the window, there is nothing for it to sit on.
+        if(cursorHidden||GLFW.glfwGetWindowAttrib(minecraft.getWindow().handle(),GLFW.GLFW_HOVERED)==0)return;
         if(!toolActive||!o().tool.selection()||pipetting||menu>=0||help||transform||TransformGizmo.dragging()||!inViewport(pointerX/scale,pointerY/scale))return;
         // As big as the pointer, which is about 16 screen pixels across and centred on the point it aims at: the badge's top-left corner sits on the pointer's bottom-right.
         double cursor=16.0*minecraft.getWindow().getGuiScaledWidth()/Math.max(1,minecraft.getWindow().getScreenWidth())/scale;
