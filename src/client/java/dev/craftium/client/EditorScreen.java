@@ -1982,7 +1982,7 @@ public final class EditorScreen extends CraftiumScreen {
             case TOGGLE_MOVE -> toggleTool(Tool.MOVE);case TOGGLE_ROTATE -> toggleTool(Tool.ROTATE);case TOGGLE_SCALE -> toggleTool(Tool.SCALE);case TOGGLE_PIVOT -> toggleTool(Tool.PIVOT);
 case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();case DUPLICATE -> action("duplicate");case PASTE -> action("paste");case PASTE_IN_PLACE -> PlacementPreview.beginInPlace();
             case COPY_AIR -> {boolean old=o().pasteAir;o().pasteAir=true;action("copy");o().pasteAir=old;}
-            case DELETE -> {if(deleteRuler()){}else if(ShapeObject.active())ShapeObject.cancel();else if(PlacementPreview.active())PlacementPreview.cancel();else action("delete");}
+            case DELETE -> {if(deleteHierarchyObjects()){}else if(deleteRuler()){}else if(ShapeObject.active())ShapeObject.cancel();else if(PlacementPreview.active())PlacementPreview.cancel();else action("delete");}
             case SWAP_BLOCKS -> swapBlocks();
             case QUICK_FILL -> action("fill");case QUICK_REPLACE -> action("replace");
             case ROTATE_PLACEMENT -> {if(!PlacementPreview.active())return false;action("rotate");}
@@ -2250,7 +2250,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(renaming>=0&&!renameShown)cancelRename(); // scrolled out of view or deleted
         else if(renaming>=0&&fields.get("rename")!=null&&!fields.get("rename").isFocused())commitRename(); // a click elsewhere keeps the name
         g.fill(x+1,y+ph-30,x+pw-1,y+ph-29,LINE); // the buttons along the bottom
-        button(g,x+10,y+ph-25,24,20,"",false,()->action("saved_selection:save"),looking?"Create a BuildObject from what is selected now · While one is shown, the new one goes around it":"Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole");
+        button(g,x+10,y+ph-25,24,20,"",false,()->action("saved_selection:save"),looking?"Create a BuildObject from what is selected now · While one is shown, the new one goes inside it":"Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole");
         glyph(g,x+10,y+ph-25,24,20,PLUS,TEXT);
     }
     /**
@@ -2314,6 +2314,15 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     private void pasteAsObject(int after){
         PlacementPreview.beginInPlace();
         if(PlacementPreview.active()){PlacementPreview.asObject="BuildObject";PlacementPreview.asObjectAfter=after;}
+    }
+    /** Delete and Backspace with the pointer over the Hierarchy and BuildObjects shown: the BuildObjects are deleted (as the menu's Delete does, their blocks stay), not the blocks in the world. */
+    private boolean deleteHierarchyObjects(){
+        var r=WorkspaceLayout.windows.get("hierarchy");
+        if(r==null||!r.visible||r.folded||!panels||mx<r.x||mx>=r.x+r.w||my<r.y||my>=r.y+r.h)return false;
+        var ids=new ArrayList<Integer>();for(var e:ClientState.savedSelections())if(e.active())ids.add(e.id());
+        if(ids.isEmpty())return false;
+        action(ids.size()==1?"saved_selection:delete:"+ids.getFirst():"saved_selection:deleteset:"+String.join(",",ids.stream().map(String::valueOf).toList()));
+        return true;
     }
     /** Whether the point is in the body of the Hierarchy window: under its title and over its buttons, where no control was hit. */
     private boolean inHierarchyBody(double x,double y){
@@ -2385,7 +2394,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         items.add(row.active()&&row.editing()?item("Stop editing","",()->action("saved_selection:release")):item("Edit blocks","",()->action("saved_selection:edit:"+id)));
         items.add(divider());
         items.add(n>1?item("Group selected ("+n+")","Ctrl+G",()->action("saved_selection:group:"+csv)):item("Create empty parent",row.active()?"Ctrl+G":"",()->action("saved_selection:group:"+id)));
-        if(ClientState.status.selectionSize()>0&&!row.active())items.add(item("Create child from selection","",()->action("saved_selection:createchild:"+id)));
+        items.add(item("Create empty BuildObject","",()->action("saved_selection:createchild:"+id)));
         items.add(divider());
         items.add(item("Rename",n==1&&row.active()?"F2":"",()->startRename(new RenameArea(null,id))));
         items.add(item("Duplicate","Ctrl+D",this::duplicateObjects));

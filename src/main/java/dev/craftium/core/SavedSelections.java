@@ -268,12 +268,17 @@ public final class SavedSelections {
      * BuildObject that has a block in the selection is taken in whole, as a child of the new one, wherever the selection reaches only part of it. A
      * BuildObject under another that is also touched comes in with it and not by itself. The new one holds the blocks of the selection that no taken
      * BuildObject holds, so no block is held twice by what it creates, and it takes the place of the first one it took (under the same parent). With
-     * nothing touched it is a new BuildObject at the top level, last.
+     * nothing touched it is a new BuildObject at the top level, last. While a BuildObject is shown, the new one is its last child instead and takes in nothing.
      */
     public Entry create(Selection live){
         if(live.size()==0)throw new IllegalArgumentException("Nothing is selected to make a BuildObject from");
         if(entries.size()>=MAX)throw new IllegalArgumentException("BuildObject limit: "+MAX);
         var cells=live.points();
+        if(active!=null&&entries.contains(active)){ // one is shown: the new one goes inside it, as its last child, and holds what the shown one and everything under it do not
+            var held=effective(active);var fresh=new ArrayList<Point>();for(var p:cells)if(!held.contains(p))fresh.add(p);
+            var child=new Entry(tree.nextId++,freeName(),fresh);entries.add(child);
+            place(child.id,active.id,children(active).size());changed();return child;
+        }
         var touched=new ArrayList<Entry>();
         for(var e:entries)if(e.points.stream().anyMatch(cells::contains))touched.add(e);
         var taken=touched.stream().filter(e->touched.stream().noneMatch(o->o!=e&&isUnder(e,o))).toList(); // tree order, the outermost only
@@ -345,12 +350,11 @@ public final class SavedSelections {
         var entry=new Entry(tree.nextId++,freeName(),List.of());entries.add(entry);
         adopt(entry,taken);changed();return entry;
     }
-    /** Makes a BuildObject from the live selection as the last child of {@code parentId}. Unlike {@link #create}, it takes nothing in. */
-    public Entry createChild(int parentId,Selection live){
+    /** Makes an empty BuildObject as the last child of {@code parentId}. */
+    public Entry createChild(int parentId){
         var parent=need(parentId);
-        if(live.size()==0)throw new IllegalArgumentException("Nothing is selected to make a BuildObject from");
         if(entries.size()>=MAX)throw new IllegalArgumentException("BuildObject limit: "+MAX);
-        var entry=new Entry(tree.nextId++,freeName(),live.points());entries.add(entry);
+        var entry=new Entry(tree.nextId++,freeName(),List.of());entries.add(entry);
         place(entry.id,parent.id,children(parent).size());changed();return entry;
     }
     /** Deletes these BuildObjects, each with everything under it (one already gone with another is skipped). */

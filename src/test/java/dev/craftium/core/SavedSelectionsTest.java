@@ -278,10 +278,15 @@ class SavedSelectionsTest {
         assertEquals(List.of(group,y),saved.children(p));assertEquals(List.of(x),saved.children(group));
     }
     @Test void groupingNothingIsRefused(){assertThrows(IllegalArgumentException.class,()->new SavedSelections().group(List.of()));}
-    @Test void aChildMadeFromTheSelectionTakesNothingInAndIsTheLast(){
+    @Test void anEmptyChildIsTheLastAndHoldsNothing(){
         var saved=new SavedSelections();var p=saved.save(live(A));var x=saved.save(live(B));saved.place(x.id(),p.id(),0);
-        var child=saved.createChild(p.id(),live(B,C));
-        assertEquals(List.of(x,child),saved.children(p));assertEquals(List.of(B,C),child.points(),"it holds the whole selection, taking nothing in");assertEquals(0,saved.children(x).size());
+        var child=saved.createChild(p.id());
+        assertEquals(List.of(x,child),saved.children(p));assertTrue(child.points().isEmpty());
+    }
+    @Test void creatingWhileOneIsShownMakesTheNewOneItsChildNotItsParent(){
+        var saved=new SavedSelections();var s=live(A,B);var p=saved.save(live(A));saved.view(p.id(),s);
+        var made=saved.create(live(A,B,C));
+        assertEquals(p.id(),made.parentId());assertEquals(0,p.parentId());assertEquals(List.of(made),saved.children(p));assertEquals(List.of(B,C),made.points(),"only what the shown one did not hold");
     }
     @Test void deletingSeveralSkipsOnesThatWentWithAnother(){
         var saved=new SavedSelections();var s=live(A);var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);saved.place(b.id(),a.id(),0);
