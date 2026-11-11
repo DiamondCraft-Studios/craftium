@@ -222,6 +222,15 @@ public final class Options {
      * {@link #buildSpec} they ride along on one request and are not kept in the saved settings. See {@link AiSessions}.
      */
     public String aiSession="",aiLabel="";
+    /** The jigsaw planner: the pool to start from, the name of the start jigsaw (empty for any), how deep and how far it grows, the seed, and whether it runs again when the files change. */
+    public String jigsawPool="minecraft:village/plains/town_centers",jigsawStart="";
+    public int jigsawDepth=5,jigsawDistance=80;
+    public long jigsawSeed=1;
+    public boolean jigsawLive=true;
+    /** Whether a jigsaw preview draws a box around each piece, and the name of the template above it. Only the client reads them. */
+    public boolean jigsawBoxes=true,jigsawNames=true;
+    /** One command of the jigsaw pool editor, as JSON (see the server's JigsawEditor); empty when none. */
+    public String jigsawEdit="";
     /** Whether the client listens on this computer for an AI client (the craftium-mcp shim) to drive the editor. Off until the player turns it on. */
     public boolean aiBridge;
     /** Whether to draw the AI previews other players are holding, in a colour of their own with the owner's name. */
@@ -345,6 +354,9 @@ public final class Options {
         shadeAzimuth=bounded(shadeAzimuth,-360,360);shadeAltitude=bounded(shadeAltitude,-90,90);shadeAmbientOcclusion=bounded(shadeAmbientOcclusion,0,1);shadeDither=bounded(shadeDither,0,1);shadeExposure=bounded(shadeExposure,.1,4);shadeBounces=Math.clamp(shadeBounces,0,4);shadeSamples=Math.clamp(shadeSamples,1,8);shadeRayLength=Math.clamp(shadeRayLength,4,96);
         if(buildSpec==null)buildSpec="";if(buildSpec.length()>400_000)throw new IllegalArgumentException("Build spec exceeds 400 KB");
         aiSession=AiSessions.cleanId(aiSession);aiLabel=AiSessions.cleanLabel(aiLabel);
+        if(jigsawPool==null)jigsawPool="";if(jigsawStart==null)jigsawStart="";
+        if(jigsawPool.length()>200||jigsawStart.length()>200)throw new IllegalArgumentException("A jigsaw name is at most 200 characters");
+        if(jigsawEdit==null)jigsawEdit="";if(jigsawEdit.length()>32_768)throw new IllegalArgumentException("A pool editor command is at most 32 KB");jigsawDepth=Math.clamp(jigsawDepth,1,20);jigsawDistance=Math.clamp(jigsawDistance,1,128);
         if(pinned==null)pinned=new java.util.ArrayList<>();
         if(pinned.size()>256||pinned.stream().anyMatch(name->name==null||name.length()>64))throw new IllegalArgumentException("Invalid pinned properties");
         radius = Math.clamp(radius,1,BrushMath.MAX_RADIUS);

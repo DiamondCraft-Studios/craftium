@@ -49,6 +49,12 @@ public final class ClientState {
     /** The place in the hue wheel each entry's starting colour was taken from. */
     private static final Map<Integer,Integer> savedIndex=new HashMap<>();
     /** Takes in the saved selections a status carries. A status that does not carry them (null) leaves them as they were. */
+    /** What the jigsaw planner said about its last run, as the server last sent it. */
+    public static String jigsawReport="";
+    static void updateJigsawReport(Packets.Status status){if(status.jigsawReport()!=null)jigsawReport=status.jigsawReport();if(status.jigsawModel()!=null){jigsawModel=status.jigsawModel();jigsawModelVersion++;}}
+    /** The pool editor's model as the server last sent it (JSON text), and a number that changes with each one. */
+    public static String jigsawModel="";
+    public static int jigsawModelVersion;
     static void updateSavedSelections(Packets.Status status){
         if(status.savedSelections()==null)return;
         savedSelections=List.copyOf(status.savedSelections());
@@ -175,6 +181,8 @@ public final class ClientState {
     public static int pluginPreviewBlocks(){return pluginPending.total();}
     static void clearPluginPreview(){pluginPending=GhostBlocks.EMPTY;pluginPendingData="";}
     public static boolean hasPending(){return pending.total()>0;}
+    /** Whether Escape, and leaving the editor, cancel the waiting edit: not a jigsaw preview, which is cancelled in the planner. */
+    public static boolean escapeCancelsPending(){return hasPending()&&!pending.keepsOnEscape();}
     /**
      * One of the player's AI sessions as the server last described it, with the build it holds as a preview (kept apart from the player's own and
      * drawn in a colour of its own) and when that description arrived.

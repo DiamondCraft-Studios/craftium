@@ -33,6 +33,7 @@ def mergeClient = mergeTask('mergeClientSources', 'client')
 def mergeTest = mergeTask('mergeTestSources', 'test')
 
 loom {
+    accessWidenerPath = file('src/main/resources/craftium.accesswidener')
     splitEnvironmentSourceSets()
     runs {
         client {

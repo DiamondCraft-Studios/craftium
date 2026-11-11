@@ -12,6 +12,7 @@
     "main": ["dev.craftium.Craftium"],
     "client": ["dev.craftium.client.CraftiumClient"]
   },
+  "accessWidener": "craftium.accesswidener",
   "mixins": ["craftium.mixins.json", {"config":"craftium.client.mixins.json","environment":"client"}],
   "depends": {
     "fabricloader": ">=0.17.0",

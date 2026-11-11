@@ -61,6 +61,17 @@ public final class EditorServer {
             else for(var c:run)(j.backwards?c.before():c.after()).place(j.level,EditPlanner.pos(c.pos()),flags);
             from=to;
         }
+        // Placing a block that has a block entity makes one, which the edit did not describe. What the world holds now is what undo has to find there, or it
+        // takes the block for one that changed since and leaves it standing.
+        if(!j.backwards){
+            int base=j.applied.size()-due.size();
+            for(int i=0;i<due.size();i++){
+                var c=due.get(i);
+                if(!c.after().state().hasBlockEntity())continue;
+                var now=BlockSnapshot.capture(j.level,EditPlanner.pos(c.pos()));
+                if(now.state()==c.after().state())j.applied.set(base+i,new Session.Change(c.pos(),c.before(),now));
+            }
+        }
         if(!j.backwards&&!j.history&&j.edit.name().equals(IN_WORLD_BREAK))breakEffects(j.level,due);
     }
     /** The name of the edit a left click in the world makes while the break is the editor's, not the game's: infinite reach or symmetry. */
@@ -212,6 +223,7 @@ public final class EditorServer {
                 s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingDirty=true;start(player,s,edit);return;
             }
             if(r.action().equals("pending_cancel")){
+                if(s.pendingEdit!=null&&s.pendingEdit==s.layoutFor)return; // a jigsaw preview stays until it is built or cancelled in the planner
                 if(s.pendingEdit!=null){
                     s.pendingEdit=null;s.pendingDirty=true;
                     if(s.pendingSelectionBefore!=null){s.selection.restore(s.pendingSelectionBefore);s.pendingSelectionBefore=null;}
@@ -1010,6 +1022,32 @@ public final class EditorServer {
         send(player,s,"Applying "+edit.name()+"…",false);
     }
     /** Holds the edit as a ghost for the player to confirm; edits made while one is waiting are added to it. */
+    /** The player's session, for commands that work on their selection and waiting preview. */
+    static Session session(ServerPlayer player){return playerSession(player);}
+    /** Holds an edit as the player's waiting preview in place of whatever waited before; Enter builds it and Esc cancels it, like any staged edit. */
+    static void preview(ServerPlayer player,Session.Edit edit,String message){preview(player,edit,message,null,true);}
+    /** As above, with the pieces of a jigsaw layout to draw, and whether its blocks are drawn too. */
+    static void preview(ServerPlayer player,Session.Edit edit,String message,GhostCodec.Layout layout,boolean blocks){
+        var s=playerSession(player);
+        s.pendingEdit=edit;s.pendingSelectionBefore=null;s.pendingDirty=true;
+        s.layoutFor=layout==null?null:edit;s.layout=layout;s.layoutBlocks=blocks;
+        send(player,s,message,false);
+    }
+    /** Builds the waiting preview, as the Enter key does. */
+    static void applyPreview(ServerPlayer player){
+        var s=playerSession(player);var edit=s.pendingEdit;
+        if(edit==null){send(player,s,"Nothing to confirm",false);return;}
+        s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingDirty=true;
+        s.bypassConfirm=true; // confirming is the confirmation, so the edit is built and not held again
+        try{start(player,s,edit);}finally{s.bypassConfirm=false;}
+    }
+    /** Drops the waiting preview, as the Escape key does. */
+    static void cancelPreview(ServerPlayer player){
+        var s=playerSession(player);
+        if(s.pendingEdit==null){send(player,s,"Nothing to cancel",false);return;}
+        s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingDirty=true;
+        send(player,s,"Edit cancelled",false);
+    }
     private static void stage(ServerPlayer player,Session s,Session.Edit edit){
         s.pendingEdit=s.pendingEdit==null?edit:merge(s.pendingEdit,edit);s.pendingDirty=true;
         send(player,s,"Edit ready: "+s.pendingEdit.changes().size()+" blocks · Enter to apply, Esc to cancel",false);
@@ -1261,12 +1299,12 @@ public final class EditorServer {
         String entityId="",entityNbt="";if(s.selectedEntity!=null){var entity=player.level().getEntity(s.selectedEntity);if(entity!=null){entityId=s.selectedEntity.toString();String nbt=EntityEdits.snapshot(entity,player.level()).toString();if(nbt.length()<12000)entityNbt=nbt;}}
         if(s.selectionRevision!=s.selection.revision()){s.selectionRevision=s.selection.revision();s.selectionData=SelectionCodec.encode(s.selection.points());}
         if(s.clipboardDirty){s.clipboardGhostDirty=true;s.clipboardData=SelectionCodec.encode(s.clipboard.entrySet().stream().filter(e->!e.getValue().state().isAir()).map(Map.Entry::getKey).toList());s.clipboardDirty=false;}
-        if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
+        if(s.pendingDirty){s.pendingData=s.pendingEdit==null?"":s.layout!=null&&s.pendingEdit==s.layoutFor?GhostCodec.encodeLayout(s.pendingEdit,GhostCodec.AI_LIMIT,s.layout,s.layoutBlocks):GhostCodec.encodeEdit(s.pendingEdit);s.pendingDirty=false;}
         if(s.pluginPreviewDirty){s.pluginPreviewData=s.pluginPreview==null?"":GhostCodec.encodeEdit(s.pluginPreview);s.pluginPreviewDirty=false;}
         if(ai!=null)aiData(ai); // one place makes the AI preview's data, so the owner and the players who see it always get the same
         if(s.clipboardGhostDirty){s.clipboardGhost=GhostCodec.encodeClipboard(s.clipboard);s.clipboardGhostDirty=false;}
         var savedList=SavedSelectionActions.forStatus(s,Handshake.clientHas(player.getUUID(),Handshake.SAVED_SELECTIONS));
-        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()||edit.hierarchyOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null||Handshake.clientHas(player.getUUID(),Handshake.AI_SESSIONS)?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin,sharedFor(player,s),false,aiInfos(player,s),s.pluginPreviewData,pluginToolsFor(player,s),savedList,savedList==null?null:SavedSelectionActions.groups(s));s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
+        var status=new Packets.Status(message,error,s.busy||(ai!=null&&ai.busy),s.selection.size(),s.selection.min(),s.selection.max(),s.clipboard.size(),s.undo.stream().map(edit->edit.selectionOnly()||edit.hierarchyOnly()?edit.name():edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())).toList(),s.undo.size(),s.redo.size(),entityId,entityNbt,AnnotationEdits.list(player.level()),s.selectionData,s.clipboardData,s.library,s.clipboardEntities.size(),s.pendingData,s.clipboardGhost,s.pivotUpdate,age(s.undo.peekFirst()),age(s.redo.peekFirst()),s.undo.isEmpty()?"":s.undo.peekFirst().name(),s.redo.isEmpty()?"":s.redo.peekFirst().name(),s.pulse,ai==null||Handshake.clientHas(player.getUUID(),Handshake.AI_SESSIONS)?"":ai.pendingData,ai==null?0:ai.undo.size(),ai==null||ai.undo.isEmpty()?"":ai.undo.peekFirst().name(),s.restoreUpdate,s.clipboardOrigin,sharedFor(player,s),false,aiInfos(player,s),s.pluginPreviewData,pluginToolsFor(player,s),savedList,savedList==null?null:SavedSelectionActions.groups(s),s.takeJigsawReport(),s.takeJigsawModel());s.library=List.of();s.pivotUpdate="";s.restoreUpdate="";s.pulse="";
         // A status that is too long for a packet cannot be written and would drop the player's connection, so one that is too big is sent without the largest drawn data.
         var json=Packets.JSON.toJson(status);var fitted=StatusFit.fit(json,STATUS_LIMIT,"Too big to draw: the selection or preview is still there, but not shown");
         if(fitted.length()!=json.length())s.sentAi.clear(); // what was left out was not drawn, so the next status carries the previews again
