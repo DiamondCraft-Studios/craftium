@@ -41,7 +41,7 @@ final class JigsawEditor {
 
     private static final Gson PRETTY = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final String POOLS = "worldgen/template_pool/";
-    private static final int THUMBNAIL_VOLUME = 60_000, THUMBNAILS = 30, MAX_TEMPLATES = 80;
+    private static final int THUMBNAIL_VOLUME = 200_000, THUMBNAILS = 30, MAX_TEMPLATES = 80;
 
     /** The bytes a file had before a command changed it (null: it was not there), so the command can be undone. */
     private record Snap(Path file, byte[] bytes) {}
