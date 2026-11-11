@@ -59,8 +59,3 @@ test("it reads only these environment variables", async () => {
   for (const { code } of await sources()) for (const m of code.matchAll(/\benv\.([A-Z_]+)/g)) names.add(m[1]);
   assert.deepEqual([...names].sort(), ["APPDATA", "CRAFTIUM_BRIDGE_FILE", "CRAFTIUM_MINECRAFT_DIR"]);
 });
-
-test("the packed extension carries no node_modules", async () => {
-  const ignore = (await readFile(path.join(root, ".mcpbignore"), "utf8")).split(/\r?\n/);
-  assert.ok(ignore.includes("node_modules/"));
-});

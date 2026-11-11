@@ -21,7 +21,6 @@ server-plugin/build/
 
 # Node tooling (MCP server)
 node_modules/
-*.mcpb
 versions/*/bin/
 /.claude
 
