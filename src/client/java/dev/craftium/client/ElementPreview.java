@@ -80,7 +80,7 @@ final class ElementPreview {
         int pw = Math.max(8, w * DETAIL), ph = Math.max(8, h * DETAIL);
         if (tex == null || dirty || pw != drawnW || ph != drawnH || !Arrays.equals(highlight, drawnHighlight)) {
             if (pixels.length != pw * ph) pixels = new int[pw * ph];
-            VoxelOrbit.render(scene, view, pw, ph, pixels, BACKGROUND, highlight);
+            VoxelOrbit.render(scene, view, pw, ph, pixels, BACKGROUND, highlight, ClientState.options.hoverColor);
             var image = new NativeImage(pw, ph, false);
             for (int row = 0; row < ph; row++) for (int col = 0; col < pw; col++) image.setPixel(col, row, pixels[row * pw + col]);
             var texture = new ReferenceTexture(image);

@@ -115,7 +115,10 @@ public final class VoxelOrbit {
     private static final int[][] AXIS_A = {{1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, -1}, {0, 0, 1}};
     private static final int[][] AXIS_B = {{0, 0, 1}, {0, 0, -1}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}};
     private static final double[] SHADE = {1.0, 0.5, 0.82, 0.62, 0.72, 0.55};
-    private static final int GOLD = 0xffffd24a;
+    /** The light blue the editor uses for what is under the pointer. */
+    public static final int HOVER = 0xff7fd8ff;
+    /** How far the lines of the outline are drawn towards the camera, in blocks: they lie in the surface of the blocks, so exactly there they would be cut away by them. */
+    private static final float LINE_BIAS = 0.04f;
 
     /** The size of a block in pixels at zoom 1, so the whole box fits in the picture. */
     public static double baseScale(Scene s, int w, int h) {
@@ -123,12 +126,21 @@ public final class VoxelOrbit {
         return Math.min(w, h) * 0.9 / Math.max(1, diagonal);
     }
 
+    public static void render(Scene s, View v, int w, int h, int[] pixels, int background, int[] highlight) {
+        render(s, v, w, h, pixels, background, highlight, HOVER);
+    }
+
     /**
      * Draws the scene into {@code pixels} ({@code w * h}, 0xAARRGGBB), which it first fills with {@code background}.
      *
-     * @param highlight a cell {x, y, z} to light up (its faces are tinted and its edges drawn on top, even where it is hidden), or null
+     * <p>A highlighted cell is shown the way the editor shows the block under the pointer: its edges are an outline that blocks in front of it hide, and where it
+     * is embedded among other blocks the faces of it that can be seen are coloured too, so it reads as part of the surface. A cell that is hidden altogether
+     * from this side is not lost: its outline is then drawn faintly through the blocks, so it can still be found.
+     *
+     * @param highlight a cell {x, y, z} to light up, or null
+     * @param hover     the colour of the highlight
      */
-    public static void render(Scene s, View v, int w, int h, int[] pixels, int background, int[] highlight) {
+    public static void render(Scene s, View v, int w, int h, int[] pixels, int background, int[] highlight, int hover) {
         java.util.Arrays.fill(pixels, 0, w * h, background);
         double yaw = Math.toRadians(v.yaw), pitch = Math.toRadians(v.pitch);
         double[] cam = {Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch), Math.cos(pitch) * Math.cos(yaw)};
@@ -140,6 +152,8 @@ public final class VoxelOrbit {
         java.util.Arrays.fill(depth, Float.MAX_VALUE);
         boolean hlInside = highlight != null && highlight[0] >= 0 && highlight[1] >= 0 && highlight[2] >= 0 && highlight[0] < s.sx && highlight[1] < s.sy && highlight[2] < s.sz;
         int hl = hlInside ? s.cell(highlight[0], highlight[1], highlight[2]) : -1;
+        boolean embedded = hlInside && (s.has(highlight[0] + 1, highlight[1], highlight[2]) || s.has(highlight[0] - 1, highlight[1], highlight[2]) || s.has(highlight[0], highlight[1] + 1, highlight[2])
+                || s.has(highlight[0], highlight[1] - 1, highlight[2]) || s.has(highlight[0], highlight[1], highlight[2] + 1) || s.has(highlight[0], highlight[1], highlight[2] - 1));
         double[] p0 = new double[3], a = new double[3], b = new double[3];
         for (int i = 0; i < s.visibleCell.length; i++) {
             int cell = s.visibleCell[i];
@@ -157,7 +171,7 @@ public final class VoxelOrbit {
             double minY = Math.min(Math.min(sy0, sy0 + say), Math.min(sy0 + sby, sy0 + say + sby)), maxY = Math.max(Math.max(sy0, sy0 + say), Math.max(sy0 + sby, sy0 + say + sby));
             int x1 = Math.max(0, (int) Math.floor(minX)), x2 = Math.min(w - 1, (int) Math.ceil(maxX)), y1 = Math.max(0, (int) Math.floor(minY)), y2 = Math.min(h - 1, (int) Math.ceil(maxY));
             double shade = SHADE[q.shade()];
-            boolean lit = cell == hl;
+            boolean lit = embedded && cell == hl;
             int[] texture = q.texture();
             for (int py = y1; py <= y2; py++)
                 for (int px = x1; px <= x2; px++) {
@@ -172,39 +186,59 @@ public final class VoxelOrbit {
                     if ((c >>> 24) < 128) continue;
                     depth[at] = depthHere;
                     int r = (int) (((c >> 16) & 255) * shade), g = (int) (((c >> 8) & 255) * shade), bl = (int) ((c & 255) * shade);
-                    if (lit) { r = (r + 255) / 2; g = (g + 210) / 2; bl = (bl + 74) / 2; }
+                    if (lit) { r = (r * 3 + ((hover >> 16) & 255) * 2) / 5; g = (g * 3 + ((hover >> 8) & 255) * 2) / 5; bl = (bl * 3 + (hover & 255) * 2) / 5; }
                     pixels[at] = 0xff000000 | r << 16 | g << 8 | bl;
                 }
         }
-        if (hlInside) outline(highlight, cx, cy, cz, right, up, scale, ox, oy, w, h, pixels);
+        if (hlInside) outline(highlight, cx, cy, cz, cam, right, up, scale, ox, oy, w, h, pixels, depth, hover);
     }
 
-    /** The edges of one cell, on top of everything. */
-    private static void outline(int[] cell, double cx, double cy, double cz, double[] right, double[] up, double scale, double ox, double oy, int w, int h, int[] pixels) {
-        double[][] corner = new double[8][2];
+    /** The edges of one cell, depth tested; when none of it can be seen, faintly and through everything. */
+    private static void outline(int[] cell, double cx, double cy, double cz, double[] cam, double[] right, double[] up, double scale, double ox, double oy, int w, int h, int[] pixels, float[] depth, int hover) {
+        double[][] corner = new double[8][3];
         for (int i = 0; i < 8; i++) {
             double[] p = {cell[0] + (i & 1) - cx, cell[1] + ((i >> 1) & 1) - cy, cell[2] + ((i >> 2) & 1) - cz};
             corner[i][0] = ox + scale * dot(p, right);
             corner[i][1] = oy - scale * dot(p, up);
+            corner[i][2] = -dot(p, cam);
         }
+        int drawn = 0;
         for (int i = 0; i < 8; i++)
             for (int bit = 0; bit < 3; bit++) {
                 if (((i >> bit) & 1) != 0) continue;
-                line(corner[i], corner[i | 1 << bit], w, h, pixels);
+                drawn += line(corner[i], corner[i | 1 << bit], w, h, pixels, depth, 0xff000000 | hover & 0xffffff, false);
+            }
+        if (drawn > 0) return;
+        for (int i = 0; i < 8; i++)
+            for (int bit = 0; bit < 3; bit++) {
+                if (((i >> bit) & 1) != 0) continue;
+                line(corner[i], corner[i | 1 << bit], w, h, pixels, depth, 0xa0000000 | hover & 0xffffff, true);
             }
     }
 
-    private static void line(double[] from, double[] to, int w, int h, int[] pixels) {
-        int steps = (int) Math.ceil(Math.max(Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1]))) + 1;
+    /** A line of two-pixel width; with {@code ghost} it is blended in dashes over what is there and ignores the depth, otherwise only the parts not behind a block are drawn. Answers how many pixels it drew. */
+    private static int line(double[] from, double[] to, int w, int h, int[] pixels, float[] depth, int colour, boolean ghost) {
+        int steps = (int) Math.ceil(Math.max(Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1]))) + 1, drawn = 0;
         for (int i = 0; i <= steps; i++) {
+            if (ghost && (i / 3) % 2 == 1) continue;
             double t = (double) i / steps;
             int x = (int) Math.round(from[0] + (to[0] - from[0]) * t), y = (int) Math.round(from[1] + (to[1] - from[1]) * t);
+            float d = (float) (from[2] + (to[2] - from[2]) * t);
             for (int dx = 0; dx <= 1; dx++)
                 for (int dy = 0; dy <= 1; dy++) {
                     int px = x + dx, py = y + dy;
-                    if (px >= 0 && py >= 0 && px < w && py < h) pixels[py * w + px] = GOLD;
+                    if (px < 0 || py < 0 || px >= w || py >= h) continue;
+                    int at = py * w + px;
+                    if (!ghost && d - LINE_BIAS > depth[at]) continue; // a block is in front of this part
+                    if (ghost) {
+                        int under = pixels[at], k = (colour >>> 24);
+                        int r = (((under >> 16) & 255) * (255 - k) + ((colour >> 16) & 255) * k) / 255, g = (((under >> 8) & 255) * (255 - k) + ((colour >> 8) & 255) * k) / 255, bl = ((under & 255) * (255 - k) + (colour & 255) * k) / 255;
+                        pixels[at] = 0xff000000 | r << 16 | g << 8 | bl;
+                    } else pixels[at] = colour;
+                    drawn++;
                 }
         }
+        return drawn;
     }
 
     private static double dot(double[] a, double[] b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }

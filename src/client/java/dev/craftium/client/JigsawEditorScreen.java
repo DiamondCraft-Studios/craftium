@@ -985,9 +985,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
             int fits = num(jig, "fits", -1);
             boolean notLoaded = issue.endsWith("is not loaded"); // fine when another mod adds the pool
             int rowBottom = y + (isFolded ? FOLDED_H - 6 : ROW_H - 8);
-            boolean pointed = mx >= x - 2 && mx < x + rightW + 2 && my >= y - 2 && my < rowBottom;
+            int headingBottom = y + FOLDED_H - 6; // only the heading answers the pointer, open or folded
+            boolean pointed = mx >= x - 2 && mx < x + rightW + 2 && my >= y - 2 && my < headingBottom;
             if (pointed) hover = new int[]{at.get(0).getAsInt(), at.get(1).getAsInt(), at.get(2).getAsInt()};
-            g.fill(x - 2, y - 2, x + rightW + 2, rowBottom, pointed ? 0x60ffd24a : issue.isEmpty() ? 0x40223247 : notLoaded ? 0x40ffc857 : 0x40ff5a4d);
+            g.fill(x - 2, y - 2, x + rightW + 2, rowBottom, issue.isEmpty() ? 0x40223247 : notLoaded ? 0x40ffc857 : 0x40ff5a4d);
+            if (pointed) { g.fill(x - 2, y - 2, x + rightW + 2, headingBottom, ClientState.options.hoverColor & 0xffffff | 0x58000000); g.outline(x - 2, y - 2, rightW + 4, headingBottom - y + 2, ClientState.options.hoverColor); }
             g.text(font, "#" + (index + 1) + " at " + at.get(0) + " " + at.get(1) + " " + at.get(2), x + 22, y + 2, MUTED, false);
             String verdict = notLoaded ? issue + " (fine if a mod adds it)" : !issue.isEmpty() ? issue : fits < 0 ? "ends here (empty pool)" : "meets " + fits + (fits == 1 ? " element" : " elements");
             g.text(font, font.plainSubstrByWidth(verdict, rightW - 130), x + rightW - 4 - Math.min(font.width(verdict), rightW - 130), y + 2, notLoaded ? WARN : !issue.isEmpty() ? ERROR : fits < 0 ? MUTED : OK, false);

@@ -54,14 +54,26 @@ class VoxelOrbitTest {
         assertTrue(drawn(pixels) > 5000);
     }
 
-    @Test void aHiddenCellCanStillBeHighlighted() {
+    @Test void aHiddenCellIsOutlinedFaintlyAndASeenOneSharply() {
         var scene = cube(3);
         var view = new VoxelOrbit.View();
-        int[] plain = new int[200 * 150], lit = new int[200 * 150];
+        int[] plain = new int[200 * 150], hidden = new int[200 * 150], seen = new int[200 * 150];
         VoxelOrbit.render(scene, view, 200, 150, plain, BACKGROUND, null);
-        VoxelOrbit.render(scene, view, 200, 150, lit, BACKGROUND, new int[]{1, 1, 1}); // the middle cell, inside the cube
-        assertFalse(java.util.Arrays.equals(plain, lit));
-        assertTrue(java.util.Arrays.stream(lit).anyMatch(p -> p == 0xffffd24a), "its edges are drawn on top");
+        VoxelOrbit.render(scene, view, 200, 150, hidden, BACKGROUND, new int[]{1, 1, 1}); // the middle cell, inside the cube
+        assertFalse(java.util.Arrays.equals(plain, hidden), "it can still be found");
+        assertTrue(java.util.Arrays.stream(hidden).noneMatch(p -> p == VoxelOrbit.HOVER), "but only faintly, not as a solid line");
+        VoxelOrbit.render(scene, view, 200, 150, seen, BACKGROUND, new int[]{2, 2, 2}); // the corner nearest the default camera
+        assertTrue(java.util.Arrays.stream(seen).anyMatch(p -> p == VoxelOrbit.HOVER), "an outline of the hover colour");
+    }
+
+    @Test void theOutlineOfACellIsCutAwayByBlocksInFront() {
+        var scene = cube(3);
+        var view = new VoxelOrbit.View();
+        int[] front = new int[200 * 150], back = new int[200 * 150];
+        VoxelOrbit.render(scene, view, 200, 150, front, BACKGROUND, new int[]{2, 2, 2});
+        VoxelOrbit.render(scene, view, 200, 150, back, BACKGROUND, new int[]{0, 0, 0}); // the far bottom corner
+        long a = java.util.Arrays.stream(front).filter(p -> p == VoxelOrbit.HOVER).count(), b = java.util.Arrays.stream(back).filter(p -> p == VoxelOrbit.HOVER).count();
+        assertTrue(a > 0 && b == 0, "the far cell has no sharp line: " + a + " / " + b);
     }
 
     @Test void alphaHolesAreSkippedAndEmptyScenesDrawNothing() {
