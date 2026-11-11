@@ -169,4 +169,26 @@ class SavedGroupsTest {
         saved.group(List.of(a.id(),b.id()));saved.deleteGroup(second.id());
         assertSame(saved.groups().getFirst(),b.ownGroup());
     }
+
+    @Test void foldsOfBuildObjectsAndGroupsAreKeptWithThemAndSurviveBeingSavedAndLoaded(){
+        var saved=new SavedSelections();var s=live(A);
+        var a=saved.save(s);var b=saved.save(s);saved.place(b.id(),a.id(),0);var second=saved.createGroup("Second");
+        assertFalse(a.folded());assertFalse(second.folded());
+        long before=saved.tree().mutations();
+        saved.setFolded(a.id(),true);saved.setGroupFolded(second.id(),true);
+        assertTrue(saved.tree().mutations()>before,"a fold is written to disk");
+        long same=saved.tree().mutations();saved.setFolded(a.id(),true);assertEquals(same,saved.tree().mutations(),"nothing changed, nothing to write");
+        var tree=saved.tree();
+        var back=new SavedSelections(SavedSelections.Tree.load(tree.nextId(),tree.saved(),tree.nextGroupId(),tree.savedGroups()));
+        assertTrue(back.byId(a.id()).folded());assertFalse(back.byId(b.id()).folded());
+        assertTrue(back.groups().get(1).folded());assertFalse(back.groups().get(0).folded());
+    }
+    @Test void aFoldIsNotInTheHistoryAndUndoLeavesItAlone(){
+        var saved=new SavedSelections();var s=live(A);
+        var a=saved.save(s);var before=saved.state();
+        saved.setFolded(a.id(),true);
+        assertTrue(saved.structureMatches(before),"folding is how it is shown, not what is there");
+        saved.rename(a.id(),"Tower");saved.restore(before,s);
+        assertTrue(a.folded(),"undoing the rename does not unfold it");
+    }
 }

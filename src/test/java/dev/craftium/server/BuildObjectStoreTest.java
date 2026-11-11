@@ -59,4 +59,13 @@ class BuildObjectStoreTest {
         assertEquals(List.of("New Group"),back.groups().stream().map(SavedSelections.Group::name).toList());
         assertSame(back.groups().getFirst(),back.entries().getFirst().group());
     }
+
+    @Test void foldsComeBackAfterTheServerRestarts(@TempDir Path dir){
+        var saved=new SavedSelections();var a=saved.save(live(A));var b=saved.save(live(B));saved.place(b.id(),a.id(),0);
+        saved.setFolded(a.id(),true);saved.setGroupFolded(saved.groups().getFirst().id(),true);
+        var tree=saved.tree();var file=dir.resolve("folds.nbt");
+        BuildObjectStore.write(file,tree.nextId(),tree.saved(),tree.nextGroupId(),tree.savedGroups());
+        var back=new SavedSelections(BuildObjectStore.load(file));
+        assertTrue(back.byId(a.id()).folded());assertFalse(back.byId(b.id()).folded());assertTrue(back.groups().getFirst().folded());
+    }
 }

@@ -99,4 +99,18 @@ class SavedSelectionActionsTest {
         assertThrows(IllegalArgumentException.class,()->SavedSelectionActions.run(s,"saved_selection:ungroup:"+b),"it is not inside another any more");
         assertEquals("move",SavedSelectionActions.permission("saved_selection:ungroup:1"));assertTrue(SavedSelectionActions.changesHierarchy("saved_selection:ungroup:1"));
     }
+
+    @Test void foldActionsFoldAndUnfoldAndAreSentWithTheList(){
+        var s=session();SavedSelectionActions.run(s,"saved_selection:save");
+        int id=s.saved.entries().getFirst().id(),group=s.saved.groups().getFirst().id();
+        assertEquals("",SavedSelectionActions.run(s,"saved_selection:fold:"+id+":1"));
+        SavedSelectionActions.run(s,"saved_selection:groupfold:"+group+":1");
+        assertTrue(SavedSelectionActions.list(s).getFirst().folded());assertTrue(SavedSelectionActions.groups(s).getFirst().folded());
+        SavedSelectionActions.run(s,"saved_selection:fold:"+id+":0");
+        assertFalse(SavedSelectionActions.list(s).getFirst().folded());
+        assertThrows(IllegalArgumentException.class,()->SavedSelectionActions.run(s,"saved_selection:fold:"+id+":2"));
+        assertNull(SavedSelectionActions.permission("saved_selection:fold:1:1"),"anyone may fold");
+        assertFalse(SavedSelectionActions.changesHierarchy("saved_selection:fold:1:1"),"and it is not an undo step");
+        assertFalse(SavedSelectionActions.changesHierarchy("saved_selection:groupfold:1:1"));
+    }
 }
