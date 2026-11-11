@@ -54,7 +54,10 @@ public final class BlueprintScreen extends CraftiumScreen {
     private volatile List<BlueprintInfo> local=List.of();
     private boolean listing,warm;
     private int loads,frames,waitTicks,waitVersion;
-    public BlueprintScreen(Screen parent){super(Component.literal("Craftium Blueprint Browser"));this.parent=parent;}
+    /** Set when something else asked the player to choose a blueprint: choosing one (a double-click or Enter) closes the browser and hands it over, and whether it is from the client's library. */
+    private final java.util.function.BiConsumer<Boolean,BlueprintInfo> picker;
+    public BlueprintScreen(Screen parent){this(parent,null);}
+    public BlueprintScreen(Screen parent,java.util.function.BiConsumer<Boolean,BlueprintInfo> picker){super(Component.literal("Craftium Blueprint Browser"));this.parent=parent;this.picker=picker;}
     @Override protected void init(){
         scale=Math.min(1f,Math.min(width/700f,height/460f));canvasW=Math.round(width/scale);canvasH=Math.round(height/scale);left=(canvasW-660)/2;top=(canvasH-420)/2;clearWidgets();boxes.clear();
         var search=new EditBox(font,left+8,top+5,420,22,Component.literal("Search blueprints"));search.setHint(Component.literal("Search names, folders, authors and tags…"));search.setValue(query);search.setResponder(value->{query=value;scroll=0;filter();});addRenderableWidget(search);
@@ -135,7 +138,13 @@ public final class BlueprintScreen extends CraftiumScreen {
         ClientState.options.name=info.file();if(ClientState.options.libraryClient)ClientAssets.load(info.file());else CraftiumClient.send("blueprint_load",null,null);
         ClientState.notify("Copied "+info.name()+" to your clipboard · Ctrl+V in the viewport to begin placement");
     }
-    private void activate(Item item){if(item.folder()){query="";enter(item.path());}else useAsClipboard(item.info());}
+    private void activate(Item item){
+        if(item.folder()){query="";enter(item.path());return;}
+        if(picker==null){useAsClipboard(item.info());return;}
+        boolean client=ClientState.options.libraryClient;var choose=picker;var info=item.info();
+        onClose(); // back to the screen that asked first, so what it does with the choice lands on it
+        choose.accept(client,info);
+    }
     private void archive(List<Item> targets){
         if(targets.isEmpty())return;
         String what=targets.size()==1?"\""+leaf(targets.get(0))+"\"":targets.size()+" items";
@@ -300,7 +309,7 @@ public final class BlueprintScreen extends CraftiumScreen {
     @Override protected void draw(Gfx g,int x,int y,float delta){
         BlueprintThumbnails.newFrame();g.pose().pushMatrix();g.pose().scale(scale,scale);g.fill(0,0,canvasW,canvasH,0xef101923);g.fill(left-12,top-25,left+672,top+414,0xff172330);
         double mx=x/scale,my=y/scale;boolean quiet=dialog!=null||menu!=null;
-        g.text(font,font.plainSubstrByWidth(folder.isEmpty()?"BLUEPRINTS":"BLUEPRINTS / "+folder.replace("/"," / "),200),left,top-17,0xffb5dcfc,false);
+        g.text(font,font.plainSubstrByWidth(folder.isEmpty()?(picker==null?"BLUEPRINTS":"DOUBLE-CLICK ONE TO USE"):(picker==null?"BLUEPRINTS / ":"USE / ")+folder.replace("/"," / "),200),left,top-17,0xffb5dcfc,false);
         frames++;boolean loading=loading();
         if(loading){var note="Loading blueprints…";g.text(font,note,left+(660-font.width(note))/2,top+190,0xffb5dcfc,false);}
         else{

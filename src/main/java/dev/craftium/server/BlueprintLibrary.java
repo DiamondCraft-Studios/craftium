@@ -82,7 +82,7 @@ final class BlueprintLibrary {
     /** The listing for a player: the pictures have a size budget (a status packet has a limit) and the reading of files a time budget (the game thread must not stall). */
     private static BlueprintFiles.Listing list()throws IOException{return BlueprintFiles.list(ServerPlatform.assets().resolve("blueprints"),700_000,40_000_000L);}
     private static ListTag ints(int... values){var list=new ListTag();for(int i:values)list.add(IntTag.valueOf(i));return list;}
-    private static CompoundTag structure(EditPlanner p){
+    static CompoundTag structure(EditPlanner p){
         var root=new CompoundTag();var palette=new ListTag();var indices=new LinkedHashMap<net.minecraft.world.level.block.state.BlockState,Integer>();var blocks=new ListTag();int sx=1,sy=1,sz=1;
         for(var e:p.session.clipboard.entrySet()){
             var at=e.getKey();var s=e.getValue();sx=Math.max(sx,at.x()+1);sy=Math.max(sy,at.y()+1);sz=Math.max(sz,at.z()+1);
