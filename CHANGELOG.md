@@ -5,6 +5,7 @@
 Changes since 1.5.0-beta.1.
 
 ### Interface
+- Ctrl+= and Ctrl+- (and the keypad + and -) change the interface size on every Craftium screen, not only in the editor.
 - New Hierarchy window at the top of the right column, where the Selections window was: it lists your saved selections. The Block palette and Tool masks sit together below it and take 3/8 of the column.
 - The Hierarchy window has a "+" button along the bottom that creates a BuildObject from what is selected, replacing the Save selection button. New ones are named BuildObject, BuildObject (1), BuildObject (2) and so on, and double-clicking a row renames it where it stands (Enter keeps the name, Esc drops it). The colour moved to the right of each row, beside the show, edit and delete buttons.
 - BuildObjects form a hierarchy: drag a row onto the middle of another to put it under that one, to any depth, or onto the top or bottom edge of a row to place it before or after it. The row you carry follows the pointer, a line or frame shows where it will land, and an arrow folds what is under a BuildObject. Looking at a parent shows everything under it; editing one changes only its own blocks; deleting one deletes what is under it, and Ctrl+Z brings the group back. Hovering a row shows no tooltip any more.

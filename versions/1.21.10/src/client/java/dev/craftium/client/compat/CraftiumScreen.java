@@ -17,6 +17,10 @@ public abstract class CraftiumScreen extends Screen {
     /** True while the screen must not change size under the pointer, as with a slider being dragged. */
     protected boolean holdScale(){return false;}
     private void fitScale(){if(!holdScale()&&dev.craftium.client.InterfaceScale.apply(minecraft,canvas()))relayout();}
+    /** Ctrl+= and Ctrl+- (and the other interface-size keys) work on every Craftium screen; a screen that overrides keyPressed calls this first. */
+    protected final boolean interfaceKey(net.minecraft.client.input.KeyEvent event){int step=dev.craftium.client.InterfaceScale.hotkey(event);if(step==0)return false;resizeInterface(step);return true;}
+    protected final void resizeInterface(int step){dev.craftium.client.InterfaceScale.resize(minecraft,step);relayout();}
+    @Override public boolean keyPressed(net.minecraft.client.input.KeyEvent event){return interfaceKey(event)||super.keyPressed(event);}
     /** Lays the screen out again at the window's current GUI scale. */
     protected final void relayout(){var window=minecraft.getWindow();super.resize(minecraft,window.getGuiScaledWidth(),window.getGuiScaledHeight());}
     @Override public void resize(net.minecraft.client.Minecraft mc,int width,int height){dev.craftium.client.InterfaceScale.apply(minecraft,canvas());var window=minecraft.getWindow();super.resize(mc,window.getGuiScaledWidth(),window.getGuiScaledHeight());}

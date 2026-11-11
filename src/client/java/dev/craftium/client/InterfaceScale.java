@@ -51,6 +51,23 @@ public final class InterfaceScale {
     public static double pixels(Minecraft mc){return mc.getWindow().getGuiScale()*zoom;}
     /** A size in halves as the player reads it: 2 is 1x, 3 is 1.5x. */
     public static String name(int halves){return halves<=0?"Auto":halves%2==0?halves/2+"x":halves/2.0+"x";}
+    /**
+     * The step (+1 larger, -1 smaller, 0 none) a key press asks for: the bound Craftium shortcuts (Ctrl+= and Ctrl+- by default), Ctrl with the
+     * keypad's + and -, and Ctrl+Shift+= (which is +). The same on every Craftium screen.
+     */
+    public static int hotkey(net.minecraft.client.input.KeyEvent event){
+        if(EditorBindings.matches(dev.craftium.core.EditorControls.Action.INTERFACE_LARGER,event))return 1;
+        if(EditorBindings.matches(dev.craftium.core.EditorControls.Action.INTERFACE_SMALLER,event))return -1;
+        int mods=event.modifiers()&7,key=event.key(),control=dev.craftium.core.EditorControls.CONTROL;
+        if(mods==control)return key==org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ADD?1:key==org.lwjgl.glfw.GLFW.GLFW_KEY_KP_SUBTRACT?-1:0;
+        return mods==(control|dev.craftium.core.EditorControls.SHIFT)&&key==org.lwjgl.glfw.GLFW.GLFW_KEY_EQUAL?1:0;
+    }
+    /** Ctrl+= and Ctrl+-: one half step larger or smaller, kept in the preferences. The screen is laid out again by whoever calls this. */
+    public static void resize(Minecraft mc,int step){
+        int now=(int)Math.round(pixels(mc)*2),next=Math.clamp(now+step,2,largest(mc)*2);
+        if(next==now){ClientState.notify(step>0?"The interface is as large as this window allows ("+name(now)+")":"The interface is as small as it goes (1x: one screen pixel per text pixel)");return;}
+        ClientState.options.interfaceHalves=next;ClientState.save();ClientState.notify("Interface size: "+name(next));
+    }
     /** Every tick: once no Craftium screen is showing, gives the player's GUI scale back. */
     public static void restoreIfIdle(Minecraft mc){
         if(!active||ClientCompat.screen(mc) instanceof CraftiumScreen)return;

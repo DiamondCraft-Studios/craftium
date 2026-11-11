@@ -349,6 +349,7 @@ public final class BlueprintScreen extends CraftiumScreen {
     }
     @Override public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event){dragBar=false;return super.mouseReleased(new net.minecraft.client.input.MouseButtonEvent(event.x()/scale,event.y()/scale,event.buttonInfo()));}
     @Override public boolean keyPressed(KeyEvent event){
+        if(interfaceKey(event))return true;
         int key=event.key();
         if(dialog!=null){
             if(key==GLFW.GLFW_KEY_ESCAPE){closeDialog();return true;}
