@@ -41,7 +41,9 @@ public final class InterfaceScale {
         double nextZoom=pixels/gui;
         int units=(int)Math.ceil(window.getScreenWidth()/pixels-1e-6),high=(int)Math.ceil(window.getScreenHeight()/pixels-1e-6);
         boolean changed=window.getGuiScale()!=gui||nextZoom!=zoom||nextZoom!=1&&(window.getGuiScaledWidth()!=units||window.getGuiScaledHeight()!=high);
-        if(window.getGuiScale()!=gui)window.setGuiScale(gui);
+        // Leaving a half step keeps the same whole scale (1.5x -> 2x is GUI scale 2 both times), so the scaled size we forced for the half step
+        // would stay; setting the scale again works the real size out from the window.
+        if(window.getGuiScale()!=gui||nextZoom==1&&zoom!=1)window.setGuiScale(gui);
         if(nextZoom!=1){var access=(dev.craftium.client.mixin.WindowAccessor)(Object)window;access.craftium$setGuiScaledWidth(units);access.craftium$setGuiScaledHeight(high);}
         zoom=nextZoom;return changed;
     }
