@@ -31,4 +31,4 @@ Change editor chords and mouse gestures under **View → Keybinds**. Tool letter
 
 Multiplayer requires Craftium on both sides: the same mod on a Fabric server, or the **Craftium server companion** on Paper/Purpur. Editing requires Creative mode and the appropriate server permissions.
 
-**Current release: 1.5.0-beta.1.** This is a development preview with independent implementations and documented limits. Craftium is independently developed; it does not provide complete Axiom feature or interaction parity.
+**Current release: 1.6.0-beta.1.** This is a development preview with independent implementations and documented limits. Craftium is independently developed; it does not provide complete Axiom feature or interaction parity.
