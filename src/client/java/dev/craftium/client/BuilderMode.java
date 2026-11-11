@@ -77,6 +77,7 @@ public final class BuilderMode {
         if(CraftiumClient.held(CraftiumClient.contextKey)){var all=Options.BuilderTool.values();ClientState.options.builderTool=all[Math.floorMod(ClientState.options.builderTool.ordinal()-steps,all.length)];retool();ClientState.save();ClientState.notify("Builder: "+name());return true;}
         if(first==null||second==null){enabled=false;mc.player.getInventory().setSelectedSlot(steps>0?8:0);clear();return true;}
         if(mc.hasControlDown()&&!mc.hasShiftDown()){magicMode=!magicMode;ClientState.notify("Middle click: "+(magicMode?"Magic select (add, Ctrl subtracts)":"Extend the box"));return true;} // with a selection, Ctrl + wheel switches what the middle button does
+        if(ClientState.options.builderTool==Options.BuilderTool.ERASE)return true; // erasing removes the selection where it is: there is nothing to move
         nudge(nudgeDirection(),steps,mc.hasControlDown());return true;
     }
     /** What the middle button does to a selection that is already made: magic select more blocks (Ctrl takes them away) or, when false, grow the box to the block. A magic selection starts in magic mode, a box in extend mode. */
@@ -126,7 +127,7 @@ public final class BuilderMode {
         if(key==GLFW.GLFW_KEY_DELETE||key==GLFW.GLFW_KEY_BACKSPACE){if(o.builderTool==Options.BuilderTool.SYMMETRY){o.symmetryX=o.symmetryY=o.symmetryZ=false;o.symmetryRotations=1;ClientState.save();}else if(first!=null&&second!=null&&o.builderTool==Options.BuilderTool.ERASE)confirm();else clear();return true;}
         if(control&&(key==GLFW.GLFW_KEY_F||key==GLFW.GLFW_KEY_R)){
             if(o.builderTool==Options.BuilderTool.SYMMETRY){if(key==GLFW.GLFW_KEY_R)o.symmetryRotations=o.symmetryRotations==4?1:4;else switch(facing().getAxis()){case X->o.symmetryX=!o.symmetryX;case Y->o.symmetryY=!o.symmetryY;case Z->o.symmetryZ=!o.symmetryZ;}ClientState.save();ClientState.notify("Symmetry updated");}
-            else if(second!=null){preview=true;if(key==GLFW.GLFW_KEY_R)o.builderRotation=(o.builderRotation+1)%4;else{int axis=facing().getAxis().ordinal();o.builderFlipAxis=o.builderFlipAxis==axis?-1:axis;}}return true;
+            else if(second!=null&&o.builderTool!=Options.BuilderTool.ERASE){preview=true;if(key==GLFW.GLFW_KEY_R)o.builderRotation=(o.builderRotation+1)%4;else{int axis=facing().getAxis().ordinal();o.builderFlipAxis=o.builderFlipAxis==axis?-1:axis;}}return true;
         }
         if(key==GLFW.GLFW_KEY_ENTER){confirm();return true;}return key==GLFW.GLFW_KEY_X||key==GLFW.GLFW_KEY_Y||key==GLFW.GLFW_KEY_Z;
     }
@@ -152,7 +153,7 @@ public final class BuilderMode {
             if(button==1){confirm();return true;}
         }
         if(hit==null)return true;Point at=CraftiumClient.point(hit.getBlockPos());
-        if(button==2&&o.builderTool==Options.BuilderTool.STACK&&first!=null&&second!=null){stackTo(at);return true;} // middle click: as many copies as it takes to reach the block
+        if(button==2&&o.builderTool==Options.BuilderTool.STACK&&first!=null&&second!=null&&preview){stackTo(at);return true;} // middle click once a stack is under way (scrolled or stacked to): as many copies as it takes to reach the block; before that it extends the selection
         if(first!=null&&second!=null&&button!=2){ // nothing is being done to it yet: left and right move the first and second point
             if(button==0)first=at;else second=at;magicStarted=magicMode=false;offset=new Point(0,0,0);refresh();dragButton=button;return true;
         }

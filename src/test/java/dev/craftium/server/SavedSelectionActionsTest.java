@@ -14,12 +14,12 @@ class SavedSelectionActionsTest {
         assertEquals("Created BuildObject",SavedSelectionActions.run(s,"saved_selection:save"));
         var list=SavedSelectionActions.forStatus(s,true);
         assertEquals(1,list.size());assertEquals("BuildObject",list.getFirst().name());assertEquals(24,list.getFirst().size());
-        assertEquals(new Point(2,3,1),list.getFirst().max());assertFalse(list.getFirst().active());
+        assertEquals(new Point(2,3,1),list.getFirst().max());assertTrue(list.getFirst().active(),"a new BuildObject is selected in the Hierarchy");
         assertNull(SavedSelectionActions.forStatus(s,true),"nothing new to say");
         assertNull(SavedSelectionActions.forStatus(new Session(),false),"a client that does not know them is sent nothing");
     }
     @Test void viewingAndReleasingSwapTheLiveSelection(){
-        var s=session();SavedSelectionActions.run(s,"saved_selection:save");
+        var s=session();SavedSelectionActions.run(s,"saved_selection:save");SavedSelectionActions.run(s,"saved_selection:release"); // saving selects the new one; let go to get the live selection back
         s.selection.combine(List.of(new Point(9,9,9)),Selection.Mode.REPLACE);
         int id=s.saved.entries().getFirst().id();
         SavedSelectionActions.run(s,"saved_selection:view:"+id);

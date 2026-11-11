@@ -399,9 +399,11 @@ public final class EditorScreen extends CraftiumScreen {
         button(g,pw-51,201,25,15,"…",false,()->ClientCompat.setScreen(minecraft,new StudioScreen(this)),"Advanced settings · View → Studio inspector");
         if(o().tool==Tool.MODIFY){modifyOptions(g);return;}
         // The Magic Wand's search buttons fill the room under the name; every other tool starts right under it.
-        scrolled(g,262,o().tool==Tool.BOX_SELECT||o().tool==Tool.MAGIC_SELECT?100:o().tool.selection()?33:6,o().tool==Tool.MAGIC_SELECT?0:TOOL_NAME_GAP,()->toolBody(g));
+        scrolled(g,262,o().tool==Tool.MAGIC_SELECT?(boundsOpen?62:20):o().tool==Tool.BOX_SELECT?100:o().tool.selection()?33:6,o().tool==Tool.MAGIC_SELECT?0:TOOL_NAME_GAP,()->toolBody(g));
     }
     private static final int TOOL_NAME_GAP=36;
+    /** Whether the Magic Wand's selection bounds are unfolded above their header. */
+    private boolean boundsOpen;
     /** The block limit slider: 1 to {@link Options#MAX_BLOCK_LIMIT}, at the very bottom of the options of every tool that builds, removes or moves blocks. */
     private void blockLimit(Gfx g,int y){
         slider(g,10,y,pw-20,"Block limit",o().blockLimit,1,Options.MAX_BLOCK_LIMIT,DEFAULTS.blockLimit,v->o().blockLimit=(int)Math.clamp(Math.round(v),1,Options.MAX_BLOCK_LIMIT),true);
@@ -454,6 +456,21 @@ public final class EditorScreen extends CraftiumScreen {
                     toggle(g,10,391,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
                     toggle(g,10,409,"Hover preview (under "+o().hoverPreviewLimit+")",o().magicPreview,()->o().magicPreview=!o().magicPreview);
                     toggle(g,10,427,"Select liquids",o().selectLiquids,()->o().selectLiquids=!o().selectLiquids,"Aim at and select water and lava; off, the wand passes over them");
+                }
+                if(o().tool==Tool.MAGIC_SELECT){ // the wand has no Fill or Clear: its bounds fold up from the very bottom of the panel
+                    fixed(g,()->{
+                        int head=pb-15;
+                        if(boundsOpen){
+                            text(g,"Min  "+s.min().coordinates(),10,head-40,TEXT);text(g,"Max  "+s.max().coordinates(),10,head-28,TEXT);
+                            text(g,s.selectionSize()+" blocks",10,head-16,0xffa5cef2);
+                        }
+                        button(g,10,head,pw-20,15,"Selection bounds",false,()->boundsOpen=!boundsOpen,boundsOpen?"Fold the selection bounds away":"Show the selection bounds");
+                        for(int i=0;i<4;i++){ // up when folded (it opens upward), down when open
+                            int span=boundsOpen?7-2*i:1+2*i,left=boundsOpen?i:3-i;
+                            g.fill(16+left,head+4+i,16+left+span,head+5+i,MUTED);
+                        }
+                    });
+                    return;
                 }
                 // The bounds are only information, so they sit at the very bottom, over the Fill and Clear buttons.
                 fixed(g,()->{

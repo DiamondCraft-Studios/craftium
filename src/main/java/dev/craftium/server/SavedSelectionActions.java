@@ -14,7 +14,7 @@ final class SavedSelectionActions {
     static String run(Session s,String action){
         var part=action.substring(PREFIX.length()).split(":",3);var saved=s.saved;
         switch(part[0]){
-            case "save"->{var entry=saved.create(s.selection);return "Created "+entry.name();}
+            case "save"->{var entry=saved.create(s.selection);saved.view(entry.id(),s.selection);return "Created "+entry.name();}
             case "view"->{saved.view(id(part),s.selection);return "Showing "+saved.active().name();}
             case "viewset"->{ // viewset:<ids separated by commas>: these BuildObjects, selected together; none lets go
                 var ids=ids(part);
@@ -25,8 +25,8 @@ final class SavedSelectionActions {
                 try{if(rest.length<2||rest.length>3)throw new NumberFormatException();saved.placeIn(ids(part),Integer.parseInt(rest[0]),rest.length==3?Integer.parseInt(rest[2]):0,Integer.parseInt(rest[1]));}catch(NumberFormatException e){throw new IllegalArgumentException("Give BuildObjects, a parent and a place");}
                 return "Moved";
             }
-            case "group"->{var entry=saved.group(ids(part));return "Grouped into "+entry.name();}
-            case "createchild"->{var entry=saved.createChild(id(part));return "Created "+entry.name();}
+            case "group"->{var entry=saved.group(ids(part));saved.view(entry.id(),s.selection);return "Grouped into "+entry.name();}
+            case "createchild"->{var entry=saved.createChild(id(part));saved.view(entry.id(),s.selection);return "Created "+entry.name();}
             case "deleteset"->{var ids=ids(part);saved.deleteMany(ids,s.selection);return "Deleted "+ids.size()+" BuildObjects";}
             case "colour"->{ // colour:<id>:<argb>
                 var where=part.length<3?"":part[2];
@@ -60,7 +60,7 @@ final class SavedSelectionActions {
                 return "Moved";
             }
             case "groupdelete"->{var group=saved.deleteGroup(id(part));return "Deleted "+group.name();} // groupdelete:<group id>: what is in it goes to the group before
-            case "empty"->{var entry=saved.createEmpty(part.length<2||part[1].isBlank()?0:id(part));return "Created "+entry.name();} // empty[:<group id>]: an empty BuildObject
+            case "empty"->{var entry=saved.createEmpty(part.length<2||part[1].isBlank()?0:id(part));saved.view(entry.id(),s.selection);return "Created "+entry.name();} // empty[:<group id>]: an empty BuildObject
             case "rename"->{if(part.length<3)throw new IllegalArgumentException("Give a name");saved.rename(id(part),part[2]);return "Renamed";}
             default->throw new IllegalArgumentException("Unknown BuildObject action "+part[0]);
         }
