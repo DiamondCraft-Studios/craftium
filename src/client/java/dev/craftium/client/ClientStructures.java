@@ -51,6 +51,8 @@ final class ClientStructures {
         pending=path;pendingName=fileName;pendingUntil=System.currentTimeMillis()+WAIT;
         CraftiumClient.send("structure_export_file",null,null);
     }
+    /** Stops waiting for a file, for an export the server has refused. */
+    static void cancelExport(){pending=null;}
     static boolean exporting(){return pending!=null&&System.currentTimeMillis()<pendingUntil;}
 
     /** The world's {@code generated/<namespace>/structures} folder, where a structure block in this world looks for the file. */
@@ -85,6 +87,21 @@ final class ClientStructures {
                 if(!file.toLowerCase(Locale.ROOT).endsWith(s.extension()))path=path.resolveSibling(file+s.extension());
                 Path result=path;Minecraft.getInstance().execute(()->then.accept(result));
             }catch(Exception e){Minecraft.getInstance().execute(()->ClientState.notify("Could not open the file dialog: "+e.getMessage()));}
+        },"Craftium structure export");
+        thread.setDaemon(true);thread.start();
+    }
+
+    /** The system's dialog to choose a folder, started in the world's structures folder; {@code then} runs on the game thread. */
+    static void chooseExportFolder(StructureSettings s,Consumer<Path> then){
+        Path directory=defaultDirectory(s);
+        String start=directory.toString()+java.io.File.separator;
+        try{Files.createDirectories(directory);}catch(Exception ignored){ /* the dialog opens elsewhere */ }
+        var thread=new Thread(()->{
+            try{
+                String chosen=TinyFileDialogs.tinyfd_selectFolderDialog("Export structures to",start);
+                if(chosen==null)return;
+                Path path=Path.of(chosen);Minecraft.getInstance().execute(()->then.accept(path));
+            }catch(Exception e){Minecraft.getInstance().execute(()->ClientState.notify("Could not open the folder dialog: "+e.getMessage()));}
         },"Craftium structure export");
         thread.setDaemon(true);thread.start();
     }
