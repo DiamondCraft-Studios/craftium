@@ -2418,7 +2418,25 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(n==1)items.add(item("Change colour…","",()->ColourPickerScreen.open(this,row.name()+" colour",()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0))));
         var box=subtreeBounds(id);
         if(box!=null)items.add(item("Focus","F",()->focusOn(box[0],box[1])));
+        items.add(divider());
+        items.add(item(n>1?"Copy paths ("+n+")":"Copy path","",()->copyPaths(targets)));
         rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=id;menu=ROW_MENU;openSub="";openSub2="";
+    }
+    /** The path of a BuildObject as an agent would name it: its group, what it is under, then its own name, joined by "/" (the group is left out on a server without groups). */
+    private String pathOf(dev.craftium.net.Packets.SavedSelection e){
+        var parts=new ArrayList<String>();int n=0;
+        for(var at=e;at!=null&&n++<64;at=savedById(at.parent()))parts.add(at.name());
+        var group=groupById(groupIdOf(e));if(group!=null)parts.add(group.name());
+        java.util.Collections.reverse(parts);
+        return String.join("/",parts);
+    }
+    /** Puts the paths of the BuildObjects on the clipboard, each in quotes and on a line of its own, ready to paste into an agent's prompt. */
+    private void copyPaths(List<Integer> ids){
+        var lines=new ArrayList<String>();
+        for(var e:hierarchyAll)if(ids.contains(e.id()))lines.add("\""+pathOf(e)+"\"");
+        if(lines.isEmpty())return;
+        minecraft.keyboardHandler.setClipboard(String.join("\n",lines));
+        ClientState.notify(lines.size()==1?"Copied "+lines.getFirst():"Copied "+lines.size()+" paths");
     }
     /** The right-click menu of a group's heading. */
     private void openGroupMenu(int groupId,int x,int y){
@@ -2430,6 +2448,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         items.add(item("Create new Group","",()->action("saved_selection:groupnew")));
         boolean folded=ClientState.groupFolded(groupId);
         items.add(item(folded?"Unfold":"Fold","",()->ClientState.toggleGroupFolded(groupId)));
+        items.add(item("Copy path","",()->{var text="\""+group.name()+"\"";minecraft.keyboardHandler.setClipboard(text);ClientState.notify("Copied "+text);}));
         if(groups.size()>1){items.add(divider());items.add(item("Delete group","",()->action("saved_selection:groupdelete:"+groupId)));} // what is in it goes to the group before
         rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=0;menu=ROW_MENU;openSub="";openSub2="";
     }
