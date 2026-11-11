@@ -274,6 +274,20 @@ public final class EditorScreen extends CraftiumScreen {
      * The hover look for every control in the workspace: the one the pointer is on, the topmost as for a click, is lightened and
      * outlined. Controls only register themselves, so none of them draws its own and a new one cannot forget to.
      */
+    /** Fills a rectangle except where the given rectangles (x0,y0,x1,y1) lie over it. */
+    private static void hoverPiece(Gfx g,int x0,int y0,int x1,int y1,int color,java.util.List<int[]> covers){
+        if(x0>=x1||y0>=y1)return;
+        for(int k=0;k<covers.size();k++){
+            var c=covers.get(k);
+            if(c[0]>=x1||c[2]<=x0||c[1]>=y1||c[3]<=y0)continue;
+            var rest=covers.subList(k+1,covers.size()); // the pieces around this cover may still meet the others
+            int ya=Math.max(y0,c[1]),yb=Math.min(y1,c[3]);
+            hoverPiece(g,x0,y0,x1,ya,color,rest);hoverPiece(g,x0,yb,x1,y1,color,rest);
+            hoverPiece(g,x0,ya,Math.max(x0,c[0]),yb,color,rest);hoverPiece(g,Math.min(x1,c[2]),ya,x1,yb,color,rest);
+            return;
+        }
+        g.fill(x0,y0,x1,y1,color);
+    }
     private void hoverFeedback(Gfx g){
         if(!pointerFree())return;
         for(int i=controls.size()-1;i>=0;i--){
@@ -283,7 +297,13 @@ public final class EditorScreen extends CraftiumScreen {
             if(c.tip.startsWith(BLOCK_TIP))return; // the menu's own surface
             g.pose().pushMatrix();WorkspaceLayout.apply(g,c.panel());
             boolean clipped=c.clipTop()!=Integer.MIN_VALUE;if(clipped)g.enableScissor(0,c.clipTop(),w,c.clipBottom()); // a control half scrolled out of view stays inside its area
-            g.fill(c.x(),c.y(),c.x()+c.width(),c.y()+c.height(),Hover.OVERLAY);g.outline(c.x(),c.y(),c.width(),c.height(),ACCENT);
+            // A control drawn later and no bigger sits on top of this one (the foreground slot over the background slot), so the hover look skips what it covers.
+            var covers=new ArrayList<int[]>();
+            for(int j=i+1;j<controls.size();j++){var o=controls.get(j);if(o.panel().equals(c.panel())&&o.width()<=c.width()&&o.height()<=c.height()&&o.x()<c.x()+c.width()&&o.x()+o.width()>c.x()&&o.y()<c.y()+c.height()&&o.y()+o.height()>c.y())covers.add(new int[]{o.x(),o.y(),o.x()+o.width(),o.y()+o.height()});}
+            int x0=c.x(),y0=c.y(),x1=x0+c.width(),y1=y0+c.height();
+            hoverPiece(g,x0,y0,x1,y1,Hover.OVERLAY,covers);
+            hoverPiece(g,x0,y0,x1,y0+1,ACCENT,covers);hoverPiece(g,x0,y1-1,x1,y1,ACCENT,covers);
+            hoverPiece(g,x0,y0+1,x0+1,y1-1,ACCENT,covers);hoverPiece(g,x1-1,y0+1,x1,y1-1,ACCENT,covers);
             if(clipped)g.disableScissor();
             g.pose().popMatrix();return;
         }
