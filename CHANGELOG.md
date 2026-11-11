@@ -50,6 +50,8 @@ Changes since 1.5.0-beta.1.
 - Target info moved to the bottom of the left column, under Tool options.
 - The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
 - Your saved window layout is reset once, to the new places.
+- The Export structure window has a third tab, Blueprint, that saves the source into the blueprint library with a name, author and tags. Ctrl + P opens the same window with only that form, replacing the old Save blueprint dialog.
+- Several BuildObjects can be exported at once: right-click them in the Hierarchy and choose Export selected. The window has a page for each, with its own name, position and size and a preview of it (the other settings are shared), and exports them all as structures to one folder, or all as blueprints.
 
 ## 1.5.0-beta.1
 
