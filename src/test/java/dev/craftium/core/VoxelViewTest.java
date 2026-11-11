@@ -74,6 +74,12 @@ class VoxelViewTest {
         }
     }
 
+    @Test void aLongThinBoxIsRefusedInsteadOfDrawnTooSmall() {
+        // Small in volume, but far wider than the picture: callers that draw thumbnails must catch this rather than let it reach a screen.
+        int n = 5000;
+        assertThrows(IllegalArgumentException.class, () -> VoxelView.render(n, 1, 1, new int[n], VoxelView.Angle.SE, 128, 88));
+    }
+
     @Test void refusesBlocksThatDoNotFillTheBox() {
         assertThrows(IllegalArgumentException.class, () -> VoxelView.render(2, 2, 2, new int[3], VoxelView.Angle.TOP, 100, 100));
     }

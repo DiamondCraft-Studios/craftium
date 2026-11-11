@@ -17,6 +17,8 @@ final class AiThumbnails {
     private static final long MAX_VOLUME = 2_000_000L;
     record Entry(Tex tex, ReferenceTexture texture, long previewId) {}
     private static final Map<String, Entry> CACHE = new HashMap<>();
+    /** The preview of each session that could not be drawn, so a long thin one is not tried again every frame. */
+    private static final Map<String, Long> UNDRAWABLE = new HashMap<>();
     private static boolean builtThisFrame;
     private AiThumbnails() {}
 
@@ -27,11 +29,13 @@ final class AiThumbnails {
     static Tex of(ClientState.AiSessionView view) {
         var entry = CACHE.get(view.id());
         var ghost = view.ghost();
-        if (ghost.total() > 0 && (entry == null || entry.previewId() != view.info().previewId()) && !builtThisFrame) {
+        long previewId = view.info().previewId();
+        if (ghost.total() > 0 && (entry == null || entry.previewId() != previewId) && !builtThisFrame && !Long.valueOf(previewId).equals(UNDRAWABLE.get(view.id()))) {
             builtThisFrame = true;
             var fresh = build(view);
             if (entry != null) release(entry);
-            if (fresh != null) CACHE.put(view.id(), fresh); else CACHE.remove(view.id());
+            if (fresh != null) { CACHE.put(view.id(), fresh); UNDRAWABLE.remove(view.id()); }
+            else { CACHE.remove(view.id()); UNDRAWABLE.put(view.id(), previewId); }
             entry = fresh;
         }
         return entry == null ? null : entry.tex();
@@ -43,11 +47,13 @@ final class AiThumbnails {
             var e = it.next();
             if (!ids.contains(e.getKey())) { release(e.getValue()); it.remove(); }
         }
+        UNDRAWABLE.keySet().retainAll(ids);
     }
 
     static void releaseAll() {
         for (var entry : CACHE.values()) release(entry);
         CACHE.clear();
+        UNDRAWABLE.clear();
     }
 
     static void release(Entry entry) {
@@ -73,7 +79,9 @@ final class AiThumbnails {
         int[] colours = new int[sx * sy * sz];
         for (int i = 0; i + 3 < cells.length; i += 4)
             colours[(cells[i] - x0) + sx * ((cells[i + 2] - z0) + sz * (cells[i + 1] - y0))] = palette[cells[i + 3]];
-        return draw(sx, sy, sz, colours, view.info().previewId());
+        // A box can be small in volume and still too long for the picture (a road, a wall): that is drawn without one, not as a crash in the screen.
+        try { return draw(sx, sy, sz, colours, view.info().previewId()); }
+        catch (IllegalArgumentException tooLarge) { return null; }
     }
 
     /** The picture of a box of block colours (0 for nothing), registered as a texture; shared with the blueprint browser. */
