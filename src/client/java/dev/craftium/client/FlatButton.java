@@ -19,7 +19,7 @@ final class FlatButton extends CraftiumButton {
         if(back==null||!active||!visible||!isMouseOver(x,y))return false;
         back.run();return true;
     }
-    @Override protected void paint(Gfx g,int x,int y,float delta){face(g,getX(),getY(),getWidth(),getHeight(),getMessage().getString(),lit,active,isHoveredOrFocused());}
+    @Override protected void paint(Gfx g,int x,int y,float delta){face(g,getX(),getY(),getWidth(),getHeight(),getMessage().getString(),lit,active,active&&isHoveredOrFocused());}
     /** How every button in the editor looks, so the workspace and the screens it opens agree. */
     static void face(Gfx g,int left,int top,int width,int height,String label,boolean lit,boolean enabled,boolean hovered){face(g,left,top,width,height,label,lit,enabled,hovered,false);}
     /** As above; {@code leftAligned} starts the label at the left edge, as the entries of a menu do, instead of centring it. */
