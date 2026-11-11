@@ -26,7 +26,7 @@ final class SavedSelectionActions {
                 return "Moved";
             }
             case "group"->{var entry=saved.group(ids(part));return "Grouped into "+entry.name();}
-            case "createchild"->{var entry=saved.createChild(id(part),s.selection);return "Created "+entry.name();}
+            case "createchild"->{var entry=saved.createChild(id(part));return "Created "+entry.name();}
             case "deleteset"->{var ids=ids(part);saved.deleteMany(ids,s.selection);return "Deleted "+ids.size()+" BuildObjects";}
             case "colour"->{ // colour:<id>:<argb>
                 var where=part.length<3?"":part[2];
