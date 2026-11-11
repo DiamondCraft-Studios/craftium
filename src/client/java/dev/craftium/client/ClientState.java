@@ -58,32 +58,123 @@ public final class ClientState {
     static void updateSavedSelections(Packets.Status status){
         if(status.savedSelections()==null)return;
         savedSelections=List.copyOf(status.savedSelections());
+        if(status.savedGroups()!=null){savedGroups=List.copyOf(status.savedGroups());loadView();for(var g:savedGroups)if(g.guid()!=null){if(view.folded(g.guid()))groupFolded.add(g.id());else groupFolded.remove(g.id());}}
+        loadView();
+        // The eye and the fold of each BuildObject come from what this player chose before, by GUID; one never seen starts with its eye closed (it shows only while it is selected).
+        for(var saved:savedSelections){
+            var guid=saved.guid();if(guid==null)continue;
+            if(!view.knowsEye(guid)){view.setHidden(guid,true);viewChanged();}
+            if(view.hidden(guid))savedHidden.add(saved.id());else savedHidden.remove(saved.id());
+            if(view.folded(guid))savedFolded.add(saved.id());else savedFolded.remove(saved.id());
+        }
         var present=new HashSet<Integer>();
         for(var saved:savedSelections){
             present.add(saved.id());
+            if(!savedColorPending.containsKey(saved.id())){ // the colour everyone sees it in, unless this player is in the middle of changing it; none chosen is the selection colour
+                if(saved.color()!=0)savedColors.put(saved.id(),saved.color());else savedColors.remove(saved.id());
+            }
             if(saved.data()==null)continue; // unchanged: the outline already made for it is still right
             if(saved.data().isEmpty())savedShapes.remove(saved.id()); // left out because the status was too big: nothing is drawn for it
             else savedShapes.put(saved.id(),OutlineShape.ofLater(SelectionCodec.decode(saved.data())));
         }
         savedShapes.keySet().retainAll(present);
-        // an entry seen for the first time takes the lowest place on the wheel that no entry here uses, so colours are reused as entries go and the first one is the selection colour again
-        for(var saved:savedSelections){
-            if(savedColors.containsKey(saved.id()))continue;
-            var used=new HashSet<Integer>();for(var other:savedSelections){var at=savedIndex.get(other.id());if(at!=null)used.add(at);}
-            int index=0;while(used.contains(index))index++;
-            savedIndex.put(saved.id(),index);savedColors.put(saved.id(),dev.craftium.core.SavedSelectionColors.forIndex(options.selectionColor,index));
-        }
+        // an older server sends no GUID, so there is nothing to keep an eye by: a BuildObject seen for the first time starts closed
+        for(var saved:savedSelections)if(saved.guid()==null&&savedWithoutGuid.add(saved.id()))savedHidden.add(saved.id());
+        savedWithoutGuid.retainAll(present);
+    }
+    /** The groups of the Hierarchy, in order, as the server last said; empty on a server that predates them, and the Hierarchy then shows no groups. */
+    private static List<Packets.SavedGroup> savedGroups=List.of();
+    public static List<Packets.SavedGroup> savedGroups(){return savedGroups;}
+    /** The groups folded in the Hierarchy, so what is in them is not listed. Like the fold of a BuildObject it belongs to this player, and is kept by GUID. */
+    private static final Set<Integer> groupFolded=new HashSet<>();
+    public static boolean groupFolded(int id){return groupFolded.contains(id);}
+    public static void toggleGroupFolded(int id){
+        boolean folded=!groupFolded.contains(id);
+        if(folded)groupFolded.add(id);else groupFolded.remove(id);
+        for(var g:savedGroups)if(g.id()==id&&g.guid()!=null&&view.setFolded(g.guid(),folded))viewChanged();
     }
     /** The outline of each saved selection by id, drawn in the selection style. A selection with none is drawn as a box. */
     private static final Map<Integer,OutlineShape> savedShapes=new HashMap<>();
     static OutlineShape savedShape(int id){return savedShapes.get(id);}
-    /** The saved selections the player hid with the eye. Like the colours, they are kept by id when an entry is deleted, so Undo brings one back as it was. */
+    /** The BuildObjects whose eye is closed, which is every new one: the outline of one shows in the world only with its eye open, or while it is selected. Like the colours, they are kept by id when an entry is deleted, so Undo brings one back as it was. */
     private static final Set<Integer> savedHidden=new HashSet<>();
     public static boolean savedHidden(int id){return savedHidden.contains(id);}
-    public static void toggleSavedHidden(int id){if(!savedHidden.remove(id))savedHidden.add(id);}
-    static void clearSavedSelections(){savedSelections=List.of();savedColors.clear();savedHidden.clear();savedShapes.clear();savedIndex.clear();}
+    public static void toggleSavedHidden(int id){setSavedHidden(id,!savedHidden.contains(id));}
+    public static void setSavedHidden(int id,boolean hidden){
+        if(hidden)savedHidden.add(id);else savedHidden.remove(id);
+        var guid=guidOf(id);if(guid!=null&&view.setHidden(guid,hidden))viewChanged();
+    }
+    private static String guidOf(int id){for(var e:savedSelections)if(e.id()==id)return e.guid();return null;}
+    /** What this player chose to see of the Hierarchy, kept by GUID in {@code config/craftium/hierarchy-view.json} (see {@link dev.craftium.core.HierarchyView}). */
+    private static final dev.craftium.core.HierarchyView view=new dev.craftium.core.HierarchyView();
+    private static boolean viewLoaded,viewDirty;private static long viewChangedAt;
+    private static java.nio.file.Path viewFile(){return net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("craftium/hierarchy-view.json");}
+    private static void loadView(){
+        if(viewLoaded)return;viewLoaded=true;
+        try{var file=viewFile();if(java.nio.file.Files.exists(file))view.load(java.nio.file.Files.readString(file));}catch(Exception ignored){}
+    }
+    private static void viewChanged(){viewDirty=true;viewChangedAt=System.currentTimeMillis();}
+    /** Writes the choices once they have been still for a moment. Called every client tick. */
+    static void flushView(){
+        if(!viewDirty||System.currentTimeMillis()-viewChangedAt<1000)return;
+        viewDirty=false;
+        try{var file=viewFile();java.nio.file.Files.createDirectories(file.getParent());java.nio.file.Files.writeString(file,view.toJson());}catch(Exception e){notify("Could not save the Hierarchy view");}
+    }
+    /** The BuildObject the pointer is on in the Hierarchy (or whose menu is open), or 0: it and what is under it are drawn in the world whatever their eyes say. */
+    public static int hoverSaved;
+    /**
+     * The corners of the box round the blocks of the BuildObject and of everything under it (not only the blocks it holds itself, which an empty parent has none of), or null
+     * when there are none.
+     */
+    public static dev.craftium.core.Point[] subtreeBounds(int id){
+        dev.craftium.core.Point lo=null,hi=null;
+        for(var e:savedSelections){
+            if(e.id()!=id&&!savedUnder(e,id))continue;
+            if(e.size()==0||e.min()==null||e.max()==null)continue;
+            lo=lo==null?e.min():new dev.craftium.core.Point(Math.min(lo.x(),e.min().x()),Math.min(lo.y(),e.min().y()),Math.min(lo.z(),e.min().z()));
+            hi=hi==null?e.max():new dev.craftium.core.Point(Math.max(hi.x(),e.max().x()),Math.max(hi.y(),e.max().y()),Math.max(hi.z(),e.max().z()));
+        }
+        return lo==null?null:new dev.craftium.core.Point[]{lo,hi};
+    }
+    /** How many blocks the BuildObject holds with everything under it. */
+    public static int subtreeSize(int id){int n=0;for(var e:savedSelections)if(e.id()==id||savedUnder(e,id))n+=e.size();return n;}
+    /** Whether {@code saved} is the BuildObject {@code ancestor} or somewhere under it. */
+    public static boolean savedUnder(Packets.SavedSelection saved,int ancestor){
+        int steps=0;var at=saved;
+        while(at!=null&&steps++<64){
+            if(at.id()==ancestor)return true;
+            Packets.SavedSelection next=null;for(var e:savedSelections)if(e.id()==at.parent()){next=e;break;}
+            at=next;
+        }
+        return false;
+    }
+    /** The BuildObjects folded in the Hierarchy, so what is under them is not listed. A fold belongs to the client. */
+    private static final Set<Integer> savedFolded=new HashSet<>();
+    public static boolean savedFolded(int id){return savedFolded.contains(id);}
+    public static void toggleSavedFolded(int id){
+        boolean folded=!savedFolded.contains(id);
+        if(folded)savedFolded.add(id);else savedFolded.remove(id);
+        var guid=guidOf(id);if(guid!=null&&view.setFolded(guid,folded))viewChanged();
+    }
+    static void clearSavedSelections(){savedSelections=List.of();savedGroups=List.of();groupFolded.clear();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedIndex.clear();}
     public static int savedColor(int id){return savedColors.getOrDefault(id,options.selectionColor);}
-    public static void setSavedColor(int id,int color){savedColors.put(id,color);}
+    private static final Set<Integer> savedWithoutGuid=new HashSet<>();
+    /** Whether a colour was chosen for it: every BuildObject is drawn in the selection colour until one is. */
+    public static boolean hasSavedColor(int id){return savedColors.containsKey(id);}
+    /** Back to the selection colour. */
+    public static void resetSavedColor(int id){savedColors.remove(id);savedColorPending.put(id,0);savedColorChanged=System.currentTimeMillis();}
+    public static void setSavedColor(int id,int color){savedColors.put(id,color);savedColorPending.put(id,color);savedColorChanged=System.currentTimeMillis();}
+    /** Colours this player changed that the server has not been told: sent once the picker has been still for a moment, a request at a time (the server drops those that come too close together). */
+    private static final Map<Integer,Integer> savedColorPending=new LinkedHashMap<>();private static long savedColorChanged,savedColorSent;
+    static void flushSavedColours(){
+        if(savedColorPending.isEmpty()||!ClientHandshake.serverHas(dev.craftium.core.Handshake.SAVED_SELECTIONS))return;
+        long now=System.currentTimeMillis();if(now-savedColorChanged<350||now-savedColorSent<150)return;
+        var present=new HashSet<Integer>();for(var e:savedSelections)present.add(e.id());
+        savedColorPending.keySet().retainAll(present); // one deleted since is nothing to tell the server
+        if(savedColorPending.isEmpty())return;
+        var first=savedColorPending.entrySet().iterator().next();savedColorPending.remove(first.getKey());savedColorSent=now;
+        CraftiumClient.send("saved_selection:colour:"+first.getKey()+":"+first.getValue(),null,null);
+    }
     /** The saved selection being looked at or edited, or null. */
     public static Packets.SavedSelection activeSaved(){for(var saved:savedSelections)if(saved.active())return saved;return null;}
     /** How many blocks the ghost of the plugin tool in use has; 0 when there is none. */

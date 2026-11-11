@@ -16,11 +16,11 @@ final class BuildPlanner {
      * @param onto a waiting preview to build on top of (its changes are planned first, so the new operations see its blocks), or null
      */
     static Session.Edit plan(net.minecraft.server.level.ServerPlayer player, Session ai, Options o, java.util.Set<Point> selection, Session.Edit onto) {
-        return plan(player, ai, o, selection, onto, name -> { throw new IllegalArgumentException("There are no saved selections to work on"); });
+        return plan(player, ai, o, selection, onto, name -> { throw new IllegalArgumentException("There are no BuildObjects to work on"); });
     }
 
     /**
-     * As above, and {@code named} finds one of the player's saved selections by the name an operation gave ("Selection 1"), or throws saying
+     * As above, and {@code named} finds one of the player's BuildObjects by the name an operation gave ("BuildObject"), or throws saying
      * which names there are. Operations that name none work on {@code selection}, so one spec can work on several selections at once.
      */
     static Session.Edit plan(net.minecraft.server.level.ServerPlayer player, Session ai, Options o, java.util.Set<Point> selection, Session.Edit onto, java.util.function.Function<String, java.util.Set<Point>> named) {
@@ -191,7 +191,7 @@ final class BuildPlanner {
      * Applies the spec's operations on the selection, one after another, each seeing what the ones before it planned. It walks the selection
      * once per operation and keeps nothing per block beyond the plan itself, so a selection of a million blocks costs what the plan costs.
      */
-    /** Whether some replace_selection names no saved selection, so it needs the one this session started with. */
+    /** Whether some replace_selection names no BuildObject, so it needs the one this session started with. */
     private static boolean usesSessionSelection(BuildSpec spec) {
         for (var op : spec.selectionOps()) if (op.selection() == null) return true;
         return false;

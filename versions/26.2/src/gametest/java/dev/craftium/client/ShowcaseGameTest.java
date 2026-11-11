@@ -66,7 +66,7 @@ public final class ShowcaseGameTest {
         c.waitTicks(30);
         c.runOnClient(mc -> CraftiumClient.send("saved_selection:save", null, new dev.craftium.core.Point(0, 1, 0)));
         c.waitFor(mc -> !ClientState.savedSelections().isEmpty(), 200);
-        require(c.computeOnClient(mc -> ClientState.savedSelections().get(0).name()).equals("Selection 1"), "the annex was not saved as Selection 1");
+        require(c.computeOnClient(mc -> ClientState.savedSelections().get(0).name()).equals("BuildObject"), "the annex was not saved as BuildObject");
         var request = com.google.gson.JsonParser.parseString("{\"job\":\"gametest-job\",\"rooms\":["
             + "{\"name\":\"Tower\",\"from\":[" + (cx - 1) + "," + g + "," + (cz - 1) + "],\"to\":[" + (cx + 1) + "," + (g + 7) + "," + (cz + 1) + "],\"shots\":[\"hero\",\"south\",{\"name\":\"overhead\",\"preset\":\"top\"}]},"
             + "{\"name\":\"Annex\",\"from\":[" + (cx + 14) + "," + g + "," + cz + "],\"to\":[" + (cx + 18) + "," + (g + 4) + "," + (cz + 4) + "],\"shots\":[\"hero\",{\"name\":\"close\",\"preset\":\"east\",\"fov\":50}]},"

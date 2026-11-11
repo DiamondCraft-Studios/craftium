@@ -1,5 +1,51 @@
 # Changelog
 
+## Unreleased
+
+Changes since 1.5.0-beta.1.
+
+### Interface
+- New Hierarchy window at the top of the right column, where the Selections window was: it lists your saved selections. The Block palette and Tool masks sit together below it and take 3/8 of the column.
+- The Hierarchy window has a "+" button along the bottom that creates a BuildObject from what is selected, replacing the Save selection button. New ones are named BuildObject, BuildObject (1), BuildObject (2) and so on, and double-clicking a row renames it where it stands (Enter keeps the name, Esc drops it). The colour moved to the right of each row, beside the show, edit and delete buttons.
+- BuildObjects form a hierarchy: drag a row onto the middle of another to put it under that one, to any depth, or onto the top or bottom edge of a row to place it before or after it. The row you carry follows the pointer, a line or frame shows where it will land, and an arrow folds what is under a BuildObject. Looking at a parent shows everything under it; editing one changes only its own blocks; deleting one deletes what is under it, and Ctrl+Z brings the group back. Hovering a row shows no tooltip any more.
+- Saved selections are BuildObjects everywhere: in the window, in messages and in what the AI is told. Two BuildObjects may now share a name; each has a unique GUID, which the AI tools list and accept in place of the name.
+- The outline of a BuildObject only shows in the world while its eye is open or while it is selected, and every new BuildObject starts with its eye closed.
+- BuildObjects follow their blocks: when you move, rotate, flip or scale the selected blocks (the Edit menu, the Move, Rotate and Scale tools and nudging), every BuildObject that holds those blocks takes them along, and Ctrl+Z puts the blocks and the BuildObjects back together. Scaling up keeps a BuildObject whole; scaling down loses the blocks it drops.
+- Creating a BuildObject from a selection that touches existing ones takes them in whole, as children of the new one, even where the selection only reaches part of them. The new one holds only the blocks that no taken BuildObject holds. A selection made while one is shown makes a parent around it.
+- Everything you do in the Hierarchy is in the history: Ctrl+Z and Ctrl+Y take back and redo making a BuildObject with +, renaming, dragging it to a new place or parent, and deleting it, in order with your block edits.
+- Ctrl + click on a row of the Hierarchy adds or removes that BuildObject from the ones shown, and Shift + Ctrl + click adds every row from the last one clicked to this one. The ones shown together are one selection, so any tool works on all of them.
+- F, with exactly one BuildObject shown, moves the view to face the middle of it from far enough back that all of it fits between the panels. It is bound in the controls like the other shortcuts.
+- Right-clicking a row of the Hierarchy opens a menu: Select, Select children only, Edit blocks; Create empty parent (or Group selected for several), Create child from selection; Rename, Delete (or Delete selected); Move up, Move down, Move out of parent, Fold or Unfold all below; Show or Hide outline, Change colour, Focus. Every item that changes the hierarchy is in the undo history.
+- Ctrl + G makes an empty parent around the BuildObjects shown, in the place of the first of them. It is in the controls like the other shortcuts, and in the right-click menu.
+- F2 renames the BuildObject shown, in its row.
+- An open Hierarchy menu takes the pointer: nothing behind it is lit up or clicked through it, and a click anywhere else closes it.
+- Duplicate (Ctrl + D, or in the Hierarchy menu) copies the blocks of the BuildObjects shown, with everything under them, and starts a placement where they were copied from; Enter pastes them as the selection and makes a new BuildObject of them, after the original. Move the placement first to put the copy somewhere else. The menu also has Copy, Cut (which takes the BuildObjects along with their blocks), Paste (a placement that makes a BuildObject) and Export, which exports the blocks shown from each BuildObject down, however they are spread over the hierarchy.
+- Hovering a row of the Hierarchy draws that BuildObject and everything under it in the world, whatever their eyes say. Ctrl + click on an eye opens or closes it for everything under it too.
+- A right click on another row while a Hierarchy menu is open opens that row's menu.
+- BuildObjects are saved with the world (`craftium/buildobjects/<dimension>.nbt`, written every few seconds and when the server stops), so they are there after a reload or a rejoin. In multiplayer they are shared: everyone who builds in a dimension sees and changes the same BuildObjects, changes reach the others at once, and what each player is looking at stays their own. A BuildObject somebody else deletes while you look at it is let go of. Colours are shared and saved too; eyes and folds stay your own and are not saved yet.
+- Who may change the BuildObjects is set in `config/craftium/hierarchy-permissions.json`, written the first time with everything allowed: `create`, `rename`, `move`, `delete`, `recolour` and `edit` can each be switched off for everyone or for a player by name or UUID, and operators bypass it unless `operatorsBypass` is off. It is read again when it changes. This is in the Fabric mod only so far.
+- Undo and Redo of a Hierarchy change are dropped, with a message, when someone else changed the BuildObjects since, so one player's Undo never undoes another's work.
+- A block that is deleted, cut or otherwise turned into air leaves the BuildObjects that held it, and Ctrl+Z puts it back into them. Replacing a block with another keeps it. Edit > Move selection takes the BuildObjects along with the blocks; Clone and Stack make copies that belong to no BuildObject. Deleting a BuildObject in the Hierarchy only removes the grouping: every block stays.
+- The eye and the fold of each BuildObject are kept for you by GUID in `config/craftium/hierarchy-view.json`, so they are as you left them after a rejoin or a restart, in any world.
+- Dragging one of several shown rows carries all of them together, in their order, and the drag shows how many.
+- The Hierarchy has groups: flat headings, never nested, that the BuildObjects at the top level sit under (one inside another is in the group of the one at the top). Every world starts with "New Group" and everything is in it. A group's name is drawn in #D9E3EC on a #212832 band. Drag a heading to put the group, with what is in it, in another place, drag a BuildObject onto a heading to put it at the end of that group, or onto a row to place it before or after that one; double-click a heading to rename it, and its arrow folds it. The eye on a heading opens or closes the eyes of everything in the group.
+- Right-clicking a group's heading opens a menu (Rename, Create empty BuildObject here, Create new Group, Fold, Move up and down, Delete group, which puts its BuildObjects in the group before it), and right-clicking the empty space in the Hierarchy opens one with Create new Group and Create empty BuildObject. A BuildObject's menu lists the other groups to move it to.
+- Groups are shared like BuildObjects: they are saved with the world, in Undo and Redo, and sent to everyone building there. Creating, renaming, moving and deleting them ask for the `create`, `rename`, `move` and `delete` permissions of the BuildObjects. A server from before groups shows the Hierarchy as it was.
+- The fold arrows of the Hierarchy are drawn in pixels, one row taller than before and one pixel higher.
+- The editor's interface size is set in Options, on the new UI tab, from Auto through 1x to 8x in half steps, and Ctrl + = and Ctrl + - change it from the editor. Every Craftium screen follows it, drawn a whole number of screen pixels to each pixel of the text so it stays sharp; a half step is exact in the editor and rounded up in the other screens. The default is 1x.
+- The Tools window opens tall enough to show every tool, with Tool options below it, and the right-hand column is 50% wider. Panels that were at the right or bottom edge of the window stay there when the interface size or the window changes. Saved window places are reset once for this.
+- Duplicate makes the whole hierarchy again: the same names, order, parents and colours, with the top one marked "(copy)", each holding its own blocks at the new place. If the copy is turned or something else is copied before it is placed, it falls back to one BuildObject.
+- A click on empty space in the Hierarchy, and Alt + D, let go of the BuildObjects shown (Alt + D also clears the selection).
+- "Delete blocks" in the Hierarchy menu (next to Delete, which still only removes the grouping) deletes the BuildObject, everything under it and all the blocks they hold, as one step: Ctrl+Z brings back the blocks and the BuildObjects together. It asks the first time, with a "Don't show this message again" tick box.
+- After a duplicate or a paste from the Hierarchy the new BuildObjects are the ones shown, not the originals.
+- The Hierarchy rows keep only the eye: Edit blocks and Delete are in the right-click menu (which also has Stop editing), and the eye stays clear of the scrollbar, which now gets its own space when the list scrolls.
+- BuildObjects are all drawn in your selection colour, with no colour taken from a wheel; the colour swatch on the rows is gone. Change colour and Reset colour are in the right-click menu.
+- Ctrl + X with BuildObjects shown takes them along with the blocks, like Cut in the menu. Ctrl + V with no block under the pointer (the pointer is over a panel, or the sky) starts the placement where the blocks were copied from instead of doing nothing. A click with any mouse button now takes the keyboard back from a text box, so the shortcuts work after a right click.
+- The Rulers window starts closed and comes up the first time a ruler is used; after that it stays as you leave it.
+- Target info moved to the bottom of the left column, under Tool options.
+- The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
+- Your saved window layout is reset once, to the new places.
+
 ## 1.5.0-beta.1
 
 Changes since 1.4.0-beta.1.

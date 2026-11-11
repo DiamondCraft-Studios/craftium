@@ -30,7 +30,7 @@ what you filled in. The ranges in this skill are usual starting points, not rule
 2. **Site.** `get_state` for where the player is, then find each build's box: `read_selection` if they selected it,
    otherwise `get_surface` and `read_blocks` or `render_view` (top) to find its real corners, roof and all. If
    `get_state` lists `savedSelections`, the player has marked their builds for you: "photograph my selections" means one
-   room per saved selection, each given as `"selection": "<name>"` instead of corners (its name is the room's name). A box that is
+   room per BuildObject, each given as `"selection": "<name>"` instead of corners (its name is the room's name). A box that is
    too big frames the build too small; too small crops it. Say the boxes you chose.
 3. **Range.** The game only holds the chunks near the player, so a build far from them cannot be photographed
    (its pictures fail with "not loaded"). Group builds that are close together into one job, and for a far one tell the

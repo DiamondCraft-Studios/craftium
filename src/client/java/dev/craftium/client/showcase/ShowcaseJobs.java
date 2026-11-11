@@ -52,9 +52,8 @@ public final class ShowcaseJobs {
         if (current != null) throw new IllegalStateException("The job \"" + current.job + "\" is still running (" + current.next + " of " + current.plan.entries().size() + " pictures); wait for it, or cancel it with capture_cancel");
         var plan = ShowcasePlan.parse(ShowcasePlan.resolveSelections(args, new ShowcasePlan.Selections() {
             @Override public dev.craftium.core.Point[] find(String name) {
-                for (var s : dev.craftium.client.ClientState.savedSelections())
-                    if (s.name().trim().equalsIgnoreCase(name) && s.size() > 0 && s.min() != null && s.max() != null) return new dev.craftium.core.Point[]{s.min(), s.max()};
-                return null;
+                var s = dev.craftium.core.SavedSelections.find(name, dev.craftium.client.ClientState.savedSelections(), e -> e.guid(), e -> e.name());
+                return s == null ? null : dev.craftium.client.ClientState.subtreeBounds(s.id()); // with everything under it: a parent that holds none of its own is still a room
             }
             @Override public List<String> names() {
                 var names = new ArrayList<String>();
