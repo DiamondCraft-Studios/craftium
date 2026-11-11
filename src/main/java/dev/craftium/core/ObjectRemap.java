@@ -6,7 +6,7 @@ import java.util.*;
  * Where a BuildObject's own blocks are after the selected blocks were moved, turned or scaled. The transform looks back from every cell it covers to
  * the cell it took its block from, so a block of an object that is now at a cell is that cell's: ownership follows the block, never the place it
  * left. A cell the shape grew into inherits from the cell it was sampled from (so scaling up keeps an object whole), and a cell that was sampled
- * away is gone (so scaling down loses what it loses).
+ * away is gone (so scaling down loses what it loses). A block that lands on a cell another object held replaces it: that object loses the cell.
  */
 public final class ObjectRemap {
     private ObjectRemap(){}
@@ -20,7 +20,8 @@ public final class ObjectRemap {
     public static List<Point> apply(Collection<Point> own,Set<Point> source,Map<Point,Point> origin){
         var mine=own instanceof Set<?>?(Set<Point>)own:new HashSet<>(own);
         var out=new LinkedHashSet<Point>();
-        for(var p:own)if(!source.contains(p))out.add(p);
+        // A cell outside the selection that the moved blocks now cover is theirs: the object that held it before does not keep (or tag) a block that came from another.
+        for(var p:own)if(!source.contains(p)&&!origin.containsKey(p))out.add(p);
         for(var e:origin.entrySet())if(mine.contains(e.getValue()))out.add(e.getKey());
         return List.copyOf(out);
     }

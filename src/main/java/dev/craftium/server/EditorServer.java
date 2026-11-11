@@ -482,7 +482,7 @@ public final class EditorServer {
                     var moveEdit=plan.finish(r.action().equals("move")?"Move selection":r.action().equals("clone")?"Clone selection":"Stack selection");
                     if(!r.action().equals("move")||moveEdit.changes().isEmpty()){start(player,s,moveEdit);return;} // a clone or a stack makes copies, which belong to no BuildObject
                     // A move takes the BuildObjects' blocks along, as a transform does, and Undo, Redo and cancelling give them back with the blocks.
-                    var origin=new LinkedHashMap<Point,Point>();for(Point p:source.keySet())origin.put(p.add(o.offsetX,o.offsetY,o.offsetZ),p);
+                    var origin=new LinkedHashMap<Point,Point>();for(var e:source.entrySet())if(!e.getValue().state().isAir()||o.pasteAir)origin.put(e.getKey().add(o.offsetX,o.offsetY,o.offsetZ),e.getKey()); // air that is not pasted leaves what is there, with its BuildObject
                     var objectsNow=s.saved.snapshot();var objectsAfter=new LinkedHashMap<Integer,List<Point>>();
                     for(var e:objectsNow.entrySet())objectsAfter.put(e.getKey(),ObjectRemap.apply(e.getValue(),source.keySet(),origin));
                     boolean staging=s.confirmEdits&&!s.bypassConfirm;var priorObjects=s.pendingObjectsBefore;

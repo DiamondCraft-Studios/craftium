@@ -23,6 +23,12 @@ class ObjectRemapTest {
         origin.put(p(0,0,0),p(0,0,0)); // two blocks became one: the second was dropped
         assertEquals(List.of(),ObjectRemap.apply(List.of(p(1,0,0)),source,origin));
     }
+    @Test void aBlockThatLandsOnAnotherObjectsCellReplacesItAndTheOtherObjectLosesTheCell(){
+        var source=Set.of(p(0,0,0));var origin=new LinkedHashMap<Point,Point>();
+        origin.put(p(5,0,0),p(0,0,0)); // moved onto a block of another object
+        assertEquals(List.of(p(5,0,0)),ObjectRemap.apply(List.of(p(0,0,0)),source,origin),"the moved block is the mover's");
+        assertEquals(List.of(p(9,9,9)),ObjectRemap.apply(List.of(p(5,0,0),p(9,9,9)),source,origin),"the other object no longer holds the cell it was covered at");
+    }
     @Test void aQuarterTurnKeepsEveryBlockOfAnObjectExactlyOnce(){
         var own=new ArrayList<Point>();var source=new HashSet<Point>();var origin=new LinkedHashMap<Point,Point>();
         for(int x=0;x<3;x++)for(int z=0;z<2;z++){var from=p(x,0,z);own.add(from);source.add(from);origin.put(p(-z,0,x),from);} // turned a quarter about the corner
