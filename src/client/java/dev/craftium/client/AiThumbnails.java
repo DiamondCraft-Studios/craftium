@@ -56,8 +56,11 @@ final class AiThumbnails {
         UNDRAWABLE.clear();
     }
 
+    /** Texture work belongs to the render thread; a disconnect arrives on the network thread, so it is handed over (and runs at once when already there). */
     static void release(Entry entry) {
-        Minecraft.getInstance().getTextureManager().release(entry.tex().id());
+        var minecraft = Minecraft.getInstance();
+        var id = entry.tex().id();
+        minecraft.execute(() -> minecraft.getTextureManager().release(id));
     }
 
     private static Entry build(ClientState.AiSessionView view) {
