@@ -39,6 +39,8 @@ final class StructureBuilder {
     /** Reads the source, then applies the settings. Throws {@link IllegalArgumentException} with a message for the player. */
     static StructureBuilder build(EditPlanner p,ServerPlayer player){
         var s=p.o.structure;s.validate();
+        if(s.blueprint()){s.mirror="none";s.rotation=0;s.integrity=100;s.sizeX=s.sizeY=s.sizeZ=0;s.airToVoid=false;s.includeBlocks=true;} // a blueprint holds the blocks as they are
+        var from=s.objectId>0?objectView(p,s.objectId):p.session; // the selection, or a BuildObject standing in for it
         boolean clipboard=s.source.equals(StructureSettings.CLIPBOARD);
         Map<Point,BlockSnapshot> source=new LinkedHashMap<>();List<CompoundTag> entities=new ArrayList<>();Point min;int dx,dy,dz;
         if(clipboard){
@@ -50,11 +52,11 @@ final class StructureBuilder {
             if(s.includeBlocks)for(var entry:p.session.clipboard.entrySet())source.put(new Point(entry.getKey().x()-x0,entry.getKey().y()-y0,entry.getKey().z()-z0),entry.getValue());
             if(s.includeEntities)for(var saved:p.session.clipboardEntities){var copy=saved.copy();ClipboardEntities.offset(copy,-x0,-y0,-z0);entities.add(copy);}
         }else{
-            if(p.session.selection.size()==0)throw new IllegalArgumentException("Create a selection first");
-            min=p.session.selection.min();var max=p.session.selection.max();dx=max.x()-min.x()+1;dy=max.y()-min.y()+1;dz=max.z()-min.z()+1;
+            if(from.selection.size()==0)throw new IllegalArgumentException("Create a selection first");
+            min=from.selection.min();var max=from.selection.max();dx=max.x()-min.x()+1;dy=max.y()-min.y()+1;dz=max.z()-min.z()+1;
             if((long)dx*dy*dz>MAX_VOLUME)throw new IllegalArgumentException("The selection's bounding box is too large to export");
-            if(s.includeBlocks)for(var at:p.session.selection.points())source.put(new Point(at.x()-min.x(),at.y()-min.y(),at.z()-min.z()),null); // read below, once the size is known
-            if(s.includeEntities)entities.addAll(ClipboardEntities.capture(player,p.session).relative());
+            if(s.includeBlocks)for(var at:from.selection.points())source.put(new Point(at.x()-min.x(),at.y()-min.y(),at.z()-min.z()),null); // read below, once the size is known
+            if(s.includeEntities)entities.addAll(ClipboardEntities.capture(player,from).relative());
         }
         int sx=s.sizeX>0?s.sizeX:dx,sy=s.sizeY>0?s.sizeY:dy,sz=s.sizeZ>0?s.sizeZ:dz;
         if((long)sx*sy*sz>MAX_VOLUME)throw new IllegalArgumentException("The structure is too large to export");
@@ -68,6 +70,15 @@ final class StructureBuilder {
         var built=new StructureBuilder(s,sx,sy,sz,cells,entities,clipboard?new Point(0,0,0):min);
         built.source=new int[]{sx,sy,sz};
         var result=built.transformed().thinned().voided();result.source=built.source;return result;
+    }
+
+    /** A session whose selection is the blocks of one BuildObject and everything under it, so it can be exported as the selection is. */
+    private static Session objectView(EditPlanner p,int id){
+        var entry=p.session.saved.byId(id);
+        if(entry==null)throw new IllegalArgumentException("That BuildObject no longer exists");
+        var points=p.session.saved.effective(entry);
+        if(points.isEmpty())throw new IllegalArgumentException("The BuildObject "+entry.name()+" has no blocks");
+        var view=new Session();view.selection.restore(points);return view;
     }
 
     private static Mirror mirrorOf(String name){return switch(name){case "left_right"->Mirror.LEFT_RIGHT;case "front_back"->Mirror.FRONT_BACK;default->Mirror.NONE;};}
