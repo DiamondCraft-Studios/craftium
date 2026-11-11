@@ -1,52 +1,98 @@
 package dev.craftium.core;
 
 /**
- * Draws a box of textured blocks from any side, in software, for a preview that can be turned, panned and zoomed. Each exposed block face is a
- * textured square seen through an orthographic camera, drawn with a depth buffer, so it needs no game, no GPU and no player.
+ * Draws a box of textured blocks from any side, in software, for a preview that can be turned, panned and zoomed. Each block is a few textured
+ * rectangles (a plain block is six, a stair or a fence more, a plant two crossed ones) seen through an orthographic camera and drawn with a depth buffer,
+ * so it needs no game, no GPU and no player.
  */
 public final class VoxelOrbit {
     private VoxelOrbit() {}
 
     /** The side length of the square texture of a block face. */
     public static final int TEX = 16;
-    public static final int TOP = 0, SIDE = 1, BOTTOM = 2;
 
     /**
-     * The blocks of a preview.
+     * One textured rectangle of a block, in the block's own space (0 to 1 on each axis). A point of it is {@code o + fa * a + fb * b} for fa and fb from 0 to 1,
+     * and the texel (0 to 16, v down) at that point is {@code (u0 + fa * ua + fb * ub, v0 + fa * va + fb * vb)}.
      *
-     * @param cells one byte per cell, {@code x + sx * (z + sz * y)}: 0 is empty, otherwise a slot of {@code faces}
-     * @param faces by slot (index 0 unused): the top, side and bottom textures of that block, each {@code TEX * TEX} pixels of 0xAARRGGBB
+     * @param normal  which way it faces, for hiding it when it faces away
+     * @param cull    the side of the block it lies on (see {@link #UP}), or -1: it is hidden when a block that fills that side stands against it
+     * @param shade   the side it counts as facing, for how light it is drawn
      */
+    public record Quad(float[] o, float[] a, float[] b, float[] normal, float u0, float v0, float ua, float va, float ub, float vb, int[] texture, int cull, int shade) {}
+
+    /** What a block is made of: its rectangles, and whether it fills the whole cell and hides what is behind it. */
+    public record Shape(Quad[] quads, boolean full) {
+        /** A plain cube with a texture for its top, its four sides and its underside. */
+        public static Shape cube(int[] top, int[] side, int[] bottom) {
+            var quads = new Quad[6];
+            for (int d = 0; d < 6; d++) {
+                int[] t = d == UP ? top : d == DOWN ? bottom : side;
+                float[] o = {ORIGIN[d][0], ORIGIN[d][1], ORIGIN[d][2]}, a = {AXIS_A[d][0], AXIS_A[d][1], AXIS_A[d][2]}, b = {AXIS_B[d][0], AXIS_B[d][1], AXIS_B[d][2]};
+                float[] n = {DX[d], DY[d], DZ[d]};
+                boolean flat = d < 2;
+                quads[d] = new Quad(o, a, b, n, 0, flat ? 0 : TEX, TEX, 0, 0, flat ? TEX : -TEX, t, d, d);
+            }
+            return new Shape(quads, true);
+        }
+    }
+
+    /** The blocks of a preview. */
     public static final class Scene {
         public final int sx, sy, sz;
         final byte[] cells;
-        final int[][][] faces;
-        /** The exposed faces, each as {@code cell * 6 + direction}. */
-        final int[] visible;
+        final Shape[] shapes;
+        /** The rectangles that can be seen, as a cell and which of its block's rectangles. */
+        final int[] visibleCell, visibleQuad;
 
-        public Scene(int sx, int sy, int sz, byte[] cells, int[][][] faces) {
+        /**
+         * @param cells  one byte per cell, {@code x + sx * (z + sz * y)}: 0 is empty, otherwise a slot of {@code shapes}
+         * @param shapes by slot (index 0 unused); null for a slot that is not drawn
+         */
+        public Scene(int sx, int sy, int sz, byte[] cells, Shape[] shapes) {
             if (sx < 1 || sy < 1 || sz < 1 || cells.length != sx * sy * sz) throw new IllegalArgumentException("The blocks do not fill the box");
-            this.sx = sx; this.sy = sy; this.sz = sz; this.cells = cells; this.faces = faces;
+            this.sx = sx; this.sy = sy; this.sz = sz; this.cells = cells; this.shapes = shapes;
             int count = 0;
-            int[] list = new int[16];
+            int[] cell = new int[64], quad = new int[64];
             for (int y = 0; y < sy; y++)
                 for (int z = 0; z < sz; z++)
                     for (int x = 0; x < sx; x++) {
-                        int cell = x + sx * (z + sz * y);
-                        if (!solid(cell)) continue;
-                        for (int d = 0; d < 6; d++) {
-                            int nx = x + DX[d], ny = y + DY[d], nz = z + DZ[d];
-                            if (nx >= 0 && ny >= 0 && nz >= 0 && nx < sx && ny < sy && nz < sz && solid(nx + sx * (nz + sz * ny))) continue;
-                            if (count == list.length) list = java.util.Arrays.copyOf(list, count * 2);
-                            list[count++] = cell * 6 + d;
+                        int at = x + sx * (z + sz * y), slot = cells[at] & 255;
+                        var shape = shape(slot);
+                        if (shape == null) continue;
+                        for (int q = 0; q < shape.quads().length; q++) {
+                            int side = shape.quads()[q].cull();
+                            if (side >= 0) {
+                                int nx = x + DX[side], ny = y + DY[side], nz = z + DZ[side];
+                                if (nx >= 0 && ny >= 0 && nz >= 0 && nx < sx && ny < sy && nz < sz) {
+                                    int other = cells[nx + sx * (nz + sz * ny)] & 255;
+                                    var next = shape(other);
+                                    if (next != null && (next.full() || other == slot)) continue; // hidden against a block that fills the side, or an identical one
+                                }
+                            }
+                            if (count == cell.length) { cell = java.util.Arrays.copyOf(cell, count * 2); quad = java.util.Arrays.copyOf(quad, count * 2); }
+                            cell[count] = at;
+                            quad[count++] = q;
                         }
                     }
-            visible = java.util.Arrays.copyOf(list, count);
+            visibleCell = java.util.Arrays.copyOf(cell, count);
+            visibleQuad = java.util.Arrays.copyOf(quad, count);
         }
 
-        private boolean solid(int cell) { int slot = cells[cell] & 255; return slot > 0 && slot < faces.length && faces[slot] != null; }
+        /** Plain cubes, from a top, side and underside texture for each slot (index 0 unused). */
+        public Scene(int sx, int sy, int sz, byte[] cells, int[][][] faces) {
+            this(sx, sy, sz, cells, cubes(faces));
+        }
+
+        private static Shape[] cubes(int[][][] faces) {
+            var out = new Shape[faces.length];
+            for (int i = 0; i < faces.length; i++) if (faces[i] != null) out[i] = Shape.cube(faces[i][0], faces[i][1], faces[i][2]);
+            return out;
+        }
+
+        private Shape shape(int slot) { return slot > 0 && slot < shapes.length ? shapes[slot] : null; }
         public int cell(int x, int y, int z) { return x + sx * (z + sz * y); }
-        public boolean has(int x, int y, int z) { return x >= 0 && y >= 0 && z >= 0 && x < sx && y < sy && z < sz && solid(cell(x, y, z)); }
+        public boolean has(int x, int y, int z) { return x >= 0 && y >= 0 && z >= 0 && x < sx && y < sy && z < sz && shape(cells[cell(x, y, z)] & 255) != null; }
     }
 
     /** Where the camera is: the angle around the box, the angle above it, how far in it is, and how far the picture has been moved (in pixels). */
@@ -61,12 +107,13 @@ public final class VoxelOrbit {
         public void turn(double dyaw, double dpitch) { yaw = (yaw + dyaw) % 360; pitch = Math.clamp(pitch + dpitch, -90, 90); }
     }
 
-    // direction: +Y, -Y, +Z, -Z, +X, -X
+    /** The sides of a block, as the numbers the rectangles name them by. */
+    public static final int UP = 0, DOWN = 1, SOUTH = 2, NORTH = 3, EAST = 4, WEST = 5;
     private static final int[] DX = {0, 0, 0, 0, 1, -1}, DY = {1, -1, 0, 0, 0, 0}, DZ = {0, 0, 1, -1, 0, 0};
-    /** The corner of each face the picture starts from, and the way it runs along its two sides, so the texture reads the right way up and not mirrored. */
-    private static final int[][] ORIGIN = {{0, 1, 0}, {0, 0, 0}, {0, 0, 1}, {1, 0, 0}, {1, 0, 1}, {0, 0, 0}};
+    /** The corner of each side a picture starts from, and the way it runs along its two edges, so a texture reads the right way up and not mirrored. */
+    private static final int[][] ORIGIN = {{0, 1, 0}, {0, 0, 1}, {0, 0, 1}, {1, 0, 0}, {1, 0, 1}, {0, 0, 0}};
     private static final int[][] AXIS_A = {{1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, -1}, {0, 0, 1}};
-    private static final int[][] AXIS_B = {{0, 0, 1}, {0, 0, 1}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}};
+    private static final int[][] AXIS_B = {{0, 0, 1}, {0, 0, -1}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}};
     private static final double[] SHADE = {1.0, 0.5, 0.82, 0.62, 0.72, 0.55};
     private static final int GOLD = 0xffffd24a;
 
@@ -91,18 +138,16 @@ public final class VoxelOrbit {
         double ox = w / 2.0 + v.panX, oy = h / 2.0 + v.panY;
         float[] depth = new float[w * h];
         java.util.Arrays.fill(depth, Float.MAX_VALUE);
-        int hl = highlight == null ? -1 : s.cell(highlight[0], highlight[1], highlight[2]);
         boolean hlInside = highlight != null && highlight[0] >= 0 && highlight[1] >= 0 && highlight[2] >= 0 && highlight[0] < s.sx && highlight[1] < s.sy && highlight[2] < s.sz;
-        for (int code : s.visible) {
-            int cell = code / 6, d = code % 6;
-            double facing = DX[d] * cam[0] + DY[d] * cam[1] + DZ[d] * cam[2];
-            if (facing <= 0.0001) continue; // turned away
+        int hl = hlInside ? s.cell(highlight[0], highlight[1], highlight[2]) : -1;
+        double[] p0 = new double[3], a = new double[3], b = new double[3];
+        for (int i = 0; i < s.visibleCell.length; i++) {
+            int cell = s.visibleCell[i];
+            Quad q = s.shapes[s.cells[cell] & 255].quads()[s.visibleQuad[i]];
+            if (q.normal()[0] * cam[0] + q.normal()[1] * cam[1] + q.normal()[2] * cam[2] <= 0.0001) continue; // turned away
             int x = cell % s.sx, z = cell / s.sx % s.sz, y = cell / (s.sx * s.sz);
-            int[][] tex = s.faces[s.cells[cell] & 255];
-            int[] texture = tex[d == 0 ? TOP : d == 1 ? BOTTOM : SIDE];
-            if (texture == null) continue;
-            double[] p0 = {x + ORIGIN[d][0] - cx, y + ORIGIN[d][1] - cy, z + ORIGIN[d][2] - cz};
-            double[] a = {AXIS_A[d][0], AXIS_A[d][1], AXIS_A[d][2]}, b = {AXIS_B[d][0], AXIS_B[d][1], AXIS_B[d][2]};
+            p0[0] = x + q.o()[0] - cx; p0[1] = y + q.o()[1] - cy; p0[2] = z + q.o()[2] - cz;
+            for (int k = 0; k < 3; k++) { a[k] = q.a()[k]; b[k] = q.b()[k]; }
             double sx0 = ox + scale * dot(p0, right), sy0 = oy - scale * dot(p0, up), z0 = -dot(p0, cam);
             double sax = scale * dot(a, right), say = -scale * dot(a, up), za = -dot(a, cam);
             double sbx = scale * dot(b, right), sby = -scale * dot(b, up), zb = -dot(b, cam);
@@ -111,8 +156,9 @@ public final class VoxelOrbit {
             double minX = Math.min(Math.min(sx0, sx0 + sax), Math.min(sx0 + sbx, sx0 + sax + sbx)), maxX = Math.max(Math.max(sx0, sx0 + sax), Math.max(sx0 + sbx, sx0 + sax + sbx));
             double minY = Math.min(Math.min(sy0, sy0 + say), Math.min(sy0 + sby, sy0 + say + sby)), maxY = Math.max(Math.max(sy0, sy0 + say), Math.max(sy0 + sby, sy0 + say + sby));
             int x1 = Math.max(0, (int) Math.floor(minX)), x2 = Math.min(w - 1, (int) Math.ceil(maxX)), y1 = Math.max(0, (int) Math.floor(minY)), y2 = Math.min(h - 1, (int) Math.ceil(maxY));
-            double shade = SHADE[d];
-            boolean lit = hlInside && cell == hl;
+            double shade = SHADE[q.shade()];
+            boolean lit = cell == hl;
+            int[] texture = q.texture();
             for (int py = y1; py <= y2; py++)
                 for (int px = x1; px <= x2; px++) {
                     double rx = px + 0.5 - sx0, ry = py + 0.5 - sy0;
@@ -121,7 +167,7 @@ public final class VoxelOrbit {
                     float depthHere = (float) (z0 + fa * za + fb * zb);
                     int at = py * w + px;
                     if (depthHere >= depth[at]) continue;
-                    int tx = Math.min(TEX - 1, (int) (fa * TEX)), ty = d < 2 ? Math.min(TEX - 1, (int) (fb * TEX)) : Math.min(TEX - 1, (int) ((1 - fb) * TEX));
+                    int tx = Math.clamp((int) Math.floor(q.u0() + q.ua() * fa + q.ub() * fb), 0, TEX - 1), ty = Math.clamp((int) Math.floor(q.v0() + q.va() * fa + q.vb() * fb), 0, TEX - 1);
                     int c = texture[ty * TEX + tx];
                     if ((c >>> 24) < 128) continue;
                     depth[at] = depthHere;

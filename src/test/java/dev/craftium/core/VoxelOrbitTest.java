@@ -71,4 +71,40 @@ class VoxelOrbitTest {
         VoxelOrbit.render(scene, new VoxelOrbit.View(), 100, 100, pixels, BACKGROUND, null);
         assertEquals(0, drawn(pixels));
     }
+
+    private static int[] solid(int colour) { int[] t = new int[VoxelOrbit.TEX * VoxelOrbit.TEX]; java.util.Arrays.fill(t, colour); return t; }
+
+    @Test void touchingBlocksHideTheFacesBetweenThem() {
+        var shape = VoxelOrbit.Shape.cube(solid(0xff00aa00), solid(0xff00aa00), solid(0xff00aa00));
+        var scene = new VoxelOrbit.Scene(2, 1, 1, new byte[]{1, 1}, new VoxelOrbit.Shape[]{null, shape});
+        assertEquals(10, scene.visibleQuad.length, "two cubes side by side show 6 + 6 - 2 faces");
+    }
+
+    @Test void aSlabIsShorterThanACubeAndAPlaneIsSeenFromOneSideOnly() {
+        // a bottom slab: its top at half height, drawn by hand
+        float[] n = {0, 1, 0};
+        var top = new VoxelOrbit.Quad(new float[]{0, 0.5f, 0}, new float[]{1, 0, 0}, new float[]{0, 0, 1}, n, 0, 0, 16, 0, 0, 16, solid(0xffcccccc), -1, VoxelOrbit.UP);
+        var slab = new VoxelOrbit.Shape(new VoxelOrbit.Quad[]{top}, false);
+        var scene = new VoxelOrbit.Scene(1, 1, 1, new byte[]{1}, new VoxelOrbit.Shape[]{null, slab});
+        var view = new VoxelOrbit.View();
+        int[] a = new int[100 * 100];
+        VoxelOrbit.render(scene, view, 100, 100, a, BACKGROUND, null);
+        assertTrue(drawn(a) > 100, "seen from above");
+        view.pitch = -30; // from below
+        int[] b = new int[100 * 100];
+        VoxelOrbit.render(scene, view, 100, 100, b, BACKGROUND, null);
+        assertEquals(0, drawn(b), "its top face is not drawn from below");
+    }
+
+    @Test void transparentTexelsLetWhatIsBehindShow() {
+        int[] holes = solid(0x00000000);
+        holes[0] = 0xffffffff;
+        var shape = VoxelOrbit.Shape.cube(holes, holes, holes);
+        var full = VoxelOrbit.Shape.cube(solid(0xffff0000), solid(0xffff0000), solid(0xffff0000));
+        var view = new VoxelOrbit.View();
+        int[] a = new int[100 * 100], b = new int[100 * 100];
+        VoxelOrbit.render(new VoxelOrbit.Scene(1, 1, 1, new byte[]{1}, new VoxelOrbit.Shape[]{null, shape}), view, 100, 100, a, BACKGROUND, null);
+        VoxelOrbit.render(new VoxelOrbit.Scene(1, 1, 1, new byte[]{1}, new VoxelOrbit.Shape[]{null, full}), view, 100, 100, b, BACKGROUND, null);
+        assertTrue(drawn(a) < drawn(b) / 10);
+    }
 }
