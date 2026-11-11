@@ -296,6 +296,8 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 case "Apply and leave" -> "Applies the waiting changes to datapacks/craftium, then goes back to the planner.";
                 case "Discard and leave" -> "Throws the waiting changes away, then goes back to the planner.";
                 case "Keep editing" -> "Stays in the editor with the changes still waiting.";
+                case "‹ Back" -> "Goes back to the pool you had open before this one.";
+                case "Forward ›" -> "Goes forward again to the pool you came back from.";
                 case "Auto-align" -> "Puts every pool back in its column and row, as the automatic layout places them. You can undo it.";
                 case "Retarget" -> "Points those connectors at the new pool. It is one undo step, and nothing reaches the datapack until you Apply.";
                 case "Cancel" -> retargetPrompt ? "Leaves the connectors as they are." : "Closes this without making anything.";
@@ -358,7 +360,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
         int tabs = y + 50;
         button("Elements", centreX, tabs, 78, 20, () -> { graph = false; init(); }).lit(!graph);
         button("Graph", centreX + 82, tabs, 78, 20, () -> { graph = true; init(); }).lit(graph);
-        if (graph) button("Auto-align", centreX + centreW - 96, tabs, 96, 20, this::resetLayout);
+        if (graph) {
+            button("Auto-align", centreX + centreW - 96, tabs, 96, 20, this::resetLayout);
+            button("‹ Back", centreX, tabs + 24, 70, 18, () -> stepHistory(-1)).active = historyAt > 0;
+            button("Forward ›", centreX + 74, tabs + 24, 78, 18, () -> stepHistory(1)).active = historyAt >= 0 && historyAt < poolHistory.size() - 1;
+        }
         if (!graph) {
             int pages = Math.max(1, (elements().size() + perPage() - 1) / perPage());
             page = Math.clamp(page, 0, pages - 1);
@@ -368,6 +374,30 @@ final class JigsawEditorScreen extends CraftiumScreen {
             button("Sort: " + SORTS[sortMode], centreX, tabs + 24, sortW, 18, () -> { sortMode = (sortMode + 1) % SORTS.length; sortDesc = sortMode == 2 || sortMode == 3 || sortMode == 4 || sortMode == 6; page = 0; init(); });
             button(sortDesc ? "Desc" : "Asc", centreX + sortW + 4, tabs + 24, 52, 18, () -> { sortDesc = !sortDesc; page = 0; init(); });
         }
+    }
+
+    /** The pools the player has opened, in order, and which of them is open: Back and Forward walk along it like a browser's. */
+    private final List<String> poolHistory = new ArrayList<>();
+    private int historyAt = -1;
+
+    /** Opens a pool the player chose, and remembers it so that Back can return to the one that was open. */
+    private void openPool(String id) {
+        if (!id.equals(poolId())) {
+            while (poolHistory.size() > historyAt + 1) poolHistory.remove(poolHistory.size() - 1); // a new choice drops what Forward would have gone to
+            if (historyAt < 0 && !poolId().isEmpty()) { poolHistory.add(poolId()); historyAt = 0; }
+            poolHistory.add(id);
+            historyAt = poolHistory.size() - 1;
+        }
+        selected = 0; page = 0; jigPage = 0;
+        edit("open", "pool", id);
+    }
+
+    private void stepHistory(int by) {
+        int to = historyAt + by;
+        if (to < 0 || to >= poolHistory.size()) return;
+        historyAt = to;
+        selected = 0; page = 0; jigPage = 0;
+        edit("open", "pool", poolHistory.get(to));
     }
 
     private int cardsTop() { return TOP + 116; }
@@ -1508,7 +1538,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
                     localRedo.clear();
                 }
                 init();
-            } else if (!pressMissing) { selected = 0; page = 0; edit("open", "pool", id); }
+            } else if (!pressMissing) openPool(id);
             return true;
         }
         return super.mouseReleased(event);
@@ -1551,7 +1581,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         if (x >= SIDE && x < SIDE + leftW - Scrollbars.WIDTH - 3 && y >= listTop() && y < listBottom()) {
             int i = (int) ((y - listTop() + poolScroll) / LIST_ROW);
             var pools = visiblePools();
-            if (i >= 0 && i < pools.size()) { selected = 0; page = 0; jigPage = 0; edit("open", "pool", pools.get(i).get("id").getAsString()); return true; }
+            if (i >= 0 && i < pools.size()) { openPool(pools.get(i).get("id").getAsString()); return true; }
         }
         if (pool() != null && !graph && x >= centreX && x < centreX + centreW && y >= cardsTop()) {
             int slot = (int) ((y - cardsTop()) / (CARD_H + CARD_GAP)), position = page * perPage() + slot;
