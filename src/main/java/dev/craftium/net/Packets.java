@@ -91,9 +91,11 @@ public final class Packets {
                                  /** The colour everyone sees its outline in (ARGB), or 0 when none was chosen: the client then takes the next one from the wheel. */
                                  int color,
                                  /** The id of the group it is in (that of the BuildObject at the top that it is under), or 0 from a server that predates groups. */
-                                 int group) {}
+                                 int group,
+                                 /** Whether what is under it is folded away in the Hierarchy: kept by the server, and false from one that predates it. */
+                                 boolean folded) {}
     /** One group of the Hierarchy: a heading that BuildObjects at the top level sit under. */
-    public record SavedGroup(int id, String guid, String name) {}
+    public record SavedGroup(int id, String guid, String name, boolean folded) {}
     /** A status that carries only the list of plugin tools, sent when it changes: not a reply to anything, so the client takes the list and nothing else from it. */
     public static Status toolsOnly(List<PluginTool> tools) {
         return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,null,tools,null,null,null,null);

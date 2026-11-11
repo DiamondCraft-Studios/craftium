@@ -87,4 +87,30 @@ class SavedSelectionActionsTest {
         assertEquals("delete",SavedSelectionActions.permission("saved_selection:groupdelete:1"));
         assertEquals("Create group",SavedSelectionActions.historyName("saved_selection:groupnew"));
     }
+
+    @Test void ungroupTakesBuildObjectsOutAndBackToTheirOwnGroup(){
+        var s=session();SavedSelectionActions.run(s,"saved_selection:save");SavedSelectionActions.run(s,"saved_selection:save");SavedSelectionActions.run(s,"saved_selection:groupnew");
+        int a=s.saved.entries().get(0).id(),b=s.saved.entries().get(1).id(),second=s.saved.groups().get(1).id();
+        SavedSelectionActions.run(s,"saved_selection:place:"+b+":0:0:"+second);
+        SavedSelectionActions.run(s,"saved_selection:group:"+a+","+b);
+        assertEquals(second,s.saved.byId(b).ownGroupId());
+        assertEquals("Taken out",SavedSelectionActions.run(s,"saved_selection:ungroup:"+b));
+        assertEquals(second,s.saved.byId(b).groupId());assertEquals(0,s.saved.byId(b).parentId());
+        assertThrows(IllegalArgumentException.class,()->SavedSelectionActions.run(s,"saved_selection:ungroup:"+b),"it is not inside another any more");
+        assertEquals("move",SavedSelectionActions.permission("saved_selection:ungroup:1"));assertTrue(SavedSelectionActions.changesHierarchy("saved_selection:ungroup:1"));
+    }
+
+    @Test void foldActionsFoldAndUnfoldAndAreSentWithTheList(){
+        var s=session();SavedSelectionActions.run(s,"saved_selection:save");
+        int id=s.saved.entries().getFirst().id(),group=s.saved.groups().getFirst().id();
+        assertEquals("",SavedSelectionActions.run(s,"saved_selection:fold:"+id+":1"));
+        SavedSelectionActions.run(s,"saved_selection:groupfold:"+group+":1");
+        assertTrue(SavedSelectionActions.list(s).getFirst().folded());assertTrue(SavedSelectionActions.groups(s).getFirst().folded());
+        SavedSelectionActions.run(s,"saved_selection:fold:"+id+":0");
+        assertFalse(SavedSelectionActions.list(s).getFirst().folded());
+        assertThrows(IllegalArgumentException.class,()->SavedSelectionActions.run(s,"saved_selection:fold:"+id+":2"));
+        assertNull(SavedSelectionActions.permission("saved_selection:fold:1:1"),"anyone may fold");
+        assertFalse(SavedSelectionActions.changesHierarchy("saved_selection:fold:1:1"),"and it is not an undo step");
+        assertFalse(SavedSelectionActions.changesHierarchy("saved_selection:groupfold:1:1"));
+    }
 }

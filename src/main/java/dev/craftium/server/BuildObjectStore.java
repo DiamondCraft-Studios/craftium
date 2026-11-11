@@ -61,11 +61,11 @@ final class BuildObjectStore {
         try{
             var root=new CompoundTag();root.putInt("format",1);root.putInt("nextId",nextId);root.putInt("nextGroupId",nextGroupId);
             var groupList=new ListTag();
-            for(var g:groups){var tag=new CompoundTag();tag.putInt("id",g.id());tag.putString("guid",g.guid());tag.putString("name",g.name());groupList.add(tag);}
+            for(var g:groups){var tag=new CompoundTag();tag.putInt("id",g.id());tag.putString("guid",g.guid());tag.putString("name",g.name());tag.putBoolean("folded",g.folded());groupList.add(tag);}
             root.put("groups",groupList);
             var list=new ListTag();
             for(var r:rows){
-                var tag=new CompoundTag();tag.putInt("id",r.id());tag.putString("guid",r.guid());tag.putString("name",r.name());tag.putInt("parent",r.parentId());tag.putInt("color",r.color());tag.putInt("group",r.groupId());
+                var tag=new CompoundTag();tag.putInt("id",r.id());tag.putString("guid",r.guid());tag.putString("name",r.name());tag.putInt("parent",r.parentId());tag.putInt("color",r.color());tag.putInt("group",r.groupId());tag.putBoolean("folded",r.folded());
                 var flat=new int[r.points().size()*3];int i=0;for(var p:r.points()){flat[i++]=p.x();flat[i++]=p.y();flat[i++]=p.z();}
                 tag.putIntArray("points",flat);list.add(tag);
             }
@@ -89,10 +89,10 @@ final class BuildObjectStore {
                 int[] flat=tag.getIntArray("points").orElse(new int[0]);
                 if(flat.length%3!=0||flat.length/3>Selection.LIMIT)throw new IllegalArgumentException("Invalid BuildObject blocks");
                 var points=new ArrayList<Point>(flat.length/3);for(int j=0;j<flat.length;j+=3)points.add(new Point(flat[j],flat[j+1],flat[j+2]));
-                rows.add(new SavedSelections.Saved(tag.getIntOr("id",0),tag.getStringOr("guid",UUID.randomUUID().toString()),tag.getStringOr("name","BuildObject"),tag.getIntOr("parent",0),tag.getIntOr("color",0),points,tag.getIntOr("group",0)));
+                rows.add(new SavedSelections.Saved(tag.getIntOr("id",0),tag.getStringOr("guid",UUID.randomUUID().toString()),tag.getStringOr("name","BuildObject"),tag.getIntOr("parent",0),tag.getIntOr("color",0),points,tag.getIntOr("group",0),tag.getBooleanOr("folded",false)));
             }
             var groups=new ArrayList<SavedSelections.SavedGroup>();var groupList=root.getListOrEmpty("groups");
-            for(int i=0;i<groupList.size();i++){var tag=groupList.getCompoundOrEmpty(i);groups.add(new SavedSelections.SavedGroup(tag.getIntOr("id",0),tag.getStringOr("guid",UUID.randomUUID().toString()),tag.getStringOr("name","New Group")));}
+            for(int i=0;i<groupList.size();i++){var tag=groupList.getCompoundOrEmpty(i);groups.add(new SavedSelections.SavedGroup(tag.getIntOr("id",0),tag.getStringOr("guid",UUID.randomUUID().toString()),tag.getStringOr("name","New Group"),tag.getBooleanOr("folded",false)));}
             return SavedSelections.Tree.load(root.getIntOr("nextId",1),rows,root.getIntOr("nextGroupId",1),groups);
         }catch(Exception e){
             ServerPlatform.LOG.warn("Cannot load BuildObjects {}: starting with none, and keeping the file as {}.bad",file,file.getFileName(),e);

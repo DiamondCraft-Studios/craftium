@@ -19,15 +19,17 @@ public final class SavedSelections {
      * group of the one at the top. There is always at least one, "New Group", and everything starts in it.
      */
     public static final class Group {
-        private final int id;private final String guid;private String name;
+        private final int id;private final String guid;private String name;private boolean folded;
         Group(int id,String guid,String name){this.id=id;this.guid=guid;this.name=name;}
         public int id(){return id;}
         public String guid(){return guid;}
         public String name(){return name;}
+        /** Whether what is in it is folded away in the Hierarchy; kept with the groups. */
+        public boolean folded(){return folded;}
     }
     /** A BuildObject: it keeps its id, its GUID and its name when the others come and go. Names may repeat; the GUID never does, and is what tells two of the same name apart. */
     public static final class Entry {
-        private final int id;private final String guid;private String name;private List<Point> points;private int version;private Entry parent;private int color;private Group group;
+        private final int id;private final String guid;private String name;private List<Point> points;private int version;private Entry parent;private int color;private Group group;private boolean folded;
         Entry(int id,String name,Collection<Point> points){this(id,java.util.UUID.randomUUID().toString(),name,points);}
         Entry(int id,String guid,String name,Collection<Point> points){this.id=id;this.guid=guid;this.name=name;this.points=List.copyOf(points);}
         public int id(){return id;}
@@ -37,9 +39,17 @@ public final class SavedSelections {
         /** The id of the BuildObject this one is under, or 0 when it is at the top. */
         public int parentId(){return parent==null?0:parent.id;}
         public Entry parent(){return parent;}
+        /** Whether what is under it is folded away in the Hierarchy. It is kept with the BuildObjects, so it is as it was after a reload or a rejoin. */
+        public boolean folded(){return folded;}
         /** The group it is in: the group of the BuildObject at the top that it is under, or its own when it is at the top. */
         public Group group(){var top=this;while(top.parent!=null)top=top.parent;return top.group;}
         public int groupId(){var g=group();return g==null?0:g.id;}
+        /**
+         * The group this BuildObject itself belongs to. At the top level that is the group it is shown in; under another BuildObject it is remembered, not shown, so grouping
+         * BuildObjects together does not take them out of their groups and ungrouping them puts each back in its own.
+         */
+        public Group ownGroup(){return group;}
+        public int ownGroupId(){return group==null?0:group.id;}
         /** The outline colour everyone sees it in (ARGB), or 0 when none was chosen and each client takes the next one from the wheel. */
         public int color(){return color;}
         /** The blocks it holds itself; see {@link SavedSelections#effective} for those with everything under it. */
@@ -61,9 +71,9 @@ public final class SavedSelections {
         public int nextId(){return nextId;}
         public int nextGroupId(){return nextGroupId;}
         /** The groups to write to disk, in order. */
-        public List<SavedGroup> savedGroups(){var out=new ArrayList<SavedGroup>();for(var g:groups)out.add(new SavedGroup(g.id,g.guid,g.name));return out;}
+        public List<SavedGroup> savedGroups(){var out=new ArrayList<SavedGroup>();for(var g:groups)out.add(new SavedGroup(g.id,g.guid,g.name,g.folded));return out;}
         /** Everything to write to disk, in tree order. */
-        public List<Saved> saved(){var out=new ArrayList<Saved>();for(var e:entries)out.add(new Saved(e.id,e.guid,e.name,e.parentId(),e.color,e.points,e.parent==null&&e.group!=null?e.group.id:0));return out;}
+        public List<Saved> saved(){var out=new ArrayList<Saved>();for(var e:entries)out.add(new Saved(e.id,e.guid,e.name,e.parentId(),e.color,e.points,e.ownGroupId(),e.folded));return out;}
         /**
          * A tree as it was saved. A BuildObject whose parent is not before it in the list (a file that was edited by hand, or damaged) goes to the top level, so the list is
          * always a tree and in tree order; ids and GUIDs that repeat are dropped.
@@ -76,7 +86,7 @@ public final class SavedSelections {
                 tree.groups.clear();
                 for(var r:savedGroups){
                     if(r.id()<=0||byGroup.containsKey(r.id())||!groupGuids.add(r.guid()))continue;
-                    var g=new Group(r.id(),r.guid(),r.name().isBlank()?"New Group":r.name());tree.groups.add(g);byGroup.put(g.id,g);
+                    var g=new Group(r.id(),r.guid(),r.name().isBlank()?"New Group":r.name());g.folded=r.folded();tree.groups.add(g);byGroup.put(g.id,g);
                 }
                 if(tree.groups.isEmpty())tree.groups.add(new Group(1,java.util.UUID.randomUUID().toString(),"New Group"));
                 tree.nextGroupId=Math.max(nextGroupId,tree.groups.stream().mapToInt(g->g.id).max().orElse(0)+1);
@@ -86,7 +96,7 @@ public final class SavedSelections {
                 if(tree.entries.size()>=MAX||r.id()<=0||byId.containsKey(r.id())||!guids.add(r.guid()))continue;
                 var e=new Entry(r.id(),r.guid(),r.name().isBlank()?"BuildObject":r.name(),r.points());e.color=r.color();
                 e.parent=byId.get(r.parentId());byId.put(e.id,e);tree.entries.add(e);
-                if(e.parent==null)e.group=byGroup.get(r.groupId());
+                e.group=byGroup.get(r.groupId());e.folded=r.folded();
             }
             tree.nextId=Math.max(nextId,tree.entries.stream().mapToInt(e->e.id).max().orElse(0)+1);
             new SavedSelections(tree).normalize();
@@ -94,12 +104,16 @@ public final class SavedSelections {
         }
     }
     /** One BuildObject as it is saved. */
-    public record Saved(int id,String guid,String name,int parentId,int color,List<Point> points,int groupId){
+    public record Saved(int id,String guid,String name,int parentId,int color,List<Point> points,int groupId,boolean folded){
         /** A BuildObject of a file from before groups. */
-        public Saved(int id,String guid,String name,int parentId,int color,List<Point> points){this(id,guid,name,parentId,color,points,0);}
+        public Saved(int id,String guid,String name,int parentId,int color,List<Point> points){this(id,guid,name,parentId,color,points,0,false);}
+        /** A BuildObject of a file from before folds were kept. */
+        public Saved(int id,String guid,String name,int parentId,int color,List<Point> points,int groupId){this(id,guid,name,parentId,color,points,groupId,false);}
     }
     /** One group as it is saved. */
-    public record SavedGroup(int id,String guid,String name){}
+    public record SavedGroup(int id,String guid,String name,boolean folded){
+        public SavedGroup(int id,String guid,String name){this(id,guid,name,false);}
+    }
     private final Tree tree;
     private final List<Entry> entries;
     /** Counts what this player has looked at, which no one else is sent anything about. */
@@ -119,7 +133,7 @@ public final class SavedSelections {
     private void normalize(){
         var first=tree.groups.getFirst();
         var fallback=active!=null&&active.group()!=null&&tree.groups.contains(active.group())?active.group():first;
-        for(var e:entries){if(e.parent==null){if(e.group==null||!tree.groups.contains(e.group))e.group=fallback;}else e.group=null;}
+        for(var e:entries){if(e.group!=null&&!tree.groups.contains(e.group))e.group=null;if(e.parent==null&&e.group==null)e.group=fallback;} // one under another keeps the group it had, or none
         var out=new ArrayList<Entry>(entries.size());
         for(var g:tree.groups)for(int i=0;i<entries.size();i++){
             var e=entries.get(i);if(e.parent!=null||e.group!=g)continue;
@@ -127,6 +141,12 @@ public final class SavedSelections {
         }
         if(out.size()==entries.size()){entries.clear();entries.addAll(out);}
     }
+    /**
+     * Folds or unfolds a BuildObject in the Hierarchy for everyone. It is not a change to the BuildObjects, so it is not in the history and needs no permission; it is
+     * kept with them, and sent to every client like any other change.
+     */
+    public void setFolded(int id,boolean folded){var e=need(id);if(e.folded==folded)return;e.folded=folded;changed();}
+    public void setGroupFolded(int id,boolean folded){var g=needGroup(id);if(g.folded==folded)return;g.folded=folded;changed();}
     /** The groups, in order. */
     public List<Group> groups(){return Collections.unmodifiableList(tree.groups);}
     public Group groupById(int id){for(var g:tree.groups)if(g.id==id)return g;return null;}
@@ -158,7 +178,7 @@ public final class SavedSelections {
         var group=needGroup(id);
         if(tree.groups.size()<=1)throw new IllegalArgumentException("There has to be at least one group");
         int at=tree.groups.indexOf(group);var into=tree.groups.get(at>0?at-1:1);
-        for(var e:entries)if(e.parent==null&&e.group==group)e.group=into;
+        for(var e:entries)if(e.group==group)e.group=into; // those under another too, which are remembered
         tree.groups.remove(group);changed();return group;
     }
     /** Makes an empty BuildObject at the end of a group (the group of the one being looked at, or the first, when {@code groupId} is 0). */
@@ -377,14 +397,35 @@ public final class SavedSelections {
             int k=Math.clamp(index,0,siblings.size());
             if(k<siblings.size()){at=entries.indexOf(siblings.get(k));if(group==null)group=siblings.get(k).group;}
             else{if(group==null)group=tree.groups.getLast();at=endOfGroup(group);}
-            for(var r:roots){r.parent=null;r.group=group;}
+            for(var r:roots){
+                var before=r.group();r.parent=null;r.group=group;
+                if(before!=group)for(var m:moving)if(m==r||isUnder(m,r))m.group=group; // moved to another group as a whole: what is under it goes along, whatever it remembered
+            }
         }else{
             var siblings=children(parent);int k=Math.clamp(index,0,siblings.size());
             if(k<siblings.size())at=entries.indexOf(siblings.get(k));
             else{at=entries.indexOf(parent)+1;while(at<entries.size()&&isUnder(entries.get(at),parent))at++;}
-            for(var r:roots){r.parent=parent;r.group=null;}
+            for(var r:roots)r.parent=parent; // under another, a BuildObject keeps the group it was in
         }
         entries.addAll(at,moving);changed();
+    }
+    /**
+     * Takes each of these BuildObjects out of the one it is under, as far as that one's own level. One that comes out at the top goes back to the group it was in
+     * before it was put under another, right after the one it came out of when that is the same group, else at the end of its own group; its children go with it.
+     * One that is not under anything stays where it is.
+     */
+    public void ungroup(List<Integer> ids){
+        var picked=new ArrayList<Entry>();for(int id:ids)picked.add(need(id));
+        boolean any=false;
+        for(var e:picked){
+            var parent=e.parent;if(parent==null)continue;any=true;
+            var up=parent.parent;
+            if(up!=null){place(e.id,up.id,children(up).indexOf(parent)+1);continue;}
+            var home=e.group!=null&&tree.groups.contains(e.group)?e.group:parent.group;
+            var there=rootsIn(home);
+            placeIn(List.of(e.id),0,home.id,home==parent.group?there.indexOf(parent)+1:there.size());
+        }
+        if(!any)throw new IllegalArgumentException("Pick BuildObjects that are inside another");
     }
     /** Where the list ends for {@code group}: after the last BuildObject in it or in a group before it. */
     private int endOfGroup(Group group){
@@ -440,7 +481,7 @@ public final class SavedSelections {
     /** One BuildObject as it was: the entry itself (it keeps its id and GUID) with the parts of it that change. */
     public record Row(Entry entry,String name,int parentId,List<Point> points,int color,int groupId){}
     public State state(){
-        var rows=new ArrayList<Row>();for(var e:entries)rows.add(new Row(e,e.name,e.parentId(),e.points,e.color,e.parent==null?e.groupId():0));
+        var rows=new ArrayList<Row>();for(var e:entries)rows.add(new Row(e,e.name,e.parentId(),e.points,e.color,e.ownGroupId()));
         var groups=new ArrayList<GroupRow>();for(var g:tree.groups)groups.add(new GroupRow(g,g.name));
         return new State(List.copyOf(rows),List.copyOf(groups));
     }
@@ -474,7 +515,7 @@ public final class SavedSelections {
             if(!there.contains(e)&&!e.points.equals(r.points())){e.points=r.points();e.version++;}
             entries.add(e);byId.put(e.id,e);
         }
-        for(var r:state.rows()){r.entry().parent=r.parentId()==0?null:byId.get(r.parentId());r.entry().group=r.parentId()==0?byGroup.get(r.groupId()):null;}
+        for(var r:state.rows()){r.entry().parent=r.parentId()==0?null:byId.get(r.parentId());r.entry().group=byGroup.get(r.groupId());}
         changed();
     }
     public int indexOf(Entry entry){return entries.indexOf(entry);}

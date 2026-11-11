@@ -120,4 +120,75 @@ class SavedGroupsTest {
         var made=saved.createFrom("Pasted",List.of(B),b.id());
         assertSame(second,made.group());assertEquals(List.of("BuildObject","BuildObject (1)","Pasted"),names(saved));
     }
+
+    @Test void groupingBuildObjectsTogetherKeepsTheGroupEachWasInAndUngroupingPutsItBack(){
+        var saved=new SavedSelections();var s=live(A);
+        var a=saved.save(s);var b=saved.save(s);var second=saved.createGroup("Second");var first=saved.groups().getFirst();
+        saved.placeIn(List.of(b.id()),0,second.id(),0);
+        var parent=saved.group(List.of(a.id(),b.id()));
+        assertEquals(first.id(),parent.groupId(),"the new parent takes the place of the first one");
+        assertEquals(first.id(),a.ownGroupId());assertEquals(second.id(),b.ownGroupId(),"B still remembers its own group");
+        assertSame(first,b.group(),"it is shown in the group of what it is under");
+        saved.ungroup(List.of(b.id()));
+        assertNull(b.parent());assertSame(second,b.group(),"back in its own group, and not left behind in the first");
+        assertSame(first,parent.group());assertEquals(a.parent(),parent);
+        saved.ungroup(List.of(a.id()));
+        assertNull(a.parent());assertSame(first,a.group());assertEquals(List.of("BuildObject (2)","BuildObject","BuildObject (1)"),names(saved),"the parent, then A right after it, then B in its group");
+    }
+    @Test void ungroupingOneThatIsNotInsideAnotherIsRefusedAndOneLevelOutStaysUnderTheGrandparent(){
+        var saved=new SavedSelections();var s=live(A);
+        var a=saved.save(s);var b=saved.save(s);var c=saved.save(s);
+        assertThrows(IllegalArgumentException.class,()->saved.ungroup(List.of(a.id())));
+        saved.place(b.id(),a.id(),0);saved.place(c.id(),b.id(),0);
+        saved.ungroup(List.of(c.id()));
+        assertSame(a,b.parent());assertSame(a,c.parent(),"one level out, to the grandparent");
+    }
+    @Test void movingAParentToAnotherGroupTakesEverythingUnderItWithIt(){
+        var saved=new SavedSelections();var s=live(A);
+        var a=saved.save(s);var b=saved.save(s);var second=saved.createGroup("Second");var third=saved.createGroup("Third");
+        saved.placeIn(List.of(b.id()),0,second.id(),0);
+        var parent=saved.group(List.of(a.id(),b.id()));
+        saved.placeIn(List.of(parent.id()),0,third.id(),0);
+        assertSame(third,parent.group());assertSame(third,a.ownGroup());assertSame(third,b.ownGroup(),"what it remembered is replaced: it moved with its parent");
+        saved.ungroup(List.of(b.id()));assertSame(third,b.group());
+    }
+    @Test void undoAndASaveKeepWhatABuildObjectRemembersWhileItIsInsideAnother(){
+        var saved=new SavedSelections();var s=live(A);
+        var a=saved.save(s);var b=saved.save(s);var second=saved.createGroup("Second");saved.placeIn(List.of(b.id()),0,second.id(),0);
+        var before=saved.state();var parent=saved.group(List.of(a.id(),b.id()));var after=saved.state();
+        saved.restore(before,s);assertNull(b.parent());assertSame(second,b.group());
+        saved.restore(after,s);assertSame(parent,b.parent());assertSame(second,b.ownGroup());
+        var tree=saved.tree();
+        var back=new SavedSelections(SavedSelections.Tree.load(tree.nextId(),tree.saved(),tree.nextGroupId(),tree.savedGroups()));
+        assertEquals(second.id(),back.byId(b.id()).ownGroupId());assertEquals(parent.groupId(),back.byId(b.id()).groupId());
+        back.ungroup(List.of(b.id()));assertEquals(second.id(),back.byId(b.id()).groupId());
+    }
+    @Test void deletingAGroupAlsoMovesWhatIsRememberedInIt(){
+        var saved=new SavedSelections();var s=live(A);
+        var a=saved.save(s);var b=saved.save(s);var second=saved.createGroup("Second");saved.placeIn(List.of(b.id()),0,second.id(),0);
+        saved.group(List.of(a.id(),b.id()));saved.deleteGroup(second.id());
+        assertSame(saved.groups().getFirst(),b.ownGroup());
+    }
+
+    @Test void foldsOfBuildObjectsAndGroupsAreKeptWithThemAndSurviveBeingSavedAndLoaded(){
+        var saved=new SavedSelections();var s=live(A);
+        var a=saved.save(s);var b=saved.save(s);saved.place(b.id(),a.id(),0);var second=saved.createGroup("Second");
+        assertFalse(a.folded());assertFalse(second.folded());
+        long before=saved.tree().mutations();
+        saved.setFolded(a.id(),true);saved.setGroupFolded(second.id(),true);
+        assertTrue(saved.tree().mutations()>before,"a fold is written to disk");
+        long same=saved.tree().mutations();saved.setFolded(a.id(),true);assertEquals(same,saved.tree().mutations(),"nothing changed, nothing to write");
+        var tree=saved.tree();
+        var back=new SavedSelections(SavedSelections.Tree.load(tree.nextId(),tree.saved(),tree.nextGroupId(),tree.savedGroups()));
+        assertTrue(back.byId(a.id()).folded());assertFalse(back.byId(b.id()).folded());
+        assertTrue(back.groups().get(1).folded());assertFalse(back.groups().get(0).folded());
+    }
+    @Test void aFoldIsNotInTheHistoryAndUndoLeavesItAlone(){
+        var saved=new SavedSelections();var s=live(A);
+        var a=saved.save(s);var before=saved.state();
+        saved.setFolded(a.id(),true);
+        assertTrue(saved.structureMatches(before),"folding is how it is shown, not what is there");
+        saved.rename(a.id(),"Tower");saved.restore(before,s);
+        assertTrue(a.folded(),"undoing the rename does not unfold it");
+    }
 }

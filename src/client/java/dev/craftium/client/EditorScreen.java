@@ -834,6 +834,8 @@ public final class EditorScreen extends CraftiumScreen {
      * square, add two joined squares, subtract a square with a cut out of it, and intersect two outlines with only where they meet filled.
      */
     private void selectionModeBadge(Gfx g){
+        // The badge belongs to the pointer: with the pointer hidden (a look, an arcball turn, a handle being dragged) or outside the window, there is nothing for it to sit on.
+        if(cursorHidden||GLFW.glfwGetWindowAttrib(minecraft.getWindow().handle(),GLFW.GLFW_HOVERED)==0)return;
         if(!toolActive||!o().tool.selection()||pipetting||menu>=0||help||transform||TransformGizmo.dragging()||!inViewport(pointerX/scale,pointerY/scale))return;
         // As big as the pointer, which is about 16 screen pixels across and centred on the point it aims at: the badge's top-left corner sits on the pointer's bottom-right.
         double cursor=16.0*minecraft.getWindow().getGuiScaledWidth()/Math.max(1,minecraft.getWindow().getScreenWidth())/scale;
@@ -2201,7 +2203,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
                 if(rowDragMoved&&rowDragId==gid)g.fill(x+9,ry,x+pw-9,ry+rowHeight,0xaa141c26);
                 var headControl=new Control(x+9,ry,rowRight-(x+9),rowHeight,()->{},HIDDEN_TIP+"Group · The arrow folds it · Double-click to rename · Drag to move it · Right-click for more");controls.add(headControl);renameAreas.add(new RenameArea(headControl,gid));
                 foldArrow(g,x+15,folded?ry+6:ry+7,folded,GROUP_TEXT);
-                controls.add(new Control(x+11,ry,14,rowHeight,()->ClientState.toggleGroupFolded(group.id()),folded?"Show this group's BuildObjects":"Fold this group's BuildObjects"));
+                controls.add(new Control(x+11,ry,14,rowHeight,()->ClientState.toggleGroupFolded(group.id()),HIDDEN_TIP+(folded?"Show this group's BuildObjects":"Fold this group's BuildObjects"))); // no tooltip: the arrow says what it does
                 var members=new ArrayList<Integer>();for(var e:hierarchyAll)if(groupIdOf(e)==group.id())members.add(e.id());
                 boolean allHidden=!members.isEmpty()&&members.stream().allMatch(ClientState::savedHidden);
                 button(g,eye,ry+2,18,rowHeight-4,"",false,()->{for(int m:members)ClientState.setSavedHidden(m,!allHidden);},allHidden?"Show the outlines of everything in this group":"Hide the outlines of everything in this group");
@@ -2220,7 +2222,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
             var rowControl=new Control(x+9,ry,rowRight-(x+9),rowHeight,()->rowClick(entry),HIDDEN_TIP+savedSpan(entry)+" blocks · "+(entry.active()&&!entry.editing()?"Let go":"Select this BuildObject")); controls.add(rowControl);renameAreas.add(new RenameArea(rowControl,id));
             if(parents.contains(id)){ // something is under it: an arrow folds it
                 boolean folded=ClientState.savedFolded(id);foldArrow(g,x+15+indent,folded?ry+6:ry+7,folded,MUTED); // centred a pixel above the middle of the row
-                controls.add(new Control(x+11+indent,ry,14,rowHeight,()->ClientState.toggleSavedFolded(id),folded?"Show what is under this BuildObject":"Fold what is under this BuildObject"));
+                controls.add(new Control(x+11+indent,ry,14,rowHeight,()->ClientState.toggleSavedFolded(id),HIDDEN_TIP+(folded?"Show what is under this BuildObject":"Fold what is under this BuildObject"))); // no tooltip: the arrow says what it does
             }
             boolean hidden=ClientState.savedHidden(id);
             button(g,eye,ry+2,18,rowHeight-4,"",false,()->eyeClick(entry,minecraft.hasControlDown()),hidden?"Show this BuildObject's outline in the world · It shows while it is selected, whatever the eye · Ctrl+click does the same for everything under it":"Hide this BuildObject's outline in the world · Ctrl+click does the same for everything under it");
@@ -2394,15 +2396,11 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         items.add(item(n>1?"Delete selected + blocks ("+n+")":"Delete blocks","",()->deleteWithBlocks(targets))); // the BuildObjects and the blocks they hold
         items.add(item("Export…","",()->exportStructure(StructureSettings.SELECTION))); // the blocks shown, which are everything under each BuildObject
         var moves=new ArrayList<MenuItem>();
-        int at=siblingIndex(row);int siblings=siblingCount(row);String inGroup=row.parent()==0&&groupIdOf(row)>0?":"+groupIdOf(row):"";
-        if(at>0)moves.add(item("Move up","",()->action("saved_selection:place:"+id+":"+row.parent()+":"+(at-1)+inGroup)));
-        if(at<siblings-1)moves.add(item("Move down","",()->action("saved_selection:place:"+id+":"+row.parent()+":"+(at+1)+inGroup)));
-        if(row.parent()!=0){var up=savedById(row.parent());if(up!=null)moves.add(item("Move out of parent","",()->action("saved_selection:place:"+id+":"+up.parent()+":"+(siblingIndex(up)+1)+(up.parent()==0&&groupIdOf(up)>0?":"+groupIdOf(up):""))));}
+        if(row.parent()!=0){var up=savedById(row.parent());if(up!=null)moves.add(item(up.parent()==0?"Ungroup":"Move out of parent","",()->action(up.parent()==0?"saved_selection:ungroup:"+id:"saved_selection:place:"+id+":"+up.parent()+":"+(siblingIndex(up)+1))));}
         if(row.parent()==0&&ClientState.savedGroups().size()>1)for(var gr:ClientState.savedGroups()){ // a BuildObject at the top goes to the end of another group
             if(gr.id()==groupIdOf(row))continue;if(moves.size()>=10)break;
             moves.add(item("Move to group: "+shorten(gr.name(),120),"",()->action("saved_selection:place:"+id+":0:"+rootCount(gr.id())+":"+gr.id())));
         }
-        if(!kids.isEmpty()){boolean folded=ClientState.savedFolded(id);moves.add(item(folded?"Unfold all below":"Fold all below","",()->foldBelow(id,!folded)));}
         if(!moves.isEmpty()){items.add(divider());items.addAll(moves);}
         items.add(divider());
         boolean allHidden=targets.stream().allMatch(ClientState::savedHidden);
@@ -2416,17 +2414,13 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     /** The right-click menu of a group's heading. */
     private void openGroupMenu(int groupId,int x,int y){
         var group=groupById(groupId);if(group==null)return;
-        var groups=ClientState.savedGroups();int at=0;for(int i=0;i<groups.size();i++)if(groups.get(i).id()==groupId)at=i;final int position=at;
+        var groups=ClientState.savedGroups();
         var items=new ArrayList<MenuItem>();
         items.add(item("Rename","",()->startRename(new RenameArea(null,GROUP_BASE+groupId))));
         items.add(item("Create empty BuildObject here","",()->action("saved_selection:empty:"+groupId)));
         items.add(item("Create new Group","",()->action("saved_selection:groupnew")));
         boolean folded=ClientState.groupFolded(groupId);
         items.add(item(folded?"Unfold":"Fold","",()->ClientState.toggleGroupFolded(groupId)));
-        var moves=new ArrayList<MenuItem>();
-        if(position>0)moves.add(item("Move up","",()->action("saved_selection:groupmove:"+groupId+":"+(position-1))));
-        if(position<groups.size()-1)moves.add(item("Move down","",()->action("saved_selection:groupmove:"+groupId+":"+(position+1))));
-        if(!moves.isEmpty()){items.add(divider());items.addAll(moves);}
         if(groups.size()>1){items.add(divider());items.add(item("Delete group","",()->action("saved_selection:groupdelete:"+groupId)));} // what is in it goes to the group before
         rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=0;menu=ROW_MENU;openSub="";openSub2="";
     }
@@ -2440,11 +2434,6 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     }
     /** The corners of the box round the blocks of the BuildObject and everything under it, or null when there are none. */
     private Point[] subtreeBounds(int id){return ClientState.subtreeBounds(id);}
-    /** Folds or unfolds the BuildObject and everything under it that has something under it. */
-    private void foldBelow(int id,boolean fold){
-        var parents=new HashSet<Integer>();for(var e:hierarchyAll)parents.add(e.parent());
-        for(var e:hierarchyAll)if((e.id()==id||isUnder(e,id))&&parents.contains(e.id())&&ClientState.savedFolded(e.id())!=fold)ClientState.toggleSavedFolded(e.id());
-    }
     private void rowMenuDraw(Gfx g){
         int width=226,height=4;for(var item:rowMenu)height+=item.action==null?9:25;
         int x=Math.max(0,rowMenuX+width>w?rowMenuX-width:rowMenuX),y=Math.clamp(rowMenuY,27,Math.max(27,h-25-height));

@@ -41,6 +41,17 @@ final class SavedSelectionActions {
                 try{if(where.length<2||where.length>3)throw new NumberFormatException();saved.placeIn(List.of(id(part)),Integer.parseInt(where[0]),where.length==3?Integer.parseInt(where[2]):0,Integer.parseInt(where[1]));}catch(NumberFormatException e){throw new IllegalArgumentException("Give a parent and a place");}
                 return "Moved";
             }
+            case "fold"->{ // fold:<id>:<1 to fold, 0 to unfold>: nothing is said, as it is only how the Hierarchy is shown
+                var where=part.length<3?"":part[2].strip();
+                if(!where.equals("0")&&!where.equals("1"))throw new IllegalArgumentException("Give 1 or 0");
+                saved.setFolded(id(part),where.equals("1"));return "";
+            }
+            case "groupfold"->{
+                var where=part.length<3?"":part[2].strip();
+                if(!where.equals("0")&&!where.equals("1"))throw new IllegalArgumentException("Give 1 or 0");
+                saved.setGroupFolded(id(part),where.equals("1"));return "";
+            }
+            case "ungroup"->{saved.ungroup(ids(part));return "Taken out";} // ungroup:<ids separated by commas>: out of the BuildObject each is in, back in the group it had
             case "groupnew"->{var group=saved.createGroup(part.length<2?"":part[1]);return "Created "+group.name();} // groupnew[:<name>]
             case "grouprename"->{if(part.length<3)throw new IllegalArgumentException("Give a name");saved.renameGroup(id(part),part[2]);return "Renamed";} // grouprename:<group id>:<name>
             case "groupmove"->{ // groupmove:<group id>:<place among the other groups>
@@ -55,13 +66,13 @@ final class SavedSelectionActions {
         }
     }
     /** Whether the action changes the BuildObjects themselves (and so goes in the history), as against only what is being looked at. */
-    static boolean changesHierarchy(String action){return switch(verb(action)){case "save","delete","deleteset","rename","place","placeset","group","createchild","colour","groupnew","grouprename","groupmove","groupdelete","empty"->true;default->false;};}
+    static boolean changesHierarchy(String action){return switch(verb(action)){case "save","delete","deleteset","rename","place","placeset","group","createchild","colour","ungroup","groupnew","grouprename","groupmove","groupdelete","empty"->true;default->false;};}
     /** What the action asks permission for (see {@link HierarchyPermissions}), or null for one everybody may do: looking, which changes nothing of the BuildObjects. */
     static String permission(String action){
         return switch(verb(action)){
             case "save","group","createchild","groupnew","empty"->"create";
             case "rename","grouprename"->"rename";
-            case "place","placeset","groupmove"->"move";
+            case "place","placeset","groupmove","ungroup"->"move";
             case "delete","deleteset","groupdelete"->"delete";
             case "colour"->"recolour";
             case "edit"->"edit";
@@ -70,7 +81,7 @@ final class SavedSelectionActions {
     }
     /** What the history calls the action: "Undid Create BuildObject". */
     static String historyName(String action){
-        return switch(verb(action)){case "save","createchild"->"Create BuildObject";case "group"->"Group BuildObjects";case "delete"->"Delete BuildObject";case "deleteset"->"Delete BuildObjects";case "rename"->"Rename BuildObject";case "colour"->"Recolour BuildObject";case "place"->"Move BuildObject";case "placeset"->"Move BuildObjects";case "empty"->"Create BuildObject";case "groupnew"->"Create group";case "grouprename"->"Rename group";case "groupmove"->"Move group";case "groupdelete"->"Delete group";default->"BuildObject";};
+        return switch(verb(action)){case "save","createchild"->"Create BuildObject";case "group"->"Group BuildObjects";case "delete"->"Delete BuildObject";case "deleteset"->"Delete BuildObjects";case "rename"->"Rename BuildObject";case "colour"->"Recolour BuildObject";case "place"->"Move BuildObject";case "placeset"->"Move BuildObjects";case "empty"->"Create BuildObject";case "ungroup"->"Ungroup BuildObjects";case "groupnew"->"Create group";case "grouprename"->"Rename group";case "groupmove"->"Move group";case "groupdelete"->"Delete group";default->"BuildObject";};
     }
     private static String verb(String action){return action.startsWith(PREFIX)?action.substring(PREFIX.length()).split(":",2)[0]:"";}
     /** The ids of an action like {@code group:1,2,3}. */
@@ -97,12 +108,12 @@ final class SavedSelectionActions {
         for(var e:s.saved.entries()){
             Point min=e.points().isEmpty()?new Point(0,0,0):new Point(e.points().stream().mapToInt(Point::x).min().getAsInt(),e.points().stream().mapToInt(Point::y).min().getAsInt(),e.points().stream().mapToInt(Point::z).min().getAsInt());
             Point max=e.points().isEmpty()?min:new Point(e.points().stream().mapToInt(Point::x).max().getAsInt(),e.points().stream().mapToInt(Point::y).max().getAsInt(),e.points().stream().mapToInt(Point::z).max().getAsInt());
-            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,s.saved.isViewed(e),e==s.saved.active()&&s.saved.editing(),withData?data(s,e):null,e.guid(),e.parentId(),e.color(),e.groupId()));
+            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,s.saved.isViewed(e),e==s.saved.active()&&s.saved.editing(),withData?data(s,e):null,e.guid(),e.parentId(),e.color(),e.groupId(),e.folded()));
         }
         return out;
     }
     /** The groups, in order, for the status that carries the list. */
-    static List<Packets.SavedGroup> groups(Session s){var out=new java.util.ArrayList<Packets.SavedGroup>();for(var g:s.saved.groups())out.add(new Packets.SavedGroup(g.id(),g.guid(),g.name()));return out;}
+    static List<Packets.SavedGroup> groups(Session s){var out=new java.util.ArrayList<Packets.SavedGroup>();for(var g:s.saved.groups())out.add(new Packets.SavedGroup(g.id(),g.guid(),g.name(),g.folded()));return out;}
     /** The list for the status that is going to this player, or null when they already have the current one. Asking marks it as sent. */
     static List<Packets.SavedSelection> forStatus(Session s,boolean supported){
         if(!supported||s.savedSent==s.saved.revision())return null;

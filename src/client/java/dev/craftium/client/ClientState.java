@@ -58,18 +58,19 @@ public final class ClientState {
     static void updateSavedSelections(Packets.Status status){
         if(status.savedSelections()==null)return;
         savedSelections=List.copyOf(status.savedSelections());
-        if(status.savedGroups()!=null){savedGroups=List.copyOf(status.savedGroups());loadView();for(var g:savedGroups)if(g.guid()!=null){if(view.folded(g.guid()))groupFolded.add(g.id());else groupFolded.remove(g.id());}}
+        if(status.savedGroups()!=null){savedGroups=List.copyOf(status.savedGroups());for(var g:savedGroups){if(g.folded())groupFolded.add(g.id());else groupFolded.remove(g.id());}} // a server that has groups keeps the folds too
         loadView();
         // The eye and the fold of each BuildObject come from what this player chose before, by GUID; one never seen starts with its eye closed (it shows only while it is selected).
         for(var saved:savedSelections){
             var guid=saved.guid();if(guid==null)continue;
             if(!view.knowsEye(guid)){view.setHidden(guid,true);viewChanged();}
             if(view.hidden(guid))savedHidden.add(saved.id());else savedHidden.remove(saved.id());
-            if(view.folded(guid))savedFolded.add(saved.id());else savedFolded.remove(saved.id());
+            if(!serverFolds()&&view.folded(guid))savedFolded.add(saved.id());else if(!serverFolds())savedFolded.remove(saved.id());
         }
         var present=new HashSet<Integer>();
         for(var saved:savedSelections){
             present.add(saved.id());
+            if(serverFolds()){if(saved.folded())savedFolded.add(saved.id());else savedFolded.remove(saved.id());}
             if(!savedColorPending.containsKey(saved.id())){ // the colour everyone sees it in, unless this player is in the middle of changing it; none chosen is the selection colour
                 if(saved.color()!=0)savedColors.put(saved.id(),saved.color());else savedColors.remove(saved.id());
             }
@@ -91,7 +92,7 @@ public final class ClientState {
     public static void toggleGroupFolded(int id){
         boolean folded=!groupFolded.contains(id);
         if(folded)groupFolded.add(id);else groupFolded.remove(id);
-        for(var g:savedGroups)if(g.id()==id&&g.guid()!=null&&view.setFolded(g.guid(),folded))viewChanged();
+        CraftiumClient.send("saved_selection:groupfold:"+id+":"+(folded?1:0),null,null);
     }
     /** The outline of each saved selection by id, drawn in the selection style. A selection with none is drawn as a box. */
     private static final Map<Integer,OutlineShape> savedShapes=new HashMap<>();
@@ -151,9 +152,12 @@ public final class ClientState {
     /** The BuildObjects folded in the Hierarchy, so what is under them is not listed. A fold belongs to the client. */
     private static final Set<Integer> savedFolded=new HashSet<>();
     public static boolean savedFolded(int id){return savedFolded.contains(id);}
+    /** Whether the server keeps the folds (a server with groups does), so they are as they were after a rejoin and for everyone; an older one leaves them to this player's own file. */
+    private static boolean serverFolds(){return !savedGroups.isEmpty();}
     public static void toggleSavedFolded(int id){
         boolean folded=!savedFolded.contains(id);
         if(folded)savedFolded.add(id);else savedFolded.remove(id);
+        if(serverFolds()){CraftiumClient.send("saved_selection:fold:"+id+":"+(folded?1:0),null,null);return;} // shown at once, and the server's list confirms it
         var guid=guidOf(id);if(guid!=null&&view.setFolded(guid,folded))viewChanged();
     }
     static void clearSavedSelections(){savedSelections=List.of();savedGroups=List.of();groupFolded.clear();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedIndex.clear();}
