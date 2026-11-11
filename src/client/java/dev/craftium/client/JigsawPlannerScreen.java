@@ -67,7 +67,7 @@ final class JigsawPlannerScreen extends CraftiumScreen {
     }
 
     @Override protected void init() {
-        uiScale = Math.min(1f, Math.min(this.width / 860f, this.height / 460f));
+        uiScale = Math.min(1f, Math.min(this.width / 800f, this.height / 440f));
         cw = Math.round(this.width / uiScale);
         ch = Math.round(this.height / uiScale);
         clearWidgets();
@@ -339,6 +339,8 @@ final class JigsawPlannerScreen extends CraftiumScreen {
         if (bar) Scrollbars.draw(g, x + FORM - Scrollbars.WIDTH - 2, y + 2, rows * ROW, listScroll * ROW, matches.size() * ROW, draggingList);
     }
 
+    /** The size this screen is laid out for: at Auto the interface takes the largest whole scale at which it fits, instead of shrinking it to fit. */
+    @Override protected int[] canvas() { return new int[]{800, 440}; }
     @Override public boolean isPauseScreen() { return false; }
     @Override public void onClose() { ClientState.save(); ClientCompat.setScreen(minecraft, parent); }
 }
