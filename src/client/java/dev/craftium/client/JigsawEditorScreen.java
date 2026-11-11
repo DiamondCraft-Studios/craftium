@@ -23,7 +23,11 @@ import java.util.*;
 final class JigsawEditorScreen extends CraftiumScreen {
     private static final int SIDE = 12, TOP = 50, FOOT = 12, CARD_H = 98, CARD_GAP = 6, ROW_H = 160, FOLDED_H = 22, LIST_ROW = 20;
     /** The preview of the selected element, at the top of the right column: a label line and then the picture, in canvas pixels. The connectors are below it. */
-    private static final int PREVIEW_LABEL = 14, PREVIEW_PICTURE_H = 160, PREVIEW_H = PREVIEW_LABEL + PREVIEW_PICTURE_H + 8;
+    private static final int PREVIEW_LABEL = 14, MIN_LEFT = 120, MIN_RIGHT = 220, MIN_CENTRE = 200, MIN_PREVIEW = 80, MIN_CONNECTORS = 120, GAP = 10;
+    /** The widths of the pools column and the right column and the height of the picture of the preview, as the player has dragged them (0: as laid out); kept while the game runs. */
+    private static int leftPref, rightPref, previewPref;
+    /** Which divider is being dragged (1 pools | elements, 2 elements | right column, 3 preview over connectors), where the pointer was and what the size was then. */
+    private int resizing, resizeFrom, resizeStart;
     private static final String[] SORTS = {"Pool order", "Name", "Weight", "Connectors", "Size", "Type", "Problems"};
     private static final int PANEL = 0xe0172330, CARD = 0xff223247, MUTED = 0xff9db5cb, TEXT = 0xffdce6ef, WARN = 0xffffd479, ERROR = 0xffff8a80, OK = 0xff8fe3a0;
 
@@ -246,8 +250,10 @@ final class JigsawEditorScreen extends CraftiumScreen {
         commits.clear();
         suggestSources.clear();
         tips.clear();
-        leftW = Math.clamp(cw / 5, 150, 210);
-        rightW = Math.clamp(cw * 3 / 10, 260, 320);
+        rightW = rightPref > 0 ? rightPref : Math.clamp(cw * 3 / 10, 260, 320);
+        rightW = Math.clamp(rightW, MIN_RIGHT, Math.max(MIN_RIGHT, cw - 2 * SIDE - 2 * GAP - MIN_LEFT - MIN_CENTRE));
+        leftW = leftPref > 0 ? leftPref : Math.clamp(cw / 5, 150, 210);
+        leftW = Math.clamp(leftW, MIN_LEFT, Math.max(MIN_LEFT, cw - 2 * SIDE - 2 * GAP - rightW - MIN_CENTRE));
         centreX = SIDE + leftW + 10;
         centreW = Math.max(200, cw - SIDE - rightW - 10 - centreX);
         int unapplied = unappliedCount();
@@ -452,10 +458,46 @@ final class JigsawEditorScreen extends CraftiumScreen {
         return pages;
     }
 
-    private int connY() { return TOP + PREVIEW_H + 6; }
+    /** The height of the picture of the preview: as dragged, and never so tall that the connectors have no room. */
+    private int previewH() { int most = Math.max(MIN_PREVIEW, ch - FOOT - TOP - PREVIEW_LABEL - 14 - 52 - MIN_CONNECTORS); return Math.clamp(previewPref > 0 ? previewPref : 160, MIN_PREVIEW, most); }
+    private int connY() { return TOP + PREVIEW_LABEL + previewH() + 14; }
+
+    // ---- the dividers between the panels
+
+    private boolean overLeftDivider(double x, double y) { return x >= SIDE + leftW && x < centreX && y >= TOP - 4 && y < ch - FOOT; }
+    private boolean overRightDivider(double x, double y) { return x >= centreX + centreW && x < previewX() && y >= TOP - 4 && y < ch - FOOT; }
+    private boolean overPreviewDivider(double x, double y) { return x >= previewX() && x < previewX() + rightW && y >= previewY() + previewH() && y < connY(); }
+
+    /** Starts dragging a divider, if the pointer is on one. */
+    private boolean pressDivider(double x, double y) {
+        if (overLeftDivider(x, y)) { resizing = 1; resizeFrom = (int) x; resizeStart = leftW; return true; }
+        if (overRightDivider(x, y)) { resizing = 2; resizeFrom = (int) x; resizeStart = rightW; return true; }
+        if (overPreviewDivider(x, y) && element(selected) != null) { resizing = 3; resizeFrom = (int) y; resizeStart = previewH(); return true; }
+        return false;
+    }
+
+    private void dragDivider(double x, double y) {
+        switch (resizing) {
+            case 1 -> leftPref = (int) Math.round(resizeStart + x - resizeFrom);
+            case 2 -> rightPref = (int) Math.round(resizeStart - (x - resizeFrom));
+            default -> previewPref = (int) Math.round(resizeStart + y - resizeFrom);
+        }
+        init(); // lays everything out again at the new sizes; init limits each size to what fits
+    }
+
+    /** A grip on each divider, brighter when the pointer is on it or it is being dragged. */
+    private void drawDividers(Gfx g, int mx, int my) {
+        int midY = (TOP + ch - FOOT) / 2;
+        grip(g, SIDE + leftW + GAP / 2 - 1, midY - 12, 3, 24, resizing == 1 || (resizing == 0 && overLeftDivider(mx, my)));
+        grip(g, centreX + centreW + GAP / 2 - 1, midY - 12, 3, 24, resizing == 2 || (resizing == 0 && overRightDivider(mx, my)));
+        if (element(selected) != null) grip(g, previewX() + rightW / 2 - 12, previewY() + previewH() + 5, 24, 3, resizing == 3 || (resizing == 0 && overPreviewDivider(mx, my)));
+    }
+
+    private void grip(Gfx g, int x, int y, int w, int h, boolean active) { g.fill(x, y, x + w, y + h, active ? ClientState.options.uiAccent : 0xff4a5c70); }
     private int previewX() { return cw - SIDE - rightW; }
     private int previewY() { return TOP + PREVIEW_LABEL; }
-    private boolean overPreview(double mx, double my) { return mx >= previewX() && mx < previewX() + rightW && my >= previewY() && my < previewY() + PREVIEW_PICTURE_H; }
+    private boolean overPreview(double mx, double my) { return mx >= previewX() && mx < previewX() + rightW && my >= previewY() && my < previewY() + previewH(); }
+    private boolean graphDragging() { return pressNode != null || pressEdge != null; }
     private boolean modal() { return adding || helpOpen || dialogMode != null || confirmLeave || retargetPrompt; }
 
     /** The buttons that put the view of the preview back: where it started, straight down, level. */
@@ -788,6 +830,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         if (pool() == null) g.text(font, "Pick a pool on the left, or make a new one.", centreX, TOP + 20, MUTED, false);
         else { drawCentre(g); if (graph) drawGraph(g, mx, my); else drawCards(g, mx, my); }
         drawConnections(g, mx, my);
+        drawDividers(g, mx, my);
         drawWidgets(g, mx, my, delta);
         drawSuggestions(g, mx, my);
         tips.draw(g, font, mx, my, cw, ch);
@@ -902,17 +945,17 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private void drawPreview(Gfx g, int x, JsonObject element, int[] hover) {
         int y = previewY();
         g.text(font, "Preview", x, TOP + 4, 0xffb5dcfc, false);
-        if (element == null) { preview.show(null, null); g.fill(x, y, x + rightW, y + PREVIEW_PICTURE_H, 0xff1b2531); g.centeredText(font, "Select an element.", x + rightW / 2, y + PREVIEW_PICTURE_H / 2 - 4, MUTED); return; }
+        if (element == null) { preview.show(null, null); g.fill(x, y, x + rightW, y + previewH(), 0xff1b2531); g.centeredText(font, "Select an element.", x + rightW / 2, y + previewH() / 2 - 4, MUTED); return; }
         var thumb = element.has("thumb") ? element.getAsJsonObject("thumb") : null;
         preview.show(str(element, "template", "?"), thumb);
         preview.highlight(hover);
-        g.enableScissor(x, y, x + rightW, y + PREVIEW_PICTURE_H);
-        if (!preview.draw(g, x, y, rightW, PREVIEW_PICTURE_H)) {
-            g.fill(x, y, x + rightW, y + PREVIEW_PICTURE_H, 0xff1b2531);
-            g.centeredText(font, noPicture(element), x + rightW / 2, y + PREVIEW_PICTURE_H / 2 - 4, element.has("missing") ? ERROR : 0xff7e8fa0);
-        } else g.text(font, "drag: turn · middle drag: pan · wheel: zoom", x + 4, y + PREVIEW_PICTURE_H - 11, 0xff7e8fa0, false);
+        g.enableScissor(x, y, x + rightW, y + previewH());
+        if (!preview.draw(g, x, y, rightW, previewH())) {
+            g.fill(x, y, x + rightW, y + previewH(), 0xff1b2531);
+            g.centeredText(font, noPicture(element), x + rightW / 2, y + previewH() / 2 - 4, element.has("missing") ? ERROR : 0xff7e8fa0);
+        } else g.text(font, "drag: turn · middle drag: pan · wheel: zoom", x + 4, y + previewH() - 11, 0xff7e8fa0, false);
         g.disableScissor();
-        g.outline(x, y, rightW, PREVIEW_PICTURE_H, ClientState.options.uiBorder);
+        g.outline(x, y, rightW, previewH(), ClientState.options.uiBorder);
         var size = element.has("size") ? element.getAsJsonArray("size") : null;
         if (size != null) { String text = size.get(0) + " × " + size.get(1) + " × " + size.get(2) + " blocks"; g.text(font, text, x + rightW - font.width(text), TOP + 4, MUTED, false); }
     }
@@ -1437,6 +1480,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     @Override public boolean mouseReleased(MouseButtonEvent raw) {
         var event = scaled(raw);
+        if (resizing != 0) { resizing = 0; return true; }
         if (preview.dragging()) { preview.letGo(); return true; }
         if (draggingPoolBar || draggingGraphBar) { draggingPoolBar = false; draggingGraphBar = false; return true; }
         if (pressEdge != null && event.button() == 0) {
@@ -1469,6 +1513,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     @Override public boolean mouseDragged(MouseButtonEvent raw, double dx, double dy) {
         var event = scaled(raw);
+        if (resizing != 0) { dragDivider(event.x(), event.y()); return true; }
         if (preview.dragging()) { preview.drag(dx / uiScale, dy / uiScale); return true; }
         if (draggingPoolBar) { poolScroll = Scrollbars.scrollAt(event.y(), listTop(), listBottom() - listTop(), visiblePools().size() * LIST_ROW); return true; }
         if (draggingGraphBar) { var bar = graphBar(); if (bar != null) graphScroll = Scrollbars.scrollAt(event.y(), bar[1], bar[2], bar[3]); return true; }
@@ -1491,6 +1536,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         var event = scaled(raw);
         if (event.button() == 0 && clickSuggestion(event.x(), event.y())) return true;
         flushEdits(); // leaving a box applies it, before this click changes anything
+        if (event.button() == 0 && !modal() && !graphDragging() && pressDivider(event.x(), event.y())) return true;
         if (super.mouseClicked(event, twice)) return true;
         if (!modal() && pool() != null && overPreview(event.x(), event.y()) && preview.hasScene() && preview.press(event.button())) return true;
         if (event.button() != 0 || adding) return false;
@@ -1537,7 +1583,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         double x = rawX / uiScale;
         if (adding) return false;
         double y = rawY / uiScale;
-        if (!modal() && pool() != null && overPreview(x, y) && preview.hasScene()) { preview.zoom(vertical, x - (previewX() + rightW / 2.0), y - (previewY() + PREVIEW_PICTURE_H / 2.0)); return true; }
+        if (!modal() && pool() != null && overPreview(x, y) && preview.hasScene()) { preview.zoom(vertical, x - (previewX() + rightW / 2.0), y - (previewY() + previewH() / 2.0)); return true; }
         if (suggestionsShowing() && overSuggestions(x, y)) { suggestScroll = Math.clamp(suggestScroll - (int) Math.signum(vertical) * 3, 0, Math.max(0, suggestMatches.size() - SUGGEST_ROWS)); return true; }
         if (x < SIDE + leftW + 6) { poolScroll = Math.clamp(poolScroll - vertical * 30, 0, Math.max(0, visiblePools().size() * LIST_ROW - (listBottom() - listTop()))); return true; }
         if (graph && x < cw - SIDE - rightW) { var bar = graphBar(); graphScroll = Math.clamp(graphScroll - vertical * 30, 0, bar == null ? 0 : bar[3] - bar[2]); return true; }
