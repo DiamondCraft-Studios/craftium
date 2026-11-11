@@ -95,7 +95,7 @@ class VoxelOrbitTest {
     @Test void aSlabIsShorterThanACubeAndAPlaneIsSeenFromOneSideOnly() {
         // a bottom slab: its top at half height, drawn by hand
         float[] n = {0, 1, 0};
-        var top = new VoxelOrbit.Quad(new float[]{0, 0.5f, 0}, new float[]{1, 0, 0}, new float[]{0, 0, 1}, n, 0, 0, 16, 0, 0, 16, solid(0xffcccccc), -1, VoxelOrbit.UP);
+        var top = new VoxelOrbit.Quad(new float[]{0, 0.5f, 0}, new float[]{1, 0, 0}, new float[]{0, 0, 1}, n, 0, 0, 16, 0, 0, 16, solid(0xffcccccc), 16, 16, -1, VoxelOrbit.UP);
         var slab = new VoxelOrbit.Shape(new VoxelOrbit.Quad[]{top}, false);
         var scene = new VoxelOrbit.Scene(1, 1, 1, new byte[]{1}, new VoxelOrbit.Shape[]{null, slab});
         var view = new VoxelOrbit.View();

@@ -37,6 +37,8 @@ final class BlockShapes {
         String id = bracket < 0 ? state : state.substring(0, bracket);
         var properties = new HashMap<String, String>();
         if (bracket >= 0) for (var pair : state.substring(bracket + 1, state.length() - 1).split(",")) { int eq = pair.indexOf('='); if (eq > 0) properties.put(pair.substring(0, eq).strip(), pair.substring(eq + 1).strip()); }
+        var entity = BlockEntityShapes.of(id, properties);
+        if (entity != null) return entity; // a chest, a bed: drawn by the game from an entity model, not from block model files
         var key = dev.craftium.compat.Compat.parse(id);
         var blockstate = json(key.getNamespace(), "blockstates/" + key.getPath() + ".json");
         var applies = new ArrayList<JsonObject>();
@@ -176,7 +178,7 @@ final class BlockShapes {
                 b = rotateModel(b, rx, ry, false);
                 normal = rotateModel(normal, rx, ry, false);
             }
-            out.add(new VoxelOrbit.Quad(o, a, b, normal, u0, v0, ua, va, ub, vb, pixels, cull, snap(normal)));
+            out.add(new VoxelOrbit.Quad(o, a, b, normal, u0, v0, ua, va, ub, vb, pixels, VoxelOrbit.TEX, VoxelOrbit.TEX, cull, snap(normal)));
         }
         return whole;
     }

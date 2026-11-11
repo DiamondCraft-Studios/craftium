@@ -13,13 +13,13 @@ public final class VoxelOrbit {
 
     /**
      * One textured rectangle of a block, in the block's own space (0 to 1 on each axis). A point of it is {@code o + fa * a + fb * b} for fa and fb from 0 to 1,
-     * and the texel (0 to 16, v down) at that point is {@code (u0 + fa * ua + fb * ub, v0 + fa * va + fb * vb)}.
+     * and the texel (0 to {@code tw} by 0 to {@code th}, v down; 16 by 16 for a block texture, larger for an entity's) at that point is {@code (u0 + fa * ua + fb * ub, v0 + fa * va + fb * vb)}.
      *
      * @param normal  which way it faces, for hiding it when it faces away
      * @param cull    the side of the block it lies on (see {@link #UP}), or -1: it is hidden when a block that fills that side stands against it
      * @param shade   the side it counts as facing, for how light it is drawn
      */
-    public record Quad(float[] o, float[] a, float[] b, float[] normal, float u0, float v0, float ua, float va, float ub, float vb, int[] texture, int cull, int shade) {}
+    public record Quad(float[] o, float[] a, float[] b, float[] normal, float u0, float v0, float ua, float va, float ub, float vb, int[] texture, int tw, int th, int cull, int shade) {}
 
     /** What a block is made of: its rectangles, and whether it fills the whole cell and hides what is behind it. */
     public record Shape(Quad[] quads, boolean full) {
@@ -31,7 +31,7 @@ public final class VoxelOrbit {
                 float[] o = {ORIGIN[d][0], ORIGIN[d][1], ORIGIN[d][2]}, a = {AXIS_A[d][0], AXIS_A[d][1], AXIS_A[d][2]}, b = {AXIS_B[d][0], AXIS_B[d][1], AXIS_B[d][2]};
                 float[] n = {DX[d], DY[d], DZ[d]};
                 boolean flat = d < 2;
-                quads[d] = new Quad(o, a, b, n, 0, flat ? 0 : TEX, TEX, 0, 0, flat ? TEX : -TEX, t, d, d);
+                quads[d] = new Quad(o, a, b, n, 0, flat ? 0 : TEX, TEX, 0, 0, flat ? TEX : -TEX, t, TEX, TEX, d, d);
             }
             return new Shape(quads, true);
         }
@@ -181,8 +181,8 @@ public final class VoxelOrbit {
                     float depthHere = (float) (z0 + fa * za + fb * zb);
                     int at = py * w + px;
                     if (depthHere >= depth[at]) continue;
-                    int tx = Math.clamp((int) Math.floor(q.u0() + q.ua() * fa + q.ub() * fb), 0, TEX - 1), ty = Math.clamp((int) Math.floor(q.v0() + q.va() * fa + q.vb() * fb), 0, TEX - 1);
-                    int c = texture[ty * TEX + tx];
+                    int tx = Math.clamp((int) Math.floor(q.u0() + q.ua() * fa + q.ub() * fb), 0, q.tw() - 1), ty = Math.clamp((int) Math.floor(q.v0() + q.va() * fa + q.vb() * fb), 0, q.th() - 1);
+                    int c = texture[ty * q.tw() + tx];
                     if ((c >>> 24) < 128) continue;
                     depth[at] = depthHere;
                     int r = (int) (((c >> 16) & 255) * shade), g = (int) (((c >> 8) & 255) * shade), bl = (int) ((c & 255) * shade);
