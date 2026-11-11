@@ -76,9 +76,9 @@ public final class ClientState {
             }
             if(saved.data()==null)continue; // unchanged: the outline already made for it is still right
             if(saved.data().isEmpty())savedShapes.remove(saved.id()); // left out because the status was too big: nothing is drawn for it
-            else savedShapes.put(saved.id(),OutlineShape.ofLater(SelectionCodec.decode(saved.data())));
+            else{var blocks=SelectionCodec.decode(saved.data());savedBlocks.put(saved.id(),blocks);savedShapes.put(saved.id(),OutlineShape.ofLater(blocks));}
         }
-        savedShapes.keySet().retainAll(present);
+        savedShapes.keySet().retainAll(present);savedBlocks.keySet().retainAll(savedShapes.keySet());
         // an older server sends no GUID, so there is nothing to keep an eye by: a BuildObject seen for the first time starts closed
         for(var saved:savedSelections)if(saved.guid()==null&&savedWithoutGuid.add(saved.id()))savedHidden.add(saved.id());
         savedWithoutGuid.retainAll(present);
@@ -98,6 +98,20 @@ public final class ClientState {
     /** The outline of each saved selection by id, drawn in the selection style. A selection with none is drawn as a box. */
     private static final Map<Integer,OutlineShape> savedShapes=new HashMap<>();
     static OutlineShape savedShape(int id){return savedShapes.get(id);}
+    /** The blocks of each saved selection by id, kept to tell which BuildObject a block under the pointer belongs to. */
+    private static final Map<Integer,Set<dev.craftium.core.Point>> savedBlocks=new HashMap<>();
+    /** The BuildObject (the deepest one) that holds the block, or 0 when none does. */
+    public static int savedAt(dev.craftium.core.Point block){
+        int best=0,bestDepth=-1;
+        for(var e:savedSelections){
+            var blocks=savedBlocks.get(e.id());if(blocks==null||!blocks.contains(block))continue;
+            int depth=0,n=0;for(var p=e;p!=null&&n++<64;){Packets.SavedSelection next=null;for(var q:savedSelections)if(q.id()==p.parent()){next=q;break;}p=next;if(p!=null)depth++;}
+            if(depth>bestDepth){best=e.id();bestDepth=depth;}
+        }
+        return best;
+    }
+    /** The BuildObject the pointer is over in a viewport while Hover BuildObjects is on, or 0: it shows its own outline and is lit in the Hierarchy. */
+    public static int hoverWorld;
     /** The BuildObjects whose eye is closed, which is every new one: the outline of one shows in the world only with its eye open, or while it is selected. Like the colours, they are kept by id when an entry is deleted, so Undo brings one back as it was. */
     private static final Set<Integer> savedHidden=new HashSet<>();
     public static boolean savedHidden(int id){return savedHidden.contains(id);}
@@ -158,7 +172,7 @@ public final class ClientState {
         if(folded)savedFolded.add(id);else savedFolded.remove(id);
         var guid=guidOf(id);if(guid!=null&&view.setFolded(guid,folded))viewChanged();
     }
-    static void clearSavedSelections(){savedSelections=List.of();savedGroups=List.of();groupFolded.clear();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedIndex.clear();}
+    static void clearSavedSelections(){savedSelections=List.of();savedGroups=List.of();groupFolded.clear();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedBlocks.clear();savedIndex.clear();hoverWorld=0;}
     public static int savedColor(int id){return savedColors.getOrDefault(id,options.selectionColor);}
     private static final Set<Integer> savedWithoutGuid=new HashSet<>();
     /** Whether a colour was chosen for it: every BuildObject is drawn in the selection colour until one is. */

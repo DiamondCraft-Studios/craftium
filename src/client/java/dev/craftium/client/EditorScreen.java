@@ -2156,6 +2156,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     private static final String[] PENCIL={"......XX.",".....XXXX","....XXXX.","...XXXX..","..XXXX...",".XXXX....",".XXX.....","XX......."};
     private static final String[] PLUS={"....X....","....X....","....X....","....X....","XXXXXXXXX","....X....","....X....","....X....","....X...."};
     private static final String[] EYE={"..XXXXX..",".X.....X.","X..XXX..X",".X.....X.","..XXXXX.."};
+    private static final String[] CURSOR={"X........","XX.......","XXX......","XXXX.....","XXXXX....","XXXXXX...","XXXXXXX..","XXXXX....","XX.XX....","X..XX....","...XXX...","....XX..."};
     private static final String[] CROSS={"X.......X",".X.....X.","..X...X..","...X.X...","....X....","...X.X...","..X...X..",".X.....X.","X.......X"};
     /** A small picture drawn pixel by pixel from rows of X, centred on the given box. */
     private void glyph(Gfx g,int x,int y,int width,int height,String[] rows,int colour){
@@ -2206,6 +2207,10 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
             var at=WorkspaceLayout.inverse("hierarchy",mx,my);
             if(at[0]>=x+8&&at[0]<x+pw-8&&at[1]>=top&&at[1]<top+rows*rowHeight){int over=savedScroll+(int)((at[1]-top)/rowHeight);if(over<saved.size()&&saved.get(over).entry()!=null)ClientState.hoverSaved=saved.get(over).entry().id();}
         }
+        ClientState.hoverWorld=0; // Hover BuildObjects: the one under the pointer in a viewport
+        if(o().hoverBuildObjects&&menu<0&&pointerFree()&&rowDragId<0&&inViewport(pointerX/scale,pointerY/scale)){
+            var hit=target();if(hit!=null)ClientState.hoverWorld=ClientState.savedAt(CraftiumClient.point(hit.getBlockPos()));
+        }
         savedScroll=Math.clamp(savedScroll,0,Math.max(0,total-rows));
         if(hierarchyAll.isEmpty()&&groups.isEmpty())text(g,"No BuildObjects yet",x+16,top+6,MUTED);
         for(int i=0;i<rows&&savedScroll+i<total;i++){
@@ -2231,6 +2236,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
             var entry=shownRow.entry();int id=entry.id();
             int indent=Math.min(depthOf(entry),6)*12,nameX=x+14+indent+12; // a level in is 12 further right; the arrow takes the first 12
             if(entry.active())g.fill(x+9,ry,rowRight,ry+rowHeight,entry.editing()?0xff5b4a84:0xff315b84);
+            else if(ClientState.hoverWorld==id)g.fill(x+9,ry,rowRight,ry+rowHeight,ClientState.savedColor(id)&0xffffff|0x66000000); // under the pointer in a viewport: tinted with the outline colour it has in the world
             if(renaming==id){
                 renameShown=true;var box=renameBox(entry.name());box.setX(nameX);box.setY(ry+4);box.setWidth(eye-4-nameX);
             }else text(g,shorten(entry.name(),eye-4-nameX),nameX,ry+6,entry.active()?TEXT:MUTED);
@@ -2269,6 +2275,9 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         g.fill(x+1,y+ph-30,x+pw-1,y+ph-29,LINE); // the buttons along the bottom
         button(g,x+10,y+ph-25,24,20,"",false,()->action("saved_selection:save"),looking?"Create a BuildObject from what is selected now · While one is shown, the new one goes inside it":"Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole");
         glyph(g,x+10,y+ph-25,24,20,PLUS,TEXT);
+        boolean hoverOn=o().hoverBuildObjects;
+        button(g,x+38,y+ph-25,24,20,"",hoverOn,()->{o().hoverBuildObjects=!o().hoverBuildObjects;ClientState.save();},"Hover BuildObjects: "+(hoverOn?"on":"off")+" · While on, the BuildObject under the pointer in a viewport shows its outline and is lit in the Hierarchy");
+        glyph(g,x+38,y+ph-25,24,20,CURSOR,TEXT);
     }
     /**
      * The fold arrow of a Hierarchy row, drawn in pixels so it keeps its shape at any interface size: a 7 by 7 box at {@code x}, {@code y}, a triangle
