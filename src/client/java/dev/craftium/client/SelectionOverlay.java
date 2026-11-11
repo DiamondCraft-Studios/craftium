@@ -12,6 +12,7 @@ final class SelectionOverlay {
     /** Past this many blocks the real models are not drawn, because a frame would have to draw all of them. */
     private static final int MAX_GHOST_BLOCKS=4096;
     private static String encoded="";
+    private static boolean unreadableLogged;
     private static OutlineShape shape=OutlineShape.EMPTY;
     /**
      * The outline is worked out on a worker thread, because for a selection of a hundred thousand blocks it takes a couple of
@@ -39,10 +40,14 @@ final class SelectionOverlay {
     private SelectionOverlay(){}
     static void update(String data){
         if(Objects.equals(encoded,data))return;encoded=data;
-        var points=SelectionCodec.decode(data);selected=List.copyOf(points);
-        if(points.isEmpty()){building.cancel();shape=OutlineShape.EMPTY;} // nothing to wait for: an empty selection must not linger on screen
-        else building.submit(()->OutlineShape.of(points)); // the decoded set is not touched again here: the lists below are copies
-        blocks=points.size()>MAX_GHOST_BLOCKS?List.of():points.stream().map(p->new BlockPos(p.x(),p.y(),p.z())).toList();
+        Set<Point> points;
+        // A selection this client cannot read (a server running a newer Craftium) must not throw out of the packet handler on every status: it shows as none, once in the log.
+        try{points=SelectionCodec.decode(data);}
+        catch(IllegalArgumentException e){if(!unreadableLogged){unreadableLogged=true;dev.craftium.Craftium.LOG.warn("Could not read the selection the server sent; is this Craftium older than the server's?",e);}points=Set.of();}
+        final Set<Point> read=points;selected=List.copyOf(read);
+        if(read.isEmpty()){building.cancel();shape=OutlineShape.EMPTY;} // nothing to wait for: an empty selection must not linger on screen
+        else building.submit(()->OutlineShape.of(read)); // the decoded set is not touched again here: the lists below are copies
+        blocks=read.size()>MAX_GHOST_BLOCKS?List.of():read.stream().map(p->new BlockPos(p.x(),p.y(),p.z())).toList();
         blockSet=new HashSet<>(blocks);pointSet=new HashSet<>(selected);contactsAt=0;
     }
     /**
