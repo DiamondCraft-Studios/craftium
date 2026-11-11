@@ -44,6 +44,12 @@ public final class SavedSelections {
         public int color(){return color;}
         /** The blocks it holds itself; see {@link SavedSelections#effective} for those with everything under it. */
         public List<Point> points(){return points;}
+        /**
+         * The group this BuildObject itself belongs to. At the top level that is the group it is shown in; under another BuildObject it is remembered, not shown, so grouping
+         * BuildObjects together does not take them out of their groups and ungrouping them puts each back in its own.
+         */
+        public Group ownGroup(){return group;}
+        public int ownGroupId(){return group==null?0:group.id;}
         public int size(){return points.size();}
         /** Goes up whenever the blocks change, so what was sent of them can be told from what is there now. */
         public int version(){return version;}
@@ -119,7 +125,7 @@ public final class SavedSelections {
     private void normalize(){
         var first=tree.groups.getFirst();
         var fallback=active!=null&&active.group()!=null&&tree.groups.contains(active.group())?active.group():first;
-        for(var e:entries){if(e.parent==null){if(e.group==null||!tree.groups.contains(e.group))e.group=fallback;}else e.group=null;}
+        for(var e:entries){if(e.group!=null&&!tree.groups.contains(e.group))e.group=null;if(e.parent==null&&e.group==null)e.group=fallback;} // one under another keeps the group it had, or none
         var out=new ArrayList<Entry>(entries.size());
         for(var g:tree.groups)for(int i=0;i<entries.size();i++){
             var e=entries.get(i);if(e.parent!=null||e.group!=g)continue;
@@ -158,7 +164,7 @@ public final class SavedSelections {
         var group=needGroup(id);
         if(tree.groups.size()<=1)throw new IllegalArgumentException("There has to be at least one group");
         int at=tree.groups.indexOf(group);var into=tree.groups.get(at>0?at-1:1);
-        for(var e:entries)if(e.parent==null&&e.group==group)e.group=into;
+        for(var e:entries)if(e.group==group)e.group=into; // those under another too, which are remembered
         tree.groups.remove(group);changed();return group;
     }
     /** Makes an empty BuildObject at the end of a group (the group of the one being looked at, or the first, when {@code groupId} is 0). */
@@ -377,12 +383,15 @@ public final class SavedSelections {
             int k=Math.clamp(index,0,siblings.size());
             if(k<siblings.size()){at=entries.indexOf(siblings.get(k));if(group==null)group=siblings.get(k).group;}
             else{if(group==null)group=tree.groups.getLast();at=endOfGroup(group);}
-            for(var r:roots){r.parent=null;r.group=group;}
+            for(var r:roots){
+                var before=r.group();r.parent=null;r.group=group;
+                if(before!=group)for(var m:moving)if(m==r||isUnder(m,r))m.group=group; // moved to another group as a whole: what is under it goes along, whatever it remembered
+            }
         }else{
             var siblings=children(parent);int k=Math.clamp(index,0,siblings.size());
             if(k<siblings.size())at=entries.indexOf(siblings.get(k));
             else{at=entries.indexOf(parent)+1;while(at<entries.size()&&isUnder(entries.get(at),parent))at++;}
-            for(var r:roots){r.parent=parent;r.group=null;}
+            for(var r:roots)r.parent=parent; // under another, a BuildObject keeps the group it was in
         }
         entries.addAll(at,moving);changed();
     }
@@ -400,6 +409,24 @@ public final class SavedSelections {
         var entry=need(id);
         if(active!=null&&editing)sync(live); // leaving an edit for another entry keeps what was done
         if(stash==null)stash=List.copyOf(live.points());
+    /**
+     * Takes each of these BuildObjects out of the one it is under, as far as that one's own level. One that comes out at the top goes back to the group it was in
+     * before it was put under another, right after the one it came out of when that is the same group, else at the end of its own group; its children go with it.
+     * One that is not under anything stays where it is.
+     */
+    public void ungroup(List<Integer> ids){
+        var picked=new ArrayList<Entry>();for(int id:ids)picked.add(need(id));
+        boolean any=false;
+        for(var e:picked){
+            var parent=e.parent;if(parent==null)continue;any=true;
+            var up=parent.parent;
+            if(up!=null){place(e.id,up.id,children(up).indexOf(parent)+1);continue;}
+            var home=e.group!=null&&tree.groups.contains(e.group)?e.group:parent.group;
+            var there=rootsIn(home);
+            placeIn(List.of(e.id),0,home.id,home==parent.group?there.indexOf(parent)+1:there.size());
+        }
+        if(!any)throw new IllegalArgumentException("Pick BuildObjects that are inside another");
+    }
         live.restore(edit?entry.points:effective(entry));active=entry;viewed.clear();viewed.add(entry);editing=edit;lookChanged();
     }
     /**
@@ -440,7 +467,7 @@ public final class SavedSelections {
     /** One BuildObject as it was: the entry itself (it keeps its id and GUID) with the parts of it that change. */
     public record Row(Entry entry,String name,int parentId,List<Point> points,int color,int groupId){}
     public State state(){
-        var rows=new ArrayList<Row>();for(var e:entries)rows.add(new Row(e,e.name,e.parentId(),e.points,e.color,e.parent==null?e.groupId():0));
+        var rows=new ArrayList<Row>();for(var e:entries)rows.add(new Row(e,e.name,e.parentId(),e.points,e.color,e.ownGroupId()));
         var groups=new ArrayList<GroupRow>();for(var g:tree.groups)groups.add(new GroupRow(g,g.name));
         return new State(List.copyOf(rows),List.copyOf(groups));
     }
@@ -474,7 +501,7 @@ public final class SavedSelections {
             if(!there.contains(e)&&!e.points.equals(r.points())){e.points=r.points();e.version++;}
             entries.add(e);byId.put(e.id,e);
         }
-        for(var r:state.rows()){r.entry().parent=r.parentId()==0?null:byId.get(r.parentId());r.entry().group=r.parentId()==0?byGroup.get(r.groupId()):null;}
+        for(var r:state.rows()){r.entry().parent=r.parentId()==0?null:byId.get(r.parentId());r.entry().group=byGroup.get(r.groupId());}
         changed();
     }
     public int indexOf(Entry entry){return entries.indexOf(entry);}

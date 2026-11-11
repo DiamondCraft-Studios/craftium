@@ -55,13 +55,13 @@ final class SavedSelectionActions {
         }
     }
     /** Whether the action changes the BuildObjects themselves (and so goes in the history), as against only what is being looked at. */
-    static boolean changesHierarchy(String action){return switch(verb(action)){case "save","delete","deleteset","rename","place","placeset","group","createchild","colour","groupnew","grouprename","groupmove","groupdelete","empty"->true;default->false;};}
+    static boolean changesHierarchy(String action){return switch(verb(action)){case "save","delete","deleteset","rename","place","placeset","group","createchild","colour","ungroup","groupnew","grouprename","groupmove","groupdelete","empty"->true;default->false;};}
     /** What the action asks permission for (see {@link HierarchyPermissions}), or null for one everybody may do: looking, which changes nothing of the BuildObjects. */
     static String permission(String action){
         return switch(verb(action)){
             case "save","group","createchild","groupnew","empty"->"create";
             case "rename","grouprename"->"rename";
-            case "place","placeset","groupmove"->"move";
+            case "place","placeset","groupmove","ungroup"->"move";
             case "delete","deleteset","groupdelete"->"delete";
             case "colour"->"recolour";
             case "edit"->"edit";
@@ -70,7 +70,7 @@ final class SavedSelectionActions {
     }
     /** What the history calls the action: "Undid Create BuildObject". */
     static String historyName(String action){
-        return switch(verb(action)){case "save","createchild"->"Create BuildObject";case "group"->"Group BuildObjects";case "delete"->"Delete BuildObject";case "deleteset"->"Delete BuildObjects";case "rename"->"Rename BuildObject";case "colour"->"Recolour BuildObject";case "place"->"Move BuildObject";case "placeset"->"Move BuildObjects";case "empty"->"Create BuildObject";case "groupnew"->"Create group";case "grouprename"->"Rename group";case "groupmove"->"Move group";case "groupdelete"->"Delete group";default->"BuildObject";};
+        return switch(verb(action)){case "save","createchild"->"Create BuildObject";case "group"->"Group BuildObjects";case "delete"->"Delete BuildObject";case "deleteset"->"Delete BuildObjects";case "rename"->"Rename BuildObject";case "colour"->"Recolour BuildObject";case "place"->"Move BuildObject";case "placeset"->"Move BuildObjects";case "empty"->"Create BuildObject";case "ungroup"->"Ungroup BuildObjects";case "groupnew"->"Create group";case "grouprename"->"Rename group";case "groupmove"->"Move group";case "groupdelete"->"Delete group";default->"BuildObject";};
     }
     private static String verb(String action){return action.startsWith(PREFIX)?action.substring(PREFIX.length()).split(":",2)[0]:"";}
     /** The ids of an action like {@code group:1,2,3}. */

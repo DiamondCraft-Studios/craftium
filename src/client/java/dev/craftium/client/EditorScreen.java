@@ -2404,10 +2404,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         items.add(item(n>1?"Delete selected + blocks ("+n+")":"Delete blocks","",()->deleteWithBlocks(targets))); // the BuildObjects and the blocks they hold
         items.add(item("Export…","",()->exportStructure(StructureSettings.SELECTION))); // the blocks shown, which are everything under each BuildObject
         var moves=new ArrayList<MenuItem>();
-        int at=siblingIndex(row);int siblings=siblingCount(row);String inGroup=row.parent()==0&&groupIdOf(row)>0?":"+groupIdOf(row):"";
-        if(at>0)moves.add(item("Move up","",()->action("saved_selection:place:"+id+":"+row.parent()+":"+(at-1)+inGroup)));
-        if(at<siblings-1)moves.add(item("Move down","",()->action("saved_selection:place:"+id+":"+row.parent()+":"+(at+1)+inGroup)));
-        if(row.parent()!=0){var up=savedById(row.parent());if(up!=null)moves.add(item("Move out of parent","",()->action("saved_selection:place:"+id+":"+up.parent()+":"+(siblingIndex(up)+1)+(up.parent()==0&&groupIdOf(up)>0?":"+groupIdOf(up):""))));}
+        if(row.parent()!=0){var up=savedById(row.parent());if(up!=null)moves.add(item(up.parent()==0?"Ungroup":"Move out of parent","",()->action(up.parent()==0?"saved_selection:ungroup:"+id:"saved_selection:place:"+id+":"+up.parent()+":"+(siblingIndex(up)+1))));}
         if(row.parent()==0&&ClientState.savedGroups().size()>1)for(var gr:ClientState.savedGroups()){ // a BuildObject at the top goes to the end of another group
             if(gr.id()==groupIdOf(row))continue;if(moves.size()>=10)break;
             moves.add(item("Move to group: "+shorten(gr.name(),120),"",()->action("saved_selection:place:"+id+":0:"+rootCount(gr.id())+":"+gr.id())));
