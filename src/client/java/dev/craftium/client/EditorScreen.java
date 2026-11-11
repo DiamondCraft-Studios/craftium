@@ -1754,6 +1754,10 @@ public final class EditorScreen extends CraftiumScreen {
             return true;
         }
         if(event.button()==1&&!help&&!transform&&menu<0)for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(!c.contains(x,y))continue;for(var area:renameAreas)if(area.row()==c){openRowMenu(area.id(),(int)x,(int)y);return true;}break;} // a right click on a row of the Hierarchy opens its menu
+        if(event.button()==1&&panels&&!help&&!transform&&menu<0&&inHierarchyBody(x,y)){ // empty space in the Hierarchy opens its own menu; a row has taken the click already
+            boolean overRow=false;for(var area:renameAreas)if(area.row().contains(x,y))overRow=true;
+            if(!overRow){openHierarchyMenu((int)x,(int)y);return true;}
+        }
         if(event.button()==1&&!help&&!transform&&menu<0)for(int i=controls.size()-1;i>=0;i--){var c=controls.get(i);if(c.contains(x,y)){if(c.back!=null){c.back.run();return true;}break;}} // a cycling button steps back
         if(help||transform||menu>=0)return true;
         if(!inViewport(x,y))return true;
@@ -1938,13 +1942,13 @@ public final class EditorScreen extends CraftiumScreen {
         if(toolActive&&ToolHints.brush(o().tool)&&(event.modifiers()&7)==0&&(event.key()==GLFW.GLFW_KEY_LEFT_BRACKET||event.key()==GLFW.GLFW_KEY_RIGHT_BRACKET)){ // [ and ] shrink and grow the brush
             o().radius=Math.clamp(o().radius+(event.key()==GLFW.GLFW_KEY_RIGHT_BRACKET?1:-1),1,dev.craftium.core.ShapeLimits.maxRadius(o()));return true;
         }
+        // The keypad's + and -, and Ctrl+Shift+= (which is +), also resize the interface when the main bindings are the defaults.
+        if((event.modifiers()&7)==EditorControls.CONTROL){int key=event.key();if(key==GLFW.GLFW_KEY_KP_ADD){resizeInterface(1);return true;}if(key==GLFW.GLFW_KEY_KP_SUBTRACT){resizeInterface(-1);return true;}}
+        if((event.modifiers()&7)==(EditorControls.CONTROL|EditorControls.SHIFT)&&event.key()==GLFW.GLFW_KEY_EQUAL){resizeInterface(1);return true;}
         for(Action binding:Action.values())if(!EditorBindings.get(binding).mouse()&&EditorBindings.matches(binding,event)&&perform(binding))return true;
         if(event.key()==GLFW.GLFW_KEY_BACKSPACE&&(event.modifiers()&7)==0){perform(Action.DELETE);return true;}
         if((event.modifiers()&7)==0)for(var entry:CraftiumClient.toolKeys.entrySet())if(entry.getValue().matches(event)){select(entry.getKey());return true;}
         if((event.modifiers()&7)==0&&event.key()==GLFW.GLFW_KEY_T&&!repeat){toggleTransparency();return true;} // T: transparency, unless a tool has taken the key
-        // The keypad's + and -, and Ctrl+Shift+= (which is +), also resize the interface when the main bindings are the defaults.
-        if((event.modifiers()&7)==EditorControls.CONTROL){int key=event.key();if(key==GLFW.GLFW_KEY_KP_ADD){resizeInterface(1);return true;}if(key==GLFW.GLFW_KEY_KP_SUBTRACT){resizeInterface(-1);return true;}}
-        if((event.modifiers()&7)==(EditorControls.CONTROL|EditorControls.SHIFT)&&event.key()==GLFW.GLFW_KEY_EQUAL){resizeInterface(1);return true;}
         return true;
     }
     /**
@@ -2150,10 +2154,33 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     /** "3 x 4 x 2": how many blocks a saved selection spans along each axis. */
     private static String savedSpan(dev.craftium.net.Packets.SavedSelection s){return (s.max().x()-s.min().x()+1)+" x "+(s.max().y()-s.min().y()+1)+" x "+(s.max().z()-s.min().z()+1);}
     /** The Hierarchy panel, the top of the right column: every selection saved by name, to look at (click), edit (pencil) or delete (cross). The player's own selection is only swapped out while one is looked at, and given back when it is let go. It is the list BuildObjects will grow into. */
+    /** The ids of the group rows start here, apart from those of BuildObjects, so one number says which row it is (see {@link HRow#id}). */
+    private static final int GROUP_BASE=1_000_000;
+    private static final int GROUP_BAND=0xff212832,GROUP_TEXT=0xffd9e3ec;
+    /** A row of the Hierarchy: a group's heading, or a BuildObject. */
+    private record HRow(dev.craftium.net.Packets.SavedGroup group,dev.craftium.net.Packets.SavedSelection entry){int id(){return group!=null?GROUP_BASE+group.id():entry.id();}}
+    /** The group a BuildObject is in as far as the Hierarchy is concerned: its own, or the first when the server named one that is not there. 0 when there are no groups. */
+    private int groupIdOf(dev.craftium.net.Packets.SavedSelection e){
+        var groups=ClientState.savedGroups();if(groups.isEmpty())return 0;
+        for(var gr:groups)if(gr.id()==e.group())return gr.id();
+        return groups.getFirst().id();
+    }
+    private int groupIdOfRow(HRow row){return row.group()!=null?row.group().id():groupIdOf(row.entry());}
+    private dev.craftium.net.Packets.SavedGroup groupById(int id){for(var gr:ClientState.savedGroups())if(gr.id()==id)return gr;return null;}
+    /** The BuildObjects at the top level in a group (all of them when {@code group} is 0). */
+    private int rootCount(int group){int k=0;for(var e:hierarchyAll)if(e.parent()==0&&(group==0||groupIdOf(e)==group))k++;return k;}
     private void hierarchyPanel(Gfx g){
         hierarchyAll=ClientState.savedSelections();
-        var saved=new ArrayList<dev.craftium.net.Packets.SavedSelection>(); // the rows shown: everything but what is under a folded BuildObject
-        for(var e:hierarchyAll){boolean shown=true;int n=0;for(var p=savedById(e.parent());p!=null&&n<64;p=savedById(p.parent()),n++)if(ClientState.savedFolded(p.id())){shown=false;break;}if(shown)saved.add(e);}
+        var groups=ClientState.savedGroups();
+        var saved=new ArrayList<HRow>(); // the rows shown: a heading for each group, and in it everything but what is under a folded BuildObject
+        for(var gr:groups.isEmpty()?java.util.Collections.singletonList((dev.craftium.net.Packets.SavedGroup)null):groups){
+            if(gr!=null){saved.add(new HRow(gr,null));if(ClientState.groupFolded(gr.id()))continue;}
+            for(var e:hierarchyAll){
+                if(gr!=null&&groupIdOf(e)!=gr.id())continue;
+                boolean shown=true;int n=0;for(var p=savedById(e.parent());p!=null&&n<64;p=savedById(p.parent()),n++)if(ClientState.savedFolded(p.id())){shown=false;break;}
+                if(shown)saved.add(new HRow(null,e));
+            }
+        }
         hierarchyRows=saved;
         var parents=new HashSet<Integer>();for(var e:hierarchyAll)parents.add(e.parent());
         int x=w-RIGHT,y=27;
@@ -2166,16 +2193,33 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(menu==ROW_MENU)ClientState.hoverSaved=rowMenuRow;
         else if(menu<0&&pointerFree()&&rowDragId<0&&WorkspaceLayout.visible("hierarchy")&&!WorkspaceLayout.folded("hierarchy")){
             var at=WorkspaceLayout.inverse("hierarchy",mx,my);
-            if(at[0]>=x+8&&at[0]<x+pw-8&&at[1]>=top&&at[1]<top+rows*rowHeight){int over=savedScroll+(int)((at[1]-top)/rowHeight);if(over<saved.size())ClientState.hoverSaved=saved.get(over).id();}
+            if(at[0]>=x+8&&at[0]<x+pw-8&&at[1]>=top&&at[1]<top+rows*rowHeight){int over=savedScroll+(int)((at[1]-top)/rowHeight);if(over<saved.size()&&saved.get(over).entry()!=null)ClientState.hoverSaved=saved.get(over).entry().id();}
         }
         savedScroll=Math.clamp(savedScroll,0,Math.max(0,total-rows));
-        if(total==0)text(g,"No BuildObjects yet",x+16,top+6,MUTED);
+        if(hierarchyAll.isEmpty()&&groups.isEmpty())text(g,"No BuildObjects yet",x+16,top+6,MUTED);
         for(int i=0;i<rows&&savedScroll+i<total;i++){
-            var entry=saved.get(savedScroll+i);int ry=top+i*rowHeight,id=entry.id();
-            int indent=Math.min(depthOf(entry),6)*12,nameX=x+14+indent+12; // a level in is 12 further right; the arrow takes the first 12
+            var shownRow=saved.get(savedScroll+i);int ry=top+i*rowHeight;
             int rowRight=total>rows?x+pw-17:x+pw-9; // a scrollbar, when there is one, has the right edge to itself
-            if(entry.active())g.fill(x+9,ry,rowRight,ry+rowHeight,entry.editing()?0xff5b4a84:0xff315b84);
             int edge=total>rows?x+pw-18:x+pw-10,eye=edge-18; // the eye keeps to the left of the scrollbar
+            if(shownRow.group()!=null){ // a group's heading: its name in a lighter colour on a band of its own
+                var group=shownRow.group();int gid=GROUP_BASE+group.id(),nameX=x+14+12;boolean folded=ClientState.groupFolded(group.id());
+                g.fill(x+9,ry,rowRight,ry+rowHeight,GROUP_BAND);
+                if(renaming==gid){renameShown=true;var box=renameBox(group.name());box.setX(nameX);box.setY(ry+4);box.setWidth(eye-4-nameX);}
+                else text(g,shorten(group.name(),eye-4-nameX),nameX,ry+6,GROUP_TEXT);
+                if(rowDragMoved&&rowDragId==gid)g.fill(x+9,ry,x+pw-9,ry+rowHeight,0xaa141c26);
+                var headControl=new Control(x+9,ry,rowRight-(x+9),rowHeight,()->{},HIDDEN_TIP+"Group · The arrow folds it · Double-click to rename · Drag to move it · Right-click for more");controls.add(headControl);renameAreas.add(new RenameArea(headControl,gid));
+                foldArrow(g,x+15,folded?ry+6:ry+7,folded,GROUP_TEXT);
+                controls.add(new Control(x+11,ry,14,rowHeight,()->ClientState.toggleGroupFolded(group.id()),folded?"Show this group's BuildObjects":"Fold this group's BuildObjects"));
+                var members=new ArrayList<Integer>();for(var e:hierarchyAll)if(groupIdOf(e)==group.id())members.add(e.id());
+                boolean allHidden=!members.isEmpty()&&members.stream().allMatch(ClientState::savedHidden);
+                button(g,eye,ry+2,18,rowHeight-4,"",false,()->{for(int m:members)ClientState.setSavedHidden(m,!allHidden);},allHidden?"Show the outlines of everything in this group":"Hide the outlines of everything in this group");
+                glyph(g,eye,ry+2,18,rowHeight-4,EYE,allHidden?0xff56606e:TEXT);
+                if(allHidden){int ox=eye+(18-9)/2,oy=ry+2+(rowHeight-4-5)/2;for(int k=0;k<9;k++)g.fill(ox+k,oy+4-k/2,ox+k+1,oy+5-k/2,0xffe07070);}
+                continue;
+            }
+            var entry=shownRow.entry();int id=entry.id();
+            int indent=Math.min(depthOf(entry),6)*12,nameX=x+14+indent+12; // a level in is 12 further right; the arrow takes the first 12
+            if(entry.active())g.fill(x+9,ry,rowRight,ry+rowHeight,entry.editing()?0xff5b4a84:0xff315b84);
             if(renaming==id){
                 renameShown=true;var box=renameBox(entry.name());box.setX(nameX);box.setY(ry+4);box.setWidth(eye-4-nameX);
             }else text(g,shorten(entry.name(),eye-4-nameX),nameX,ry+6,entry.active()?TEXT:MUTED);
@@ -2183,11 +2227,11 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
             // later controls win where they overlap, so the row comes first and the cells and buttons on it after
             var rowControl=new Control(x+9,ry,rowRight-(x+9),rowHeight,()->rowClick(entry),HIDDEN_TIP+savedSpan(entry)+" blocks · "+(entry.active()&&!entry.editing()?"Let go":"Select this BuildObject")); controls.add(rowControl);renameAreas.add(new RenameArea(rowControl,id));
             if(parents.contains(id)){ // something is under it: an arrow folds it
-                boolean folded=ClientState.savedFolded(id);text(g,folded?"▸":"▾",x+14+indent,ry+6,MUTED);
+                boolean folded=ClientState.savedFolded(id);foldArrow(g,x+15+indent,folded?ry+6:ry+7,folded,MUTED); // centred a pixel above the middle of the row
                 controls.add(new Control(x+11+indent,ry,14,rowHeight,()->ClientState.toggleSavedFolded(id),folded?"Show what is under this BuildObject":"Fold what is under this BuildObject"));
             }
             boolean hidden=ClientState.savedHidden(id);
-            button(g,eye,ry+2,18,rowHeight-4,"",false,()->eyeClick(entry,minecraft.hasControlDown()),hidden?"Show this BuildObject's outline in the world · It shows while it is selected, whatever the eye · Ctrl+click does the same for everything under it":"Hide this BuildObject's outline in the world · It still shows while it is selected · Ctrl+click does the same for everything under it");
+            button(g,eye,ry+2,18,rowHeight-4,"",false,()->eyeClick(entry,minecraft.hasControlDown()),hidden?"Show this BuildObject's outline in the world · It shows while it is selected, whatever the eye · Ctrl+click does the same for everything under it":"Hide this BuildObject's outline in the world · Ctrl+click does the same for everything under it");
             glyph(g,eye,ry+2,18,rowHeight-4,EYE,hidden?0xff56606e:TEXT);
             if(hidden){int ox=eye+(18-9)/2,oy=ry+2+(rowHeight-4-5)/2;for(int k=0;k<9;k++)g.fill(ox+k,oy+4-k/2,ox+k+1,oy+5-k/2,0xffe07070);} // a slash through it
         }
@@ -2198,12 +2242,14 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(rowDragMoved){ // where the dragged row would land: a line between rows, or a frame round the row it would go under
             var drop=dropAt();
             if(drop!=null&&total>0){
-                int at=drop.row()-savedScroll,ry=top+at*rowHeight,indentTo=x+14+Math.min(depthOf(saved.get(Math.clamp(drop.row(),0,total-1))),6)*12;
+                int at=drop.row()-savedScroll,ry=top+at*rowHeight;
+                var target=saved.get(Math.clamp(drop.row(),0,total-1));
+                int indentTo=x+14+(target.entry()==null?0:Math.min(depthOf(target.entry()),6)*12);
                 if(at>=0&&at<rows)switch(drop.kind()){
                     case DROP_INTO->g.outline(x+9,ry,pw-18,rowHeight,ACCENT);
-                    case DROP_ABOVE->g.fill(indentTo,ry-1,x+pw-9,ry+1,ACCENT);
+                    case DROP_ABOVE,DROP_GROUP_BEFORE->g.fill(drop.kind()==DROP_GROUP_BEFORE?x+9:indentTo,ry-1,x+pw-9,ry+1,ACCENT);
                     case DROP_FIRST_CHILD->g.fill(indentTo+12,ry+rowHeight-1,x+pw-9,ry+rowHeight+1,ACCENT);
-                    default->g.fill(indentTo,ry+rowHeight-1,x+pw-9,ry+rowHeight+1,ACCENT);
+                    default->g.fill(drop.kind()==DROP_GROUP_AFTER?x+9:indentTo,ry+rowHeight-1,x+pw-9,ry+rowHeight+1,ACCENT);
                 }
             }
         }
@@ -2212,6 +2258,16 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         g.fill(x+1,y+ph-30,x+pw-1,y+ph-29,LINE); // the buttons along the bottom
         button(g,x+10,y+ph-25,24,20,"",false,()->action("saved_selection:save"),looking?"Create a BuildObject from what is selected now · While one is shown, the new one goes around it":"Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole");
         glyph(g,x+10,y+ph-25,24,20,PLUS,TEXT);
+    }
+    /**
+     * The fold arrow of a Hierarchy row, drawn in pixels so it keeps its shape at any interface size: a 7 by 7 box at {@code x}, {@code y}, a triangle
+     * of four rows pointing down when open and four columns pointing right when folded. It sits one pixel higher than the font's own arrows did.
+     */
+    private static void foldArrow(Gfx g,int x,int y,boolean folded,int color){
+        for(int i=0;i<4;i++){
+            int span=7-2*i; // 7, 5, 3, 1
+            if(folded)g.fill(x+i,y+i,x+i+1,y+i+span,color);else g.fill(x+i,y+i,x+i+span,y+i+1,color);
+        }
     }
     /** Opens or closes the eye of a BuildObject; with Ctrl, of everything under it as well, all to the new state. */
     private void eyeClick(dev.craftium.net.Packets.SavedSelection entry,boolean below){
@@ -2282,7 +2338,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(ctrl&&shift){
             int from=-1,to=-1;for(int i=0;i<hierarchyRows.size();i++){int id=hierarchyRows.get(i).id();if(id==hierarchyAnchor)from=i;if(id==entry.id())to=i;}
             if(from<0)from=to;
-            for(int i=Math.min(from,to);i<=Math.max(from,to);i++){int id=hierarchyRows.get(i).id();if(!chosen.contains(id))chosen.add(id);}
+            for(int i=Math.min(from,to);i<=Math.max(from,to);i++){if(hierarchyRows.get(i).entry()==null)continue;int id=hierarchyRows.get(i).id();if(!chosen.contains(id))chosen.add(id);}
         }else if(ctrl){
             if(!chosen.remove((Integer)entry.id()))chosen.add(entry.id());hierarchyAnchor=entry.id();
         }else{
@@ -2323,6 +2379,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         return shown.contains(id)?shown:List.of(id);
     }
     private void openRowMenu(int id,int x,int y){
+        if(id>=GROUP_BASE){openGroupMenu(id-GROUP_BASE,x,y);return;}
         var row=savedById(id);if(row==null)return;
         var targets=rowMenuTargets(id);int n=targets.size();String csv=String.join(",",targets.stream().map(String::valueOf).toList());
         if(!targets.equals(List.of(id))||!row.active())if(n==1)action("saved_selection:view:"+id); // right-clicking one chooses it, as in any list
@@ -2345,10 +2402,14 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         items.add(item(n>1?"Delete selected + blocks ("+n+")":"Delete blocks","",()->deleteWithBlocks(targets))); // the BuildObjects and the blocks they hold
         items.add(item("Export…","",()->exportStructure(StructureSettings.SELECTION))); // the blocks shown, which are everything under each BuildObject
         var moves=new ArrayList<MenuItem>();
-        int at=siblingIndex(row);int siblings=childCount(row.parent());
-        if(at>0)moves.add(item("Move up","",()->action("saved_selection:place:"+id+":"+row.parent()+":"+(at-1))));
-        if(at<siblings-1)moves.add(item("Move down","",()->action("saved_selection:place:"+id+":"+row.parent()+":"+(at+1))));
-        if(row.parent()!=0){var up=savedById(row.parent());if(up!=null)moves.add(item("Move out of parent","",()->action("saved_selection:place:"+id+":"+up.parent()+":"+(siblingIndex(up)+1))));}
+        int at=siblingIndex(row);int siblings=siblingCount(row);String inGroup=row.parent()==0&&groupIdOf(row)>0?":"+groupIdOf(row):"";
+        if(at>0)moves.add(item("Move up","",()->action("saved_selection:place:"+id+":"+row.parent()+":"+(at-1)+inGroup)));
+        if(at<siblings-1)moves.add(item("Move down","",()->action("saved_selection:place:"+id+":"+row.parent()+":"+(at+1)+inGroup)));
+        if(row.parent()!=0){var up=savedById(row.parent());if(up!=null)moves.add(item("Move out of parent","",()->action("saved_selection:place:"+id+":"+up.parent()+":"+(siblingIndex(up)+1)+(up.parent()==0&&groupIdOf(up)>0?":"+groupIdOf(up):""))));}
+        if(row.parent()==0&&ClientState.savedGroups().size()>1)for(var gr:ClientState.savedGroups()){ // a BuildObject at the top goes to the end of another group
+            if(gr.id()==groupIdOf(row))continue;if(moves.size()>=10)break;
+            moves.add(item("Move to group: "+shorten(gr.name(),120),"",()->action("saved_selection:place:"+id+":0:"+rootCount(gr.id())+":"+gr.id())));
+        }
         if(!kids.isEmpty()){boolean folded=ClientState.savedFolded(id);moves.add(item(folded?"Unfold all below":"Fold all below","",()->foldBelow(id,!folded)));}
         if(!moves.isEmpty()){items.add(divider());items.addAll(moves);}
         items.add(divider());
@@ -2359,6 +2420,31 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         var box=subtreeBounds(id);
         if(box!=null)items.add(item("Focus","F",()->focusOn(box[0],box[1])));
         rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=id;menu=ROW_MENU;openSub="";openSub2="";
+    }
+    /** The right-click menu of a group's heading. */
+    private void openGroupMenu(int groupId,int x,int y){
+        var group=groupById(groupId);if(group==null)return;
+        var groups=ClientState.savedGroups();int at=0;for(int i=0;i<groups.size();i++)if(groups.get(i).id()==groupId)at=i;final int position=at;
+        var items=new ArrayList<MenuItem>();
+        items.add(item("Rename","",()->startRename(new RenameArea(null,GROUP_BASE+groupId))));
+        items.add(item("Create empty BuildObject here","",()->action("saved_selection:empty:"+groupId)));
+        items.add(item("Create new Group","",()->action("saved_selection:groupnew")));
+        boolean folded=ClientState.groupFolded(groupId);
+        items.add(item(folded?"Unfold":"Fold","",()->ClientState.toggleGroupFolded(groupId)));
+        var moves=new ArrayList<MenuItem>();
+        if(position>0)moves.add(item("Move up","",()->action("saved_selection:groupmove:"+groupId+":"+(position-1))));
+        if(position<groups.size()-1)moves.add(item("Move down","",()->action("saved_selection:groupmove:"+groupId+":"+(position+1))));
+        if(!moves.isEmpty()){items.add(divider());items.addAll(moves);}
+        if(groups.size()>1){items.add(divider());items.add(item("Delete group","",()->action("saved_selection:groupdelete:"+groupId)));} // what is in it goes to the group before
+        rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=0;menu=ROW_MENU;openSub="";openSub2="";
+    }
+    /** The right-click menu of the empty space in the Hierarchy. */
+    private void openHierarchyMenu(int x,int y){
+        var items=new ArrayList<MenuItem>();
+        var groups=ClientState.savedGroups();
+        if(!groups.isEmpty())items.add(item("Create new Group","",()->action("saved_selection:groupnew")));
+        items.add(item("Create empty BuildObject","",()->action("saved_selection:empty"+(groups.isEmpty()?"":":"+groups.getLast().id())))); // at the end of the last group, which is where the empty space is
+        rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=0;menu=ROW_MENU;openSub="";openSub2="";
     }
     /** The corners of the box round the blocks of the BuildObject and everything under it, or null when there are none. */
     private Point[] subtreeBounds(int id){return ClientState.subtreeBounds(id);}
@@ -2398,16 +2484,18 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     }
     private int rowDragId=-1,hierarchyTop,hierarchyRow=20,hierarchyRowCount=1;private double rowDragX,rowDragY;private boolean rowDragMoved;private Runnable rowDragClick;
     /** The BuildObjects as the client has them, and the rows listed of them (those not under a folded one), for the drag to work out where it lands. */
-    private List<dev.craftium.net.Packets.SavedSelection> hierarchyAll=List.of(),hierarchyRows=List.of();
+    private List<dev.craftium.net.Packets.SavedSelection> hierarchyAll=List.of();private List<HRow> hierarchyRows=List.of();
     private dev.craftium.net.Packets.SavedSelection savedById(int id){if(id==0)return null;for(var e:hierarchyAll)if(e.id()==id)return e;return null;}
     private int depthOf(dev.craftium.net.Packets.SavedSelection e){int d=0;for(var p=savedById(e.parent());p!=null&&d<64;p=savedById(p.parent()))d++;return d;}
     private boolean isUnder(dev.craftium.net.Packets.SavedSelection e,int ancestor){int n=0;for(var p=savedById(e.parent());p!=null&&n<64;p=savedById(p.parent()),n++)if(p.id()==ancestor)return true;return false;}
     /** Which child of its parent the row is, counting the others before it. */
-    private int siblingIndex(dev.craftium.net.Packets.SavedSelection e){int k=0;for(var o:hierarchyAll){if(o.id()==e.id())return k;if(o.parent()==e.parent())k++;}return k;}
+    private int siblingIndex(dev.craftium.net.Packets.SavedSelection e){int k=0;for(var o:hierarchyAll){if(o.id()==e.id())return k;if(o.parent()==e.parent()&&(e.parent()!=0||groupIdOf(o)==groupIdOf(e)))k++;}return k;} // at the top level, the place in its group
+    /** How many BuildObjects are beside this one, itself included: under its parent, or in its group at the top level. */
+    private int siblingCount(dev.craftium.net.Packets.SavedSelection e){return e.parent()==0?rootCount(groupIdOf(e)):childCount(e.parent());}
     private int childCount(int id){int k=0;for(var o:hierarchyAll)if(o.parent()==id)k++;return k;}
     /** What dropping a dragged row here does: under {@code parent} (0 for the top) as child number {@code index}, shown by {@code kind} at {@code row}. */
-    private record Drop(int parent,int index,int kind,int row){}
-    private static final int DROP_ABOVE=0,DROP_BELOW=1,DROP_INTO=2,DROP_FIRST_CHILD=3,DROP_END=4;
+    private record Drop(int parent,int index,int kind,int row,int group){}
+    private static final int DROP_ABOVE=0,DROP_BELOW=1,DROP_INTO=2,DROP_FIRST_CHILD=3,DROP_END=4,DROP_GROUP_BEFORE=5,DROP_GROUP_AFTER=6;
     /**
      * Where the dragged row would land, from the pointer: the top quarter of a row puts it before that row, the bottom quarter after it (or first
      * under it when it is open), the middle makes it a child, and below the last row it goes to the end of the top level. Null where it cannot go: on itself
@@ -2417,27 +2505,44 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         int total=hierarchyRows.size();if(total==0)return null;
         double py=WorkspaceLayout.inverse("hierarchy",mx,my)[1]-hierarchyTop,at=Math.floor(py/hierarchyRow);
         int row=(int)at+savedScroll;
-        if(row>=total)return new Drop(0,childCount(0),DROP_END,total-1);
+        if(rowDragId>=GROUP_BASE){ // a group: it goes before or after the group the pointer is over, by which half of that group's rows it is in
+            int dragged=rowDragId-GROUP_BASE;
+            var hit=hierarchyRows.get(row>=total?total-1:Math.max(row,0));int target=groupIdOfRow(hit);
+            if(target==dragged)return null;
+            int first=-1,last=-1;for(int i=0;i<total;i++)if(groupIdOfRow(hierarchyRows.get(i))==target){if(first<0)first=i;last=i;}
+            boolean before=row<total&&py/hierarchyRow+savedScroll<first+(last-first+1)/2.0;
+            var others=new ArrayList<Integer>();for(var gr:ClientState.savedGroups())if(gr.id()!=dragged)others.add(gr.id());
+            int index=others.indexOf(target)+(before?0:1);
+            return new Drop(0,index,before?DROP_GROUP_BEFORE:DROP_GROUP_AFTER,before?first:last,target);
+        }
+        if(row>=total){int lastGroup=groupIdOfRow(hierarchyRows.get(total-1));return new Drop(0,rootCount(lastGroup),DROP_END,total-1,lastGroup);}
         var target=hierarchyRows.get(Math.max(row,0));
-        for(int dragged:rowDragIds)if(target.id()==dragged||isUnder(target,dragged))return null; // not onto what is being carried, nor onto what is under it
+        if(target.group()!=null)return new Drop(0,rootCount(target.group().id()),DROP_INTO,Math.max(row,0),target.group().id()); // onto a group's heading: the end of that group
+        var entry=target.entry();
+        for(int dragged:rowDragIds)if(entry.id()==dragged||isUnder(entry,dragged))return null; // not onto what is being carried, nor onto what is under it
         double f=py<0?0:py/hierarchyRow-at;
-        if(f<.25)return new Drop(target.parent(),siblingIndex(target),DROP_ABOVE,Math.max(row,0));
-        if(f>.75){boolean open=childCount(target.id())>0&&!ClientState.savedFolded(target.id());return open?new Drop(target.id(),0,DROP_FIRST_CHILD,row):new Drop(target.parent(),siblingIndex(target)+1,DROP_BELOW,row);}
-        return new Drop(target.id(),childCount(target.id()),DROP_INTO,row);
+        int group=entry.parent()==0?groupIdOf(entry):0;
+        if(f<.25)return new Drop(entry.parent(),siblingIndex(entry),DROP_ABOVE,Math.max(row,0),group);
+        if(f>.75){boolean open=childCount(entry.id())>0&&!ClientState.savedFolded(entry.id());return open?new Drop(entry.id(),0,DROP_FIRST_CHILD,row,0):new Drop(entry.parent(),siblingIndex(entry)+1,DROP_BELOW,row,group);}
+        return new Drop(entry.id(),childCount(entry.id()),DROP_INTO,row,0);
     }
     /** Lets go of a pressed row: where it was dropped moves it, and a press that never moved is the click it always was. */
     private void finishRowDrag(){
         int id=rowDragId;var ids=rowDragIds;boolean moved=rowDragMoved;var click=rowDragClick;var drop=moved?dropAt():null;var dragged=savedById(id);rowDragId=-1;rowDragIds=List.of();rowDragMoved=false;rowDragClick=null;
         if(!moved){if(click!=null)click.run();return;}
+        if(id>=GROUP_BASE){if(drop!=null)action("saved_selection:groupmove:"+(id-GROUP_BASE)+":"+drop.index());return;} // a group, to its new place among the groups
         if(drop==null||dragged==null)return;
         int index=drop.index();
-        for(int carried:ids){var row=savedById(carried);if(row!=null&&row.parent()==drop.parent()&&siblingIndex(row)<drop.index())index--;} // the place is counted without the rows carried
-        if(ids.size()>1)action("saved_selection:placeset:"+String.join(",",ids.stream().map(String::valueOf).toList())+":"+drop.parent()+":"+index);
-        else action("saved_selection:place:"+id+":"+drop.parent()+":"+index);
+        for(int carried:ids){var row=savedById(carried);if(row!=null&&row.parent()==drop.parent()&&(drop.parent()!=0||drop.group()==0||groupIdOf(row)==drop.group())&&siblingIndex(row)<drop.index())index--;} // the place is counted without the rows carried
+        String where=drop.parent()+":"+index+(drop.parent()==0&&drop.group()>0?":"+drop.group():""); // at the top level the place is in a group
+        if(ids.size()>1)action("saved_selection:placeset:"+String.join(",",ids.stream().map(String::valueOf).toList())+":"+where);
+        else action("saved_selection:place:"+id+":"+where);
     }
     /** The dragged row, following the pointer so it is plain that it is being carried. */
     private void rowDragGhost(Gfx g){
-        if(!rowDragMoved)return;var e=savedById(rowDragId);if(e==null)return;
+        if(!rowDragMoved)return;
+        if(rowDragId>=GROUP_BASE){var group=groupById(rowDragId-GROUP_BASE);if(group==null)return;int gw=140,gh=18,gx=Math.min(mx+12,w-gw-4),gy=my-9;g.fill(gx,gy,gx+gw,gy+gh,0xe0212832);g.outline(gx,gy,gw,gh,ACCENT);text(g,shorten(group.name(),gw-12),gx+6,gy+5,GROUP_TEXT);return;}
+        var e=savedById(rowDragId);if(e==null)return;
         int gw=140,gh=18,gx=Math.min(mx+12,w-gw-4),gy=my-9;
         g.fill(gx,gy,gx+gw,gy+gh,0xe0315b84);g.outline(gx,gy,gw,gh,ACCENT);
         g.fill(gx+4,gy+4,gx+14,gy+gh-4,0xff000000|ClientState.savedColor(e.id())&0xffffff);
@@ -2459,6 +2564,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     private void commitRename(){
         var box=fields.get("rename");int id=renaming;cancelRename();
         if(box==null)return;
+        if(id>=GROUP_BASE){var group=groupById(id-GROUP_BASE);String named=box.getValue().strip();if(group!=null&&!named.isEmpty()&&!group.name().equals(named))action("saved_selection:grouprename:"+group.id()+":"+named);return;}
         String name=box.getValue().strip();var current=ClientState.savedSelections().stream().filter(e->e.id()==id).findFirst();
         if(!name.isEmpty()&&current.isPresent()&&!current.get().name().equals(name))action("saved_selection:rename:"+id+":"+name);
     }

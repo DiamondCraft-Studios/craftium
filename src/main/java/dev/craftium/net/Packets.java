@@ -42,10 +42,15 @@ public final class Packets {
                           */
                          List<PluginTool> pluginTools,
                          /** The player's saved selections, in order: null means the same as last time, and an empty list means there are none now. */
-                         List<SavedSelection> savedSelections) {
-        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo,String entityUuid,String entityNbt,List<dev.craftium.core.Annotation> annotations,String selectionData,String clipboardData,List<dev.craftium.core.BlueprintInfo> blueprints,int clipboardEntityCount,String pendingData,String clipboardGhost,String pivotUpdate,long undoAge,long redoAge,String undoName,String redoName,String pulse,String aiPendingData,int aiUndo,String aiUndoName){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,entityUuid,entityNbt,annotations,selectionData,clipboardData,blueprints,clipboardEntityCount,pendingData,clipboardGhost,pivotUpdate,undoAge,redoAge,undoName,redoName,pulse,aiPendingData,aiUndo,aiUndoName,"",null,null,false,null,"",null,null);}
+                         List<SavedSelection> savedSelections,
+                         /**
+                          * The groups of the Hierarchy, in order, sent whenever the list of BuildObjects is: null means the same as last time, and a server that predates groups never sends them
+                          * (the client then shows the list as it was, with no groups).
+                          */
+                         List<SavedGroup> savedGroups) {
+        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo,String entityUuid,String entityNbt,List<dev.craftium.core.Annotation> annotations,String selectionData,String clipboardData,List<dev.craftium.core.BlueprintInfo> blueprints,int clipboardEntityCount,String pendingData,String clipboardGhost,String pivotUpdate,long undoAge,long redoAge,String undoName,String redoName,String pulse,String aiPendingData,int aiUndo,String aiUndoName){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,entityUuid,entityNbt,annotations,selectionData,clipboardData,blueprints,clipboardEntityCount,pendingData,clipboardGhost,pivotUpdate,undoAge,redoAge,undoName,redoName,pulse,aiPendingData,aiUndo,aiUndoName,"",null,null,false,null,"",null,null,null);}
         /** {@code undoAge} and {@code redoAge} are how many milliseconds ago the next edit to undo or redo was made, or -1 when there is none. */
-        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,false,null,"",null,null);}
+        public Status(String message,boolean error,boolean busy,int selectionSize,Point min,Point max,int clipboardSize,List<String> history,int undo,int redo){this(message,error,busy,selectionSize,min,max,clipboardSize,history,undo,redo,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,false,null,"",null,null,null);}
     }
 
     /**
@@ -80,25 +85,29 @@ public final class Packets {
                                  /** The id of the BuildObject this one is under, or 0 at the top level (and from a server that predates hierarchy). The list is in tree order. */
                                  int parent,
                                  /** The colour everyone sees its outline in (ARGB), or 0 when none was chosen: the client then takes the next one from the wheel. */
-                                 int color) {}
+                                 int color,
+                                 /** The id of the group it is in (that of the BuildObject at the top that it is under), or 0 from a server that predates groups. */
+                                 int group) {}
+    /** One group of the Hierarchy: a heading that BuildObjects at the top level sit under. */
+    public record SavedGroup(int id, String guid, String name) {}
     /** A status that carries only the list of plugin tools, sent when it changes: not a reply to anything, so the client takes the list and nothing else from it. */
     public static Status toolsOnly(List<PluginTool> tools) {
-        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,null,tools,null);
+        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,null,tools,null,null);
     }
 
     /** A status that carries only the ghost a plugin's tool is showing: not a reply to anything, so the client takes the ghost and nothing else from it. */
     public static Status pluginOnly(String ghost) {
-        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,ghost,null,null);
+        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,ghost,null,null,null);
     }
 
     /** A status that carries only the list of BuildObjects, sent when someone else changed them: not a reply to anything, so the client takes the list and nothing else from it. */
-    public static Status savedOnly(List<SavedSelection> saved) {
-        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,null,null,saved);
+    public static Status savedOnly(List<SavedSelection> saved,List<SavedGroup> groups) {
+        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,null,true,null,null,null,saved,groups);
     }
 
     /** A status that carries only the other players' AI previews, sent when one of them changes. */
     public static Status sharedOnly(List<SharedPreview> shared) {
-        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,shared,true,null,null,null,null);
+        return new Status("",false,false,0,null,null,0,List.of(),0,0,"","",List.of(),"","",List.of(),0,"","","",-1,-1,"","","","",0,"","",null,shared,true,null,null,null,null,null);
     }
 
     public record Bridge(byte[] bytes) implements CustomPacketPayload {

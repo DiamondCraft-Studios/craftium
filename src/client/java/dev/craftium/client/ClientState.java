@@ -52,6 +52,7 @@ public final class ClientState {
     static void updateSavedSelections(Packets.Status status){
         if(status.savedSelections()==null)return;
         savedSelections=List.copyOf(status.savedSelections());
+        if(status.savedGroups()!=null){savedGroups=List.copyOf(status.savedGroups());loadView();for(var g:savedGroups)if(g.guid()!=null){if(view.folded(g.guid()))groupFolded.add(g.id());else groupFolded.remove(g.id());}}
         loadView();
         // The eye and the fold of each BuildObject come from what this player chose before, by GUID; one never seen starts with its eye closed (it shows only while it is selected).
         for(var saved:savedSelections){
@@ -74,6 +75,17 @@ public final class ClientState {
         // an older server sends no GUID, so there is nothing to keep an eye by: a BuildObject seen for the first time starts closed
         for(var saved:savedSelections)if(saved.guid()==null&&savedWithoutGuid.add(saved.id()))savedHidden.add(saved.id());
         savedWithoutGuid.retainAll(present);
+    }
+    /** The groups of the Hierarchy, in order, as the server last said; empty on a server that predates them, and the Hierarchy then shows no groups. */
+    private static List<Packets.SavedGroup> savedGroups=List.of();
+    public static List<Packets.SavedGroup> savedGroups(){return savedGroups;}
+    /** The groups folded in the Hierarchy, so what is in them is not listed. Like the fold of a BuildObject it belongs to this player, and is kept by GUID. */
+    private static final Set<Integer> groupFolded=new HashSet<>();
+    public static boolean groupFolded(int id){return groupFolded.contains(id);}
+    public static void toggleGroupFolded(int id){
+        boolean folded=!groupFolded.contains(id);
+        if(folded)groupFolded.add(id);else groupFolded.remove(id);
+        for(var g:savedGroups)if(g.id()==id&&g.guid()!=null&&view.setFolded(g.guid(),folded))viewChanged();
     }
     /** The outline of each saved selection by id, drawn in the selection style. A selection with none is drawn as a box. */
     private static final Map<Integer,OutlineShape> savedShapes=new HashMap<>();
@@ -138,7 +150,7 @@ public final class ClientState {
         if(folded)savedFolded.add(id);else savedFolded.remove(id);
         var guid=guidOf(id);if(guid!=null&&view.setFolded(guid,folded))viewChanged();
     }
-    static void clearSavedSelections(){savedSelections=List.of();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedIndex.clear();}
+    static void clearSavedSelections(){savedSelections=List.of();savedGroups=List.of();groupFolded.clear();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedIndex.clear();}
     public static int savedColor(int id){return savedColors.getOrDefault(id,options.selectionColor);}
     private static final Set<Integer> savedWithoutGuid=new HashSet<>();
     /** Whether a colour was chosen for it: every BuildObject is drawn in the selection colour until one is. */

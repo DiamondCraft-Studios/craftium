@@ -40,4 +40,23 @@ class BuildObjectStoreTest {
         BuildObjectStore.write(file,1,List.of());
         assertTrue(new SavedSelections(BuildObjectStore.load(file)).entries().isEmpty());
     }
+
+    @Test void groupsAndWhatIsInThemComeBackAfterTheServerRestarts(@TempDir Path dir){
+        var saved=new SavedSelections();
+        var a=saved.save(live(A));var b=saved.save(live(B));var walls=saved.createGroup("Walls");saved.placeIn(List.of(b.id()),0,walls.id(),0);
+        var tree=saved.tree();var file=dir.resolve("groups.nbt");
+        BuildObjectStore.write(file,tree.nextId(),tree.saved(),tree.nextGroupId(),tree.savedGroups());
+        var back=new SavedSelections(BuildObjectStore.load(file));
+        assertEquals(List.of("New Group","Walls"),back.groups().stream().map(SavedSelections.Group::name).toList());
+        assertEquals(saved.groups().get(1).guid(),back.groups().get(1).guid());
+        assertEquals(back.groups().getFirst().id(),back.byId(a.id()).groupId());assertEquals(walls.id(),back.byId(b.id()).groupId());
+        assertEquals(tree.nextGroupId(),back.tree().nextGroupId());
+    }
+    @Test void aFileWrittenBeforeGroupsLoadsIntoOneGroup(@TempDir Path dir){
+        var saved=new SavedSelections();saved.save(live(A));var file=dir.resolve("old.nbt");
+        BuildObjectStore.write(file,saved.tree().nextId(),saved.tree().saved()); // the old shape: no groups
+        var back=new SavedSelections(BuildObjectStore.load(file));
+        assertEquals(List.of("New Group"),back.groups().stream().map(SavedSelections.Group::name).toList());
+        assertSame(back.groups().getFirst(),back.entries().getFirst().group());
+    }
 }
