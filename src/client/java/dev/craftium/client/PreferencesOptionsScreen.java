@@ -29,7 +29,9 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
     private record Cycle(String label,String about,Function<Options,String> get,java.util.function.Consumer<Options> next,java.util.function.BiConsumer<Options,Options> reset) implements Row {}
     /** A whole number typed into a box, kept between {@code min} and {@code max}. */
     private record Field(String label,String about,int min,int max,Function<Options,Integer> get,java.util.function.BiConsumer<Options,Integer> set) implements Row {}
-    private record Number(String label,String about,int min,int max,Function<Options,Integer> get,java.util.function.BiConsumer<Options,Integer> set) implements Row {}
+    private record Number(String label,String about,int min,int max,Function<Options,Integer> get,java.util.function.BiConsumer<Options,Integer> set,Function<Integer,String> text) implements Row {
+        Number(String label,String about,int min,int max,Function<Options,Integer> get,java.util.function.BiConsumer<Options,Integer> set){this(label,about,min,max,get,set,String::valueOf);}
+    }
 
     /** The preferences in groups, each shown on its own tab; the order here is the order on screen. */
     private static final java.util.Map<String,List<Row>> GROUPS=new java.util.LinkedHashMap<>();
@@ -56,6 +58,8 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
             new Toggle("Show axis gizmo","Draw the X, Y and Z axes at the top right of the editor; click an end to look along that axis",o->o.showAxisGizmo,(o,v)->o.showAxisGizmo=v),
             new Toggle("Hide other gizmo handles","While a gizmo handle is held, draw only that handle",o->o.gizmoHideOthers,(o,v)->o.gizmoHideOthers=v),
             new Link("Ruler options","The colours of the ruler's line, its knobs and its span label",SelectionOptionsScreen::ruler)));
+        GROUPS.put("UI",List.of(
+            new Number("Interface size","How big the text and buttons of every Craftium screen are. Auto keeps the game's GUI scale (the editor lowers it until it fits the window); 1x to 8x draw every pixel of the text with that many screen pixels, in half steps. Whole steps stay perfectly sharp; a half step is only exact in the editor, and every other screen rounds it up to the next whole step. A size bigger than the window fits can push panels off the screen; Ctrl and - (or Auto) bring it back. Ctrl and + / - change it inside the editor",0,16,o->o.interfaceHalves,(o,v)->o.interfaceHalves=v,InterfaceScale::name)));
         GROUPS.put("AI",List.of(
             new Number("AI preview models","How many block models an AI preview draws; the rest of a bigger preview shows as its outline. More looks fuller but costs frame rate",Options.AI_GHOST_DRAW_MIN,Options.AI_GHOST_DRAW_MAX,o->o.aiGhostDrawLimit,(o,v)->o.aiGhostDrawLimit=v)));
     }
@@ -71,6 +75,8 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
     private final java.util.List<Integer> listBase=new java.util.ArrayList<>();
     private List<Row> rows(){return GROUPS.get(TABS.get(tab));}
 
+    /** The size of the screens follows the slider only once the button is let go, since laying out again would drop the slider being dragged. */
+    @Override protected boolean holdScale(){return minecraft.mouseHandler.isLeftPressed();}
     PreferencesOptionsScreen(Screen parent){super(Component.literal("Options"));this.parent=parent;}
 
     private int viewTop(){return LIST_TOP-6;}
@@ -119,7 +125,7 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
             }else if(ROWS.get(i) instanceof Number n){
                 double span=n.max()-n.min();
                 var slider=new FlatSlider(x+245,y,180,20,Component.empty(),(n.get().apply(o)-n.min())/span){
-                    protected void updateMessage(){setMessage(Component.literal(String.valueOf(n.min()+(int)Math.round(value*span))));}
+                    protected void updateMessage(){setMessage(Component.literal(n.text().apply(n.min()+(int)Math.round(value*span))));}
                     protected void applyValue(){n.set().accept(o,n.min()+(int)Math.round(value*span));}
                 };
                 slider.range(n.min(),n.max(),n.get().apply(DEFAULTS));slider.setRaw((n.get().apply(o)-n.min())/span);

@@ -22,7 +22,7 @@ final class SavedSelectionActions {
             }
             case "placeset"->{ // placeset:<ids separated by commas>:<parent id, 0 for the top>:<child number among the parent's others>
                 var rest=part.length<3?new String[0]:part[2].split(":");
-                try{if(rest.length!=2)throw new NumberFormatException();saved.placeMany(ids(part),Integer.parseInt(rest[0]),Integer.parseInt(rest[1]));}catch(NumberFormatException e){throw new IllegalArgumentException("Give BuildObjects, a parent and a place");}
+                try{if(rest.length<2||rest.length>3)throw new NumberFormatException();saved.placeIn(ids(part),Integer.parseInt(rest[0]),rest.length==3?Integer.parseInt(rest[2]):0,Integer.parseInt(rest[1]));}catch(NumberFormatException e){throw new IllegalArgumentException("Give BuildObjects, a parent and a place");}
                 return "Moved";
             }
             case "group"->{var entry=saved.group(ids(part));return "Grouped into "+entry.name();}
@@ -36,24 +36,33 @@ final class SavedSelectionActions {
             case "edit"->{saved.edit(id(part),s.selection);return "Editing "+saved.active().name();}
             case "release"->{saved.release(s.selection);return "Your selection is back";}
             case "delete"->{var entry=saved.delete(id(part),s.selection);return "Deleted "+entry.name();}
-            case "place"->{ // place:<id>:<parent id, 0 for the top>:<child number among the parent's others>
+            case "place"->{ // place:<id>:<parent id, 0 for the top>:<child number among the parent's others>[:<group id>, which makes the number the place in that group]
                 var where=part.length<3?new String[0]:part[2].split(":");
-                try{if(where.length!=2)throw new NumberFormatException();saved.place(id(part),Integer.parseInt(where[0]),Integer.parseInt(where[1]));}catch(NumberFormatException e){throw new IllegalArgumentException("Give a parent and a place");}
+                try{if(where.length<2||where.length>3)throw new NumberFormatException();saved.placeIn(List.of(id(part)),Integer.parseInt(where[0]),where.length==3?Integer.parseInt(where[2]):0,Integer.parseInt(where[1]));}catch(NumberFormatException e){throw new IllegalArgumentException("Give a parent and a place");}
                 return "Moved";
             }
+            case "groupnew"->{var group=saved.createGroup(part.length<2?"":part[1]);return "Created "+group.name();} // groupnew[:<name>]
+            case "grouprename"->{if(part.length<3)throw new IllegalArgumentException("Give a name");saved.renameGroup(id(part),part[2]);return "Renamed";} // grouprename:<group id>:<name>
+            case "groupmove"->{ // groupmove:<group id>:<place among the other groups>
+                var where=part.length<3?"":part[2];
+                try{saved.moveGroup(id(part),Integer.parseInt(where.strip()));}catch(NumberFormatException e){throw new IllegalArgumentException("Give a place");}
+                return "Moved";
+            }
+            case "groupdelete"->{var group=saved.deleteGroup(id(part));return "Deleted "+group.name();} // groupdelete:<group id>: what is in it goes to the group before
+            case "empty"->{var entry=saved.createEmpty(part.length<2||part[1].isBlank()?0:id(part));return "Created "+entry.name();} // empty[:<group id>]: an empty BuildObject
             case "rename"->{if(part.length<3)throw new IllegalArgumentException("Give a name");saved.rename(id(part),part[2]);return "Renamed";}
             default->throw new IllegalArgumentException("Unknown BuildObject action "+part[0]);
         }
     }
     /** Whether the action changes the BuildObjects themselves (and so goes in the history), as against only what is being looked at. */
-    static boolean changesHierarchy(String action){return switch(verb(action)){case "save","delete","deleteset","rename","place","placeset","group","createchild","colour"->true;default->false;};}
+    static boolean changesHierarchy(String action){return switch(verb(action)){case "save","delete","deleteset","rename","place","placeset","group","createchild","colour","groupnew","grouprename","groupmove","groupdelete","empty"->true;default->false;};}
     /** What the action asks permission for (see {@link HierarchyPermissions}), or null for one everybody may do: looking, which changes nothing of the BuildObjects. */
     static String permission(String action){
         return switch(verb(action)){
-            case "save","group","createchild"->"create";
-            case "rename"->"rename";
-            case "place","placeset"->"move";
-            case "delete","deleteset"->"delete";
+            case "save","group","createchild","groupnew","empty"->"create";
+            case "rename","grouprename"->"rename";
+            case "place","placeset","groupmove"->"move";
+            case "delete","deleteset","groupdelete"->"delete";
             case "colour"->"recolour";
             case "edit"->"edit";
             default->null;
@@ -61,7 +70,7 @@ final class SavedSelectionActions {
     }
     /** What the history calls the action: "Undid Create BuildObject". */
     static String historyName(String action){
-        return switch(verb(action)){case "save","createchild"->"Create BuildObject";case "group"->"Group BuildObjects";case "delete"->"Delete BuildObject";case "deleteset"->"Delete BuildObjects";case "rename"->"Rename BuildObject";case "colour"->"Recolour BuildObject";case "place"->"Move BuildObject";case "placeset"->"Move BuildObjects";default->"BuildObject";};
+        return switch(verb(action)){case "save","createchild"->"Create BuildObject";case "group"->"Group BuildObjects";case "delete"->"Delete BuildObject";case "deleteset"->"Delete BuildObjects";case "rename"->"Rename BuildObject";case "colour"->"Recolour BuildObject";case "place"->"Move BuildObject";case "placeset"->"Move BuildObjects";case "empty"->"Create BuildObject";case "groupnew"->"Create group";case "grouprename"->"Rename group";case "groupmove"->"Move group";case "groupdelete"->"Delete group";default->"BuildObject";};
     }
     private static String verb(String action){return action.startsWith(PREFIX)?action.substring(PREFIX.length()).split(":",2)[0]:"";}
     /** The ids of an action like {@code group:1,2,3}. */
@@ -88,10 +97,12 @@ final class SavedSelectionActions {
         for(var e:s.saved.entries()){
             Point min=e.points().isEmpty()?new Point(0,0,0):new Point(e.points().stream().mapToInt(Point::x).min().getAsInt(),e.points().stream().mapToInt(Point::y).min().getAsInt(),e.points().stream().mapToInt(Point::z).min().getAsInt());
             Point max=e.points().isEmpty()?min:new Point(e.points().stream().mapToInt(Point::x).max().getAsInt(),e.points().stream().mapToInt(Point::y).max().getAsInt(),e.points().stream().mapToInt(Point::z).max().getAsInt());
-            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,s.saved.isViewed(e),e==s.saved.active()&&s.saved.editing(),withData?data(s,e):null,e.guid(),e.parentId(),e.color()));
+            out.add(new Packets.SavedSelection(e.id(),e.name(),e.size(),min,max,s.saved.isViewed(e),e==s.saved.active()&&s.saved.editing(),withData?data(s,e):null,e.guid(),e.parentId(),e.color(),e.groupId()));
         }
         return out;
     }
+    /** The groups, in order, for the status that carries the list. */
+    static List<Packets.SavedGroup> groups(Session s){var out=new java.util.ArrayList<Packets.SavedGroup>();for(var g:s.saved.groups())out.add(new Packets.SavedGroup(g.id(),g.guid(),g.name()));return out;}
     /** The list for the status that is going to this player, or null when they already have the current one. Asking marks it as sent. */
     static List<Packets.SavedSelection> forStatus(Session s,boolean supported){
         if(!supported||s.savedSent==s.saved.revision())return null;

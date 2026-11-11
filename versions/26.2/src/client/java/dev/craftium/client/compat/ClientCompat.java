@@ -56,4 +56,6 @@ public final class ClientCompat {
         var source=mc.getBlockColors().getTintSource(state,index);
         return source==null?-1:source.colorInWorld(state,mc.level,pos);
     }
+    /** Sets the game's GUI scale back to the player's own and lays the current screen out again. */
+    public static void refreshGui(Minecraft mc){mc.resizeGui();}
 }

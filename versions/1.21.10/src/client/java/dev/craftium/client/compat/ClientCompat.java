@@ -61,4 +61,6 @@ public final class ClientCompat {
     public static int blockTint(Minecraft mc,BlockState state,BlockPos pos){return blockTint(mc,state,pos,0);}
     /** Biome or block tint of the state's tint layer {@code index} at {@code pos}, or -1 when it has none. */
     public static int blockTint(Minecraft mc,BlockState state,BlockPos pos,int index){return mc.getBlockColors().getColor(state,mc.level,pos,index);}
+    /** Sets the game's GUI scale back to the player's own and lays the current screen out again. */
+    public static void refreshGui(Minecraft mc){mc.resizeDisplay();}
 }
