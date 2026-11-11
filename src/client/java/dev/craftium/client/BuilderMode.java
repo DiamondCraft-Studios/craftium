@@ -153,7 +153,7 @@ public final class BuilderMode {
             if(button==1){confirm();return true;}
         }
         if(hit==null)return true;Point at=CraftiumClient.point(hit.getBlockPos());
-        if(button==2&&o.builderTool==Options.BuilderTool.STACK&&first!=null&&second!=null){stackTo(at);return true;} // middle click: as many copies as it takes to reach the block
+        if(button==2&&o.builderTool==Options.BuilderTool.STACK&&first!=null&&second!=null&&preview){stackTo(at);return true;} // middle click once a stack is under way (scrolled or stacked to): as many copies as it takes to reach the block; before that it extends the selection
         if(first!=null&&second!=null&&button!=2){ // nothing is being done to it yet: left and right move the first and second point
             if(button==0)first=at;else second=at;magicStarted=magicMode=false;offset=new Point(0,0,0);refresh();dragButton=button;return true;
         }
