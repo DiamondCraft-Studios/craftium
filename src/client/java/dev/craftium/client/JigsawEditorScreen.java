@@ -135,7 +135,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     /** Notes in this screen's own history that a command changed something on the server, so undo can tell it from a move in the graph. */
     private void note(String op) {
         switch (op) {
-            case "open", "templates", "features", "names", "undo", "redo", "retarget_check" -> { }
+            case "open", "templates", "features", "names", "undo", "redo", "retarget_check", "bedrock_plan", "bedrock_export" -> { }
             case "apply", "discard" -> { localUndo.clear(); localRedo.clear(); }
             default -> { localUndo.push(new Local(Kind.SERVER, null, null, null, null)); localRedo.clear(); }
         }
@@ -257,6 +257,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         button("Discard", cw - SIDE - 70 - 152 - 76, 10, 70, 20, () -> edit("discard")).active = unapplied > 0;
         button("Apply (" + unapplied + ")", cw - SIDE - 70 - 152 - 76 - 102, 10, 96, 20, () -> edit("apply")).lit(unapplied > 0).active = unapplied > 0;
         button("?", cw - SIDE - 70 - 152 - 76 - 102 - 28, 10, 22, 20, () -> { helpOpen = true; init(); });
+        button("Bedrock pack…", cw - SIDE - 70 - 152 - 76 - 102 - 28 - 112, 10, 106, 20, this::openBedrock).active = pool() != null;
         if (retargetPrompt) { retargetButtons(); applyTips(); return; }
         if (confirmLeave) { leavePrompt(); applyTips(); return; }
         if (dialogMode != null) { dialogButtons(); applyTips(); return; }
@@ -293,6 +294,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 case "Cancel" -> retargetPrompt ? "Leaves the connectors as they are." : "Closes this without making anything.";
                 case "Undo" -> "Takes back your last change here: an edit to a pool or template, or a move of a pool in the graph.";
                 case "Redo" -> "Puts back a change you took back, including a move in the graph.";
+                case "Bedrock pack…" -> "Makes a file for Minecraft Bedrock Edition (an .mcpack) from the open pool and every pool and piece it leads to. You name it, see what Bedrock cannot hold, then choose where to save it.";
                 case "New pool…" -> "Makes an empty pool. You are asked for its name: without a namespace it goes in craftium.";
                 case "?" -> "A short guide: what a pool is, how to make a structure, and what the connector fields mean.";
                 case "Template" -> "Adds a template that already exists: one of the game's, another pack's, or one you saved.";
@@ -1055,7 +1057,30 @@ final class JigsawEditorScreen extends CraftiumScreen {
         init();
     }
 
+    /** Opens the window that names a Bedrock pack made from the open pool, and asks the server what the pack would hold and lose. */
+    private void openBedrock() {
+        if (poolId().isEmpty()) return;
+        dialogMode = "bedrock_pack";
+        dialogText = dev.craftium.core.BedrockPack.defaultName(poolId());
+        localMessage = "";
+        edit("bedrock_plan", "pool", poolId(), "name", dialogText);
+        init();
+    }
+
+    private int bedrockHeight() { return Math.min(ch - 40, 330); }
+
     private void dialogButtons() {
+        if ("bedrock_pack".equals(dialogMode)) {
+            int w = Math.min(520, cw - 40), x = (cw - w) / 2, h = bedrockHeight(), y = Math.max(20, (ch - h) / 2);
+            var field = box(x + 10, y + 36, w - 20, dialogText, 80, v -> dialogText = v, this::confirmDialog);
+            setFocused(field);
+            field.setFocused(true);
+            var bedrock = model.has("bedrock") ? model.getAsJsonObject("bedrock") : null;
+            var export = button("Export…", x + 10, y + h - 32, 120, 22, this::confirmDialog);
+            export.active = bedrock != null && !(bedrock.has("tooBig") && bedrock.get("tooBig").getAsBoolean());
+            button("Cancel", x + 136, y + h - 32, 90, 22, () -> { dialogMode = null; init(); });
+            return;
+        }
         int w = Math.min(420, cw - 40), x = (cw - w) / 2, y = Math.max(60, ch / 2 - 70);
         var field = box(x + 10, y + 56, w - 20, dialogText, 120, v -> dialogText = v, this::confirmDialog);
         setFocused(field);
@@ -1071,13 +1096,64 @@ final class JigsawEditorScreen extends CraftiumScreen {
         String mode = dialogMode;
         dialogMode = null;
         switch (mode) {
+            case "bedrock_pack" -> {
+                String pool = poolId();
+                // the save dialog first (it starts in Documents), then the server builds the pack and sends it to the path that was chosen
+                ClientBedrockPack.choose(dev.craftium.core.BedrockPack.fileName(text), path -> { ClientBedrockPack.expect(path); edit("bedrock_export", "pool", pool, "name", text); });
+                init();
+            }
             case "pool_new" -> edit("pool_new", "id", text);
             case "pool_copy" -> edit("pool_copy", "from", poolId(), "to", text);
             default -> edit("pool_rename", "from", poolId(), "to", text);
         }
     }
 
+    private void drawBedrockDialog(Gfx g) {
+        int w = Math.min(520, cw - 40), x = (cw - w) / 2, h = bedrockHeight(), y = Math.max(20, (ch - h) / 2);
+        g.fill(0, 0, cw, ch, 0xaa000000);
+        g.fill(x, y, x + w, y + h, 0xff172330);
+        g.outline(x, y, w, h, ClientState.options.uiAccent);
+        g.text(font, "Export Bedrock pack", x + 10, y + 10, 0xffb5dcfc, false);
+        g.text(font, "Pack name", x + 10, y + 25, MUTED, false);
+        int line = y + 62, bottom = y + h - 40;
+        var bedrock = model.has("bedrock") ? model.getAsJsonObject("bedrock") : null;
+        if (bedrock == null) {
+            String say = localMessage.isEmpty() ? "Working out what the pack holds…" : localMessage;
+            g.text(font, say, x + 10, line, localMessage.isEmpty() ? MUTED : ERROR, false);
+        } else {
+            String structures = num(bedrock, "structures", 0) > 0 ? ", " + num(bedrock, "structures", 0) + (num(bedrock, "structures", 0) == 1 ? " structure" : " structures") : "";
+            String head = shortName(str(bedrock, "pool", "")) + " and everything it leads to: " + num(bedrock, "pools", 0) + (num(bedrock, "pools", 0) == 1 ? " pool, " : " pools, ")
+                    + num(bedrock, "pieces", 0) + (num(bedrock, "pieces", 0) == 1 ? " piece" : " pieces") + structures;
+            for (var row : font.split(Component.literal(head), w - 20)) { g.text(font, row, x + 10, line, TEXT, false); line += 10; }
+            boolean tooBig = bedrock.has("tooBig") && bedrock.get("tooBig").getAsBoolean();
+            int kib = (num(bedrock, "bytes", 0) + 1023) / 1024;
+            g.text(font, kib + " KiB" + (tooBig ? " is over the 1,024 KiB the game can send you: export a pool that leads to fewer or smaller pieces" : ""), x + 10, line, tooBig ? ERROR : MUTED, false);
+            line += 14;
+            int lost = num(bedrock, "lost", 0), changed = num(bedrock, "changed", 0), check = num(bedrock, "check", 0);
+            g.text(font, (lost + changed + check == 0 ? "Nothing is lost, changed or left unchecked." : "Left out: " + lost + "   Changed: " + changed + "   To check in Bedrock: " + check), x + 10, line, lost > 0 ? WARN : TEXT, false);
+            line += 14;
+            if (bedrock.has("notes")) for (var item : bedrock.getAsJsonArray("notes")) {
+                if (line > bottom - 10) break;
+                var note = item.getAsJsonObject();
+                String kind = str(note, "kind", "");
+                int colour = kind.equals("LOST") ? WARN : kind.equals("CHANGED") ? TEXT : MUTED;
+                String text = (kind.equals("LOST") ? "Left out: " : kind.equals("CHANGED") ? "Changed: " : "Check: ") + str(note, "text", "");
+                for (var row : font.split(Component.literal(text), w - 20)) {
+                    if (line > bottom - 10) break;
+                    g.text(font, row, x + 10, line, colour, false);
+                    line += 10;
+                }
+                line += 2;
+            }
+            int more = Math.max(0, num(bedrock, "moreNotes", 0));
+            if (more > 0 || line > bottom - 10) { g.text(font, "The whole list is in craftium-export-report.txt inside the pack.", x + 10, bottom - 2, MUTED, false); }
+        }
+        g.text(font, "Next you choose where to save it (it starts in your Documents).", x + 236, y + h - 26, MUTED, false);
+        if (!localMessage.isEmpty() && bedrock != null) g.text(font, localMessage, x + 10, y + h - 44, ERROR, false);
+    }
+
     private void drawDialog(Gfx g) {
+        if ("bedrock_pack".equals(dialogMode)) { drawBedrockDialog(g); return; }
         int w = Math.min(420, cw - 40), x = (cw - w) / 2, y = Math.max(60, ch / 2 - 70);
         g.fill(0, 0, cw, ch, 0xaa000000);
         g.fill(x, y, x + w, y + 136, 0xff172330);

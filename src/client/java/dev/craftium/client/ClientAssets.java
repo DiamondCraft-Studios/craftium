@@ -16,6 +16,7 @@ public final class ClientAssets {
     static void receive(Packets.Download download){
         if(download.folder().equals("preview")){ClientStructures.receivePreview(download);return;}
         if(download.folder().equals("structure")){ClientStructures.receiveExport(download);return;}
+        if(download.folder().equals("bedrockpack")){ClientBedrockPack.receive(download);return;}
         Long expiry=expected.remove(download.folder()+"/"+download.name());if(expiry==null||expiry<System.currentTimeMillis())return;
         try{if(!download.name().matches("(?i).*\\.(nbt|schem|schematic|csv)"))throw new IllegalArgumentException("Unsupported download");byte[] bytes=Base64.getDecoder().decode(download.data());if(bytes.length>1_048_576)throw new IllegalArgumentException("Download limit: 1 MiB");Path path=file(download.folder(),download.name());write(path,bytes);Files.deleteIfExists(path.resolveSibling(path.getFileName()+".json"));
             if(!download.metadata().isBlank()){var info=Packets.JSON.fromJson(download.metadata(),BlueprintInfo.class);if(info!=null&&info.thumbnail()!=null&&info.thumbnail().size()<=256)write(path.resolveSibling(path.getFileName()+".json"),download.metadata().getBytes(java.nio.charset.StandardCharsets.UTF_8));}
