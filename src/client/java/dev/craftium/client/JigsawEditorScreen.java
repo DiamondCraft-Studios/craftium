@@ -925,7 +925,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
             var offer = list.get(i);
             boolean hover = mx >= x + 2 && mx < x + 2 + rowW && my >= Math.max(ry, y + 2) && my < Math.min(ry + TARGET_MENU_ROW, y + 2 + rows * TARGET_MENU_ROW);
             g.fill(x + 2, ry, x + 2 + rowW, ry + TARGET_MENU_ROW - 2, offer.matches() ? 0xff315473 : hover ? 0xff2a3d55 : CARD);
-            int tw = 48, th = TARGET_MENU_ROW - 8;
+            int th = TARGET_MENU_ROW - 8, tw = th * PoolThumbnails.WIDTH / PoolThumbnails.HEIGHT; // the picture's own proportions
             g.fill(x + 6, ry + 3, x + 6 + tw, ry + 3 + th, 0xff2a3441);
             var tex = PoolThumbnails.of(offer.template(), offer.thumb());
             if (tex != null) g.blit(tex, x + 6, ry + 3, 0, 0, tw, th, PoolThumbnails.WIDTH * 2, PoolThumbnails.HEIGHT * 2, PoolThumbnails.WIDTH * 2, PoolThumbnails.HEIGHT * 2, 0xffffffff);

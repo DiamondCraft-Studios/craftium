@@ -120,6 +120,37 @@ public final class VoxelOrbit {
     /** How far the lines of the outline are drawn towards the camera, in blocks: they lie in the surface of the blocks, so exactly there they would be cut away by them. */
     private static final float LINE_BIAS = 0.04f;
 
+    /**
+     * Sets the zoom and pan of {@code v} so that what the scene shows from the view's angle fills the picture of {@code w} x {@code h} pixels, centred, with {@code margin}
+     * pixels of room around it. The angle is left as it is. A scene with nothing to see leaves the view alone.
+     */
+    public static void fit(Scene s, View v, int w, int h, int margin) {
+        if (s.visibleCell.length == 0) return;
+        double yaw = Math.toRadians(v.yaw), pitch = Math.toRadians(v.pitch);
+        double[] cam = {Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch), Math.cos(pitch) * Math.cos(yaw)};
+        double[] right = {Math.cos(yaw), 0, -Math.sin(yaw)};
+        double[] up = {cam[1] * right[2] - cam[2] * right[1], cam[2] * right[0] - cam[0] * right[2], cam[0] * right[1] - cam[1] * right[0]};
+        double scale = baseScale(s, w, h), cx = s.sx / 2.0, cy = s.sy / 2.0, cz = s.sz / 2.0;
+        double minX = Double.MAX_VALUE, maxX = -Double.MAX_VALUE, minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+        double[] p = new double[3];
+        for (int i = 0; i < s.visibleCell.length; i++) {
+            int cell = s.visibleCell[i];
+            Quad q = s.shapes[s.cells[cell] & 255].quads()[s.visibleQuad[i]];
+            if (q.normal()[0] * cam[0] + q.normal()[1] * cam[1] + q.normal()[2] * cam[2] <= 0.0001) continue; // turned away: not in the picture
+            int x = cell % s.sx, z = cell / s.sx % s.sz, y = cell / (s.sx * s.sz);
+            for (int corner = 0; corner < 4; corner++) {
+                for (int k = 0; k < 3; k++) p[k] = (k == 0 ? x - cx : k == 1 ? y - cy : z - cz) + q.o()[k] + ((corner & 1) != 0 ? q.a()[k] : 0) + ((corner & 2) != 0 ? q.b()[k] : 0);
+                double px = scale * dot(p, right), py = -scale * dot(p, up);
+                minX = Math.min(minX, px); maxX = Math.max(maxX, px); minY = Math.min(minY, py); maxY = Math.max(maxY, py);
+            }
+        }
+        if (maxX <= minX || maxY <= minY) return;
+        double zoom = Math.min((w - 2.0 * margin) / (maxX - minX), (h - 2.0 * margin) / (maxY - minY));
+        v.zoom = zoom;
+        v.panX = -zoom * (minX + maxX) / 2;
+        v.panY = -zoom * (minY + maxY) / 2;
+    }
+
     /** The size of a block in pixels at zoom 1, so the whole box fits in the picture. */
     public static double baseScale(Scene s, int w, int h) {
         double diagonal = Math.sqrt((double) s.sx * s.sx + (double) s.sy * s.sy + (double) s.sz * s.sz);

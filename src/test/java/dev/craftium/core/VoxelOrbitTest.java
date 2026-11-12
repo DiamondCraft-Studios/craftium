@@ -44,6 +44,24 @@ class VoxelOrbitTest {
         assertNull(VoxelOrbit.pick(scene, view, 200, 150, -1, 5), "outside the picture is empty");
     }
 
+    @Test void fitFillsThePictureAndCentresIt() {
+        int[] red = new int[VoxelOrbit.TEX * VoxelOrbit.TEX];
+        java.util.Arrays.fill(red, 0xffcc2020);
+        byte[] cells = new byte[7 * 2 * 3]; // a low, wide, deep piece: a plain default view leaves most of the picture empty
+        java.util.Arrays.fill(cells, (byte) 1);
+        var scene = new VoxelOrbit.Scene(7, 2, 3, cells, new int[][][]{null, {red, red, red}});
+        var view = new VoxelOrbit.View();
+        int w = 208, h = 144, margin = 6;
+        VoxelOrbit.fit(scene, view, w, h, margin);
+        int[] pixels = new int[w * h];
+        VoxelOrbit.render(scene, view, w, h, pixels, BACKGROUND, null);
+        int minX = w, maxX = -1, minY = h, maxY = -1;
+        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) if (pixels[y * w + x] != BACKGROUND) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+        assertTrue(minX >= margin - 2 && minY >= margin - 2 && maxX <= w - margin + 2 && maxY <= h - margin + 2, "it stays inside the margin");
+        assertTrue(minX <= margin + 2 || minY <= margin + 2, "it reaches the margin on one side at least: " + minX + "," + minY);
+        assertTrue(Math.abs((minX + maxX) / 2 - w / 2) <= 3 && Math.abs((minY + maxY) / 2 - h / 2) <= 3, "it is centred");
+    }
+
     @Test void zoomingInFillsMoreOfThePicture() {
         var scene = cube(3);
         var view = new VoxelOrbit.View();
