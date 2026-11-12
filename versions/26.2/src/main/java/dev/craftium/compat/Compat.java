@@ -43,4 +43,6 @@ public final class Compat {
     public static Set<String> entityTags(Entity entity){return entity.entityTags();}
     public static long chunkKey(int x,int z){return net.minecraft.world.level.ChunkPos.pack(x,z);}
     public static Transformation identityTransform(){return Transformation.IDENTITY;}
+    /** A block entity type for one block; the constructor is public here. */
+    public static <T extends net.minecraft.world.level.block.entity.BlockEntity> net.minecraft.world.level.block.entity.BlockEntityType<T> blockEntityType(net.minecraft.world.level.block.entity.BlockEntityType.BlockEntitySupplier<T> factory,net.minecraft.world.level.block.Block block){return new net.minecraft.world.level.block.entity.BlockEntityType<>(factory,Set.of(block));}
 }

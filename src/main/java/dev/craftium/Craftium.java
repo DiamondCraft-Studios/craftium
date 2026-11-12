@@ -14,6 +14,9 @@ import org.slf4j.LoggerFactory;
 public final class Craftium implements ModInitializer {
     public static final Logger LOG = LoggerFactory.getLogger("Craftium");
     @Override public void onInitialize() {
+        dev.craftium.server.MissingBlocks.register();
+        ServerLifecycleEvents.SERVER_STARTING.register(dev.craftium.server.MissingBlocks::bind);
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> dev.craftium.server.MissingBlocks.unbind());
         dev.craftium.runtime.ServerPlatform.install(net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("craftium"),new dev.craftium.runtime.ServerPlatform.Host(){
             public boolean canSend(net.minecraft.server.level.ServerPlayer player){return ServerPlayNetworking.canSend(player,Packets.Update.TYPE);}
             public void send(net.minecraft.server.level.ServerPlayer player,net.minecraft.network.protocol.common.custom.CustomPacketPayload payload){ServerPlayNetworking.send(player,payload);}
