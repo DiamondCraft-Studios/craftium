@@ -134,12 +134,12 @@ final class StructureBuilder {
     // --- Java structure NBT ---
 
     CompoundTag javaNbt(){
-        var root=new CompoundTag();var palette=new ListTag();var indices=new HashMap<BlockState,Integer>();var blocks=new ListTag();
+        var root=new CompoundTag();var palette=new ListTag();var indices=new HashMap<Object,Integer>();var blocks=new ListTag();
         for(int y=0;y<sizeY;y++)for(int z=0;z<sizeZ;z++)for(int x=0;x<sizeX;x++){
             var snapshot=cells[index(x,y,z)];if(snapshot==null)continue;
-            int state=indices.computeIfAbsent(snapshot.state(),key->{palette.add(NbtUtils.writeBlockState(key));return palette.size()-1;});
+            int state=indices.computeIfAbsent(AssetNbt.paletteKey(snapshot),key->{palette.add(AssetNbt.paletteTag(snapshot));return palette.size()-1;});
             var block=new CompoundTag();block.put("pos",ints(x,y,z));block.putInt("state",state);
-            if(snapshot.data()!=null){var data=snapshot.data().copy();data.remove("x");data.remove("y");data.remove("z");block.put("nbt",data);}
+            var fileData=AssetNbt.fileData(snapshot);if(fileData!=null){var data=fileData.copy();data.remove("x");data.remove("y");data.remove("z");block.put("nbt",data);}
             blocks.add(block);
         }
         root.putInt("DataVersion",net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());
@@ -157,9 +157,9 @@ final class StructureBuilder {
         for(int y=0;y<sizeY;y++)for(int z=0;z<sizeZ;z++)for(int x=0;x<sizeX;x++){
             var snapshot=cells[index(x,y,z)];if(snapshot==null)gaps++;
             // A schematic has no void: a cell nothing is placed in is air.
-            String state=snapshot==null?"minecraft:air":net.minecraft.commands.arguments.blocks.BlockStateParser.serialize(snapshot.state());
+            String state=snapshot==null?"minecraft:air":AssetNbt.paletteText(snapshot);
             int value=indices.computeIfAbsent(state,key->indices.size());while((value&~0x7f)!=0){bytes.write((value&0x7f)|0x80);value>>>=7;}bytes.write(value);
-            if(snapshot!=null&&snapshot.data()!=null){var tag=snapshot.data().copy();tag.putString("Id",tag.getStringOr("id",""));tag.remove("id");tag.remove("x");tag.remove("y");tag.remove("z");tag.putIntArray("Pos",new int[]{x,y,z});blockEntities.add(tag);}
+            var fileData=snapshot==null?null:AssetNbt.fileData(snapshot);if(fileData!=null){var tag=fileData.copy();tag.putString("Id",tag.getStringOr("id",""));tag.remove("id");tag.remove("x");tag.remove("y");tag.remove("z");tag.putIntArray("Pos",new int[]{x,y,z});blockEntities.add(tag);}
         }
         indices.forEach(palette::putInt);root.put("Palette",palette);root.putInt("PaletteMax",indices.size());root.putByteArray("BlockData",bytes.toByteArray());
         root.put("BlockEntities",blockEntities);root.put("Entities",AssetNbt.schematicEntities(entities));
