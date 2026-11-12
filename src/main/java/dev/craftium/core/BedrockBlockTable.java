@@ -23,6 +23,8 @@ public final class BedrockBlockTable {
     private final Map<String,Entry> forward=new HashMap<>();
     private final Map<String,String> reverse=new HashMap<>(),reverseByName=new HashMap<>();
     private final Map<String,Integer> rank=new HashMap<>();
+    /** The Bedrock name of each Java block, whatever its state: the name a pool's processor rule matches by. */
+    private final Map<String,String> names=new HashMap<>();
 
     /** The table shipped with the mod; the first call reads it. */
     public static synchronized BedrockBlockTable get(){
@@ -47,6 +49,7 @@ public final class BedrockBlockTable {
                 String bedrock=parts[1].isEmpty()?block.substring(block.indexOf(':')+1):parts[1];
                 if(bedrock.indexOf(':')<0)bedrock="minecraft:"+bedrock;
                 forward.put(javaKey(block,parts[0]),new Entry(bedrock,parts[2]));
+                names.putIfAbsent(block,bedrock);
                 // Several Java states share one Bedrock state (waterlogging, redstone power). Importing picks the likeliest.
                 String key=bedrock+"|"+parts[2],candidate=javaKey(block,parts[0]);
                 int score=(preferred?0:2)+(parts[0].contains("waterlogged=true")?1:0);
@@ -67,6 +70,9 @@ public final class BedrockBlockTable {
     }
 
     public int size(){return forward.size();}
+
+    /** The Bedrock name of a Java block ({@code minecraft:} is added when missing), or null when Bedrock has no such block. */
+    public String bedrockNameOf(String javaName){return names.get(javaName.indexOf(':')<0?"minecraft:"+javaName:javaName);}
 
     /** The Bedrock block for a Java state, or null when the table has none. */
     public Bedrock toBedrock(String name,Map<String,String> properties){

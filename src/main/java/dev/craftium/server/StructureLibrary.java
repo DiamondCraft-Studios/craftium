@@ -46,6 +46,7 @@ final class StructureLibrary {
             var result=readBedrock(data,p);blocks=result.blocks;
             if(!result.missing.isEmpty())note=" · "+result.missing.size()+" unknown blocks left out ("+String.join(", ",result.missing.stream().limit(3).toList())+(result.missing.size()>3?", …":"")+")";
             if(result.approximate>0)note+=" · "+result.approximate+" blocks used their usual state";
+            if(result.jigsaws>0)note+=" · "+result.jigsaws+" jigsaw blocks kept their connections";
         }else{
             var tag=NbtIo.readCompressed(new ByteArrayInputStream(data),NbtAccounter.create(32*1024*1024));
             blocks=BlueprintLibrary.read(tag,p);entities=AssetNbt.entities(tag,p);
@@ -56,7 +57,16 @@ final class StructureLibrary {
         return "Loaded "+name+" · "+blocks.size()+" blocks"+note+" · paste with Ctrl+V";
     }
 
-    private record Bedrock(Map<Point,BlockSnapshot> blocks,Set<String> missing,int approximate){}
+    private record Bedrock(Map<Point,BlockSnapshot> blocks,Set<String> missing,int approximate,int jigsaws){}
+
+    /** A Bedrock jigsaw's data as the block entity Java keeps in a template; the game sets the position when it is pasted. */
+    private static CompoundTag javaJigsaw(Map<String,Object> data){
+        var fields=JigsawEntity.fromBedrock(data,BedrockBlockTable.get(),null);var tag=new CompoundTag();
+        tag.putString("id","minecraft:jigsaw");tag.putString("name",fields.name());tag.putString("target",fields.target());tag.putString("pool",fields.pool());
+        tag.putString("joint",fields.joint());tag.putString("final_state",fields.finalState());
+        tag.putInt("selection_priority",fields.selectionPriority());tag.putInt("placement_priority",fields.placementPriority());
+        return tag;
+    }
 
     /**
      * Keeps the blocks and moves them so the lowest corner is 0,0,0. The editor outlines and transforms the clipboard by its
@@ -91,7 +101,8 @@ final class StructureLibrary {
             states[i]=java==null?null:BedrockBlocks.toJava(java,p);
             if(states[i]==null)missing.add(name);else if(!exact[0])approximate[0]++;
         }
-        var result=new LinkedHashMap<Point,BlockSnapshot>();
+        var positions=defaults==null?Map.<String,Object>of():(Map<String,Object>)defaults.getOrDefault("block_position_data",Map.of());
+        var result=new LinkedHashMap<Point,BlockSnapshot>();int jigsaws=0;
         for(int x=0;x<sx;x++)for(int y=0;y<sy;y++)for(int z=0;z<sz;z++){
             int at=(x*sy+y)*sz+z;int id=(Integer)primary.get(at);BlockState state=null;
             if(id>=0&&id<states.length)state=states[id];
@@ -99,9 +110,12 @@ final class StructureLibrary {
             boolean flooded=under>=0&&under<water.length&&water[under];
             if(state==null){if(!flooded)continue;state=Blocks.WATER.defaultBlockState();}
             else if(flooded&&state.hasProperty(BlockStateProperties.WATERLOGGED))state=state.setValue(BlockStateProperties.WATERLOGGED,true);
-            result.put(new Point(x,y,z),new BlockSnapshot(state));
+            var snapshot=new BlockSnapshot(state);
+            if(state.getBlock()==Blocks.JIGSAW&&positions.get(String.valueOf(at)) instanceof Map<?,?> position&&position.get("block_entity_data") instanceof Map<?,?> entity
+                    &&JigsawEntity.isBedrockJigsaw((Map<String,Object>)entity)){snapshot=new BlockSnapshot(state,javaJigsaw((Map<String,Object>)entity));jigsaws++;}
+            result.put(new Point(x,y,z),snapshot);
             if(result.size()>Selection.LIMIT)throw new IllegalArgumentException("Structure too large to import: "+Selection.LIMIT+" blocks");
         }
-        return new Bedrock(result,missing,approximate[0]);
+        return new Bedrock(result,missing,approximate[0],jigsaws);
     }
 }

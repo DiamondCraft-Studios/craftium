@@ -62,7 +62,7 @@ public final class BlueprintScreen extends CraftiumScreen {
         scale=Math.min(1f,Math.min(width/700f,height/460f));canvasW=Math.round(width/scale);canvasH=Math.round(height/scale);left=(canvasW-660)/2;top=(canvasH-420)/2;clearWidgets();boxes.clear();
         var search=new EditBox(font,left+8,top+5,420,22,Component.literal("Search blueprints"));search.setHint(Component.literal("Search names, folders, authors and tags…"));search.setValue(query);search.setResponder(value->{query=value;scroll=0;filter();});addRenderableWidget(search);
         button(ClientState.options.libraryClient?"Source: Client":"Source: Server",left+500,top-21,150,20,()->{ClientState.options.libraryClient=!ClientState.options.libraryClient;folder="";scroll=0;selected.clear();reload();init();});
-        button("View: "+MODES[mode],left+212,top-21,136,20,()->setMode((mode+1)%MODES.length));button("Sort: "+SORTS[sort],left+354,top-21,140,20,()->{sort=(sort+1)%SORTS.length;scroll=0;init();});
+        button("View: "+MODES[mode],left+212,top-21,136,20,()->setMode((mode+1)%MODES.length)).back(()->setMode(Math.floorMod(mode-1,MODES.length)));button("Sort: "+SORTS[sort],left+354,top-21,140,20,()->{sort=(sort+1)%SORTS.length;scroll=0;init();}).back(()->{sort=Math.floorMod(sort-1,SORTS.length);scroll=0;init();});
         button("Refresh",left+437,top+5,100,22,this::refresh);button("Import…",left+545,top+5,105,22,this::importFile);
         button("Return",left+530,top+375,120,23,this::onClose);
         if(!folder.isEmpty())button("Up",left+400,top+375,120,23,this::up);
@@ -115,7 +115,7 @@ public final class BlueprintScreen extends CraftiumScreen {
         var alive=clip.paths().stream().filter(p->all.stream().anyMatch(e->p.endsWith("/")?e.file().startsWith(p):e.file().equals(p))).toList();
         if(alive.size()!=clip.paths().size())clip=alive.isEmpty()?null:new Clip(clip.cut(),clip.client(),alive);
     }
-    private void button(String label,int x,int y,int w,int h,Runnable action){addRenderableWidget(new FlatButton(x,y,w,h,label,action));}
+    private FlatButton button(String label,int x,int y,int w,int h,Runnable action){var b=new FlatButton(x,y,w,h,label,action);addRenderableWidget(b);return b;}
     @Override public void tick(){
         if(listing&&!ClientState.options.libraryClient&&(ClientState.libraryVersion!=waitVersion||++waitTicks>200))listing=false; // the server answered, or never will
         if(!warm&&frames>=2){BlockColours.faces("minecraft:stone");warm=true;} // the first use reads every block's textures, which takes a while: the note is on screen before it starts
@@ -331,6 +331,7 @@ public final class BlueprintScreen extends CraftiumScreen {
     @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event,boolean twice){
         double x=event.x()/scale,y=event.y()/scale;int button=event.button();
         var scaled=new net.minecraft.client.input.MouseButtonEvent(x,y,event.buttonInfo());
+        if(button==1&&dialog==null)for(var child:children())if(child instanceof FlatButton rb&&rb.rightClick(x,y))return true; // a cycling button steps back
         if(dialog!=null){boolean inside=x>=dialogX()&&x<dialogX()+340&&y>=dialogY()&&y<dialogY()+dialogHeight();return inside&&super.mouseClicked(scaled,twice)||true;}
         if(menu!=null){var hit=menuAt(x,y);menu=null;if(hit!=null){if(hit.enabled())hit.action().run();return true;}if(button!=1)return true;}
         if(button==0&&!loading()&&maxScroll()>0&&x>=left+655&&x<left+664&&y>=top+VIEW_TOP&&y<top+VIEW_TOP+VIEW_H){dragBar=true;dragTo(y);return true;}

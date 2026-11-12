@@ -54,6 +54,11 @@ final class JigsawEditor {
         JsonObject retarget;
         /** Set by the features command: the next model carries the placed features that fit it. */
         String featureQuery;
+        /** What a Bedrock pack made from the open pool holds and loses, for the export window: set by bedrock_plan and bedrock_export, forgotten by any other command. */
+        JsonObject bedrock;
+        /** What the used_by command found, shown in the next model and forgotten by any other command. */
+        JsonArray usedBy;
+        boolean usedByTruncated;
         final Deque<List<Snap>> undo = new ArrayDeque<>(), redo = new ArrayDeque<>();
     }
     private static final Map<UUID, Memory> MEMORY = new ConcurrentHashMap<>();
@@ -123,6 +128,8 @@ final class JigsawEditor {
     private static String run(ServerPlayer player, JigsawPlanner.Env env, Memory memory, Edit edit, JsonObject c) throws IOException {
         String op = text(c, "op");
         if (!op.equals("retarget_check")) memory.retarget = null;
+        if (!op.equals("bedrock_plan") && !op.equals("bedrock_export")) memory.bedrock = null;
+        if (!op.equals("used_by")) memory.usedBy = null;
         switch (op) {
             case "open" -> { if (c.has("pool")) memory.pool = poolId(text(c, "pool")).toString(); return ""; }
             case "templates" -> { memory.query = c.has("query") ? text(c, "query") : ""; return ""; }
@@ -303,9 +310,34 @@ final class JigsawEditor {
             case "jigsaw_set" -> { return setJigsaw(env, edit, c); }
             case "names" -> { memory.names = true; return ""; }
             case "retarget_check" -> { memory.retarget = retargetCheck(env, c); return ""; }
+            case "used_by" -> {
+                if (memory.pool.isEmpty()) throw new IllegalArgumentException("Open a pool first");
+                var registry = JigsawPlanner.loadPools(env.server(), env.manager()).lookupOrThrow(Registries.TEMPLATE_POOL);
+                var truncated = new boolean[1];
+                memory.usedBy = usedBy(env, registry, poolId(memory.pool), truncated);
+                memory.usedByTruncated = truncated[0];
+                return "";
+            }
             case "retarget" -> { return retarget(env, edit, c); }
             case "apply" -> { return apply(env, memory); }
             case "discard" -> { return discard(env, memory); }
+            case "bedrock_plan" -> {
+                if (!c.has("pool") && memory.pool.isEmpty()) throw new IllegalArgumentException("Open a pool first");
+                memory.bedrock = JigsawBedrockExport.build(env, c.has("pool") ? text(c, "pool") : memory.pool, c.has("name") ? text(c, "name") : "").summary();
+                return "";
+            }
+            case "bedrock_export" -> {
+                if (!c.has("pool") && memory.pool.isEmpty()) throw new IllegalArgumentException("Open a pool first");
+                var built = JigsawBedrockExport.build(env, c.has("pool") ? text(c, "pool") : memory.pool, c.has("name") ? text(c, "name") : "");
+                memory.bedrock = built.summary();
+                if (built.pack().length > JigsawBedrockExport.LIMIT)
+                    throw new IllegalArgumentException("The pack is " + built.pack().length / 1024 + " KiB, over the 1 MiB limit for sending it to you. Export a pool that leads to fewer or smaller pieces.");
+                dev.craftium.runtime.ServerPlatform.send(player, new dev.craftium.net.Packets.Download("bedrockpack", built.fileName(), Base64.getEncoder().encodeToString(built.pack()), ""));
+                var summary = built.summary();
+                return "Made " + built.fileName() + ": " + summary.get("pools").getAsInt() + " pools, " + summary.get("pieces").getAsInt() + " pieces"
+                        + (summary.get("structures").getAsInt() > 0 ? ", " + summary.get("structures").getAsInt() + " structure" + (summary.get("structures").getAsInt() == 1 ? "" : "s") : "")
+                        + " · " + summary.get("lost").getAsInt() + " lost, " + summary.get("changed").getAsInt() + " changed, " + summary.get("check").getAsInt() + " to check (see the report in the pack)";
+            }
             default -> throw new IllegalArgumentException("Unknown pool editor command: " + text(c, "op"));
         }
     }
@@ -676,6 +708,8 @@ final class JigsawEditor {
         root.addProperty("selection", EditorServer.session(player).selection.size());
         root.add("unapplied", unapplied(env));
         if (memory.retarget != null) root.add("retarget", memory.retarget);
+        if (memory.bedrock != null) root.add("bedrock", memory.bedrock);
+        if (memory.usedBy != null) { root.add("usedBy", memory.usedBy); root.addProperty("usedByTruncated", memory.usedByTruncated); }
         Registry<StructureTemplatePool> pools = null;
         try { pools = JigsawPlanner.loadPools(env.server(), env.manager()).lookupOrThrow(Registries.TEMPLATE_POOL); }
         catch (RuntimeException e) { root.addProperty("registryError", String.valueOf(e.getMessage())); }
@@ -703,6 +737,12 @@ final class JigsawEditor {
             list.add(item);
         }
         root.add("pools", list);
+        var processorLists = new JsonArray(); // for the suggestions of the processor box of an element
+        var processorFiles = env.manager().listResources("worldgen/processor_list", id -> id.getPath().endsWith(".json"));
+        processorFiles.keySet().stream()
+                .map(key -> ResourceLocation.fromNamespaceAndPath(key.getNamespace(), key.getPath().substring("worldgen/processor_list/".length(), key.getPath().length() - 5)).toString())
+                .sorted(Comparator.comparing((String id) -> id.startsWith("minecraft:")).thenComparing(id -> id)).forEach(processorLists::add);
+        root.add("processorLists", processorLists);
         if (memory.names) { memory.names = false; return PRETTY.toJson(root); }
 
         var templates = new JsonArray();
@@ -874,6 +914,40 @@ final class JigsawEditor {
         graph.add("nodes", nodes);
         graph.add("edges", edges);
         return graph;
+    }
+
+    /** How long the search for the users of a pool may take: every pool of the game and the packs is read, which can be a great many templates. */
+    private static final long USED_BY_NANOS = 3_000_000_000L;
+    private static final int USED_BY_MAX = 300;
+
+    /** The connectors of the elements of every pool whose pool is this one: the pool, the element's number in it, its template and the connector's name and target. */
+    private static JsonArray usedBy(JigsawPlanner.Env env, Registry<StructureTemplatePool> pools, ResourceLocation id, boolean[] truncated) {
+        var out = new JsonArray();
+        long end = System.nanoTime() + USED_BY_NANOS;
+        var entries = new ArrayList<>(pools.entrySet());
+        entries.sort(Comparator.comparing((Map.Entry<ResourceKey<StructureTemplatePool>, StructureTemplatePool> e) -> !e.getKey().location().getNamespace().equals("craftium")).thenComparing(e -> e.getKey().location().toString()));
+        for (var entry : entries) {
+            var from = entry.getKey().location();
+            var templates = entry.getValue().getTemplates();
+            for (int i = 0; i < templates.size(); i++) {
+                if (System.nanoTime() > end || out.size() >= USED_BY_MAX) { truncated[0] = true; return out; }
+                for (var single : singles(templates.get(i).getFirst())) {
+                    var template = env.templates().get(single.getTemplateLocation());
+                    if (template.isEmpty() || template.get().palettes.isEmpty()) continue;
+                    for (var jigsaw : template.get().palettes.get(0).jigsaws()) {
+                        if (!jigsaw.pool().location().equals(id)) continue;
+                        var item = new JsonObject();
+                        item.addProperty("pool", from.toString());
+                        item.addProperty("element", i);
+                        item.addProperty("template", single.getTemplateLocation().toString());
+                        item.addProperty("name", jigsaw.name().toString());
+                        item.addProperty("target", jigsaw.target().toString());
+                        out.add(item);
+                    }
+                }
+            }
+        }
+        return out;
     }
 
     private static List<SinglePoolElement> singles(StructurePoolElement element) {

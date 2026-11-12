@@ -225,6 +225,7 @@ final class JigsawRuns {
         action("cancel", use -> EditorServer.cancelPreview(use.player()));
         action("pin", use -> say(use, pin(use.player())));
         action("view", use -> { var memory = memory(use.player()); say(use, view(use.player(), View.values()[(memory.view.ordinal() + 1) % View.values().length])); });
+        action("view_back", use -> { var memory = memory(use.player()); say(use, view(use.player(), View.values()[Math.floorMod(memory.view.ordinal() - 1, View.values().length)])); });
         action("live", use -> say(use, live(use.player(), use.options().jigsawLive)));
         action("pools", use -> say(use, pools(use.player())));
         action("edit", use -> say(use, JigsawEditor.act(use.player(), use.options().jigsawEdit, use.options().assetData)));
