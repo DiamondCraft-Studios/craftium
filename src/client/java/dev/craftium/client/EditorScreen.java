@@ -2193,6 +2193,9 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     private static final String[] PLUS={"....X....","....X....","....X....","....X....","XXXXXXXXX","....X....","....X....","....X....","....X...."};
     private static final String[] EYE={"..XXXXX..",".X.....X.","X..XXX..X",".X.....X.","..XXXXX.."};
     private static final String[] CURSOR={"X........","XX.......","XXX......","XXXX.....","XXXXX....","XXXXXX...","XXXXXXX..","XXXXX....","XX.XX....","X..XX....","...XXX...","....XX..."};
+    /** An isometric cube: filled for a BuildObject that holds blocks, outline only for one that holds none. */
+    private static final String[] CUBE_FILLED={"....XX....","..XXXXXX..","XXXXXXXXXX","XXXXXXXXXX","XXXXXXXXXX","XXXXXXXXXX","..XXXXXX..","....XX...."};
+    private static final String[] CUBE_OUTLINE={"....XX....","..XX..XX..","XX..XX..XX","X...XX...X","X...XX...X","XX..XX..XX","..XX..XX..","....XX...."};
     private static final String[] CROSS={"X.......X",".X.....X.","..X...X..","...X.X...","....X....","...X.X...","..X...X..",".X.....X.","X.......X"};
     /** A small picture drawn pixel by pixel from rows of X, centred on the given box. */
     private void glyph(Gfx g,int x,int y,int width,int height,String[] rows,int colour){
@@ -2274,7 +2277,8 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
                 continue;
             }
             var entry=shownRow.entry();int id=entry.id();
-            int indent=Math.min(depthOf(entry),6)*12,nameX=x+14+indent+12; // a level in is 12 further right; the arrow takes the first 12
+            int indent=Math.min(depthOf(entry),6)*12,nameX=x+14+indent+24; // a level in is 12 further right; the arrow takes the first 12 and the cube the next 12
+            glyph(g,x+14+indent+12,ry,12,rowHeight,entry.size()>0?CUBE_FILLED:CUBE_OUTLINE,entry.active()?TEXT:MUTED); // blocks of its own: a filled cube; none (a parent, or air): an outline
             if(entry.active())g.fill(x+9,ry,rowRight,ry+rowHeight,entry.editing()?0xff5b4a84:0xff315b84);
             else if(ClientState.hoverWorld==id)g.fill(x+9,ry,rowRight,ry+rowHeight,ClientState.savedColor(id)&0xffffff|0x66000000); // under the pointer in a viewport: tinted with the outline colour it has in the world
             if(renaming==id){
