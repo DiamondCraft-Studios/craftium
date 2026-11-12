@@ -97,7 +97,7 @@ final class TransformGizmo {
         mode=effectiveMode(t);localBasis=t.kind==Kind.SHAPE&&mode==Options.GizmoMode.SCALE;basis=axesAt(t.anchor);pickScale=screenScale(t.anchor);pickExtent=extent(t);pickReach=reach(t,pickExtent);double best=100;int chosen=-1;double[] center=project(t.anchor);
         boolean plain=t.kind==Kind.MODEL||t.kind==Kind.PIVOT||t.kind==Kind.SHAPE&&ClientState.options.tool.transform(); // the transform tools show only their own handles
         // The centre: free move, even scaling for the Scale tool's circle; Rotate has the trackball instead, below.
-        if(mask==ALL_AXES&&(!plain||mode==Options.GizmoMode.SCALE&&blocky(t.kind))&&mode!=Options.GizmoMode.ROTATE&&center!=null&&Math.pow(x-center[0],2)+Math.pow(y-center[1],2)<81)chosen=3;
+        if(mask==ALL_AXES&&(!plain||mode==Options.GizmoMode.MOVE||mode==Options.GizmoMode.SCALE&&blocky(t.kind))&&mode!=Options.GizmoMode.ROTATE&&center!=null&&Math.pow(x-center[0],2)+Math.pow(y-center[1],2)<81)chosen=3;
         if(chosen<0)for(int i=0;i<3;i++){
             if((mask>>i&1)==0)continue; // a locked axis leaves the others out
             if(mode==Options.GizmoMode.ROTATE){Vec3 a=basis[(i+1)%3],b=basis[(i+2)%3];for(int j=0;j<96;j++){double v=j*Math.PI/48,w=(j+1)*Math.PI/48;double d=distance(x,y,project(t.anchor.add(a.scale(Math.cos(v)*3.5*pickScale)).add(b.scale(Math.sin(v)*3.5*pickScale))),project(t.anchor.add(a.scale(Math.cos(w)*3.5*pickScale)).add(b.scale(Math.sin(w)*3.5*pickScale))));if(d<best){best=d;chosen=i;}}}
@@ -601,7 +601,7 @@ final class TransformGizmo {
         if(currentMode==Options.GizmoMode.SCALE&&plainHandles&&!(held&&active!=3)){ // the Scale tool's circle in the middle scales every axis
             Vec3[] cam=cameraAxes();circle(anchor,cam[0],cam[1],.32*k,active==3?CENTER_ACTIVE:CENTER,active==3?3:2f);
         }
-        if(showFaces&&currentMode!=Options.GizmoMode.ROTATE&&!plainHandles&&axisMask==ALL_AXES&&!(held&&active!=3)){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
+        if(showFaces&&currentMode!=Options.GizmoMode.ROTATE&&(!plainHandles||currentMode==Options.GizmoMode.MOVE)&&axisMask==ALL_AXES&&!(held&&active!=3)){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
     }
     /** Names the handle under the pointer next to it. */
     private static void label(Vec3 anchor,Vec3[] directions,double k,Vec3 extent,Options.GizmoMode mode,int handle){
