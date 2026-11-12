@@ -2453,6 +2453,8 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         var items=new ArrayList<MenuItem>();
         var kids=new ArrayList<Integer>();for(var e:hierarchyAll)if(e.parent()==id)kids.add(e.id());
         boolean only=n==1&&row.active()&&!row.editing();
+        items.add(item(n>1?"Copy paths ("+n+")":"Copy path","",()->copyPaths(targets)));
+        items.add(divider());
         if(!only||n>1)items.add(item("Select","",()->action("saved_selection:view:"+id)));
         if(!kids.isEmpty())items.add(item("Select children only","",()->action("saved_selection:viewset:"+String.join(",",kids.stream().map(String::valueOf).toList()))));
         items.add(row.active()&&row.editing()?item("Stop editing","",()->action("saved_selection:release")):item("Edit blocks","",()->action("saved_selection:edit:"+id)));
@@ -2482,8 +2484,6 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(n==1)items.add(item("Change colour…","",()->ColourPickerScreen.open(this,row.name()+" colour",()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0))));
         var box=subtreeBounds(id);
         if(box!=null)items.add(item("Focus","F",()->focusOn(box[0],box[1])));
-        items.add(divider());
-        items.add(item(n>1?"Copy paths ("+n+")":"Copy path","",()->copyPaths(targets)));
         rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=id;menu=ROW_MENU;openSub="";openSub2="";
     }
     /** The path of a BuildObject as an agent would name it: its group, what it is under, then its own name, joined by "/" (the group is left out on a server without groups). */
@@ -2507,12 +2507,13 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         var group=groupById(groupId);if(group==null)return;
         var groups=ClientState.savedGroups();
         var items=new ArrayList<MenuItem>();
+        items.add(item("Copy path","",()->{var text="\""+group.name()+"\"";minecraft.keyboardHandler.setClipboard(text);ClientState.notify("Copied "+text);}));
+        items.add(divider());
         items.add(item("Rename","",()->startRename(new RenameArea(null,GROUP_BASE+groupId))));
         items.add(item("Create empty BuildObject here","",()->action("saved_selection:empty:"+groupId)));
         items.add(item("Create new Group","",()->action("saved_selection:groupnew")));
         boolean folded=ClientState.groupFolded(groupId);
         items.add(item(folded?"Unfold":"Fold","",()->ClientState.toggleGroupFolded(groupId)));
-        items.add(item("Copy path","",()->{var text="\""+group.name()+"\"";minecraft.keyboardHandler.setClipboard(text);ClientState.notify("Copied "+text);}));
         if(groups.size()>1){items.add(divider());items.add(item("Delete group","",()->action("saved_selection:groupdelete:"+groupId)));} // what is in it goes to the group before
         rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=0;menu=ROW_MENU;openSub="";openSub2="";
     }
