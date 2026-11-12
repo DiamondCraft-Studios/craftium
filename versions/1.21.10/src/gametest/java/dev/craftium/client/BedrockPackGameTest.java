@@ -124,7 +124,9 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
             String said = c.computeOnClient(mc -> ClientState.status.message());
             require(said != null && said.contains("game's pools"), "the refusal should say why: " + said);
             // the pool editor's window for it
-            c.runOnClient(mc -> { ClientState.options.jigsawPool = "outpost:halls"; JigsawEditorScreen.open(null); });
+            // at 1.5x on a full-size window, where text would show uneven pixels
+            c.runOnClient(mc -> { mc.getWindow().setWindowed(1600, 900); ClientState.options.interfaceHalves = 3; ClientState.options.jigsawPool = "outpost:halls"; JigsawEditorScreen.open(null); });
+            c.waitTicks(20);
             c.waitTicks(40);
             c.takeScreenshot("pool-editor-dropdown-closed");
             c.runOnClient(mc -> {
@@ -206,6 +208,12 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
                     menu.set(screen, null);
                 } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
             });
+            // the same screen with each way of drawing text, for comparing
+            for (var mode : TextMode.Mode.values()) {
+                c.runOnClient(mc -> TextMode.set(mode));
+                c.waitTicks(20);
+                c.takeScreenshot("text-" + mode.name().toLowerCase());
+            }
             // the Single view of the connectors: the picked one in a window on top
             c.runOnClient(mc -> {
                 try {
@@ -236,6 +244,7 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
             });
             c.waitTicks(40);
             c.takeScreenshot("bedrock-pack-window");
+            c.runOnClient(mc -> { TextMode.set(TextMode.Mode.SUPERSAMPLED); mc.getWindow().setWindowed(854, 480); });
             System.out.println("CRAFTIUM_BEDROCK done");
         } catch (java.io.IOException e) {
             throw new java.io.UncheckedIOException(e);
