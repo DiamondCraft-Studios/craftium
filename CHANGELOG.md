@@ -50,6 +50,7 @@ Changes since 1.5.0-beta.1.
 - Target info moved to the bottom of the left column, under Tool options.
 - The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
 - Your saved window layout is reset once, to the new places.
+- Dragging a gizmo handle (an arrow, a plane square or the centre) is now worked out from each step of the pointer, so flying about while you drag no longer slows it, stops it or sends the selection back towards you, even when you look along the arrow. The selection stays where it is while only the camera moves.
 
 ## 1.5.0-beta.1
 
