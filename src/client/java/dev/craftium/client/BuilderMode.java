@@ -342,9 +342,21 @@ public final class BuilderMode {
                 var shown=preview(o,min,size,steps);
                 if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),o.removedTint); // the blocks that are moving, where they are now
                 if(shown==null)boxShape(min.add(offset.x(),offset.y(),offset.z()),max.add(offset.x()+1,offset.y()+1,offset.z()+1)).drawPlain(Vec3.ZERO,o.previewColor,(float)o.builderPreviewWidth,0,false,false);
-                else{shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.builderPreviewWidth,o.previewFill,true,false);if(!shown.places().isEmpty())Overlay.blockStates(turned(shown.models(),o),shown.places(),o.previewTint);}
+                else{drawDestination(o,shown);if(!shown.places().isEmpty())Overlay.blockStates(turned(shown.models(),o),shown.places(),o.previewTint);}
             }
         }
+    }
+    private static SceneShape destScene=SceneShape.EMPTY;
+    private static Preview destOf;private static long destAt;
+    /** The destination as the world hides it, like the selection (see {@link SceneShape}): dim faces on the ground, an outline in open air, nothing showing through terrain. Worked out again when the preview changes or, once a second, the world does. */
+    private static void drawDestination(Options o,Preview shown){
+        var level=Minecraft.getInstance().level;
+        if(level==null){shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.builderPreviewWidth,o.previewFill,true,false);return;}
+        long second=level.getGameTime()/20;
+        if(shown!=destOf||second!=destAt){destScene=SceneShape.of(level,shown.landing(),true);destOf=shown;destAt=second;}
+        if(destScene.tooLarge()){shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.builderPreviewWidth,o.previewFill,true,false);return;}
+        int fill=(o.previewFill>>>24)!=0?o.previewFill:o.previewColor&0xffffff|SceneShape.FACE_ALPHA;
+        destScene.draw(fill,o.previewColor,(float)o.builderPreviewWidth,o.previewFill);
     }
     private static final Map<Object,OutlineShape> boxes=new HashMap<>();
     /** The outline of the box between two block corners, kept for as long as it is drawn so its silhouette is not worked out again every frame. */
@@ -402,7 +414,7 @@ public final class BuilderMode {
     /** Past this many blocks the preview is just a box around where they land. */
     private static final int PREVIEW_LIMIT=4096;
     /** Where the cells would land: one outline around them, plus each block's model drawn at its destination. */
-    private record Preview(OutlineShape shape,List<net.minecraft.core.BlockPos> models,List<net.minecraft.core.BlockPos> places){}
+    private record Preview(OutlineShape shape,Set<Point> landing,List<net.minecraft.core.BlockPos> models,List<net.minecraft.core.BlockPos> places){}
     private static Preview cachedPreview;
     private static Object[] cachedFor;
     private static List<Point> cachedCells;
@@ -420,7 +432,7 @@ public final class BuilderMode {
         if(landing!=null){
             var models=new ArrayList<net.minecraft.core.BlockPos>(landing.size());var places=new ArrayList<net.minecraft.core.BlockPos>(landing.size());
             landing.forEach((to,from)->{places.add(new net.minecraft.core.BlockPos(to.x(),to.y(),to.z()));models.add(new net.minecraft.core.BlockPos(from.x(),from.y(),from.z()));});
-            built=new Preview(OutlineShape.of(landing.keySet()),models,places);
+            built=new Preview(OutlineShape.of(landing.keySet()),landing.keySet(),models,places);
         }
         cachedFor=key;cachedCells=cells;cachedPreview=built;
         return built;
