@@ -24,7 +24,7 @@ public final class FontTextures {
 
     /** Sets every font texture to what the mode and the interface scale now call for. */
     public static void update(){
-        boolean want=TextMode.mode==TextMode.Mode.LINEAR&&InterfaceScale.zoom()!=1;
+        boolean want=TextMode.mode()==TextMode.Mode.LINEAR&&InterfaceScale.zoom()!=1;
         if(want==linear)return;
         linear=want;
         synchronized(ALL){for(var texture:ALL)texture.setFilter(linear,false);}

@@ -244,7 +244,7 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
             });
             c.waitTicks(40);
             c.takeScreenshot("bedrock-pack-window");
-            c.runOnClient(mc -> { TextMode.set(TextMode.Mode.SUPERSAMPLED); mc.getWindow().setWindowed(854, 480); });
+            c.runOnClient(mc -> { TextMode.set(TextMode.Mode.LINEAR); mc.getWindow().setWindowed(854, 480); });
             System.out.println("CRAFTIUM_BEDROCK done");
         } catch (java.io.IOException e) {
             throw new java.io.UncheckedIOException(e);

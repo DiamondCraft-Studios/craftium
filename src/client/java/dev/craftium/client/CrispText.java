@@ -29,7 +29,7 @@ public final class CrispText {
 
     /** Draws the text with its top left (or its middle, when centred) at x, y of the current pose, if the pose puts a font pixel between whole screen pixels. False: not drawn, draw it as the game does. */
     public static boolean draw(Gfx g,Font font,String text,int x,int y,int color,boolean shadow,boolean centred){
-        if(TextMode.mode!=TextMode.Mode.SUPERSAMPLED||text==null)return false;
+        if(TextMode.mode()!=TextMode.Mode.SUPERSAMPLED||text==null)return false;
         var pose=g.pose();
         double gui=Minecraft.getInstance().getWindow().getGuiScale(),sx=pose.m00(),pixels=gui*sx;
         if(sx<=0||pose.m11()!=sx||pose.m01()!=0||pose.m10()!=0||Math.abs(pixels-Math.rint(pixels))<.02)return false;

@@ -13,8 +13,11 @@ public final class TextMode {
         SUPERSAMPLED
     }
 
-    public static volatile Mode mode=Mode.SUPERSAMPLED;
+    /** The way the player chose in the options. */
+    public static Mode mode(){
+        return switch(ClientState.options.textSmoothing){case "vanilla"->Mode.VANILLA;case "supersampled"->Mode.SUPERSAMPLED;default->Mode.LINEAR;};
+    }
 
-    /** Chooses how text is drawn, and tells whatever has to follow (the font textures, in LINEAR). */
-    public static void set(Mode next){mode=next;InterfaceScale.listener.run();}
+    /** Chooses how text is drawn, as the options do, and tells whatever has to follow (the font textures, in LINEAR). */
+    public static void set(Mode next){ClientState.options.textSmoothing=next.name().toLowerCase(java.util.Locale.ROOT);InterfaceScale.listener.run();}
 }
