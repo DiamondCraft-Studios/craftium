@@ -100,12 +100,15 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
             require(String.valueOf(hall.get("size")).replace(" ", "").equals("[7, 4, 3]".replace(" ", "")), "hall size " + hall.get("size"));
             @SuppressWarnings("unchecked") var palette = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) hall.get("structure")).get("palette")).get("default");
             @SuppressWarnings("unchecked") var positions = (Map<String, Object>) palette.get("block_position_data");
-            require(positions.size() == 2, "the hall should keep its two jigsaws, found " + positions.size());
-            @SuppressWarnings("unchecked") var data = (Map<String, Object>) ((Map<String, Object>) positions.values().iterator().next()).get("block_entity_data");
-            require("outpost:door".equals(data.get("name")) && "outpost:caps".equals(data.get("target_pool")) && "JigsawBlock".equals(data.get("id")), "jigsaw data " + data);
+            @SuppressWarnings("unchecked") var entities = positions.values().stream().map(v -> (Map<String, Object>) ((Map<String, Object>) v).get("block_entity_data")).toList();
+            var jigsaws = entities.stream().filter(e -> "JigsawBlock".equals(e.get("id"))).toList();
+            require(jigsaws.size() == 2, "the hall should keep its two jigsaws, found " + jigsaws.size() + " of " + entities.size() + " block entities");
+            require(entities.stream().anyMatch(e -> "Chest".equals(e.get("id"))), "the chest of the hall should keep its data: " + entities);
+            var data = jigsaws.get(0);
+            require("outpost:door".equals(data.get("name")) && "outpost:caps".equals(data.get("target_pool")), "jigsaw data " + data);
 
             String report = new String(entries.get("craftium-export-report.txt"), StandardCharsets.UTF_8);
-            require(report.contains("placed feature") && report.contains("block entities"), "the report should name the feature and the chest:\n" + report);
+            require(report.contains("placed feature") && !report.contains("block entities (chests"), "the report should name the feature, and no longer call the chest lost:\n" + report);
             System.out.println("CRAFTIUM_BEDROCK report:\n" + report);
 
             // a pool of the game is refused, and nothing is sent
@@ -122,6 +125,26 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
             // the pool editor's window for it
             c.runOnClient(mc -> { ClientState.options.jigsawPool = "outpost:halls"; JigsawEditorScreen.open(null); });
             c.waitTicks(40);
+            c.takeScreenshot("pool-editor-dropdown-closed");
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var toggle = JigsawEditorScreen.class.getDeclaredMethod("toggleMenu");
+                    toggle.setAccessible(true);
+                    toggle.invoke(screen);
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            c.waitTicks(10);
+            c.takeScreenshot("pool-editor-dropdown-open");
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var toggle = JigsawEditorScreen.class.getDeclaredMethod("toggleMenu");
+                    toggle.setAccessible(true);
+                    toggle.invoke(screen);
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            c.waitTicks(10);
             c.runOnClient(mc -> {
                 try {
                     var screen = dev.craftium.client.compat.ClientCompat.screen(mc);

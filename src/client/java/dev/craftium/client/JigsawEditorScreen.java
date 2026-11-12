@@ -15,17 +15,17 @@ import org.lwjgl.glfw.GLFW;
 import java.util.*;
 
 /**
- * The jigsaw pool editor. On the left the pools (the craftium pack's, and every other pack's, which are overridden in the craftium pack when edited), in
+ * The jigsaw pool editor. At the top left a dropdown picks the pool (the craftium pack's, and every other pack's, which are overridden in the craftium pack when edited); in
  * the middle the elements of the pool as cards with a picture, a weight and a projection, on the right the connectors of the selected element, each
  * with how many elements it can meet, and a graph of how the pools lead to each other. The server does all the editing, by changing the pack's files
  * (so the live preview follows) and answering with a model; every change is one undo step. A text box applies what is typed when Enter is pressed.
  */
 final class JigsawEditorScreen extends CraftiumScreen {
-    private static final int SIDE = 12, TOP = 50, FOOT = 12, CARD_H = 98, CARD_GAP = 6, ROW_H = 160, FOLDED_H = 22, LIST_ROW = 20;
+    private static final int SIDE = 12, TOP = 50, FOOT = 12, CARD_H = 98, CARD_GAP = 6, ROW_H = 160, FOLDED_H = 22, LIST_ROW = 20, MENU_ROWS = 12;
     /** The preview of the selected element, at the top of the right column: a label line and then the picture, in canvas pixels. The connectors are below it. */
-    private static final int PREVIEW_LABEL = 14, MIN_LEFT = 120, MIN_RIGHT = 220, MIN_CENTRE = 200, MIN_PREVIEW = 80, MIN_CONNECTORS = 120, GAP = 10;
+    private static final int PREVIEW_LABEL = 14, MIN_RIGHT = 220, MIN_CENTRE = 200, MIN_PREVIEW = 80, MIN_CONNECTORS = 120, GAP = 10;
     /** The widths of the pools column and the right column and the height of the picture of the preview, as the player has dragged them (0: as laid out); kept while the game runs. */
-    private static int leftPref, rightPref, previewPref;
+    private static int rightPref, previewPref;
     /** Which divider is being dragged (1 pools | elements, 2 elements | right column, 3 preview over connectors), where the pointer was and what the size was then. */
     private int resizing, resizeFrom, resizeStart;
     /** The width of the Back and Forward tabs under the header, which the messages start after. */
@@ -42,7 +42,9 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private boolean graph, adding;
     private String filter = "", name = "", query = "", selectionName = "";
     private double poolScroll, graphScroll;
-    private boolean draggingPoolBar, draggingGraphBar;
+    private boolean draggingGraphBar, draggingPoolBar, poolMenuOpen;
+    private EditBox poolBox;
+    private int pickW;
     private final Map<EditBox, Runnable> commits = new HashMap<>();
     /** What to say when the pointer rests on a button; drawn inside the scaled canvas, so it sits at the pointer whatever the window size. */
     private final Tips tips = new Tips();
@@ -95,7 +97,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private String featureQuery = "";
     private boolean helpOpen;
     private String dialogMode, dialogText = "";
-    private int leftW, rightW, centreX, centreW;
+    private int rightW, centreX, centreW;
     /** The editor is laid out on a canvas at least 860 by 460 and scaled down to fit a smaller window, like the Studio inspector. */
     private float uiScale = 1;
     private int cw, ch;
@@ -185,12 +187,6 @@ final class JigsawEditorScreen extends CraftiumScreen {
         resolveTarget();
         var elements = elements();
         if (selected >= elements.size()) selected = Math.max(0, elements.size() - 1);
-        var pools = visiblePools();
-        for (int i = 0; i < pools.size(); i++)
-            if (pools.get(i).get("id").getAsString().equals(poolId())) {
-                int y = i * LIST_ROW, room = listBottom() - listTop();
-                if (y < poolScroll || y + LIST_ROW > poolScroll + room) poolScroll = Math.max(0, y - room / 2);
-            }
     }
     private JsonObject pool() { return model.has("pool") ? model.getAsJsonObject("pool") : null; }
     private String poolId() { var p = pool(); return p == null ? "" : p.get("id").getAsString(); }
@@ -255,10 +251,8 @@ final class JigsawEditorScreen extends CraftiumScreen {
         suggestSources.clear();
         tips.clear();
         rightW = rightPref > 0 ? rightPref : Math.clamp(cw * 3 / 10, 260, 320);
-        rightW = Math.clamp(rightW, MIN_RIGHT, Math.max(MIN_RIGHT, cw - 2 * SIDE - 2 * GAP - MIN_LEFT - MIN_CENTRE));
-        leftW = leftPref > 0 ? leftPref : Math.clamp(cw / 5, 150, 210);
-        leftW = Math.clamp(leftW, MIN_LEFT, Math.max(MIN_LEFT, cw - 2 * SIDE - 2 * GAP - rightW - MIN_CENTRE));
-        centreX = SIDE + leftW + 10;
+        rightW = Math.clamp(rightW, MIN_RIGHT, Math.max(MIN_RIGHT, cw - 2 * SIDE - 2 * GAP - MIN_CENTRE));
+        centreX = SIDE;
         centreW = Math.max(200, cw - SIDE - rightW - 10 - centreX);
         int unapplied = unappliedCount();
         int redoCount = localRedo.isEmpty() ? num(model, "redo", 0) : localRedo.size(), undoCount = localUndo.isEmpty() ? num(model, "undo", 0) : localUndo.size();
@@ -276,7 +270,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         if (adding) { overlay(); applyTips(); return; }
         button("‹ Back", SIDE, 24, 70, 18, () -> stepHistory(-1)).active = historyAt > 0;
         button("Forward ›", SIDE + 74, 24, 78, 18, () -> stepHistory(1)).active = historyAt >= 0 && historyAt < poolHistory.size() - 1;
-        leftPane();
+        poolPicker();
         if (pool() != null) {
             centreHeader();
             if (!graph && !usedView) {
@@ -311,7 +305,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 case "Undo" -> "Takes back your last change here: an edit to a pool or template, or a move of a pool in the graph.";
                 case "Redo" -> "Puts back a change you took back, including a move in the graph.";
                 case "Bedrock pack…" -> "Makes a file for Minecraft Bedrock Edition (an .mcpack) from the open pool and every pool and piece it leads to. You name it, see what Bedrock cannot hold, then choose where to save it.";
-                case "New pool…" -> "Makes an empty pool. You are asked for its name: without a namespace it goes in craftium.";
+                case "New…" -> "Makes an empty pool. You are asked for its name: without a namespace it goes in craftium.";
                 case "?" -> "A short guide: what a pool is, how to make a structure, and what the connector fields mean.";
                 case "Template" -> "Adds a template that already exists: one of the game's, another pack's, or one you saved.";
                 case "Selection" -> "Saves the blocks you selected as a new template and adds it.";
@@ -347,15 +341,48 @@ final class JigsawEditorScreen extends CraftiumScreen {
         }
     }
 
-    private void leftPane() {
-        tips.on(box(SIDE, TOP, leftW, filter, 64, v -> { filter = v; poolScroll = 0; }, null), "Type part of a pool name to narrow the list. Start a word with @ to narrow by namespace: @minecraft shows only the pools of minecraft, and @craftium town only the town pools of craftium.");
-        int y = ch - FOOT - 44;
-        int half = leftW / 2 - 2;
-        button("New pool…", SIDE, y, half, 18, () -> openDialog("pool_new"));
-        button("Copy…", SIDE + half + 4, y, half, 18, () -> { if (!poolId().isEmpty()) openDialog("pool_copy"); });
-        button("Rename…", SIDE, y + 22, half, 18, () -> { if (!poolId().isEmpty()) openDialog("pool_rename"); });
-        button("Delete", SIDE + half + 4, y + 22, half, 18, () -> { if (!poolId().isEmpty()) edit("pool_delete", "id", poolId()); });
+    /** The dropdown that picks the pool, and the buttons that make, copy, rename and delete one, along the top of the middle. */
+    private void poolPicker() {
+        int y = TOP - 4, buttons = 54 + 54 + 62 + 54 + 3 * 4;
+        pickW = Math.clamp(centreW - 24 - 6 - buttons - 8, 150, 320);
+        poolBox = box(centreX, y, pickW, filter, 64, v -> { filter = v; poolMenuOpen = true; poolScroll = 0; }, this::pickFirstPool);
+        tips.on(poolBox, "Type part of a pool name to narrow the list, then pick a pool. Start a word with @ to narrow by namespace: @minecraft shows only the pools of minecraft, and @craftium town only the town pools of craftium. Enter opens the first one.");
+        var arrow = button(poolMenuOpen ? "▴" : "▾", centreX + pickW + 2, y, 22, 18, () -> toggleMenu());
+        tips.on(arrow, "Shows the list of pools to pick from.");
+        int x = centreX + pickW + 24 + 6;
+        button("New…", x, y, 54, 18, () -> openDialog("pool_new")).active = true;
+        button("Copy…", x + 58, y, 54, 18, () -> { if (!poolId().isEmpty()) openDialog("pool_copy"); });
+        button("Rename…", x + 116, y, 62, 18, () -> { if (!poolId().isEmpty()) openDialog("pool_rename"); });
+        button("Delete", x + 182, y, 54, 18, () -> { if (!poolId().isEmpty()) edit("pool_delete", "id", poolId()); });
     }
+
+    private void toggleMenu() {
+        poolMenuOpen = !poolMenuOpen;
+        if (poolMenuOpen) scrollMenuToOpenPool();
+        else filter = "";
+        init();
+    }
+
+    /** Scrolls the menu so the open pool shows, as the left list used to when the editor opened. */
+    private void scrollMenuToOpenPool() {
+        var pools = visiblePools();
+        for (int i = 0; i < pools.size(); i++)
+            if (pools.get(i).get("id").getAsString().equals(poolId())) { poolScroll = Math.clamp((i - menuRows(pools.size()) / 2) * LIST_ROW, 0, Math.max(0, (pools.size() - menuRows(pools.size())) * LIST_ROW)); return; }
+        poolScroll = 0;
+    }
+
+    private void pickFirstPool() {
+        var pools = visiblePools();
+        if (pools.isEmpty()) return;
+        closeMenu();
+        openPool(pools.get(0).get("id").getAsString(), 0);
+    }
+
+    private void closeMenu() { poolMenuOpen = false; filter = ""; }
+
+    private int menuRows(int count) { return Math.max(1, Math.min(Math.min(MENU_ROWS, count), (ch - FOOT - menuY() - 22) / LIST_ROW)); }
+    private int menuY() { return TOP + 16; }
+    private int menuH(int count) { return menuRows(count) * LIST_ROW + 4 + 14; }
 
     private void centreHeader() {
         int y = TOP + 16;
@@ -630,13 +657,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     // ---- the dividers between the panels
 
-    private boolean overLeftDivider(double x, double y) { return x >= SIDE + leftW && x < centreX && y >= TOP - 4 && y < ch - FOOT; }
     private boolean overRightDivider(double x, double y) { return x >= centreX + centreW && x < previewX() && y >= TOP - 4 && y < ch - FOOT; }
     private boolean overPreviewDivider(double x, double y) { return x >= previewX() && x < previewX() + rightW && y >= previewY() + previewH() && y < connY(); }
 
     /** Starts dragging a divider, if the pointer is on one. */
     private boolean pressDivider(double x, double y) {
-        if (overLeftDivider(x, y)) { resizing = 1; resizeFrom = (int) x; resizeStart = leftW; return true; }
         if (overRightDivider(x, y)) { resizing = 2; resizeFrom = (int) x; resizeStart = rightW; return true; }
         if (overPreviewDivider(x, y) && element(selected) != null) { resizing = 3; resizeFrom = (int) y; resizeStart = previewH(); return true; }
         return false;
@@ -644,7 +669,6 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     private void dragDivider(double x, double y) {
         switch (resizing) {
-            case 1 -> leftPref = (int) Math.round(resizeStart + x - resizeFrom);
             case 2 -> rightPref = (int) Math.round(resizeStart - (x - resizeFrom));
             default -> previewPref = (int) Math.round(resizeStart + y - resizeFrom);
         }
@@ -654,7 +678,6 @@ final class JigsawEditorScreen extends CraftiumScreen {
     /** A grip on each divider, brighter when the pointer is on it or it is being dragged. */
     private void drawDividers(Gfx g, int mx, int my) {
         int midY = (TOP + ch - FOOT) / 2;
-        grip(g, SIDE + leftW + GAP / 2 - 1, midY - 12, 3, 24, resizing == 1 || (resizing == 0 && overLeftDivider(mx, my)));
         grip(g, centreX + centreW + GAP / 2 - 1, midY - 12, 3, 24, resizing == 2 || (resizing == 0 && overRightDivider(mx, my)));
         if (element(selected) != null) grip(g, previewX() + rightW / 2 - 12, previewY() + previewH() + 5, 24, 3, resizing == 3 || (resizing == 0 && overPreviewDivider(mx, my)));
     }
@@ -983,9 +1006,6 @@ final class JigsawEditorScreen extends CraftiumScreen {
         return out;
     }
 
-    private int listTop() { return TOP + 24; }
-    private int listBottom() { return ch - FOOT - 70; }
-
     @Override protected void draw(Gfx g, int mx, int my, float delta) {
         PoolThumbnails.newFrame();
         g.fill(0, 0, this.width, this.height, 0xf2101923);
@@ -1005,41 +1025,47 @@ final class JigsawEditorScreen extends CraftiumScreen {
         if (dialogMode != null) { drawDialog(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
         if (helpOpen) { drawHelp(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
         if (adding) { drawOverlay(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
-        drawPools(g, mx, my);
-        if (pool() == null) g.text(font, "Pick a pool on the left, or make a new one.", centreX, TOP + 20, MUTED, false);
+        if (pool() == null) g.text(font, "Pick a pool from the list above, or make a new one.", centreX, TOP + 20, MUTED, false);
         else { drawCentre(g); if (graph) drawGraph(g, mx, my); else if (usedView) drawUsed(g, mx, my); else drawCards(g, mx, my); }
         drawConnections(g, mx, my);
         drawDividers(g, mx, my);
         drawWidgets(g, mx, my, delta);
         drawSuggestions(g, mx, my);
+        if (poolBox != null && poolBox.getValue().isEmpty() && !poolBox.isFocused()) g.text(font, font.plainSubstrByWidth(pool() == null ? "Pick a pool · " + (model.has("pools") ? model.getAsJsonArray("pools").size() : 0) + " pools" : poolId(), pickW - 10), centreX + 5, TOP, pool() == null ? 0xff5f7186 : TEXT, false);
+        drawPoolMenu(g, mx, my);
         tips.draw(g, font, mx, my, cw, ch);
-        if (filter.isEmpty()) g.text(font, "filter " + (model.has("pools") ? model.getAsJsonArray("pools").size() : 0) + " pools · @namespace", SIDE + 5, TOP + 5, 0xff5f7186, false);
         g.pose().popMatrix();
     }
 
-    private void drawPools(Gfx g, int mx, int my) {
-        g.fill(SIDE - 4, TOP - 4, SIDE + leftW + 4, ch - FOOT + 2, PANEL);
-        g.enableScissor(SIDE, listTop(), SIDE + leftW, listBottom());
+    /** The open dropdown: the pools that fit what is typed, over everything else, with what each pool is (craftium's, another pack's, the game's) and its problems. */
+    private void drawPoolMenu(Gfx g, int mx, int my) {
+        if (!poolMenuOpen || modal()) return;
         var pools = visiblePools();
-        int rowW = leftW - Scrollbars.WIDTH - 3; // the bar has its own strip
+        int x = centreX, y = menuY(), w = pickW + 24, rows = menuRows(pools.size()), h = menuH(pools.size());
+        boolean bar = pools.size() > rows;
+        poolScroll = Math.clamp(poolScroll, 0, Math.max(0, (pools.size() - rows) * LIST_ROW));
+        g.fill(x, y, x + w, y + h, 0xf0101923);
+        g.outline(x, y, w, h, ClientState.options.uiAccent);
+        int rowW = w - 4 - (bar ? Scrollbars.WIDTH + 2 : 0);
+        g.enableScissor(x + 2, y + 2, x + w - 2, y + 2 + rows * LIST_ROW);
+        if (pools.isEmpty()) g.text(font, "No pool matches.", x + 8, y + 7, MUTED, false);
         for (int i = 0; i < pools.size(); i++) {
-            int y = listTop() + i * LIST_ROW - (int) poolScroll;
-            if (y + LIST_ROW < listTop() || y > listBottom()) continue;
+            int ry = y + 2 + i * LIST_ROW - (int) poolScroll;
+            if (ry + LIST_ROW < y + 2 || ry > y + 2 + rows * LIST_ROW) continue;
             var p = pools.get(i);
-            boolean current = p.get("id").getAsString().equals(poolId()), hover = mx >= SIDE && mx < SIDE + rowW && my >= Math.max(y, listTop()) && my < Math.min(y + LIST_ROW, listBottom());
-            g.fill(SIDE, y, SIDE + rowW, y + LIST_ROW - 2, current ? 0xff315473 : hover ? 0xff2a3d55 : CARD);
+            boolean current = p.get("id").getAsString().equals(poolId()), hover = mx >= x + 2 && mx < x + 2 + rowW && my >= Math.max(ry, y + 2) && my < Math.min(ry + LIST_ROW, y + 2 + rows * LIST_ROW);
+            g.fill(x + 2, ry, x + 2 + rowW, ry + LIST_ROW - 2, current ? 0xff315473 : hover ? 0xff2a3d55 : CARD);
             String source = str(p, "source", "");
-            g.fill(SIDE, y, SIDE + 3, y + LIST_ROW - 2, source.equals("craftium") ? OK : source.equals("pack") ? 0xff8fd3ff : 0xff5a6b7d);
+            g.fill(x + 2, ry, x + 5, ry + LIST_ROW - 2, source.equals("craftium") ? OK : source.equals("pack") ? 0xff8fd3ff : 0xff5a6b7d);
             int errors = num(p, "errors", 0), warnings = num(p, "warnings", 0);
             String badge = errors > 0 ? errors + "!" : warnings > 0 ? warnings + "?" : "";
-            int room = rowW - 12 - (badge.isEmpty() ? 0 : font.width(badge) + 6);
-            g.text(font, font.plainSubstrByWidth(shortName(p.get("id").getAsString()), room), SIDE + 7, y + 5, TEXT, false);
-            if (!badge.isEmpty()) g.text(font, badge, SIDE + rowW - font.width(badge) - 4, y + 5, errors > 0 ? ERROR : WARN, false);
+            int room = rowW - 14 - (badge.isEmpty() ? 0 : font.width(badge) + 6);
+            g.text(font, font.plainSubstrByWidth(shortName(p.get("id").getAsString()), room), x + 9, ry + 5, TEXT, false);
+            if (!badge.isEmpty()) g.text(font, badge, x + 2 + rowW - font.width(badge) - 4, ry + 5, errors > 0 ? ERROR : WARN, false);
         }
         g.disableScissor();
-        Scrollbars.draw(g, SIDE + leftW - Scrollbars.WIDTH, listTop(), listBottom() - listTop(), poolScroll, pools.size() * LIST_ROW, draggingPoolBar);
-        int ly = ch - FOOT - 62;
-        int lx = SIDE;
+        if (bar) Scrollbars.draw(g, x + w - Scrollbars.WIDTH - 2, y + 2, rows * LIST_ROW, poolScroll, pools.size() * LIST_ROW, draggingPoolBar);
+        int lx = x + 6, ly = y + h - 12;
         for (var key : new String[][]{{"craftium", "" + OK}, {"pack", "" + 0xff8fd3ff}, {"vanilla", "" + 0xff5a6b7d}}) {
             g.fill(lx, ly + 1, lx + 6, ly + 8, Integer.parseInt(key[1]));
             g.text(font, key[0], lx + 9, ly, 0xff6f8296, false);
@@ -1047,13 +1073,19 @@ final class JigsawEditorScreen extends CraftiumScreen {
         }
     }
 
+    private boolean overPoolMenu(double x, double y) {
+        if (!poolMenuOpen) return false;
+        int count = visiblePools().size();
+        return x >= centreX && x < centreX + pickW + 24 && y >= menuY() && y < menuY() + menuH(count);
+    }
+
     private void drawCentre(Gfx g) {
         var p = pool();
         g.fill(centreX - 4, TOP - 4, centreX + centreW + 4, ch - FOOT + 2, PANEL);
         boolean ours = p.has("overridden") && p.get("overridden").getAsBoolean();
         String tag = ours ? "in the craftium pack" : "another pack: an edit overrides it here";
-        g.text(font, tag, centreX + centreW - font.width(tag), TOP, ours ? OK : MUTED, false);
-        g.text(font, font.plainSubstrByWidth(p.get("id").getAsString(), centreW - font.width(tag) - 12), centreX, TOP, 0xffffffff, false);
+        int tagX = centreX + pickW + 24 + 6 + 54 + 54 + 62 + 54 + 3 * 4 + 12;
+        if (tagX + font.width(tag) <= centreX + centreW) g.text(font, tag, centreX + centreW - font.width(tag), TOP + 1, ours ? OK : MUTED, false);
         g.text(font, "Fallback", centreX + 2, TOP + 21, MUTED, false);
         g.text(font, "Description", centreX + 2, TOP + 45, MUTED, false);
         if (!graph && !usedView) {
@@ -1698,7 +1730,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         var event = scaled(raw);
         if (resizing != 0) { dragDivider(event.x(), event.y()); return true; }
         if (preview.dragging()) { preview.drag(dx / uiScale, dy / uiScale); return true; }
-        if (draggingPoolBar) { poolScroll = Scrollbars.scrollAt(event.y(), listTop(), listBottom() - listTop(), visiblePools().size() * LIST_ROW); return true; }
+        if (draggingPoolBar) { int rows = menuRows(visiblePools().size()); poolScroll = Scrollbars.scrollAt(event.y(), menuY() + 2, rows * LIST_ROW, visiblePools().size() * LIST_ROW); return true; }
         if (draggingGraphBar) { var bar = graphBar(); if (bar != null) graphScroll = Scrollbars.scrollAt(event.y(), bar[1], bar[2], bar[3]); return true; }
         if (pressEdge != null) {
             if (!edgeDragging && Math.hypot(event.x() - edgePressX, event.y() - edgePressY) > 3) edgeDragging = true;
@@ -1715,26 +1747,42 @@ final class JigsawEditorScreen extends CraftiumScreen {
         return super.mouseDragged(event, dx / uiScale, dy / uiScale);
     }
 
+    /** A click while the dropdown is open: a row opens that pool, the bar scrolls, and a click anywhere but the box and its arrow closes the menu (and goes on to whatever was clicked). */
+    private boolean clickPoolMenu(double x, double y) {
+        var pools = visiblePools();
+        int rows = menuRows(pools.size());
+        if (overPoolMenu(x, y)) {
+            int top = menuY() + 2;
+            boolean bar = pools.size() > rows;
+            if (bar && Scrollbars.hit(x, y, centreX + pickW + 24 - Scrollbars.WIDTH - 2, top, rows * LIST_ROW)) { draggingPoolBar = true; poolScroll = Scrollbars.scrollAt(y, top, rows * LIST_ROW, pools.size() * LIST_ROW); return true; }
+            if (y >= top && y < top + rows * LIST_ROW) {
+                int i = (int) ((y - top + poolScroll) / LIST_ROW);
+                if (i >= 0 && i < pools.size()) { closeMenu(); openPool(pools.get(i).get("id").getAsString(), 0); }
+            }
+            return true;
+        }
+        boolean onBox = x >= centreX && x < centreX + pickW + 24 && y >= TOP - 4 && y < TOP + 14;
+        if (!onBox) { closeMenu(); init(); }
+        return false;
+    }
+
     @Override public boolean mouseClicked(MouseButtonEvent raw, boolean twice) {
         var event = scaled(raw);
         if (event.button() == 1) for (var child : children()) if (child instanceof FlatButton b && b.rightClick(event.x(), event.y())) return true; // a cycling button steps back
         if ((event.button() == 3 || event.button() == 4) && !modal()) { stepHistory(event.button() == 3 ? -1 : 1); return true; } // the mouse's back and forward buttons
         if (event.button() == 0 && clickSuggestion(event.x(), event.y())) return true;
+        if (event.button() == 0 && !modal() && poolMenuOpen && clickPoolMenu(event.x(), event.y())) return true;
         flushEdits(); // leaving a box applies it, before this click changes anything
         if (event.button() == 0 && !modal() && !graphDragging() && pressDivider(event.x(), event.y())) return true;
-        if (super.mouseClicked(event, twice)) return true;
+        if (super.mouseClicked(event, twice)) {
+            if (event.button() == 0 && !modal() && poolBox != null && poolBox.isFocused() && !poolMenuOpen) { poolMenuOpen = true; scrollMenuToOpenPool(); }
+            return true;
+        }
         if (!modal() && pool() != null && overPreview(event.x(), event.y()) && preview.hasScene() && preview.press(event.button())) return true;
         if (event.button() != 0 || adding) return false;
         double x = event.x(), y = event.y();
-        int poolRoom = listBottom() - listTop(), poolContent = visiblePools().size() * LIST_ROW;
-        if (poolContent > poolRoom && Scrollbars.hit(x, y, SIDE + leftW - Scrollbars.WIDTH, listTop(), poolRoom)) { draggingPoolBar = true; poolScroll = Scrollbars.scrollAt(y, listTop(), poolRoom, poolContent); return true; }
         var graphBar = graphBar();
         if (graphBar != null && Scrollbars.hit(x, y, graphBar[0], graphBar[1], graphBar[2])) { draggingGraphBar = true; graphScroll = Scrollbars.scrollAt(y, graphBar[1], graphBar[2], graphBar[3]); return true; }
-        if (x >= SIDE && x < SIDE + leftW - Scrollbars.WIDTH - 3 && y >= listTop() && y < listBottom()) {
-            int i = (int) ((y - listTop() + poolScroll) / LIST_ROW);
-            var pools = visiblePools();
-            if (i >= 0 && i < pools.size()) { openPool(pools.get(i).get("id").getAsString(), 0); return true; }
-        }
         if (pool() != null && usedView && x >= centreX && x < centreX + centreW && y >= cardsTop() - 4 && y < ch - FOOT) {
             int row = (int) ((y - (cardsTop() - 4) + usedScroll) / USED_ROW);
             var list = usedList();
@@ -1775,7 +1823,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         double y = rawY / uiScale;
         if (!modal() && pool() != null && overPreview(x, y) && preview.hasScene()) { preview.zoom(vertical, x - (previewX() + rightW / 2.0), y - (previewY() + previewH() / 2.0)); return true; }
         if (suggestionsShowing() && overSuggestions(x, y)) { suggestScroll = Math.clamp(suggestScroll - (int) Math.signum(vertical) * 3, 0, Math.max(0, suggestMatches.size() - SUGGEST_ROWS)); return true; }
-        if (x < SIDE + leftW + 6) { poolScroll = Math.clamp(poolScroll - vertical * 30, 0, Math.max(0, visiblePools().size() * LIST_ROW - (listBottom() - listTop()))); return true; }
+        if (poolMenuOpen && overPoolMenu(x, y)) { int count = visiblePools().size(); poolScroll = Math.clamp(poolScroll - vertical * 30, 0, Math.max(0, (count - menuRows(count)) * LIST_ROW)); return true; }
         if (usedView && x < cw - SIDE - rightW && x >= centreX) { usedScroll = Math.clamp(usedScroll - vertical * 30, 0, Math.max(0, usedList().size() * USED_ROW - (ch - FOOT - (cardsTop() - 4)))); return true; }
         if (graph && x < cw - SIDE - rightW) { var bar = graphBar(); graphScroll = Math.clamp(graphScroll - vertical * 30, 0, bar == null ? 0 : bar[3] - bar[2]); return true; }
         return false;
@@ -1798,6 +1846,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
             if (getFocused() instanceof EditBox box && applied.containsKey(box)) { applyIfChanged(box); return true; }
             if (getFocused() instanceof EditBox box && commits.containsKey(box)) { commits.get(box).run(); return true; }
         }
+        if (event.key() == GLFW.GLFW_KEY_ESCAPE && poolMenuOpen && !modal()) { closeMenu(); init(); return true; }
         if (event.key() == GLFW.GLFW_KEY_ESCAPE && adding) { adding = false; init(); return true; }
         return super.keyPressed(event);
     }
