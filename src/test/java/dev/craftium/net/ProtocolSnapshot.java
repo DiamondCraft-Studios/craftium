@@ -547,6 +547,7 @@ final class ProtocolSnapshot {
         enum dev.craftium.core.Tool.FLATTEN
         enum dev.craftium.core.Tool.FLOODFILL
         enum dev.craftium.core.Tool.FLUID_BALL
+        enum dev.craftium.core.Tool.FLUID_BLOCK
         enum dev.craftium.core.Tool.FREEHAND_DRAW
         enum dev.craftium.core.Tool.FREEHAND_SELECT
         enum dev.craftium.core.Tool.GRADIENT_PAINTER

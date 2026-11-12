@@ -58,6 +58,7 @@ class WireCompatibilityTest {
         ROTATE
         SCALE
         PIVOT
+        FLUID_BLOCK
         """;
 
     /** Every top-level field {@link Options} wrote in 0.9.0-beta.1, with its JSON shape (primitive, array or object). */

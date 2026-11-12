@@ -47,6 +47,7 @@ class IconCatalogTest {
         craftium:tool/rock @@ Tools/Terrain @@ 24x24
         craftium:tool/floodfill @@ Tools/Terrain @@ 24x24
         craftium:tool/fluid_ball @@ Tools/Terrain @@ 24x24
+        craftium:tool/fluid_block @@ Tools/Terrain @@ 24x24
         craftium:tool/ruler @@ Tools/Utility @@ 24x24
         craftium:tool/tinker @@ Tools/Utility @@ 24x24
         craftium:tool/annotation @@ Tools/Utility @@ 24x24

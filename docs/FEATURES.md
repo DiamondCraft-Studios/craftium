@@ -28,6 +28,7 @@ This is a functional development preview. Implemented equivalents do not establi
 | Path | DDA/Bresenham-style lines, Bezier, Catmull-Rom and catenary-like paths; loops, grounding and stair/slab choice | Curve, catenary and stair heuristics differ from Axiom |
 | Floodfill | Count-limited connected fill with direction/corner controls | 128-block search radius |
 | Fluid Ball | Bounded water/lava/snow flow; support, edges, sources and connectivity controls | Approximate flow solver, not an identical simulator |
+| Fluid Block | Pours the material palette like powder: falls, settles on terrain, spreads and thins towards the edges; uses Fluid Ball's radius and flow length | Craftium's own; works with gravity and non-gravity blocks |
 | Elevation | Soft column raising/lowering and imported PNG heightmaps | Local height scan and limited vertical displacement |
 | Flatten | Terrain height interpolation toward target level | Local scan |
 | Slope | Two anchors defining a height plane | Linear plane with local scan |

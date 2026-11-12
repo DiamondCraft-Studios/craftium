@@ -54,6 +54,7 @@ class ToolMetadataTest {
         ROTATE @@ Rotate @@ RT @@ Transform @@ Drag a ring to rotate the selected blocks around the pivot. Enter applies it. @@ NONE @@ false @@ true @@ true @@ false @@ 82
         SCALE @@ Scale @@ SZ @@ Transform @@ Drag a square on a face to scale the selected blocks around the pivot. Enter applies it. @@ NONE @@ false @@ true @@ true @@ false @@ 67
         PIVOT @@ Pivot @@ PV @@ Transform @@ Click a block, or drag the arrows, to set the point Rotate and Scale work around. @@ NONE @@ false @@ true @@ false @@ false @@ 73
+        FLUID_BLOCK @@ Fluid Block @@ FK @@ Terrain @@ Pour your blocks over terrain like powder: they fall, settle and spread thinner towards the edges. @@ SPHERE @@ false @@ false @@ true @@ false @@ -1
         """;
 
     /** The sections of the Tools panel, in order, with the tools in each in the order shown. */
@@ -62,7 +63,7 @@ class ToolMetadataTest {
         Draw: SHAPE,LINE,PATH,MODELLING,FREEHAND_DRAW,TEXT,ERASE
         Paint: PAINTER,PAINT_BUCKET,GRADIENT_PAINTER,NOISE_PAINTER,SCRIPT_BRUSH,BIOME_PAINTER,CLENTAMINATOR
         Sculpt: SMOOTH,ROUGHEN,DISTORT,MELT,WELD,SHATTER,EXTRUDE,SMEAR,SCULPT_DRAW,MODIFY,STAMP
-        Terrain: ELEVATION,FLATTEN,SLOPE,ROCK,FLOODFILL,FLUID_BALL
+        Terrain: ELEVATION,FLATTEN,SLOPE,ROCK,FLOODFILL,FLUID_BALL,FLUID_BLOCK
         Utility: RULER,TINKER,ANNOTATION
         """;
 

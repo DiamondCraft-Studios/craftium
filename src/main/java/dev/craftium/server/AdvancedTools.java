@@ -69,6 +69,7 @@ final class AdvancedTools {
                 },start,Math.clamp(o.blockLimit,1,Selection.LIMIT),Selection.LIMIT*8,o.floodGap,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners))p.put(at,p.material);
             }
             case FLUID_BALL -> fluid(p,center,normal);
+            case FLUID_BLOCK -> powder(p,center,normal);
             case SMEAR -> {
                 var source=new LinkedHashMap<Point,BlockSnapshot>();
                 if(!p.session.selection.points().isEmpty()){for(Point at:p.session.selection.points())if(!p.state(at).isAir())source.put(at,BlockSnapshot.capture(p.level,EditPlanner.pos(at)));}
@@ -107,6 +108,20 @@ final class AdvancedTools {
             if(!supported&&at.y()>p.level.getMinY())queue.add(new Flow(at.add(0,-1,0),0,f.distance+1));
             if(supported||o.fillEdges)for(Point n:EditPlanner.NEIGHBOURS)if(n.y()==0&&f.cost<Math.min(7,o.flowLength))queue.add(new Flow(at.add(n.x(),0,n.z()),f.cost+1,f.distance+1));
             if(o.fluidQuality>1&&o.fillEdges&&f.cost<6)for(int x:new int[]{-1,1})for(int z:new int[]{-1,1})queue.add(new Flow(at.add(x,0,z),f.cost+2,f.distance+1));
+        }
+    }
+    /** Fluid Ball's flow, but pouring the palette: blocks fall until something holds them, then spread sideways, piled up to three high where they land and a single layer at the edge. Works for gravity blocks and for ones that float. */
+    private static void powder(EditPlanner p,Point center,Point normal){
+        var o=p.o;var queue=new PriorityQueue<Flow>(Comparator.comparingInt(Flow::cost).thenComparingInt(Flow::distance));var visited=new HashMap<Point,Integer>();
+        Point origin=center.add(normal.x(),normal.y(),normal.z());queue.add(new Flow(origin,0,0));int maxDistance=o.radius+o.flowLength,maxCost=Math.max(1,Math.min(7,o.flowLength));
+        while(!queue.isEmpty()){
+            var f=queue.remove();Point at=f.point;if(f.distance>maxDistance||at.y()>origin.y()+o.radius||at.y()<Math.max(p.level.getMinY(),origin.y()-maxDistance*2))continue;
+            if(visited.getOrDefault(at,Integer.MAX_VALUE)<=f.cost)continue;visited.put(at,f.cost);if(visited.size()>Selection.LIMIT)throw new IllegalArgumentException("Fluid block pour exceeds limit");
+            if(p.solid(at))continue;
+            if(!p.solid(at.add(0,-1,0))){queue.add(new Flow(at.add(0,-1,0),0,f.distance+1));continue;} // nothing under it yet: keep falling
+            int height=1+(maxCost-Math.min(maxCost,f.cost))*2/maxCost;
+            for(int i=0;i<height;i++){Point cell=at.add(0,i,0);if(p.solid(cell))break;p.put(cell,p.palette(BrushMath.hash(cell.x(),cell.y(),cell.z(),o.seed),cell));}
+            if(f.cost<Math.min(7,o.flowLength))for(Point n:EditPlanner.NEIGHBOURS)if(n.y()==0)queue.add(new Flow(at.add(n.x(),0,n.z()),f.cost+1,f.distance+1));
         }
     }
     private static BlockState pathMaterial(EditPlanner p,Point at,Point next){
