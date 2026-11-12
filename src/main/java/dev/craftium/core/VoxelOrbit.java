@@ -120,6 +120,37 @@ public final class VoxelOrbit {
     /** How far the lines of the outline are drawn towards the camera, in blocks: they lie in the surface of the blocks, so exactly there they would be cut away by them. */
     private static final float LINE_BIAS = 0.04f;
 
+    /**
+     * Sets the zoom and pan of {@code v} so that what the scene shows from the view's angle fills the picture of {@code w} x {@code h} pixels, centred, with {@code margin}
+     * pixels of room around it. The angle is left as it is. A scene with nothing to see leaves the view alone.
+     */
+    public static void fit(Scene s, View v, int w, int h, int margin) {
+        if (s.visibleCell.length == 0) return;
+        double yaw = Math.toRadians(v.yaw), pitch = Math.toRadians(v.pitch);
+        double[] cam = {Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch), Math.cos(pitch) * Math.cos(yaw)};
+        double[] right = {Math.cos(yaw), 0, -Math.sin(yaw)};
+        double[] up = {cam[1] * right[2] - cam[2] * right[1], cam[2] * right[0] - cam[0] * right[2], cam[0] * right[1] - cam[1] * right[0]};
+        double scale = baseScale(s, w, h), cx = s.sx / 2.0, cy = s.sy / 2.0, cz = s.sz / 2.0;
+        double minX = Double.MAX_VALUE, maxX = -Double.MAX_VALUE, minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+        double[] p = new double[3];
+        for (int i = 0; i < s.visibleCell.length; i++) {
+            int cell = s.visibleCell[i];
+            Quad q = s.shapes[s.cells[cell] & 255].quads()[s.visibleQuad[i]];
+            if (q.normal()[0] * cam[0] + q.normal()[1] * cam[1] + q.normal()[2] * cam[2] <= 0.0001) continue; // turned away: not in the picture
+            int x = cell % s.sx, z = cell / s.sx % s.sz, y = cell / (s.sx * s.sz);
+            for (int corner = 0; corner < 4; corner++) {
+                for (int k = 0; k < 3; k++) p[k] = (k == 0 ? x - cx : k == 1 ? y - cy : z - cz) + q.o()[k] + ((corner & 1) != 0 ? q.a()[k] : 0) + ((corner & 2) != 0 ? q.b()[k] : 0);
+                double px = scale * dot(p, right), py = -scale * dot(p, up);
+                minX = Math.min(minX, px); maxX = Math.max(maxX, px); minY = Math.min(minY, py); maxY = Math.max(maxY, py);
+            }
+        }
+        if (maxX <= minX || maxY <= minY) return;
+        double zoom = Math.min((w - 2.0 * margin) / (maxX - minX), (h - 2.0 * margin) / (maxY - minY));
+        v.zoom = zoom;
+        v.panX = -zoom * (minX + maxX) / 2;
+        v.panY = -zoom * (minY + maxY) / 2;
+    }
+
     /** The size of a block in pixels at zoom 1, so the whole box fits in the picture. */
     public static double baseScale(Scene s, int w, int h) {
         double diagonal = Math.sqrt((double) s.sx * s.sx + (double) s.sy * s.sy + (double) s.sz * s.sz);
@@ -154,6 +185,10 @@ public final class VoxelOrbit {
         int hl = hlInside ? s.cell(highlight[0], highlight[1], highlight[2]) : -1;
         boolean embedded = hlInside && (s.has(highlight[0] + 1, highlight[1], highlight[2]) || s.has(highlight[0] - 1, highlight[1], highlight[2]) || s.has(highlight[0], highlight[1] + 1, highlight[2])
                 || s.has(highlight[0], highlight[1] - 1, highlight[2]) || s.has(highlight[0], highlight[1], highlight[2] + 1) || s.has(highlight[0], highlight[1], highlight[2] - 1));
+        // A big picture is drawn in bands of rows, one band to a thread: every band tests all the rectangles but only fills its own rows, so none writes where another does.
+        int bands = (long) w * h >= 120_000 ? Math.min(8, Math.max(1, Runtime.getRuntime().availableProcessors())) : 1;
+        java.util.stream.IntStream.range(0, bands).parallel().forEach(band -> {
+        int rowA = (int) ((long) h * band / bands), rowB = (int) ((long) h * (band + 1) / bands);
         double[] p0 = new double[3], a = new double[3], b = new double[3];
         for (int i = 0; i < s.visibleCell.length; i++) {
             int cell = s.visibleCell[i];
@@ -169,7 +204,8 @@ public final class VoxelOrbit {
             if (Math.abs(det) < 1e-6) continue;
             double minX = Math.min(Math.min(sx0, sx0 + sax), Math.min(sx0 + sbx, sx0 + sax + sbx)), maxX = Math.max(Math.max(sx0, sx0 + sax), Math.max(sx0 + sbx, sx0 + sax + sbx));
             double minY = Math.min(Math.min(sy0, sy0 + say), Math.min(sy0 + sby, sy0 + say + sby)), maxY = Math.max(Math.max(sy0, sy0 + say), Math.max(sy0 + sby, sy0 + say + sby));
-            int x1 = Math.max(0, (int) Math.floor(minX)), x2 = Math.min(w - 1, (int) Math.ceil(maxX)), y1 = Math.max(0, (int) Math.floor(minY)), y2 = Math.min(h - 1, (int) Math.ceil(maxY));
+            int x1 = Math.max(0, (int) Math.floor(minX)), x2 = Math.min(w - 1, (int) Math.ceil(maxX)), y1 = Math.max(rowA, (int) Math.floor(minY)), y2 = Math.min(rowB - 1, (int) Math.ceil(maxY));
+            if (x1 > x2 || y1 > y2) continue;
             double shade = SHADE[q.shade()];
             boolean lit = embedded && cell == hl;
             int[] texture = q.texture();
@@ -190,7 +226,49 @@ public final class VoxelOrbit {
                     pixels[at] = 0xff000000 | r << 16 | g << 8 | bl;
                 }
         }
+        });
         if (hlInside) outline(highlight, cx, cy, cz, cam, right, up, scale, ox, oy, w, h, pixels, depth, hover);
+    }
+
+    /**
+     * The cell whose block is nearest to the camera at one pixel of a picture {@link #render} would draw with the same view, size and scene, as {x, y, z}, or null when
+     * nothing is there. It tests the same rectangles the same way, so what is under the pointer is what the picture shows there.
+     */
+    public static int[] pick(Scene s, View v, int w, int h, int pixelX, int pixelY) {
+        if (pixelX < 0 || pixelY < 0 || pixelX >= w || pixelY >= h) return null;
+        double yaw = Math.toRadians(v.yaw), pitch = Math.toRadians(v.pitch);
+        double[] cam = {Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch), Math.cos(pitch) * Math.cos(yaw)};
+        double[] right = {Math.cos(yaw), 0, -Math.sin(yaw)};
+        double[] up = {cam[1] * right[2] - cam[2] * right[1], cam[2] * right[0] - cam[0] * right[2], cam[0] * right[1] - cam[1] * right[0]};
+        double scale = baseScale(s, w, h) * v.zoom, cx = s.sx / 2.0, cy = s.sy / 2.0, cz = s.sz / 2.0;
+        double ox = w / 2.0 + v.panX, oy = h / 2.0 + v.panY;
+        double[] p0 = new double[3], a = new double[3], b = new double[3];
+        float best = Float.MAX_VALUE;
+        int found = -1;
+        for (int i = 0; i < s.visibleCell.length; i++) {
+            int cell = s.visibleCell[i];
+            Quad q = s.shapes[s.cells[cell] & 255].quads()[s.visibleQuad[i]];
+            if (q.normal()[0] * cam[0] + q.normal()[1] * cam[1] + q.normal()[2] * cam[2] <= 0.0001) continue;
+            int x = cell % s.sx, z = cell / s.sx % s.sz, y = cell / (s.sx * s.sz);
+            p0[0] = x + q.o()[0] - cx; p0[1] = y + q.o()[1] - cy; p0[2] = z + q.o()[2] - cz;
+            for (int k = 0; k < 3; k++) { a[k] = q.a()[k]; b[k] = q.b()[k]; }
+            double sx0 = ox + scale * dot(p0, right), sy0 = oy - scale * dot(p0, up), z0 = -dot(p0, cam);
+            double sax = scale * dot(a, right), say = -scale * dot(a, up), za = -dot(a, cam);
+            double sbx = scale * dot(b, right), sby = -scale * dot(b, up), zb = -dot(b, cam);
+            double det = sax * sby - sbx * say;
+            if (Math.abs(det) < 1e-6) continue;
+            double rx = pixelX + 0.5 - sx0, ry = pixelY + 0.5 - sy0;
+            double fa = (rx * sby - sbx * ry) / det, fb = (sax * ry - rx * say) / det;
+            if (fa < 0 || fa >= 1 || fb < 0 || fb >= 1) continue;
+            float depthHere = (float) (z0 + fa * za + fb * zb);
+            if (depthHere >= best) continue;
+            int tx = Math.clamp((int) Math.floor(q.u0() + q.ua() * fa + q.ub() * fb), 0, q.tw() - 1), ty = Math.clamp((int) Math.floor(q.v0() + q.va() * fa + q.vb() * fb), 0, q.th() - 1);
+            if ((q.texture()[ty * q.tw() + tx] >>> 24) < 128) continue;
+            best = depthHere;
+            found = cell;
+        }
+        if (found < 0) return null;
+        return new int[]{found % s.sx, found / (s.sx * s.sz), found / s.sx % s.sz};
     }
 
     /** The edges of one cell, depth tested; when none of it can be seen, faintly and through everything. */

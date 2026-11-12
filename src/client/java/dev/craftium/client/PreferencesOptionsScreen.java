@@ -60,8 +60,17 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
             new Link("Ruler options","The colours of the ruler's line, its knobs and its span label",SelectionOptionsScreen::ruler)));
         GROUPS.put("UI",List.of(
             new Number("Interface size","How big the text and buttons of every Craftium screen are. Auto keeps the game's GUI scale (the editor lowers it until it fits the window); 1x to 8x draw every pixel of the text with that many screen pixels, in half steps. Whole steps stay perfectly sharp; a half step is only exact in the editor, and every other screen rounds it up to the next whole step. A size bigger than the window fits can push panels off the screen; Ctrl and - (or Auto) bring it back. Ctrl and + / - change it inside the editor",0,16,o->o.interfaceHalves,(o,v)->o.interfaceHalves=v,InterfaceScale::name)));
+        GROUPS.put("UI",List.copyOf(withTextSmoothing(GROUPS.get("UI"))));
         GROUPS.put("AI",List.of(
             new Number("AI preview models","How many block models an AI preview draws; the rest of a bigger preview shows as its outline. More looks fuller but costs frame rate",Options.AI_GHOST_DRAW_MIN,Options.AI_GHOST_DRAW_MAX,o->o.aiGhostDrawLimit,(o,v)->o.aiGhostDrawLimit=v)));
+    }
+    private static List<Row> withTextSmoothing(List<Row> rows){
+        var out=new java.util.ArrayList<>(rows);
+        out.add(new Cycle("Text smoothing","How the letters of Craftium screens are drawn at a half-step interface size such as 1.5x, where a font pixel is one screen pixel wide in some places and two in others. Linear blends the edges of the game's font; Supersampled draws the letters larger and averages them down (a little thinner, and not in text boxes); Vanilla is the game's own drawing, sharp but uneven. Whole sizes are always sharp, whatever this says",
+                o->o.textSmoothing.substring(0,1).toUpperCase()+o.textSmoothing.substring(1),
+                o->o.textSmoothing=switch(o.textSmoothing){case "vanilla"->"linear";case "linear"->"supersampled";default->"vanilla";},
+                (o,d)->o.textSmoothing=d.textSmoothing));
+        return out;
     }
     private static final List<String> TABS=List.copyOf(GROUPS.keySet());
 

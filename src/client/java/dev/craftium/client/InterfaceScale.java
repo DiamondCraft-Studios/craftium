@@ -14,6 +14,8 @@ public final class InterfaceScale {
     private InterfaceScale(){}
 
     private static double zoom=1;
+    /** Told whenever the scale a Craftium screen is drawn at may have changed (and when the game takes its own back). */
+    public static volatile Runnable listener=()->{};
     /** The most a chosen size may be, in screen pixels per unit: the screen must still be 400 by 225 units, and 8 is the top of the slider. */
     public static int largest(Minecraft mc){var w=mc.getWindow();return Math.clamp(Math.min(w.getScreenWidth()/400,w.getScreenHeight()/225),1,8);}
     /** The player's own GUI scale. */
@@ -45,7 +47,7 @@ public final class InterfaceScale {
         // would stay; setting the scale again works the real size out from the window.
         if(window.getGuiScale()!=gui||nextZoom==1&&zoom!=1)window.setGuiScale(gui);
         if(nextZoom!=1){var access=(dev.craftium.client.mixin.WindowAccessor)(Object)window;access.craftium$setGuiScaledWidth(units);access.craftium$setGuiScaledHeight(high);}
-        zoom=nextZoom;return changed;
+        zoom=nextZoom;listener.run();return changed;
     }
     /** How much of the game's whole GUI scale a Craftium screen is drawn at: 1, or 0.75 to land on 1.5 screen pixels with a GUI scale of 2. */
     public static double zoom(){return zoom;}
@@ -73,7 +75,7 @@ public final class InterfaceScale {
     /** Every tick: once no Craftium screen is showing, gives the player's GUI scale back. */
     public static void restoreIfIdle(Minecraft mc){
         if(!active||ClientCompat.screen(mc) instanceof CraftiumScreen)return;
-        active=false;zoom=1;ClientCompat.refreshGui(mc);
+        active=false;zoom=1;listener.run();ClientCompat.refreshGui(mc);
     }
     /** The canvas the editor was laid out on before sizes were chosen: its window in the player's GUI scale, shrunk to fit 1000 by 562. */
     public static int[] legacyCanvas(Minecraft mc){

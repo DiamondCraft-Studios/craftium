@@ -44,6 +44,7 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
             server.runCommand("setblock " + (x + 6) + " " + (y + 1) + " " + (z + 1) + " jigsaw[orientation=east_up]{name:\"outpost:door\",target:\"outpost:door\",pool:\"outpost:caps\",final_state:\"minecraft:stone_bricks\",joint:\"aligned\"}");
             server.runCommand("setblock " + (x + 3) + " " + (y + 1) + " " + (z + 1) + " chest[facing=south]{Items:[{Slot:0b,id:\"minecraft:diamond\",count:3}]}");
             server.runCommand("fill " + x + " " + (y + 10) + " " + z + " " + (x + 2) + " " + (y + 12) + " " + z + " stone_bricks");
+            server.runCommand("setblock " + (x + 1) + " " + (y + 10) + " " + z + " jigsaw[orientation=south_up]{name:\"outpost:door\",target:\"minecraft:empty\",pool:\"minecraft:empty\",final_state:\"minecraft:air\",joint:\"aligned\"}");
             c.waitTicks(10);
             Path folder = server.computeOnServer(s -> s.getWorldPath(LevelResource.DATAPACK_DIR).resolve("craftium"));
             server.runOnServer(s -> {
@@ -100,12 +101,15 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
             require(String.valueOf(hall.get("size")).replace(" ", "").equals("[7, 4, 3]".replace(" ", "")), "hall size " + hall.get("size"));
             @SuppressWarnings("unchecked") var palette = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) hall.get("structure")).get("palette")).get("default");
             @SuppressWarnings("unchecked") var positions = (Map<String, Object>) palette.get("block_position_data");
-            require(positions.size() == 2, "the hall should keep its two jigsaws, found " + positions.size());
-            @SuppressWarnings("unchecked") var data = (Map<String, Object>) ((Map<String, Object>) positions.values().iterator().next()).get("block_entity_data");
-            require("outpost:door".equals(data.get("name")) && "outpost:caps".equals(data.get("target_pool")) && "JigsawBlock".equals(data.get("id")), "jigsaw data " + data);
+            @SuppressWarnings("unchecked") var entities = positions.values().stream().map(v -> (Map<String, Object>) ((Map<String, Object>) v).get("block_entity_data")).toList();
+            var jigsaws = entities.stream().filter(e -> "JigsawBlock".equals(e.get("id"))).toList();
+            require(jigsaws.size() == 2, "the hall should keep its two jigsaws, found " + jigsaws.size() + " of " + entities.size() + " block entities");
+            require(entities.stream().anyMatch(e -> "Chest".equals(e.get("id"))), "the chest of the hall should keep its data: " + entities);
+            var data = jigsaws.get(0);
+            require("outpost:door".equals(data.get("name")) && "outpost:caps".equals(data.get("target_pool")), "jigsaw data " + data);
 
             String report = new String(entries.get("craftium-export-report.txt"), StandardCharsets.UTF_8);
-            require(report.contains("placed feature") && report.contains("block entities"), "the report should name the feature and the chest:\n" + report);
+            require(report.contains("placed feature") && !report.contains("block entities (chests"), "the report should name the feature, and no longer call the chest lost:\n" + report);
             System.out.println("CRAFTIUM_BEDROCK report:\n" + report);
 
             // a pool of the game is refused, and nothing is sent
@@ -120,8 +124,116 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
             String said = c.computeOnClient(mc -> ClientState.status.message());
             require(said != null && said.contains("game's pools"), "the refusal should say why: " + said);
             // the pool editor's window for it
-            c.runOnClient(mc -> { ClientState.options.jigsawPool = "outpost:halls"; JigsawEditorScreen.open(null); });
+            // at 1.5x on a full-size window, where text would show uneven pixels
+            c.runOnClient(mc -> { mc.getWindow().setWindowed(1600, 900); ClientState.options.interfaceHalves = 3; ClientState.options.jigsawPool = "outpost:halls"; JigsawEditorScreen.open(null); });
+            c.waitTicks(20);
             c.waitTicks(40);
+            c.takeScreenshot("pool-editor-dropdown-closed");
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var toggle = JigsawEditorScreen.class.getDeclaredMethod("toggleMenu");
+                    toggle.setAccessible(true);
+                    toggle.invoke(screen);
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            c.waitTicks(10);
+            c.takeScreenshot("pool-editor-dropdown-open");
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var toggle = JigsawEditorScreen.class.getDeclaredMethod("toggleMenu");
+                    toggle.setAccessible(true);
+                    toggle.invoke(screen);
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            c.waitTicks(10);
+            // a click on a jigsaw block in the preview picks its connector and opens it
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var find = JigsawEditorScreen.class.getDeclaredMethod("jigsawPoint", int.class);
+                    find.setAccessible(true);
+                    var point = (double[]) find.invoke(screen, 1);
+                    require(point != null, "the second jigsaw block should be visible in the preview");
+                    var pick = JigsawEditorScreen.class.getDeclaredMethod("pickJigsawInPreview", double.class, double.class);
+                    pick.setAccessible(true);
+                    pick.invoke(screen, point[0], point[1]);
+                    var field = JigsawEditorScreen.class.getDeclaredField("pickedJig");
+                    field.setAccessible(true);
+                    require(String.valueOf(field.get(screen)).contains("[6,1,1]"), "the click should pick the connector at 6 1 1: " + field.get(screen));
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            c.waitTicks(10);
+            // a click into a text box selects all of its text
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var field = JigsawEditorScreen.class.getDeclaredField("poolBox");
+                    field.setAccessible(true);
+                    var box = (net.minecraft.client.gui.components.EditBox) field.get(screen);
+                    var scale = JigsawEditorScreen.class.getDeclaredField("uiScale");
+                    scale.setAccessible(true);
+                    float ui = (float) scale.get(screen);
+                    box.setValue("outpost:halls");
+                    var event = new net.minecraft.client.input.MouseButtonEvent((box.getX() + 8) * ui, (box.getY() + 8) * ui, new net.minecraft.client.input.MouseButtonInfo(0, 0));
+                    ((net.minecraft.client.gui.screens.Screen) screen).mouseClicked(event, false);
+                    box = (net.minecraft.client.gui.components.EditBox) field.get(screen); // the screen may have been laid out again
+                    require("outpost:halls".equals(box.getHighlighted()), "a click into a box should select all its text, selected: '" + box.getHighlighted() + "'");
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            c.waitTicks(10);
+            c.takeScreenshot("pool-editor-picked");
+            // the target dropdown of the picked connector: the elements of its pool with picture, name and path
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var picked = JigsawEditorScreen.class.getDeclaredField("pickedJig");
+                    picked.setAccessible(true);
+                    var menu = JigsawEditorScreen.class.getDeclaredField("targetMenuKey");
+                    menu.setAccessible(true);
+                    menu.set(screen, picked.get(screen));
+                    var init = JigsawEditorScreen.class.getDeclaredMethod("init");
+                    init.setAccessible(true);
+                    init.invoke(screen);
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            c.waitTicks(40);
+            c.takeScreenshot("pool-editor-target-menu");
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var menu = JigsawEditorScreen.class.getDeclaredField("targetMenuKey");
+                    menu.setAccessible(true);
+                    menu.set(screen, null);
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            // the same screen with each way of drawing text, for comparing
+            for (var mode : TextMode.Mode.values()) {
+                c.runOnClient(mc -> TextMode.set(mode));
+                c.waitTicks(20);
+                c.takeScreenshot("text-" + mode.name().toLowerCase());
+            }
+            // the Single view of the connectors: the picked one in a window on top
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var view = JigsawEditorScreen.class.getDeclaredMethod("setView", boolean.class);
+                    view.setAccessible(true);
+                    view.invoke(screen, true);
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            c.waitTicks(10);
+            c.takeScreenshot("pool-editor-single");
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var view = JigsawEditorScreen.class.getDeclaredMethod("setView", boolean.class);
+                    view.setAccessible(true);
+                    view.invoke(screen, false);
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            c.waitTicks(10);
             c.runOnClient(mc -> {
                 try {
                     var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
@@ -132,6 +244,7 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
             });
             c.waitTicks(40);
             c.takeScreenshot("bedrock-pack-window");
+            c.runOnClient(mc -> { TextMode.set(TextMode.Mode.LINEAR); mc.getWindow().setWindowed(854, 480); });
             System.out.println("CRAFTIUM_BEDROCK done");
         } catch (java.io.IOException e) {
             throw new java.io.UncheckedIOException(e);

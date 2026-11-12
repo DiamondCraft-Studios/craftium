@@ -41,7 +41,7 @@ final class JigsawEditor {
 
     private static final Gson PRETTY = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final String POOLS = "worldgen/template_pool/";
-    private static final int THUMBNAIL_VOLUME = 200_000, THUMBNAILS = 30, MAX_TEMPLATES = 80;
+    private static final int THUMBNAIL_VOLUME = 200_000, THUMBNAILS = 30, MAX_TEMPLATES = 80, TARGET_POOLS = 4, TARGET_THUMBNAILS = 16;
 
     /** The bytes a file had before a command changed it (null: it was not there), so the command can be undone. */
     private record Snap(Path file, byte[] bytes) {}
@@ -58,6 +58,8 @@ final class JigsawEditor {
         JsonObject bedrock;
         /** What the used_by command found, shown in the next model and forgotten by any other command. */
         JsonArray usedBy;
+        /** The pools whose elements the target boxes of the open connectors show and offer, as ids separated by commas: asked for by the editor, kept until it asks for others. */
+        String targetPools = "";
         boolean usedByTruncated;
         final Deque<List<Snap>> undo = new ArrayDeque<>(), redo = new ArrayDeque<>();
     }
@@ -310,6 +312,7 @@ final class JigsawEditor {
             case "jigsaw_set" -> { return setJigsaw(env, edit, c); }
             case "names" -> { memory.names = true; return ""; }
             case "retarget_check" -> { memory.retarget = retargetCheck(env, c); return ""; }
+            case "target_pools" -> { memory.targetPools = c.has("pools") ? text(c, "pools") : ""; return ""; }
             case "used_by" -> {
                 if (memory.pool.isEmpty()) throw new IllegalArgumentException("Open a pool first");
                 var registry = JigsawPlanner.loadPools(env.server(), env.manager()).lookupOrThrow(Registries.TEMPLATE_POOL);
@@ -765,10 +768,23 @@ final class JigsawEditor {
             try { root.add("pool", poolModel(env, pools, id)); root.add("graph", graph(env, pools, id)); }
             catch (IllegalArgumentException e) { root.addProperty("poolError", e.getMessage()); }
         }
+        if (!memory.targetPools.isEmpty()) {
+            var asked = new JsonArray();
+            int count = 0;
+            for (var part : memory.targetPools.split(",")) {
+                var wanted = ResourceLocation.tryParse(part.strip());
+                if (wanted == null || count >= TARGET_POOLS) continue;
+                try { asked.add(poolModel(env, pools, wanted, TARGET_THUMBNAILS)); count++; }
+                catch (IOException | IllegalArgumentException e) { /* a pool that cannot be read has nothing to show */ }
+            }
+            root.add("targetPools", asked);
+        }
         return PRETTY.toJson(root);
     }
 
-    private static JsonObject poolModel(JigsawPlanner.Env env, Registry<StructureTemplatePool> pools, ResourceLocation id) throws IOException {
+    private static JsonObject poolModel(JigsawPlanner.Env env, Registry<StructureTemplatePool> pools, ResourceLocation id) throws IOException { return poolModel(env, pools, id, THUMBNAILS); }
+
+    private static JsonObject poolModel(JigsawPlanner.Env env, Registry<StructureTemplatePool> pools, ResourceLocation id, int thumbnails) throws IOException {
         var raw = readPool(env, id);
         var model = new JsonObject();
         model.addProperty("id", id.toString());
@@ -799,7 +815,7 @@ final class JigsawEditor {
             if (element.has("location") && element.get("location").isJsonPrimitive()) {
                 var template = ResourceLocation.tryParse(element.get("location").getAsString());
                 out.addProperty("template", element.get("location").getAsString());
-                if (template != null) templateModel(env, pools, template, out, thumbs < THUMBNAILS);
+                if (template != null) templateModel(env, pools, template, out, thumbs < thumbnails);
                 if (out.has("thumb")) thumbs++;
             }
             elements.add(out);

@@ -36,7 +36,9 @@ final class PoolThumbnails {
         if (scene == null) { FAILED.add(key); return null; }
         int w = WIDTH * DETAIL, h = HEIGHT * DETAIL;
         int[] pixels = new int[w * h];
-        VoxelOrbit.render(scene, new VoxelOrbit.View(), w, h, pixels, BACKGROUND, null);
+        var view = new VoxelOrbit.View();
+        VoxelOrbit.fit(scene, view, w, h, 6); // the piece fills the picture, whatever its shape
+        VoxelOrbit.render(scene, view, w, h, pixels, BACKGROUND, null);
         var image = new NativeImage(w, h, false);
         for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) image.setPixel(x, y, pixels[y * w + x]);
         var texture = new ReferenceTexture(image);

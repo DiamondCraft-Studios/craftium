@@ -53,6 +53,8 @@ public final class Options {
     public boolean historyPulse = true;
     /** How many screen pixels Craftium's screens draw each pixel of their text and icons with, in halves (2 is 1x, 3 is 1.5x); 0 is Auto, the game's own GUI scale (the editor lowers it to fit). */
     public int interfaceHalves = 2;
+    /** How text is drawn at a half-step interface scale such as 1.5x, where a font pixel lands on whole screen pixels in some places and not in others: "vanilla" (as the game draws it), "linear" (the font texture is blended) or "supersampled" (drawn at a larger size and averaged down). */
+    public String textSmoothing = "linear";
     public String block = "minecraft:stone";
     public String secondary = "minecraft:andesite";
     public String mask = "";
@@ -371,6 +373,7 @@ public final class Options {
         flySpeed = Float.isFinite(flySpeed) ? Math.clamp(flySpeed,0.1f,10f) : 1;
         copies=Math.max(1,copies); // offsets and copies have no upper limit
         if(builderMagicCompare==null)builderMagicCompare=Compare.BLOCK;
+        if(textSmoothing==null||!(textSmoothing.equals("vanilla")||textSmoothing.equals("linear")||textSmoothing.equals("supersampled")))textSmoothing="linear";
         if(compare==null)compare=Compare.ANY; // Gson reads a constant that no longer exists, the old SOLID, as null
         if(noise==null||pathMode==null||modelMode==null||modifyMode==null||shapeKind==null||rulerMode==null)throw new IllegalArgumentException("Missing advanced options");
         if(modifyAxis==null||modifyType==null)throw new IllegalArgumentException("Missing advanced options");
