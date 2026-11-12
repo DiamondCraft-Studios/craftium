@@ -724,6 +724,12 @@ final class JigsawEditor {
             list.add(item);
         }
         root.add("pools", list);
+        var processorLists = new JsonArray(); // for the suggestions of the processor box of an element
+        var processorFiles = env.manager().listResources("worldgen/processor_list", id -> id.getPath().endsWith(".json"));
+        processorFiles.keySet().stream()
+                .map(key -> ResourceLocation.fromNamespaceAndPath(key.getNamespace(), key.getPath().substring("worldgen/processor_list/".length(), key.getPath().length() - 5)).toString())
+                .sorted(Comparator.comparing((String id) -> id.startsWith("minecraft:")).thenComparing(id -> id)).forEach(processorLists::add);
+        root.add("processorLists", processorLists);
         if (memory.names) { memory.names = false; return PRETTY.toJson(root); }
 
         var templates = new JsonArray();

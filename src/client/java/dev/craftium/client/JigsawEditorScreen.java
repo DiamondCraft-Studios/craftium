@@ -417,6 +417,10 @@ final class JigsawEditorScreen extends CraftiumScreen {
             tips.on(projection, rigid ? RIGID_TIP : FOLLOW_TIP);
             if (editable && element.has("processors")) {
                 var processors = tips.on(applyBox(tx + 100, y + 48, Math.max(40, w - 100), str(element, "processors", "minecraft:empty"), 120, v -> edit("element_set", "pool", pool0, "index", index, "processors", v)), "The processor list applied to this element when it is placed, such as minecraft:mossify_10_percent. Enter applies.");
+                var lists = new ArrayList<String>();
+                if (model.has("processorLists")) for (var n : model.getAsJsonArray("processorLists")) lists.add(n.getAsString());
+                if (!lists.contains("minecraft:empty")) lists.add("minecraft:empty");
+                suggestSources.put(processors, lists);
                 if (str(element, "processors", "").equals("(inline)")) processors.setEditable(false); // a processor list written in the pool file is kept as it is
             }
         }
