@@ -44,6 +44,7 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
             server.runCommand("setblock " + (x + 6) + " " + (y + 1) + " " + (z + 1) + " jigsaw[orientation=east_up]{name:\"outpost:door\",target:\"outpost:door\",pool:\"outpost:caps\",final_state:\"minecraft:stone_bricks\",joint:\"aligned\"}");
             server.runCommand("setblock " + (x + 3) + " " + (y + 1) + " " + (z + 1) + " chest[facing=south]{Items:[{Slot:0b,id:\"minecraft:diamond\",count:3}]}");
             server.runCommand("fill " + x + " " + (y + 10) + " " + z + " " + (x + 2) + " " + (y + 12) + " " + z + " stone_bricks");
+            server.runCommand("setblock " + (x + 1) + " " + (y + 10) + " " + z + " jigsaw[orientation=south_up]{name:\"outpost:door\",target:\"minecraft:empty\",pool:\"minecraft:empty\",final_state:\"minecraft:air\",joint:\"aligned\"}");
             c.waitTicks(10);
             Path folder = server.computeOnServer(s -> s.getWorldPath(LevelResource.DATAPACK_DIR).resolve("craftium"));
             server.runOnServer(s -> {
@@ -181,6 +182,30 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
             });
             c.waitTicks(10);
             c.takeScreenshot("pool-editor-picked");
+            // the target dropdown of the picked connector: the elements of its pool with picture, name and path
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var picked = JigsawEditorScreen.class.getDeclaredField("pickedJig");
+                    picked.setAccessible(true);
+                    var menu = JigsawEditorScreen.class.getDeclaredField("targetMenuKey");
+                    menu.setAccessible(true);
+                    menu.set(screen, picked.get(screen));
+                    var init = JigsawEditorScreen.class.getDeclaredMethod("init");
+                    init.setAccessible(true);
+                    init.invoke(screen);
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            c.waitTicks(40);
+            c.takeScreenshot("pool-editor-target-menu");
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var menu = JigsawEditorScreen.class.getDeclaredField("targetMenuKey");
+                    menu.setAccessible(true);
+                    menu.set(screen, null);
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
             // the Single view of the connectors: the picked one in a window on top
             c.runOnClient(mc -> {
                 try {
