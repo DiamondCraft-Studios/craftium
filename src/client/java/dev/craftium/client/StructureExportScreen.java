@@ -63,6 +63,8 @@ final class StructureExportScreen extends CraftiumScreen {
     StructureExportScreen(Screen parent,List<Target> objects){this(parent,objects,false);}
     /** The window for Ctrl+P: the clipboard saved as a blueprint, with no tabs. */
     static StructureExportScreen blueprintOnly(Screen parent){return new StructureExportScreen(parent,List.of(),true);}
+    /** The window on these BuildObjects with the Blueprint tab chosen: a blueprint is saved from each. */
+    static StructureExportScreen blueprintOf(Screen parent,List<Target> objects){var screen=new StructureExportScreen(parent,objects,false);screen.s.format=StructureSettings.BLUEPRINT;return screen;}
 
     private StructureExportScreen(Screen parent,List<Target> objects,boolean blueprintOnly){
         super(Component.literal(blueprintOnly?"Save blueprint":"Export structure"));this.parent=parent;this.blueprintOnly=blueprintOnly;

@@ -1526,6 +1526,13 @@ public final class EditorScreen extends CraftiumScreen {
         if(objects.isEmpty())return;
         ClientCompat.setScreen(minecraft,new StructureExportScreen(this,objects));
     }
+    /** Opens the export window on the Blueprint tab for these BuildObjects, a page for each. */
+    private void blueprintObjects(List<Integer> ids){
+        var objects=new ArrayList<StructureExportScreen.Target>();
+        for(int id:ids){var row=savedById(id);if(row!=null)objects.add(new StructureExportScreen.Target(id,row.name()));}
+        if(objects.isEmpty())return;
+        ClientCompat.setScreen(minecraft,StructureExportScreen.blueprintOf(this,objects));
+    }
     private void exportStructure(String source,String format,String javaFile){
         var settings=o().structure;settings.source=source;if(format!=null){settings.format=format;settings.javaFile=javaFile;}
         ClientCompat.setScreen(minecraft,new StructureExportScreen(this));
@@ -2428,6 +2435,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         items.add(n>1?item("Delete selected ("+n+")","",()->action("saved_selection:deleteset:"+csv)):item("Delete","",()->action("saved_selection:delete:"+id)));
         items.add(item(n>1?"Delete selected + blocks ("+n+")":"Delete blocks","",()->deleteWithBlocks(targets))); // the BuildObjects and the blocks they hold
         items.add(item(n>1?"Export selected ("+n+")…":"Export…","",()->exportObjects(targets))); // each BuildObject with everything under it, a page of the window for each
+        items.add(item(n>1?"Save selected as blueprints ("+n+")…":"Save as blueprint…","",()->blueprintObjects(targets)));
         var moves=new ArrayList<MenuItem>();
         if(row.parent()!=0){var up=savedById(row.parent());if(up!=null)moves.add(item(up.parent()==0?"Ungroup":"Move out of parent","",()->action(up.parent()==0?"saved_selection:ungroup:"+id:"saved_selection:place:"+id+":"+up.parent()+":"+(siblingIndex(up)+1))));}
         if(row.parent()==0&&ClientState.savedGroups().size()>1)for(var gr:ClientState.savedGroups()){ // a BuildObject at the top goes to the end of another group
