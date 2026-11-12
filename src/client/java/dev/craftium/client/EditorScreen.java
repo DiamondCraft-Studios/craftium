@@ -1810,6 +1810,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(index>=0){selectedNode=index;if(!toolActive)ClientState.selectedRuler=rulerOfNode(index);draggingNode=true;placementDragOrigin=points.get(index);placementDragX=event.x();placementDragY=event.y();return true;}
             if(!toolActive){var line=rulerAt(event.x(),event.y());if(line!=null){ClientState.selectedRuler=line;selectedNode=-1;TransformGizmo.cancel();return true;}} // no tool chosen: a click on a ruler picks it, without choosing the Ruler tool
         }
+        if(event.button()==0&&!toolActive&&!PlacementPreview.active()){objectPickHit=target();objectPickPending=objectPickHit!=null;objectPickX=event.x();objectPickY=event.y();} // resolved on release, if it was a click and not a drag
         if(PlacementPreview.active()){
             if(event.button()==1){var hit=target();if(hit!=null){Point p=CraftiumClient.point(hit.getBlockPos()),n=CraftiumClient.normal(hit);PlacementPreview.origin=p.add(n.x(),n.y(),n.z());}return true;}
             if(event.button()==0&&pickPlacementAxis(event.x(),event.y())){draggingPlacement=true;placementDragOrigin=PlacementPreview.origin;placementDragX=event.x();placementDragY=event.y();return true;}
@@ -1849,7 +1850,7 @@ public final class EditorScreen extends CraftiumScreen {
         String block=BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(hit.getBlockPos()).getBlock()).toString();
         ClientState.pick(block);
     }
-    @Override public boolean mouseReleased(MouseButtonEvent event){if(rowDragId>=0&&event.button()==0){mx=(int)(event.x()/scale);my=(int)(event.y()/scale);finishRowDrag();return true;}if(selectingText){selectingText=false;return true;}if(dragBlock!=null&&event.button()==0){finishBlockDrag(event);return true;}if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting)Interactions.of(o().tool).strokeEnded(context);if(painting&&sculpts(o().tool))CraftiumClient.send("stroke_end",null,null);painting=false;ClientState.strokeId=0;Interactions.of(o().tool).released(context);}return true;}
+    @Override public boolean mouseReleased(MouseButtonEvent event){if(event.button()==0&&objectPickPending){objectPickPending=false;if(Math.hypot(event.x()-objectPickX,event.y()-objectPickY)<=3)pickBuildObject(objectPickHit);}if(rowDragId>=0&&event.button()==0){mx=(int)(event.x()/scale);my=(int)(event.y()/scale);finishRowDrag();return true;}if(selectingText){selectingText=false;return true;}if(dragBlock!=null&&event.button()==0){finishBlockDrag(event);return true;}if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting)Interactions.of(o().tool).strokeEnded(context);if(painting&&sculpts(o().tool))CraftiumClient.send("stroke_end",null,null);painting=false;ClientState.strokeId=0;Interactions.of(o().tool).released(context);}return true;}
     @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy) {
         if(rowDragId>=0){mx=(int)(event.x()/scale);my=(int)(event.y()/scale);if(!rowDragMoved&&Math.hypot(event.x()-rowDragX,event.y()-rowDragY)>5)rowDragMoved=true;return true;}
         if(dragBlock!=null){if(!dragMoved&&Math.hypot(event.x()-dragStartX,event.y()-dragStartY)>5)dragMoved=true;return true;}
@@ -2172,7 +2173,20 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         }
         button(g,x+10,y+ph-26,pw-20,20,"Clear all",false,this::clearRulers,"Delete every ruler in this world");
     }
-    private int savedScroll;
+    private int savedScroll,revealId;
+    private BlockHitResult objectPickHit;private boolean objectPickPending;private double objectPickX,objectPickY;
+    /** A plain click (no drag) on a block of a BuildObject in a viewport picks it as a click on its row does, opens what hides its row, and scrolls the Hierarchy to it. */
+    private void pickBuildObject(BlockHitResult hit){
+        if(hit==null)return;
+        int id=ClientState.savedAt(CraftiumClient.point(hit.getBlockPos()));
+        if(id==0)return;
+        hierarchyAll=ClientState.savedSelections();
+        var entry=savedById(id);if(entry==null)return;
+        int n=0;for(var p=savedById(entry.parent());p!=null&&n++<64;p=savedById(p.parent()))if(ClientState.savedFolded(p.id()))ClientState.toggleSavedFolded(p.id());
+        var group=groupById(groupIdOf(entry));if(group!=null&&ClientState.groupFolded(group.id()))ClientState.toggleGroupFolded(group.id());
+        rowClick(entry);
+        revealId=id;
+    }
     private static final String[] PENCIL={"......XX.",".....XXXX","....XXXX.","...XXXX..","..XXXX...",".XXXX....",".XXX.....","XX......."};
     private static final String[] PLUS={"....X....","....X....","....X....","....X....","XXXXXXXXX","....X....","....X....","....X....","....X...."};
     private static final String[] EYE={"..XXXXX..",".X.....X.","X..XXX..X",".X.....X.","..XXXXX.."};
@@ -2230,6 +2244,10 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         ClientState.hoverWorld=0; // Hover BuildObjects: the one under the pointer in a viewport
         if(o().hoverBuildObjects&&menu<0&&pointerFree()&&rowDragId<0&&inViewport(pointerX/scale,pointerY/scale)){
             var hit=target();if(hit!=null)ClientState.hoverWorld=ClientState.savedAt(CraftiumClient.point(hit.getBlockPos()));
+        }
+        if(revealId!=0){ // a BuildObject was picked in a viewport: scroll the Hierarchy to its row
+            for(int i=0;i<total;i++)if(saved.get(i).entry()!=null&&saved.get(i).entry().id()==revealId){savedScroll=Math.clamp(savedScroll,Math.max(0,i-rows+1),i);break;}
+            revealId=0;
         }
         savedScroll=Math.clamp(savedScroll,0,Math.max(0,total-rows));
         if(hierarchyAll.isEmpty()&&groups.isEmpty())text(g,"No BuildObjects yet",x+16,top+6,MUTED);
