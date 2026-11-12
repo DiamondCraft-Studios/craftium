@@ -131,9 +131,13 @@ public final class SavedSelections {
      * the list runs group by group in the groups' order, and inside a group in tree order, each with everything under it.
      */
     private void normalize(){
-        var first=tree.groups.getFirst();
-        var fallback=active!=null&&active.group()!=null&&tree.groups.contains(active.group())?active.group():first;
-        for(var e:entries){if(e.group!=null&&!tree.groups.contains(e.group))e.group=null;if(e.parent==null&&e.group==null)e.group=fallback;} // one under another keeps the group it had, or none
+        var last=tree.groups.getLast();
+        boolean fromActive=active!=null&&active.group()!=null&&tree.groups.contains(active.group());
+        var fallback=fromActive?active.group():last; // with nothing selected, a new one goes at the very bottom: the last group
+        for(var e:entries){
+            if(e.group!=null&&!tree.groups.contains(e.group))e.group=null;
+            if(e.parent==null&&e.group==null){e.group=fallback;if(!fromActive&&fallback.folded)fallback.folded=false;} // a folded group would hide it, so it opens
+        } // one under another keeps the group it had, or none
         var out=new ArrayList<Entry>(entries.size());
         for(var g:tree.groups)for(int i=0;i<entries.size();i++){
             var e=entries.get(i);if(e.parent!=null||e.group!=g)continue;
