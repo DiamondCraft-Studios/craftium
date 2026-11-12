@@ -57,6 +57,17 @@ class BedrockPackTest {
             assertThrows(IllegalArgumentException.class, () -> BedrockPack.zip("A", "d", Map.of(bad, new byte[0]), UUID::randomUUID), bad);
     }
 
+    @Test void theOfferedNameComesFromTheFirstPartOfThePoolsPath() {
+        assertEquals("Outpost", BedrockPack.defaultName("craftium:outpost/hall"));
+        assertEquals("My ruin", BedrockPack.defaultName("craftium:my_ruin"));
+        assertEquals("Dungeon", BedrockPack.defaultName("dungeon:start"));
+        assertEquals("Outpost", BedrockPack.defaultName("outpost:halls"));
+        assertEquals("Villages", BedrockPack.defaultName("villages/plains"));
+        assertEquals("Tower", BedrockPack.defaultName("tower"));
+        assertEquals("Craftium pack", BedrockPack.defaultName(""));
+        assertEquals("Craftium pack", BedrockPack.defaultName(null));
+    }
+
     @Test void theFileNameKeepsOnlySafeCharacters() {
         assertEquals("Outpost.mcpack", BedrockPack.fileName("Outpost"));
         assertEquals("My ruin_1.mcpack", BedrockPack.fileName("My ruin:*?1"));

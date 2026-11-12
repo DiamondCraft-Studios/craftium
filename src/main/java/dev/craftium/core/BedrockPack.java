@@ -83,6 +83,20 @@ public final class BedrockPack {
         zip.closeEntry();
     }
 
+    /**
+     * The name offered for a pack that starts from this pool ({@code namespace:path}, a bare name being in craftium): the first part of its path, or, for a pool
+     * with no folder, the namespace (a pool is usually named for what it is, such as halls or start, and the namespace for the set it belongs to) unless that is
+     * craftium or minecraft, when it is the pool's own name. Written as words with a capital.
+     */
+    public static String defaultName(String pool) {
+        String id = pool == null ? "" : pool.strip();
+        int colon = id.indexOf(':');
+        String namespace = colon < 0 ? "craftium" : id.substring(0, colon), path = colon < 0 ? id : id.substring(colon + 1);
+        String base = path.contains("/") ? path.substring(0, path.indexOf('/')) : namespace.equals("craftium") || namespace.equals("minecraft") ? path : namespace;
+        String words = base.replace('_', ' ').replace('-', ' ').strip();
+        return words.isEmpty() ? "Craftium pack" : Character.toUpperCase(words.charAt(0)) + words.substring(1);
+    }
+
     /** The name of the {@code .mcpack} file for a pack called {@code name}: letters, digits, spaces, dots, dashes and underscores only. */
     public static String fileName(String name) {
         String cleaned = name == null ? "" : name.replaceAll("[^A-Za-z0-9 ._-]+", "_").strip().replaceAll("^[._]+|[. ]+$", "");

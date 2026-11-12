@@ -54,6 +54,8 @@ final class JigsawEditor {
         JsonObject retarget;
         /** Set by the features command: the next model carries the placed features that fit it. */
         String featureQuery;
+        /** What a Bedrock pack made from the open pool holds and loses, for the export window: set by bedrock_plan and bedrock_export, forgotten by any other command. */
+        JsonObject bedrock;
         final Deque<List<Snap>> undo = new ArrayDeque<>(), redo = new ArrayDeque<>();
     }
     private static final Map<UUID, Memory> MEMORY = new ConcurrentHashMap<>();
@@ -123,6 +125,7 @@ final class JigsawEditor {
     private static String run(ServerPlayer player, JigsawPlanner.Env env, Memory memory, Edit edit, JsonObject c) throws IOException {
         String op = text(c, "op");
         if (!op.equals("retarget_check")) memory.retarget = null;
+        if (!op.equals("bedrock_plan") && !op.equals("bedrock_export")) memory.bedrock = null;
         switch (op) {
             case "open" -> { if (c.has("pool")) memory.pool = poolId(text(c, "pool")).toString(); return ""; }
             case "templates" -> { memory.query = c.has("query") ? text(c, "query") : ""; return ""; }
@@ -306,6 +309,23 @@ final class JigsawEditor {
             case "retarget" -> { return retarget(env, edit, c); }
             case "apply" -> { return apply(env, memory); }
             case "discard" -> { return discard(env, memory); }
+            case "bedrock_plan" -> {
+                if (!c.has("pool") && memory.pool.isEmpty()) throw new IllegalArgumentException("Open a pool first");
+                memory.bedrock = JigsawBedrockExport.build(env, c.has("pool") ? text(c, "pool") : memory.pool, c.has("name") ? text(c, "name") : "").summary();
+                return "";
+            }
+            case "bedrock_export" -> {
+                if (!c.has("pool") && memory.pool.isEmpty()) throw new IllegalArgumentException("Open a pool first");
+                var built = JigsawBedrockExport.build(env, c.has("pool") ? text(c, "pool") : memory.pool, c.has("name") ? text(c, "name") : "");
+                memory.bedrock = built.summary();
+                if (built.pack().length > JigsawBedrockExport.LIMIT)
+                    throw new IllegalArgumentException("The pack is " + built.pack().length / 1024 + " KiB, over the 1 MiB limit for sending it to you. Export a pool that leads to fewer or smaller pieces.");
+                dev.craftium.runtime.ServerPlatform.send(player, new dev.craftium.net.Packets.Download("bedrockpack", built.fileName(), Base64.getEncoder().encodeToString(built.pack()), ""));
+                var summary = built.summary();
+                return "Made " + built.fileName() + ": " + summary.get("pools").getAsInt() + " pools, " + summary.get("pieces").getAsInt() + " pieces"
+                        + (summary.get("structures").getAsInt() > 0 ? ", " + summary.get("structures").getAsInt() + " structure" + (summary.get("structures").getAsInt() == 1 ? "" : "s") : "")
+                        + " · " + summary.get("lost").getAsInt() + " lost, " + summary.get("changed").getAsInt() + " changed, " + summary.get("check").getAsInt() + " to check (see the report in the pack)";
+            }
             default -> throw new IllegalArgumentException("Unknown pool editor command: " + text(c, "op"));
         }
     }
@@ -676,6 +696,7 @@ final class JigsawEditor {
         root.addProperty("selection", EditorServer.session(player).selection.size());
         root.add("unapplied", unapplied(env));
         if (memory.retarget != null) root.add("retarget", memory.retarget);
+        if (memory.bedrock != null) root.add("bedrock", memory.bedrock);
         Registry<StructureTemplatePool> pools = null;
         try { pools = JigsawPlanner.loadPools(env.server(), env.manager()).lookupOrThrow(Registries.TEMPLATE_POOL); }
         catch (RuntimeException e) { root.addProperty("registryError", String.valueOf(e.getMessage())); }

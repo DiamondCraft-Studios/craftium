@@ -36,6 +36,17 @@ final class StructureBuilder {
     }
     int index(int x,int y,int z){return (y*sizeZ+z)*sizeX+x;}
 
+    /**
+     * A structure from blocks that are already in a grid, such as the cells of a stored template: nothing is mirrored, turned or thinned, and a null cell is
+     * void. {@code cells} holds one entry per cell as {@code (y*sizeZ+z)*sizeX+x}. Its Bedrock bytes and notes come from the same code as an exported selection.
+     */
+    static StructureBuilder ofCells(int sx,int sy,int sz,BlockSnapshot[] cells){
+        var settings=new StructureSettings();settings.format=StructureSettings.BEDROCK;
+        var built=new StructureBuilder(settings,sx,sy,sz,cells,List.of(),new Point(0,0,0));
+        built.source=new int[]{sx,sy,sz};
+        return built;
+    }
+
     /** Reads the source, then applies the settings. Throws {@link IllegalArgumentException} with a message for the player. */
     static StructureBuilder build(EditPlanner p,ServerPlayer player){
         var s=p.o.structure;s.validate();
