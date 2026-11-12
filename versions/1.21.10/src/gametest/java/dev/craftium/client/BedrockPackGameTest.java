@@ -162,6 +162,24 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
                 } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
             });
             c.waitTicks(10);
+            // a click into a text box selects all of its text
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var field = JigsawEditorScreen.class.getDeclaredField("poolBox");
+                    field.setAccessible(true);
+                    var box = (net.minecraft.client.gui.components.EditBox) field.get(screen);
+                    var scale = JigsawEditorScreen.class.getDeclaredField("uiScale");
+                    scale.setAccessible(true);
+                    float ui = (float) scale.get(screen);
+                    box.setValue("outpost:halls");
+                    var event = new net.minecraft.client.input.MouseButtonEvent((box.getX() + 8) * ui, (box.getY() + 8) * ui, new net.minecraft.client.input.MouseButtonInfo(0, 0));
+                    ((net.minecraft.client.gui.screens.Screen) screen).mouseClicked(event, false);
+                    box = (net.minecraft.client.gui.components.EditBox) field.get(screen); // the screen may have been laid out again
+                    require("outpost:halls".equals(box.getHighlighted()), "a click into a box should select all its text, selected: '" + box.getHighlighted() + "'");
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            c.waitTicks(10);
             c.takeScreenshot("pool-editor-picked");
             c.runOnClient(mc -> {
                 try {

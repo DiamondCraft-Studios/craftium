@@ -238,6 +238,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
         apply.accept(field.getValue());
     }
 
+    private static void selectAll(EditBox box) {
+        box.moveCursorToEnd(false);
+        box.setHighlightPos(0);
+    }
+
     private void flushEdits() { for (var field : new ArrayList<>(applied.keySet())) applyIfChanged(field); }
 
     @Override protected void init() {
@@ -1840,7 +1845,10 @@ final class JigsawEditorScreen extends CraftiumScreen {
         if (event.button() == 0 && !modal() && poolMenuOpen && clickPoolMenu(event.x(), event.y())) return true;
         flushEdits(); // leaving a box applies it, before this click changes anything
         if (event.button() == 0 && !modal() && !graphDragging() && pressDivider(event.x(), event.y())) return true;
+        EditBox focusedBefore = getFocused() instanceof EditBox before && before.isFocused() ? before : null;
         if (super.mouseClicked(event, twice)) {
+            // a click that puts the focus in a box selects all of its text, so typing replaces it; a click in the box that already has the focus moves the cursor as usual
+            if (event.button() == 0 && getFocused() instanceof EditBox now && now.isFocused() && now != focusedBefore) selectAll(now);
             if (event.button() == 0 && !modal() && poolBox != null && poolBox.isFocused() && !poolMenuOpen) { poolMenuOpen = true; scrollMenuToOpenPool(); }
             return true;
         }
