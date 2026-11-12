@@ -21,11 +21,13 @@ import java.util.*;
  * (so the live preview follows) and answering with a model; every change is one undo step. A text box applies what is typed when Enter is pressed.
  */
 final class JigsawEditorScreen extends CraftiumScreen {
-    private static final int SIDE = 12, TOP = 50, FOOT = 12, CARD_H = 98, CARD_GAP = 6, ROW_H = 160, FOLDED_H = 22, LIST_ROW = 20, MENU_ROWS = 12;
+    private static final int SIDE = 12, TOP = 50, FOOT = 12, CARD_H = 98, CARD_GAP = 6, ROW_H = 160, FOLDED_H = 22, LIST_ROW = 20, MENU_ROWS = 12, CONN_HEAD = 72;
     /** The preview of the selected element, in the middle column: a label line and then the picture, in canvas pixels. */
     private static final int PREVIEW_LABEL = 14, MIN_RIGHT = 220, MIN_CENTRE = 200, MIN_PREVIEW = 160, GAP = 10;
     /** The widths of the preview column and the connectors column, as the player has dragged them (0: as laid out); kept while the game runs. */
     private static int rightPref, previewPref;
+    /** The connectors column shows its connectors as a List (each folded or open), or Single: the picked one in a window on top with the others listed under it. Kept while the game runs. */
+    private static boolean singleView;
     /** Which divider is being dragged (2 elements | preview, 3 preview | connectors), where the pointer was and what the size was then. */
     private int resizing, resizeFrom, resizeStart;
     /** The width of the Back and Forward tabs under the header, which the messages start after. */
@@ -259,9 +261,10 @@ final class JigsawEditorScreen extends CraftiumScreen {
         commits.clear();
         suggestSources.clear();
         tips.clear();
-        rightW = rightPref > 0 ? rightPref : Math.clamp(cw * 3 / 10, 260, 320);
+        int third = (cw - 2 * SIDE - 2 * GAP) / 3; // by default the elements, the preview and the connectors each take a third
+        rightW = rightPref > 0 ? rightPref : third;
         rightW = Math.clamp(rightW, MIN_RIGHT, Math.max(MIN_RIGHT, cw - 2 * SIDE - 2 * GAP - MIN_CENTRE - MIN_PREVIEW));
-        previewW = previewPref > 0 ? previewPref : Math.clamp(cw / 4, 180, 380);
+        previewW = previewPref > 0 ? previewPref : third;
         previewW = Math.clamp(previewW, MIN_PREVIEW, Math.max(MIN_PREVIEW, cw - 2 * SIDE - 2 * GAP - MIN_CENTRE - rightW));
         centreX = SIDE;
         centreW = Math.max(200, cw - SIDE - rightW - GAP - previewW - GAP - centreX);
@@ -654,17 +657,53 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     private static String foldKey(String template, JsonObject jig) { return template + "@" + jig.getAsJsonArray("pos"); }
 
-    /** The connectors that fit on each page, as from (included) and to (excluded): a folded one is short, so more of them fit. */
+    /** The order the connectors are listed in under the window of Single: all of them but the picked one, which is in the window. In List, all of them in the template's order. */
+    private List<Integer> orderList(JsonArray jigsaws, String template) {
+        var order = new ArrayList<Integer>();
+        int shown = singleView ? selectedIndex(jigsaws, template) : -1;
+        for (int i = 0; i < jigsaws.size(); i++) if (i != shown) order.add(i);
+        return order;
+    }
+
+    /** The connector the window of Single shows: the one picked in the preview or by its button, or else the first. */
+    private int selectedIndex(JsonArray jigsaws, String template) {
+        for (int i = 0; i < jigsaws.size(); i++) if (foldKey(template, jigsaws.get(i).getAsJsonObject()).equals(pickedJig)) return i;
+        return jigsaws.isEmpty() ? -1 : 0;
+    }
+
+    /** The connectors that fit on each page, as from (included) and to (excluded) in {@link #orderList}: a folded one is short, so more of them fit. In Single the window takes room on every page. */
     private List<int[]> jigPages(JsonArray jigsaws, String template) {
-        int room = ch - FOOT - (connY() + 52), used = 0, start = 0;
+        var order = orderList(jigsaws, template);
+        int room = ch - FOOT - (connY() + CONN_HEAD) - (singleView && !jigsaws.isEmpty() ? ROW_H : 0), used = 0, start = 0;
         var pages = new ArrayList<int[]>();
-        for (int i = 0; i < jigsaws.size(); i++) {
-            int height = folded(template, jigsaws.get(i).getAsJsonObject()) ? FOLDED_H : ROW_H;
+        for (int i = 0; i < order.size(); i++) {
+            int height = singleView || folded(template, jigsaws.get(order.get(i)).getAsJsonObject()) ? FOLDED_H : ROW_H;
             if (used + height > room && i > start) { pages.add(new int[]{start, i}); start = i; used = 0; }
             used += height;
         }
-        pages.add(new int[]{start, jigsaws.size()});
+        pages.add(new int[]{start, order.size()});
         return pages;
+    }
+
+    /** One connector as it is laid out: which one, where its heading is, whether its fields show, and whether it is the window of Single. */
+    private record Row(int index, int y, boolean open, boolean window) {}
+
+    /** The rows of the connectors column: the window of Single first, then the connectors of the current page. */
+    private List<Row> rows(JsonArray jigsaws, String template) {
+        var out = new ArrayList<Row>();
+        var order = orderList(jigsaws, template);
+        var pages = jigPages(jigsaws, template);
+        jigPage = Math.clamp(jigPage, 0, pages.size() - 1);
+        int cursor = connY() + CONN_HEAD;
+        if (singleView && !jigsaws.isEmpty()) { out.add(new Row(selectedIndex(jigsaws, template), cursor, true, true)); cursor += ROW_H; }
+        var range = pages.get(jigPage);
+        for (int p = range[0]; p < range[1]; p++) {
+            int index = order.get(p);
+            boolean open = !singleView && !folded(template, jigsaws.get(index).getAsJsonObject());
+            out.add(new Row(index, cursor, open, false));
+            cursor += open ? ROW_H : FOLDED_H;
+        }
+        return out;
     }
 
     /** The preview fills its column from under its label to the foot; the connectors start at the top of theirs. */
@@ -722,19 +761,19 @@ final class JigsawEditorScreen extends CraftiumScreen {
         if (element == null || !element.has("jigsaws")) return;
         var jigsaws = element.getAsJsonArray("jigsaws");
         String template = str(element, "template", "");
-        var pageList = jigPages(jigsaws, template);
-        int pages = pageList.size();
-        jigPage = Math.clamp(jigPage, 0, pages - 1);
+        var rowList = rows(jigsaws, template);
+        int pages = jigPages(jigsaws, template).size();
+        tips.on(button("List", x, connY() + 18, 60, 18, () -> setView(false)).lit(!singleView), "Every connector of the element in a list: open it to edit its fields, or fold it to leave its heading.");
+        tips.on(button("Single", x + 64, connY() + 18, 60, 18, () -> setView(true)).lit(singleView), "One connector at a time, in a window at the top: pick it from the list under it, or by clicking its jigsaw block in the preview. What you change shows there as you go.");
         button("‹", x + rightW - 56, connY(), 24, 18, () -> { jigPage = Math.max(0, jigPage - 1); init(); });
         button("›", x + rightW - 28, connY(), 24, 18, () -> { jigPage = Math.min(pages - 1, jigPage + 1); init(); });
-        int cursor = connY() + 52;
-        for (int index = pageList.get(jigPage)[0]; index < pageList.get(jigPage)[1]; index++) {
-            var jig = jigsaws.get(index).getAsJsonObject();
+        for (var row : rowList) {
+            var jig = jigsaws.get(row.index()).getAsJsonObject();
             String key = foldKey(template, jig);
-            boolean isFolded = folded(template, jig);
-            int y = cursor;
-            cursor += isFolded ? FOLDED_H : ROW_H;
-            tips.on(button(isFolded ? "+" : "-", x, y - 1, 16, 14, () -> { if (!openConnectors.remove(key)) openConnectors.add(key); init(); }), isFolded ? "Show the fields of this connector." : "Fold this connector away, leaving only its heading.");
+            boolean isFolded = !row.open();
+            int y = row.y();
+            if (!singleView) tips.on(button(isFolded ? "+" : "-", x, y - 1, 16, 14, () -> { if (!openConnectors.remove(key)) openConnectors.add(key); init(); }), isFolded ? "Show the fields of this connector." : "Fold this connector away, leaving only its heading.");
+            else if (!row.window()) tips.on(button("›", x, y - 1, 16, 14, () -> { pickedJig = key; init(); }), "Shows this connector in the window above.");
             if (isFolded) continue;
             var at = jig.getAsJsonArray("pos");
             JsonObject base = cmd("jigsaw_set", "template", template);
@@ -783,7 +822,14 @@ final class JigsawEditorScreen extends CraftiumScreen {
         return -1;
     }
 
-    /** A click on a jigsaw block in the preview: its connector is picked, unfolded, and its page of the list opened. */
+    private void setView(boolean single) {
+        if (singleView == single) return;
+        singleView = single;
+        jigPage = 0;
+        init();
+    }
+
+    /** A click on a jigsaw block in the preview: its connector is picked and, in List, unfolded and its page opened; in Single it fills the window. */
     private void pickJigsawInPreview(double x, double y) {
         var element = element(selected);
         if (element == null || !element.has("jigsaws") || !preview.hasScene()) return;
@@ -793,9 +839,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
         String template = str(element, "template", "");
         var jig = jigsaws.get(index).getAsJsonObject();
         pickedJig = foldKey(template, jig);
-        openConnectors.add(pickedJig); // opened, so its fields show
-        var pages = jigPages(jigsaws, template);
-        for (int page = 0; page < pages.size(); page++) if (index >= pages.get(page)[0] && index < pages.get(page)[1]) jigPage = page;
+        if (!singleView) {
+            openConnectors.add(pickedJig); // opened, so its fields show
+            var pages = jigPages(jigsaws, template);
+            for (int page = 0; page < pages.size(); page++) if (index >= pages.get(page)[0] && index < pages.get(page)[1]) jigPage = page;
+        }
         init();
     }
 
@@ -1239,24 +1287,22 @@ final class JigsawEditorScreen extends CraftiumScreen {
         g.text(font, "Connections", x, top + 4, 0xffb5dcfc, false);
         if (element == null || !element.has("jigsaws")) { g.text(font, "Select an element to see its connectors.", x, top + 24, MUTED, false); return null; }
         var jigsaws = element.getAsJsonArray("jigsaws");
-        g.text(font, font.plainSubstrByWidth(str(element, "template", ""), rightW), x, top + 18, TEXT, false);
-        g.text(font, font.plainSubstrByWidth("Enter or leaving a box applies what you typed.", rightW), x, top + 30, 0xff6f8296, false);
-        if (jigsaws.size() == 0) { g.text(font, "This template has no connectors, so nothing grows from it.", x, top + 52, MUTED, false); return null; }
+        g.text(font, font.plainSubstrByWidth(str(element, "template", ""), rightW), x, top + 42, TEXT, false);
+        g.text(font, font.plainSubstrByWidth("Enter or leaving a box applies what you typed.", rightW), x, top + 54, 0xff6f8296, false);
+        if (jigsaws.size() == 0) { g.text(font, "This template has no connectors, so nothing grows from it.", x, top + CONN_HEAD, MUTED, false); return null; }
         String template = str(element, "template", "");
-        var pageList = jigPages(jigsaws, template);
-        int pages = pageList.size();
-        jigPage = Math.clamp(jigPage, 0, pages - 1);
-        int cursor = top + 52;
+        int pages = jigPages(jigsaws, template).size();
+        var rowList = rows(jigsaws, template);
         // lit in the preview when nothing else is: the entry the pointer is over in the preview, or else the one picked there
         for (int i = 0; i < jigsaws.size(); i++) {
             var other = jigsaws.get(i).getAsJsonObject();
             if (i == previewJig || (previewJig < 0 && foldKey(template, other).equals(pickedJig))) { var pos = other.getAsJsonArray("pos"); hover = new int[]{pos.get(0).getAsInt(), pos.get(1).getAsInt(), pos.get(2).getAsInt()}; break; }
         }
-        for (int index = pageList.get(jigPage)[0]; index < pageList.get(jigPage)[1]; index++) {
+        for (var row : rowList) {
+            int index = row.index();
             var jig = jigsaws.get(index).getAsJsonObject();
-            boolean isFolded = folded(template, jig);
-            int y = cursor;
-            cursor += isFolded ? FOLDED_H : ROW_H;
+            boolean isFolded = !row.open();
+            int y = row.y();
             var at = jig.getAsJsonArray("pos");
             String issue = str(jig, "issue", "");
             int fits = num(jig, "fits", -1);
@@ -1266,7 +1312,8 @@ final class JigsawEditorScreen extends CraftiumScreen {
             boolean pointed = (mx >= x - 2 && mx < x + rightW + 2 && my >= y - 2 && my < headingBottom) || index == previewJig;
             // the whole entry lights its block up in the preview, but only its heading takes the hover look
             if (mx >= x - 2 && mx < x + rightW + 2 && my >= y - 2 && my < rowBottom) hover = new int[]{at.get(0).getAsInt(), at.get(1).getAsInt(), at.get(2).getAsInt()};
-            if (foldKey(template, jig).equals(pickedJig)) g.outline(x - 2, y - 2, rightW + 4, headingBottom - y + 2, ClientState.options.uiAccent);
+            if (row.window()) g.outline(x - 3, y - 3, rightW + 6, rowBottom - y + 6, ClientState.options.uiAccent);
+            else if (foldKey(template, jig).equals(pickedJig)) g.outline(x - 2, y - 2, rightW + 4, headingBottom - y + 2, ClientState.options.uiAccent);
             g.fill(x - 2, y - 2, x + rightW + 2, rowBottom, issue.isEmpty() ? 0x40223247 : notLoaded ? 0x40ffc857 : 0x40ff5a4d);
             if (pointed) { g.fill(x - 2, y - 2, x + rightW + 2, headingBottom, ClientState.options.hoverColor & 0xffffff | 0x58000000); g.outline(x - 2, y - 2, rightW + 4, headingBottom - y + 2, ClientState.options.hoverColor); }
             g.text(font, "#" + (index + 1) + " at " + at.get(0) + " " + at.get(1) + " " + at.get(2), x + 22, y + 2, MUTED, false);

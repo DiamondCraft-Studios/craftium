@@ -181,6 +181,26 @@ public final class BedrockPackGameTest implements FabricClientGameTest {
             });
             c.waitTicks(10);
             c.takeScreenshot("pool-editor-picked");
+            // the Single view of the connectors: the picked one in a window on top
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var view = JigsawEditorScreen.class.getDeclaredMethod("setView", boolean.class);
+                    view.setAccessible(true);
+                    view.invoke(screen, true);
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            c.waitTicks(10);
+            c.takeScreenshot("pool-editor-single");
+            c.runOnClient(mc -> {
+                try {
+                    var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
+                    var view = JigsawEditorScreen.class.getDeclaredMethod("setView", boolean.class);
+                    view.setAccessible(true);
+                    view.invoke(screen, false);
+                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            });
+            c.waitTicks(10);
             c.runOnClient(mc -> {
                 try {
                     var screen = dev.craftium.client.compat.ClientCompat.screen(mc);
