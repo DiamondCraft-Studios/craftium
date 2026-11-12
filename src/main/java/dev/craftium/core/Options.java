@@ -163,6 +163,8 @@ public final class Options {
     public boolean builderRuler=true;
     /** Builder tools: after the first click, the box between that block and the one aimed at is drawn, and follows the aim. */
     public boolean builderLiveBox=true;
+    /** Builder tools: the select and confirm buttons trade places, so the right button selects (the first corner, then the second) and the left button places. */
+    public boolean builderSwapButtons;
     /** Builder tools: blocks already where the selection lands are not overwritten. Apart from the editor's Keep existing, which the Builder does not follow. */
     public boolean builderKeepExisting;
     /** Brush flow, 1 to 100: how often a stroke applies the brush. 100 is as often as the server allows (about 30 times a second), 25 the usual rate (about 7 a second), less leaves wider gaps along the stroke. */
