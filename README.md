@@ -104,7 +104,7 @@ Extrude uses right-click to grow a face and left-click to shrink it. Erase uses 
 
 Use `/craftium intro`, `editor`, `builder`, `docs`, `status`, `handshake`, `toggle <capability>`, and `pos1` / `pos2 [x y z]` (including `~` coordinates). `/craftium enablecheats` works only in your local singleplayer world. WorldEdit's `//pos1` and `//pos2` are observed without consuming their commands; other WorldEdit selection changes are not synchronized.
 
-Operators can use `/craftium gamerule <rule> <true|false>` with `doBlockGravity`, `doBlockDrops`, `doTrampleFarmland` or `playerInvulnerability`. The rules are saved with the world and sit beside Minecraft's own `/gamerule` list, not in it.
+Operators can use `/craftium gamerule <rule> <true|false>` with `doBlockGravity`, `doBlockDrops`, `doTrampleFarmland`, `doDestructiveExplosions` (turn it off and no explosion breaks blocks or starts fires) or `playerInvulnerability`. The rules are saved with the world and sit beside Minecraft's own `/gamerule` list, not in it.
 
 Lua includes numeric block-state IDs, properties, tags, collision tests, seeded noise and resource-pack colour matching. Editable variables use `$int(Height,5,1,20)$`, `$float(Strength,0.5,0,1)$`, `$boolean(Enabled,true)$` and `$blockState(Material,stone)$`. `$once$` runs a brush once per dab. Brush and mask variables have separate controls. The sandbox limits instructions and memory and excludes host file, network and Java access.
 

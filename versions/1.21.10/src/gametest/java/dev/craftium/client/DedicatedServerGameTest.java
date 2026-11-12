@@ -102,7 +102,7 @@ public final class DedicatedServerGameTest implements FabricClientGameTest {
         options(o -> o.block = "minecraft:gold_block");
         send("fill", null);
         require(error() && block(0, Y, 0) == Blocks.AIR, "A non-operator edit changed the world");
-        ctx.runOnClient(mc -> mc.getConnection().sendCommand("craftiumDoBlockGravity false"));
+        ctx.runOnClient(mc -> mc.getConnection().sendCommand("craftium gamerule doBlockGravity false"));
         ctx.waitTicks(10);
         require(server.computeOnServer(s -> WorldRules.get(s.overworld()).blockGravity), "A non-operator changed a world rule");
         System.out.println(TAG + "permissions non_operator_denied");
@@ -283,12 +283,12 @@ public final class DedicatedServerGameTest implements FabricClientGameTest {
 
     private void worldRules() {
         // Gravity off: sand stays where it is placed. Gravity on: it falls.
-        server.runCommand("craftiumDoBlockGravity false");
+        server.runCommand("craftium gamerule doBlockGravity false");
         require(server.computeOnServer(s -> !WorldRules.get(s.overworld()).blockGravity), "The gravity rule did not apply");
         server.runCommand("setblock 9 " + (Y + 5) + " 9 sand");
         ctx.waitTicks(20);
         checkBlock(9, Y + 5, 9, Blocks.SAND);
-        server.runCommand("craftiumDoBlockGravity true");
+        server.runCommand("craftium gamerule doBlockGravity true");
         server.runCommand("setblock 9 " + (Y + 6) + " 9 sand");
         ctx.waitTicks(30);
         require(block(9, Y + 6, 9) == Blocks.AIR, "Sand did not fall with gravity on");
