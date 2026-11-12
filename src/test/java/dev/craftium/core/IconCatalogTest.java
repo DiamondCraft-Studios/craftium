@@ -50,6 +50,7 @@ class IconCatalogTest {
         craftium:tool/ruler @@ Tools/Utility @@ 24x24
         craftium:tool/tinker @@ Tools/Utility @@ 24x24
         craftium:tool/annotation @@ Tools/Utility @@ 24x24
+        craftium:tool/inspect @@ Tools/Utility @@ 24x24
         craftium:tool/move @@ Tools/Transform @@ 24x24
         craftium:tool/rotate @@ Tools/Transform @@ 24x24
         craftium:tool/scale @@ Tools/Transform @@ 24x24

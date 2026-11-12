@@ -28,6 +28,8 @@ public final class Compat {
     public static Identifier vanilla(String path){return Identifier.withDefaultNamespace(path);}
     /** Namespaced name of a registry or dimension key, e.g. {@code minecraft:overworld}. */
     public static String keyName(ResourceKey<?> key){return key.identifier().toString();}
+    /** Namespaced name of a tag, e.g. {@code minecraft:infiniburn_overworld}. */
+    public static String tagName(net.minecraft.tags.TagKey<?> tag){return tag.location().toString();}
 
     public static boolean isGamemaster(ServerPlayer player){return player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);}
     /** The player's command source raised to game-master (operator level 2) permission. */
