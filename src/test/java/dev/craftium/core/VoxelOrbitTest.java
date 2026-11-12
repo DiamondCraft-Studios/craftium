@@ -31,6 +31,19 @@ class VoxelOrbitTest {
         assertFalse(java.util.Arrays.equals(b, c), "panning changes the picture");
     }
 
+    @Test void pickFindsTheBlockUnderAPixelTheSameWayTheyAreDrawn() {
+        var scene = cube(3);
+        var view = new VoxelOrbit.View();
+        view.top(); // straight down: the middle of the picture is above the middle column, and the top block is the one in front
+        int[] hit = VoxelOrbit.pick(scene, view, 200, 150, 100, 75);
+        assertNotNull(hit, "something is under the middle");
+        assertEquals(1, hit[0]);
+        assertEquals(2, hit[1], "the top block is nearest to a camera above");
+        assertEquals(1, hit[2]);
+        assertNull(VoxelOrbit.pick(scene, view, 200, 150, 2, 2), "the corner of the picture is empty");
+        assertNull(VoxelOrbit.pick(scene, view, 200, 150, -1, 5), "outside the picture is empty");
+    }
+
     @Test void zoomingInFillsMoreOfThePicture() {
         var scene = cube(3);
         var view = new VoxelOrbit.View();

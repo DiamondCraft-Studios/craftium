@@ -15,18 +15,18 @@ import org.lwjgl.glfw.GLFW;
 import java.util.*;
 
 /**
- * The jigsaw pool editor. At the top left a dropdown picks the pool (the craftium pack's, and every other pack's, which are overridden in the craftium pack when edited); in
- * the middle the elements of the pool as cards with a picture, a weight and a projection, on the right the connectors of the selected element, each
+ * The jigsaw pool editor. At the top left a dropdown picks the pool (the craftium pack's, and every other pack's, which are overridden in the craftium pack when edited); on
+ * the left the elements of the pool as cards with a picture, a weight and a projection, in the middle the preview of the selected element, on the right its connectors, each
  * with how many elements it can meet, and a graph of how the pools lead to each other. The server does all the editing, by changing the pack's files
  * (so the live preview follows) and answering with a model; every change is one undo step. A text box applies what is typed when Enter is pressed.
  */
 final class JigsawEditorScreen extends CraftiumScreen {
     private static final int SIDE = 12, TOP = 50, FOOT = 12, CARD_H = 98, CARD_GAP = 6, ROW_H = 160, FOLDED_H = 22, LIST_ROW = 20, MENU_ROWS = 12;
-    /** The preview of the selected element, at the top of the right column: a label line and then the picture, in canvas pixels. The connectors are below it. */
-    private static final int PREVIEW_LABEL = 14, MIN_RIGHT = 220, MIN_CENTRE = 200, MIN_PREVIEW = 80, MIN_CONNECTORS = 120, GAP = 10;
-    /** The widths of the pools column and the right column and the height of the picture of the preview, as the player has dragged them (0: as laid out); kept while the game runs. */
+    /** The preview of the selected element, in the middle column: a label line and then the picture, in canvas pixels. */
+    private static final int PREVIEW_LABEL = 14, MIN_RIGHT = 220, MIN_CENTRE = 200, MIN_PREVIEW = 160, GAP = 10;
+    /** The widths of the preview column and the connectors column, as the player has dragged them (0: as laid out); kept while the game runs. */
     private static int rightPref, previewPref;
-    /** Which divider is being dragged (1 pools | elements, 2 elements | right column, 3 preview over connectors), where the pointer was and what the size was then. */
+    /** Which divider is being dragged (2 elements | preview, 3 preview | connectors), where the pointer was and what the size was then. */
     private int resizing, resizeFrom, resizeStart;
     /** The width of the Back and Forward tabs under the header, which the messages start after. */
     private static final int NAV_W = 160, LINK = 26;
@@ -97,7 +97,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private String featureQuery = "";
     private boolean helpOpen;
     private String dialogMode, dialogText = "";
-    private int rightW, centreX, centreW;
+    private int rightW, previewW, centreX, centreW;
+    /** The connector the player picked in the preview (its fold key), shown lit until another is picked; and which one the pointer is over in the preview, or -1. */
+    private String pickedJig;
+    private int previewJig = -1;
+    private double pressPreviewX, pressPreviewY;
     /** The editor is laid out on a canvas at least 860 by 460 and scaled down to fit a smaller window, like the Studio inspector. */
     private float uiScale = 1;
     private int cw, ch;
@@ -251,9 +255,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
         suggestSources.clear();
         tips.clear();
         rightW = rightPref > 0 ? rightPref : Math.clamp(cw * 3 / 10, 260, 320);
-        rightW = Math.clamp(rightW, MIN_RIGHT, Math.max(MIN_RIGHT, cw - 2 * SIDE - 2 * GAP - MIN_CENTRE));
+        rightW = Math.clamp(rightW, MIN_RIGHT, Math.max(MIN_RIGHT, cw - 2 * SIDE - 2 * GAP - MIN_CENTRE - MIN_PREVIEW));
+        previewW = previewPref > 0 ? previewPref : Math.clamp(cw / 4, 180, 380);
+        previewW = Math.clamp(previewW, MIN_PREVIEW, Math.max(MIN_PREVIEW, cw - 2 * SIDE - 2 * GAP - MIN_CENTRE - rightW));
         centreX = SIDE;
-        centreW = Math.max(200, cw - SIDE - rightW - 10 - centreX);
+        centreW = Math.max(200, cw - SIDE - rightW - GAP - previewW - GAP - centreX);
         int unapplied = unappliedCount();
         int redoCount = localRedo.isEmpty() ? num(model, "redo", 0) : localRedo.size(), undoCount = localUndo.isEmpty() ? num(model, "undo", 0) : localUndo.size();
         button("Close", cw - SIDE - 70, 10, 70, 20, this::onClose);
@@ -651,26 +657,28 @@ final class JigsawEditorScreen extends CraftiumScreen {
         return pages;
     }
 
-    /** The height of the picture of the preview: as dragged, and never so tall that the connectors have no room. */
-    private int previewH() { int most = Math.max(MIN_PREVIEW, ch - FOOT - TOP - PREVIEW_LABEL - 14 - 52 - MIN_CONNECTORS); return Math.clamp(previewPref > 0 ? previewPref : 160, MIN_PREVIEW, most); }
-    private int connY() { return TOP + PREVIEW_LABEL + previewH() + 14; }
+    /** The preview fills its column from under its label to the foot; the connectors start at the top of theirs. */
+    private int previewH() { return Math.max(40, ch - FOOT - previewY()); }
+    private int connY() { return TOP; }
+    private int connX() { return cw - SIDE - rightW; }
 
     // ---- the dividers between the panels
 
-    private boolean overRightDivider(double x, double y) { return x >= centreX + centreW && x < previewX() && y >= TOP - 4 && y < ch - FOOT; }
-    private boolean overPreviewDivider(double x, double y) { return x >= previewX() && x < previewX() + rightW && y >= previewY() + previewH() && y < connY(); }
+    /** The divider between the elements and the preview, and the one between the preview and the connectors. */
+    private boolean overPreviewDivider(double x, double y) { return x >= centreX + centreW && x < previewX() && y >= TOP - 4 && y < ch - FOOT; }
+    private boolean overRightDivider(double x, double y) { return x >= previewX() + previewW && x < connX() && y >= TOP - 4 && y < ch - FOOT; }
 
     /** Starts dragging a divider, if the pointer is on one. */
     private boolean pressDivider(double x, double y) {
-        if (overRightDivider(x, y)) { resizing = 2; resizeFrom = (int) x; resizeStart = rightW; return true; }
-        if (overPreviewDivider(x, y) && element(selected) != null) { resizing = 3; resizeFrom = (int) y; resizeStart = previewH(); return true; }
+        if (overPreviewDivider(x, y)) { resizing = 2; resizeFrom = (int) x; resizeStart = previewW; return true; }
+        if (overRightDivider(x, y)) { resizing = 3; resizeFrom = (int) x; resizeStart = rightW; return true; }
         return false;
     }
 
     private void dragDivider(double x, double y) {
         switch (resizing) {
-            case 2 -> rightPref = (int) Math.round(resizeStart - (x - resizeFrom));
-            default -> previewPref = (int) Math.round(resizeStart + y - resizeFrom);
+            case 2 -> previewPref = (int) Math.round(resizeStart - (x - resizeFrom));
+            default -> rightPref = (int) Math.round(resizeStart - (x - resizeFrom));
         }
         init(); // lays everything out again at the new sizes; init limits each size to what fits
     }
@@ -678,21 +686,21 @@ final class JigsawEditorScreen extends CraftiumScreen {
     /** A grip on each divider, brighter when the pointer is on it or it is being dragged. */
     private void drawDividers(Gfx g, int mx, int my) {
         int midY = (TOP + ch - FOOT) / 2;
-        grip(g, centreX + centreW + GAP / 2 - 1, midY - 12, 3, 24, resizing == 2 || (resizing == 0 && overRightDivider(mx, my)));
-        if (element(selected) != null) grip(g, previewX() + rightW / 2 - 12, previewY() + previewH() + 5, 24, 3, resizing == 3 || (resizing == 0 && overPreviewDivider(mx, my)));
+        grip(g, centreX + centreW + GAP / 2 - 1, midY - 12, 3, 24, resizing == 2 || (resizing == 0 && overPreviewDivider(mx, my)));
+        grip(g, previewX() + previewW + GAP / 2 - 1, midY - 12, 3, 24, resizing == 3 || (resizing == 0 && overRightDivider(mx, my)));
     }
 
     private void grip(Gfx g, int x, int y, int w, int h, boolean active) { g.fill(x, y, x + w, y + h, active ? ClientState.options.uiAccent : 0xff4a5c70); }
-    private int previewX() { return cw - SIDE - rightW; }
+    private int previewX() { return centreX + centreW + GAP; }
     private int previewY() { return TOP + PREVIEW_LABEL; }
-    private boolean overPreview(double mx, double my) { return mx >= previewX() && mx < previewX() + rightW && my >= previewY() && my < previewY() + previewH(); }
+    private boolean overPreview(double mx, double my) { return mx >= previewX() && mx < previewX() + previewW && my >= previewY() && my < previewY() + previewH(); }
     private boolean graphDragging() { return pressNode != null || pressEdge != null; }
     private boolean modal() { return adding || helpOpen || dialogMode != null || confirmLeave || retargetPrompt; }
 
     /** The buttons that put the view of the preview back: where it started, straight down, level. */
     private void previewButtons() {
         if (element(selected) == null) return;
-        int bx = previewX() + rightW - 50, by = previewY() + 4;
+        int bx = previewX() + previewW - 50, by = previewY() + 4;
         button("Reset", bx, by, 46, 16, preview::reset);
         button("Top", bx, by + 20, 46, 16, preview::top);
         button("Front", bx, by + 40, 46, 16, preview::front);
@@ -752,6 +760,43 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 button("Create pool " + shortName(missing), x, y + 134, rightW, 18, () -> edit("pool_new", "id", missing));
             }
         }
+    }
+
+    /** The index of the connector of the element whose jigsaw block is at this cell, or -1. */
+    private static int jigAt(JsonObject element, int[] cell) {
+        if (cell == null || !element.has("jigsaws")) return -1;
+        var jigsaws = element.getAsJsonArray("jigsaws");
+        for (int i = 0; i < jigsaws.size(); i++) {
+            var pos = jigsaws.get(i).getAsJsonObject().getAsJsonArray("pos");
+            if (pos.get(0).getAsInt() == cell[0] && pos.get(1).getAsInt() == cell[1] && pos.get(2).getAsInt() == cell[2]) return i;
+        }
+        return -1;
+    }
+
+    /** A click on a jigsaw block in the preview: its connector is picked, unfolded, and its page of the list opened. */
+    private void pickJigsawInPreview(double x, double y) {
+        var element = element(selected);
+        if (element == null || !element.has("jigsaws") || !preview.hasScene()) return;
+        int index = jigAt(element, preview.cellAt(x, y, previewX(), previewY(), previewW, previewH()));
+        if (index < 0) return;
+        var jigsaws = element.getAsJsonArray("jigsaws");
+        String template = str(element, "template", "");
+        var jig = jigsaws.get(index).getAsJsonObject();
+        pickedJig = foldKey(template, jig);
+        openConnectors.add(pickedJig); // opened, so its fields show
+        var pages = jigPages(jigsaws, template);
+        for (int page = 0; page < pages.size(); page++) if (index >= pages.get(page)[0] && index < pages.get(page)[1]) jigPage = page;
+        init();
+    }
+
+    /** For the game test: a point of the preview where the jigsaw block of connector {@code index} can be seen, as {x, y}, or null. */
+    double[] jigsawPoint(int index) {
+        var element = element(selected);
+        if (element == null || !preview.hasScene()) return null;
+        for (int y = previewY(); y < previewY() + previewH(); y += 2)
+            for (int x = previewX(); x < previewX() + previewW; x += 2)
+                if (jigAt(element, preview.cellAt(x, y, previewX(), previewY(), previewW, previewH())) == index) return new double[]{x, y};
+        return null;
     }
 
     private void setInt(JsonObject json, String key, String text) {
@@ -1145,31 +1190,36 @@ final class JigsawEditorScreen extends CraftiumScreen {
         return n;
     }
 
-    /** The right column: the preview of the selected element above, its connectors below. Pointing at a connector lights up its jigsaw block in the preview. */
+    /** The middle and right columns: the preview of the selected element and its connectors. Pointing at a connector lights up its jigsaw block in the preview, and pointing at a jigsaw block there lights up its connector; a click on the block picks it. */
     private void drawConnections(Gfx g, int mx, int my) {
-        int x = cw - SIDE - rightW;
+        int x = connX(), px = previewX();
+        g.fill(px - 4, TOP - 4, px + previewW + 4, ch - FOOT + 2, PANEL);
         g.fill(x - 4, TOP - 4, x + rightW + 4, ch - FOOT + 2, PANEL);
         var element = element(selected);
+        // the jigsaw block under the pointer in the preview lights its entry in the list, as an entry lights its block in the preview
+        previewJig = -1;
+        if (element != null && element.has("jigsaws") && !modal() && !preview.dragging() && preview.hasScene() && overPreview(mx, my))
+            previewJig = jigAt(element, preview.cellAt(mx, my, px, previewY(), previewW, previewH()));
         int[] hover = drawConnectorList(g, mx, my, x, element);
-        drawPreview(g, x, element, hover);
+        drawPreview(g, px, element, hover);
     }
 
     private void drawPreview(Gfx g, int x, JsonObject element, int[] hover) {
         int y = previewY();
         g.text(font, "Preview", x, TOP + 4, 0xffb5dcfc, false);
-        if (element == null) { preview.show(null, null); g.fill(x, y, x + rightW, y + previewH(), 0xff1b2531); g.centeredText(font, "Select an element.", x + rightW / 2, y + previewH() / 2 - 4, MUTED); return; }
+        if (element == null) { preview.show(null, null); g.fill(x, y, x + previewW, y + previewH(), 0xff1b2531); g.centeredText(font, "Select an element.", x + previewW / 2, y + previewH() / 2 - 4, MUTED); return; }
         var thumb = element.has("thumb") ? element.getAsJsonObject("thumb") : null;
         preview.show(str(element, "template", "?"), thumb);
         preview.highlight(hover);
-        g.enableScissor(x, y, x + rightW, y + previewH());
-        if (!preview.draw(g, x, y, rightW, previewH())) {
-            g.fill(x, y, x + rightW, y + previewH(), 0xff1b2531);
-            g.centeredText(font, noPicture(element), x + rightW / 2, y + previewH() / 2 - 4, element.has("missing") ? ERROR : 0xff7e8fa0);
+        g.enableScissor(x, y, x + previewW, y + previewH());
+        if (!preview.draw(g, x, y, previewW, previewH())) {
+            g.fill(x, y, x + previewW, y + previewH(), 0xff1b2531);
+            g.centeredText(font, noPicture(element), x + previewW / 2, y + previewH() / 2 - 4, element.has("missing") ? ERROR : 0xff7e8fa0);
         } else g.text(font, "drag: turn · middle drag: pan · wheel: zoom", x + 4, y + previewH() - 11, 0xff7e8fa0, false);
         g.disableScissor();
-        g.outline(x, y, rightW, previewH(), ClientState.options.uiBorder);
+        g.outline(x, y, previewW, previewH(), ClientState.options.uiBorder);
         var size = element.has("size") ? element.getAsJsonArray("size") : null;
-        if (size != null) { String text = size.get(0) + " × " + size.get(1) + " × " + size.get(2) + " blocks"; g.text(font, text, x + rightW - font.width(text), TOP + 4, MUTED, false); }
+        if (size != null) { String text = size.get(0) + " × " + size.get(1) + " × " + size.get(2) + " blocks"; g.text(font, text, x + previewW - font.width(text), TOP + 4, MUTED, false); }
     }
 
     /** Draws the connectors and answers the place of the jigsaw block of the one under the pointer, or null. */
@@ -1187,6 +1237,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
         int pages = pageList.size();
         jigPage = Math.clamp(jigPage, 0, pages - 1);
         int cursor = top + 52;
+        // lit in the preview when nothing else is: the entry the pointer is over in the preview, or else the one picked there
+        for (int i = 0; i < jigsaws.size(); i++) {
+            var other = jigsaws.get(i).getAsJsonObject();
+            if (i == previewJig || (previewJig < 0 && foldKey(template, other).equals(pickedJig))) { var pos = other.getAsJsonArray("pos"); hover = new int[]{pos.get(0).getAsInt(), pos.get(1).getAsInt(), pos.get(2).getAsInt()}; break; }
+        }
         for (int index = pageList.get(jigPage)[0]; index < pageList.get(jigPage)[1]; index++) {
             var jig = jigsaws.get(index).getAsJsonObject();
             boolean isFolded = folded(template, jig);
@@ -1198,9 +1253,10 @@ final class JigsawEditorScreen extends CraftiumScreen {
             boolean notLoaded = issue.endsWith("is not loaded"); // fine when another mod adds the pool
             int rowBottom = y + (isFolded ? FOLDED_H - 6 : ROW_H - 8);
             int headingBottom = y + FOLDED_H - 6; // the heading, open or folded
-            boolean pointed = mx >= x - 2 && mx < x + rightW + 2 && my >= y - 2 && my < headingBottom;
+            boolean pointed = (mx >= x - 2 && mx < x + rightW + 2 && my >= y - 2 && my < headingBottom) || index == previewJig;
             // the whole entry lights its block up in the preview, but only its heading takes the hover look
             if (mx >= x - 2 && mx < x + rightW + 2 && my >= y - 2 && my < rowBottom) hover = new int[]{at.get(0).getAsInt(), at.get(1).getAsInt(), at.get(2).getAsInt()};
+            if (foldKey(template, jig).equals(pickedJig)) g.outline(x - 2, y - 2, rightW + 4, headingBottom - y + 2, ClientState.options.uiAccent);
             g.fill(x - 2, y - 2, x + rightW + 2, rowBottom, issue.isEmpty() ? 0x40223247 : notLoaded ? 0x40ffc857 : 0x40ff5a4d);
             if (pointed) { g.fill(x - 2, y - 2, x + rightW + 2, headingBottom, ClientState.options.hoverColor & 0xffffff | 0x58000000); g.outline(x - 2, y - 2, rightW + 4, headingBottom - y + 2, ClientState.options.hoverColor); }
             g.text(font, "#" + (index + 1) + " at " + at.get(0) + " " + at.get(1) + " " + at.get(2), x + 22, y + 2, MUTED, false);
@@ -1696,7 +1752,12 @@ final class JigsawEditorScreen extends CraftiumScreen {
     @Override public boolean mouseReleased(MouseButtonEvent raw) {
         var event = scaled(raw);
         if (resizing != 0) { resizing = 0; return true; }
-        if (preview.dragging()) { preview.letGo(); return true; }
+        if (preview.dragging()) {
+            boolean turn = event.button() == 0 && Math.hypot(event.x() - pressPreviewX, event.y() - pressPreviewY) <= 3; // let go in place: a click, not a turn
+            preview.letGo();
+            if (turn) pickJigsawInPreview(event.x(), event.y());
+            return true;
+        }
         if (draggingPoolBar || draggingGraphBar) { draggingPoolBar = false; draggingGraphBar = false; return true; }
         if (pressEdge != null && event.button() == 0) {
             var edge = pressEdge;
@@ -1778,7 +1839,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
             if (event.button() == 0 && !modal() && poolBox != null && poolBox.isFocused() && !poolMenuOpen) { poolMenuOpen = true; scrollMenuToOpenPool(); }
             return true;
         }
-        if (!modal() && pool() != null && overPreview(event.x(), event.y()) && preview.hasScene() && preview.press(event.button())) return true;
+        if (!modal() && pool() != null && overPreview(event.x(), event.y()) && preview.hasScene() && preview.press(event.button())) { pressPreviewX = event.x(); pressPreviewY = event.y(); return true; }
         if (event.button() != 0 || adding) return false;
         double x = event.x(), y = event.y();
         var graphBar = graphBar();
@@ -1821,11 +1882,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
         double x = rawX / uiScale;
         if (adding) return false;
         double y = rawY / uiScale;
-        if (!modal() && pool() != null && overPreview(x, y) && preview.hasScene()) { preview.zoom(vertical, x - (previewX() + rightW / 2.0), y - (previewY() + previewH() / 2.0)); return true; }
+        if (!modal() && pool() != null && overPreview(x, y) && preview.hasScene()) { preview.zoom(vertical, x - (previewX() + previewW / 2.0), y - (previewY() + previewH() / 2.0)); return true; }
         if (suggestionsShowing() && overSuggestions(x, y)) { suggestScroll = Math.clamp(suggestScroll - (int) Math.signum(vertical) * 3, 0, Math.max(0, suggestMatches.size() - SUGGEST_ROWS)); return true; }
         if (poolMenuOpen && overPoolMenu(x, y)) { int count = visiblePools().size(); poolScroll = Math.clamp(poolScroll - vertical * 30, 0, Math.max(0, (count - menuRows(count)) * LIST_ROW)); return true; }
-        if (usedView && x < cw - SIDE - rightW && x >= centreX) { usedScroll = Math.clamp(usedScroll - vertical * 30, 0, Math.max(0, usedList().size() * USED_ROW - (ch - FOOT - (cardsTop() - 4)))); return true; }
-        if (graph && x < cw - SIDE - rightW) { var bar = graphBar(); graphScroll = Math.clamp(graphScroll - vertical * 30, 0, bar == null ? 0 : bar[3] - bar[2]); return true; }
+        if (usedView && x < centreX + centreW + GAP && x >= centreX) { usedScroll = Math.clamp(usedScroll - vertical * 30, 0, Math.max(0, usedList().size() * USED_ROW - (ch - FOOT - (cardsTop() - 4)))); return true; }
+        if (graph && x < centreX + centreW + GAP) { var bar = graphBar(); graphScroll = Math.clamp(graphScroll - vertical * 30, 0, bar == null ? 0 : bar[3] - bar[2]); return true; }
         return false;
     }
 

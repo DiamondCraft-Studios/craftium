@@ -50,6 +50,21 @@ final class ElementPreview {
     }
 
     boolean hasScene() { return scene != null; }
+
+    private int[] pickedAt; private int pickedX = Integer.MIN_VALUE, pickedY, pickedW, pickedH; private double pickedYaw, pickedPitch, pickedZoom, pickedPanX, pickedPanY; private VoxelOrbit.Scene pickedScene;
+
+    /** The cell of the block under a point of the picture drawn at (x, y, w, h), as {x, y, z}, or null; remembered while the pointer and the view stay where they are. */
+    int[] cellAt(double pointX, double pointY, int x, int y, int w, int h) {
+        if (scene == null) return null;
+        int px = (int) ((pointX - x) * DETAIL), py = (int) ((pointY - y) * DETAIL), pw = Math.max(8, w * DETAIL), ph = Math.max(8, h * DETAIL);
+        boolean same = pickedScene == scene && px == pickedX && py == pickedY && pw == pickedW && ph == pickedH && view.yaw == pickedYaw && view.pitch == pickedPitch && view.zoom == pickedZoom && view.panX == pickedPanX && view.panY == pickedPanY;
+        if (!same) {
+            pickedAt = VoxelOrbit.pick(scene, view, pw, ph, px, py);
+            pickedScene = scene; pickedX = px; pickedY = py; pickedW = pw; pickedH = ph;
+            pickedYaw = view.yaw; pickedPitch = view.pitch; pickedZoom = view.zoom; pickedPanX = view.panX; pickedPanY = view.panY;
+        }
+        return pickedAt == null ? null : pickedAt.clone();
+    }
     void reset() { view.reset(); dirty = true; }
     void top() { view.top(); dirty = true; }
     void front() { view.front(); dirty = true; }
