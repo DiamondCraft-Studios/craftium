@@ -56,6 +56,7 @@ class ToolCatalogTest {
         special.put(Tool.SCALE, InteractionKind.TRANSFORM);
         special.put(Tool.GRADIENT_PAINTER, InteractionKind.SHIFT_POINTS);
         special.put(Tool.SLOPE, InteractionKind.ANCHOR_PAIR);
+        special.put(Tool.INSPECT, InteractionKind.INSPECT);
         for (Tool tool : Tool.values()) assertEquals(special.getOrDefault(tool, InteractionKind.CLICK), tool.spec().interaction(), tool.name());
     }
 
