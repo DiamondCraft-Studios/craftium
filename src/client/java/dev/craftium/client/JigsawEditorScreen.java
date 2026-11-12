@@ -349,18 +349,23 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     /** The dropdown that picks the pool, and the buttons that make, copy, rename and delete one, along the top of the middle. */
     private void poolPicker() {
-        int y = TOP - 4, buttons = 54 + 54 + 62 + 54 + 3 * 4;
-        pickW = Math.clamp(centreW - 24 - 6 - buttons - 8, 150, 320);
+        int y = TOP - 4, buttons = buttonsW();
+        pickW = Math.clamp(centreW - 24 - 6 - buttons - 8, 90, 320);
         poolBox = box(centreX, y, pickW, filter, 64, v -> { filter = v; poolMenuOpen = true; poolScroll = 0; }, this::pickFirstPool);
         tips.on(poolBox, "Type part of a pool name to narrow the list, then pick a pool. Start a word with @ to narrow by namespace: @minecraft shows only the pools of minecraft, and @craftium town only the town pools of craftium. Enter opens the first one.");
         var arrow = button(poolMenuOpen ? "▴" : "▾", centreX + pickW + 2, y, 22, 18, () -> toggleMenu());
         tips.on(arrow, "Shows the list of pools to pick from.");
         int x = centreX + pickW + 24 + 6;
-        button("New…", x, y, 54, 18, () -> openDialog("pool_new")).active = true;
-        button("Copy…", x + 58, y, 54, 18, () -> { if (!poolId().isEmpty()) openDialog("pool_copy"); });
-        button("Rename…", x + 116, y, 62, 18, () -> { if (!poolId().isEmpty()) openDialog("pool_rename"); });
-        button("Delete", x + 182, y, 54, 18, () -> { if (!poolId().isEmpty()) edit("pool_delete", "id", poolId()); });
+        int unit = (buttons - 3 * 4) * 100 / 224; // New, Copy, Rename and Delete share the room in the ratio 54 : 54 : 62 : 54
+        int newW = unit * 54 / 100, copyW = unit * 54 / 100, renameW = unit * 62 / 100, deleteW = buttons - 3 * 4 - newW - copyW - renameW;
+        button("New…", x, y, newW, 18, () -> openDialog("pool_new"));
+        button("Copy…", x + newW + 4, y, copyW, 18, () -> { if (!poolId().isEmpty()) openDialog("pool_copy"); });
+        button("Rename…", x + newW + copyW + 8, y, renameW, 18, () -> { if (!poolId().isEmpty()) openDialog("pool_rename"); });
+        button("Delete", x + newW + copyW + renameW + 12, y, deleteW, 18, () -> { if (!poolId().isEmpty()) edit("pool_delete", "id", poolId()); });
     }
+
+    /** The room the four pool buttons take: all of it in a wide window, less in a narrow one so the dropdown keeps some. */
+    private int buttonsW() { return Math.clamp(centreW * 45 / 100, 176, 236); }
 
     private void toggleMenu() {
         poolMenuOpen = !poolMenuOpen;
@@ -1129,7 +1134,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         g.fill(centreX - 4, TOP - 4, centreX + centreW + 4, ch - FOOT + 2, PANEL);
         boolean ours = p.has("overridden") && p.get("overridden").getAsBoolean();
         String tag = ours ? "in the craftium pack" : "another pack: an edit overrides it here";
-        int tagX = centreX + pickW + 24 + 6 + 54 + 54 + 62 + 54 + 3 * 4 + 12;
+        int tagX = centreX + pickW + 24 + 6 + buttonsW() + 12;
         if (tagX + font.width(tag) <= centreX + centreW) g.text(font, tag, centreX + centreW - font.width(tag), TOP + 1, ours ? OK : MUTED, false);
         g.text(font, "Fallback", centreX + 2, TOP + 21, MUTED, false);
         g.text(font, "Description", centreX + 2, TOP + 45, MUTED, false);

@@ -154,6 +154,10 @@ public final class VoxelOrbit {
         int hl = hlInside ? s.cell(highlight[0], highlight[1], highlight[2]) : -1;
         boolean embedded = hlInside && (s.has(highlight[0] + 1, highlight[1], highlight[2]) || s.has(highlight[0] - 1, highlight[1], highlight[2]) || s.has(highlight[0], highlight[1] + 1, highlight[2])
                 || s.has(highlight[0], highlight[1] - 1, highlight[2]) || s.has(highlight[0], highlight[1], highlight[2] + 1) || s.has(highlight[0], highlight[1], highlight[2] - 1));
+        // A big picture is drawn in bands of rows, one band to a thread: every band tests all the rectangles but only fills its own rows, so none writes where another does.
+        int bands = (long) w * h >= 120_000 ? Math.min(8, Math.max(1, Runtime.getRuntime().availableProcessors())) : 1;
+        java.util.stream.IntStream.range(0, bands).parallel().forEach(band -> {
+        int rowA = (int) ((long) h * band / bands), rowB = (int) ((long) h * (band + 1) / bands);
         double[] p0 = new double[3], a = new double[3], b = new double[3];
         for (int i = 0; i < s.visibleCell.length; i++) {
             int cell = s.visibleCell[i];
@@ -169,7 +173,8 @@ public final class VoxelOrbit {
             if (Math.abs(det) < 1e-6) continue;
             double minX = Math.min(Math.min(sx0, sx0 + sax), Math.min(sx0 + sbx, sx0 + sax + sbx)), maxX = Math.max(Math.max(sx0, sx0 + sax), Math.max(sx0 + sbx, sx0 + sax + sbx));
             double minY = Math.min(Math.min(sy0, sy0 + say), Math.min(sy0 + sby, sy0 + say + sby)), maxY = Math.max(Math.max(sy0, sy0 + say), Math.max(sy0 + sby, sy0 + say + sby));
-            int x1 = Math.max(0, (int) Math.floor(minX)), x2 = Math.min(w - 1, (int) Math.ceil(maxX)), y1 = Math.max(0, (int) Math.floor(minY)), y2 = Math.min(h - 1, (int) Math.ceil(maxY));
+            int x1 = Math.max(0, (int) Math.floor(minX)), x2 = Math.min(w - 1, (int) Math.ceil(maxX)), y1 = Math.max(rowA, (int) Math.floor(minY)), y2 = Math.min(rowB - 1, (int) Math.ceil(maxY));
+            if (x1 > x2 || y1 > y2) continue;
             double shade = SHADE[q.shade()];
             boolean lit = embedded && cell == hl;
             int[] texture = q.texture();
@@ -190,6 +195,7 @@ public final class VoxelOrbit {
                     pixels[at] = 0xff000000 | r << 16 | g << 8 | bl;
                 }
         }
+        });
         if (hlInside) outline(highlight, cx, cy, cz, cam, right, up, scale, ox, oy, w, h, pixels, depth, hover);
     }
 

@@ -19,6 +19,11 @@ import java.util.zip.InflaterInputStream;
 final class ElementPreview {
     /** How many pixels are drawn for each pixel of the panel, so the blocks stay crisp. */
     private static final int DETAIL = 2;
+    /** How long after the view last moved the picture is drawn at half detail, which is four times fewer pixels: it is sharp again once the view rests. */
+    private static final long SETTLE_MS = 160;
+    private long movingUntil;
+    private int drawnDetail;
+    private ReferenceTexture texture;
     private static final int BACKGROUND = 0xff1b2531;
 
     private String key = "";
@@ -65,9 +70,10 @@ final class ElementPreview {
         }
         return pickedAt == null ? null : pickedAt.clone();
     }
-    void reset() { view.reset(); dirty = true; }
-    void top() { view.top(); dirty = true; }
-    void front() { view.front(); dirty = true; }
+    private void moved() { dirty = true; movingUntil = System.currentTimeMillis() + SETTLE_MS; }
+    void reset() { view.reset(); moved(); }
+    void top() { view.top(); moved(); }
+    void front() { view.front(); moved(); }
 
     boolean press(int button) { if (button != 0 && button != 2) return false; dragging = button; return true; }
     void letGo() { dragging = -1; }
@@ -76,7 +82,7 @@ final class ElementPreview {
     void drag(double dx, double dy) {
         if (dragging == 0) view.turn(-dx * 0.8, dy * 0.8);
         else if (dragging == 2) { view.panX += dx * DETAIL; view.panY += dy * DETAIL; }
-        dirty = true;
+        moved();
     }
 
     /** Zooms towards the pointer, which is given in pixels from the middle of the panel. */
@@ -86,26 +92,38 @@ final class ElementPreview {
         view.panX = (view.panX - fromCentreX * DETAIL) * k + fromCentreX * DETAIL;
         view.panY = (view.panY - fromCentreY * DETAIL) * k + fromCentreY * DETAIL;
         view.zoom = after;
-        dirty = true;
+        moved();
     }
 
     /** Draws the picture into the panel (x, y, w, h); false when there is nothing to show. */
     boolean draw(Gfx g, int x, int y, int w, int h) {
         if (scene == null) return false;
-        int pw = Math.max(8, w * DETAIL), ph = Math.max(8, h * DETAIL);
-        if (tex == null || dirty || pw != drawnW || ph != drawnH || !Arrays.equals(highlight, drawnHighlight)) {
+        boolean moving = System.currentTimeMillis() < movingUntil;
+        int detail = moving ? 1 : DETAIL;
+        int pw = Math.max(8, w * detail), ph = Math.max(8, h * detail);
+        if (tex == null || dirty || detail != drawnDetail || pw != drawnW || ph != drawnH || !Arrays.equals(highlight, drawnHighlight)) {
             if (pixels.length != pw * ph) pixels = new int[pw * ph];
-            VoxelOrbit.render(scene, view, pw, ph, pixels, BACKGROUND, highlight, ClientState.options.hoverColor);
-            var image = new NativeImage(pw, ph, false);
-            for (int row = 0; row < ph; row++) for (int col = 0; col < pw; col++) image.setPixel(col, row, pixels[row * pw + col]);
-            var texture = new ReferenceTexture(image);
-            texture.filtering(true);
-            var next = Tex.of("craftium", "pool_preview/" + UUID.randomUUID());
-            Minecraft.getInstance().getTextureManager().register(next.id(), texture);
-            release(tex);
-            tex = next;
+            // the view keeps its pan in pixels of the sharp picture; a picture of fewer pixels moves by fewer
+            var shown = new VoxelOrbit.View();
+            shown.yaw = view.yaw; shown.pitch = view.pitch; shown.zoom = view.zoom;
+            shown.panX = view.panX * detail / DETAIL; shown.panY = view.panY * detail / DETAIL;
+            VoxelOrbit.render(scene, shown, pw, ph, pixels, BACKGROUND, highlight, ClientState.options.hoverColor);
+            if (texture == null || drawnW != pw || drawnH != ph) { // a new size needs a new texture; the same size is written into the one there is
+                var image = new NativeImage(pw, ph, false);
+                var next = new ReferenceTexture(image);
+                next.filtering(true);
+                var id = Tex.of("craftium", "pool_preview/" + UUID.randomUUID());
+                Minecraft.getInstance().getTextureManager().register(id.id(), next);
+                release(tex);
+                tex = id;
+                texture = next;
+            }
+            var image = texture.getPixels();
+            for (int row = 0; row < ph; row++) { int base = row * pw; for (int col = 0; col < pw; col++) image.setPixel(col, row, pixels[base + col]); }
+            texture.upload();
             drawnW = pw;
             drawnH = ph;
+            drawnDetail = detail;
             drawnHighlight = highlight == null ? null : highlight.clone();
             dirty = false;
         }
@@ -113,7 +131,7 @@ final class ElementPreview {
         return true;
     }
 
-    void releaseAll() { release(tex); tex = null; key = ""; scene = null; PreviewScenes.clear(); }
+    void releaseAll() { release(tex); tex = null; texture = null; key = ""; scene = null; PreviewScenes.clear(); }
 
     private static void release(Tex t) { if (t != null) Minecraft.getInstance().getTextureManager().release(t.id()); }
 }
