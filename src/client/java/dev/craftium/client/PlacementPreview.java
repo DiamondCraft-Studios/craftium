@@ -13,11 +13,25 @@ public final class PlacementPreview {
     private static GhostBlocks ghost=GhostBlocks.EMPTY;
     static void updateGhost(String json){ghost=GhostBlocks.parse(json);}
     private PlacementPreview(){}
-    static void update(String value){if(Objects.equals(data,value))return;data=value;shape=OutlineShape.of(SelectionCodec.decode(value));}
+    static void update(String value){if(Objects.equals(data,value))return;data=value;var cells=SelectionCodec.decode(value);points=cells.size()<=SCENE_LIMIT?List.copyOf(cells):List.of();shape=OutlineShape.of(cells);sceneFor=null;}
+    /** A placement of more blocks than this is drawn as one outline, as working out what the world hides of it costs more than a frame can spare. */
+    private static final int SCENE_LIMIT=32_768;
+    private static List<Point> points=List.of();
+    private static SceneShape scene=SceneShape.EMPTY;
+    private static Point sceneAt;private static long sceneSecond;private static Object sceneFor;
+    /** The placement as the world hides it, like the selection (see {@link SceneShape}): worked out again when it moves or, once a second, the world changes. Null when it is too large or the world is not there. */
+    private static SceneShape sceneAt(){
+        var level=net.minecraft.client.Minecraft.getInstance().level;if(level==null||points.isEmpty())return null;
+        long second=level.getGameTime()/20;
+        if(sceneFor!=points||!origin.equals(sceneAt)||second!=sceneSecond){var moved=new ArrayList<Point>(points.size());for(var p:points)moved.add(p.add(origin.x(),origin.y(),origin.z()));scene=SceneShape.of(level,moved,true);sceneFor=points;sceneAt=origin;sceneSecond=second;}
+        return scene.tooLarge()?null:scene;
+    }
     /** The pending placement as one outline, moved by the transform in progress; filled while nothing is being dragged. */
     static void draw(){
         if(origin==null)return;
-        shape.draw(new Vec3(origin.x(),origin.y(),origin.z()),TransformGizmo::line,ClientState.options.previewColor,ClientState.options.previewFill,!TransformGizmo.dragging());
+        var o=ClientState.options;var hidden=TransformGizmo.dragging()?null:sceneAt(); // a drag moves the lines with the gizmo, so only a placement at rest is depth-tested
+        if(hidden!=null)hidden.draw((o.previewFill>>>24)!=0?o.previewFill:o.previewColor&0xffffff|SceneShape.FACE_ALPHA,o.previewColor,(float)o.selectionWidth,o.previewFill);
+        else shape.draw(new Vec3(origin.x(),origin.y(),origin.z()),TransformGizmo::line,o.previewColor,o.previewFill,!TransformGizmo.dragging());
         if(!TransformGizmo.dragging())ghost.draw(origin,false); // the real blocks, so the preview shows what will be placed
     }
     /** When set, confirming the placement also makes a BuildObject of the pasted blocks: its name, and the one it goes after (0 for the end). Set by a duplicate or a paste from the Hierarchy. */
