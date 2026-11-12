@@ -2504,6 +2504,14 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         minecraft.keyboardHandler.setClipboard(String.join("\n",lines));
         ClientState.notify(lines.size()==1?"Copied "+lines.getFirst():"Copied "+lines.size()+" paths");
     }
+    /** Deletes a group; one with BuildObjects in it asks first, since they all move to the group before it. */
+    private void deleteGroup(int groupId){
+        Runnable go=()->action("saved_selection:groupdelete:"+groupId);
+        int n=0;for(var e:hierarchyAll)if(groupIdOf(e)==groupId)n++;
+        if(n==0){go.run();return;}
+        var group=groupById(groupId);
+        confirm=new Confirm("Delete the group "+(group==null?"":"\""+shorten(group.name(),200)+"\" ")+"with "+n+(n==1?" BuildObject":" BuildObjects")+" in it?\nThey move to the group before it.","Delete group",go);
+    }
     /** The right-click menu of a group's heading. */
     private void openGroupMenu(int groupId,int x,int y){
         var group=groupById(groupId);if(group==null)return;
@@ -2516,7 +2524,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         items.add(item("Create new Group","",()->action("saved_selection:groupnew")));
         boolean folded=ClientState.groupFolded(groupId);
         items.add(item(folded?"Unfold":"Fold","",()->ClientState.toggleGroupFolded(groupId)));
-        if(groups.size()>1){items.add(divider());items.add(item("Delete group","",()->action("saved_selection:groupdelete:"+groupId)));} // what is in it goes to the group before
+        if(groups.size()>1){items.add(divider());items.add(item("Delete group","",()->deleteGroup(groupId)));} // what is in it goes to the group before
         rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=0;menu=ROW_MENU;openSub="";openSub2="";
     }
     /** The right-click menu of the empty space in the Hierarchy. */
