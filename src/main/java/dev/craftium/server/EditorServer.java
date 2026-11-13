@@ -418,7 +418,8 @@ public final class EditorServer {
                     var chain=confirming&&staged!=null&&staged==s.pendingChainEdit?s.pendingChain:null;
                     var base=chain!=null?s.pendingChainBase:confirming?staged:null; // what was staged before the run of transforms began
                     if(base!=null)for(var c:base.changes())plan.changes.put(c.pos(),c);
-                    var computed=ModelTransform.compute(plan,s,o,chain);
+                    var hiddenBox=ObjectMoves.hiddenBox(s); // with nothing selected, a BuildObject that is all hidden is what moves
+                    var computed=ModelTransform.compute(plan,s,o,chain,hiddenBox==null?null:hiddenBox[0],hiddenBox==null?null:hiddenBox[1]);
                     // The selection follows its blocks; if the edit is cancelled it goes back.
                     var priorBefore=s.pendingSelectionBefore;
                     var original=confirming&&priorBefore!=null?priorBefore:before; // undo puts back the selection from before the whole run
@@ -432,7 +433,7 @@ public final class EditorServer {
                     if(confirming&&priorHeld==null)s.pendingHeldBefore=heldNow;
                     try{
                         ModelTransform.Result result;Map<Integer,List<Point>> objectsAfter;
-                        if(ObjectMoves.touches(objectsStart,computed.source().keySet())){
+                        if(ObjectMoves.touches(objectsStart,computed.source().keySet())||!ObjectMoves.carried(s,objectsStart,heldStart).isEmpty()){
                             // The selection holds BuildObject blocks: they move with the world winning, so what they could not place is kept, not lost (see ObjectMove).
                             var done=ObjectMoves.transform(player.level(),s,plan,computed,objectsStart,heldStart);
                             result=ModelTransform.finish(computed,done.moved());objectsAfter=done.applied().ownAfter();
@@ -449,6 +450,7 @@ public final class EditorServer {
                         if(confirming)s.pendingEdit=null; // the new edit already holds what was staged, so it replaces it
                         start(player,s,edit);
                         if(confirming&&s.pendingEdit!=null){s.pendingChain=result.chain();s.pendingChainBase=base;s.pendingChainEdit=s.pendingEdit;}
+                        else if(confirming){s.pendingObjectsBefore=null;s.pendingHeldBefore=null;s.pendingSelectionBefore=null;} // nothing was staged (only what the BuildObjects keep changed, and that is in the history): there is nothing to cancel
                     }
                     catch(RuntimeException e){s.selection.restore(before);s.saved.setPoints(objectsNow);s.saved.restoreHeld(heldNow);s.pendingSelectionBefore=priorBefore;s.pendingObjectsBefore=priorObjects;s.pendingHeldBefore=priorHeld;if(confirming)s.pendingEdit=staged;throw e;}
                 }
@@ -1089,8 +1091,8 @@ public final class EditorServer {
             var change=edit.selection()==null?Session.SelectionChange.restoring(Map.of(),Map.of()):edit.selection();
             edit=edit.withSelection(change.with(Map.of("shape",s.shapeAtRequest),Map.of("shape","none")));
         }
-        if(edit.changes().isEmpty()&&edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()&&edit.selection()!=null&&edit.selection().hasHierarchy()){
-            s.remember(edit);send(player,s,edit.name(),false);return; // nothing to build (a copy put back in place, or blocks that were air already), but what it did to the BuildObjects is in the history
+        if(edit.changes().isEmpty()&&edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()&&edit.selection()!=null&&(edit.selection().hasHierarchy()||edit.selection().hasObjects()||edit.selection().hasHeld())){
+            s.remember(edit);send(player,s,edit.name(),false);return; // nothing to build (a copy put back in place, blocks that were air already, or hidden blocks that moved but are still hidden), but what it did to the BuildObjects is in the history
         }
         if(edit.changes().isEmpty() && edit.biomes().isEmpty()&&edit.entities().isEmpty()&&edit.annotations().isEmpty()){var why=s.nothingChangedBecause;s.nothingChangedBecause=null;send(player,s,why==null?"No matching blocks changed":"No matching blocks changed: "+why,false);return;}
         EditGate.check(player,edit);

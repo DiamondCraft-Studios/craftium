@@ -72,6 +72,8 @@ final class Session {
     dev.craftium.core.SavedSelections saved=new dev.craftium.core.SavedSelections();boolean savedAttached;long savedSent=-1;
     /** The {@link dev.craftium.core.SavedSelections.Entry#version} of each saved selection's blocks that this player was last sent, by id. */
     final Map<Integer,Integer> savedDataSent=new HashMap<>();
+    /** The version of what each BuildObject keeps hidden that this player was last sent, to send it again only when it changes. */
+    final Map<Integer,Integer> savedHiddenSent=new HashMap<>();
     /** What the last AI spec planned looked wrong in (see BuildSpec.Result#warnings), for the reply that describes its preview. */
     List<String> specWarnings=List.of();
     /** The clipboard's blocks as a ghost for the placement preview, and whether it needs encoding again. */

@@ -28,7 +28,7 @@ final class BuildObjectStore {
     /** Gives the session a view of the shared tree of the dimension the player is in. Done once per session (a new dimension is a new session). */
     static void attach(ServerPlayer player,Session session){
         if(session.savedAttached)return;
-        session.saved=new SavedSelections(slot(player).tree);session.savedAttached=true;session.savedSent=-1;session.savedDataSent.clear();
+        session.saved=new SavedSelections(slot(player).tree);session.savedAttached=true;session.savedSent=-1;session.savedDataSent.clear();session.savedHiddenSent.clear();
     }
     private static Slot slot(ServerPlayer player){
         Path file=player.level().getServer().getWorldPath(LevelResource.ROOT).resolve("craftium/buildobjects").resolve(dev.craftium.compat.Compat.keyName(player.level().dimension()).replace(':','_')+".nbt");

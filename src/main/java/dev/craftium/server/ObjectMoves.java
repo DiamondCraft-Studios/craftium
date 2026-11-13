@@ -83,6 +83,33 @@ final class ObjectMoves {
         return new Applied(ownStart,ownAfter,heldStart,s.saved.heldSnapshot());
     }
 
+    /**
+     * The BuildObjects that are shown (with everything under them) and hold nothing in the world, but keep blocks hidden: they move with the selection, though there is
+     * nothing of them to select. {@code own} and {@code held} are the BuildObjects as they began.
+     */
+    static Set<Integer> carried(Session s,Map<Integer,List<Point>> own,Map<Integer,SavedSelections.Held> held){
+        var shown=new ArrayList<Integer>();for(var e:s.saved.viewed())shown.add(e.id());
+        var out=new LinkedHashSet<Integer>();
+        for(var id:s.saved.withDescendants(shown)){
+            var cells=own.get(id);var kept=held.get(id);
+            if(cells!=null&&cells.isEmpty()&&kept!=null&&!kept.dormant().isEmpty())out.add(id);
+        }
+        return out;
+    }
+
+    /** With nothing selected, the box {min,max} around the hidden blocks of the BuildObjects that are carried; null when there are none or something is selected. */
+    static Point[] hiddenBox(Session s){
+        if(s.selection.size()>0)return null;
+        var carried=carried(s,s.saved.snapshot(),s.saved.heldSnapshot());
+        int[] box=null;
+        for(var id:carried){
+            var b=s.saved.byId(id).hiddenBounds();if(b==null)continue;
+            if(box==null)box=b.clone();
+            else{for(int i=0;i<3;i++)box[i]=Math.min(box[i],b[i]);for(int i=3;i<6;i++)box[i]=Math.max(box[i],b[i]);}
+        }
+        return box==null?null:new Point[]{new Point(box[0],box[1],box[2]),new Point(box[3],box[4],box[5])};
+    }
+
     /** Whether any selected cell belongs to one of these BuildObjects. */
     static boolean touches(Map<Integer,List<Point>> own,Set<Point> source){
         for(var cells:own.values())for(var p:cells)if(source.contains(p))return true;
@@ -100,8 +127,9 @@ final class ObjectMoves {
     static Transformed transform(ServerLevel level,Session s,EditPlanner plan,ModelTransform.Computed c,Map<Integer,List<Point>> ownStart,Map<Integer,SavedSelections.Held> heldStart){
         s.saved.setPoints(ownStart);s.saved.restoreHeld(heldStart);
         try{
+            var carried=carried(s,ownStart,heldStart);
             var ordered=new ArrayList<ObjectMove.Obj>();
-            for(var e:s.saved.entries())ordered.add(new ObjectMove.Obj(e.id(),new HashSet<>(e.points()),e.dormant(),e.replaced()));
+            for(var e:s.saved.entries())ordered.add(new ObjectMove.Obj(e.id(),new HashSet<>(e.points()),e.dormant(),e.replaced(),carried.contains(e.id())));
             var source=c.source().keySet();
             var solidCache=new HashMap<String,Boolean>();
             Predicate<String> solid=text->solidCache.computeIfAbsent(text,t->beats(plan.parse(t)));

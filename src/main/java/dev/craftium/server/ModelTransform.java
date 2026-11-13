@@ -42,17 +42,24 @@ final class ModelTransform {
     }
 
     /** Works the transform out without queueing anything (staged changes in {@code plan} count as the blocks that are there). */
-    static Computed compute(EditPlanner plan,Session session,Options o,Chain prior){
+    static Computed compute(EditPlanner plan,Session session,Options o,Chain prior){return compute(plan,session,o,prior,null,null);}
+
+    /**
+     * As above; with nothing selected, {@code hiddenMin} and {@code hiddenMax} are the box of BuildObject blocks that are not in the world, which the transform is about
+     * (the blocks that are in the world are none, so only what ObjectMoves carries along moves).
+     */
+    static Computed compute(EditPlanner plan,Session session,Options o,Chain prior,Point hiddenMin,Point hiddenMax){
         var selection=session.selection;
         plan.exact=true;
-        if(selection.size()==0)throw new IllegalArgumentException("Create a selection first");
+        boolean hiddenOnly=selection.size()==0&&hiddenMin!=null;
+        if(selection.size()==0&&!hiddenOnly)throw new IllegalArgumentException("Create a selection first");
         boolean identity=o.offsetX==0&&o.offsetY==0&&o.offsetZ==0&&o.yaw==0&&o.pitch==0&&o.roll==0&&o.sizeX==1&&o.sizeY==1&&o.sizeZ==1;
         if(identity)throw new IllegalArgumentException("Nothing to transform");
         // A negative size flips the blocks along that axis.
         double sx=scale(o.sizeX),sy=scale(o.sizeY),sz=scale(o.sizeZ);
 
         Map<Point,BlockSnapshot> source;Point min,max;var steps=new ArrayList<Step>();
-        Point now=selection.min(),end=selection.max(); // the selection as it stands, which is where the pivot is taken from
+        Point now=hiddenOnly?hiddenMin:selection.min(),end=hiddenOnly?hiddenMax:selection.max(); // the selection as it stands, which is where the pivot is taken from
         if(prior==null){
             source=new LinkedHashMap<>();
             for(Point at:selection.points()){plan.validate(at);var staged=plan.changes.get(at);source.put(at,staged!=null?staged.after():BlockSnapshot.capture(plan.level,EditPlanner.pos(at)));}
@@ -63,7 +70,7 @@ final class ModelTransform {
         steps.add(new Step(o,pivot,sx,sy,sz));
 
         var origin=new LinkedHashMap<Point,Point>();
-        var landed=place(source,min,max,steps,origin);
+        var landed=source.isEmpty()?new LinkedHashMap<Point,BlockSnapshot>():place(source,min,max,steps,origin);
         // A quarter turn about a point that is not on the right half-block loses cells: their centres fall on the
         // edges between blocks. Try pivots half a block away, nearest first, and keep the first that loses none.
         if(landed.size()<source.size()&&steps.stream().allMatch(ModelTransform::quarterTurn)){
