@@ -26,7 +26,15 @@ public final class MissingBlockEntity extends BlockEntity {
     public int key(){return key;}
     public CompoundTag kept(){return kept;}
     public String label(){return label;}
-    public void set(int key,CompoundTag kept){this.key=key;this.kept=kept;setChanged();}
+    private MissingBlockTable.Entry entry;
+    /** The block this one stands for, read once. On the server it comes from the table; on a client from the name the server sent. Null when neither knows it. */
+    public MissingBlockTable.Entry entry(){
+        if(entry!=null)return entry;
+        if(!label.isEmpty())return entry=MissingBlockTable.Entry.parse(label);
+        var table=MissingBlocks.table();
+        return table==null?null:(entry=table.get(key));
+    }
+    public void set(int key,CompoundTag kept){this.key=key;this.kept=kept;entry=null;setChanged();}
 
     @Override protected void saveAdditional(ValueOutput output){
         super.saveAdditional(output);
@@ -38,6 +46,7 @@ public final class MissingBlockEntity extends BlockEntity {
         key=input.getIntOr(MissingBlockRewrite.KEY,-1);
         kept=input.read(MissingBlockRewrite.KEPT,CompoundTag.CODEC).orElse(null);
         label=input.getStringOr("label","");
+        entry=null;
     }
     @Override public Packet<ClientGamePacketListener> getUpdatePacket(){return ClientboundBlockEntityDataPacket.create(this);}
     @Override public CompoundTag getUpdateTag(HolderLookup.Provider registries){

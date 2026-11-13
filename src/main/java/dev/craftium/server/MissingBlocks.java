@@ -36,6 +36,12 @@ public final class MissingBlocks {
     public static MissingBlockTable table(){return table;}
 
     public static boolean isMissing(BlockState state){return state.is(BLOCK);}
+    /** The placeholder at {@code pos}, or null when the block there is any other. The state is asked first so an ordinary block costs no block entity lookup. */
+    public static MissingBlockEntity at(net.minecraft.world.level.BlockGetter level,net.minecraft.core.BlockPos pos,BlockState state){
+        return state.is(BLOCK)&&level.getBlockEntity(pos) instanceof MissingBlockEntity missing?missing:null;
+    }
+    /** The number of the missing block at {@code pos}, or -1 when the block there is not a placeholder. */
+    public static int keyAt(net.minecraft.world.level.BlockGetter level,net.minecraft.core.BlockPos pos,BlockState state){var missing=at(level,pos,state);return missing==null?-1:missing.key();}
     /** Whether any installed mod provides a block of this name. */
     public static boolean exists(String name){var id=Compat.tryParse(name);return id!=null&&BuiltInRegistries.BLOCK.containsKey(id);}
 }

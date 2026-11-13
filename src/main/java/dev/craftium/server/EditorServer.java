@@ -594,7 +594,7 @@ public final class EditorServer {
     /** The points a selection tool would add, less any the block mask rules out. */
     static List<Point> masked(EditPlanner plan,Options o,Iterable<Point> points){
         var mask=BlockMask.of(o);var kept=new ArrayList<Point>();
-        for(Point p:points)if(mask.allows(plan.state(p)))kept.add(p);
+        for(Point p:points)if(mask.allows(plan.state(p),AdvancedTools.missingEntry(plan,p)))kept.add(p);
         return kept;
     }
     /** What the player's tool does with a click on the world: whatever the tool's behaviour makes of it. */
