@@ -156,6 +156,7 @@ public final class ObjectMove {
                 }else if(holder==me){current.put(d,a.block());landedCells.add(d);}
                 else if(!a.block().isAir())me.dormant.put(d,a.block().state(),a.block().data()); // an air block that loses a cell has nothing to keep
             }else{
+                if(holder!=null&&holder!=me){holder.own.remove(d);holder.touched=true;} // what it held here is not there, or is replaced when built on: it does not keep the cell
                 if(!isAir(here.state()))me.replaced.put(d,here.state(),here.data());
                 owner.put(d,me);me.own.add(d);current.put(d,a.block());landedCells.add(d);
             }
@@ -187,6 +188,41 @@ public final class ObjectMove {
         var changed=new LinkedHashMap<Integer,Obj>();
         for(var w:work.values())if(w.touched)changed.put(w.id,new Obj(w.id,w.own,w.dormant,w.replaced,false));
         return new Result(writes,changed,landedCells);
+    }
+
+    /**
+     * Gives each cell to the BuildObject that now outranks the one holding it: where a BuildObject keeps a block hidden under the block of one earlier in the list, which
+     * is lower priority, the block of the later one is written and the earlier one keeps its own as dormant. For after the order of the Hierarchy has changed. Cells that
+     * are only hidden, with nothing of another BuildObject on them, stay hidden (that is Place here).
+     */
+    public static Result reorder(List<Obj> ordered,Function<Point,Block> worldState,Predicate<String> solid){
+        var placements=outranked(ordered);
+        if(placements.isEmpty())return new Result(Map.of(),Map.of(),Set.of());
+        var taken=new HashMap<Integer,Set<Point>>();
+        for(var pl:placements)taken.computeIfAbsent(pl.objectId(),k->new HashSet<>()).add(pl.cell());
+        var adjusted=new ArrayList<Obj>();
+        for(var o:ordered){
+            var cut=taken.get(o.id());
+            if(cut==null){adjusted.add(o);continue;}
+            var rest=o.dormant().copy();for(var c:cut)rest.remove(c); // these are placed below, not kept twice
+            adjusted.add(new Obj(o.id(),o.own(),rest,o.replaced(),o.carried()));
+        }
+        return place(adjusted,placements,worldState,solid);
+    }
+
+    /** The hidden blocks that outrank the BuildObject standing in their cell, as the placements that {@link #reorder} makes: what a caller needs to know which chunks to load. */
+    public static List<Placement> outranked(List<Obj> ordered){
+        var priority=new HashMap<Integer,Integer>();for(int i=0;i<ordered.size();i++)priority.put(ordered.get(i).id(),i);
+        var hiddenAt=new HashSet<Point>();for(var o:ordered)hiddenAt.addAll(o.dormant().points());
+        if(hiddenAt.isEmpty())return List.of();
+        var holder=new HashMap<Point,Obj>();
+        for(var o:ordered)for(var p:o.own())if(hiddenAt.contains(p))holder.put(p,o);
+        var placements=new ArrayList<Placement>();
+        for(var o:ordered)for(var c:o.dormant().points()){
+            var held=holder.get(c);
+            if(held!=null&&held!=o&&priority.get(o.id())>priority.get(held.id()))placements.add(new Placement(o.id(),c,new Block(o.dormant().get(c),o.dormant().data(c))));
+        }
+        return placements;
     }
 
     /** Water, as a block state text (not a block that only starts with the word, such as a water cauldron). */

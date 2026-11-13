@@ -77,4 +77,21 @@ class HierarchyPriorityTest {
         assertEquals(sibling.id(),winner(saved,List.of(parent,child,sibling)));
         assertEquals(child.id(),winner(saved,List.of(parent,child)));
     }
+    @Test void draggingABuildObjectBelowAnotherGivesItTheCellTheOtherWasHidingUnder(){
+        var saved=new SavedSelections();var upper=make(saved);var lower=make(saved); // lower is on top of upper
+        // the upper one stands in the cell, and the lower one, which outranks it, keeps its block hidden there: that is how it got there before the order was this
+        var world=new HashMap<Point,ObjectMove.Block>(Map.of(CELL,ObjectMove.Block.of("minecraft:stone")));
+        var hidden=new PackedCells();hidden.put(CELL,"minecraft:dirt");
+        saved.place(lower.id(),0,0); // the lower one dragged to the top, so now the other one outranks it
+        var holder=new ObjectMove.Obj(lower.id(),new HashSet<>(),hidden,new PackedCells());var stands=new ObjectMove.Obj(upper.id(),new HashSet<>(List.of(CELL)),new PackedCells(),new PackedCells());
+        var ordered=new ArrayList<ObjectMove.Obj>();for(var e:saved.entries())ordered.add(e.id()==lower.id()?holder:stands);
+        assertEquals(upper.id(),saved.entries().get(1).id(),"the upper one is below now");
+        var r=ObjectMove.reorder(ordered,world::get,s->!ObjectMove.isAir(s));
+        assertTrue(r.writes().isEmpty(),"the one that stands there outranks the one hiding: nothing changes");
+        saved.place(lower.id(),0,1); // and back to the bottom: the hiding one outranks the one standing there
+        ordered.clear();for(var e:saved.entries())ordered.add(e.id()==lower.id()?holder:stands);
+        r=ObjectMove.reorder(ordered,world::get,s->!ObjectMove.isAir(s));
+        assertEquals("minecraft:dirt",r.writes().get(CELL).state());assertEquals(Set.of(CELL),r.objects().get(lower.id()).own());
+        assertEquals("minecraft:stone",r.objects().get(upper.id()).dormant().get(CELL));
+    }
 }

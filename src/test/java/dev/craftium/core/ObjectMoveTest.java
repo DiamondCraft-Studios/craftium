@@ -187,4 +187,28 @@ class ObjectMoveTest{
         var r=ObjectMove.shift(List.of(buried),Set.of(),shift(5),view(world),ObjectMoveTest::solid,false);
         assertTrue(r.objects().isEmpty());
     }
+    @Test void afterAReorderTheOneThatNowOutranksTheOtherTakesTheCellAndTheOtherKeepsItsBlock(){
+        var world=new HashMap<>(Map.of(p(0),STONE)); // object 2 stands in the cell, object 1 keeps its dirt hidden under it
+        var low=obj(1,cells(p(0),DIRT),new PackedCells());var high=obj(2,p(0));
+        // 2 is now earlier in the list, so 1 outranks it
+        var r=ObjectMove.reorder(List.of(high,low),view(world),ObjectMoveTest::solid);apply(world,r);
+        assertEquals(DIRT,world.get(p(0)));
+        assertEquals(Set.of(p(0)),r.objects().get(1).own());assertTrue(r.objects().get(1).dormant().isEmpty());
+        assertTrue(r.objects().get(2).own().isEmpty());assertEquals(STONE,r.objects().get(2).dormant().get(p(0)),"nothing is lost");
+        assertEquals(Set.of(p(0)),r.landed());
+    }
+    @Test void aReorderThatChangesNothingOrOnlyHidesOverFreeCellsWritesNothing(){
+        var world=new HashMap<>(Map.of(p(0),STONE));
+        var low=obj(1,cells(p(0),DIRT),new PackedCells());var high=obj(2,p(0));
+        assertTrue(ObjectMove.reorder(List.of(low,high),view(world),ObjectMoveTest::solid).writes().isEmpty(),"2 still outranks 1");
+        var free=obj(3,cells(p(7),DIRT),new PackedCells(),p(1)); // hidden at a cell nothing holds: that is Place here, not a reorder
+        assertTrue(ObjectMove.reorder(List.of(free),view(world),ObjectMoveTest::solid).writes().isEmpty());
+        assertTrue(ObjectMove.reorder(List.of(obj(4,p(0))),view(world),ObjectMoveTest::solid).objects().isEmpty());
+    }
+    @Test void aBuildObjectThatCoversWhatAnotherOneHoldsInAReplaceableBlockTakesTheCellFromIt(){
+        var world=new HashMap<>(Map.of(p(0),WATER));
+        var stale=obj(1,p(0)); // it holds the cell, but only in water, which is replaced when built on
+        var r=ObjectMove.place(List.of(stale,obj(2)),List.of(put(2,0,STONE)),view(world),ObjectMoveTest::solid);apply(world,r);
+        assertEquals(STONE,world.get(p(0)));assertEquals(Set.of(p(0)),r.objects().get(2).own());assertTrue(r.objects().get(1).own().isEmpty(),"no two hold one cell");
+    }
 }
