@@ -248,7 +248,7 @@ final class TransformGizmo {
     private static final int LANDING_BLOCKS=20_000;
     private static final long LANDING_CELLS=400_000L;
     /** What a landing was worked out from, and the drag it was worked out for, so it is worked out again only when one of them changes. */
-    private static final class LandingCache{List<Point> from;Vec3 delta,angles,size,about;OutlineShape shape;}
+    private static final class LandingCache{List<Point> from;Vec3 delta,angles,size,about;OutlineShape shape;Map<Point,Point> cells;}
     private static final LandingCache SELECTED_LANDING=new LandingCache(),HIDDEN_LANDING=new LandingCache();
     /**
      * The shape the selected blocks land in with a rotate or scale drag as it stands, with square edges like the blocks that
@@ -264,11 +264,14 @@ final class TransformGizmo {
         Vec3 about=aboutPoint();
         if(cache.from!=selected||!delta.equals(cache.delta)||!angles.equals(cache.angles)||!size.equals(cache.size)||!about.equals(cache.about)){
             cache.from=selected;cache.delta=delta;cache.angles=angles;cache.size=size;cache.about=about;
-            var cells=VoxelTransform.landed(selected,new Geometry.Vector(about.x,about.y,about.z),angles.y,angles.x,angles.z,size.x,size.y,size.z,(int)Math.round(delta.x),(int)Math.round(delta.y),(int)Math.round(delta.z),LANDING_CELLS);
-            cache.shape=cells==null||cells.isEmpty()?null:OutlineShape.of(cells);
+            var cells=VoxelTransform.landedFrom(selected,new Geometry.Vector(about.x,about.y,about.z),angles.y,angles.x,angles.z,size.x,size.y,size.z,(int)Math.round(delta.x),(int)Math.round(delta.y),(int)Math.round(delta.z),LANDING_CELLS);
+            cache.cells=cells==null||cells.isEmpty()?null:cells;
+            cache.shape=cache.cells==null?null:OutlineShape.of(cache.cells.keySet());
         }
         return cache.shape;
     }
+    /** For each cell the hidden blocks land in with a rotate or scale drag as it stands, the cell its block came from; as {@link #landingHidden}, which has to be asked first. */
+    static Map<Point,Point> landingHiddenCells(){return HIDDEN_LANDING.cells;}
     /** Whether the selected blocks (and what a BuildObject keeps hidden with them) are being dragged by the gizmo. */
     static boolean draggingModel(){return dragging!=null&&dragging.kind==Kind.MODEL;}
     /** One outline segment of hidden blocks being transformed: moved by the transform in progress and drawn through everything, since they are inside what hides them. */

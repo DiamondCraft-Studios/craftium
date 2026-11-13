@@ -103,6 +103,8 @@ public final class ClientState {
             if(!savedColorPending.containsKey(saved.id())){ // the colour everyone sees it in, unless this player is in the middle of changing it; none chosen is the selection colour
                 if(saved.color()!=0)savedColors.put(saved.id(),saved.color());else savedColors.remove(saved.id());
             }
+            if(saved.hidden()==0||saved.hiddenData()!=null)hiddenBlocks.remove(saved.id()); // the cells changed, so the blocks held for a drag are not the right ones any more
+            if(saved.hiddenGhost()!=null){if(saved.hiddenGhost().isEmpty())hiddenBlocks.remove(saved.id());else hiddenBlocks.put(saved.id(),GhostBlocks.parse(saved.hiddenGhost()));ghostFor=-1;}
             if(saved.hidden()==0){savedXray.remove(saved.id());savedXrayPoints.remove(saved.id());}
             else if(saved.hiddenData()!=null){ // null: unchanged, and the x-ray made for it is still right
                 if(saved.hiddenData().isEmpty()){savedXray.remove(saved.id());savedXrayPoints.remove(saved.id());} // too many to draw, or left out because the status was too big
@@ -112,7 +114,7 @@ public final class ClientState {
             if(saved.data().isEmpty())savedShapes.remove(saved.id()); // left out because the status was too big: nothing is drawn for it
             else{var blocks=SelectionCodec.decode(saved.data());savedBlocks.put(saved.id(),blocks);savedShapes.put(saved.id(),OutlineShape.ofLater(blocks));}
         }
-        savedShapes.keySet().retainAll(present);savedBlocks.keySet().retainAll(savedShapes.keySet());savedXray.keySet().retainAll(present);savedXrayPoints.keySet().retainAll(present);
+        savedShapes.keySet().retainAll(present);savedBlocks.keySet().retainAll(savedShapes.keySet());savedXray.keySet().retainAll(present);savedXrayPoints.keySet().retainAll(present);hiddenBlocks.keySet().retainAll(present);
         hiddenBoxFor=-1;ghostFor=-1;
         // an older server sends no GUID, so there is nothing to keep an eye by: a BuildObject seen for the first time starts closed
         for(var saved:savedSelections)if(saved.guid()==null&&savedWithoutGuid.add(saved.id()))savedHidden.add(saved.id());
@@ -136,6 +138,30 @@ public final class ClientState {
     /** The blocks each BuildObject keeps out of the world, drawn as an x-ray so they can be seen inside what hides them. */
     private static final Map<Integer,OutlineShape> savedXray=new HashMap<>();
     private static final Map<Integer,List<dev.craftium.core.Point>> savedXrayPoints=new HashMap<>();
+    /** The hidden blocks of each BuildObject with their block states, held only while one is dragged, to draw them as the blocks they are. */
+    private static final Map<Integer,GhostBlocks> hiddenBlocks=new HashMap<>();
+    private static Map<dev.craftium.core.Point,net.minecraft.world.level.block.state.BlockState> hiddenStates;
+    /** Asks the server for the hidden blocks of what is selected, with their states: sent when a drag begins. */
+    static void requestHiddenBlocks(){if(hiddenGhost()!=null)CraftiumClient.send("saved_selection:hiddenghost",null,null);}
+    /** Lets go of them when the drag is over. */
+    static void clearHiddenBlocks(){hiddenBlocks.clear();hiddenStates=null;}
+    /** The hidden blocks of what is selected, each with its state, or null while they have not arrived or are too many to carry exactly. */
+    static Map<dev.craftium.core.Point,net.minecraft.world.level.block.state.BlockState> hiddenBlockStates(){
+        if(hiddenStates!=null)return hiddenStates;
+        var out=new HashMap<dev.craftium.core.Point,net.minecraft.world.level.block.state.BlockState>();
+        for(var e:savedSelections){
+            if(!savedSelected(e))continue;var held=hiddenBlocks.get(e.id());if(held==null)continue;
+            var placed=held.placed();if(placed==null)return null; // more than were sent: not exact
+            out.putAll(placed);
+        }
+        return out.isEmpty()?null:(hiddenStates=out);
+    }
+    /** The hidden blocks that have arrived, to draw by an offset. */
+    static List<GhostBlocks> hiddenBlocksSelected(){
+        var out=new ArrayList<GhostBlocks>();
+        for(var e:savedSelections)if(savedSelected(e)){var held=hiddenBlocks.get(e.id());if(held!=null)out.add(held);}
+        return out;
+    }
     static OutlineShape xrayShape(int id){return savedXray.get(id);}
 
     /**
@@ -260,7 +286,7 @@ public final class ClientState {
         hierarchyVersion++;
         var guid=guidOf(id);if(guid!=null&&view.setFolded(guid,folded))viewChanged();
     }
-    static void clearSavedSelections(){savedSelections=List.of();savedById=Map.of();hierarchyVersion++;savedXray.clear();savedXrayPoints.clear();hiddenBoxFor=-1;ghostFor=-1;savedGroups=List.of();groupFolded.clear();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedBlocks.clear();savedIndex.clear();hoverWorld=0;}
+    static void clearSavedSelections(){savedSelections=List.of();savedById=Map.of();hierarchyVersion++;savedXray.clear();savedXrayPoints.clear();hiddenBlocks.clear();hiddenStates=null;hiddenBoxFor=-1;ghostFor=-1;savedGroups=List.of();groupFolded.clear();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedBlocks.clear();savedIndex.clear();hoverWorld=0;}
     public static int savedColor(int id){return savedColors.getOrDefault(id,options.selectionColor);}
     private static final Set<Integer> savedWithoutGuid=new HashSet<>();
     /** Whether a colour was chosen for it: every BuildObject is drawn in the selection colour until one is. */

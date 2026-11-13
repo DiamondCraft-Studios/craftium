@@ -400,6 +400,7 @@ public final class CraftiumClient implements ClientModInitializer {
         // While it is selected they are as strong as its outline, so that the shape of the whole BuildObject can be followed while it is dragged out of the ground
         // (the selection itself is only the blocks that are in the world, so that no tool can reach what is under the hidden ones); otherwise they are fainter.
         boolean dragged=TransformGizmo.draggingModel(); // the hidden blocks of what is selected are dragged with it, drawn below where they would land, not where they were
+        if(dragged!=hiddenWereDragged){if(dragged)ClientState.requestHiddenBlocks();else ClientState.clearHiddenBlocks();hiddenWereDragged=dragged;} // the blocks themselves are asked for when a drag begins, and let go of when it ends
         for(var saved:ClientState.savedSelections()){
             var xray=ClientState.xrayShape(saved.id());if(xray==null||!ClientState.xrayShown(saved))continue;
             boolean selected=ClientState.savedSelected(saved);
@@ -412,9 +413,32 @@ public final class CraftiumClient implements ClientModInitializer {
                 var landing=TransformGizmo.landingHidden(ghost.points()); // a rotate or scale: the cells they land in, as for the selection
                 if(landing!=null)landing.drawLiveThrough(Vec3.ZERO,ClientState.options.previewColor&0xffffff|0xe0000000,(float)ClientState.options.selectionWidth);
                 else ghost.shape().draw(Vec3.ZERO,TransformGizmo::hiddenLine,ClientState.options.previewColor,0,false,ClientState.options.selectionStyle,TransformGizmo::eyeInShape);
+                drawHiddenBlocks(landing!=null);
             }
         }
     }
+    private static boolean hiddenWereDragged;
+    /**
+     * The hidden blocks of what is selected as the blocks they are, where the drag would put them (the preview tint, like the blocks of the selection): a move shifts them by whole blocks,
+     * a rotate or a scale puts each in the cell the transform lands it in. Only once the server has sent them, and only when it sent all of them for a rotate or a scale.
+     */
+    private static void drawHiddenBlocks(boolean resampled){
+        var tint=ClientState.options.previewTint;
+        if(!resampled){
+            var by=TransformGizmo.moveDelta();if(by==null)return;
+            for(var held:ClientState.hiddenBlocksSelected())held.draw(by,false,false);
+            return;
+        }
+        var from=TransformGizmo.landingHiddenCells();var states=ClientState.hiddenBlockStates();if(from==null||states==null)return;
+        if(blocksFor!=from||blocksStates!=states){
+            var places=new java.util.ArrayList<net.minecraft.core.BlockPos>(from.size());var list=new java.util.ArrayList<net.minecraft.world.level.block.state.BlockState>(from.size());
+            for(var e:from.entrySet()){var state=states.get(e.getValue());if(state==null)continue;places.add(new net.minecraft.core.BlockPos(e.getKey().x(),e.getKey().y(),e.getKey().z()));list.add(state);}
+            blocksFor=from;blocksStates=states;landedPlaces=places;landedStates=list;
+        }
+        if(!landedStates.isEmpty())dev.craftium.client.compat.Overlay.cachedBlockStates(landedStates,landedPlaces,tint);
+    }
+    private static java.util.Map<dev.craftium.core.Point,dev.craftium.core.Point> blocksFor;private static java.util.Map<dev.craftium.core.Point,net.minecraft.world.level.block.state.BlockState> blocksStates;
+    private static List<net.minecraft.core.BlockPos> landedPlaces=List.of();private static List<net.minecraft.world.level.block.state.BlockState> landedStates=List.of();
     /** Every ruler: its line (or circle), its length, and a knob at each end. The end being dragged shows where it will land, and the length with it. */
     private static void drawRulers(EditorScreen screen){
         var o=ClientState.options;
