@@ -1417,12 +1417,18 @@ public final class EditorServer {
                             ? s.clipboardOrigin
                             : r.action().equals("paste") ? target.add(normal.x(), normal.y(), normal.z()) : target;
                     var placed = new LinkedHashSet<Point>();
+                    // A duplicate or a paste from the Hierarchy makes BuildObjects, which do not overwrite solid
+                    // blocks: they are placed after they exist (see ObjectMoves#settlePaste).
+                    boolean asObject =
+                            r.action().equals("paste_select") && o.pasteAsObject != null && !o.pasteAsObject.isBlank();
+                    var placedBlocks = new LinkedHashMap<Point, BlockSnapshot>();
                     for (var entry : s.clipboard.entrySet()) {
                         var relative = entry.getKey();
                         var value = entry.getValue();
                         if (!o.pasteAir && value.state().isAir()) continue;
                         Point at = origin.add(relative.x(), relative.y(), relative.z());
-                        plan.putClipboard(at, value);
+                        if (asObject) placedBlocks.put(at, value);
+                        else plan.putClipboard(at, value);
                         placed.add(at);
                     }
                     if (r.action().equals("paste_select")
@@ -1456,6 +1462,8 @@ public final class EditorServer {
                                         .isBlank()) { // a duplicate or a paste from the Hierarchy: the pasted blocks
                             // are also a new BuildObject, in the history with them
                             var hierarchyBefore = s.saved.state();
+                            var ownBeforePaste = s.saved.snapshot();
+                            var heldBeforePaste = s.saved.heldSnapshot();
                             var nodes = s.duplicateNodes;
                             var kept = new HashSet<Point>();
                             if (nodes != null) for (var n : nodes) kept.addAll(n.relative());
@@ -1474,6 +1482,30 @@ public final class EditorServer {
                                         .createFrom(o.pasteAsObject, placed, o.pasteAsObjectAfter)
                                         .id()); // the clipboard is not what was duplicated any more (turned, or
                             // something else was copied): one BuildObject
+                            ObjectMoves.Transformed settled;
+                            try {
+                                settled = ObjectMoves.settlePaste(
+                                        player.level(), s, plan, placedBlocks, ownBeforePaste, heldBeforePaste);
+                            } catch (RuntimeException ex) {
+                                s.saved.restore(hierarchyBefore, s.selection);
+                                s.saved.setPoints(ownBeforePaste);
+                                s.saved.restoreHeld(heldBeforePaste);
+                                throw ex;
+                            } // the new BuildObjects go again
+                            // The selection is the cells where a block was placed, not those where the world won, or
+                            // the next move would carry the world's blocks.
+                            s.selection.combine(settled.moved(), Selection.Mode.REPLACE);
+                            s.historySelection = new ArrayList<>(settled.moved());
+                            selected = new Session.SelectionChange(
+                                            before,
+                                            new ArrayList<>(settled.moved()),
+                                            null,
+                                            null,
+                                            handlesBefore,
+                                            Map.of("corners", "none"))
+                                    .withObjects(
+                                            ownBeforePaste, settled.applied().ownAfter())
+                                    .withHeld(heldBeforePaste, s.saved.heldSnapshot());
                             s.duplicateNodes = null;
                             s.saved.viewSet(shown, s.selection);
                             s.historyRevision = s.selection
