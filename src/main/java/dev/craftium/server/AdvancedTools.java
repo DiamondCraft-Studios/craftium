@@ -109,7 +109,7 @@ final class AdvancedTools {
         dev.craftium.core.FluidFlow.powder(new Cells(p){
             public void fluid(Point at,int level){}
             public void snow(Point at,int layers){}
-            public void pour(Point cell){p.put(cell,p.palette(BrushMath.hash(cell.x(),cell.y(),cell.z(),o.seed),cell));}
+            public void pour(Point cell){/* palette() dithers with the hash of the seed itself, so the position along the palette needs another one or the two agree and the first block always wins */p.put(cell,p.palette(BrushMath.hash(cell.x(),cell.y(),cell.z(),o.seed+0x9E3779B9L),cell));}
         },o,center.add(normal.x(),normal.y(),normal.z()));
     }
     private abstract static class Cells implements dev.craftium.core.FluidFlow.Cells{
