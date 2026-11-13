@@ -1812,7 +1812,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(index>=0){selectedNode=index;if(!toolActive)ClientState.selectedRuler=rulerOfNode(index);draggingNode=true;placementDragOrigin=points.get(index);placementDragX=event.x();placementDragY=event.y();return true;}
             if(!toolActive){var line=rulerAt(event.x(),event.y());if(line!=null){ClientState.selectedRuler=line;selectedNode=-1;TransformGizmo.cancel();return true;}} // no tool chosen: a click on a ruler picks it, without choosing the Ruler tool
         }
-        if(event.button()==0&&!toolActive&&!PlacementPreview.active()){objectPickHit=target();objectPickPending=objectPickHit!=null;objectPickX=event.x();objectPickY=event.y();} // resolved on release, if it was a click and not a drag
+        if(event.button()==0&&o().hoverBuildObjects&&!toolActive&&!PlacementPreview.active()){objectPickHit=target();objectPickPending=objectPickHit!=null;objectPickX=event.x();objectPickY=event.y();} // resolved on release, if it was a click and not a drag
         if(PlacementPreview.active()){
             if(event.button()==1){var hit=target();if(hit!=null){Point p=CraftiumClient.point(hit.getBlockPos()),n=CraftiumClient.normal(hit);PlacementPreview.origin=p.add(n.x(),n.y(),n.z());}return true;}
             if(event.button()==0&&pickPlacementAxis(event.x(),event.y())){draggingPlacement=true;placementDragOrigin=PlacementPreview.origin;placementDragX=event.x();placementDragY=event.y();return true;}
@@ -2193,6 +2193,9 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     private static final String[] PLUS={"....X....","....X....","....X....","....X....","XXXXXXXXX","....X....","....X....","....X....","....X...."};
     private static final String[] EYE={"..XXXXX..",".X.....X.","X..XXX..X",".X.....X.","..XXXXX.."};
     private static final String[] CURSOR={"X........","XX.......","XXX......","XXXX.....","XXXXX....","XXXXXX...","XXXXXXX..","XXXXX....","XX.XX....","X..XX....","...XXX...","....XX..."};
+    /** An isometric cube: filled for a BuildObject that holds blocks, outline only for one that holds none. */
+    private static final String[] CUBE_FILLED={"....XX....","..XXXXXX..","XXXXXXXXXX","XXXXXXXXXX","XXXXXXXXXX","XXXXXXXXXX","..XXXXXX..","....XX...."};
+    private static final String[] CUBE_OUTLINE={"....XX....","..XX..XX..","XX..XX..XX","X...XX...X","X...XX...X","XX..XX..XX","..XX..XX..","....XX...."};
     private static final String[] CROSS={"X.......X",".X.....X.","..X...X..","...X.X...","....X....","...X.X...","..X...X..",".X.....X.","X.......X"};
     /** A small picture drawn pixel by pixel from rows of X, centred on the given box. */
     private void glyph(Gfx g,int x,int y,int width,int height,String[] rows,int colour){
@@ -2274,7 +2277,8 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
                 continue;
             }
             var entry=shownRow.entry();int id=entry.id();
-            int indent=Math.min(depthOf(entry),6)*12,nameX=x+14+indent+12; // a level in is 12 further right; the arrow takes the first 12
+            int indent=Math.min(depthOf(entry),6)*12,nameX=x+14+indent+24; // a level in is 12 further right; the arrow takes the first 12 and the cube the next 12
+            glyph(g,x+14+indent+12,ry,12,rowHeight,entry.size()>0?CUBE_FILLED:CUBE_OUTLINE,entry.active()?TEXT:MUTED); // blocks of its own: a filled cube; none (a parent, or air): an outline
             if(entry.active())g.fill(x+9,ry,rowRight,ry+rowHeight,entry.editing()?0xff5b4a84:0xff315b84);
             else if(ClientState.hoverWorld==id)g.fill(x+9,ry,rowRight,ry+rowHeight,ClientState.savedColor(id)&0xffffff|0x66000000); // under the pointer in a viewport: tinted with the outline colour it has in the world
             if(renaming==id){
@@ -2504,6 +2508,14 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         minecraft.keyboardHandler.setClipboard(String.join("\n",lines));
         ClientState.notify(lines.size()==1?"Copied "+lines.getFirst():"Copied "+lines.size()+" paths");
     }
+    /** Deletes a group; one with BuildObjects in it asks first, since they all move to the group before it. */
+    private void deleteGroup(int groupId){
+        Runnable go=()->action("saved_selection:groupdelete:"+groupId);
+        int n=0;for(var e:hierarchyAll)if(groupIdOf(e)==groupId)n++;
+        if(n==0){go.run();return;}
+        var group=groupById(groupId);
+        confirm=new Confirm("Delete the group "+(group==null?"":"\""+shorten(group.name(),200)+"\" ")+"with "+n+(n==1?" BuildObject":" BuildObjects")+" in it?\nThey move to the group before it.","Delete group",go);
+    }
     /** The right-click menu of a group's heading. */
     private void openGroupMenu(int groupId,int x,int y){
         var group=groupById(groupId);if(group==null)return;
@@ -2516,7 +2528,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         items.add(item("Create new Group","",()->action("saved_selection:groupnew")));
         boolean folded=ClientState.groupFolded(groupId);
         items.add(item(folded?"Unfold":"Fold","",()->ClientState.toggleGroupFolded(groupId)));
-        if(groups.size()>1){items.add(divider());items.add(item("Delete group","",()->action("saved_selection:groupdelete:"+groupId)));} // what is in it goes to the group before
+        if(groups.size()>1){items.add(divider());items.add(item("Delete group","",()->deleteGroup(groupId)));} // what is in it goes to the group before
         rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=0;menu=ROW_MENU;openSub="";openSub2="";
     }
     /** The right-click menu of the empty space in the Hierarchy. */
