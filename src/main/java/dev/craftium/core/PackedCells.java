@@ -7,7 +7,8 @@ import java.util.function.BiConsumer;
  * Block states by world cell, kept packed: a cell is one {@code long} (the layout of a block position: 26 bits of x, 26 of z, 12 of y)
  * and its state is a 16-bit index into a palette of state texts, so a cell costs about 10 bytes where a {@link Point} costs about 36.
  * It holds the blocks of a BuildObject that are not in the world (dormant), and the world blocks an object wrote over, to give back.
- * A state is the block state as text, for example {@code minecraft:oak_stairs[facing=north]}. Not thread safe.
+ * A state is the block state as text, for example {@code minecraft:oak_stairs[facing=north]}. A cell with a block entity (a chest, a sign) also keeps its data
+ * as text (SNBT), so what a block holds is not lost while it is out of the world; few cells have any, so it is kept apart. Not thread safe.
  */
 public final class PackedCells {
     /** The most states one store can name. */
@@ -21,6 +22,7 @@ public final class PackedCells {
     private int size;
     private final List<String> palette = new ArrayList<>();
     private final Map<String, Integer> paletteIndex = new HashMap<>();
+    private final Map<Long, String> data = new HashMap<>();
 
     public PackedCells() {
         this(false);
@@ -58,22 +60,36 @@ public final class PackedCells {
         int i = indexOf(pack(cell));
         return i < 0 ? null : palette.get(values[i] - 1);
     }
+    /** The block entity data of a cell as text, or null when it has none (or is not here). */
+    public String data(Point cell) {
+        return data.get(pack(cell));
+    }
 
-    /** Sets a cell; a null or blank state removes it. Returns whether the store changed. */
+    /** Sets a cell with no block entity data; a null or blank state removes it. Returns whether the store changed. */
     public boolean put(Point cell, String state) {
+        return put(cell, state, null);
+    }
+
+    /** Sets a cell and the data of its block entity (null or blank for none); a null or blank state removes it. Returns whether the store changed. */
+    public boolean put(Point cell, String state, String blockData) {
         if (frozen) throw new UnsupportedOperationException("EMPTY is shared");
         if (state == null || state.isBlank()) return remove(cell);
         long key = pack(cell);
         int at = indexOf(key);
         int index = index(state) + 1;
+        String wanted = blockData == null || blockData.isBlank() ? null : blockData;
         if (at >= 0) {
-            if (values[at] == index) return false;
+            boolean same = values[at] == index && Objects.equals(data.get(key), wanted);
+            if (same) return false;
             values[at] = (char) index;
+            if (wanted == null) data.remove(key);
+            else data.put(key, wanted);
             return true;
         }
         if ((size + 1) * 4 > keys.length * 3) grow();
         insert(key, (char) index);
         size++;
+        if (wanted != null) data.put(key, wanted);
         return true;
     }
 
@@ -98,6 +114,7 @@ public final class PackedCells {
         }
         values[hole] = 0;
         size--;
+        data.remove(pack(cell));
         return true;
     }
 
@@ -121,6 +138,7 @@ public final class PackedCells {
         c.size = size;
         c.palette.addAll(palette);
         c.paletteIndex.putAll(paletteIndex);
+        c.data.putAll(data);
         return c;
     }
 
@@ -143,6 +161,18 @@ public final class PackedCells {
         return trimmed().indexes;
     }
 
+    /** The cells that have block entity data, sorted, and the data of each in the same order. */
+    public long[] dataKeysArray() {
+        var out = data.keySet().stream().mapToLong(Long::longValue).sorted().toArray();
+        return out;
+    }
+
+    public List<String> dataList() {
+        var out = new ArrayList<String>();
+        for (long k : dataKeysArray()) out.add(data.get(k));
+        return out;
+    }
+
     private record Trim(List<String> palette, int[] indexes) {}
 
     private Trim trimmed() {
@@ -163,6 +193,20 @@ public final class PackedCells {
             if (indexes[i] < 0 || indexes[i] >= palette.size())
                 throw new IllegalArgumentException("Bad state index " + indexes[i]);
             out.put(unpack(keys[i]), palette.get(indexes[i]));
+        }
+        return out;
+    }
+
+    /** As {@link #of(long[],List,int[])}, also with block entity data for some cells: {@code dataKeys} are packed cells that must be in {@code keys}. */
+    public static PackedCells of(
+            long[] keys, List<String> palette, int[] indexes, long[] dataKeys, List<String> dataTexts) {
+        var out = of(keys, palette, indexes);
+        if (dataKeys.length != dataTexts.size()) throw new IllegalArgumentException("Data and cells differ in number");
+        for (int i = 0; i < dataKeys.length; i++) {
+            var cell = unpack(dataKeys[i]);
+            var state = out.get(cell);
+            if (state == null) throw new IllegalArgumentException("Data for a cell that is not there");
+            out.put(cell, state, dataTexts.get(i));
         }
         return out;
     }
