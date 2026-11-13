@@ -176,6 +176,14 @@ public final class ClientState {
                 if (saved.color() != 0) savedColors.put(saved.id(), saved.color());
                 else savedColors.remove(saved.id());
             }
+            if (saved.hidden() == 0 || saved.hiddenData() != null)
+                hiddenBlocks.remove(
+                        saved.id()); // the cells changed, so the blocks held for a drag are not the right ones any more
+            if (saved.hiddenGhost() != null) {
+                if (saved.hiddenGhost().isEmpty()) hiddenBlocks.remove(saved.id());
+                else hiddenBlocks.put(saved.id(), GhostBlocks.parse(saved.hiddenGhost()));
+                ghostFor = -1;
+            }
             if (saved.hidden() == 0) {
                 savedXray.remove(saved.id());
                 savedXrayPoints.remove(saved.id());
@@ -203,6 +211,7 @@ public final class ClientState {
         savedBlocks.keySet().retainAll(savedShapes.keySet());
         savedXray.keySet().retainAll(present);
         savedXrayPoints.keySet().retainAll(present);
+        hiddenBlocks.keySet().retainAll(present);
         hiddenBoxFor = -1;
         ghostFor = -1;
         // an older server sends no GUID, so there is nothing to keep an eye by: a BuildObject seen for the first time
@@ -239,6 +248,43 @@ public final class ClientState {
     private static final Map<Integer, OutlineShape> savedXray = new HashMap<>();
 
     private static final Map<Integer, List<dev.craftium.core.Point>> savedXrayPoints = new HashMap<>();
+    /** The hidden blocks of each BuildObject with their block states, held only while one is dragged, to draw them as the blocks they are. */
+    private static final Map<Integer, GhostBlocks> hiddenBlocks = new HashMap<>();
+
+    private static Map<dev.craftium.core.Point, net.minecraft.world.level.block.state.BlockState> hiddenStates;
+    /** Asks the server for the hidden blocks of what is selected, with their states: sent when a drag begins. */
+    static void requestHiddenBlocks() {
+        if (hiddenGhost() != null) CraftiumClient.send("saved_selection:hiddenghost", null, null);
+    }
+    /** Lets go of them when the drag is over. */
+    static void clearHiddenBlocks() {
+        hiddenBlocks.clear();
+        hiddenStates = null;
+    }
+    /** The hidden blocks of what is selected, each with its state, or null while they have not arrived or are too many to carry exactly. */
+    static Map<dev.craftium.core.Point, net.minecraft.world.level.block.state.BlockState> hiddenBlockStates() {
+        if (hiddenStates != null) return hiddenStates;
+        var out = new HashMap<dev.craftium.core.Point, net.minecraft.world.level.block.state.BlockState>();
+        for (var e : savedSelections) {
+            if (!savedSelected(e)) continue;
+            var held = hiddenBlocks.get(e.id());
+            if (held == null) continue;
+            var placed = held.placed();
+            if (placed == null) return null; // more than were sent: not exact
+            out.putAll(placed);
+        }
+        return out.isEmpty() ? null : (hiddenStates = out);
+    }
+    /** The hidden blocks that have arrived, to draw by an offset. */
+    static List<GhostBlocks> hiddenBlocksSelected() {
+        var out = new ArrayList<GhostBlocks>();
+        for (var e : savedSelections)
+            if (savedSelected(e)) {
+                var held = hiddenBlocks.get(e.id());
+                if (held != null) out.add(held);
+            }
+        return out;
+    }
 
     static OutlineShape xrayShape(int id) {
         return savedXray.get(id);
@@ -479,6 +525,8 @@ public final class ClientState {
         hierarchyVersion++;
         savedXray.clear();
         savedXrayPoints.clear();
+        hiddenBlocks.clear();
+        hiddenStates = null;
         hiddenBoxFor = -1;
         ghostFor = -1;
         savedGroups = List.of();

@@ -696,6 +696,7 @@ final class TransformGizmo {
         List<Point> from;
         Vec3 delta, angles, size, about;
         OutlineShape shape;
+        Map<Point, Point> cells;
     }
 
     private static final LandingCache SELECTED_LANDING = new LandingCache(), HIDDEN_LANDING = new LandingCache();
@@ -727,7 +728,7 @@ final class TransformGizmo {
             cache.angles = angles;
             cache.size = size;
             cache.about = about;
-            var cells = VoxelTransform.landed(
+            var cells = VoxelTransform.landedFrom(
                     selected,
                     new Geometry.Vector(about.x, about.y, about.z),
                     angles.y,
@@ -740,9 +741,14 @@ final class TransformGizmo {
                     (int) Math.round(delta.y),
                     (int) Math.round(delta.z),
                     LANDING_CELLS);
-            cache.shape = cells == null || cells.isEmpty() ? null : OutlineShape.of(cells);
+            cache.cells = cells == null || cells.isEmpty() ? null : cells;
+            cache.shape = cache.cells == null ? null : OutlineShape.of(cache.cells.keySet());
         }
         return cache.shape;
+    }
+    /** For each cell the hidden blocks land in with a rotate or scale drag as it stands, the cell its block came from; as {@link #landingHidden}, which has to be asked first. */
+    static Map<Point, Point> landingHiddenCells() {
+        return HIDDEN_LANDING.cells;
     }
     /** Whether the selected blocks (and what a BuildObject keeps hidden with them) are being dragged by the gizmo. */
     static boolean draggingModel() {
