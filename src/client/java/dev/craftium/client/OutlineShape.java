@@ -32,12 +32,17 @@ final class OutlineShape {
     // cost of a big shape, and a shape that is drawn where it is never changes. A shape drawn moved by something still works them out each time.
     private Vec3[] creaseEnds;
     private Vec3[][] quads;
+    /** The blocks the shape was made from, kept to tell which edges the shape itself hides from the camera; null for a box, which hides none of its own. */
+    private Collection<Point> cells;
+    private Set<Point> cellSet;
 
     private OutlineShape(SelectionOutline.Result outline,AABB bounds){this.outline=outline;this.bounds=bounds;}
 
     static OutlineShape of(Collection<Point> points){
         if(points.isEmpty())return EMPTY;
-        return new OutlineShape(SelectionOutline.of(points),boundsOf(points));
+        var shape=new OutlineShape(SelectionOutline.of(points),boundsOf(points));
+        shape.cells=points;
+        return shape;
     }
     private static AABB boundsOf(Collection<Point> points){
         AABB bounds=null;
@@ -55,7 +60,7 @@ final class OutlineShape {
     static OutlineShape ofLater(Collection<Point> points){
         if(points.size()<=LATER_FROM)return of(points);
         var shape=new OutlineShape(SelectionOutline.Result.EMPTY,boundsOf(points));
-        shape.ready=false;
+        shape.ready=false;shape.cells=points;
         LATER.execute(()->{shape.outline=SelectionOutline.of(points);shape.ready=true;});
         return shape;
     }
@@ -166,15 +171,59 @@ final class OutlineShape {
         boolean skipFar=!eyeInside(eye.subtract(at));
         boolean here=at.equals(Vec3.ZERO);
         Vec3[] ready=creaseEnds();
+        boolean[] hidden=skipFar?hiddenByShape(eye.subtract(at)):null;
         int index=0;
         for(var crease:outline.creases()){
             var s=crease.segment();int k=index++;
             if(skipFar){
                 double mx=(s.x0()+s.x1())/2d+at.x,my=(s.y0()+s.y1())/2d+at.y,mz=(s.z0()+s.z1())/2d+at.z;
                 if(!towards(crease.normalA(),eye,mx,my,mz)&&!towards(crease.normalB(),eye,mx,my,mz))continue;
+                if(hidden!=null&&hidden[k])continue;
             }
             if(here)lines.line(ready[k*2],ready[k*2+1]);
             else lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
+        }
+    }
+    /** The most work, in blocks looked through, spent on finding which edges the shape hides from itself; a bigger shape keeps to the faces-away test alone. */
+    private static final int OCCLUSION_BUDGET=150_000;
+    private boolean[] hiddenArray;private Vec3 hiddenEye;private SelectionOutline.Result hiddenFor;
+    /**
+     * For each crease, whether the shape's own blocks lie between it and the camera, so that it is behind the shape. The faces-away test misses these on a
+     * curved shape, where an edge on the far side can still border a face that points up toward the camera. Null when the shape is too big to look through
+     * every frame. Worked out again only when the camera moves.
+     */
+    private boolean[] hiddenByShape(Vec3 eye){
+        var creases=outline.creases();
+        if(cells==null||bounds==null||creases.isEmpty())return null;
+        double reach=bounds.getXsize()+bounds.getYsize()+bounds.getZsize();
+        if((double)creases.size()*reach>OCCLUSION_BUDGET)return null;
+        if(hiddenArray!=null&&hiddenFor==outline&&hiddenEye.distanceToSqr(eye)<1e-8)return hiddenArray;
+        if(cellSet==null)cellSet=cells instanceof Set<Point> set?set:new HashSet<>(cells);
+        var result=new boolean[creases.size()];int i=0;
+        for(var crease:creases){
+            var s=crease.segment();
+            result[i++]=blocked(eye,(s.x0()+s.x1())/2d,(s.y0()+s.y1())/2d,(s.z0()+s.z1())/2d);
+        }
+        hiddenArray=result;hiddenEye=eye;hiddenFor=outline;
+        return result;
+    }
+    /** Whether a block of the shape lies on the line from just in front of the point to the eye (all in the shape's own coordinates). */
+    private boolean blocked(Vec3 eye,double px,double py,double pz){
+        double dx=eye.x-px,dy=eye.y-py,dz=eye.z-pz,length=Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(length<1e-6)return false;
+        double nudge=.02/length;double x=px+dx*nudge,y=py+dy*nudge,z=pz+dz*nudge;
+        int cx=(int)Math.floor(x),cy=(int)Math.floor(y),cz=(int)Math.floor(z);
+        int sx=dx>0?1:-1,sy=dy>0?1:-1,sz=dz>0?1:-1;
+        double ax=Math.abs(dx),ay=Math.abs(dy),az=Math.abs(dz);
+        double tx=ax==0?Double.POSITIVE_INFINITY:(dx>0?cx+1-x:x-cx)/ax,ty=ay==0?Double.POSITIVE_INFINITY:(dy>0?cy+1-y:y-cy)/ay,tz=az==0?Double.POSITIVE_INFINITY:(dz>0?cz+1-z:z-cz)/az;
+        double ux=ax==0?Double.POSITIVE_INFINITY:1/ax,uy=ay==0?Double.POSITIVE_INFINITY:1/ay,uz=az==0?Double.POSITIVE_INFINITY:1/az;
+        // The cell the line starts in is not looked at: the point lies on the shape's surface, so its own cell is where the line starts, not what is in its way.
+        while(true){
+            double t=Math.min(tx,Math.min(ty,tz));
+            if(t>=1)return false; // reached the eye
+            if(tx==t){cx+=sx;tx+=ux;}else if(ty==t){cy+=sy;ty+=uy;}else{cz+=sz;tz+=uz;}
+            if(cx<bounds.minX-1||cx>bounds.maxX||cy<bounds.minY-1||cy>bounds.maxY||cz<bounds.minZ-1||cz>bounds.maxZ)return false; // left the shape's box, never to come back
+            if(cellSet.contains(new Point(cx,cy,cz)))return true;
         }
     }
     private Vec3[] creaseEnds(){var ends=creaseEnds;if(ends==null)creaseEnds=ends=ends(outline.creases().stream().map(SelectionOutline.Crease::segment).toList());return ends;}
@@ -326,7 +375,8 @@ final class OutlineShape {
     /** The box round a shape too detailed to draw, filled; with {@code scene} depth-tested like the rest of the shape, so blocks in front of it hide it. */
     private static void sceneBox(AABB box,int stroke,int fill,boolean scene){
         if(!scene){Overlay.box(box,stroke,1,fill);return;}
-        for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)Overlay.sceneLine(corner(box,i),corner(box,i|bit),stroke,1);
+        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
+        for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0&&!farEdge(box,i,bit,eye))Overlay.sceneLine(corner(box,i),corner(box,i|bit),stroke,1);
         if((fill>>>24)==0)return;
         for(int axis=0;axis<3;axis++){int u=(axis+1)%3,v=(axis+2)%3;
             for(int side=0;side<2;side++){Vec3[] c=new Vec3[4];int[][] ring={{0,0},{1,0},{1,1},{0,1}};
@@ -334,7 +384,19 @@ final class OutlineShape {
                 if(side==0)Overlay.sceneFace(c[3],c[2],c[1],c[0],fill);else Overlay.sceneFace(c[0],c[1],c[2],c[3],fill);}}
     }
     private static void boxLines(AABB box,Lines lines){
-        for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)lines.line(corner(box,i),corner(box,i|bit));
+        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
+        for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0&&!farEdge(box,i,bit,eye))lines.line(corner(box,i),corner(box,i|bit));
+    }
+    /** Whether the box edge from corner {@code i} along {@code bit} lies on the far side of the box: neither of its two faces points toward the eye, which is outside the box. */
+    private static boolean farEdge(AABB box,int i,int bit,Vec3 eye){
+        if(box.contains(eye))return false;
+        Vec3 c=corner(box,i);double[] e={eye.x,eye.y,eye.z},p={c.x,c.y,c.z};
+        for(int axis=0;axis<3;axis++){
+            int b=1<<axis;if(b==bit)continue;
+            double sign=(i&b)==0?-1:1;
+            if(sign*(e[axis]-p[axis])>0)return false;
+        }
+        return true;
     }
     private static Vec3 corner(AABB box,int i){return new Vec3((i&1)==0?box.minX:box.maxX,(i&2)==0?box.minY:box.maxY,(i&4)==0?box.minZ:box.maxZ);}
 

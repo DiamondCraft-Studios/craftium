@@ -1,6 +1,5 @@
 package dev.craftium.client;
 
-import dev.craftium.client.compat.Overlay;
 import dev.craftium.core.BrushMath;
 import dev.craftium.core.Options;
 import dev.craftium.core.Point;
@@ -31,11 +30,28 @@ public final class BrushPreview {
 
     public static void draw(Minecraft mc,BlockPos at,Options o){
         if(mc.level==null)return;
-        var now=List.<Object>of(o.tool.brushUse(),o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.polygonSeed,o.starInner,o.outline,o.sizeX,o.sizeY,o.sizeZ,at,shownBlocks>Selection.LIMIT?0:mc.level.getGameTime()/20); // a huge brush is not worked out again every second
+        var now=List.<Object>of(o.tool.brushUse(),o.shape,o.radius,o.hollow,o.outlineThickness,o.pixelPerfect,o.strokeAlign,o.polygonSides,o.polygonSeed,o.starInner,o.outline,o.surfaceOnly,o.inSelection,List.of(o.mask,List.copyOf(o.maskActive),o.maskExclude,o.maskOff,o.maskExpression,o.minY,o.maxY),o.sizeX,o.sizeY,o.sizeZ,at,shownBlocks>Selection.LIMIT?0:mc.level.getGameTime()/20); // a huge brush is not worked out again every second
         if(!now.equals(key)){key=now;rebuild(mc,at,o);}
-        if(tooLarge){Overlay.box(new AABB(at).inflate(o.radius),o.hoverColor,1.5f,0);return;} // too large to work out: the box it fits in
+        if(tooLarge){ // too large to work out: the box it fits in, as a selection's edges are drawn
+            var box=new AABB(at).inflate(o.radius);
+            OutlineShape.box(new Point((int)Math.floor(box.minX),(int)Math.floor(box.minY),(int)Math.floor(box.minZ)),new Point((int)Math.ceil(box.maxX),(int)Math.ceil(box.maxY),(int)Math.ceil(box.maxZ))).drawPlain(Vec3.ZERO,o.hoverColor,(float)o.selectionWidth,0,false,true);
+            return;
+        }
         int fill=o.hoverColor&0xffffff|SceneShape.FACE_ALPHA;
         shape.draw(fill,o.hoverColor,(float)o.selectionWidth,0); // dim faces on the ground, the selection's silhouette in the air
+    }
+
+    /** The blocks of {@code cells} that the Surface Painter would paint, as the server picks them: solid blocks, only those touching a non-solid block when Surface only is on, only inside the selection when the tool is restricted to it, and those the masks let through. */
+    private static List<Point> paintable(net.minecraft.world.level.Level level,List<Point> cells,Options o){
+        var found=new ArrayList<Point>();var mask=new PaintMask(level,o);
+        for(Point p:cells){
+            if(!mask.solid(p))continue;
+            if(o.inSelection&&!SelectionOverlay.contains(new BlockPos(p.x(),p.y(),p.z())))continue;
+            if(o.surfaceOnly&&mask.allSolidAround(p))continue;
+            if(!mask.allows(p))continue;
+            found.add(p);
+        }
+        return found;
     }
 
     private static void rebuild(Minecraft mc,BlockPos at,Options o){
@@ -59,9 +75,10 @@ public final class BrushPreview {
         }
         catch(IllegalArgumentException e){tooLarge=true;shownBlocks=MAX_BLOCKS;return;}
         shownBlocks=relative.size();
-        var absolute=new ArrayList<Point>(relative.size());
+        List<Point> absolute=new ArrayList<>(relative.size());
         for(Point r:relative)absolute.add(new Point(at.getX()+r.x(),at.getY()+r.y(),at.getZ()+r.z()));
-        shape=SceneShape.of(mc.level,absolute);
+        if(o.tool==dev.craftium.core.Tool.PAINTER||o.tool==dev.craftium.core.Tool.NOISE_PAINTER)absolute=paintable(mc.level,absolute,o); // only what the Surface (Noise) Painter would paint
+        shape=SceneShape.of(mc.level,absolute,true); // outlined all round like a selection, solid blocks too
         tooLarge=shape.tooLarge();
     }
 }
