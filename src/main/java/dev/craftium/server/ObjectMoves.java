@@ -5,6 +5,7 @@ import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -63,9 +64,16 @@ final class ObjectMoves {
 
     /** Queues what the move decided and sets the BuildObjects as they are afterwards; {@code ownStart} and {@code heldStart} are what undo goes back to. Nothing is left changed if it throws. */
     private static Applied commit(Session s,EditPlanner plan,ObjectMove.Result result,Map<Integer,List<Point>> ownStart,Map<Integer,SavedSelections.Held> heldStart){
+        // A block that can hold water is waterlogged where it covers water, as it is when built there: the water it replaced is given back when it leaves.
+        var wet=new HashSet<Point>();
+        for(var o:result.objects().values())for(var c:o.own())if(ObjectMove.isWater(o.replaced().get(c)))wet.add(c);
         for(var e:result.writes().entrySet()){
             plan.validate(e.getKey());
-            plan.put(e.getKey(),snapshot(plan,e.getValue()));
+            var written=snapshot(plan,e.getValue());
+            var state=written.state();
+            if(wet.contains(e.getKey())&&state.hasProperty(BlockStateProperties.WATERLOGGED)&&!state.getValue(BlockStateProperties.WATERLOGGED))
+                written=new BlockSnapshot(state.setValue(BlockStateProperties.WATERLOGGED,true),written.data());
+            plan.put(e.getKey(),written);
         }
         var ownAfter=new LinkedHashMap<Integer,List<Point>>();
         for(var o:result.objects().values())ownAfter.put(o.id(),List.copyOf(o.own()));
