@@ -13,7 +13,7 @@ import java.util.*;
  */
 public final class SavedSelections {
     /** The most selections one player may save. */
-    public static final int MAX=64;
+    public static final int MAX=1024;
     /**
      * A group of the Hierarchy: a named, ordered heading that the BuildObjects at the top level sit under. Groups are not nested, and a BuildObject inside another is in the
      * group of the one at the top. There is always at least one, "New Group", and everything starts in it.

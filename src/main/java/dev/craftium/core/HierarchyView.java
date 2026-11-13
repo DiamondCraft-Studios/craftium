@@ -9,7 +9,7 @@ import java.util.*;
  * The newest {@link #MAX} choices are kept, so a player who makes thousands of BuildObjects does not grow the file for ever.
  */
 public final class HierarchyView {
-    public static final int MAX=2000;
+    public static final int MAX=4000;
     /** GUID to whether its eye is closed. A GUID that is not here has not been seen: it starts closed. */
     private final LinkedHashMap<String,Boolean> eyes=new LinkedHashMap<>();
     private final LinkedHashSet<String> folds=new LinkedHashSet<>();
