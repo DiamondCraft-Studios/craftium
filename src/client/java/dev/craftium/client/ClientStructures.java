@@ -25,6 +25,7 @@ final class ClientStructures {
     static StructurePreview preview;
     static int previews;
     private static Path pending;private static String pendingName="";private static long pendingUntil;
+    private static final Map<String,Integer> colours=new HashMap<>();
     private ClientStructures(){}
 
     static void receivePreview(Packets.Download download){
@@ -148,5 +149,19 @@ final class ClientStructures {
             }catch(Exception e){Minecraft.getInstance().execute(()->ClientState.notify(e.getMessage()==null?"Could not import the structure":e.getMessage()));}
         },"Craftium structure import");
         thread.setDaemon(true);thread.start();
+    }
+
+    /** A block's colour in the preview: the average of its textures when known, otherwise its map colour. */
+    static int colour(String id){
+        return colours.computeIfAbsent(id,key->{
+            var entry=BlockColours.get(key);if(entry!=null)return 0xff000000|entry.rgb();
+            var block=BuiltInRegistries.BLOCK.getValue(dev.craftium.compat.Compat.parse(key));
+            return 0xff000000|block.defaultMapColor().col;
+        });
+    }
+    static int[] colours(StructurePreview preview){
+        BlockColours.build();var result=new int[preview.palette().size()];
+        for(int i=0;i<result.length;i++)result[i]=colour(preview.palette().get(i).name());
+        return result;
     }
 }
