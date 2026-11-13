@@ -118,6 +118,27 @@ final class ObjectMoves {
         }catch(RuntimeException ex){s.saved.setPoints(ownStart);s.saved.restoreHeld(heldStart);throw ex;}
     }
 
+    /**
+     * Places the blocks of a paste for the BuildObjects it just made, with the world winning (see {@link ObjectMove#place}). Making them claimed their cells from whatever held
+     * them; {@code ownBefore} and {@code heldBefore} are what the BuildObjects that were already there held before the paste, which they get back so that a block that has to give
+     * way is kept by its object, not lost. Nothing is left changed if it throws, except that the new BuildObjects still exist: the caller takes those back.
+     * {@code blocks} is each pasted cell's block.
+     */
+    static Transformed settlePaste(ServerLevel level,Session s,EditPlanner plan,Map<Point,BlockSnapshot> blocks,Map<Integer,List<Point>> ownBefore,Map<Integer,SavedSelections.Held> heldBefore){
+        var fresh=new LinkedHashMap<Integer,List<Point>>();
+        for(var e:s.saved.entries())if(!ownBefore.containsKey(e.id()))fresh.put(e.id(),e.points());
+        s.saved.setPoints(ownBefore);
+        var ordered=new ArrayList<ObjectMove.Obj>();
+        for(var e:s.saved.entries())ordered.add(new ObjectMove.Obj(e.id(),fresh.containsKey(e.id())?new HashSet<>():new HashSet<>(e.points()),e.dormant(),e.replaced()));
+        var placements=new ArrayList<ObjectMove.Placement>();
+        for(var e:fresh.entrySet())for(var p:e.getValue()){var b=blocks.get(p);if(b!=null)placements.add(new ObjectMove.Placement(e.getKey(),p,block(b)));}
+        var solidCache=new HashMap<String,Boolean>();
+        Predicate<String> solid=text->solidCache.computeIfAbsent(text,t->beats(plan.parse(t)));
+        Function<Point,ObjectMove.Block> world=p->{var staged=plan.changes.get(p);return block(staged!=null?staged.after():BlockSnapshot.capture(level,EditPlanner.pos(p)));};
+        var result=ObjectMove.place(ordered,placements,world,solid);
+        return new Transformed(commit(s,plan,result,ownBefore,heldBefore),result.landed());
+    }
+
     private static ObjectMove.Block block(BlockSnapshot snapshot){
         return new ObjectMove.Block(BlockStateParser.serialize(snapshot.state()),snapshot.data()==null?null:snapshot.data().toString());
     }
