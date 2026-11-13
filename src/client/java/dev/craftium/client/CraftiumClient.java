@@ -49,6 +49,7 @@ public final class CraftiumClient implements ClientModInitializer {
             var spec=tool.spec();
             toolKeys.put(tool,ClientCompat.registerKey(new KeyMapping("key.craftium.tool."+spec.path(),InputConstants.Type.KEYSYM,spec.defaultKey(),category)));
         }
+        ClientPlayNetworking.registerGlobalReceiver(Packets.MissingBlocks.TYPE,(payload,context)->context.client().execute(()->ClientState.setMissingBlocks(payload.ids())));
         ClientPlayNetworking.registerGlobalReceiver(Packets.Report.TYPE,(payload,context)->context.client().execute(()->ClientCompat.setScreen(context.client(),new ReportScreen(ClientCompat.screen(context.client()),payload.text()))));
         ClientPlayNetworking.registerGlobalReceiver(Packets.AiReply.TYPE,(payload,context)->AiBridge.dataReceived(payload.json()));
         ClientPlayNetworking.registerGlobalReceiver(Packets.Hello.TYPE,(payload,context)->context.client().execute(()->ClientHandshake.receive(payload.json(),false)));
@@ -57,7 +58,7 @@ public final class CraftiumClient implements ClientModInitializer {
         }));
         ClientPlayConnectionEvents.DISCONNECT.register((handler,client)-> {
             ClientState.status=new Packets.Status("Disconnected",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);
-            ClientState.save();resetEditor();ClientState.clearPluginTools();ClientState.clearSavedSelections();placementSynced="";
+            ClientState.missingBlocks=List.of();ClientState.save();resetEditor();ClientState.clearPluginTools();ClientState.clearSavedSelections();placementSynced="";
             ClientCommands.reset();ClientHandshake.disconnected();
             ClientAssets.clear();bridge.clear();BlockSearch.clear(); // another world may have other data packs, so its tags and tabs are looked up again
             PlacementPreview.update("");
