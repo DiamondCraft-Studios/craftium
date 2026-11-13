@@ -58,6 +58,7 @@ Changes since 1.5.0-beta.1.
 ### Missing blocks
 - A block that no installed mod provides (a mod you removed, a build from another modpack) is no longer turned into air when its chunk loads or when a blueprint, structure or schematic is pasted. It becomes a Missing Block that remembers the block it stood for, with its properties and any block entity data it had.
 - /craftium missing list shows what the world is missing and how many of each are in your selection; /craftium missing replace <number> <block> swaps one for any block you choose, as an edit you can undo. The numbers are kept in craftium/missing-blocks.txt in the world folder, which only ever grows.
+- The editor tools work on them: the Magic Wand, Paint Bucket and dropping a block in the world treat Missing Blocks for different original blocks as different blocks, even when they touch (in every select type but Any). Pick one with the pipette or the middle button to add its original block to the block mask, then Fill, Replace or the brushes change only those blocks. A mask entry may also be typed as the original id, like othermod:marble.
 - Saving a blueprint, structure or schematic writes a Missing Block back out under its original name, so the file stays portable.
 - Chunks that were loaded and saved without Craftium before this version already turned their missing blocks into air, and those cannot be recovered.
 - A world saved with Missing Blocks needs Craftium to be installed when it is opened again: without it, they are air as before.
