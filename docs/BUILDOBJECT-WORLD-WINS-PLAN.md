@@ -56,17 +56,20 @@ Known follow-ups: the whole tree is re-sent to each editor when it changes (abou
 
 ## Status
 
-Done, with tests (756 pass on 26.2; both versions and Paper 26.2 compile; rebased on main 2026-11-13):
+Done, with tests (765 pass on 26.2; both versions, their game-test sources and Paper 26.2 compile; rebased on main 2026-11-13; pushed to origin as `feat/buildobject-world-wins` up to the waterlogging commit):
 - the BuildObject limit of 1,024; `ObjectVolume`; `OccupancyResolver`;
 - `PackedCells` (packed store, with block entity data), dormant and replaced cells on each BuildObject with caps, saved with the world;
-- `ObjectMove`: the pure move and placement with the world winning (dormant, replaced, priority, resampling, block entity data);
+- `ObjectMove`: the pure move and placement with the world winning (dormant, replaced, priority, resampling, block entity data, waterlogging, carried objects);
 - undo and redo carry the dormant and replaced stores (`SelectionChange`), and saved history keeps them;
-- **wired into the editor (not yet run in the game):** the Edit > Move action (`move`), the transform path (`selection_transform`: the Move, Rotate and Scale tools and the gizmo) including the staged preview, Enter and cancel, Duplicate and paste of BuildObjects (`paste_select` with `pasteAsObject`), and **Place here** in the Hierarchy menu (`saved_selection:placehere:<ids>`, permission "edit");
+- **wired into the editor (not yet run in the game):** the Edit > Move action, the transform path (the Move, Rotate and Scale tools and the gizmo) including the staged preview, Enter and cancel, Duplicate and paste of BuildObjects, and **Place here** in the Hierarchy menu;
+- findings from the first test (2026-11-13): waterlogging where a block covers water (done); a fully buried BuildObject could not be selected (done: x-ray of the hidden blocks, an amber marker and a count on its Hierarchy row, and the gizmo works on the box of its hidden blocks while nothing is selected);
 - changelog entries.
 
-Not built: the x-ray preview of dormant cells, a gametest, the Hierarchy scroll check at hundreds of rows, a count of hidden blocks in the Hierarchy row, plain paste/clone/stack of non-object blocks (they overwrite by design).
+How a fully hidden BuildObject is moved: the status carries, for each Hierarchy row, a count of hidden blocks, the blocks themselves (up to 262,144, as x-ray) and the box around them, all additive. With nothing selected, the client takes the gizmo box from the rows that are shown and hold nothing in the world, and the server's transform works from that box and treats those BuildObjects as carried: their hidden blocks go through the same steps as a selection. The live selection stays empty, so no other tool can reach the terrain under the hidden blocks. An edit that changes only what BuildObjects keep hidden is kept in the history.
 
-Known costs to measure in the game: every transform request builds the whole BuildObject tree for `ObjectMove`, which may be slow per drag tick with very many or very large objects; an optimisation is to include only the objects that matter. The staged preview does not show which cells went dormant until the x-ray exists, so a buried part simply looks missing.
+Not built: the Edit > Move offset action for a fully hidden object (use the gizmo), a gametest, the Hierarchy scroll check at hundreds of rows, plain paste/clone/stack of non-object blocks (they overwrite by design).
+
+Known costs to measure in the game: every transform request builds the whole BuildObject tree for `ObjectMove`, which may be slow per drag tick with very many or very large objects; an optimisation is to include only the objects that matter.
 
 ### What wiring it in involves (found while reading the edit path)
 - The Move, nudge and Transform actions work on selected *world* cells and the objects follow through `ObjectRemap`. A dormant block is not in the world, so those tools cannot carry it on their own.
