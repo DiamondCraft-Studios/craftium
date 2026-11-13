@@ -482,4 +482,11 @@ class SavedSelectionsTest {
         assertFalse(saved.restoreHeld(Map.of(999,after.get(one.id()))),"an id that is gone is skipped");
         dormant.put(D,"minecraft:dirt");assertEquals(1,saved.byId(one.id()).dormant().size(),"the snapshot is not changed by the caller's store");
     }
+    @Test void aBuildObjectAndEverythingUnderItAreFoundByIdAndAGoneIdIsSkipped(){
+        var saved=new SavedSelections();var parent=saved.create(live(A));var child=saved.create(live(B));var other=saved.create(live(C));
+        saved.place(child.id(),parent.id(),0);
+        assertEquals(List.of(parent.id(),child.id()),List.copyOf(saved.withDescendants(List.of(parent.id()))));
+        assertEquals(List.of(child.id()),List.copyOf(saved.withDescendants(List.of(child.id(),999))));
+        assertEquals(java.util.Set.of(parent.id(),child.id(),other.id()),saved.withDescendants(List.of(other.id(),parent.id())));
+    }
 }

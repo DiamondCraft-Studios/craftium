@@ -285,6 +285,12 @@ public final class SavedSelections {
         return changed;
     }
     /** The blocks of the BuildObject and of everything under it: what looking at it shows. */
+    /** The ids of these BuildObjects and of everything under them (an id that is gone is skipped). */
+    public Set<Integer> withDescendants(Collection<Integer> ids){
+        var out=new LinkedHashSet<Integer>();
+        for(var id:ids){var e=byId(id);if(e!=null)for(var x:subtree(e))out.add(x.id);}
+        return out;
+    }
     public Set<Point> effective(Entry entry){var out=new LinkedHashSet<Point>();for(var e:subtree(entry))out.addAll(e.points);return out;}
     public Entry active(){return active;}
     public boolean editing(){return editing&&active!=null&&viewed.size()==1;}
