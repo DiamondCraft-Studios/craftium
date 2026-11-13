@@ -176,11 +176,19 @@ public final class ClientState {
                 if (saved.color() != 0) savedColors.put(saved.id(), saved.color());
                 else savedColors.remove(saved.id());
             }
-            if (saved.hidden() == 0) savedXray.remove(saved.id());
-            else if (saved.hiddenData() != null) { // null: unchanged, and the x-ray made for it is still right
-                if (saved.hiddenData().isEmpty())
-                    savedXray.remove(saved.id()); // too many to draw, or left out because the status was too big
-                else savedXray.put(saved.id(), OutlineShape.ofLater(SelectionCodec.decode(saved.hiddenData())));
+            if (saved.hidden() == 0) {
+                savedXray.remove(saved.id());
+                savedXrayPoints.remove(saved.id());
+            } else if (saved.hiddenData() != null) { // null: unchanged, and the x-ray made for it is still right
+                if (saved.hiddenData().isEmpty()) {
+                    savedXray.remove(saved.id());
+                    savedXrayPoints.remove(saved.id());
+                } // too many to draw, or left out because the status was too big
+                else {
+                    var cells = SelectionCodec.decode(saved.hiddenData());
+                    savedXrayPoints.put(saved.id(), List.copyOf(cells));
+                    savedXray.put(saved.id(), OutlineShape.ofLater(cells));
+                }
             }
             if (saved.data() == null) continue; // unchanged: the outline already made for it is still right
             if (saved.data().isEmpty())
@@ -194,7 +202,9 @@ public final class ClientState {
         savedShapes.keySet().retainAll(present);
         savedBlocks.keySet().retainAll(savedShapes.keySet());
         savedXray.keySet().retainAll(present);
+        savedXrayPoints.keySet().retainAll(present);
         hiddenBoxFor = -1;
+        ghostFor = -1;
         // an older server sends no GUID, so there is nothing to keep an eye by: a BuildObject seen for the first time
         // starts closed
         for (var saved : savedSelections)
@@ -228,8 +238,30 @@ public final class ClientState {
     /** The blocks each BuildObject keeps out of the world, drawn as an x-ray so they can be seen inside what hides them. */
     private static final Map<Integer, OutlineShape> savedXray = new HashMap<>();
 
+    private static final Map<Integer, List<dev.craftium.core.Point>> savedXrayPoints = new HashMap<>();
+
     static OutlineShape xrayShape(int id) {
         return savedXray.get(id);
+    }
+
+    /**
+     * The hidden blocks of every BuildObject that is selected, as one client-side shape for the drag preview. It is never part of the selection, which holds only blocks
+     * that are in the world: it exists to be drawn, moved by the transform that is being dragged, so the outline of the whole BuildObject follows the drag.
+     */
+    record HiddenGhost(List<dev.craftium.core.Point> points, OutlineShape shape) {}
+
+    private static HiddenGhost ghost;
+    private static int ghostFor = -1;
+
+    static HiddenGhost hiddenGhost() {
+        if (ghostFor == hierarchyVersion) return ghost;
+        var all = new ArrayList<dev.craftium.core.Point>();
+        for (var e : savedSelections) {
+            var cells = savedXrayPoints.get(e.id());
+            if (cells != null && savedSelected(e)) all.addAll(cells);
+        }
+        ghostFor = hierarchyVersion;
+        return ghost = all.isEmpty() ? null : new HiddenGhost(List.copyOf(all), OutlineShape.ofLater(all));
     }
     /** Whether a BuildObject is selected, or is under one that is: it is part of what the player is working on. */
     static boolean savedSelected(Packets.SavedSelection saved) {
@@ -446,7 +478,9 @@ public final class ClientState {
         savedById = Map.of();
         hierarchyVersion++;
         savedXray.clear();
+        savedXrayPoints.clear();
         hiddenBoxFor = -1;
+        ghostFor = -1;
         savedGroups = List.of();
         groupFolded.clear();
         savedColors.clear();
