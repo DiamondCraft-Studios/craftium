@@ -31,7 +31,14 @@ final class SceneShape {
 
     static SceneShape of(BlockGetter level,Collection<Point> points){return of(level,points,false);}
     /** With {@code outlineAll} the outline runs round every block, solid ones too (still hidden where blocks are in front of it), not only those in open air. */
-    static SceneShape of(BlockGetter level,Collection<Point> points,boolean outlineAll){
+    static SceneShape of(BlockGetter level,Collection<Point> points,boolean outlineAll){return build(level,points,outlineAll,null);}
+    /**
+     * The same blocks looked at again after the world may have changed (once a second): the dim faces are worked out anew, but the outline is the
+     * previous shape's, since with {@code outlineAll} it does not depend on the world. Its silhouette is kept, so it does not fall back to the
+     * creases every time the world is looked at again. Only for the same blocks as {@code previous} was made from.
+     */
+    static SceneShape again(BlockGetter level,Collection<Point> points,SceneShape previous){return build(level,points,true,previous);}
+    private static SceneShape build(BlockGetter level,Collection<Point> points,boolean outlineAll,SceneShape previous){
         var open=new ArrayList<Point>();var solid=new HashSet<Point>();
         for(Point p:points){
             if(level.getBlockState(new BlockPos(p.x(),p.y(),p.z())).isAir())open.add(p);else solid.add(p);
@@ -42,13 +49,13 @@ final class SceneShape {
             found.add(face(p,d));
             if(found.size()>MAX_FACES)return new SceneShape(List.of(),OutlineShape.EMPTY,true);
         }
-        return new SceneShape(found,OutlineShape.of(outlineAll?points:open),false);
+        return new SceneShape(found,outlineAll&&previous!=null&&previous.air!=OutlineShape.EMPTY?previous.air:OutlineShape.of(outlineAll?points:open),false);
     }
 
     /** The dim faces, then the outline of the blocks in open air (with {@code airFill} on their faces, when given). */
     void draw(int faceFill,int stroke,float width,int airFill){
         for(var f:faces)Overlay.sceneFace(f[0],f[1],f[2],f[3],faceFill);
-        air.drawPlain(Vec3.ZERO,stroke,width,airFill,airFill!=0,true);
+        air.drawPlain(Vec3.ZERO,stroke,width,airFill,airFill!=0,true); // scene: lines and fill alike are hidden by blocks in front
     }
 
     /** The face of the block at {@code p} on the side {@code d} points to, lifted off the block so it does not fight it for depth, counter-clockwise from outside. */

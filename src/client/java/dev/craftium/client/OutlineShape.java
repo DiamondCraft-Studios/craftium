@@ -91,7 +91,7 @@ final class OutlineShape {
     void drawPlain(Vec3 at,int colour,float width,int fill,int backFill,boolean withFill,boolean scene){
         var style=ClientState.options.selectionStyle;
         Lines lines=scene||style==Options.SelectionStyle.ALL_EDGES?(a,b)->sceneLine(a,b,colour,width):(a,b)->Overlay.line(a,b,colour,width);
-        draw(at,lines,colour,fill,backFill,withFill,style,null);
+        draw(at,lines,colour,fill,backFill,withFill,style,null,scene);
     }
     /**
      * As the first drawPlain, for a shape that is being changed as it is looked at, such as the blocks a drag will leave, which are worked out
@@ -100,32 +100,32 @@ final class OutlineShape {
     void drawLive(Vec3 at,int colour,float width,int fill,boolean withFill){
         var style=ClientState.options.selectionStyle;
         Lines lines=style==Options.SelectionStyle.ALL_EDGES?(a,b)->sceneLine(a,b,colour,width):(a,b)->Overlay.line(a,b,colour,width);
-        draw(at,lines,colour,fill,fill,withFill,style,java.util.function.UnaryOperator.identity());
+        draw(at,lines,colour,fill,fill,withFill,style,java.util.function.UnaryOperator.identity(),false);
     }
     /** Only the fill of the exterior faces, with no outline: how blocks about to be removed are shown. */
     void drawFill(Vec3 at,int fill){draw(at,(a,b)->{},0,fill,true,ClientState.options.selectionStyle);}
     /** A depth-tested line, drawn a little toward the camera: the outline lies in the surface of the blocks, so exactly there it would be cut away by them. */
-    private static void sceneLine(Vec3 a,Vec3 b,int colour,float width){
+    static void sceneLine(Vec3 a,Vec3 b,int colour,float width){
         Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position(),mid=a.add(b).scale(.5),toEye=eye.subtract(mid);
         double distance=toEye.length();
         Vec3 nudge=distance<1e-6?Vec3.ZERO:toEye.scale((.004+.0006*distance)/distance);
         Overlay.sceneLine(a.add(nudge),b.add(nudge),colour,width);
     }
     /** As {@link #draw(Vec3,Lines,int,int,boolean)}, with the outline style chosen by the caller instead of the selection's. */
-    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style){draw(at,lines,stroke,fill,fill,withFill,style,null);}
+    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style){draw(at,lines,stroke,fill,fill,withFill,style,null,false);}
     /**
      * As above, for a shape whose lines {@code lines} moves somewhere else, as a drag does. What the camera sees of the moved shape is not what it
      * sees of the shape where it is, so the silhouette is worked out from where the camera is relative to the shape as it was before the move:
      * {@code eyeInShape} turns the camera's position into that. The shape changes with every step of the drag, so only a silhouette that can be
      * found within the frame is used, never a late one from another thread.
      */
-    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape){draw(at,lines,stroke,fill,fill,withFill,style,eyeInShape);}
-    private void draw(Vec3 at,Lines lines,int stroke,int fill,int backFill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape){
+    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape){draw(at,lines,stroke,fill,fill,withFill,style,eyeInShape,false);}
+    private void draw(Vec3 at,Lines lines,int stroke,int fill,int backFill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape,boolean scene){
         if(bounds==null||!ready)return;
         boxed=outline.edges().size()>maxEdges;
         if(boxed){
             AABB box=bounds.move(at);
-            if(withFill)Overlay.box(box,stroke,1,fill);else boxLines(box,lines);
+            if(withFill)sceneBox(box,stroke,fill,scene);else boxLines(box,lines);
             return;
         }
         // Only the outline as the camera sees it, unless every edge was asked for or the camera is inside the shape.
@@ -143,7 +143,7 @@ final class OutlineShape {
                 int colour=fill;
                 if(inside){double plane=switch(f.axis()){case 0->f.x0();case 1->f.y0();default->f.z0();},from=switch(f.axis()){case 0->eye.x;case 1->eye.y;default->eye.z;};
                     if(f.sign()*(from-plane)<=0)colour=backFill;}
-                if(ready!=null){Vec3[] q=ready[next++];Overlay.face(q[0],q[1],q[2],q[3],colour);}else face(f,at,colour);
+                if(ready!=null){Vec3[] q=ready[next++];if(scene)Overlay.sceneFace(q[0],q[1],q[2],q[3],colour);else Overlay.face(q[0],q[1],q[2],q[3],colour);}else face(f,at,colour,scene);
             }
         }
     }
@@ -290,13 +290,24 @@ final class OutlineShape {
         int[] n=SelectionOutline.normal(direction);
         return n[0]*(eye.x-x)+n[1]*(eye.y-y)+n[2]*(eye.z-z)>0;
     }
+    /** The box round a shape too detailed to draw, filled; with {@code scene} depth-tested like the rest of the shape, so blocks in front of it hide it. */
+    private static void sceneBox(AABB box,int stroke,int fill,boolean scene){
+        if(!scene){Overlay.box(box,stroke,1,fill);return;}
+        for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)Overlay.sceneLine(corner(box,i),corner(box,i|bit),stroke,1);
+        if((fill>>>24)==0)return;
+        for(int axis=0;axis<3;axis++){int u=(axis+1)%3,v=(axis+2)%3;
+            for(int side=0;side<2;side++){Vec3[] c=new Vec3[4];int[][] ring={{0,0},{1,0},{1,1},{0,1}};
+                for(int k=0;k<4;k++){int idx=(side<<axis)|(ring[k][0]<<u)|(ring[k][1]<<v);c[k]=corner(box,idx);}
+                if(side==0)Overlay.sceneFace(c[3],c[2],c[1],c[0],fill);else Overlay.sceneFace(c[0],c[1],c[2],c[3],fill);}}
+    }
     private static void boxLines(AABB box,Lines lines){
         for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)lines.line(corner(box,i),corner(box,i|bit));
     }
     private static Vec3 corner(AABB box,int i){return new Vec3((i&1)==0?box.minX:box.maxX,(i&2)==0?box.minY:box.maxY,(i&4)==0?box.minZ:box.maxZ);}
 
+    private static void quad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color,boolean scene){if(scene)Overlay.sceneFace(a,b,c,d,color);else Overlay.face(a,b,c,d,color);}
     /** Sends one exterior rectangle to the overlay, wound so it faces outward. */
-    private static void face(SelectionOutline.Face f,Vec3 at,int color){
+    private static void face(SelectionOutline.Face f,Vec3 at,int color,boolean scene){
         int[] lo={f.x0(),f.y0(),f.z0()},hi={f.x1(),f.y1(),f.z1()};
         int axis=f.axis(),u=(axis+1)%3,v=(axis+2)%3;
         // (axis, u, v) is a right-handed cycle, so this ring runs counter-clockwise seen from the +axis side.
@@ -306,6 +317,6 @@ final class OutlineShape {
             double[] p=new double[3];p[axis]=lo[axis];p[u]=ring[i][0];p[v]=ring[i][1];
             c[i]=new Vec3(p[0],p[1],p[2]).add(at);
         }
-        if(f.sign()>0)Overlay.face(c[0],c[1],c[2],c[3],color);else Overlay.face(c[3],c[2],c[1],c[0],color);
+        if(f.sign()>0)quad(c[0],c[1],c[2],c[3],color,scene);else quad(c[3],c[2],c[1],c[0],color,scene);
     }
 }

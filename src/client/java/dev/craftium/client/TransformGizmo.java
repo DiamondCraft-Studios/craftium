@@ -231,6 +231,10 @@ final class TransformGizmo {
         return back==null?eye:new Vec3(back.x(),back.y(),back.z());
     }
     /** One outline segment of a selection being transformed, moved by the transform in progress. */
+    /** The outline of a shape being moved, in the selection's style: with All edges the lines are hidden by blocks in front of them, as when the shape is still. */
+    static void shapeLine(Vec3 from,Vec3 to){
+        if(ClientState.options.selectionStyle==Options.SelectionStyle.ALL_EDGES)OutlineShape.sceneLine(transformed(from),transformed(to),ClientState.options.previewColor,(float)ClientState.options.selectionWidth);else Overlay.line(transformed(from),transformed(to),ClientState.options.previewColor,(float)ClientState.options.selectionWidth);
+    }
     static void line(Vec3 from,Vec3 to){Overlay.line(transformed(from),transformed(to),ClientState.options.previewColor,1.5f);}
     static boolean dragging(){return dragging!=null;}
     /** The mode of the handle being dragged, or null when none is held. */

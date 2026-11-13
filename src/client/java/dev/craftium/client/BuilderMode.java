@@ -332,16 +332,16 @@ public final class BuilderMode {
             }
             if(!stacking&&blocksOnly()&&second!=null&&!cells.isEmpty()&&cells.size()<=OUTLINE_LIMIT){ // the blocks themselves (while stacking, the one box round the whole stack), not the box round them
                 if(leaving){if(cells!=shapeOf){selectionShape=OutlineShape.of(cells);shapeOf=cells;}
-                    selectionShape.drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,false,false);}
+                    selectionShape.drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.selectionWidth,o.builderSelectionFill,false,false);}
                 else drawInScene(o); // not moving: faces on the ground are coloured dimly, with no edges, and only what is in open air is outlined
-            }else boxShape(from,to.add(1,1,1)).drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,(second!=null&&!leaving)||live,false); // in the style set in the preferences
+            }else boxShape(from,to.add(1,1,1)).drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.selectionWidth,o.builderSelectionFill,(second!=null&&!leaving)||live,false); // in the style set in the preferences
             // With Copy air off the air inside the box is left out, so the box itself is shown as a plain white outline round what is copied. With it on, the whole box is the selection and is drawn as above.
-            if(!o.pasteAir)boxShape(from,to.add(1,1,1)).drawPlain(Vec3.ZERO,0xffffffff,(float)o.builderSelectionWidth,0,(second!=null&&!leaving)||live,false);
+            if(!o.pasteAir)boxShape(from,to.add(1,1,1)).drawPlain(Vec3.ZERO,0xffffffff,(float)o.selectionWidth,0,(second!=null&&!leaving)||live,false);
             if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?stackSteps(size):List.of(offset);
                 if(stacking){drawStack(o,min,size);return;}
                 var shown=preview(o,min,size,steps);
                 if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),o.removedTint); // the blocks that are moving, where they are now
-                if(shown==null)boxShape(min.add(offset.x(),offset.y(),offset.z()),max.add(offset.x()+1,offset.y()+1,offset.z()+1)).drawPlain(Vec3.ZERO,o.previewColor,(float)o.builderPreviewWidth,0,false,false);
+                if(shown==null)boxShape(min.add(offset.x(),offset.y(),offset.z()),max.add(offset.x()+1,offset.y()+1,offset.z()+1)).drawPlain(Vec3.ZERO,o.previewColor,(float)o.selectionWidth,0,false,false);
                 else{drawDestination(o,shown);if(!shown.places().isEmpty())Overlay.blockStates(turned(shown.models(),o),shown.places(),o.previewTint);}
             }
         }
@@ -351,12 +351,12 @@ public final class BuilderMode {
     /** The destination as the world hides it, like the selection (see {@link SceneShape}): dim faces on the ground, an outline in open air, nothing showing through terrain. Worked out again when the preview changes or, once a second, the world does. */
     private static void drawDestination(Options o,Preview shown){
         var level=Minecraft.getInstance().level;
-        if(level==null){shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.builderPreviewWidth,o.previewFill,true,false);return;}
+        if(level==null){shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.selectionWidth,o.previewFill,true,true);return;}
         long second=level.getGameTime()/20;
-        if(shown!=destOf||second!=destAt){destScene=SceneShape.of(level,shown.landing(),true);destOf=shown;destAt=second;}
-        if(destScene.tooLarge()){shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.builderPreviewWidth,o.previewFill,true,false);return;}
+        if(shown!=destOf||second!=destAt){destScene=shown==destOf?SceneShape.again(level,shown.landing(),destScene):SceneShape.of(level,shown.landing(),true);destOf=shown;destAt=second;}
+        if(destScene.tooLarge()){shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.selectionWidth,o.previewFill,true,true);return;}
         int fill=(o.previewFill>>>24)!=0?o.previewFill:o.previewColor&0xffffff|SceneShape.FACE_ALPHA;
-        destScene.draw(fill,o.previewColor,(float)o.builderPreviewWidth,o.previewFill);
+        destScene.draw(fill,o.previewColor,(float)o.selectionWidth,o.previewFill);
     }
     private static final Map<Object,OutlineShape> boxes=new HashMap<>();
     /** The outline of the box between two block corners, kept for as long as it is drawn so its silhouette is not worked out again every frame. */
@@ -374,10 +374,10 @@ public final class BuilderMode {
     private static void drawInScene(Options o){
         var level=Minecraft.getInstance().level;if(level==null)return;
         long second=level.getGameTime()/20;
-        if(cells!=sceneOf||second!=sceneAt){sceneShape=SceneShape.of(level,cells,true);sceneOf=cells;sceneAt=second;}
-        if(sceneShape.tooLarge()){boxShape(min(),max().add(1,1,1)).drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.builderSelectionWidth,o.builderSelectionFill,true,false);return;}
+        if(cells!=sceneOf||second!=sceneAt){sceneShape=cells==sceneOf?SceneShape.again(level,cells,sceneShape):SceneShape.of(level,cells,true);sceneOf=cells;sceneAt=second;}
+        if(sceneShape.tooLarge()){boxShape(min(),max().add(1,1,1)).drawPlain(Vec3.ZERO,o.builderSelectionColor,(float)o.selectionWidth,o.builderSelectionFill,true,true);return;}
         int fill=(o.builderSelectionFill>>>24)!=0?o.builderSelectionFill:o.builderSelectionColor&0xffffff|SceneShape.FACE_ALPHA;
-        sceneShape.draw(fill,o.builderSelectionColor,(float)o.builderSelectionWidth,0);
+        sceneShape.draw(fill,o.builderSelectionColor,(float)o.selectionWidth,0);
     }
     /**
      * The stack's preview: the blocks' models where they land. The whole stack is one selection, drawn by {@link #draw()}, with no box round each copy; the models are kept until the stack, the selection or the turn changes.
