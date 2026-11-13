@@ -67,7 +67,7 @@ final class TransformGizmo {
         var status=ClientState.status;var o=ClientState.options;
         if(o.tool.transform()){
             if(o.tool==Tool.PIVOT)return new Target(Kind.PIVOT,pivotAnchor(screen),null);
-            return status.selectionSize()>0?new Target(Kind.MODEL,pivot(),null):null;
+            return ClientState.gizmoSize()>0?new Target(Kind.MODEL,pivot(),null):null;
         }
         if(o.gizmoTarget!=Options.GizmoTarget.ENTITY&&(o.tool==Tool.BOX_SELECT||o.gizmoTarget==Options.GizmoTarget.SELECTION)&&status.selectionSize()>0){Point min=status.min();return new Target(Kind.SELECTION,new Vec3(min.x(),min.y(),min.z()),null);}
         var mc=Minecraft.getInstance();if(mc.level!=null&&!ClientState.options.entityUuid.isBlank())for(var e:mc.level.entitiesForRendering())if(e.getUUID().toString().equals(ClientState.options.entityUuid)&&(e instanceof Display||e instanceof Marker))return new Target(Kind.ENTITY,e.position(),e);
@@ -208,7 +208,7 @@ final class TransformGizmo {
      */
     private static Vec3 aboutPoint(){
         if(dragging.kind==Kind.MODEL&&mode==Options.GizmoMode.SCALE){
-            var s=ClientState.status;Point min=s.min(),max=s.max();
+            Point min=ClientState.gizmoMin(),max=ClientState.gizmoMax();
             return altDown()||handle==3?new Vec3((min.x()+max.x()+1)/2d,(min.y()+max.y()+1)/2d,(min.z()+max.z()+1)/2d):new Vec3(min.x(),min.y(),min.z());
         }
         return dragging.anchor;
@@ -377,7 +377,7 @@ final class TransformGizmo {
     }
     /** How far the target reaches along each axis, so scale handles can sit on its faces; null when it has no extent, like an entity. */
     private static Vec3 extent(Target t){
-        if(t.kind==Kind.SELECTION||t.kind==Kind.MODEL){var s=ClientState.status;Point min=s.min(),max=s.max();return new Vec3(max.x()-min.x()+1,max.y()-min.y()+1,max.z()-min.z()+1);}
+        if(t.kind==Kind.SELECTION||t.kind==Kind.MODEL){Point min=ClientState.gizmoMin(),max=ClientState.gizmoMax();return new Vec3(max.x()-min.x()+1,max.y()-min.y()+1,max.z()-min.z()+1);}
         if(t.kind==Kind.PLACEMENT){AABB b=bounds();return new Vec3(b.getXsize(),b.getYsize(),b.getZsize());}
         if(t.kind==Kind.SHAPE)return ShapeObject.dims();
         return null;
@@ -386,7 +386,7 @@ final class TransformGizmo {
     /** How far a scale handle sits from what the scale is about: the extent from the corner, or from the pivot for the blocks. */
     private static Vec3 reach(Target t,Vec3 extent){
         if(extent==null||t.kind!=Kind.MODEL)return extent;
-        var s=ClientState.status;Point max=s.max();
+        Point max=ClientState.gizmoMax();
         return new Vec3(max.x()+1-t.anchor.x,max.y()+1-t.anchor.y,max.z()+1-t.anchor.z);
     }
     private static Vec3 faceCenter(Vec3 anchor,Vec3[] directions,Vec3 extent,int axis){
@@ -538,7 +538,7 @@ final class TransformGizmo {
      */
     private static Vec3 pivotAnchor(EditorScreen screen){
         var o=ClientState.options;
-        if(o.pivotSet||ClientState.status.selectionSize()>0){parked=null;return pivot();}
+        if(o.pivotSet||ClientState.gizmoSize()>0){parked=null;return pivot();}
         var mc=Minecraft.getInstance();
         if(parked!=null&&(mc.player==null||parked.distanceToSqr(mc.player.position())<128*128))return parked;
         var hit=screen.target();
@@ -551,12 +551,12 @@ final class TransformGizmo {
     static Vec3 pivot(){
         var o=ClientState.options;
         if(o.pivotSet)return new Vec3(o.pivotX,o.pivotY,o.pivotZ);
-        var s=ClientState.status;Point min=s.min(),max=s.max();
+        Point min=ClientState.gizmoMin(),max=ClientState.gizmoMax();
         return new Vec3((min.x()+max.x()+1)/2d,(min.y()+max.y()+1)/2d,(min.z()+max.z()+1)/2d);
     }
     /** The corner the target's faces are measured from. */
     private static Vec3 faceBase(Target t){
-        if(t.kind==Kind.MODEL){Point min=ClientState.status.min();return new Vec3(min.x(),min.y(),min.z());}
+        if(t.kind==Kind.MODEL){Point min=ClientState.gizmoMin();return new Vec3(min.x(),min.y(),min.z());}
         if(t.kind==Kind.PLACEMENT){Point p=PlacementPreview.origin;AABB b=bounds();return new Vec3(p.x()+b.minX,p.y()+b.minY,p.z()+b.minZ);}
         if(t.kind==Kind.SHAPE){ // the corner of the shape's own box, so the scale handles sit on the middle of its faces
             Vec3 e=ShapeObject.dims();Vec3[] d=ShapeObject.axes();
