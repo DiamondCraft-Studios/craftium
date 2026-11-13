@@ -30,7 +30,7 @@ final class OutlineShape {
     private volatile boolean ready=true;
     // The outline's corners as ready-made points, made on first use. Building a few of them per edge and face every frame was a large part of the
     // cost of a big shape, and a shape that is drawn where it is never changes. A shape drawn moved by something still works them out each time.
-    private Vec3[] edgeEnds,creaseEnds;
+    private Vec3[] creaseEnds;
     private Vec3[][] quads;
 
     private OutlineShape(SelectionOutline.Result outline,AABB bounds){this.outline=outline;this.bounds=bounds;}
@@ -83,14 +83,14 @@ final class OutlineShape {
      */
     void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill){draw(at,lines,stroke,fill,withFill,ClientState.options.selectionStyle);}
     /**
-     * The selection's style as it is: the silhouette (or the outline) at the plain line width, with no extra edges. All edges is always
-     * depth-tested. With {@code scene} the other styles' lines are hidden by blocks in front of them too.
+     * The selection's style as it is: the silhouette (or the outline) at the plain line width, with no extra edges. In every style a line is whole
+     * where nothing is in front of it and a quarter as opaque behind blocks (see {@link #edge}). With {@code scene} the fill is hidden by blocks in front of it too.
      */
     void drawPlain(Vec3 at,int colour,float width,int fill,boolean withFill,boolean scene){drawPlain(at,colour,width,fill,fill,withFill,scene);}
     /** As above, with the faces that point away from the camera filled in {@code backFill}: with the camera inside the shape, those are the walls around it. */
     void drawPlain(Vec3 at,int colour,float width,int fill,int backFill,boolean withFill,boolean scene){
         var style=ClientState.options.selectionStyle;
-        Lines lines=scene||style==Options.SelectionStyle.ALL_EDGES?(a,b)->sceneLine(a,b,colour,width):(a,b)->Overlay.line(a,b,colour,width);
+        Lines lines=(a,b)->edge(a,b,colour,width);
         draw(at,lines,colour,fill,backFill,withFill,style,null,scene);
     }
     /**
@@ -99,11 +99,21 @@ final class OutlineShape {
      */
     void drawLive(Vec3 at,int colour,float width,int fill,boolean withFill){
         var style=ClientState.options.selectionStyle;
-        Lines lines=style==Options.SelectionStyle.ALL_EDGES?(a,b)->sceneLine(a,b,colour,width):(a,b)->Overlay.line(a,b,colour,width);
+        Lines lines=(a,b)->edge(a,b,colour,width);
         draw(at,lines,colour,fill,fill,withFill,style,java.util.function.UnaryOperator.identity(),false);
     }
     /** Only the fill of the exterior faces, with no outline: how blocks about to be removed are shown. */
     void drawFill(Vec3 at,int fill){draw(at,(a,b)->{},0,fill,true,ClientState.options.selectionStyle);}
+    /** The share of its colour that a line keeps where blocks hide it. */
+    private static final int HIDDEN_ALPHA_DIVISOR=4;
+    /**
+     * A line of the selection in every style: whole where nothing is in front of it, and a quarter as opaque where blocks hide it. The depth-tested line
+     * is the whole one; the other, drawn over everything, is the faint one that shows through.
+     */
+    static void edge(Vec3 a,Vec3 b,int colour,float width){
+        Overlay.line(a,b,colour&0xffffff|((colour>>>24)/HIDDEN_ALPHA_DIVISOR)<<24,width);
+        sceneLine(a,b,colour,width);
+    }
     /** A depth-tested line, drawn a little toward the camera: the outline lies in the surface of the blocks, so exactly there it would be cut away by them. */
     static void sceneLine(Vec3 a,Vec3 b,int colour,float width){
         Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position(),mid=a.add(b).scale(.5),toEye=eye.subtract(mid);
@@ -131,7 +141,7 @@ final class OutlineShape {
         // Only the outline as the camera sees it, unless every edge was asked for or the camera is inside the shape.
         boolean contoured=style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at,eyeInShape);
         if(style==Options.SelectionStyle.ALL_EDGES||!contoured&&!silhouette(lines,at,eyeInShape))
-            allEdges(lines,at);
+            allEdges(lines,at,eyeInShape);
         if(style!=Options.SelectionStyle.SILHOUETTE||contoured)outlineSince=0;
         else if(outlineSince==0)outlineSince=System.nanoTime();
         if(withFill&&outline.faces().size()<=maxFaces){
@@ -147,9 +157,32 @@ final class OutlineShape {
             }
         }
     }
-    private void allEdges(Lines lines,Vec3 at){
-        if(at.equals(Vec3.ZERO)){var ends=edgeEnds;if(ends==null)edgeEnds=ends=ends(outline.edges());for(int i=0;i<ends.length;i+=2)lines.line(ends[i],ends[i+1]);return;}
-        for(var s:outline.edges())lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
+    /**
+     * Every edge of the outline, except those behind the shape itself: seen from outside, an edge whose two faces both point away from the camera lies
+     * on the far side of the shape and is not drawn at all, not even faintly. From inside the shape every edge is drawn.
+     */
+    private void allEdges(Lines lines,Vec3 at,java.util.function.UnaryOperator<Vec3> eyeInShape){
+        Vec3 eye=eyeIn(eyeInShape);
+        boolean skipFar=!eyeInside(eye.subtract(at));
+        boolean here=at.equals(Vec3.ZERO);
+        Vec3[] ready=creaseEnds();
+        int index=0;
+        for(var crease:outline.creases()){
+            var s=crease.segment();int k=index++;
+            if(skipFar){
+                double mx=(s.x0()+s.x1())/2d+at.x,my=(s.y0()+s.y1())/2d+at.y,mz=(s.z0()+s.z1())/2d+at.z;
+                if(!towards(crease.normalA(),eye,mx,my,mz)&&!towards(crease.normalB(),eye,mx,my,mz))continue;
+            }
+            if(here)lines.line(ready[k*2],ready[k*2+1]);
+            else lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
+        }
+    }
+    private Vec3[] creaseEnds(){var ends=creaseEnds;if(ends==null)creaseEnds=ends=ends(outline.creases().stream().map(SelectionOutline.Crease::segment).toList());return ends;}
+    private Vec3 insideEye;private boolean insideResult;
+    /** {@link #inside} for an eye relative to the shape, worked out again only when the eye has moved. */
+    private boolean eyeInside(Vec3 eye){
+        if(insideEye==null||insideEye.distanceToSqr(eye)>1e-8){insideResult=inside(eye);insideEye=eye;}
+        return insideResult;
     }
     private static Vec3[] ends(List<SelectionOutline.Segment> segments){
         var ends=new Vec3[segments.size()*2];int i=0;
@@ -266,7 +299,7 @@ final class OutlineShape {
         int drawn=0;
         boolean here=at.equals(Vec3.ZERO);
         Vec3[] ready=null;
-        if(here){ready=creaseEnds;if(ready==null)creaseEnds=ready=ends(outline.creases().stream().map(SelectionOutline.Crease::segment).toList());}
+        if(here)ready=creaseEnds();
         int index=0;
         for(var crease:outline.creases()){
             var s=crease.segment();
