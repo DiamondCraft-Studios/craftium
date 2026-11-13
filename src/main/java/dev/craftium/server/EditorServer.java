@@ -2442,6 +2442,11 @@ public final class EditorServer {
                     backwards
                             ? change.objectsBefore()
                             : change.objectsAfter()); // the BuildObjects go back with their blocks
+        if (change.hasHeld())
+            s.saved.restoreHeld(
+                    backwards
+                            ? change.heldBefore()
+                            : change.heldAfter()); // and so do the blocks they keep outside the world
         String pivot = backwards ? change.pivotBefore() : change.pivotAfter();
         if (pivot != null) s.pivotUpdate = pivot;
         var values = backwards ? change.restoreBefore() : change.restoreAfter();

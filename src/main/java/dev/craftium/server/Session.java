@@ -215,7 +215,36 @@ final class Session {
             Map<Integer, List<Point>> objectsAfter,
             /** The BuildObjects before and after something done in the Hierarchy (made, renamed, moved, deleted): null for any other change. */
             dev.craftium.core.SavedSelections.State hierarchyBefore,
-            dev.craftium.core.SavedSelections.State hierarchyAfter) {
+            dev.craftium.core.SavedSelections.State hierarchyAfter,
+            /** What the BuildObjects keep outside the world (dormant blocks, and the world blocks they replaced) before and after, by id: only those that differ. */
+            Map<Integer, dev.craftium.core.SavedSelections.Held> heldBefore,
+            Map<Integer, dev.craftium.core.SavedSelections.Held> heldAfter) {
+        SelectionChange(
+                List<Point> before,
+                List<Point> after,
+                String pivotBefore,
+                String pivotAfter,
+                Map<String, String> restoreBefore,
+                Map<String, String> restoreAfter,
+                Map<Integer, List<Point>> objectsBefore,
+                Map<Integer, List<Point>> objectsAfter,
+                dev.craftium.core.SavedSelections.State hierarchyBefore,
+                dev.craftium.core.SavedSelections.State hierarchyAfter) {
+            this(
+                    before,
+                    after,
+                    pivotBefore,
+                    pivotAfter,
+                    restoreBefore,
+                    restoreAfter,
+                    objectsBefore,
+                    objectsAfter,
+                    hierarchyBefore,
+                    hierarchyAfter,
+                    Map.of(),
+                    Map.of());
+        }
+
         SelectionChange(
                 List<Point> before,
                 List<Point> after,
@@ -259,7 +288,9 @@ final class Session {
                     objectsBefore,
                     objectsAfter,
                     before,
-                    after);
+                    after,
+                    heldBefore,
+                    heldAfter);
         }
 
         SelectionChange(
@@ -296,11 +327,49 @@ final class Session {
                     b,
                     a,
                     hierarchyBefore,
-                    hierarchyAfter);
+                    hierarchyAfter,
+                    heldBefore,
+                    heldAfter);
         }
 
         boolean hasObjects() {
             return !objectsBefore.isEmpty();
+        }
+        /** The same change, also giving back what these BuildObjects keep outside the world (only those that differ are kept). */
+        SelectionChange withHeld(
+                Map<Integer, dev.craftium.core.SavedSelections.Held> before,
+                Map<Integer, dev.craftium.core.SavedSelections.Held> after) {
+            var b = new LinkedHashMap<Integer, dev.craftium.core.SavedSelections.Held>(heldBefore);
+            var a = new LinkedHashMap<Integer, dev.craftium.core.SavedSelections.Held>(heldAfter);
+            for (var e : after.entrySet()) {
+                var was = before.getOrDefault(e.getKey(), dev.craftium.core.SavedSelections.Held.NONE);
+                if (was.same(e.getValue())) {
+                    if (!heldBefore.containsKey(e.getKey())) {
+                        b.remove(e.getKey());
+                        a.remove(e.getKey());
+                    }
+                    continue;
+                }
+                b.putIfAbsent(e.getKey(), was);
+                a.put(e.getKey(), e.getValue());
+            }
+            return new SelectionChange(
+                    this.before,
+                    this.after,
+                    pivotBefore,
+                    pivotAfter,
+                    restoreBefore,
+                    restoreAfter,
+                    objectsBefore,
+                    objectsAfter,
+                    hierarchyBefore,
+                    hierarchyAfter,
+                    b,
+                    a);
+        }
+
+        boolean hasHeld() {
+            return !heldBefore.isEmpty();
         }
         /**
          * The same change, also moving these BuildObjects' blocks (only the ones named in {@code after}, which are the ones that changed), after the blocks it already moved:
@@ -322,7 +391,9 @@ final class Session {
                     ob,
                     oa,
                     hierarchyBefore,
-                    hierarchyAfter);
+                    hierarchyAfter,
+                    heldBefore,
+                    heldAfter);
         }
 
         SelectionChange(List<Point> before, List<Point> after) {
@@ -352,7 +423,9 @@ final class Session {
                     objectsBefore,
                     objectsAfter,
                     hierarchyBefore,
-                    hierarchyAfter);
+                    hierarchyAfter,
+                    heldBefore,
+                    heldAfter);
         }
         /** This change followed by a later one, as one: it starts where this began and ends where the later one did. */
         SelectionChange then(SelectionChange later) {
@@ -364,6 +437,10 @@ final class Session {
             ob.putAll(objectsBefore); // the earlier change's blocks are where it began
             var oa = new LinkedHashMap<>(objectsAfter);
             oa.putAll(later.objectsAfter);
+            var hb = new LinkedHashMap<>(later.heldBefore);
+            hb.putAll(heldBefore);
+            var ha = new LinkedHashMap<>(heldAfter);
+            ha.putAll(later.heldAfter); // as for the blocks: it began where the earlier change did
             return new SelectionChange(
                     before != null ? before : later.before,
                     later.after != null ? later.after : after,
@@ -374,7 +451,9 @@ final class Session {
                     ob,
                     oa,
                     hierarchyBefore != null ? hierarchyBefore : later.hierarchyBefore,
-                    later.hierarchyAfter != null ? later.hierarchyAfter : hierarchyAfter);
+                    later.hierarchyAfter != null ? later.hierarchyAfter : hierarchyAfter,
+                    hb,
+                    ha);
         }
     }
     /** {@code time} is when the edit was made, in epoch milliseconds, or 0 when unknown (history from before it was kept). */
