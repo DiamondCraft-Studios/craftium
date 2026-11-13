@@ -36,7 +36,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private static final int PANEL = 0xe0172330, CARD = 0xff223247, MUTED = 0xff9db5cb, TEXT = 0xffdce6ef, WARN = 0xffffd479, ERROR = 0xffff8a80, OK = 0xff8fe3a0;
 
     private final Screen parent;
-    private final ElementPreview preview = new ElementPreview();
+    private final OrbitPreview preview = new OrbitPreview();
     private int sortMode;
     private boolean sortDesc;
     private JsonObject model = new JsonObject();

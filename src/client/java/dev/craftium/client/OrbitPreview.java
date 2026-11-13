@@ -13,10 +13,11 @@ import java.util.*;
 import java.util.zip.InflaterInputStream;
 
 /**
- * The picture of the selected element in the pool editor: its blocks with their textures, drawn in software (see {@link VoxelOrbit}) and turned with the
- * left button, panned with the middle one and zoomed with the wheel. The picture is drawn again only when the view or the highlight changes.
+ * A picture of blocks with their textures and models, drawn in software (see {@link VoxelOrbit}) and turned with the left button, panned with the middle one and zoomed
+ * with the wheel. The pool editor shows the selected element with it and the export window the structure to be exported, with lines drawn over it ({@link #overlay}).
+ * The picture is drawn again only when the view, the highlight or the overlay changes.
  */
-final class ElementPreview {
+final class OrbitPreview {
     /** How many pixels are drawn for each pixel of the panel, so the blocks stay crisp. */
     private static final int DETAIL = 2;
     /** How long after the view last moved the picture is drawn at half detail, which is four times fewer pixels: it is sharp again once the view rests. */
@@ -31,6 +32,7 @@ final class ElementPreview {
     private final VoxelOrbit.View view = new VoxelOrbit.View();
     private int[] highlight, drawnHighlight;
     private boolean dirty = true;
+    private VoxelOrbit.Overlay overlay;
     private int drawnW, drawnH;
     private Tex tex;
     private int[] pixels = new int[0];
@@ -45,6 +47,24 @@ final class ElementPreview {
         scene = thumb == null ? null : PreviewScenes.of(template, thumb);
         view.reset();
         highlight = null;
+        dirty = true;
+    }
+
+    /** Chooses a scene made by the caller; {@code key} says when it is a new one (the view starts again then), and a null scene shows nothing. */
+    void showScene(String sceneKey, VoxelOrbit.Scene next) {
+        if (next == scene && sceneKey.equals(key)) return;
+        boolean same = sceneKey.equals(key);
+        key = sceneKey;
+        scene = next;
+        if (!same) view.reset();
+        highlight = null;
+        dirty = true;
+    }
+
+    /** Lines and dots drawn over the blocks (the export window's bounding box and axes), or null. */
+    void overlay(VoxelOrbit.Overlay next) {
+        if (next == overlay) return;
+        overlay = next;
         dirty = true;
     }
 
@@ -107,7 +127,7 @@ final class ElementPreview {
             var shown = new VoxelOrbit.View();
             shown.yaw = view.yaw; shown.pitch = view.pitch; shown.zoom = view.zoom;
             shown.panX = view.panX * detail / DETAIL; shown.panY = view.panY * detail / DETAIL;
-            VoxelOrbit.render(scene, shown, pw, ph, pixels, BACKGROUND, highlight, ClientState.options.hoverColor);
+            VoxelOrbit.render(scene, shown, pw, ph, pixels, BACKGROUND, highlight, ClientState.options.hoverColor, overlay);
             if (texture == null || drawnW != pw || drawnH != ph) { // a new size needs a new texture; the same size is written into the one there is
                 var image = new NativeImage(pw, ph, false);
                 var next = new ReferenceTexture(image);
@@ -131,7 +151,7 @@ final class ElementPreview {
         return true;
     }
 
-    void releaseAll() { release(tex); tex = null; texture = null; key = ""; scene = null; PreviewScenes.clear(); }
+    void releaseAll() { release(tex); tex = null; texture = null; key = ""; scene = null; overlay = null; PreviewScenes.clear(); }
 
     private static void release(Tex t) { if (t != null) Minecraft.getInstance().getTextureManager().release(t.id()); }
 }

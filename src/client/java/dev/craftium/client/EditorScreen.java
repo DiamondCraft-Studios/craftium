@@ -1543,6 +1543,20 @@ public final class EditorScreen extends CraftiumScreen {
     /** Mirrors a placement waiting to be put down, or else the selection, across the plane through its centre or pivot normal to axis 0, 1 or 2 (X, Y, Z). */
     /** Opens the structure export pop-up on the given source, and on a format when one is named. */
     private void exportStructure(String source){exportStructure(source,null,null);}
+    /** Opens the export window on these BuildObjects, a page for each. */
+    private void exportObjects(List<Integer> ids){
+        var objects=new ArrayList<StructureExportScreen.Target>();
+        for(int id:ids){var row=savedById(id);if(row!=null)objects.add(new StructureExportScreen.Target(id,row.name()));}
+        if(objects.isEmpty())return;
+        ClientCompat.setScreen(minecraft,new StructureExportScreen(this,objects));
+    }
+    /** Opens the export window on the Blueprint tab for these BuildObjects, a page for each. */
+    private void blueprintObjects(List<Integer> ids){
+        var objects=new ArrayList<StructureExportScreen.Target>();
+        for(int id:ids){var row=savedById(id);if(row!=null)objects.add(new StructureExportScreen.Target(id,row.name()));}
+        if(objects.isEmpty())return;
+        ClientCompat.setScreen(minecraft,StructureExportScreen.blueprintOf(this,objects));
+    }
     private void exportStructure(String source,String format,String javaFile){
         var settings=o().structure;settings.source=source;if(format!=null){settings.format=format;settings.javaFile=javaFile;}
         ClientCompat.setScreen(minecraft,new StructureExportScreen(this));
@@ -2033,7 +2047,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
             case ROTATE_PLACEMENT -> {if(!PlacementPreview.active())return false;action("rotate");}
             case FLIP_PLACEMENT -> {if(!PlacementPreview.active())return false;action("flip_facing");}
             case EXTRUDE_POINT -> {if(!Interactions.of(o().tool).extrudePoint(context))return false;}
-            case SAVE_BLUEPRINT -> {if(ClientState.status.clipboardSize()==0&&ClientState.status.clipboardEntityCount()==0)ClientState.notify("Copy a selection first");else ClientCompat.setScreen(minecraft,new SaveBlueprintScreen(this));}
+            case SAVE_BLUEPRINT -> {if(ClientState.status.clipboardSize()==0&&ClientState.status.clipboardEntityCount()==0)ClientState.notify("Copy a selection first");else ClientCompat.setScreen(minecraft,StructureExportScreen.blueprintOnly(this));}
             case SHOW_BIOMES -> o().showBiomes=!o().showBiomes;
             case CYCLE_SELECTION_STYLE -> CraftiumClient.cycleSelectionStyle();
             case SHOW_SELECTION -> showSelection=!showSelection;case SHOW_ANNOTATIONS -> o().showAnnotations=!o().showAnnotations;
@@ -2488,7 +2502,8 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(ClientState.status.clipboardSize()>0&&ClientState.status.clipboardOrigin()!=null)items.add(item("Paste","",()->pasteAsObject(id)));
         items.add(n>1?item("Delete selected ("+n+")","",()->action("saved_selection:deleteset:"+csv)):item("Delete","",()->action("saved_selection:delete:"+id)));
         items.add(item(n>1?"Delete selected + blocks ("+n+")":"Delete blocks","",()->deleteWithBlocks(targets))); // the BuildObjects and the blocks they hold
-        items.add(item("Export…","",()->exportStructure(StructureSettings.SELECTION))); // the blocks shown, which are everything under each BuildObject
+        items.add(item(n>1?"Export selected ("+n+")…":"Export…","",()->exportObjects(targets))); // each BuildObject with everything under it, a page of the window for each
+        items.add(item(n>1?"Save selected as blueprints ("+n+")…":"Save as blueprint…","",()->blueprintObjects(targets)));
         var moves=new ArrayList<MenuItem>();
         if(row.parent()!=0){var up=savedById(row.parent());if(up!=null)moves.add(item(up.parent()==0?"Ungroup":"Move out of parent","",()->action(up.parent()==0?"saved_selection:ungroup:"+id:"saved_selection:place:"+id+":"+up.parent()+":"+(siblingIndex(up)+1))));}
         if(row.parent()==0&&ClientState.savedGroups().size()>1)for(var gr:ClientState.savedGroups()){ // a BuildObject at the top goes to the end of another group

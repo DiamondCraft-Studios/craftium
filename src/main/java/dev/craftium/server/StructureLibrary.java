@@ -33,6 +33,16 @@ final class StructureLibrary {
                 ServerPlatform.send(player,new Packets.Download("structure",s.fileName(),Base64.getEncoder().encodeToString(bytes),""));
                 yield "Exported "+s.fileName()+" · "+built.blocks()+" blocks"+(built.notes.isEmpty()?"":" · "+String.join("; ",built.notes));
             }
+            case "blueprint_save_source"->{
+                // The blocks of the export window's source, as they are, saved to the library the way a copied selection is.
+                p.o.structure.format=StructureSettings.BLUEPRINT;
+                var built=StructureBuilder.build(p,player);
+                var scratch=new Session();
+                for(int y=0;y<built.sizeY;y++)for(int z=0;z<built.sizeZ;z++)for(int x=0;x<built.sizeX;x++){var cell=built.cells[built.index(x,y,z)];if(cell!=null&&!cell.state().isAir())scratch.clipboard.put(new Point(x,y,z),cell);}
+                scratch.clipboardEntities.addAll(built.entities);
+                var plan=new EditPlanner(p.level,scratch,p.o);
+                yield BlueprintLibrary.act("blueprint_save",plan)+BlueprintLibrary.download("blueprint_save",plan,player);
+            }
             case "structure_import_file"->importFile(p);
             default->throw new IllegalArgumentException("Unknown structure action");
         };
