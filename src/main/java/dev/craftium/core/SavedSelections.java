@@ -132,11 +132,12 @@ public final class SavedSelections {
      */
     private void normalize(){
         var last=tree.groups.getLast();
-        boolean fromActive=active!=null&&active.group()!=null&&tree.groups.contains(active.group());
-        var fallback=fromActive?active.group():last; // with nothing selected, a new one goes at the very bottom: the last group
+        var from=active!=null?active:lastActive; // the one selected, or the last one that was: a new one goes in its group
+        boolean fromActive=from!=null&&entries.contains(from)&&from.group()!=null&&tree.groups.contains(from.group());
+        var fallback=fromActive?from.group():last; // with none ever selected, a new one goes at the very bottom: the last group
         for(var e:entries){
             if(e.group!=null&&!tree.groups.contains(e.group))e.group=null;
-            if(e.parent==null&&e.group==null){e.group=fallback;if(!fromActive&&fallback.folded)fallback.folded=false;} // a folded group would hide it, so it opens
+            if(e.parent==null&&e.group==null){e.group=fallback;fallback.folded=false;} // a folded group would hide it, so it opens
         } // one under another keeps the group it had, or none
         var out=new ArrayList<Entry>(entries.size());
         for(var g:tree.groups)for(int i=0;i<entries.size();i++){
@@ -150,6 +151,13 @@ public final class SavedSelections {
      * kept with them, and sent to every client like any other change.
      */
     public void setFolded(int id,boolean folded){var e=need(id);if(e.folded==folded)return;e.folded=folded;changed();}
+    /** Opens whatever hides the entry in the Hierarchy: the BuildObjects it is under, and its group. */
+    public void reveal(Entry entry){
+        boolean opened=false;
+        for(var p=entry.parent;p!=null;p=p.parent)if(p.folded){p.folded=false;opened=true;}
+        var g=entry.group();if(g!=null&&g.folded){g.folded=false;opened=true;}
+        if(opened)changed();
+    }
     public void setGroupFolded(int id,boolean folded){var g=needGroup(id);if(g.folded==folded)return;g.folded=folded;changed();}
     /** The groups, in order. */
     public List<Group> groups(){return Collections.unmodifiableList(tree.groups);}
@@ -196,7 +204,7 @@ public final class SavedSelections {
     private static final java.util.regex.Pattern NUMBERED=java.util.regex.Pattern.compile("BuildObject(?: \\((\\d{1,9})\\))?");
     /** The BuildObject being looked at or edited, or null. */
     /** The BuildObjects being looked at (several when selected together), and {@code active}, the last of them: the one editing is about. */
-    private Entry active;private final List<Entry> viewed=new ArrayList<>();private boolean editing;
+    private Entry active;private Entry lastActive;private final List<Entry> viewed=new ArrayList<>();private boolean editing;
     /** The live selection as it was before looking began; null when not looking. */
     private List<Point> stash;
 
@@ -449,7 +457,7 @@ public final class SavedSelections {
         var entry=need(id);
         if(active!=null&&editing)sync(live); // leaving an edit for another entry keeps what was done
         if(stash==null)stash=List.copyOf(live.points());
-        live.restore(edit?entry.points:effective(entry));active=entry;viewed.clear();viewed.add(entry);editing=edit;lookChanged();
+        live.restore(edit?entry.points:effective(entry));active=lastActive=entry;viewed.clear();viewed.add(entry);editing=edit;lookChanged();
     }
     /**
      * Swaps several BuildObjects in for the live selection at once, as selecting them together: the selection is all of their blocks, each with everything under it.
@@ -461,7 +469,7 @@ public final class SavedSelections {
         if(active!=null&&editing)sync(live);
         if(stash==null)stash=List.copyOf(live.points());
         var union=new LinkedHashSet<Point>();for(var e:picked)union.addAll(effective(e));
-        live.restore(union);viewed.clear();viewed.addAll(picked);active=viewed.getLast();editing=false;lookChanged();
+        live.restore(union);viewed.clear();viewed.addAll(picked);active=lastActive=viewed.getLast();editing=false;lookChanged();
     }
     /** Gives back the live selection from before looking. Whatever was done to the live selection while only viewing is dropped. Does nothing when not looking. */
     public void release(Selection live){

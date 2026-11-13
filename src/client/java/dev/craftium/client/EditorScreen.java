@@ -47,6 +47,8 @@ public final class EditorScreen extends CraftiumScreen {
     private int dragOriginX,dragOriginY;
     private double dragPointerX,dragPointerY;
     private final List<Control> controls=new ArrayList<>();
+    /** The fold arrows of the Hierarchy: they sit inside their row, so the row's hover look runs under them instead of leaving a hole. */
+    private final Set<Control> foldControls=Collections.newSetFromMap(new IdentityHashMap<>());
     private final Map<String,EditBox> fields=new LinkedHashMap<>();
     private Slider dragging;
     private String draggingSliderPanel="";
@@ -210,7 +212,7 @@ public final class EditorScreen extends CraftiumScreen {
         runAfterStatus();
         pointerX=mouseX;pointerY=mouseY;
         // A held gizmo has the pointer: the interface under it is not lit, as the cursor is hidden and only steers the handle.
-        boolean steering=TransformGizmo.dragging();mx=steering?-100000:(int)(mouseX/scale);my=steering?-100000:(int)(mouseY/scale);controls.clear();renameAreas.clear();sliderAreas.clear();dragSources.clear();dropTargets.clear();PanelLog.frame();
+        boolean steering=TransformGizmo.dragging();mx=steering?-100000:(int)(mouseX/scale);my=steering?-100000:(int)(mouseY/scale);controls.clear();foldControls.clear();renameAreas.clear();sliderAreas.clear();dragSources.clear();dropTargets.clear();PanelLog.frame();
         syncCrosshair();
         SelectionOverlay.tint(g); // under the panels, so only the world is washed
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
@@ -301,7 +303,7 @@ public final class EditorScreen extends CraftiumScreen {
             boolean clipped=c.clipTop()!=Integer.MIN_VALUE;if(clipped)g.enableScissor(0,c.clipTop(),w,c.clipBottom()); // a control half scrolled out of view stays inside its area
             // A control drawn later and no bigger sits on top of this one (the foreground slot over the background slot), so the hover look skips what it covers.
             var covers=new ArrayList<int[]>();
-            for(int j=i+1;j<controls.size();j++){var o=controls.get(j);if(o.panel().equals(c.panel())&&o.width()<=c.width()&&o.height()<=c.height()&&o.x()<c.x()+c.width()&&o.x()+o.width()>c.x()&&o.y()<c.y()+c.height()&&o.y()+o.height()>c.y())covers.add(new int[]{o.x(),o.y(),o.x()+o.width(),o.y()+o.height()});}
+            for(int j=i+1;j<controls.size();j++){var o=controls.get(j);if(!foldControls.contains(o)&&o.panel().equals(c.panel())&&o.width()<=c.width()&&o.height()<=c.height()&&o.x()<c.x()+c.width()&&o.x()+o.width()>c.x()&&o.y()<c.y()+c.height()&&o.y()+o.height()>c.y())covers.add(new int[]{o.x(),o.y(),o.x()+o.width(),o.y()+o.height()});}
             int x0=c.x(),y0=c.y(),x1=x0+c.width(),y1=y0+c.height();
             hoverPiece(g,x0,y0,x1,y1,Hover.OVERLAY,covers);
             hoverPiece(g,x0,y0,x1,y0+1,ACCENT,covers);hoverPiece(g,x0,y1-1,x1,y1,ACCENT,covers);
@@ -1812,7 +1814,10 @@ public final class EditorScreen extends CraftiumScreen {
             if(index>=0){selectedNode=index;if(!toolActive)ClientState.selectedRuler=rulerOfNode(index);draggingNode=true;placementDragOrigin=points.get(index);placementDragX=event.x();placementDragY=event.y();return true;}
             if(!toolActive){var line=rulerAt(event.x(),event.y());if(line!=null){ClientState.selectedRuler=line;selectedNode=-1;TransformGizmo.cancel();return true;}} // no tool chosen: a click on a ruler picks it, without choosing the Ruler tool
         }
-        if(event.button()==0&&o().hoverBuildObjects&&!toolActive&&!PlacementPreview.active()){objectPickHit=target();objectPickPending=objectPickHit!=null;objectPickX=event.x();objectPickY=event.y();} // resolved on release, if it was a click and not a drag
+        if(event.button()==0&&o().hoverBuildObjects&&!PlacementPreview.active()){ // whatever tool is chosen
+            objectPickHit=target();objectPickPending=objectPickHit!=null&&ClientState.savedAt(CraftiumClient.point(objectPickHit.getBlockPos()))!=0;objectPickX=event.x();objectPickY=event.y(); // resolved on release, if it was a click and not a drag
+            if(objectPickPending)return true; // a click on a BuildObject picks it, and the tool does not also act on it
+        }
         if(PlacementPreview.active()){
             if(event.button()==1){var hit=target();if(hit!=null){Point p=CraftiumClient.point(hit.getBlockPos()),n=CraftiumClient.normal(hit);PlacementPreview.origin=p.add(n.x(),n.y(),n.z());}return true;}
             if(event.button()==0&&pickPlacementAxis(event.x(),event.y())){draggingPlacement=true;placementDragOrigin=PlacementPreview.origin;placementDragX=event.x();placementDragY=event.y();return true;}
@@ -2175,7 +2180,10 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         }
         button(g,x+10,y+ph-26,pw-20,20,"Clear all",false,this::clearRulers,"Delete every ruler in this world");
     }
-    private int savedScroll,revealId;
+    private int savedScroll,revealId;private long revealUntil;
+    /** The ids there were when a BuildObject was asked for, to find the new one among the list that comes back. */
+    private Set<Integer> newKnown;private long newUntil;
+    private void expectNewBuildObject(){newKnown=new HashSet<>();for(var e:ClientState.savedSelections())newKnown.add(e.id());newUntil=System.currentTimeMillis()+5000;}
     private BlockHitResult objectPickHit;private boolean objectPickPending;private double objectPickX,objectPickY;
     /** A plain click (no drag) on a block of a BuildObject in a viewport picks it as a click on its row does, opens what hides its row, and scrolls the Hierarchy to it. */
     private void pickBuildObject(BlockHitResult hit){
@@ -2187,7 +2195,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         int n=0;for(var p=savedById(entry.parent());p!=null&&n++<64;p=savedById(p.parent()))if(ClientState.savedFolded(p.id()))ClientState.toggleSavedFolded(p.id());
         var group=groupById(groupIdOf(entry));if(group!=null&&ClientState.groupFolded(group.id()))ClientState.toggleGroupFolded(group.id());
         rowClick(entry);
-        revealId=id;
+        revealId=id;revealUntil=System.currentTimeMillis()+1000;
     }
     private static final String[] PENCIL={"......XX.",".....XXXX","....XXXX.","...XXXX..","..XXXX...",".XXXX....",".XXX.....","XX......."};
     private static final String[] PLUS={"....X....","....X....","....X....","....X....","XXXXXXXXX","....X....","....X....","....X....","....X...."};
@@ -2250,9 +2258,14 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(o().hoverBuildObjects&&menu<0&&pointerFree()&&rowDragId<0&&inViewport(pointerX/scale,pointerY/scale)){
             var hit=target();if(hit!=null)ClientState.hoverWorld=ClientState.savedAt(CraftiumClient.point(hit.getBlockPos()));
         }
-        if(revealId!=0){ // a BuildObject was picked in a viewport: scroll the Hierarchy to its row
-            for(int i=0;i<total;i++)if(saved.get(i).entry()!=null&&saved.get(i).entry().id()==revealId){savedScroll=Math.clamp(savedScroll,Math.max(0,i-rows+1),i);break;}
-            revealId=0;
+        if(newKnown!=null){ // a BuildObject was just created: it is the one that was not there before, and its row is scrolled to once it is listed
+            if(System.currentTimeMillis()>newUntil)newKnown=null;
+            else for(var e:hierarchyAll)if(!newKnown.contains(e.id())){revealId=e.id();revealUntil=newUntil;newKnown=null;break;}
+        }
+        if(revealId!=0){ // a BuildObject was picked in a viewport or created: scroll the Hierarchy to its row
+            boolean found=false;
+            for(int i=0;i<total;i++)if(saved.get(i).entry()!=null&&saved.get(i).entry().id()==revealId){savedScroll=Math.clamp(savedScroll,Math.max(0,i-rows+1),i);found=true;break;}
+            if(found||System.currentTimeMillis()>revealUntil)revealId=0; // a row still folded away or not yet sent is waited for
         }
         savedScroll=Math.clamp(savedScroll,0,Math.max(0,total-rows));
         if(hierarchyAll.isEmpty()&&groups.isEmpty())text(g,"No BuildObjects yet",x+16,top+6,MUTED);
@@ -2268,7 +2281,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
                 if(rowDragMoved&&rowDragId==gid)g.fill(x+9,ry,x+pw-9,ry+rowHeight,0xaa141c26);
                 var headControl=new Control(x+9,ry,rowRight-(x+9),rowHeight,()->{},HIDDEN_TIP+"Group · The arrow folds it · Double-click to rename · Drag to move it · Right-click for more");controls.add(headControl);renameAreas.add(new RenameArea(headControl,gid));
                 foldArrow(g,x+15,folded?ry+6:ry+7,folded,GROUP_TEXT);
-                controls.add(new Control(x+11,ry,14,rowHeight,()->ClientState.toggleGroupFolded(group.id()),HIDDEN_TIP+(folded?"Show this group's BuildObjects":"Fold this group's BuildObjects"))); // no tooltip: the arrow says what it does
+                var groupFold=new Control(x+11,ry,14,rowHeight,()->ClientState.toggleGroupFolded(group.id()),HIDDEN_TIP+(folded?"Show this group's BuildObjects":"Fold this group's BuildObjects"));controls.add(groupFold);foldControls.add(groupFold); // no tooltip: the arrow says what it does
                 var members=new ArrayList<Integer>();for(var e:hierarchyAll)if(groupIdOf(e)==group.id())members.add(e.id());
                 boolean allHidden=!members.isEmpty()&&members.stream().allMatch(ClientState::savedHidden);
                 button(g,eye,ry+2,18,rowHeight-4,"",false,()->{for(int m:members)ClientState.setSavedHidden(m,!allHidden);},allHidden?"Show the outlines of everything in this group":"Hide the outlines of everything in this group");
@@ -2277,10 +2290,10 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
                 continue;
             }
             var entry=shownRow.entry();int id=entry.id();
-            int indent=Math.min(depthOf(entry),6)*12,nameX=x+14+indent+24; // a level in is 12 further right; the arrow takes the first 12 and the cube the next 12
-            glyph(g,x+14+indent+12,ry,12,rowHeight,entry.size()>0?CUBE_FILLED:CUBE_OUTLINE,entry.active()?TEXT:MUTED); // blocks of its own: a filled cube; none (a parent, or air): an outline
+            int indent=Math.min(depthOf(entry),6)*12,nameX=x+14+indent+24+5; // a level in is 12 further right; the arrow takes the first 12, the cube the next 12, and a space (5) separates the cube from the name
             if(entry.active())g.fill(x+9,ry,rowRight,ry+rowHeight,entry.editing()?0xff5b4a84:0xff315b84);
             else if(ClientState.hoverWorld==id)g.fill(x+9,ry,rowRight,ry+rowHeight,ClientState.savedColor(id)&0xffffff|0x66000000); // under the pointer in a viewport: tinted with the outline colour it has in the world
+            glyph(g,x+14+indent+12,ry,12,rowHeight,entry.size()>0?CUBE_FILLED:CUBE_OUTLINE,entry.active()?TEXT:MUTED); // blocks of its own: a filled cube; none (a parent, or air): an outline; drawn over the row's highlight
             if(renaming==id){
                 renameShown=true;var box=renameBox(entry.name());box.setX(nameX);box.setY(ry+4);box.setWidth(eye-4-nameX);
             }else text(g,shorten(entry.name(),eye-4-nameX),nameX,ry+6,entry.active()?TEXT:MUTED);
@@ -2289,7 +2302,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
             var rowControl=new Control(x+9,ry,rowRight-(x+9),rowHeight,()->rowClick(entry),HIDDEN_TIP+savedSpan(entry)+" blocks · "+(entry.active()&&!entry.editing()?"Let go":"Select this BuildObject")); controls.add(rowControl);renameAreas.add(new RenameArea(rowControl,id));
             if(parents.contains(id)){ // something is under it: an arrow folds it
                 boolean folded=ClientState.savedFolded(id);foldArrow(g,x+15+indent,folded?ry+6:ry+7,folded,MUTED); // centred a pixel above the middle of the row
-                controls.add(new Control(x+11+indent,ry,14,rowHeight,()->ClientState.toggleSavedFolded(id),HIDDEN_TIP+(folded?"Show what is under this BuildObject":"Fold what is under this BuildObject"))); // no tooltip: the arrow says what it does
+                var fold=new Control(x+11+indent,ry,14,rowHeight,()->ClientState.toggleSavedFolded(id),HIDDEN_TIP+(folded?"Show what is under this BuildObject":"Fold what is under this BuildObject"));controls.add(fold);foldControls.add(fold); // no tooltip: the arrow says what it does
             }
             boolean hidden=ClientState.savedHidden(id);
             button(g,eye,ry+2,18,rowHeight-4,"",false,()->eyeClick(entry,minecraft.hasControlDown()),hidden?"Show this BuildObject's outline in the world · It shows while it is selected, whatever the eye · Ctrl+click does the same for everything under it":"Hide this BuildObject's outline in the world · Ctrl+click does the same for everything under it");
@@ -2317,10 +2330,10 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(renaming>=0&&!renameShown)cancelRename(); // scrolled out of view or deleted
         else if(renaming>=0&&fields.get("rename")!=null&&!fields.get("rename").isFocused())commitRename(); // a click elsewhere keeps the name
         g.fill(x+1,y+ph-30,x+pw-1,y+ph-29,LINE); // the buttons along the bottom
-        button(g,x+10,y+ph-25,24,20,"",false,()->action("saved_selection:save"),looking?"Create a BuildObject from what is selected now · While one is shown, the new one goes inside it":"Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole");
+        button(g,x+10,y+ph-25,24,20,"",false,()->{expectNewBuildObject();action("saved_selection:save");},looking?"Create a BuildObject from what is selected now · While one is shown, the new one goes inside it":"Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole");
         glyph(g,x+10,y+ph-25,24,20,PLUS,TEXT);
         boolean hoverOn=o().hoverBuildObjects;
-        button(g,x+38,y+ph-25,24,20,"",hoverOn,()->{o().hoverBuildObjects=!o().hoverBuildObjects;ClientState.save();},"Hover BuildObjects: "+(hoverOn?"on":"off")+" · While on, the BuildObject under the pointer in a viewport shows its outline and is lit in the Hierarchy");
+        button(g,x+38,y+ph-25,24,20,"",hoverOn,()->{o().hoverBuildObjects=!o().hoverBuildObjects;ClientState.save();},"Hover BuildObjects: "+(hoverOn?"on":"off")+" · While on, the BuildObject under the pointer in a viewport shows its outline and is lit in the Hierarchy · Clicking it picks it, with any tool");
         glyph(g,x+38,y+ph-25,24,20,CURSOR,TEXT);
     }
     /**
@@ -2466,7 +2479,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         items.add(row.active()&&row.editing()?item("Stop editing","",()->action("saved_selection:release")):item("Edit blocks","",()->action("saved_selection:edit:"+id)));
         items.add(divider());
         items.add(n>1?item("Group selected ("+n+")","Ctrl+G",()->action("saved_selection:group:"+csv)):item("Create empty parent",row.active()?"Ctrl+G":"",()->action("saved_selection:group:"+id)));
-        items.add(item("Create empty BuildObject","",()->action("saved_selection:createchild:"+id)));
+        items.add(item("Create empty BuildObject","",()->{expectNewBuildObject();action("saved_selection:createchild:"+id);}));
         items.add(divider());
         items.add(item("Rename",n==1&&row.active()?"F2":"",()->startRename(new RenameArea(null,id))));
         items.add(item("Duplicate","Ctrl+D",this::duplicateObjects));
@@ -2524,7 +2537,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         items.add(item("Copy path","",()->{var text="\""+group.name()+"\"";minecraft.keyboardHandler.setClipboard(text);ClientState.notify("Copied "+text);}));
         items.add(divider());
         items.add(item("Rename","",()->startRename(new RenameArea(null,GROUP_BASE+groupId))));
-        items.add(item("Create empty BuildObject here","",()->action("saved_selection:empty:"+groupId)));
+        items.add(item("Create empty BuildObject here","",()->{expectNewBuildObject();action("saved_selection:empty:"+groupId);}));
         items.add(item("Create new Group","",()->action("saved_selection:groupnew")));
         boolean folded=ClientState.groupFolded(groupId);
         items.add(item(folded?"Unfold":"Fold","",()->ClientState.toggleGroupFolded(groupId)));
@@ -2536,7 +2549,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         var items=new ArrayList<MenuItem>();
         var groups=ClientState.savedGroups();
         if(!groups.isEmpty())items.add(item("Create new Group","",()->action("saved_selection:groupnew")));
-        items.add(item("Create empty BuildObject","",()->action("saved_selection:empty"+(groups.isEmpty()?"":":"+groups.getLast().id())))); // at the end of the last group, which is where the empty space is
+        items.add(item("Create empty BuildObject","",()->{expectNewBuildObject();action("saved_selection:empty"+(groups.isEmpty()?"":":"+groups.getLast().id()));})); // at the end of the last group, which is where the empty space is
         rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=0;menu=ROW_MENU;openSub="";openSub2="";
     }
     /** The corners of the box round the blocks of the BuildObject and everything under it, or null when there are none. */
