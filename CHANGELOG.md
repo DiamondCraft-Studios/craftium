@@ -63,6 +63,9 @@ Changes since 1.5.0-beta.1.
 - The clipboard is kept packed, at about 14 bytes a block instead of about 128, so copying two million blocks holds roughly 190 MB less memory.
 - An AI or jigsaw preview describes up to 49,152 blocks (was 32,768), and an edit may reach up to 256 chunks that are not loaded (was 128), which can make the server pause longer while they generate.
 - A world holds up to 1,024 BuildObjects per dimension, up from 64.
+- BuildObjects no longer carve the world. Moving, rotating, scaling, duplicating or pasting one leaves solid blocks where they are: a block of the BuildObject that would land on one is kept hidden inside the BuildObject, with its contents, and the BuildObject keeps the rest. Where two BuildObjects overlap, the one lower in the Hierarchy (a child over its parent) wins the cell, and the other keeps its block hidden.
+- Hidden blocks come back where the world is free: they go along when the BuildObject moves, turns or scales, and are placed again wherever the new place allows. Water, grass and snow a BuildObject covers are given back when it leaves, and a block of another BuildObject that was hidden under it returns. Undo and Redo give all of it back too.
+- Place here, in the Hierarchy menu, places what a BuildObject keeps hidden where it stands, for example after you remove the block that was in the way.
 - Edits and selections go up to 2,097,152 blocks, twice as many as before.
 - Undo history is kept packed, at about 16 bytes a block instead of about 128, so a big edit takes far less of the history budget.
 - A Large edit window shows how far an edit of 100,000 blocks or more has got (blocks done, percent, time left) while the server applies, undoes or redoes it. It is a window like the others: move it, resize it, fold it, or close it for the rest of that edit.
