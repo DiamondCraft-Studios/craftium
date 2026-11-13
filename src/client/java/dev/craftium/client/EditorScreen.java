@@ -2379,6 +2379,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     private record HRow(dev.craftium.net.Packets.SavedGroup group,dev.craftium.net.Packets.SavedSelection entry){int id(){return group!=null?GROUP_BASE+group.id():entry.id();}}
     /** The group a BuildObject is in as far as the Hierarchy is concerned: its own, or the first when the server named one that is not there. 0 when there are no groups. */
     private int groupIdOf(dev.craftium.net.Packets.SavedSelection e){
+        var known=hierarchyModel().group.get(e.id());if(known!=null)return known;
         var groups=ClientState.savedGroups();if(groups.isEmpty())return 0;
         for(var gr:groups)if(gr.id()==e.group())return gr.id();
         return groups.getFirst().id();
@@ -2386,21 +2387,63 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     private int groupIdOfRow(HRow row){return row.group()!=null?row.group().id():groupIdOf(row.entry());}
     private dev.craftium.net.Packets.SavedGroup groupById(int id){for(var gr:ClientState.savedGroups())if(gr.id()==id)return gr;return null;}
     /** The BuildObjects at the top level in a group (all of them when {@code group} is 0). */
-    private int rootCount(int group){int k=0;for(var e:hierarchyAll)if(e.parent()==0&&(group==0||groupIdOf(e)==group))k++;return k;}
-    private void hierarchyPanel(Gfx g){
-        hierarchyAll=ClientState.savedSelections();
-        var groups=ClientState.savedGroups();
-        var saved=new ArrayList<HRow>(); // the rows shown: a heading for each group, and in it everything but what is under a folded BuildObject
+    private int rootCount(int group){return hierarchyModel().roots.getOrDefault(group,0);}
+
+    /**
+     * What the Hierarchy works out from the BuildObjects and groups: who is whose parent and how deep, which group each is in, who has children, and the rows
+     * that are shown. It is built once and kept until the lists or a fold change, so a frame only draws the rows in view instead of working all of them out again.
+     */
+    private static final class HModel{
+        final Map<Integer,dev.craftium.net.Packets.SavedSelection> byId=new HashMap<>();
+        final Map<Integer,Integer> depth=new HashMap<>(),group=new HashMap<>(),children=new HashMap<>(),roots=new HashMap<>();
+        final Set<Integer> parents=new HashSet<>();
+        final Map<Integer,List<dev.craftium.net.Packets.SavedSelection>> members=new HashMap<>();
+        final Map<Integer,List<Integer>> memberIds=new HashMap<>();
+        List<HRow> rows=List.of();
+    }
+    private HModel hierarchyModel;private List<dev.craftium.net.Packets.SavedSelection> modelSelections;private List<dev.craftium.net.Packets.SavedGroup> modelGroups;private int modelVersion=-1;
+    /** The Hierarchy's model, built again only when the lists the server sent or a fold have changed since. */
+    private HModel hierarchyModel(){
+        var all=ClientState.savedSelections();var groups=ClientState.savedGroups();
+        if(hierarchyModel==null||all!=modelSelections||groups!=modelGroups||modelVersion!=ClientState.hierarchyVersion){
+            modelSelections=all;modelGroups=groups;modelVersion=ClientState.hierarchyVersion;
+            hierarchyModel=buildHierarchy(all,groups);hierarchyAll=all;
+        }
+        return hierarchyModel;
+    }
+    private static HModel buildHierarchy(List<dev.craftium.net.Packets.SavedSelection> all,List<dev.craftium.net.Packets.SavedGroup> groups){
+        var m=new HModel();
+        for(var e:all)m.byId.put(e.id(),e);
+        var known=new HashSet<Integer>();for(var gr:groups)known.add(gr.id());
+        int first=groups.isEmpty()?0:groups.getFirst().id();
+        for(var e:all){
+            int gid=groups.isEmpty()?0:known.contains(e.group())?e.group():first; // its own group, or the first when the server named one that is not there
+            m.group.put(e.id(),gid);
+            m.parents.add(e.parent());
+            m.children.merge(e.parent(),1,Integer::sum);
+            if(e.parent()==0){m.roots.merge(0,1,Integer::sum);if(gid!=0)m.roots.merge(gid,1,Integer::sum);}
+            int d=0;for(var p=m.byId.get(e.parent());p!=null&&d<64;p=m.byId.get(p.parent()))d++;
+            m.depth.put(e.id(),d);
+            m.members.computeIfAbsent(gid,k->new ArrayList<>()).add(e);
+            m.memberIds.computeIfAbsent(gid,k->new ArrayList<>()).add(e.id());
+        }
+        var rows=new ArrayList<HRow>(); // the rows shown: a heading for each group, and in it everything but what is under a folded BuildObject
         for(var gr:groups.isEmpty()?java.util.Collections.singletonList((dev.craftium.net.Packets.SavedGroup)null):groups){
-            if(gr!=null){saved.add(new HRow(gr,null));if(ClientState.groupFolded(gr.id()))continue;}
-            for(var e:hierarchyAll){
-                if(gr!=null&&groupIdOf(e)!=gr.id())continue;
-                boolean shown=true;int n=0;for(var p=savedById(e.parent());p!=null&&n<64;p=savedById(p.parent()),n++)if(ClientState.savedFolded(p.id())){shown=false;break;}
-                if(shown)saved.add(new HRow(null,e));
+            if(gr!=null){rows.add(new HRow(gr,null));if(ClientState.groupFolded(gr.id()))continue;}
+            for(var e:gr==null?all:m.members.getOrDefault(gr.id(),List.of())){
+                boolean shown=true;int n=0;for(var p=m.byId.get(e.parent());p!=null&&n<64;p=m.byId.get(p.parent()),n++)if(ClientState.savedFolded(p.id())){shown=false;break;}
+                if(shown)rows.add(new HRow(null,e));
             }
         }
+        m.rows=rows;
+        return m;
+    }
+    private void hierarchyPanel(Gfx g){
+        var model=hierarchyModel();
+        var groups=ClientState.savedGroups();
+        var saved=model.rows;
         hierarchyRows=saved;
-        var parents=new HashSet<Integer>();for(var e:hierarchyAll)parents.add(e.parent());
+        var parents=model.parents;
         int x=w-RIGHT,y=27;
         panel(g,x,y,RIGHT,Math.max(90,groupTop()-6-y),"Hierarchy");
         boolean looking=ClientState.activeSaved()!=null;
@@ -2441,7 +2484,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
                 var headControl=new Control(x+9,ry,rowRight-(x+9),rowHeight,()->{},HIDDEN_TIP+"Group · The arrow folds it · Double-click to rename · Drag to move it · Right-click for more");controls.add(headControl);renameAreas.add(new RenameArea(headControl,gid));
                 foldArrow(g,x+15,folded?ry+6:ry+7,folded,GROUP_TEXT);
                 var groupFold=new Control(x+11,ry,14,rowHeight,()->ClientState.toggleGroupFolded(group.id()),HIDDEN_TIP+(folded?"Show this group's BuildObjects":"Fold this group's BuildObjects"));controls.add(groupFold);foldControls.add(groupFold); // no tooltip: the arrow says what it does
-                var members=new ArrayList<Integer>();for(var e:hierarchyAll)if(groupIdOf(e)==group.id())members.add(e.id());
+                var members=model.memberIds.getOrDefault(group.id(),List.of());
                 boolean allHidden=!members.isEmpty()&&members.stream().allMatch(ClientState::savedHidden);
                 button(g,eye,ry+2,18,rowHeight-4,"",false,()->{for(int m:members)ClientState.setSavedHidden(m,!allHidden);},allHidden?"Show the outlines of everything in this group":"Hide the outlines of everything in this group");
                 glyph(g,eye,ry+2,18,rowHeight-4,EYE,allHidden?0xff56606e:TEXT);
@@ -2746,14 +2789,14 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     private int rowDragId=-1,hierarchyTop,hierarchyRow=20,hierarchyRowCount=1;private double rowDragX,rowDragY;private boolean rowDragMoved;private Runnable rowDragClick;
     /** The BuildObjects as the client has them, and the rows listed of them (those not under a folded one), for the drag to work out where it lands. */
     private List<dev.craftium.net.Packets.SavedSelection> hierarchyAll=List.of();private List<HRow> hierarchyRows=List.of();
-    private dev.craftium.net.Packets.SavedSelection savedById(int id){if(id==0)return null;for(var e:hierarchyAll)if(e.id()==id)return e;return null;}
-    private int depthOf(dev.craftium.net.Packets.SavedSelection e){int d=0;for(var p=savedById(e.parent());p!=null&&d<64;p=savedById(p.parent()))d++;return d;}
+    private dev.craftium.net.Packets.SavedSelection savedById(int id){return id==0?null:hierarchyModel().byId.get(id);}
+    private int depthOf(dev.craftium.net.Packets.SavedSelection e){var known=hierarchyModel().depth.get(e.id());if(known!=null)return known;int d=0;for(var p=savedById(e.parent());p!=null&&d<64;p=savedById(p.parent()))d++;return d;}
     private boolean isUnder(dev.craftium.net.Packets.SavedSelection e,int ancestor){int n=0;for(var p=savedById(e.parent());p!=null&&n<64;p=savedById(p.parent()),n++)if(p.id()==ancestor)return true;return false;}
     /** Which child of its parent the row is, counting the others before it. */
     private int siblingIndex(dev.craftium.net.Packets.SavedSelection e){int k=0;for(var o:hierarchyAll){if(o.id()==e.id())return k;if(o.parent()==e.parent()&&(e.parent()!=0||groupIdOf(o)==groupIdOf(e)))k++;}return k;} // at the top level, the place in its group
     /** How many BuildObjects are beside this one, itself included: under its parent, or in its group at the top level. */
     private int siblingCount(dev.craftium.net.Packets.SavedSelection e){return e.parent()==0?rootCount(groupIdOf(e)):childCount(e.parent());}
-    private int childCount(int id){int k=0;for(var o:hierarchyAll)if(o.parent()==id)k++;return k;}
+    private int childCount(int id){return hierarchyModel().children.getOrDefault(id,0);}
     /** What dropping a dragged row here does: under {@code parent} (0 for the top) as child number {@code index}, shown by {@code kind} at {@code row}. */
     private record Drop(int parent,int index,int kind,int row,int group){}
     private static final int DROP_ABOVE=0,DROP_BELOW=1,DROP_INTO=2,DROP_FIRST_CHILD=3,DROP_END=4,DROP_GROUP_BEFORE=5,DROP_GROUP_AFTER=6;

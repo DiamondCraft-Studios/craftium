@@ -65,6 +65,13 @@ public final class ClientState {
     /** The selections the player saved, as the server last said; empty on a server that has none or does not know them. */
     private static List<Packets.SavedSelection> savedSelections=List.of();
     public static List<Packets.SavedSelection> savedSelections(){return savedSelections;}
+    /** The saved selections by id, rebuilt with the list, so a parent is found without scanning it. */
+    private static Map<Integer,Packets.SavedSelection> savedById=Map.of();
+    private static void indexSaved(){var map=new HashMap<Integer,Packets.SavedSelection>(savedSelections.size()*2);for(var e:savedSelections)map.put(e.id(),e);savedById=map;}
+    /** The saved selection with this id, or null. */
+    public static Packets.SavedSelection savedById(int id){return savedById.get(id);}
+    /** A number that changes whenever something the Hierarchy's rows depend on besides the lists themselves does: a fold, or the folds read back from this player's file. */
+    public static int hierarchyVersion;
     /** The outline colour of each saved selection by id. A colour belongs to the client: it starts as the selection colour turned by the golden angle for each one saved before it, and the player can change it. */
     private static final Map<Integer,Integer> savedColors=new HashMap<>();
     /** The place in the hue wheel each entry's starting colour was taken from. */
@@ -79,6 +86,7 @@ public final class ClientState {
     static void updateSavedSelections(Packets.Status status){
         if(status.savedSelections()==null)return;
         savedSelections=List.copyOf(status.savedSelections());
+        indexSaved();hierarchyVersion++;
         loadView();
         // Folds belong to this player, not to the world: they are read from this player's own file by GUID, whatever the server has stored.
         if(status.savedGroups()!=null){savedGroups=List.copyOf(status.savedGroups());for(var g:savedGroups){if(g.guid()!=null&&view.folded(g.guid()))groupFolded.add(g.id());else groupFolded.remove(g.id());}}
@@ -113,6 +121,7 @@ public final class ClientState {
     public static void toggleGroupFolded(int id){
         boolean folded=!groupFolded.contains(id);
         if(folded)groupFolded.add(id);else groupFolded.remove(id);
+        hierarchyVersion++;
         String guid=null;for(var g:savedGroups)if(g.id()==id)guid=g.guid();
         if(guid!=null&&view.setFolded(guid,folded))viewChanged();
     }
@@ -126,7 +135,7 @@ public final class ClientState {
         int best=0,bestDepth=-1;
         for(var e:savedSelections){
             var blocks=savedBlocks.get(e.id());if(blocks==null||!blocks.contains(block))continue;
-            int depth=0,n=0;for(var p=e;p!=null&&n++<64;){Packets.SavedSelection next=null;for(var q:savedSelections)if(q.id()==p.parent()){next=q;break;}p=next;if(p!=null)depth++;}
+            int depth=0,n=0;for(var p=e;p!=null&&n++<64;){p=savedById.get(p.parent());if(p!=null)depth++;}
             if(depth>bestDepth){best=e.id();bestDepth=depth;}
         }
         return best;
@@ -141,7 +150,7 @@ public final class ClientState {
         if(hidden)savedHidden.add(id);else savedHidden.remove(id);
         var guid=guidOf(id);if(guid!=null&&view.setHidden(guid,hidden))viewChanged();
     }
-    private static String guidOf(int id){for(var e:savedSelections)if(e.id()==id)return e.guid();return null;}
+    private static String guidOf(int id){var e=savedById.get(id);return e==null?null:e.guid();}
     /** What this player chose to see of the Hierarchy, kept by GUID in {@code config/craftium/hierarchy-view.json} (see {@link dev.craftium.core.HierarchyView}). */
     private static final dev.craftium.core.HierarchyView view=new dev.craftium.core.HierarchyView();
     private static boolean viewLoaded,viewDirty;private static long viewChangedAt;
@@ -180,8 +189,7 @@ public final class ClientState {
         int steps=0;var at=saved;
         while(at!=null&&steps++<64){
             if(at.id()==ancestor)return true;
-            Packets.SavedSelection next=null;for(var e:savedSelections)if(e.id()==at.parent()){next=e;break;}
-            at=next;
+            at=savedById.get(at.parent());
         }
         return false;
     }
@@ -191,9 +199,10 @@ public final class ClientState {
     public static void toggleSavedFolded(int id){
         boolean folded=!savedFolded.contains(id);
         if(folded)savedFolded.add(id);else savedFolded.remove(id);
+        hierarchyVersion++;
         var guid=guidOf(id);if(guid!=null&&view.setFolded(guid,folded))viewChanged();
     }
-    static void clearSavedSelections(){savedSelections=List.of();savedGroups=List.of();groupFolded.clear();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedBlocks.clear();savedIndex.clear();hoverWorld=0;}
+    static void clearSavedSelections(){savedSelections=List.of();savedById=Map.of();hierarchyVersion++;savedGroups=List.of();groupFolded.clear();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedBlocks.clear();savedIndex.clear();hoverWorld=0;}
     public static int savedColor(int id){return savedColors.getOrDefault(id,options.selectionColor);}
     private static final Set<Integer> savedWithoutGuid=new HashSet<>();
     /** Whether a colour was chosen for it: every BuildObject is drawn in the selection colour until one is. */
