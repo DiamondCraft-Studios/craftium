@@ -57,6 +57,7 @@ public final class SavedSelections {
         private int color;
         private Group group;
         private boolean folded;
+        private PackedCells dormant = PackedCells.EMPTY, replaced = PackedCells.EMPTY;
 
         Entry(int id, String name, Collection<Point> points) {
             this(id, java.util.UUID.randomUUID().toString(), name, points);
@@ -126,6 +127,14 @@ public final class SavedSelections {
         public int size() {
             return points.size();
         }
+        /** Its own blocks that are not in the world because a solid world block or another BuildObject won the cell. It keeps them, and writes them where the cell is free. */
+        public PackedCells dormant() {
+            return dormant;
+        }
+        /** The world blocks it wrote over (air is not kept), which it gives back when it moves away. */
+        public PackedCells replaced() {
+            return replaced;
+        }
         /** Goes up whenever the blocks change, so what was sent of them can be told from what is there now. */
         public int version() {
             return version;
@@ -167,8 +176,26 @@ public final class SavedSelections {
         public List<Saved> saved() {
             var out = new ArrayList<Saved>();
             for (var e : entries)
-                out.add(new Saved(e.id, e.guid, e.name, e.parentId(), e.color, e.points, e.ownGroupId(), e.folded));
+                out.add(new Saved(
+                        e.id,
+                        e.guid,
+                        e.name,
+                        e.parentId(),
+                        e.color,
+                        e.points,
+                        e.ownGroupId(),
+                        e.folded,
+                        e.dormant,
+                        e.replaced));
             return out;
+        }
+        /** How many cells all the BuildObjects of a tree may hold between them, dormant and replaced: the memory guard (about 10 bytes a cell). */
+        public static final int HELD_LIMIT = 8_388_608;
+        /** The cells every BuildObject holds, dormant and replaced. */
+        public long held() {
+            long n = 0;
+            for (var e : entries) n += e.dormant.size() + e.replaced.size();
+            return n;
         }
         /**
          * A tree as it was saved. A BuildObject whose parent is not before it in the list (a file that was edited by hand, or damaged) goes to the top level, so the list is
@@ -204,6 +231,10 @@ public final class SavedSelections {
                     continue;
                 var e = new Entry(r.id(), r.guid(), r.name().isBlank() ? "BuildObject" : r.name(), r.points());
                 e.color = r.color();
+                if (tree.held() + r.dormant().size() + r.replaced().size() <= HELD_LIMIT) {
+                    e.dormant = r.dormant();
+                    e.replaced = r.replaced();
+                }
                 e.parent = byId.get(r.parentId());
                 byId.put(e.id, e);
                 tree.entries.add(e);
@@ -225,7 +256,21 @@ public final class SavedSelections {
             int color,
             List<Point> points,
             int groupId,
-            boolean folded) {
+            boolean folded,
+            PackedCells dormant,
+            PackedCells replaced) {
+        /** A BuildObject of a file from before dormant blocks. */
+        public Saved(
+                int id,
+                String guid,
+                String name,
+                int parentId,
+                int color,
+                List<Point> points,
+                int groupId,
+                boolean folded) {
+            this(id, guid, name, parentId, color, points, groupId, folded, PackedCells.EMPTY, PackedCells.EMPTY);
+        }
         /** A BuildObject of a file from before groups. */
         public Saved(int id, String guid, String name, int parentId, int color, List<Point> points) {
             this(id, guid, name, parentId, color, points, 0, false);
@@ -478,6 +523,34 @@ public final class SavedSelections {
         }
         if (changed) changed();
         return changed;
+    }
+    /**
+     * Sets what a BuildObject holds that is not in the world: its dormant blocks and the world blocks it replaced. The stores are copied, so the caller keeps its own.
+     * Refused when either goes past {@link Selection#LIMIT} cells or the tree's total would pass {@link Tree#HELD_LIMIT}; nothing is changed then.
+     * Returns whether anything changed.
+     */
+    public boolean setHeld(int id, PackedCells dormant, PackedCells replaced) {
+        Entry e = byId(id);
+        if (e == null) throw new IllegalArgumentException("No such BuildObject");
+        if (dormant.size() > Selection.LIMIT || replaced.size() > Selection.LIMIT)
+            throw new IllegalArgumentException("A BuildObject holds up to " + String.format("%,d", Selection.LIMIT)
+                    + " dormant and as many replaced blocks");
+        long others = tree.held() - e.dormant.size() - e.replaced.size();
+        if (others + dormant.size() + replaced.size() > Tree.HELD_LIMIT)
+            throw new IllegalArgumentException("The BuildObjects of this world hold up to "
+                    + String.format("%,d", Tree.HELD_LIMIT) + " dormant and replaced blocks between them");
+        if (same(e.dormant, dormant) && same(e.replaced, replaced)) return false;
+        e.dormant = dormant.isEmpty() ? PackedCells.EMPTY : dormant.copy();
+        e.replaced = replaced.isEmpty() ? PackedCells.EMPTY : replaced.copy();
+        tree.mutations++; // saved to disk, but no client is sent them, so the revision stays
+        return true;
+    }
+
+    private static boolean same(PackedCells a, PackedCells b) {
+        return a.size() == b.size()
+                && Arrays.equals(a.keysArray(), b.keysArray())
+                && a.paletteList().equals(b.paletteList())
+                && Arrays.equals(a.indexesArray(), b.indexesArray());
     }
     /** The blocks of the BuildObject and of everything under it: what looking at it shows. */
     public Set<Point> effective(Entry entry) {
