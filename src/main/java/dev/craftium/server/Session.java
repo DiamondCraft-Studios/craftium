@@ -55,8 +55,6 @@ final class Session {
     String pendingData="";boolean pendingDirty;
     /** The ghost a plugin's tool is showing for this player, as an edit and as the data the client is sent. It is not an edit waiting to be built. */
     Edit pluginPreview;String pluginPreviewData="";boolean pluginPreviewDirty;
-    /** The plugin ghost is the export window's preview in the world, which a tool's cursor ghost must not clear. */
-    boolean exportGhost;
     /** A jigsaw preview's layout and how it is drawn, which only apply while {@link #pendingEdit} is still the edit it was made for. */
     Edit layoutFor;GhostCodec.Layout layout;boolean layoutBlocks=true;
     /** What the jigsaw planner last said about its run, sent once to the client when it changes (see {@link #takeJigsawReport}). */

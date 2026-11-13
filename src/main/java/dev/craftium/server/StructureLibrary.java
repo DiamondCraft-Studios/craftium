@@ -25,27 +25,6 @@ final class StructureLibrary {
                 if(data.length()>1_300_000)throw new IllegalArgumentException("The structure is too detailed to preview");
                 ServerPlatform.send(player,new Packets.Download("preview","preview",data,""));yield "";
             }
-            case "structure_world_preview"->{
-                // The structure as the file will hold it, drawn in the world as ghost blocks (the way a jigsaw preview is) beside where it comes from. It is not an edit: nothing is built from it.
-                var built=StructureBuilder.build(p,player);
-                var anchor=p.o.structure.source.equals(StructureSettings.CLIPBOARD)
-                    ?new Point(player.getBlockX()+3,player.getBlockY(),player.getBlockZ())
-                    :new Point(built.origin.x()+built.source[0]+3,built.origin.y(),built.origin.z());
-                var changes=new ArrayList<Session.Change>();
-                for(int y=0;y<built.sizeY;y++)for(int z=0;z<built.sizeZ;z++)for(int x=0;x<built.sizeX;x++){
-                    var cell=built.cells[built.index(x,y,z)];if(cell==null||cell.state().isAir())continue;
-                    var at=new Point(anchor.x()+x,anchor.y()+y,anchor.z()+z);
-                    changes.add(new Session.Change(at,BlockSnapshot.capture(p.level,EditPlanner.pos(at)),new BlockSnapshot(cell.state(),null)));
-                }
-                if(changes.isEmpty())throw new IllegalArgumentException("There are no blocks to show");
-                p.session.pluginPreview=new Session.Edit("Export preview",changes,List.of(),0);p.session.pluginPreviewDirty=true;p.session.exportGhost=true;
-                EditorServer.sendPluginPreview(player,p.session);
-                yield "Showing the structure in the world beside "+(p.o.structure.source.equals(StructureSettings.CLIPBOARD)?"you":"its source")+(changes.size()>GhostCodec.LIMIT?" · the "+GhostCodec.LIMIT+" outermost blocks are drawn":"");
-            }
-            case "structure_world_clear"->{
-                p.session.pluginPreview=null;p.session.pluginPreviewDirty=true;p.session.exportGhost=false;
-                EditorServer.sendPluginPreview(player,p.session);yield "Preview in the world cleared";
-            }
             case "structure_export_file"->{
                 var built=StructureBuilder.build(p,player);var s=built.settings;byte[] bytes;
                 if(s.bedrock())bytes=built.bedrockBytes();
