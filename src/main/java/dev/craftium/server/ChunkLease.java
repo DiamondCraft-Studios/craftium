@@ -17,7 +17,7 @@ import java.util.*;
  */
 final class ChunkLease implements AutoCloseable {
     /** Most chunks one lease may load that were not loaded already; past it the edit is refused instead of stalling the server. */
-    static final int MAX_NEW_CHUNKS = 128;
+    static final int MAX_NEW_CHUNKS = 256;
     static final ChunkLease NONE = new ChunkLease(null, List.of());
 
     /** Loads the chunk and nothing else: it neither ticks, nor saves itself in the world's list of forced chunks, nor times out. */
