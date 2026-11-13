@@ -19,4 +19,10 @@ class SavedSelectionHiddenTest {
         var none=new Packets.SavedSelection(1,"A",0,new Point(0,0,0),new Point(0,0,0),true,false,null,"g",0,0,1,false);
         assertEquals(0,none.hidden());assertNull(none.hiddenMin());
     }
+    @Test void theHiddenBlocksWithTheirStatesAreOnlyThereWhenAsked(){
+        var plain=new Packets.SavedSelection(1,"A",0,new Point(0,0,0),new Point(0,0,0),true,false,null,"g",0,0,1,false,7,"xyz",new Point(1,2,3),new Point(4,5,6));
+        assertNull(plain.hiddenGhost());
+        var asked=new Packets.SavedSelection(1,"A",0,new Point(0,0,0),new Point(0,0,0),true,false,null,"g",0,0,1,false,7,null,new Point(1,2,3),new Point(4,5,6),"{\"total\":7}");
+        assertEquals("{\"total\":7}",Packets.JSON.fromJson(Packets.JSON.toJson(asked),Packets.SavedSelection.class).hiddenGhost());
+    }
 }

@@ -99,10 +99,16 @@ public final class Packets {
                                  /** Those blocks as {@code SelectionCodec} text, to draw them as an x-ray: null means the client already has them, and empty means none or left out because the status was too big. */
                                  String hiddenData,
                                  /** The corners of the box around the hidden blocks, or null when there are none: where the gizmo is when nothing of it is in the world. */
-                                 Point hiddenMin,Point hiddenMax) {
+                                 Point hiddenMin,Point hiddenMax,
+                                 /** The hidden blocks with their block states, as ghost data, for a preview while the BuildObject is dragged: null unless the client asked for them (it holds them only for the drag). */
+                                 String hiddenGhost) {
+        /** A BuildObject with the hidden blocks of its outline but not their block states. */
+        public SavedSelection(int id, String name, int size, Point min, Point max, boolean active, boolean editing, String data, String guid, int parent, int color, int group, boolean folded, int hidden, String hiddenData, Point hiddenMin, Point hiddenMax) {
+            this(id, name, size, min, max, active, editing, data, guid, parent, color, group, folded, hidden, hiddenData, hiddenMin, hiddenMax, null);
+        }
         /** A BuildObject from a server that predates hidden blocks, or one with none. */
         public SavedSelection(int id, String name, int size, Point min, Point max, boolean active, boolean editing, String data, String guid, int parent, int color, int group, boolean folded) {
-            this(id, name, size, min, max, active, editing, data, guid, parent, color, group, folded, 0, null, null, null);
+            this(id, name, size, min, max, active, editing, data, guid, parent, color, group, folded, 0, null, null, null, null);
         }
     }
     /** One group of the Hierarchy: a heading that BuildObjects at the top level sit under. */

@@ -83,6 +83,14 @@ final class GhostCodec {
             &&placedAt.contains(key(new Point(p.x(),p.y(),p.z()+1)))&&placedAt.contains(key(new Point(p.x(),p.y(),p.z()-1)));
     }
 
+    /** The blocks a BuildObject keeps out of the world, with their states, at their own cells (not relative to anything), for a preview of dragging it. */
+    static String encodeHidden(dev.craftium.core.PackedCells hidden,int limit){
+        long[] keys=hidden.keysArray();var states=hidden.paletteList();int[] index=hidden.indexesArray();
+        int n=Math.min(keys.length,limit);var blocks=new int[n*4];
+        for(int i=0;i<n;i++){var at=dev.craftium.core.PackedCells.unpack(keys[i]);blocks[i*4]=at.x();blocks[i*4+1]=at.y();blocks[i*4+2]=at.z();blocks[i*4+3]=index[i];}
+        return Packets.JSON.toJson(new Ghost(new ArrayList<>(states),blocks,new int[0],keys.length));
+    }
+
     /** The clipboard's non-air blocks, positioned relative to where it will be pasted. */
     static String encodeClipboard(Map<Point,BlockSnapshot> clipboard){
         var palette=new LinkedHashMap<BlockState,Integer>();var blocks=new ArrayList<Integer>();int total=0;

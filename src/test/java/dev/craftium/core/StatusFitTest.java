@@ -127,4 +127,13 @@ class StatusFitTest {
         assertEquals(1_000, kept.get("data").getAsString().length(), "its own blocks are kept");
         assertEquals(40, kept.get("hidden").getAsInt(), "how many are hidden is still said");
     }
+    @Test void theHiddenBlocksWithTheirStatesAreLeftOutWhenTheyAreWhatDoesNotFit() {
+        var entry = new JsonObject();
+        entry.addProperty("id", 3);entry.addProperty("data", "d".repeat(1_000));entry.addProperty("hiddenData", "h".repeat(2_000));entry.addProperty("hiddenGhost", "g".repeat(3_000_000));
+        var list = new com.google.gson.JsonArray();list.add(entry);
+        var o = new JsonObject();o.add("savedSelections", list);
+        var kept = JsonParser.parseString(StatusFit.fit(o.toString(), 1_500_000, "too big")).getAsJsonObject().getAsJsonArray("savedSelections").get(0).getAsJsonObject();
+        assertEquals("", kept.get("hiddenGhost").getAsString());
+        assertEquals(2_000, kept.get("hiddenData").getAsString().length());assertEquals(1_000, kept.get("data").getAsString().length());
+    }
 }

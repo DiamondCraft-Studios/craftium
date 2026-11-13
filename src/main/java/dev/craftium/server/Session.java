@@ -74,6 +74,8 @@ final class Session {
     final Map<Integer,Integer> savedDataSent=new HashMap<>();
     /** The version of what each BuildObject keeps hidden that this player was last sent, to send it again only when it changes. */
     final Map<Integer,Integer> savedHiddenSent=new HashMap<>();
+    /** The BuildObjects whose hidden blocks, with their states, this player asked for to preview a drag: sent once with the next list, then forgotten. */
+    final Set<Integer> hiddenGhostWanted=new HashSet<>();
     /** What the last AI spec planned looked wrong in (see BuildSpec.Result#warnings), for the reply that describes its preview. */
     List<String> specWarnings=List.of();
     /** The clipboard's blocks as a ghost for the placement preview, and whether it needs encoding again. */
