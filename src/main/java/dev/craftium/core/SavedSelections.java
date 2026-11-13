@@ -58,6 +58,9 @@ public final class SavedSelections {
         private Group group;
         private boolean folded;
         private PackedCells dormant = PackedCells.EMPTY, replaced = PackedCells.EMPTY;
+        private int heldVersion;
+        private int[] hiddenBox;
+        private int hiddenBoxFor = -1;
 
         Entry(int id, String name, Collection<Point> points) {
             this(id, java.util.UUID.randomUUID().toString(), name, points);
@@ -134,6 +137,33 @@ public final class SavedSelections {
         /** The world blocks it wrote over (air is not kept), which it gives back when it moves away. */
         public PackedCells replaced() {
             return replaced;
+        }
+        /** Goes up whenever what it keeps outside the world changes, so what was sent of it can be told from what is there now. */
+        public int heldVersion() {
+            return heldVersion;
+        }
+        /** The box around its dormant blocks as {x0,y0,z0,x1,y1,z1}, or null when it keeps none. Worked out once for each change. */
+        public int[] hiddenBounds() {
+            if (dormant.isEmpty()) return null;
+            if (hiddenBox != null && hiddenBoxFor == heldVersion) return hiddenBox;
+            int[] b = {
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                Integer.MIN_VALUE,
+                Integer.MIN_VALUE,
+                Integer.MIN_VALUE
+            };
+            for (var p : dormant.points()) {
+                b[0] = Math.min(b[0], p.x());
+                b[1] = Math.min(b[1], p.y());
+                b[2] = Math.min(b[2], p.z());
+                b[3] = Math.max(b[3], p.x());
+                b[4] = Math.max(b[4], p.y());
+                b[5] = Math.max(b[5], p.z());
+            }
+            hiddenBoxFor = heldVersion;
+            return hiddenBox = b;
         }
         /** Goes up whenever the blocks change, so what was sent of them can be told from what is there now. */
         public int version() {
@@ -542,7 +572,9 @@ public final class SavedSelections {
         if (e.dormant.sameContent(dormant) && e.replaced.sameContent(replaced)) return false;
         e.dormant = dormant.isEmpty() ? PackedCells.EMPTY : dormant.copy();
         e.replaced = replaced.isEmpty() ? PackedCells.EMPTY : replaced.copy();
-        tree.mutations++; // saved to disk, but no client is sent them, so the revision stays
+        e.heldVersion++;
+        tree.mutations++;
+        tree.revision++; // saved to disk, and each client is told which blocks are hidden, to draw them
         return true;
     }
     /** What a BuildObject keeps outside the world, for undo and redo. Never changed once made, so it is shared, not copied. */
@@ -575,9 +607,13 @@ public final class SavedSelections {
             if (e.dormant.sameContent(h.dormant) && e.replaced.sameContent(h.replaced)) continue;
             e.dormant = h.dormant.isEmpty() ? PackedCells.EMPTY : h.dormant;
             e.replaced = h.replaced.isEmpty() ? PackedCells.EMPTY : h.replaced;
+            e.heldVersion++;
             changed = true;
         }
-        if (changed) tree.mutations++;
+        if (changed) {
+            tree.mutations++;
+            tree.revision++;
+        }
         return changed;
     }
     /** The blocks of the BuildObject and of everything under it: what looking at it shows. */

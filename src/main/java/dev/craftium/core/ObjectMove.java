@@ -35,8 +35,15 @@ public final class ObjectMove {
         }
     }
 
-    /** A BuildObject as the move sees it: the cells it holds in the world, and what it keeps outside it. */
-    public record Obj(int id, Set<Point> own, PackedCells dormant, PackedCells replaced) {}
+    /**
+     * A BuildObject as the move sees it: the cells it holds in the world, and what it keeps outside it. {@code carried} is set for one that holds nothing in the
+     * world (everything it has is dormant) but is shown with the selection: it moves with it, so its hidden blocks go through the same steps.
+     */
+    public record Obj(int id, Set<Point> own, PackedCells dormant, PackedCells replaced, boolean carried) {
+        public Obj(int id, Set<Point> own, PackedCells dormant, PackedCells replaced) {
+            this(id, own, dormant, replaced, false);
+        }
+    }
 
     /** A block that landed in a cell (as it lands: a transform may have turned it), and the cell it came from. */
     public record Landing(Point from, Block block) {}
@@ -47,9 +54,11 @@ public final class ObjectMove {
      */
     public record Result(Map<Point, Block> writes, Map<Integer, Obj> objects, Set<Point> landed) {}
 
-    /** Whether an object moves whole for this selection, and so takes its dormant blocks along. */
+    /** Whether an object moves whole for this selection, and so takes its dormant blocks along: all it holds in the world is selected, or it holds nothing there and is carried. */
     public static boolean moves(Obj o, Set<Point> source) {
-        return !o.own().isEmpty() && source.containsAll(o.own());
+        return o.carried()
+                ? o.own().isEmpty() || source.containsAll(o.own())
+                : !o.own().isEmpty() && source.containsAll(o.own());
     }
 
     /** A move by a one-to-one map of cells (a shift, a quarter turn, a mirror). */
@@ -204,7 +213,8 @@ public final class ObjectMove {
         for (var e : current.entrySet())
             if (!e.getValue().equals(orAir(worldState.apply(e.getKey())))) writes.put(e.getKey(), e.getValue());
         var changed = new LinkedHashMap<Integer, Obj>();
-        for (var w : work.values()) if (w.touched) changed.put(w.id, new Obj(w.id, w.own, w.dormant, w.replaced));
+        for (var w : work.values())
+            if (w.touched) changed.put(w.id, new Obj(w.id, w.own, w.dormant, w.replaced, false));
         return new Result(writes, changed, landedCells);
     }
 
@@ -300,7 +310,8 @@ public final class ObjectMove {
         for (var e : current.entrySet())
             if (!e.getValue().equals(orAir(worldState.apply(e.getKey())))) writes.put(e.getKey(), e.getValue());
         var changed = new LinkedHashMap<Integer, Obj>();
-        for (var w : work.values()) if (w.touched) changed.put(w.id, new Obj(w.id, w.own, w.dormant, w.replaced));
+        for (var w : work.values())
+            if (w.touched) changed.put(w.id, new Obj(w.id, w.own, w.dormant, w.replaced, false));
         return new Result(writes, changed, landedCells);
     }
 
