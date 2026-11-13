@@ -237,6 +237,21 @@ class SavedSelectionsTest {
         var saved=new SavedSelections();for(int i=0;i<SavedSelections.MAX;i++)saved.save(live(new Point(i+10,0,0)));
         assertThrows(IllegalArgumentException.class,()->saved.create(live(E)));
     }
+    @Test void heldBlocksAreCopiedCountedAndClearedPerObject(){
+        var saved=new SavedSelections();var one=saved.save(live(A));var two=saved.save(live(B));
+        var some=new PackedCells();some.put(C,"minecraft:stone");
+        assertTrue(saved.setHeld(one.id(),some,PackedCells.EMPTY));assertEquals(1,saved.tree().held());
+        assertThrows(IllegalArgumentException.class,()->saved.setHeld(999,some,PackedCells.EMPTY));
+        assertEquals("minecraft:stone",saved.byId(one.id()).dormant().get(C),"the object holds its own copy");
+        some.put(D,"minecraft:dirt");assertEquals(1,saved.byId(one.id()).dormant().size(),"a later change to the caller's store does not reach it");
+        assertTrue(saved.setHeld(one.id(),PackedCells.EMPTY,PackedCells.EMPTY));assertEquals(0,saved.tree().held());
+        assertSame(PackedCells.EMPTY,saved.byId(one.id()).dormant());
+        // What a saved tree holds counts toward the world's total when it is loaded. (The cap itself is 8,388,608 cells, too many to fill in a test.)
+        var rows=new ArrayList<SavedSelections.Saved>();var big=new PackedCells();
+        for(int i=0;i<1000;i++)big.put(new Point(i,0,0),"minecraft:stone");
+        rows.add(new SavedSelections.Saved(1,"g1","A",0,0,List.of(A),0,false,big,PackedCells.EMPTY));
+        var tree=SavedSelections.Tree.load(2,rows);assertEquals(1000,tree.held());
+    }
     @Test void severalEntriesCanBeShownTogetherAsOneSelection(){
         var saved=new SavedSelections();var s=live(A);var a=saved.save(s);s.restore(List.of(B));var b=saved.save(s);s.restore(List.of(C));var c=saved.save(s);
         s.restore(List.of(new Point(9,9,9)));
