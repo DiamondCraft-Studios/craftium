@@ -9,7 +9,7 @@ public enum Tool {
     RULER("Ruler", "RL", "Utility", "Add measurement points; use the inspector for circles, splits and center selection."),
     PAINTER("Painter", "PA", "Paint", "Paint existing blocks with your active material."),
     PAINT_BUCKET("Paint Bucket", "PB", "Paint", "Fill the connected blocks you click with your foreground block. Directions and select type work as in the Magic Wand."),
-    NOISE_PAINTER("Noise Painter", "NP", "Paint", "Blend two materials with coherent seeded noise."),
+    NOISE_PAINTER("Noise Painter", "NP", "Paint", "Blend the Materials palette with coherent seeded noise."),
     BIOME_PAINTER("Biome Painter", "BP", "Paint", "Paint biome cells inside the brush. Biomes use 4-block cells."),
     CLENTAMINATOR("Clentaminator", "CL", "Paint", "Convert biome and matching surface materials together."),
     FREEHAND_DRAW("Freehand Draw", "DR", "Draw", "Draw solid shapes; invert to carve."),
@@ -45,6 +45,7 @@ public enum Tool {
     ROTATE("Rotate", "RT", "Transform", "Drag a ring to rotate the selected blocks around the pivot. Enter applies it."),
     SCALE("Scale", "SZ", "Transform", "Drag a square on a face to scale the selected blocks around the pivot. Enter applies it."),
     PIVOT("Pivot", "PV", "Transform", "Click a block, or drag the arrows, to set the point Rotate and Scale work around."),
+    FLUID_BLOCK("Fluid Block", "FK", "Terrain", "Pour your blocks over terrain like powder: they fall, settle and spread thinner towards the edges."),
     INSPECT("Inspect", "IN", "Utility", "Point at a block to see its tags above it; right-click to list them all in chat. Changes nothing.");
 
     public final String label, icon, group, description;
@@ -79,7 +80,7 @@ public enum Tool {
         all.put("Draw", List.of(SHAPE, LINE, PATH, MODELLING, FREEHAND_DRAW, TEXT, ERASE));
         all.put("Paint", List.of(PAINTER, PAINT_BUCKET, GRADIENT_PAINTER, NOISE_PAINTER, SCRIPT_BRUSH, BIOME_PAINTER, CLENTAMINATOR));
         all.put("Sculpt", List.of(SMOOTH, ROUGHEN, DISTORT, MELT, WELD, SHATTER, EXTRUDE, SMEAR, SCULPT_DRAW, MODIFY, STAMP));
-        all.put("Terrain", List.of(ELEVATION, FLATTEN, SLOPE, ROCK, FLOODFILL, FLUID_BALL));
+        all.put("Terrain", List.of(ELEVATION, FLATTEN, SLOPE, ROCK, FLOODFILL, FLUID_BALL, FLUID_BLOCK));
         all.put("Utility", List.of(RULER, TINKER, ANNOTATION, INSPECT));
         return Collections.unmodifiableMap(all);
     }

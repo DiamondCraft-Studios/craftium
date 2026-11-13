@@ -69,6 +69,7 @@ final class AdvancedTools {
                 },start,Math.clamp(o.blockLimit,1,Selection.LIMIT),Selection.LIMIT*8,o.floodGap,o.floodUp,o.floodDown,o.floodHorizontal,o.floodCorners))p.put(at,p.material);
             }
             case FLUID_BALL -> fluid(p,center,normal);
+            case FLUID_BLOCK -> powder(p,center,normal);
             case SMEAR -> {
                 var source=new LinkedHashMap<Point,BlockSnapshot>();
                 if(!p.session.selection.points().isEmpty()){for(Point at:p.session.selection.points())if(!p.state(at).isAir())source.put(at,BlockSnapshot.capture(p.level,EditPlanner.pos(at)));}
@@ -94,20 +95,27 @@ final class AdvancedTools {
             default -> {return false;}
         }return true;
     }
-    private record Flow(Point point,int cost,int distance){}
     private static void fluid(EditPlanner p,Point center,Point normal){
-        var o=p.o;var queue=new PriorityQueue<Flow>(Comparator.comparingInt(Flow::cost).thenComparingInt(Flow::distance));var visited=new HashMap<Point,Integer>();
-        Point origin=center.add(normal.x(),normal.y(),normal.z());queue.add(new Flow(origin,0,0));int maxDistance=o.radius+o.flowLength;
-        while(!queue.isEmpty()){
-            var f=queue.remove();Point at=f.point;if(f.distance>maxDistance||at.y()>origin.y()+o.radius||at.y()<Math.max(p.level.getMinY(),origin.y()-maxDistance*2))continue;
-            if(visited.getOrDefault(at,Integer.MAX_VALUE)<=f.cost)continue;visited.put(at,f.cost);if(visited.size()>Selection.LIMIT)throw new IllegalArgumentException("Fluid simulation exceeds limit");
-            if(p.solid(at))continue;boolean supported=p.solid(at.add(0,-1,0));if(o.requireSupport&&!supported){queue.add(new Flow(at.add(0,-1,0),0,f.distance+1));continue;}
-            if(o.fluidType==Options.FluidType.SNOW){if(supported)p.put(at,Blocks.SNOW.defaultBlockState().setValue(BlockStateProperties.LAYERS,Math.clamp(8-f.cost,1,8)));}
-            else {var state=(o.fluidType==Options.FluidType.LAVA?Blocks.LAVA:Blocks.WATER).defaultBlockState();int level=o.infiniteSources&&at.distanceSquared(origin)<=o.radius*o.radius?0:Math.clamp(f.cost,0,7);if(o.removeFluidsWithoutSources&&f.distance>o.flowLength)continue;p.put(at,state.setValue(BlockStateProperties.LEVEL,level));}
-            if(!supported&&at.y()>p.level.getMinY())queue.add(new Flow(at.add(0,-1,0),0,f.distance+1));
-            if(supported||o.fillEdges)for(Point n:EditPlanner.NEIGHBOURS)if(n.y()==0&&f.cost<Math.min(7,o.flowLength))queue.add(new Flow(at.add(n.x(),0,n.z()),f.cost+1,f.distance+1));
-            if(o.fluidQuality>1&&o.fillEdges&&f.cost<6)for(int x:new int[]{-1,1})for(int z:new int[]{-1,1})queue.add(new Flow(at.add(x,0,z),f.cost+2,f.distance+1));
-        }
+        var o=p.o;
+        dev.craftium.core.FluidFlow.ball(new Cells(p){
+            public void fluid(Point at,int level){var state=(o.fluidType==Options.FluidType.LAVA?Blocks.LAVA:Blocks.WATER).defaultBlockState();p.put(at,state.setValue(BlockStateProperties.LEVEL,level));}
+            public void snow(Point at,int layers){p.put(at,Blocks.SNOW.defaultBlockState().setValue(BlockStateProperties.LAYERS,layers));}
+            public void pour(Point cell){}
+        },o,center.add(normal.x(),normal.y(),normal.z()));
+    }
+    /** Fluid Ball's flow, but pouring the palette: works for gravity blocks and for ones that float. */
+    private static void powder(EditPlanner p,Point center,Point normal){
+        var o=p.o;
+        dev.craftium.core.FluidFlow.powder(new Cells(p){
+            public void fluid(Point at,int level){}
+            public void snow(Point at,int layers){}
+            public void pour(Point cell){/* palette() dithers with the hash of the seed itself, so the position along the palette needs another one or the two agree and the first block always wins */p.put(cell,p.palette(BrushMath.hash(cell.x(),cell.y(),cell.z(),o.seed+0x9E3779B9L),cell));}
+        },o,center.add(normal.x(),normal.y(),normal.z()));
+    }
+    private abstract static class Cells implements dev.craftium.core.FluidFlow.Cells{
+        final EditPlanner p;Cells(EditPlanner p){this.p=p;}
+        public boolean solid(Point at){return p.solid(at);}
+        public int minY(){return p.level.getMinY();}
     }
     private static BlockState pathMaterial(EditPlanner p,Point at,Point next){
         String base=BuiltInRegistries.BLOCK.getKey(p.material.getBlock()).getPath().replaceAll("(_planks|_block)$","").replaceAll("_bricks$","_brick").replaceAll("_tiles$","_tile");

@@ -38,7 +38,7 @@ public final class ToolCatalog {
             case FREEHAND_SELECT, PAINTER, NOISE_PAINTER, BIOME_PAINTER, CLENTAMINATOR, FREEHAND_DRAW, SHAPE, ERASE, SCULPT_DRAW, WELD, MELT, SMOOTH, DISTORT, ROUGHEN, SHATTER, GRADIENT_PAINTER, SCRIPT_BRUSH -> Tool.BrushUse.SHAPE;
             case LINE, PATH -> Tool.BrushUse.SMALL_SHAPE;
             case ELEVATION, FLATTEN, SLOPE, STAMP -> Tool.BrushUse.DISC;
-            case ROCK, FLUID_BALL -> Tool.BrushUse.SPHERE;
+            case ROCK, FLUID_BALL, FLUID_BLOCK -> Tool.BrushUse.SPHERE;
             default -> Tool.BrushUse.NONE;
         };
     }

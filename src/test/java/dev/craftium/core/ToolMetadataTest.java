@@ -18,7 +18,7 @@ class ToolMetadataTest {
         RULER @@ Ruler @@ RL @@ Utility @@ Add measurement points; use the inspector for circles, splits and center selection. @@ NONE @@ false @@ false @@ false @@ false @@ -1
         PAINTER @@ Painter @@ PA @@ Paint @@ Paint existing blocks with your active material. @@ SHAPE @@ true @@ false @@ true @@ false @@ 80
         PAINT_BUCKET @@ Paint Bucket @@ PB @@ Paint @@ Fill the connected blocks you click with your foreground block. Directions and select type work as in the Magic Wand. @@ NONE @@ false @@ false @@ true @@ false @@ -1
-        NOISE_PAINTER @@ Noise Painter @@ NP @@ Paint @@ Blend two materials with coherent seeded noise. @@ SHAPE @@ true @@ false @@ true @@ false @@ 79
+        NOISE_PAINTER @@ Noise Painter @@ NP @@ Paint @@ Blend the Materials palette with coherent seeded noise. @@ SHAPE @@ true @@ false @@ true @@ false @@ 79
         BIOME_PAINTER @@ Biome Painter @@ BP @@ Paint @@ Paint biome cells inside the brush. Biomes use 4-block cells. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
         CLENTAMINATOR @@ Clentaminator @@ CL @@ Paint @@ Convert biome and matching surface materials together. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
         FREEHAND_DRAW @@ Freehand Draw @@ DR @@ Draw @@ Draw solid shapes; invert to carve. @@ SHAPE @@ true @@ false @@ true @@ false @@ 71
@@ -54,6 +54,7 @@ class ToolMetadataTest {
         ROTATE @@ Rotate @@ RT @@ Transform @@ Drag a ring to rotate the selected blocks around the pivot. Enter applies it. @@ NONE @@ false @@ true @@ true @@ false @@ 82
         SCALE @@ Scale @@ SZ @@ Transform @@ Drag a square on a face to scale the selected blocks around the pivot. Enter applies it. @@ NONE @@ false @@ true @@ true @@ false @@ 67
         PIVOT @@ Pivot @@ PV @@ Transform @@ Click a block, or drag the arrows, to set the point Rotate and Scale work around. @@ NONE @@ false @@ true @@ false @@ false @@ 73
+        FLUID_BLOCK @@ Fluid Block @@ FK @@ Terrain @@ Pour your blocks over terrain like powder: they fall, settle and spread thinner towards the edges. @@ SPHERE @@ false @@ false @@ true @@ false @@ -1
         INSPECT @@ Inspect @@ IN @@ Utility @@ Point at a block to see its tags above it; right-click to list them all in chat. Changes nothing. @@ NONE @@ false @@ false @@ false @@ false @@ -1
         """;
 
@@ -63,7 +64,7 @@ class ToolMetadataTest {
         Draw: SHAPE,LINE,PATH,MODELLING,FREEHAND_DRAW,TEXT,ERASE
         Paint: PAINTER,PAINT_BUCKET,GRADIENT_PAINTER,NOISE_PAINTER,SCRIPT_BRUSH,BIOME_PAINTER,CLENTAMINATOR
         Sculpt: SMOOTH,ROUGHEN,DISTORT,MELT,WELD,SHATTER,EXTRUDE,SMEAR,SCULPT_DRAW,MODIFY,STAMP
-        Terrain: ELEVATION,FLATTEN,SLOPE,ROCK,FLOODFILL,FLUID_BALL
+        Terrain: ELEVATION,FLATTEN,SLOPE,ROCK,FLOODFILL,FLUID_BALL,FLUID_BLOCK
         Utility: RULER,TINKER,ANNOTATION,INSPECT
         """;
 

@@ -44,6 +44,7 @@
   "key.craftium.tool.path": "Path",
   "key.craftium.tool.floodfill": "Floodfill",
   "key.craftium.tool.fluid_ball": "Fluid Ball",
+  "key.craftium.tool.fluid_block": "Fluid Block",
   "key.craftium.tool.modify": "Modify",
   "key.craftium.tool.annotation": "Annotation",
   "key.craftium.tool.smear": "Smear"

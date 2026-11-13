@@ -18,7 +18,7 @@ class ToolBrushUseTest {
     }
 
     @Test void radiusOnlyToolsAreNotGivenAShapePicker() {
-        for (Tool tool : EnumSet.of(Tool.ELEVATION, Tool.FLATTEN, Tool.SLOPE, Tool.STAMP, Tool.ROCK, Tool.FLUID_BALL)) assertFalse(tool.picksShape(), tool.name());
+        for (Tool tool : EnumSet.of(Tool.ELEVATION, Tool.FLATTEN, Tool.SLOPE, Tool.STAMP, Tool.ROCK, Tool.FLUID_BALL, Tool.FLUID_BLOCK)) assertFalse(tool.picksShape(), tool.name());
         assertEquals(Tool.BrushUse.SMALL_SHAPE, Tool.LINE.brushUse());
         assertEquals(Tool.BrushUse.SMALL_SHAPE, Tool.PATH.brushUse());
     }
