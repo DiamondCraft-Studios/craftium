@@ -143,7 +143,7 @@ public final class Options {
     /** Whether deleting a BuildObject together with its blocks asks first (until "Don't show this message again" is ticked). */
     public boolean warnDeleteBlocks=true;
     /** Hover BuildObjects (Hierarchy): the BuildObject the pointer is over in a viewport shows its outline and is lit in the Hierarchy. */
-    public boolean hoverBuildObjects=false;
+    public boolean hoverBuildObjects=true;
     /** Whether the Rulers window has been shown once, the first time a ruler was used: it starts out of the way and is only brought up that once. */
     public boolean rulersIntroduced;
     /** A selection this many blocks bigger than before is confirmed with the player first, in the editor and in the Builder. */
