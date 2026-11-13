@@ -213,7 +213,7 @@ final class EditPlanner {
             double n=noise.sample(p);
             switch(o.tool) {
                 case PAINTER -> { if(filled && (!o.surfaceOnly || surface(p))) put(p,o.typeReplace?AdvancedTools.typeReplace(this,old,material):o.copyProperties?preserve(old,material):material); }
-                case NOISE_PAINTER -> { if(filled && (!o.surfaceOnly || surface(p))) put(p,preserve(old,materials.size()>2?palette(n,p):n<o.density?material:secondary)); }
+                case NOISE_PAINTER -> { if(filled && (!o.surfaceOnly || surface(p))) put(p,preserve(old,materials.size()>2?palette(n,p):materials.size()==2?(n<o.density?materials.get(0):materials.get(1)):materials.get(0))); }
                 case FREEHAND_DRAW,SHAPE -> put(p,o.invert?Blocks.AIR.defaultBlockState():material);
                 case ERASE -> put(p,Blocks.AIR.defaultBlockState());
                 case ROCK -> {

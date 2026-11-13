@@ -4,11 +4,13 @@ import java.util.*;
 
 /** Commas inside a block's property list belong to that state. */
 public final class MaterialList {
+    /** The most blocks a palette holds. */
+    public static final int MAX=256;
     private MaterialList(){}
     public static List<String> split(String source){
         var result=new ArrayList<String>();int start=0,depth=0;
         for(int i=0;i<source.length();i++){char c=source.charAt(i);if(c=='[')depth++;else if(c==']'){if(--depth<0)throw new IllegalArgumentException("Unbalanced block properties");}else if(c==','&&depth==0){add(result,source.substring(start,i));start=i+1;}}
-        if(depth!=0)throw new IllegalArgumentException("Unbalanced block properties");add(result,source.substring(start));if(result.size()>256)throw new IllegalArgumentException("Palette limit: 256 entries");return result;
+        if(depth!=0)throw new IllegalArgumentException("Unbalanced block properties");add(result,source.substring(start));if(result.size()>MAX)throw new IllegalArgumentException("Palette limit: "+MAX+" entries");return result;
     }
     private static void add(List<String> result,String value){if(!value.isBlank())result.add(value.trim());}
     public static int index(double value,List<Double> weights,int size,double random,double dither){

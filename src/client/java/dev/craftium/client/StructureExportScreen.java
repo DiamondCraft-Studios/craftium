@@ -377,7 +377,7 @@ final class StructureExportScreen extends CraftiumScreen {
         }
         if(redraw){redraw=false;var shown=ClientStructures.preview;orbit.overlay(shown==null?null:overlay(shown));}
 
-        if(blueprintOnly)g.text(font,"SAVE BLUEPRINT",left+12,top+14,o.uiText,false);
+        if(blueprintOnly)g.text(font,"Save blueprint",left+12,top+14,o.uiText,false);
         for(var label:labels)g.text(font,label.text(),label.x(),label.y(),label.muted()?o.uiMuted:o.uiText,false);
         if(maxScroll>0){
             int track=formBottom-formTop,thumb=Math.max(16,track*track/(track+maxScroll)),at=formTop+(track-thumb)*scroll/maxScroll,x=viewX-GAP-8;

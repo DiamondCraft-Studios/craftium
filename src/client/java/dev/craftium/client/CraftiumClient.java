@@ -368,6 +368,8 @@ public final class CraftiumClient implements ClientModInitializer {
             if(ClientPlayNetworking.canSend(Packets.Edit.TYPE))ClientPlayNetworking.send(new Packets.Edit(request));
             else for(byte[] frame:BridgeCodec.encode(Packets.JSON.toJson(new BridgeCodec.Message("edit",request))))ClientPlayNetworking.send(new Packets.Bridge(frame));}finally{options.scriptColours=new java.util.ArrayList<>();options.modifyTranslateScale=scale;}
     }
+    /** Opens the Materials window if it is closed; the game tests use it. */
+    public static void showMaterials(){WorkspaceLayout.show("materials");}
     public static Point point(net.minecraft.core.BlockPos p){return new Point(p.getX(),p.getY(),p.getZ());}
     public static Point normal(BlockHitResult hit){var d=hit.getDirection();return new Point(d.getStepX(),d.getStepY(),d.getStepZ());}
     public static BlockHitResult raycast(double guiX,double guiY) {

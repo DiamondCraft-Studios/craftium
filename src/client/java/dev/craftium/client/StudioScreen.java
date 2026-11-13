@@ -91,7 +91,7 @@ public final class StudioScreen extends CraftiumScreen {
         }else if(tab.equals("Assets")){
             actionRow(new String[]{"Import asset…","Import schematic","Export schematic","Structure NBT","Selection CSV"},new Runnable[]{()->AssetPicker.open(this::init),()->send("schematic_import"),()->send("schematic_export"),()->send("structure_export"),()->send("selection_csv")});
         }else if(tab.equals("Paint")){
-            actionRow(new String[]{"Colour studio","Weighted palette"},new Runnable[]{()->ClientCompat.setScreen(minecraft,new ColourScreen(this)),()->ClientCompat.setScreen(minecraft,new PaletteScreen(this))});
+            actionRow(new String[]{"Colour studio","Materials window"},new Runnable[]{()->ClientCompat.setScreen(minecraft,new ColourScreen(this)),()->{WorkspaceLayout.show("materials");onClose();}});
         }else if(tab.equals("Ruler")){
             actionRow(new String[]{"Split segments","Select center","Clear ruler"},new Runnable[]{()->{
                 var rulers=ClientState.rulers;int parts=ClientState.options.rulerSplit;var next=new ArrayList<Ruler>();
@@ -110,7 +110,7 @@ public final class StudioScreen extends CraftiumScreen {
             actionRow(new String[]{"Save named hotbar","Load named hotbar","List hotbars","Inventory"},new Runnable[]{()->send("hotbar_save"),()->send("hotbar_load"),()->send("hotbar_list"),()->ClientCompat.setScreen(minecraft,new InventoryPaletteScreen(this))});
             button("Previous saved slot",left,top+125,200,24,()->send("hotbar_previous"));button("Next saved slot",left+212,top+125,200,24,()->send("hotbar_next"));
         }else if(tab.equals("Lighting")){
-            actionRow(new String[]{"Autoshade","Add light here","Clear lights","List lights","Palette…"},new Runnable[]{()->send("autoshade"),()->{var player=minecraft.player;if(player!=null&&ClientState.options.shadeLights.size()<16)ClientState.options.shadeLights.add(new ShadeLight(player.getX(),player.getEyeY(),player.getZ(),ClientState.options.strength));},()->ClientState.options.shadeLights.clear(),()->ClientCompat.setScreen(minecraft,new ReportScreen(this,String.join("\n",ClientState.options.shadeLights.stream().map(Object::toString).toList()))),()->ClientCompat.setScreen(minecraft,new PaletteScreen(this))});
+            actionRow(new String[]{"Autoshade","Add light here","Clear lights","List lights","Palette…"},new Runnable[]{()->send("autoshade"),()->{var player=minecraft.player;if(player!=null&&ClientState.options.shadeLights.size()<16)ClientState.options.shadeLights.add(new ShadeLight(player.getX(),player.getEyeY(),player.getZ(),ClientState.options.strength));},()->ClientState.options.shadeLights.clear(),()->ClientCompat.setScreen(minecraft,new ReportScreen(this,String.join("\n",ClientState.options.shadeLights.stream().map(Object::toString).toList()))),()->{WorkspaceLayout.show("materials");onClose();}});
         }else if(tab.equals("Rebuild")){
             actionRow(new String[]{"Start animated rebuild","Cancel and restore"},new String[]{"animated_rebuild","rebuild_cancel"});
         }else if(tab.equals("Entities")){
@@ -217,7 +217,7 @@ public final class StudioScreen extends CraftiumScreen {
     @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
     @Override protected void draw(Gfx g,int x,int y,float delta){
         g.pose().pushMatrix();g.pose().scale(uiScale,uiScale);
-        g.fill(0,0,canvasW,canvasH,0xee101923);g.fill(left-12,top-13,Math.min(canvasW-5,left+640),canvasH-25,0xff172330);g.text(font,tab.toUpperCase(Locale.ROOT),left,top-25,0xffb5dcfc,false);
+        g.fill(0,0,canvasW,canvasH,0xee101923);g.fill(left-12,top-13,Math.min(canvasW-5,left+640),canvasH-25,0xff172330);g.text(font,tab,left,top-25,0xffb5dcfc,false);
         for(Label label:labels)g.text(font,font.plainSubstrByWidth(label.text,625),label.x,label.y,0xff9db5cb,false);
         if(tab.equals("AI"))drawAi(g);
         drawWidgets(g,(int)(x/uiScale),(int)(y/uiScale),delta);g.text(font,font.plainSubstrByWidth(message.isBlank()?ClientState.status.message():message,canvasW-30),15,canvasH-17,0xffffdca8,false);g.pose().popMatrix();

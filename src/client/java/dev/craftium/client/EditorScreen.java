@@ -142,8 +142,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(!builder) {
             if(pinnedTab)pinnedFields();
             else if(o().tool==Tool.NOISE_PAINTER) {
-                field("secondary",10,398,optionsWidth()-20,o().secondary,s->o().secondary=s);
-                field("seed",10,439,optionsWidth()-20,Long.toString(o().seed),s->{try{o().seed=Long.parseLong(s);}catch(NumberFormatException ignored){}});
+                field("seed",10,444,optionsWidth()-20,Long.toString(o().seed),s->{try{o().seed=Long.parseLong(s);}catch(NumberFormatException ignored){}});
             } else if(o().tool==Tool.BIOME_PAINTER || o().tool==Tool.CLENTAMINATOR)
                 field("biome",10,382,optionsWidth()-20,o().biome,s->o().biome=s);
             else if(o().tool==Tool.TEXT)field("text",10,326,optionsWidth()-20,o().text,s->o().text=s);
@@ -218,7 +217,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
         g.pose().pushMatrix();g.pose().scale(scale,scale);
         topbar(g);
-        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);hierarchyPanel(g);magicPanel(g);missingPanel(g);}
+        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);hierarchyPanel(g);magicPanel(g);missingPanel(g);materialsPanel(g);}
         finishPanel(g);
         viewport(g);
         axisGizmo(g);
@@ -537,7 +536,8 @@ public final class EditorScreen extends CraftiumScreen {
         // Tool-specific controls occupy the same familiar options area.
         switch(o().tool) {
             case NOISE_PAINTER -> {
-                text(g,"Secondary block",10,382,MUTED);text(g,"Noise seed",10,423,MUTED);
+                materialsRow(g,10,369,pw-20);
+                text(g,"Noise seed",10,431,MUTED);
                 slider(g,10,480,pw-20,"Scale",o().noiseScale,1,64,DEFAULTS.noiseScale,v->o().noiseScale=v,false);
                 slider(g,10,508,pw-20,"Blend",o().density,0,1,DEFAULTS.density,v->o().density=v,false);
             }
@@ -586,6 +586,7 @@ public final class EditorScreen extends CraftiumScreen {
                 if(o().tool.picksShape())fillButtons(g,403+row);
                 toggle(g,10,403+fillRow+row,"Surface only",o().surfaceOnly,()->o().surfaceOnly=!o().surfaceOnly);
                 int next=428+fillRow+row;
+                if(MATERIAL_TOOLS.contains(o().tool)){materialsRow(g,10,next+4,pw-20);next+=48;}
                 if(o().tool==Tool.EXTRUDE){toggle(g,10,next,"Into grass and water",o().extrudeReplaceable,()->o().extrudeReplaceable=!o().extrudeReplaceable,"Grow into replaceable blocks like grass and water, replacing them, instead of stopping at them");next+=22;
                     toggle(g,10,next,"Smart extrude",o().smartExtrude,()->o().smartExtrude=!o().smartExtrude,"Take in the whole family of the clicked block, stairs, slabs and walls of the same material, each block keeping its own shape");next+=22;}
                 if(o().hollow&&o().tool.picksShape()){ // the outline's own settings sit under the others, so they only take room while Hollow is chosen
@@ -948,6 +949,60 @@ public final class EditorScreen extends CraftiumScreen {
             for(int r=0;r<6;r++)for(int c=0;c<6;c++)if((r+c)%2==0)g.fill(x+1+c*5,y+1+r*5,x+6+c*5,y+6+r*5,0x40ffffff);
         }
         dragSource(new Control(x,y,30,30,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,label,block,id->{set.accept(id);ClientState.save();})),label+" · "+block+" · Click to replace · Drag into the world to bucket fill"),block);
+    }
+    /** The tools that blend or pour the Materials palette, and so show its window. */
+    private static final EnumSet<Tool> MATERIAL_TOOLS=EnumSet.of(Tool.NOISE_PAINTER,Tool.FLUID_BLOCK,Tool.GRADIENT_PAINTER);
+    private int materialsScroll;
+    /** The Materials window: the palette the blending and pouring tools draw from, one row per block with its icon, a weight and where it sits in the order. It opens from the tool panel or the Window menu and is moved, sized and folded like the others. */
+    private void materialsPanel(Gfx g){
+        int x=w-RIGHT-300,y=300;
+        panel(g,x,y,290,320,"Materials");
+        var o=o();var blocks=MaterialPalette.blocks(o);
+        dropArea(x,y,pw,ph,id->{if(!id.isEmpty()&&!id.equals("minecraft:air")&&!MaterialPalette.add(o,id))ClientState.notify("The palette is full");ClientState.save();}); // a block dropped anywhere on the window joins the palette
+        int rowTop=y+36,pitch=36,fit=Math.max(1,(pb-50-rowTop)/pitch);
+        materialsScroll=Math.clamp(materialsScroll,0,Math.max(0,blocks.size()-fit));
+        for(int r=0;r<fit&&materialsScroll+r<blocks.size();r++){
+            int i=materialsScroll+r,ry=rowTop+r*pitch;String block=blocks.get(i);
+            int sliderX=x+32,sliderW=pw-10-32-3*17-6;
+            g.fill(x+6,ry-12,x+pw-6,ry+25,0xff1b2838);
+            BlockPickerScreen.icon(g,font,block,x+10,ry-1);
+            controls.add(new Control(x+8,ry-3,20,20,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,"Replace "+block,block,id->{MaterialPalette.replace(o(),i,id);ClientState.save();})),BlockPickerScreen.name(block)+" · "+block+" · Click to change the block"));
+            slider(g,sliderX,ry+2,sliderW,(i+1)+"  "+shorten(BlockPickerScreen.name(block),sliderW-44),MaterialPalette.weight(o,i),MaterialPalette.MIN_WEIGHT,10,MaterialPalette.MAX_WEIGHT,1,v->{MaterialPalette.setWeight(o(),i,Math.round(v*100)/100d);},false);
+            String share=Math.round(100*MaterialPalette.share(o,i))+"%";text(g,share,sliderX+sliderW-TextCache.width(font,share),ry-8,TEXT);
+            int bx=x+pw-10-3*17-4;
+            button(g,bx,ry+2,15,17,"▲",false,()->{MaterialPalette.move(o(),i,-1);ClientState.save();},"Move up");
+            button(g,bx+17,ry+2,15,17,"▼",false,()->{MaterialPalette.move(o(),i,1);ClientState.save();},"Move down");
+            button(g,bx+34,ry+2,15,17,"×",false,()->{if(!MaterialPalette.remove(o(),i))ClientState.notify("The palette keeps at least one block");ClientState.save();},"Remove this block");
+        }
+        int[] top=flex(pw-20,4,1,1,1);
+        button(g,x+10,pb-26,top[0],19,"Add block",false,()->ClientCompat.setScreen(minecraft,new BlockPickerScreen(this,"Add to Materials","minecraft:stone",id->{if(!MaterialPalette.add(o(),id))ClientState.notify("The palette is full");ClientState.save();})),"Pick a block to add · or drag one onto this window");
+        button(g,x+14+top[0],pb-26,top[1],19,"Add hotbar",false,()->{
+            int added=0;if(minecraft.player!=null)for(int i=0;i<9;i++)if(minecraft.player.getInventory().getItem(i).getItem() instanceof net.minecraft.world.item.BlockItem item){var id=BuiltInRegistries.BLOCK.getKey(item.getBlock()).toString();if(!MaterialPalette.blocks(o()).contains(id)&&MaterialPalette.add(o(),id))added++;}
+            ClientState.notify(added==0?"No new blocks in the hotbar":"Added "+added+(added==1?" block":" blocks"));ClientState.save();
+        },"Add the blocks in your hotbar that are not in the palette yet");
+        button(g,x+18+top[0]+top[1],pb-26,top[2],19,"Sort",false,()->{
+            BlockColours.build();var order=new ArrayList<Integer>();var list=MaterialPalette.blocks(o());for(int i=0;i<list.size();i++)order.add(i);
+            order.sort(Comparator.comparingDouble(i->{var entry=BlockColours.get(list.get(i));return entry==null?0:entry.lab()[0];}));
+            MaterialPalette.reorder(o(),order);ClientState.save();
+        },"Put the blocks in order from dark to light");
+        text(g,blocks.size()+(blocks.size()==1?" block":" blocks")+(blocks.size()>fit?" · scroll for more":" · drop blocks here to add"),x+10,pb-40,MUTED);
+    }
+    /** The Materials palette as a row of its blocks' icons, 24 pixels tall; a click opens the window where blocks are added, weighed and put in order. */
+    private void materialsRow(Gfx g,int x,int y,int width){
+        List<String> blocks;try{blocks=MaterialList.split(o().materials);}catch(IllegalArgumentException bad){blocks=List.of();}
+        var weights=o().materialWeights;double total=0;for(int i=0;i<blocks.size();i++)total+=Math.clamp(i<weights.size()?weights.get(i):1,.01,100);
+        text(g,"Materials",x,y,MUTED);y+=13;
+        if(!culled(y,24)){
+            FlatButton.face(g,x,y,width,24,"",false,true,false,true);
+            String count=blocks.size()+(blocks.size()==1?" block":" blocks")+" ›";int countWidth=TextCache.width(font,count);
+            int shown=Math.max(0,Math.min(blocks.size(),(width-countWidth-14)/20));
+            for(int i=0;i<shown;i++)BlockPickerScreen.icon(g,font,blocks.get(i),x+5+i*20,y+4);
+            if(shown<blocks.size())g.text(font,"+"+(blocks.size()-shown),x+5+shown*20,y+8,0xff9db5cb,false);
+            g.text(font,count,x+width-countWidth-6,y+8,TEXT,false);
+        }
+        var tip=new StringBuilder("Materials · Click to open or close the Materials window, where blocks are added, weighed and put in order");
+        for(int i=0;i<Math.min(blocks.size(),4);i++)tip.append(i==0?" · ":", ").append(blocks.get(i).replace("minecraft:","")).append(String.format(Locale.ROOT," %.0f%%",100*Math.clamp(i<weights.size()?weights.get(i):1,.01,100)/total));
+        controls.add(new Control(x,y,width,24,()->{if(WorkspaceLayout.visible("materials"))WorkspaceLayout.toggle("materials");else WorkspaceLayout.show("materials");},tip.toString()));
     }
     /** A block cell that is clicked as usual, or dragged into the world to bucket fill with it. */
     private record DragSource(Control area,String block){}
@@ -1952,6 +2007,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("hierarchy")){savedScroll=Math.max(0,savedScroll+(vertical<0?1:-1));return true;}
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("missing")){missingScroll=Math.max(0,missingScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("rulers")){rulerScroll=Math.max(0,rulerScroll+(vertical<0?1:-1));return true;} // clamped when drawn
+        if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("materials")){materialsScroll=Math.max(0,materialsScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("masks")){maskScroll=Math.max(0,maskScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("tools")){toolScroll=Math.clamp(toolScroll+(vertical<0?1:-1),0,maxToolScroll());return true;}
         if(panels&&!pinnedTab&&o().tool!=Tool.MODIFY&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("options")){optionsScroll=Math.clamp(optionsScroll+(vertical<0?24:-24),0,scrollLimit);return true;}
