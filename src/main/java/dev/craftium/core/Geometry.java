@@ -69,6 +69,10 @@ public final class Geometry {
     private static List<Point> turned(Point center,Options o){
         // An outline and a pixel perfect wall are worked out on the turned solid, since a line of single blocks does not survive being turned.
         boolean afterwards=o.outline||o.hollow&&o.pixelPerfect;
+        // A wall one block thick does not survive being turned either: looking each cell back to the nearest cell of a thin wall tears holes in it.
+        // A closed shape gets the blocks that close them (below). A quarter turn puts every cell exactly on another, so it tears nothing and is left as it is.
+        boolean tears=o.hollow&&!o.outline&&closed(o.shape)&&!(quarter(o.yaw)&&quarter(o.pitch)&&quarter(o.roll));
+        boolean patch=tears&&!o.pixelPerfect,repair=tears&&o.pixelPerfect;
         var base=BrushMath.brush(new Point(0,0,0),o.radius,o.shape,o.hollow&&!afterwards,o.outlineThickness,o.pixelPerfect,o.outlineShift(),o.polygonSides,false,Selection.LIMIT,o.form());
         int e=0;double far=0;
         for(Point p:base){e=Math.max(e,Math.max(Math.abs(p.x()),Math.max(Math.abs(p.y()),Math.abs(p.z()))));far=Math.max(far,(double)p.x()*p.x()+(double)p.y()*p.y()+(double)p.z()*p.z());}
@@ -77,19 +81,45 @@ public final class Geometry {
         if((2L*extent+1)*(2L*extent+1)*(2L*extent+1)>ShapeLimits.SCAN_CELLS||(2L*e+1)*(2L*e+1)*(2L*e+1)>ShapeLimits.SCAN_CELLS)throw new IllegalArgumentException("A scaled or turned shape this big cannot be built; make it smaller");
         int n=2*e+1;var grid=new boolean[n*n*n];
         for(Point p:base)grid[((p.x()+e)*n+p.y()+e)*n+p.z()+e]=true;
-        double ra=Math.toRadians(-o.yaw),rb=Math.toRadians(-o.pitch),rc=Math.toRadians(-o.roll);
-        double ca=Math.cos(ra),sa=Math.sin(ra),cb=Math.cos(rb),sb=Math.sin(rb),cc=Math.cos(rc),sc=Math.sin(rc);
-        var result=new ArrayList<Point>();
+        var back=new Back(o.yaw,o.pitch,o.roll);
+        // The solid the wall belongs to, judged where a cell looks back to, as the brush judges it.
+        int outer=Math.min(o.radius+Math.max(0,o.outlineShift()),BrushMath.MAX_REACH);
+        List<Point> result=new ArrayList<>();
         for(int x=-extent;x<=extent;x++)for(int y=-extent;y<=extent;y++)for(int z=-extent;z<=extent;z++){
-            double px=x*cc-y*sc,py=x*sc+y*cc,pz=z,qy=py*cb-pz*sb;pz=py*sb+pz*cb;py=qy;
-            double vx=px*ca-pz*sa,vz=px*sa+pz*ca;
-            int gx=(int)Math.floor(vx+.5+1e-9),gy=(int)Math.floor(py+.5+1e-9),gz=(int)Math.floor(vz+.5+1e-9);
-            if(gx<-e||gx>e||gy<-e||gy>e||gz<-e||gz>e||!grid[((gx+e)*n+gy+e)*n+gz+e])continue;
+            back.at(x,y,z);
+            int gx=back.x,gy=back.y,gz=back.z;
+            boolean hit=!(gx<-e||gx>e||gy<-e||gy>e||gz<-e||gz>e)&&grid[((gx+e)*n+gy+e)*n+gz+e];
+            if(!hit&&patch&&BrushMath.contains(o.shape,gx,gy,gz,outer,o.polygonSides,o.form())){
+                // Inside the shape, and a face of this block meets a block that is not: it is part of the skin, which no path can pass.
+                for(Point f:FACES){back.at(x+f.x(),y+f.y(),z+f.z());if(!BrushMath.contains(o.shape,back.x,back.y,back.z,outer,o.polygonSides,o.form())){hit=true;break;}}
+            }
+            if(!hit)continue;
             result.add(center.add(x,y,z));if(result.size()>Selection.LIMIT)throw new IllegalArgumentException("Shape exceeds block limit");
         }
         if(o.outline)return BrushMath.edges(result);
-        return o.hollow&&o.pixelPerfect?OutlineMath.thin(result,Math.max(1,o.outlineThickness)):result;
+        if(!(o.hollow&&o.pixelPerfect))return result;
+        var thin=OutlineMath.thin(result,Math.max(1,o.outlineThickness));
+        return repair?OutlineMath.seal(result,thin):thin;
     }
+    /** Where a cell of a turned shape looks back to in the unturned one: the nearest cell, as {@link #rotate} turns it. */
+    private static final class Back{
+        final double ca,sa,cb,sb,cc,sc;int x,y,z;
+        Back(double yaw,double pitch,double roll){
+            double ra=Math.toRadians(-yaw),rb=Math.toRadians(-pitch),rc=Math.toRadians(-roll);
+            ca=Math.cos(ra);sa=Math.sin(ra);cb=Math.cos(rb);sb=Math.sin(rb);cc=Math.cos(rc);sc=Math.sin(rc);
+        }
+        void at(int cx,int cy,int cz){
+            double px=cx*cc-cy*sc,py=cx*sc+cy*cc,pz=cz,qy=py*cb-pz*sb;pz=py*sb+pz*cb;py=qy;
+            double vx=px*ca-pz*sa,vz=px*sa+pz*ca;
+            x=(int)Math.floor(vx+.5+1e-9);y=(int)Math.floor(py+.5+1e-9);z=(int)Math.floor(vz+.5+1e-9);
+        }
+    }
+    private static boolean quarter(double degrees){return Math.abs(degrees/90-Math.rint(degrees/90))<1e-9;}
+    /** The brush shapes with no open side, whose hollow form is a sealed shell. */
+    private static boolean closed(BrushMath.Shape shape){
+        return switch(shape){case SPHERE,CUBE,CYLINDER,CONE,PYRAMID,OCTAHEDRON,TORUS->true;default->false;};
+    }
+    private static final Point[] FACES={new Point(1,0,0),new Point(-1,0,0),new Point(0,1,0),new Point(0,-1,0),new Point(0,0,1),new Point(0,0,-1)};
     private static boolean shell(Vector v,Options o){
         // The wall is as many blocks thick as the setting says whatever the size: each axis gives up that many blocks, not that share of its length.
         double t=Math.clamp(o.outlineThickness,1,Math.max(1,o.radius)),outer=o.outerRadius();
