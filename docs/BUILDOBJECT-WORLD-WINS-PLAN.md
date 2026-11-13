@@ -27,6 +27,15 @@ Resolution happens only when an object is placed or moved. If a solid world bloc
 
 The ghost preview shows dormant cells (faint outline or x-ray) before the player confirms.
 
+## Priority is the order of the Hierarchy
+
+Between BuildObjects, the one **lower in the Hierarchy wins**:
+- a child is above its parent;
+- of the BuildObjects on one level, the one below is above;
+- of the groups, the one below is above, and a group decides before the BuildObjects in it.
+
+All of it is one list: each group in turn, each top-level BuildObject followed by everything under it (`SavedSelections.entries`), and the last one that wants a cell gets it. A consequence worth knowing: the BuildObject below a parent is above that parent's children too, because it comes later in the list. `HierarchyPriorityTest` fixes the rule. Priority is resolved when a BuildObject is placed, moved or placed here; reordering the Hierarchy does not re-resolve by itself yet.
+
 ## Storage
 
 - **Where:** the same per-dimension file as the objects, `craftium/buildobjects/<dimension>.nbt`, on the server only. The file format is bumped when the dormant data is added; older files load with none.
