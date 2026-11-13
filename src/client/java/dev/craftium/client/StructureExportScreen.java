@@ -102,7 +102,7 @@ final class StructureExportScreen extends CraftiumScreen {
     /** Runs {@code send} with the settings of a page (or as they are, for none) and puts the shown page back after: a request carries the settings as they are when it goes out. */
     private void withPage(Page p,Runnable send){
         var o=ClientState.options;String priorBlueprint=o.name;keepPage();
-        if(p!=null){applyPage(p);o.name=p.blueprint;}
+        if(p!=null){applyPage(p);o.name=savePrefix+p.blueprint;}
         try{send.run();}
         finally{o.name=priorBlueprint;if(!pages.isEmpty())applyPage(pages.get(page));}
     }
@@ -338,15 +338,26 @@ final class StructureExportScreen extends CraftiumScreen {
         }
     }
 
-    /** Saves each page as a blueprint in the library; the server answers each. */
+    /** The folder of the library the blueprints are being saved in, put in front of each name ("" for the top level, otherwise ending in a slash). */
+    private String savePrefix="";
+
+    /** Checks the names, then opens the Blueprint library for the player to choose the folder; each page is saved as a blueprint there, and the server answers each. */
     private void saveBlueprints(){
         var opt=ClientState.options;
-        if(pages.isEmpty()){
-            if(opt.name.isBlank()){result="× Name the blueprint first";return;}
-            CraftiumClient.send("blueprint_save_source",null,null);onClose();return;
+        if(pages.isEmpty()){if(opt.name.isBlank()){result="× Name the blueprint first";return;}}
+        else{
+            keepPage();
+            for(var p:pages)if(p.blueprint.isBlank()){result="× Every blueprint needs a name ("+p.label+")";return;}
         }
-        keepPage();
-        for(var p:pages)if(p.blueprint.isBlank()){result="× Every blueprint needs a name ("+p.label+")";return;}
+        ClientCompat.setScreen(minecraft,BlueprintScreen.chooseFolder(this,folder->{savePrefix=folder.isEmpty()?"":folder+"/";saveBlueprintsIn();}));
+    }
+    private void saveBlueprintsIn(){
+        var opt=ClientState.options;
+        if(pages.isEmpty()){
+            String prior=opt.name;opt.name=savePrefix+prior;
+            try{CraftiumClient.send("blueprint_save_source",null,null);}finally{opt.name=prior;}
+            onClose();return;
+        }
         for(var p:pages)withPage(p,()->CraftiumClient.send("blueprint_save_source",null,null));
         ClientState.notify("Saving "+pages.size()+" blueprints…");onClose();
     }
@@ -389,7 +400,7 @@ final class StructureExportScreen extends CraftiumScreen {
         // What the last export did, and what the format can hold, under the fields.
         int bottom=top+panelHeight-FOOT+6;
         if(!result.isEmpty())g.text(font,font.plainSubstrByWidth(result,viewX-left-GAP-24),left+12,bottom,result.startsWith("×")?0xffe08a7a:o.uiText,false);
-        else if(s.blueprint())g.text(font,"Saved to the blueprint library on the server.",left+12,bottom,o.uiMuted,false);
+        else if(s.blueprint())g.text(font,"Save blueprint opens the library to choose the folder.",left+12,bottom,o.uiMuted,false);
         else g.text(font,s.bedrock()?"Bedrock structure blocks save up to 64 × 256 × 64":"Java structure blocks load up to 48 × 48 × 48",left+12,bottom,o.uiMuted,false);
         g.text(font,s.blueprint()?"A blueprint keeps the blocks as they are.":"Mirror, rotation and integrity are applied to the exported blocks.",left+12,bottom+11,o.uiMuted,false);
         drawWidgets(g,mouseX,mouseY,delta);

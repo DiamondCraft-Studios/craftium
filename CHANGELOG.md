@@ -52,6 +52,7 @@ Changes since 1.5.0-beta.1.
 - Your saved window layout is reset once, to the new places.
 - The Export structure window has a third tab, Blueprint, that saves the source into the blueprint library with a name, author and tags. Ctrl + P opens the same window with only that form, replacing the old Save blueprint dialog.
 - Several BuildObjects can be exported at once: right-click them in the Hierarchy and choose Export selected. The window has a page for each, with its own name, position and size and a preview of it (the other settings are shared), and exports them all as structures to one folder, or all as blueprints.
+- Save blueprint in the Export structure window opens the Blueprint library so you choose the folder to save in; press Save here to save into the folder you are in.
 - Dragging a gizmo handle (an arrow, a plane square or the centre) is now worked out from each step of the pointer, so flying about while you drag no longer slows it, stops it or sends the selection back towards you, even when you look along the arrow. The selection stays where it is while only the camera moves.
 - The Move tool's gizmo now has the free move handle in the middle: drag it to move the selection anywhere on the screen's plane.
 - New Inspect tool, in Utility: point at a block to see its name and the first few of its block tags floating above it, and use the tool (right-click by default) to list every block and fluid tag in chat. It changes nothing in the world and sends nothing to the server.
