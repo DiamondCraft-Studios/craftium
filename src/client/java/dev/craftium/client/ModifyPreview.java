@@ -15,13 +15,10 @@ import java.util.*;
  */
 public final class ModifyPreview {
     private ModifyPreview() {}
-    /** Past this many blocks the preview is a box around where they land, because a frame would have to draw every one. */
-    private static final int LIMIT=4096;
     private static final int INNER=0xffff6b6b,OUTER=0xff6bff8a,AXIS=0xffffd66d;
     private static Object[] key;
     private static List<BlockPos> models=List.of(),places=List.of();
     private static OutlineShape shape=OutlineShape.EMPTY;
-    private static AABB bounds;
     private static String problem;
     /** The anchor, when there is one. A list, so that the Move gizmo can carry it as it does the handle points of the other tools. */
     private static final List<Point> anchors=new ArrayList<>();
@@ -64,8 +61,8 @@ public final class ModifyPreview {
         if(places.isEmpty()&&ModifyMath.usesCursor(o)&&cursor==null)return; // nothing to turn around until the cursor is on a block
         if(shape!=OutlineShape.EMPTY){
             shape.drawPlain(Vec3.ZERO,o.previewColor,(float)o.selectionWidth,o.previewFill,true,false);
-            if(!places.isEmpty())Overlay.blocks(models,places,o.previewTint);
-        }else if(bounds!=null)Overlay.box(bounds,o.previewColor,2,o.previewFill);
+            if(!places.isEmpty())Overlay.cachedBlocks(models,places,o.previewTint);
+        }
         // Depth-tested rulers through what the tool turns about, as the gizmo draws while it is dragged: the block under the cursor, or the middle of the selection.
         if(c!=null){TransformGizmo.ruler(new Vec3(cursor.x()+.5,cursor.y()+.5,cursor.z()+.5));guides(o,selected,cursor);}
         else{TransformGizmo.ruler(middleOf(selected));if(o.modifyMode==Options.ModifyMode.TWIST)axisLine(o,selected);}
@@ -75,24 +72,21 @@ public final class ModifyPreview {
         return true;
     }
     private static void rebuild(Minecraft mc,Options o,List<Point> selected,Point cursor){
-        models=List.of();places=List.of();shape=OutlineShape.EMPTY;bounds=null;problem=null;
+        models=List.of();places=List.of();shape=OutlineShape.EMPTY;problem=null;
         var sources=new ArrayList<Point>();
         for(Point at:selected)if(o.pasteAir||!mc.level.getBlockState(new BlockPos(at.x(),at.y(),at.z())).isAir())sources.add(at);
         if(sources.isEmpty())return;
         try{
             var placed=ModifyMath.plan(o,sources,lowest(selected),highest(selected),cursor);
             if(placed.isEmpty())return;
-            if(placed.size()>LIMIT){
-                int x0=Integer.MAX_VALUE,y0=x0,z0=x0,x1=Integer.MIN_VALUE,y1=x1,z1=x1;
-                for(Point at:placed.keySet()){x0=Math.min(x0,at.x());y0=Math.min(y0,at.y());z0=Math.min(z0,at.z());x1=Math.max(x1,at.x());y1=Math.max(y1,at.y());z1=Math.max(z1,at.z());}
-                bounds=new AABB(x0,y0,z0,x1+1,y1+1,z1+1);return;
-            }
-            var from=new ArrayList<BlockPos>(placed.size());var to=new ArrayList<BlockPos>(placed.size());
-            placed.forEach((dest,source)->{to.add(new BlockPos(dest.x(),dest.y(),dest.z()));from.add(new BlockPos(source.x(),source.y(),source.z()));});
-            models=from;places=to;shape=OutlineShape.of(placed.keySet());
+            // The outline covers everything that lands. A frame cannot draw the model of every block of a big result, so it draws as many as the player allows, the outer surface first.
+            var shown=Exposed.first(placed.keySet(),ClientState.options.aiGhostDrawLimit);
+            var from=new ArrayList<BlockPos>(shown.size());var to=new ArrayList<BlockPos>(shown.size());
+            for(Point dest:shown){var source=placed.get(dest);to.add(new BlockPos(dest.x(),dest.y(),dest.z()));from.add(new BlockPos(source.x(),source.y(),source.z()));}
+            models=from;places=to;shape=OutlineShape.ofLater(placed.keySet()); // a big outline is worked out off the render thread and appears when ready
         }catch(IllegalArgumentException e){problem=e.getMessage();}
         catch(RuntimeException e){ // the preview is drawn every frame, so a failure here must not reach the render loop; the edit itself is checked by the server
-            problem="Cannot preview this: "+e.getClass().getSimpleName();models=List.of();places=List.of();shape=OutlineShape.EMPTY;bounds=null;
+            problem="Cannot preview this: "+e.getClass().getSimpleName();models=List.of();places=List.of();shape=OutlineShape.EMPTY;
         }
     }
     /** Where a point lies on the circle about {@code centre} in the plane the axis is the normal of. */

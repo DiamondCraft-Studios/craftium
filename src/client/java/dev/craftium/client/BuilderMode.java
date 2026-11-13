@@ -340,9 +340,9 @@ public final class BuilderMode {
             if(preview){Point size=max.add(1-min.x(),1-min.y(),1-min.z());List<Point> steps=o.builderTool==Options.BuilderTool.SMEAR?BrushMath.line(new Point(0,0,0),offset):o.builderTool==Options.BuilderTool.STACK?stackSteps(size):List.of(offset);
                 if(stacking){drawStack(o,min,size);return;}
                 var shown=preview(o,min,size,steps);
-                if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),o.removedTint); // the blocks that are moving, where they are now
+                if(leaving&&!cells.isEmpty()){var gone=cellBlocks();Overlay.cachedBlocks(gone,gone,o.removedTint);} // the blocks that are moving, where they are now (as many as are drawn, the outer surface first)
                 if(shown==null)boxShape(min.add(offset.x(),offset.y(),offset.z()),max.add(offset.x()+1,offset.y()+1,offset.z()+1)).drawPlain(Vec3.ZERO,o.previewColor,(float)o.selectionWidth,0,false,false);
-                else{drawDestination(o,shown);if(!shown.places().isEmpty())Overlay.blockStates(turned(shown.models(),o),shown.places(),o.previewTint);}
+                else{drawDestination(o,shown);if(!shown.places().isEmpty())Overlay.cachedBlockStates(turned(shown.models(),o),shown.places(),o.previewTint);}
             }
         }
     }
@@ -351,7 +351,7 @@ public final class BuilderMode {
     /** The destination as the world hides it, like the selection (see {@link SceneShape}): dim faces on the ground, an outline in open air, nothing showing through terrain. Worked out again when the preview changes or, once a second, the world does. */
     private static void drawDestination(Options o,Preview shown){
         var level=Minecraft.getInstance().level;
-        if(level==null){shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.selectionWidth,o.previewFill,true,true);return;}
+        if(level==null||shown.landing().size()>OUTLINE_LIMIT){shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.selectionWidth,o.previewFill,true,true);return;} // a result past the limit is not worked out against the world every second: its outline alone
         long second=level.getGameTime()/20;
         if(shown!=destOf||second!=destAt){destScene=shown==destOf?SceneShape.again(level,shown.landing(),destScene):SceneShape.of(level,shown.landing(),true);destOf=shown;destAt=second;}
         if(destScene.tooLarge()){shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.selectionWidth,o.previewFill,true,true);return;}
@@ -385,34 +385,52 @@ public final class BuilderMode {
     private static void drawStack(Options o,Point min,Point size){
         long copies=((long)Math.abs(stackX)+1)*(Math.abs(stackY)+1)*(Math.abs(stackZ)+1)-1;
         if(cells.size()*copies>PREVIEW_LIMIT)return;
-        Object[] key={min,size,o.builderRotation,o.builderFlipAxis,stackX,stackY,stackZ};
+        Object[] key={min,size,o.builderRotation,o.builderFlipAxis,stackX,stackY,stackZ,o.aiGhostDrawLimit};
         if(stackFor==null||cells!=stackCells||!Arrays.equals(key,stackFor)){
-            var models=new ArrayList<net.minecraft.core.BlockPos>();var places=new ArrayList<net.minecraft.core.BlockPos>();var seen=new HashSet<Point>();
+            var landing=new LinkedHashMap<Point,Point>();
             for(Point step:stackSteps(size))for(Point at:cells){
                 Point q=BuilderTransform.apply(at.subtract(min),size,o.builderRotation,o.builderFlipAxis).add(min.x()+step.x(),min.y()+step.y(),min.z()+step.z());
-                if(seen.add(q)){places.add(new net.minecraft.core.BlockPos(q.x(),q.y(),q.z()));models.add(new net.minecraft.core.BlockPos(at.x(),at.y(),at.z()));}
+                landing.putIfAbsent(q,at);
             }
+            // A frame draws only as many models as the player allows, the outer surface of the stack first.
+            var shown=Exposed.first(landing.keySet(),o.aiGhostDrawLimit);
+            var models=new ArrayList<net.minecraft.core.BlockPos>(shown.size());var places=new ArrayList<net.minecraft.core.BlockPos>(shown.size());
+            for(Point q:shown){var at=landing.get(q);places.add(new net.minecraft.core.BlockPos(q.x(),q.y(),q.z()));models.add(new net.minecraft.core.BlockPos(at.x(),at.y(),at.z()));}
             stackFor=key;stackCells=cells;stackModels=models;stackPlaces=places;
         }
-        if(!stackPlaces.isEmpty())Overlay.blockStates(turned(stackModels,o),stackPlaces,o.previewTint);
+        if(!stackPlaces.isEmpty())Overlay.cachedBlockStates(turned(stackModels,o),stackPlaces,o.previewTint);
     }
     /** The blocks at {@code models} as they will stand once the builder's turn and flip are applied, so oriented blocks are drawn facing their new way. */
+    /** The models' states as the Builder's turn leaves them. The same list object comes back while nothing changed, so the renderer can keep what it worked out about it; read again once a second for the world. */
     private static List<net.minecraft.world.level.block.state.BlockState> turned(List<net.minecraft.core.BlockPos> models,Options o){
-        var level=Minecraft.getInstance().level;var states=new ArrayList<net.minecraft.world.level.block.state.BlockState>(models.size());
+        var level=Minecraft.getInstance().level;long second=level.getGameTime()/20;
+        var known=TURNED.get(models);
+        if(known!=null&&known.rotation==o.builderRotation&&known.flip==o.builderFlipAxis&&known.second==second)return known.states;
+        var states=new ArrayList<net.minecraft.world.level.block.state.BlockState>(models.size());
         for(var pos:models)states.add(dev.craftium.server.BuilderEdits.turn(level.getBlockState(pos),o.builderRotation,o.builderFlipAxis));
+        if(known!=null&&known.states.equals(states)){known.rotation=o.builderRotation;known.flip=o.builderFlipAxis;known.second=second;return known.states;}
+        if(TURNED.size()>8)TURNED.clear();
+        TURNED.put(models,new Turned(o.builderRotation,o.builderFlipAxis,second,states));
         return states;
     }
+    private static final class Turned{int rotation,flip;long second;final List<net.minecraft.world.level.block.state.BlockState> states;Turned(int r,int f,long t,List<net.minecraft.world.level.block.state.BlockState> s){rotation=r;flip=f;second=t;states=s;}}
+    private static final Map<List<net.minecraft.core.BlockPos>,Turned> TURNED=new IdentityHashMap<>();
     private static Object[] stackFor;
     private static List<Point> stackCells;
     private static List<net.minecraft.core.BlockPos> stackModels=List.of(),stackPlaces=List.of();
     private static List<net.minecraft.core.BlockPos> cellBlocks;
     private static List<Point> cellBlocksFor;
+    private static int cellBlocksLimit;
     private static List<net.minecraft.core.BlockPos> cellBlocks(){
-        if(cellBlocksFor!=cells){cellBlocks=cells.stream().map(p->new net.minecraft.core.BlockPos(p.x(),p.y(),p.z())).toList();cellBlocksFor=cells;}
+        int limit=ClientState.options.aiGhostDrawLimit;
+        if(cellBlocksFor!=cells||cellBlocksLimit!=limit){cellBlocks=Exposed.first(cells,limit).stream().map(p->new net.minecraft.core.BlockPos(p.x(),p.y(),p.z())).toList();cellBlocksFor=cells;cellBlocksLimit=limit;}
         return cellBlocks;
     }
-    /** Past this many blocks the preview is just a box around where they land. */
-    private static final int PREVIEW_LIMIT=4096;
+    /**
+     * Past this many blocks the preview is just a box around where they land. Inside it the whole result is outlined, and a frame draws as many
+     * models as the player allows (Preferences, "Preview models"), the outer surface first.
+     */
+    private static final int PREVIEW_LIMIT=262_144;
     /** Where the cells would land: one outline around them, plus each block's model drawn at its destination. */
     private record Preview(OutlineShape shape,Set<Point> landing,List<net.minecraft.core.BlockPos> models,List<net.minecraft.core.BlockPos> places){}
     private static Preview cachedPreview;
@@ -421,7 +439,7 @@ public final class BuilderMode {
 
     /** Rebuilt only when something it depends on changes, because the outline costs more than a frame can spare. Null when too large. */
     private static Preview preview(Options o,Point min,Point size,List<Point> steps){
-        Object[] key={min,size,offset,o.builderRotation,o.builderFlipAxis,o.builderTool,o.copies,stackX,stackY,stackZ};
+        Object[] key={min,size,offset,o.builderRotation,o.builderFlipAxis,o.builderTool,o.copies,stackX,stackY,stackZ,o.aiGhostDrawLimit};
         if(cachedFor!=null&&cells==cachedCells&&Arrays.equals(key,cachedFor))return cachedPreview;
         var landing=new LinkedHashMap<Point,Point>();
         outer:for(Point step:steps)for(Point at:cells){
@@ -430,9 +448,10 @@ public final class BuilderMode {
         }
         Preview built=null;
         if(landing!=null){
-            var models=new ArrayList<net.minecraft.core.BlockPos>(landing.size());var places=new ArrayList<net.minecraft.core.BlockPos>(landing.size());
-            landing.forEach((to,from)->{places.add(new net.minecraft.core.BlockPos(to.x(),to.y(),to.z()));models.add(new net.minecraft.core.BlockPos(from.x(),from.y(),from.z()));});
-            built=new Preview(OutlineShape.of(landing.keySet()),landing.keySet(),models,places);
+            var shown=Exposed.first(landing.keySet(),o.aiGhostDrawLimit);
+            var models=new ArrayList<net.minecraft.core.BlockPos>(shown.size());var places=new ArrayList<net.minecraft.core.BlockPos>(shown.size());
+            for(Point to:shown){var from=landing.get(to);places.add(new net.minecraft.core.BlockPos(to.x(),to.y(),to.z()));models.add(new net.minecraft.core.BlockPos(from.x(),from.y(),from.z()));}
+            built=new Preview(OutlineShape.ofLater(landing.keySet()),landing.keySet(),models,places); // a big outline is worked out off the render thread and appears when ready
         }
         cachedFor=key;cachedCells=cells;cachedPreview=built;
         return built;

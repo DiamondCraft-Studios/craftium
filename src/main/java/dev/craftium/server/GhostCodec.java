@@ -12,12 +12,19 @@ import java.util.*;
  * with {@code total} saying how many there really are.
  */
 final class GhostCodec {
-    /** More blocks than this are not drawn as models, because a frame would have to draw all of them. */
-    static final int LIMIT=4096;
     /**
-     * What an AI preview describes. The client draws only as many models as the player allows, but an outline of all of it, so the
-     * describing can go further than the drawing; the blocks that show come first, so a cut never leaves a hole in the outer surface.
+     * What a waiting edit or a tool's preview describes. The client draws only as many models as the player allows, but an outline of all of it, so the
+     * describing can go further than the drawing; the blocks that show come first, so a cut never leaves a hole in the outer surface. What goes over
+     * the wire is bounded by the status packet (about 15 characters a block), which is why this is not larger: the client works out its own
+     * preview of anything bigger while the server's reply is on its way (see ModifyPreview and BuilderMode), and the server's takes over when it arrives.
      */
+    static final int LIMIT=32_768;
+    /**
+     * The clipboard ghost is sent again with every status for as long as the clipboard holds something, so it stays small: the pasted blocks'
+     * outline is described separately and in full, as runs.
+     */
+    static final int CLIPBOARD_LIMIT=4096;
+    /** What an AI preview describes; larger than {@link #LIMIT} because the AI preview has its own history and budget. */
     static final int AI_LIMIT=49_152;
     /**
      * {@code layout} and {@code names} are only there for a jigsaw preview: one box per piece (x0, y0, z0, x1, y1, z1 and a hue, or -1 for the start piece)
@@ -89,7 +96,7 @@ final class GhostCodec {
         for(var entry:clipboard.entrySet()){
             var state=entry.getValue().state();if(state.isAir())continue;
             total++;
-            if(blocks.size()/4<LIMIT){var at=entry.getKey();blocks.add(at.x());blocks.add(at.y());blocks.add(at.z());blocks.add(palette.computeIfAbsent(state,k->palette.size()));}
+            if(blocks.size()/4<CLIPBOARD_LIMIT){var at=entry.getKey();blocks.add(at.x());blocks.add(at.y());blocks.add(at.z());blocks.add(palette.computeIfAbsent(state,k->palette.size()));}
         }
         return json(palette,blocks,List.of(),total);
     }

@@ -99,6 +99,25 @@ public final class Overlay {
      * the world changing around it after that first frame.
      */
     public static void cachedBlockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){OverlayLog.blocks("cachedBlockStates",places,tint);out.add(new Blocks(places,places,null,states,tint,true));}
+    /**
+     * As {@link #cachedBlockStates}, for a ghost whose blocks are those of the world at {@code models} (a selection, a move, a result being
+     * previewed). The states are read once, and again once a second so an edit does not leave the ghost showing what the blocks were;
+     * the same two list objects must be passed for as long as the ghost stays the same.
+     */
+    public static void cachedBlocks(List<BlockPos> models,List<BlockPos> places,int tint){
+        var level=Minecraft.getInstance().level;if(level==null)return;
+        long second=level.getGameTime()/20;
+        var known=RESOLVED.get(places);
+        if(known==null||known.models!=models||known.second!=second){
+            var states=new ArrayList<net.minecraft.world.level.block.state.BlockState>(models.size());
+            for(var at:models)states.add(level.getBlockState(at));
+            if(known!=null&&known.models==models&&known.states.equals(states))known.second=second; // nothing changed: what was worked out about it stays
+            else{known=new Resolved(models,states,second);RESOLVED.put(places,known);PREPARED.remove(places);}
+        }
+        cachedBlockStates(known.states,places,tint);
+    }
+    private static final class Resolved{final List<BlockPos> models;final List<net.minecraft.world.level.block.state.BlockState> states;long second;Resolved(List<BlockPos> m,List<net.minecraft.world.level.block.state.BlockState> s,long t){models=m;states=s;second=t;}}
+    private static final java.util.Map<List<BlockPos>,Resolved> RESOLVED=new java.util.IdentityHashMap<>();
     public static void text(String text,BlockPos pos,int color,int background,float scale){text(text,new Vec3(pos.getX()+.5,pos.getY()+1.3,pos.getZ()+.5),color,background,scale);}
     /** A label centred on the point {@code at}. */
     public static void text(String text,Vec3 at,int color,int background,float scale){OverlayLog.text(text,at,color,background,scale);out.add(new Label(text,at,color,background,scale));}
@@ -113,14 +132,14 @@ public final class Overlay {
             try{frame.run();}finally{out=saved;}
             prims=extra;
         }
-        if(prims.isEmpty()||mc.level==null){PREPARED.clear();return;}
+        if(prims.isEmpty()||mc.level==null){PREPARED.clear();RESOLVED.clear();return;}
         var camera=ClientCompat.camera(mc);
         var view=new View(camera.position(),camera.getLeftVector(),camera.getUpVector(),
             2*Math.tan(Math.toRadians(ClientCompat.fov(mc,camera))/2)/Math.max(1,mc.getWindow().getHeight()));
         // Block ghosts go first, then the lines, boxes and points over them, so handles and outlines are never covered by a ghost.
         TOUCHED.clear();
         for(var prim:prims)if(prim instanceof Blocks g)blocks(context,mc,view,g);
-        PREPARED.keySet().retainAll(TOUCHED); // a ghost that was not drawn this frame is gone
+        PREPARED.keySet().retainAll(TOUCHED);RESOLVED.keySet().retainAll(TOUCHED); // a ghost that was not drawn this frame is gone
         var pose=context.matrices().last();
         var quads=context.consumers().getBuffer(RenderType.textBackgroundSeeThrough());
         for(var prim:prims)switch(prim){
@@ -238,6 +257,7 @@ public final class Overlay {
         final List<Boolean> loose=new ArrayList<>();
         final List<List<net.minecraft.client.renderer.block.model.BlockModelPart>> parts=new ArrayList<>();
         int[] tints;
+        Object source;
     }
     private static final java.util.Map<List<BlockPos>,Prepared> PREPARED=new java.util.IdentityHashMap<>();
     private static final java.util.Set<List<BlockPos>> TOUCHED=java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
@@ -268,7 +288,8 @@ public final class Overlay {
 
     private static void cachedBlocks(WorldRenderContext context,Minecraft mc,View view,Blocks ghost){
         TOUCHED.add(ghost.places);
-        var prepared=PREPARED.computeIfAbsent(ghost.places,k->prepare(mc,ghost));
+        var prepared=PREPARED.get(ghost.places);
+        if(prepared==null||prepared.source!=ghost.states){prepared=prepare(mc,ghost);prepared.source=ghost.states;PREPARED.put(ghost.places,prepared);} // new states for the same places (a turn, an edit) are worked out again
         var consumer=context.consumers().getBuffer(RenderType.entityTranslucent(TextureAtlas.LOCATION_BLOCKS));
         var stack=context.matrices();
         float a=(ghost.tint>>>24)/255f,r=(ghost.tint>>16&255)/255f,g=(ghost.tint>>8&255)/255f,b=(ghost.tint&255)/255f;
