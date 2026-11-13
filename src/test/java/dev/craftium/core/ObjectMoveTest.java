@@ -136,4 +136,20 @@ class ObjectMoveTest{
         var r=ObjectMove.moveLanded(List.of(obj(1,p(0))),Set.of(p(0)),landed,Map.of(),view(world),ObjectMoveTest::solid,true);apply(world,r);
         assertEquals(DIRT,world.get(p(5)));assertTrue(r.objects().get(1).dormant().isEmpty(),"nothing worth keeping");
     }
+    private static ObjectMove.Placement put(int id,int x,String state){return new ObjectMove.Placement(id,p(x),ObjectMove.Block.of(state));}
+    @Test void aPlacedObjectWritesWhereTheWorldIsFreeKeepsWhatLosesAndGivesNothingBackYet(){
+        var world=new HashMap<>(Map.of(p(2),DIRT,p(3),WATER));
+        var r=ObjectMove.place(List.of(obj(1)),List.of(put(1,1,STONE),put(1,2,STAIRS),put(1,3,STONE)),view(world),ObjectMoveTest::solid);apply(world,r);
+        assertEquals(Map.of(p(1),STONE,p(2),DIRT,p(3),STONE),world);
+        var o=r.objects().get(1);assertEquals(Set.of(p(1),p(3)),o.own());assertEquals(STAIRS,o.dormant().get(p(2)));assertEquals(WATER,o.replaced().get(p(3)));
+        assertEquals(Set.of(p(1),p(3)),r.landed());
+    }
+    @Test void aPlacedObjectEarlierInTheListLosesToOneThatIsAlreadyThereAndALaterOneTakesTheCell(){
+        var world=new HashMap<>(Map.of(p(0),DIRT));
+        var there=obj(2,p(0));
+        var earlier=ObjectMove.place(List.of(obj(1),there),List.of(put(1,0,STONE)),view(world),ObjectMoveTest::solid);
+        assertEquals(STONE,earlier.objects().get(1).dormant().get(p(0)),"the object later in the list keeps the cell");assertNull(earlier.objects().get(2));
+        var later=ObjectMove.place(List.of(there,obj(3)),List.of(put(3,0,STONE)),view(world),ObjectMoveTest::solid);apply(world,later);
+        assertEquals(STONE,world.get(p(0)));assertEquals(DIRT,later.objects().get(2).dormant().get(p(0)));assertTrue(later.objects().get(2).own().isEmpty());
+    }
 }

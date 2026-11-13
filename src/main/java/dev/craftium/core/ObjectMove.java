@@ -111,7 +111,6 @@ public final class ObjectMove {
         }
 
         // 2. Arrivals, lowest priority first so a later object can take a cell from an earlier one that just landed there.
-        record Arrival(Work who,Point to,Block block,int rank){}
         var arrivals=new ArrayList<Arrival>();
         for(var e:landed.entrySet()){
             var b=e.getValue().block();if(b==null||(b.isAir()&&!pasteAir))continue;
@@ -121,6 +120,19 @@ public final class ObjectMove {
             w.dormant=new PackedCells();w.touched=true; // what is not landed anywhere is sampled away
             for(var e:dormantLanded.getOrDefault(w.id,Map.of()).entrySet())arrivals.add(new Arrival(w,e.getKey(),e.getValue().block(),priority.get(w.id)));
         }
+        var landedCells=settle(arrivals,owner,current,priority,solid,at);
+
+        var writes=new LinkedHashMap<Point,Block>();
+        for(var e:current.entrySet())if(!e.getValue().equals(orAir(worldState.apply(e.getKey()))))writes.put(e.getKey(),e.getValue());
+        var changed=new LinkedHashMap<Integer,Obj>();
+        for(var w:work.values())if(w.touched)changed.put(w.id,new Obj(w.id,w.own,w.dormant,w.replaced));
+        return new Result(writes,changed,landedCells);
+    }
+
+    private record Arrival(Work who,Point to,Block block,int rank){}
+
+    /** Lets each arrival take its cell, lowest priority first, by the rules above. Returns the cells where a block landed. */
+    private static Set<Point> settle(List<Arrival> arrivals,Map<Point,Work> owner,Map<Point,Block> current,Map<Integer,Integer> priority,Predicate<String> solid,Function<Point,Block> at){
         arrivals.sort(Comparator.comparingInt(Arrival::rank));
         var landedCells=new LinkedHashSet<Point>();
         for(var a:arrivals){
@@ -141,7 +153,28 @@ public final class ObjectMove {
                 owner.put(d,me);me.own.add(d);current.put(d,a.block());landedCells.add(d);
             }
         }
+        return landedCells;
+    }
 
+    /** A block an object places: it is the object's block that would go in this cell. */
+    public record Placement(int objectId,Point cell,Block block){}
+
+    /**
+     * Places blocks that come from outside the world (a paste, a duplicate) for BuildObjects, by the same rules as a move but with nothing vacated: a solid world
+     * block wins and the object keeps its block as dormant, what a block replaces is kept, and between objects the later one in the list wins.
+     * The objects the blocks are for should hold none of those cells in {@code ordered}.
+     * @param ordered every BuildObject, lowest priority first
+     */
+    public static Result place(List<Obj> ordered,List<Placement> placements,Function<Point,Block> worldState,Predicate<String> solid){
+        var work=new LinkedHashMap<Integer,Work>();var priority=new HashMap<Integer,Integer>();
+        for(int i=0;i<ordered.size();i++){var o=ordered.get(i);work.put(o.id(),new Work(o));priority.put(o.id(),i);}
+        var owner=new HashMap<Point,Work>();
+        for(var w:work.values())for(var p:w.own)owner.put(p,w);
+        var current=new HashMap<Point,Block>();
+        Function<Point,Block> at=p->{var b=current.get(p);return b!=null?b:orAir(worldState.apply(p));};
+        var arrivals=new ArrayList<Arrival>();
+        for(var pl:placements){var w=work.get(pl.objectId());if(w==null)throw new IllegalArgumentException("No such BuildObject");arrivals.add(new Arrival(w,pl.cell(),pl.block(),priority.get(pl.objectId())));}
+        var landedCells=settle(arrivals,owner,current,priority,solid,at);
         var writes=new LinkedHashMap<Point,Block>();
         for(var e:current.entrySet())if(!e.getValue().equals(orAir(worldState.apply(e.getKey()))))writes.put(e.getKey(),e.getValue());
         var changed=new LinkedHashMap<Integer,Obj>();
