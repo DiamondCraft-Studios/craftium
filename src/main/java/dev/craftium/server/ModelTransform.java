@@ -34,7 +34,15 @@ final class ModelTransform {
      * chain the blocks come from its original source, and {@code plan} is expected to hold only what was staged before that chain.
      * Blocks staged but not yet built count as the blocks that are there.
      */
-    static Result apply(EditPlanner plan,Session session,Options o,Chain prior){
+    static Result apply(EditPlanner plan,Session session,Options o,Chain prior){return write(plan,compute(plan,session,o,prior));}
+
+    /** A transform worked out but not yet queued: where every block of the selection lands, and which cell each came from. */
+    record Computed(Map<Point,BlockSnapshot> source,Point min,Point max,List<Step> steps,LinkedHashMap<Point,BlockSnapshot> landed,Map<Point,Point> origin){
+        Chain chain(){return new Chain(source,min,max,List.copyOf(steps));}
+    }
+
+    /** Works the transform out without queueing anything (staged changes in {@code plan} count as the blocks that are there). */
+    static Computed compute(EditPlanner plan,Session session,Options o,Chain prior){
         var selection=session.selection;
         plan.exact=true;
         if(selection.size()==0)throw new IllegalArgumentException("Create a selection first");
@@ -67,10 +75,28 @@ final class ModelTransform {
             }
         }
         if(landed.size()>Selection.LIMIT)throw new IllegalArgumentException("Selection exceeds limit");
+        return new Computed(source,min,max,steps,landed,origin);
+    }
 
-        for(Point at:source.keySet())if(!landed.containsKey(at))plan.put(at,Blocks.AIR.defaultBlockState());
-        for(var entry:landed.entrySet()){plan.validate(entry.getKey());plan.put(entry.getKey(),entry.getValue());}
-        return new Result(new LinkedHashSet<>(landed.keySet()),new Chain(source,min,max,List.copyOf(steps)),origin);
+    /** Queues a computed transform: the cells left behind are cleared, and every landed block is placed. */
+    static Result write(EditPlanner plan,Computed c){
+        for(Point at:c.source().keySet())if(!c.landed().containsKey(at))plan.put(at,Blocks.AIR.defaultBlockState());
+        for(var entry:c.landed().entrySet()){plan.validate(entry.getKey());plan.put(entry.getKey(),entry.getValue());}
+        return new Result(new LinkedHashSet<>(c.landed().keySet()),c.chain(),c.origin());
+    }
+
+    /** The result of a computed transform whose blocks something else queued: {@code moved} are the cells where a block actually landed. */
+    static Result finish(Computed c,Set<Point> moved){return new Result(new LinkedHashSet<>(moved),c.chain(),c.origin());}
+
+    /**
+     * Where blocks that are not selected (the dormant blocks of a BuildObject that moves whole) land when they go through the same steps as the selection.
+     * Which cell a landed cell came from depends only on the steps, so these line up with the selection however far they lie from it.
+     */
+    static LinkedHashMap<Point,BlockSnapshot> landOutside(Map<Point,BlockSnapshot> blocks,List<Step> steps,Map<Point,Point> origin){
+        if(blocks.isEmpty())return new LinkedHashMap<>();
+        int x0=Integer.MAX_VALUE,y0=x0,z0=x0,x1=Integer.MIN_VALUE,y1=x1,z1=x1;
+        for(var p:blocks.keySet()){x0=Math.min(x0,p.x());y0=Math.min(y0,p.y());z0=Math.min(z0,p.z());x1=Math.max(x1,p.x());y1=Math.max(y1,p.y());z1=Math.max(z1,p.z());}
+        return place(blocks,new Point(x0,y0,z0),new Point(x1,y1,z1),steps,origin);
     }
 
     /** Pivot shifts to try, smallest first. */
