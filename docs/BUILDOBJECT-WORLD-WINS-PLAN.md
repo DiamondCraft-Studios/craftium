@@ -56,16 +56,17 @@ Known follow-ups: the whole tree is re-sent to each editor when it changes (abou
 
 ## Status
 
-Done, with tests (753 pass on 26.2; both versions compile; rebased on main 2026-11-13):
+Done, with tests (756 pass on 26.2; both versions and Paper 26.2 compile; rebased on main 2026-11-13):
 - the BuildObject limit of 1,024; `ObjectVolume`; `OccupancyResolver`;
 - `PackedCells` (packed store, with block entity data), dormant and replaced cells on each BuildObject with caps, saved with the world;
-- `ObjectMove`: the pure move with the world winning (dormant, replaced, priority, resampling, block entity data);
+- `ObjectMove`: the pure move and placement with the world winning (dormant, replaced, priority, resampling, block entity data);
 - undo and redo carry the dormant and replaced stores (`SelectionChange`), and saved history keeps them;
-- **wired into the editor (not yet run in the game):** the Edit > Move action (`move`) and the transform path (`selection_transform`: the Move, Rotate and Scale tools and the gizmo), including the staged preview and Enter, and cancelling a staged edit. A dormant block of an object that moves whole goes through the same steps as the selection.
+- **wired into the editor (not yet run in the game):** the Edit > Move action (`move`), the transform path (`selection_transform`: the Move, Rotate and Scale tools and the gizmo) including the staged preview, Enter and cancel, Duplicate and paste of BuildObjects (`paste_select` with `pasteAsObject`), and **Place here** in the Hierarchy menu (`saved_selection:placehere:<ids>`, permission "edit");
+- changelog entries.
 
-Not built: Duplicate and paste of a BuildObject (still overwrite), the **Place here** action, the x-ray preview of dormant cells, a gametest, the Hierarchy scroll check at hundreds of rows, a changelog entry.
+Not built: the x-ray preview of dormant cells, a gametest, the Hierarchy scroll check at hundreds of rows, a count of hidden blocks in the Hierarchy row, plain paste/clone/stack of non-object blocks (they overwrite by design).
 
-Known costs to measure in the game: every transform request now builds the whole BuildObject tree for `ObjectMove`, which may be slow per drag tick with very many or very large objects; an optimisation is to include only the objects that matter.
+Known costs to measure in the game: every transform request builds the whole BuildObject tree for `ObjectMove`, which may be slow per drag tick with very many or very large objects; an optimisation is to include only the objects that matter. The staged preview does not show which cells went dormant until the x-ray exists, so a buried part simply looks missing.
 
 ### What wiring it in involves (found while reading the edit path)
 - The Move, nudge and Transform actions work on selected *world* cells and the objects follow through `ObjectRemap`. A dormant block is not in the world, so those tools cannot carry it on their own.
