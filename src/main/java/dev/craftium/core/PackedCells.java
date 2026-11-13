@@ -83,6 +83,12 @@ public final class PackedCells{
     /** The cells, in no particular order. */
     public List<Point> points(){var out=new ArrayList<Point>(size);for(int i=0;i<keys.length;i++)if(values[i]!=0)out.add(unpack(keys[i]));return out;}
 
+    /** Whether both hold the same cells, states and block entity data, whatever order they were put in. */
+    public boolean sameContent(PackedCells o){
+        return size==o.size&&Arrays.equals(keysArray(),o.keysArray())&&paletteList().equals(o.paletteList())&&Arrays.equals(indexesArray(),o.indexesArray())
+            &&Arrays.equals(dataKeysArray(),o.dataKeysArray())&&dataList().equals(o.dataList());
+    }
+
     /** A copy that shares nothing with this one. */
     public PackedCells copy(){
         var c=new PackedCells();c.keys=keys.clone();c.values=values.clone();c.size=size;c.palette.addAll(palette);c.paletteIndex.putAll(paletteIndex);c.data.putAll(data);

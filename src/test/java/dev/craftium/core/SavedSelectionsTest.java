@@ -470,4 +470,16 @@ class SavedSelectionsTest {
             assertEquals(Math.max(base>>16&255,Math.max(base>>8&255,base&255)),Math.max(c>>16&255,Math.max(c>>8&255,c&255)),2);}
     }
     @Test void aGreyBaseStaysGrey(){assertEquals(0xff808080,SavedSelectionColors.forIndex(0xff808080,5));}
+    @Test void whatBuildObjectsKeepOutsideTheWorldCanBeSnapshotAndPutBackWithoutTheCaps(){
+        var saved=new SavedSelections();var one=saved.save(live(A));var two=saved.save(live(B));
+        var dormant=new PackedCells();dormant.put(C,"minecraft:stone");
+        var before=saved.heldSnapshot();assertTrue(before.get(one.id()).isEmpty());
+        saved.setHeld(one.id(),dormant,PackedCells.EMPTY);
+        var after=saved.heldSnapshot();assertFalse(after.get(one.id()).isEmpty());assertTrue(after.get(two.id()).isEmpty());
+        assertTrue(saved.restoreHeld(before));assertTrue(saved.byId(one.id()).dormant().isEmpty(),"undo");
+        assertFalse(saved.restoreHeld(before),"already there");
+        assertTrue(saved.restoreHeld(after));assertEquals("minecraft:stone",saved.byId(one.id()).dormant().get(C),"redo");
+        assertFalse(saved.restoreHeld(Map.of(999,after.get(one.id()))),"an id that is gone is skipped");
+        dormant.put(D,"minecraft:dirt");assertEquals(1,saved.byId(one.id()).dormant().size(),"the snapshot is not changed by the caller's store");
+    }
 }

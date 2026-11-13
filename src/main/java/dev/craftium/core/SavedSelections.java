@@ -257,13 +257,32 @@ public final class SavedSelections {
         if(dormant.size()>Selection.LIMIT||replaced.size()>Selection.LIMIT)throw new IllegalArgumentException("A BuildObject holds up to "+String.format("%,d",Selection.LIMIT)+" dormant and as many replaced blocks");
         long others=tree.held()-e.dormant.size()-e.replaced.size();
         if(others+dormant.size()+replaced.size()>Tree.HELD_LIMIT)throw new IllegalArgumentException("The BuildObjects of this world hold up to "+String.format("%,d",Tree.HELD_LIMIT)+" dormant and replaced blocks between them");
-        if(same(e.dormant,dormant)&&same(e.replaced,replaced))return false;
+        if(e.dormant.sameContent(dormant)&&e.replaced.sameContent(replaced))return false;
         e.dormant=dormant.isEmpty()?PackedCells.EMPTY:dormant.copy();e.replaced=replaced.isEmpty()?PackedCells.EMPTY:replaced.copy();
         tree.mutations++; // saved to disk, but no client is sent them, so the revision stays
         return true;
     }
-    private static boolean same(PackedCells a,PackedCells b){
-        return a.size()==b.size()&&Arrays.equals(a.keysArray(),b.keysArray())&&a.paletteList().equals(b.paletteList())&&Arrays.equals(a.indexesArray(),b.indexesArray())&&Arrays.equals(a.dataKeysArray(),b.dataKeysArray())&&a.dataList().equals(b.dataList());
+    /** What a BuildObject keeps outside the world, for undo and redo. Never changed once made, so it is shared, not copied. */
+    public record Held(PackedCells dormant,PackedCells replaced){
+        public static final Held NONE=new Held(PackedCells.EMPTY,PackedCells.EMPTY);
+        public boolean isEmpty(){return dormant.isEmpty()&&replaced.isEmpty();}
+        public boolean same(Held o){return dormant.sameContent(o.dormant)&&replaced.sameContent(o.replaced);}
+    }
+    /** What every BuildObject keeps outside the world, by id, as it is now: what a move changes, and what undo puts back. */
+    public Map<Integer,Held> heldSnapshot(){var out=new LinkedHashMap<Integer,Held>();for(var e:entries)out.put(e.id,new Held(e.dormant,e.replaced));return out;}
+    /**
+     * Puts back what BuildObjects kept outside the world (an id that is gone is skipped, and one that is not named is left alone). Unlike {@link #setHeld} it does not check the
+     * caps: it restores what was there before, and must not fail halfway through an undo. Returns whether anything changed.
+     */
+    public boolean restoreHeld(Map<Integer,Held> held){
+        boolean changed=false;
+        for(var e:entries){
+            var h=held.get(e.id);if(h==null)continue;
+            if(e.dormant.sameContent(h.dormant)&&e.replaced.sameContent(h.replaced))continue;
+            e.dormant=h.dormant.isEmpty()?PackedCells.EMPTY:h.dormant;e.replaced=h.replaced.isEmpty()?PackedCells.EMPTY:h.replaced;changed=true;
+        }
+        if(changed)tree.mutations++;
+        return changed;
     }
     /** The blocks of the BuildObject and of everything under it: what looking at it shows. */
     public Set<Point> effective(Entry entry){var out=new LinkedHashSet<Point>();for(var e:subtree(entry))out.addAll(e.points);return out;}
