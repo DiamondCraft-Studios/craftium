@@ -2679,6 +2679,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(!only||n>1)items.add(item("Select","",()->action("saved_selection:view:"+id)));
         if(!kids.isEmpty())items.add(item("Select children only","",()->action("saved_selection:viewset:"+String.join(",",kids.stream().map(String::valueOf).toList()))));
         items.add(row.active()&&row.editing()?item("Stop editing","",()->action("saved_selection:release")):item("Edit blocks","",()->action("saved_selection:edit:"+id)));
+        items.add(item(n>1?"Place here ("+n+")":"Place here","",()->action("saved_selection:placehere:"+csv))); // blocks it keeps out of the world, because something solid was there, are placed where it is free now
         items.add(divider());
         items.add(n>1?item("Group selected ("+n+")","Ctrl+G",()->action("saved_selection:group:"+csv)):item("Create empty parent",row.active()?"Ctrl+G":"",()->action("saved_selection:group:"+id)));
         items.add(item("Create empty BuildObject","",()->{expectNewBuildObject();action("saved_selection:createchild:"+id);}));
