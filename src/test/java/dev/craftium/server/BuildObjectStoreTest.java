@@ -53,7 +53,7 @@ class BuildObjectStoreTest {
         var tower = saved.save(live(A, B));
         var dormant = new PackedCells();
         dormant.put(B, "minecraft:oak_stairs[facing=north]");
-        dormant.put(C, "minecraft:stone");
+        dormant.put(C, "minecraft:chest[facing=north]", "{Items:[{id:\"minecraft:diamond\",count:3}]}");
         var replaced = new PackedCells();
         replaced.put(A, "minecraft:water[level=0]");
         assertTrue(saved.setHeld(tower.id(), dormant, replaced));
@@ -63,7 +63,10 @@ class BuildObjectStoreTest {
 
         var back = new SavedSelections(BuildObjectStore.load(file)).byId(tower.id());
         assertEquals("minecraft:oak_stairs[facing=north]", back.dormant().get(B));
-        assertEquals("minecraft:stone", back.dormant().get(C));
+        assertEquals("minecraft:chest[facing=north]", back.dormant().get(C));
+        assertEquals(
+                "{Items:[{id:\"minecraft:diamond\",count:3}]}", back.dormant().data(C), "a chest keeps its items");
+        assertNull(back.dormant().data(B));
         assertEquals("minecraft:water[level=0]", back.replaced().get(A));
         assertEquals(2, back.dormant().size());
         assertEquals(1, back.replaced().size());

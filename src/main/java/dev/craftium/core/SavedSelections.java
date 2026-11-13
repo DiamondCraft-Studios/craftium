@@ -550,7 +550,9 @@ public final class SavedSelections {
         return a.size() == b.size()
                 && Arrays.equals(a.keysArray(), b.keysArray())
                 && a.paletteList().equals(b.paletteList())
-                && Arrays.equals(a.indexesArray(), b.indexesArray());
+                && Arrays.equals(a.indexesArray(), b.indexesArray())
+                && Arrays.equals(a.dataKeysArray(), b.dataKeysArray())
+                && a.dataList().equals(b.dataList());
     }
     /** The blocks of the BuildObject and of everything under it: what looking at it shows. */
     public Set<Point> effective(Entry entry) {
