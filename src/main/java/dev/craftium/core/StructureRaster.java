@@ -36,7 +36,15 @@ public final class StructureRaster {
         float depthOfNormal(int nx,int ny,int nz){float z1=-nx*sinY+nz*cosY;return ny*sinP+z1*cosP;}
     }
 
+    /** One colour for every face of each palette entry. */
     public static void render(StructurePreview p,int[] colours,View view,int[] pixels,int w,int h){
+        var faces=new int[colours.length][];
+        for(int i=0;i<faces.length;i++)faces[i]=new int[]{colours[i],colours[i],colours[i]};
+        render(p,faces,view,pixels,w,h);
+    }
+
+    /** {@code colours[cell]} is {@code {top, side, bottom}}: the colour of the texture the block puts on each kind of face. */
+    public static void render(StructurePreview p,int[][] colours,View view,int[] pixels,int w,int h){
         if(pixels.length<w*h)throw new IllegalArgumentException("Pixel buffer too small");
         Arrays.fill(pixels,0,w*h,BACKGROUND);
         var depth=new float[w*h];Arrays.fill(depth,Float.NEGATIVE_INFINITY);
@@ -52,12 +60,12 @@ public final class StructureRaster {
         int cell=p.cells()[p.index(x,y,z)];return cell>=0&&p.palette().get(cell).occludes();
     }
 
-    private static void faces(StructurePreview p,int[] colours,Camera cam,int[] pixels,float[] depth,int w,int h){
+    private static void faces(StructurePreview p,int[][] colours,Camera cam,int[] pixels,float[] depth,int w,int h){
         var a=new float[3];var b=new float[3];var c=new float[3];int drawn=0;
         float[] corners=new float[12];
         for(int y=0;y<p.sizeY();y++)for(int z=0;z<p.sizeZ();z++)for(int x=0;x<p.sizeX();x++){
             int cell=p.cells()[p.index(x,y,z)];if(cell<0)continue;
-            var block=p.palette().get(cell);int[] bb=block.bounds();int base=cell<colours.length?colours[cell]:0xff9aa5b1;
+            var block=p.palette().get(cell);int[] bb=block.bounds();int[] own=cell<colours.length?colours[cell]:null;
             float x0=x+bb[0]/16f,y0=y+bb[1]/16f,z0=z+bb[2]/16f,x1=x+bb[3]/16f,y1=y+bb[4]/16f,z1=z+bb[5]/16f;
             for(int d=0;d<6;d++){
                 int[] n=NORMALS[d];
@@ -76,6 +84,7 @@ public final class StructureRaster {
                     default->corner(corners,x0,y0,z1,x1,y0,z1,x0,y1,z1);
                 }
                 cam.project(corners[0],corners[1],corners[2],a);cam.project(corners[3],corners[4],corners[5],b);cam.project(corners[6],corners[7],corners[8],c);
+                int base=own==null?0xff9aa5b1:own[d==3?0:d==2?2:1];
                 parallelogram(a,b,c,shade(base,LIGHT[d]),pixels,depth,w,h);
             }
         }

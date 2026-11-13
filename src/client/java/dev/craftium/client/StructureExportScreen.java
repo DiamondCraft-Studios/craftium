@@ -1,11 +1,8 @@
 package dev.craftium.client;
 
-import com.mojang.blaze3d.platform.NativeImage;
 import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
-import dev.craftium.client.compat.ReferenceTexture;
-import dev.craftium.client.compat.Tex;
 import dev.craftium.core.StructurePreview;
 import dev.craftium.core.StructureRaster;
 import dev.craftium.core.StructureSettings;
@@ -43,9 +40,9 @@ final class StructureExportScreen extends CraftiumScreen {
     private final ArrayDeque<Page> queue=new ArrayDeque<>();private java.nio.file.Path folder;private Page current;private int exported,total;private final List<String> failed=new ArrayList<>();
     private int left,top,panelWidth,panelHeight,viewX,viewY,viewWidth,viewHeight,formTop,formBottom,scroll,maxScroll;
     // The preview: a software-rendered texture of the structure and the camera that renders it.
-    private Tex texture;private ReferenceTexture dynamic;private int[] pixels=new int[0];private int textureWidth,textureHeight;
+    private final PixelTexture view=new PixelTexture("structure_preview");
     private float yaw=-35,pitch=28,zoom=1;private boolean dragging,redraw=true;
-    private int[] colours=new int[0];private int shownPreviews=-1;
+    private int[][] colours=new int[0][];private int shownPreviews=-1;
     // Asking the server for a new preview once the player has stopped typing.
     private boolean dirty=true;private long changedAt,sentAt;private boolean waiting;
     /** The status the server had last sent when each request went out, to tell its reply from an older message. */
@@ -260,18 +257,8 @@ final class StructureExportScreen extends CraftiumScreen {
 
     // --- Preview texture ---
 
-    private void makeTexture(){
-        releaseTexture();
-        double scale=Math.max(1,minecraft.getWindow().getGuiScale());
-        int w=(int)Math.max(16,viewWidth*scale),h=(int)Math.max(16,viewHeight*scale);
-        while((long)w*h>700_000){w=w*3/4;h=h*3/4;}
-        textureWidth=w;textureHeight=h;pixels=new int[w*h];
-        var image=new NativeImage(w,h,false);
-        dynamic=new ReferenceTexture(image);dynamic.filtering(true);
-        texture=Tex.of("craftium","structure_preview/"+UUID.randomUUID());
-        minecraft.getTextureManager().register(texture.id(),dynamic);redraw=true;
-    }
-    private void releaseTexture(){if(texture!=null){minecraft.getTextureManager().release(texture.id());texture=null;dynamic=null;}}
+    private void makeTexture(){view.resize(viewWidth,viewHeight);redraw=true;}
+    private void releaseTexture(){view.release();}
     @Override public void removed(){
         releaseTexture();
         s.objectId=priorObject;
@@ -282,11 +269,9 @@ final class StructureExportScreen extends CraftiumScreen {
     }
 
     private void render(){
-        var preview=ClientStructures.preview;if(preview==null||dynamic==null)return;
-        StructureRaster.render(preview,colours,new StructureRaster.View(yaw,pitch,zoom,s.showBounds,s.showInvisible,s.showAxes),pixels,textureWidth,textureHeight);
-        var image=dynamic.getPixels();
-        for(int y=0;y<textureHeight;y++)for(int x=0;x<textureWidth;x++)image.setPixel(x,y,pixels[y*textureWidth+x]);
-        dynamic.upload();
+        var preview=ClientStructures.preview;if(preview==null||!view.ready())return;
+        StructureRaster.render(preview,colours,new StructureRaster.View(yaw,pitch,zoom,s.showBounds,s.showInvisible,s.showAxes),view.pixels(),view.width(),view.height());
+        view.upload();
     }
 
     // --- Talking to the server ---
@@ -362,7 +347,7 @@ final class StructureExportScreen extends CraftiumScreen {
         g.fill(left,top,left+panelWidth,top+panelHeight,o.uiPanel);g.outline(left,top,panelWidth,panelHeight,o.uiBorder);
         if(ClientStructures.previews!=shownPreviews){
             shownPreviews=ClientStructures.previews;var preview=ClientStructures.preview;
-            if(preview!=null)colours=ClientStructures.colours(preview);
+            if(preview!=null)colours=PreviewFaces.of(preview.palette().stream().map(b->b.name()).toList());
             redraw=true;
             // Fields left on "detect" show the detected size, so they follow the structure when it changes.
             if(preview!=null&&!Arrays.equals(preview.source(),shownSource)&&(s.sizeX==0||s.sizeY==0||s.sizeZ==0))rebuildWidgets();
@@ -379,7 +364,7 @@ final class StructureExportScreen extends CraftiumScreen {
         // The preview.
         g.fill(viewX,viewY,viewX+viewWidth,viewY+viewHeight,StructureRaster.BACKGROUND);
         var preview=ClientStructures.preview;
-        if(preview!=null&&texture!=null)g.blit(texture,viewX,viewY,0,0,viewWidth,viewHeight,textureWidth,textureHeight,textureWidth,textureHeight,0xffffffff);
+        if(preview!=null&&view.ready())g.blit(view.tex(),viewX,viewY,0,0,viewWidth,viewHeight,view.width(),view.height(),view.width(),view.height(),0xffffffff);
         else g.centeredText(font,waiting?"Building the preview…":(problem.isEmpty()?"No preview yet":problem),viewX+viewWidth/2,viewY+viewHeight/2-4,o.uiMuted);
         g.outline(viewX,viewY,viewWidth,viewHeight,dragging?o.uiAccent:o.uiBorder);
         g.text(font,"Drag to rotate · scroll to zoom",viewX+6,viewY+viewHeight-12,o.uiMuted,false);

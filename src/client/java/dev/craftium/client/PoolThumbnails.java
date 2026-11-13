@@ -77,10 +77,12 @@ final class PoolThumbnails {
             try (var in = new InflaterInputStream(new ByteArrayInputStream(Base64.getDecoder().decode(thumb.get("data").getAsString())))) { cells = in.readAllBytes(); }
             if (cells.length != sx * sy * sz) return null;
             var names = thumb.getAsJsonArray("palette");
-            var cache = new HashMap<String, int[]>();
-            int[][] palette = new int[names.size() + 1][];
+            var list = new ArrayList<String>();
+            for (var name : names) list.add(name.getAsString());
+            var faces = PreviewFaces.of(list);
+            int[][] palette = new int[faces.length + 1][];
             palette[0] = new int[3];
-            for (int i = 0; i < names.size(); i++) palette[i + 1] = AiView.faceColours(names.get(i).getAsString(), cache);
+            System.arraycopy(faces, 0, palette, 1, faces.length);
             int[] top = new int[cells.length], side = new int[cells.length], bottom = new int[cells.length];
             boolean any = false;
             for (int i = 0; i < cells.length; i++) {
