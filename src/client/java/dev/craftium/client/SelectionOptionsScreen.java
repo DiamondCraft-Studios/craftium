@@ -55,8 +55,7 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     private static final List<Width> WIDTHS=List.of(
         new Width("Line width (all selections)",o->o.selectionWidth,(o,v)->o.selectionWidth=v),
         // the opacity of the destination's ghost blocks is the alpha of their tint, so it is the same setting as the tint colour above
-        new Width("Block preview opacity",o->(o.previewTint>>>24)/255d,(o,v)->o.previewTint=((int)Math.round(v*255)<<24)|(o.previewTint&0xffffff),5,100,true),
-        new Width("AI block preview opacity",o->(o.aiTint>>>24)/255d,(o,v)->o.aiTint=((int)Math.round(v*255)<<24)|(o.aiTint&0xffffff),5,100,true));
+        new Width("Block preview opacity",o->(o.previewTint>>>24)/255d,(o,v)->o.previewTint=((int)Math.round(v*255)<<24)|(o.previewTint&0xffffff),5,100,true));
 
     private static final List<Entry> RULER_ENTRIES=List.of(
         entry("Ruler","Line",o->o.rulerLineColor,(o,c)->o.rulerLineColor=c),
@@ -80,6 +79,27 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     /** Whether the screen sets the selection's style: the selection screen does, the ruler's does not. */
     private final boolean styled;
     private int left,top,selected=-1;
+    /** How far the colours and the editor beside them are scrolled, for a window too short to show them all. The title and the buttons stay put. */
+    private double scroll;
+    private boolean draggingBar;
+    /** The controls that scroll with the content: drawn and clicked only inside the view. */
+    private final List<net.minecraft.client.gui.components.AbstractWidget> content=new ArrayList<>();
+    private static final int BAR=6;
+    private int panelH(){return Math.clamp(height-16,200,H);}
+    private int viewTop(){return top+30;}
+    private int viewBottom(){return top+panelH()-38;}
+    /** The top of the content as scrolled: everything inside the view is placed from here. */
+    private int ct(){return top-(int)scroll;}
+    private int contentHeight(){
+        int list=entries.isEmpty()?0:rowY(entries.size()-1)-ct()+ROW;
+        int column=262+(styled?38:0)+22*widths.size();
+        return Math.max(list,column);
+    }
+    private int maxScroll(){return Math.max(0,contentHeight()-(viewBottom()-top));}
+    private int barX(){return left+W+2;}
+    private int thumbH(){return Scrollbars.thumb(viewBottom()-viewTop(),contentHeight()-(viewTop()-top));}
+    private boolean overBar(double x,double y){return maxScroll()>0&&Scrollbars.hit(x,y,barX(),viewTop(),viewBottom()-viewTop());}
+    private void scrollTo(double value){double next=Math.clamp(value,0,maxScroll());if(next!=scroll){scroll=next;init();}}
     private ColourPicker picker;
 
     public SelectionOptionsScreen(Screen parent){this(parent,"Selection options",ENTRIES,WIDTHS,true);}
@@ -90,12 +110,12 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     static SelectionOptionsScreen ruler(Screen parent){return new SelectionOptionsScreen(parent,"Ruler options",RULER_ENTRIES,RULER_WIDTHS,false);}
 
     @Override protected void init(){
-        left=(width-W)/2;top=(height-H)/2;
-        clearWidgets();picker=null;
+        left=(width-W)/2;top=(height-panelH())/2;
+        clearWidgets();content.clear();picker=null;scroll=Math.clamp(scroll,0,maxScroll());
         var o=ClientState.options;
-        int ex0=left+W-290,sy=top+262; // the style and the line widths sit under the colour editor, so the list of colours has the whole left side
+        int ex0=left+W-290,sy=ct()+262; // the style and the line widths sit under the colour editor, so the list of colours has the whole left side
         if(styled){
-            addRenderableWidget(new FlatButton(ex0,sy,270,20,"Style: "+o.selectionStyle.label+"   (click to cycle)",()->{
+            track(new FlatButton(ex0,sy,270,20,"Style: "+o.selectionStyle.label+"   (click to cycle)",()->{
                 var all=Options.SelectionStyle.values();o.selectionStyle=all[(o.selectionStyle.ordinal()+1)%all.length];init();
             }).back(()->{var all=Options.SelectionStyle.values();o.selectionStyle=all[(o.selectionStyle.ordinal()+all.length-1)%all.length];init();}));
             sy+=38; // the line under the button says what the style does
@@ -106,19 +126,20 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
                 protected void updateMessage(){setMessage(Component.literal(w.label()+": "+w.show(low+value*span)));}
                 protected void applyValue(){w.set().accept(o,w.fromUnits(low+value*span));}
             };
-            widthSlider.range(low,w.max(),w.units(w.get().applyAsDouble(DEFAULTS)));widthSlider.setRaw((w.units(w.get().applyAsDouble(o))-low)/span);addRenderableWidget(widthSlider);
+            widthSlider.range(low,w.max(),w.units(w.get().applyAsDouble(DEFAULTS)));widthSlider.setRaw((w.units(w.get().applyAsDouble(o))-low)/span);track(widthSlider);
             sy+=22;
         }
-        addRenderableWidget(new FlatButton(ex0,top+H-30,132,22,"Reset all",()->{for(var e:entries)e.set().accept(e.fallback().getAsInt());for(var w:widths)w.set().accept(o,w.get().applyAsDouble(DEFAULTS));if(styled)o.selectionStyle=DEFAULTS.selectionStyle;init();}));
-        addRenderableWidget(new FlatButton(ex0+138,top+H-30,132,22,"Done",this::onClose));
+        addRenderableWidget(new FlatButton(ex0,top+panelH()-30,132,22,"Reset all",()->{for(var e:entries)e.set().accept(e.fallback().getAsInt());for(var w:widths)w.set().accept(o,w.get().applyAsDouble(DEFAULTS));if(styled)o.selectionStyle=DEFAULTS.selectionStyle;init();}));
+        addRenderableWidget(new FlatButton(ex0+138,top+panelH()-30,132,22,"Done",this::onClose));
         if(selected<0)return;
         var entry=entries.get(selected);int ex=left+W-290;
-        picker=new ColourPicker(ex,top+52,entry.get(),entry.set(),entry.fallback());
-        picker.init(font,w->addRenderableWidget(w));
+        picker=new ColourPicker(ex,ct()+52,entry.get(),entry.set(),entry.fallback());
+        picker.init(font,this::track);
     }
 
+    private void track(net.minecraft.client.gui.components.AbstractWidget w){addWidget(w);content.add(w);}
     private int rowY(int index){
-        int y=top+34;String group="";
+        int y=ct()+34;String group="";
         for(int i=0;i<=index;i++){
             if(!entries.get(i).group().equals(group)){group=entries.get(i).group();y+=15;}
             if(i<index)y+=ROW;
@@ -129,8 +150,9 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){
         var o=ClientState.options;
-        g.fill(0,0,width,height,0xef101923);g.fill(left-8,top-8,left+W+8,top+H+8,0xff172330);
+        g.fill(0,0,width,height,0xef101923);g.fill(left-8,top-8,left+W+8,top+panelH()+8,0xff172330);
         g.text(font,heading,left+14,top+10,0xffb5dcfc,false);
+        g.enableScissor(left-8,viewTop(),left+W+8,viewBottom()); // the colours and the editor scroll under this
         String group="";
         for(int i=0;i<entries.size();i++){
             var e=entries.get(i);int y=rowY(i);
@@ -142,10 +164,13 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
         }
         if(selected>=0){
             var e=entries.get(selected);int ex=left+W-290;
-            g.text(font,e.group()+" · "+e.name(),ex,top+36,0xffffd66d,false);
-        }else g.text(font,"Click a colour to edit it",left+W-290,top+40,0xff9db5cb,false);
-        if(styled)g.text(font,o.selectionStyle==Options.SelectionStyle.SILHOUETTE?"Silhouette: only the contour on the screen":o.selectionStyle==Options.SelectionStyle.OUTLINE?"Outline: the edges on the near side":"All edges: every edge of the selection",left+W-290,top+286,0xff7e91a4,false);
+            g.text(font,e.group()+" · "+e.name(),ex,ct()+36,0xffffd66d,false);
+        }else g.text(font,"Click a colour to edit it",left+W-290,ct()+40,0xff9db5cb,false);
+        if(styled)g.text(font,o.selectionStyle==Options.SelectionStyle.SILHOUETTE?"Silhouette: only the contour on the screen":o.selectionStyle==Options.SelectionStyle.OUTLINE?"Outline: the edges on the near side":"All edges: every edge of the selection",left+W-290,ct()+286,0xff7e91a4,false);
         if(picker!=null)picker.draw(g,font);
+        for(var w:content)if(w.getY()+w.getHeight()>viewTop()&&w.getY()<viewBottom())g.widget(w,mouseX,mouseY,delta);
+        g.disableScissor();
+        if(maxScroll()>0)Scrollbars.draw(g,barX(),viewTop(),viewBottom()-viewTop(),scroll,contentHeight()-(viewTop()-top),draggingBar);
         drawWidgets(g,mouseX,mouseY,delta);
     }
 
@@ -158,19 +183,30 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     }
 
     @Override public boolean mouseClicked(MouseButtonEvent event,boolean twice){
-        if(event.button()==1)for(var child:children())if(child instanceof FlatButton rb&&rb.rightClick(event.x(),event.y()))return true; // a cycling button steps back
-        if(picker!=null&&picker.mouseClicked(event.x(),event.y(),event.button()))return true;
-        if(event.button()==0)for(int i=0;i<entries.size();i++){
+        if(event.button()==0&&overBar(event.x(),event.y())){draggingBar=true;scrollTo(Scrollbars.scrollAt(event.y(),viewTop(),viewBottom()-viewTop(),contentHeight()-(viewTop()-top)));return true;}
+        // What is scrolled out of the view is still there under the title and the buttons: a click outside the view does not reach it.
+        boolean inView=event.y()>=viewTop()&&event.y()<viewBottom();
+        if(event.button()==1)for(var child:children())if(child instanceof FlatButton rb&&(inView||!content.contains(rb))&&rb.rightClick(event.x(),event.y()))return true; // a cycling button steps back
+        if(inView&&picker!=null&&picker.mouseClicked(event.x(),event.y(),event.button()))return true;
+        if(inView&&event.button()==0)for(int i=0;i<entries.size();i++){
             int y=rowY(i);
             if(event.x()>=left+14&&event.x()<left+314&&event.y()>=y&&event.y()<y+ROW-1){selected=selected==i?-1:i;init();return true;}
         }
-        return super.mouseClicked(event,twice);
+        if(!inView)for(var w:content)w.active=false;
+        try{return super.mouseClicked(event,twice);}
+        finally{if(!inView)for(var w:content)w.active=true;}
+    }
+    @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){
+        if(maxScroll()<=0)return super.mouseScrolled(x,y,horizontal,vertical);
+        scrollTo(scroll-vertical*ROW*1.5);return true;
     }
     @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy){
+        if(draggingBar){scrollTo(Scrollbars.scrollAt(event.y(),viewTop(),viewBottom()-viewTop(),contentHeight()-(viewTop()-top)));return true;}
         if(picker!=null&&picker.mouseDragged(event.x(),event.y(),event.button()))return true;
         return super.mouseDragged(event,dx,dy);
     }
     @Override public boolean mouseReleased(MouseButtonEvent event){
+        if(draggingBar){draggingBar=false;return true;}
         if(picker!=null&&picker.mouseReleased(event.button()))return true;
         return super.mouseReleased(event);
     }
