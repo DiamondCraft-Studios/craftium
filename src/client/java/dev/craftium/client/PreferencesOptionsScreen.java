@@ -63,7 +63,8 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
             new Number("Interface size","How big the text and buttons of every Craftium screen are. Auto keeps the game's GUI scale (the editor lowers it until it fits the window); 1x to 8x draw every pixel of the text with that many screen pixels, in half steps. Whole steps stay perfectly sharp; a half step is only exact in the editor, and every other screen rounds it up to the next whole step. A size bigger than the window fits can push panels off the screen; Ctrl and - (or Auto) bring it back. Ctrl and + / - change it inside the editor",0,16,o->o.interfaceHalves,(o,v)->o.interfaceHalves=v,InterfaceScale::name)));
         GROUPS.put("UI",List.copyOf(withTextSmoothing(GROUPS.get("UI"))));
         GROUPS.put("AI",List.of(
-            new Number("AI preview models","How many block models an AI preview draws; the rest of a bigger preview shows as its outline. More looks fuller but costs frame rate",Options.AI_GHOST_DRAW_MIN,Options.AI_GHOST_DRAW_MAX,o->o.aiGhostDrawLimit,(o,v)->o.aiGhostDrawLimit=v)));
+            new Number("AI preview models","How many block models an AI preview draws; the rest of a bigger preview shows as its outline. More looks fuller but costs frame rate",Options.AI_GHOST_DRAW_MIN,Options.AI_GHOST_DRAW_MAX,o->o.aiGhostDrawLimit,(o,v)->o.aiGhostDrawLimit=v),
+            new Number("AI block preview opacity","How solid the block models of an AI preview are. It is the opacity of the AI preview's blocks tint, the colour of which is in Selection options",5,100,o->Math.round((o.aiTint>>>24)*100/255f),(o,v)->o.aiTint=(Math.round(v*255/100f)<<24)|(o.aiTint&0xffffff),v->v+"%")));
     }
     private static List<Row> withTextSmoothing(List<Row> rows){
         var out=new java.util.ArrayList<>(rows);

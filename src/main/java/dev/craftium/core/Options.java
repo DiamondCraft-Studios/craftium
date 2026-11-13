@@ -123,7 +123,7 @@ public final class Options {
     public double selectionWidth=1;
     /** How the builder tools draw their selection and where it would land, set apart from the editor's selection: colours (ARGB) and line widths. */
     public int builderSelectionColor=0xff2389c6,builderSelectionFill=0x302389c6;
-    public double builderSelectionWidth=1,builderPreviewWidth=1;
+    public double builderSelectionWidth=1,builderPreviewWidth=1; // no longer used: every selection shares selectionWidth. Kept so the wire format does not change.
     /** The point one transform request works about, which can differ from the player's pivot, as when scaling from the far side. */
     public boolean aboutSet;
     /** A selection transform that also turns and mirrors the blocks' states, as the Edit menu's Rotate and Flip and the gizmo do. */

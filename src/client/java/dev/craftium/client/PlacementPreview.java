@@ -23,7 +23,7 @@ public final class PlacementPreview {
     private static SceneShape sceneAt(){
         var level=net.minecraft.client.Minecraft.getInstance().level;if(level==null||points.isEmpty())return null;
         long second=level.getGameTime()/20;
-        if(sceneFor!=points||!origin.equals(sceneAt)||second!=sceneSecond){var moved=new ArrayList<Point>(points.size());for(var p:points)moved.add(p.add(origin.x(),origin.y(),origin.z()));scene=SceneShape.of(level,moved,true);sceneFor=points;sceneAt=origin;sceneSecond=second;}
+        if(sceneFor!=points||!origin.equals(sceneAt)||second!=sceneSecond){var moved=new ArrayList<Point>(points.size());for(var p:points)moved.add(p.add(origin.x(),origin.y(),origin.z()));scene=sceneFor==points&&origin.equals(sceneAt)?SceneShape.again(level,moved,scene):SceneShape.of(level,moved,true);sceneFor=points;sceneAt=origin;sceneSecond=second;}
         return scene.tooLarge()?null:scene;
     }
     /** The pending placement as one outline, moved by the transform in progress; filled while nothing is being dragged. */
@@ -31,7 +31,7 @@ public final class PlacementPreview {
         if(origin==null)return;
         var o=ClientState.options;var hidden=TransformGizmo.dragging()?null:sceneAt(); // a drag moves the lines with the gizmo, so only a placement at rest is depth-tested
         if(hidden!=null)hidden.draw((o.previewFill>>>24)!=0?o.previewFill:o.previewColor&0xffffff|SceneShape.FACE_ALPHA,o.previewColor,(float)o.selectionWidth,o.previewFill);
-        else shape.draw(new Vec3(origin.x(),origin.y(),origin.z()),TransformGizmo::line,o.previewColor,o.previewFill,!TransformGizmo.dragging());
+        else shape.draw(new Vec3(origin.x(),origin.y(),origin.z()),TransformGizmo::shapeLine,o.previewColor,o.previewFill,!TransformGizmo.dragging());
         if(!TransformGizmo.dragging())ghost.draw(origin,false); // the real blocks, so the preview shows what will be placed
     }
     /** When set, confirming the placement also makes a BuildObject of the pasted blocks: its name, and the one it goes after (0 for the end). Set by a duplicate or a paste from the Hierarchy. */
