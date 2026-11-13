@@ -247,22 +247,33 @@ final class TransformGizmo {
     /** Past these the landing is not worked out while dragging: too many blocks, or too much space to look through, for a frame. */
     private static final int LANDING_BLOCKS=20_000;
     private static final long LANDING_CELLS=400_000L;
-    private static List<Point> landingFrom;private static Vec3 landingDelta,landingAngles,landingSize,landingAbout;private static OutlineShape landing;
+    /** What a landing was worked out from, and the drag it was worked out for, so it is worked out again only when one of them changes. */
+    private static final class LandingCache{List<Point> from;Vec3 delta,angles,size,about;OutlineShape shape;}
+    private static final LandingCache SELECTED_LANDING=new LandingCache(),HIDDEN_LANDING=new LandingCache();
     /**
      * The shape the selected blocks land in with a rotate or scale drag as it stands, with square edges like the blocks that
      * will be built, instead of the old outline turned into diagonal lines. Worked out again only when the drag changes. Null
      * when nothing is dragged, when the drag is a plain move (the moved outline is exact), or when the selection is too big.
      */
-    static OutlineShape landing(List<Point> selected){
+    static OutlineShape landing(List<Point> selected){return landing(selected,SELECTED_LANDING);}
+    /** As {@link #landing}, for the hidden blocks of the BuildObjects that are selected, which go through the same transform. */
+    static OutlineShape landingHidden(List<Point> hidden){return landing(hidden,HIDDEN_LANDING);}
+    private static OutlineShape landing(List<Point> selected,LandingCache cache){
         if(dragging==null||dragging.kind!=Kind.MODEL||selected.isEmpty()||selected.size()>LANDING_BLOCKS)return null;
         if(angles.equals(Vec3.ZERO)&&size.equals(new Vec3(1,1,1)))return null;
         Vec3 about=aboutPoint();
-        if(landingFrom!=selected||!delta.equals(landingDelta)||!angles.equals(landingAngles)||!size.equals(landingSize)||!about.equals(landingAbout)){
-            landingFrom=selected;landingDelta=delta;landingAngles=angles;landingSize=size;landingAbout=about;
+        if(cache.from!=selected||!delta.equals(cache.delta)||!angles.equals(cache.angles)||!size.equals(cache.size)||!about.equals(cache.about)){
+            cache.from=selected;cache.delta=delta;cache.angles=angles;cache.size=size;cache.about=about;
             var cells=VoxelTransform.landed(selected,new Geometry.Vector(about.x,about.y,about.z),angles.y,angles.x,angles.z,size.x,size.y,size.z,(int)Math.round(delta.x),(int)Math.round(delta.y),(int)Math.round(delta.z),LANDING_CELLS);
-            landing=cells==null||cells.isEmpty()?null:OutlineShape.of(cells);
+            cache.shape=cells==null||cells.isEmpty()?null:OutlineShape.of(cells);
         }
-        return landing;
+        return cache.shape;
+    }
+    /** Whether the selected blocks (and what a BuildObject keeps hidden with them) are being dragged by the gizmo. */
+    static boolean draggingModel(){return dragging!=null&&dragging.kind==Kind.MODEL;}
+    /** One outline segment of hidden blocks being transformed: moved by the transform in progress and drawn through everything, since they are inside what hides them. */
+    static void hiddenLine(Vec3 from,Vec3 to){
+        Overlay.line(transformed(from),transformed(to),ClientState.options.previewColor&0xffffff|0xe0000000,(float)ClientState.options.selectionWidth);
     }
     /** True when the pointer is on one of the handles of a point gizmo at {@code at}, so a gizmo that is only shown can still be grabbed. */
     static boolean hitsPointHandles(Vec3 at,double x,double y){

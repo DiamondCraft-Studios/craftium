@@ -106,6 +106,11 @@ final class OutlineShape {
         Lines lines=(a,b)->Overlay.line(a,b,colour,width);
         draw(at,lines,colour,0,0,false,ClientState.options.selectionStyle,null,false);
     }
+    /** As {@link #drawThrough}, for a shape that is being changed as it is looked at (see {@link #drawLive}). */
+    void drawLiveThrough(Vec3 at,int colour,float width){
+        Lines lines=(a,b)->Overlay.line(a,b,colour,width);
+        draw(at,lines,colour,0,0,false,ClientState.options.selectionStyle,java.util.function.UnaryOperator.identity(),false);
+    }
     /**
      * As the first drawPlain, for a shape that is being changed as it is looked at, such as the blocks a drag will leave, which are worked out
      * again at every step. Its silhouette is always found from this frame's camera, never from an earlier one.

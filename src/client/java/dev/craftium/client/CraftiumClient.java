@@ -399,10 +399,20 @@ public final class CraftiumClient implements ClientModInitializer {
         // The blocks a BuildObject keeps out of the world because something solid was in the way, as an x-ray: lines only, in its colour, seen through what hides them.
         // While it is selected they are as strong as its outline, so that the shape of the whole BuildObject can be followed while it is dragged out of the ground
         // (the selection itself is only the blocks that are in the world, so that no tool can reach what is under the hidden ones); otherwise they are fainter.
+        boolean dragged=TransformGizmo.draggingModel(); // the hidden blocks of what is selected are dragged with it, drawn below where they would land, not where they were
         for(var saved:ClientState.savedSelections()){
             var xray=ClientState.xrayShape(saved.id());if(xray==null||!ClientState.xrayShown(saved))continue;
-            int alpha=ClientState.savedSelected(saved)?0xe0:0x80;
-            xray.drawThrough(Vec3.ZERO,ClientState.savedColor(saved.id())&0xffffff|alpha<<24,(float)ClientState.options.selectionWidth);
+            boolean selected=ClientState.savedSelected(saved);
+            if(dragged&&selected)continue;
+            xray.drawThrough(Vec3.ZERO,ClientState.savedColor(saved.id())&0xffffff|(selected?0xe0:0x80)<<24,(float)ClientState.options.selectionWidth);
+        }
+        if(dragged){
+            var ghost=ClientState.hiddenGhost(); // client-side only: the selection itself holds just the blocks in the world, so no tool can reach what is under the hidden ones
+            if(ghost!=null){
+                var landing=TransformGizmo.landingHidden(ghost.points()); // a rotate or scale: the cells they land in, as for the selection
+                if(landing!=null)landing.drawLiveThrough(Vec3.ZERO,ClientState.options.previewColor&0xffffff|0xe0000000,(float)ClientState.options.selectionWidth);
+                else ghost.shape().draw(Vec3.ZERO,TransformGizmo::hiddenLine,ClientState.options.previewColor,0,false,ClientState.options.selectionStyle,TransformGizmo::eyeInShape);
+            }
         }
     }
     /** Every ruler: its line (or circle), its length, and a knob at each end. The end being dragged shows where it will land, and the length with it. */
