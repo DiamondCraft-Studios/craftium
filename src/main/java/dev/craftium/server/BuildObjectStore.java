@@ -167,7 +167,7 @@ final class BuildObjectStore {
         }
     }
     /** Writes packed cells as {@code name}: sorted cell keys, the states in use as one text of lines (a block state never has a line break), and each cell's index. Nothing is written for none. */
-    private static void putCells(CompoundTag tag, String name, PackedCells cells) {
+    static void putCells(CompoundTag tag, String name, PackedCells cells) {
         if (cells.isEmpty()) return;
         var c = new CompoundTag();
         c.putLongArray("cells", cells.keysArray());
@@ -186,7 +186,7 @@ final class BuildObjectStore {
         tag.put(name, c);
     }
     /** The cells {@link #putCells} wrote, or none when absent. A store that does not add up throws, so the file is kept as .bad like any damaged one. */
-    private static PackedCells readCells(CompoundTag tag, String name) {
+    static PackedCells readCells(CompoundTag tag, String name) {
         var c = tag.getCompoundOrEmpty(name);
         long[] keys = c.getLongArray("cells").orElse(new long[0]);
         if (keys.length == 0) return PackedCells.EMPTY;
