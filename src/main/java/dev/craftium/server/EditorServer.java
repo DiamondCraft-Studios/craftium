@@ -939,8 +939,7 @@ public final class EditorServer {
                             ? s.pendingChainBase
                             : confirming ? staged : null; // what was staged before the run of transforms began
                     if (base != null) for (var c : base.changes()) plan.changes.put(c.pos(), c);
-                    var result = ModelTransform.apply(plan, s, o, chain);
-                    var moved = result.moved();
+                    var computed = ModelTransform.compute(plan, s, o, chain);
                     // The selection follows its blocks; if the edit is cancelled it goes back.
                     var priorBefore = s.pendingSelectionBefore;
                     var original = confirming && priorBefore != null
@@ -949,26 +948,47 @@ public final class EditorServer {
                     if (confirming && priorBefore == null) s.pendingSelectionBefore = before;
                     // The BuildObjects' blocks follow their blocks: each is worked out again from where it began, so a
                     // run of transforms is never remapped twice over.
+                    // What they keep outside the world (dormant blocks, replaced blocks) begins where it did too.
                     var objectsNow = s.saved.snapshot();
+                    var heldNow = s.saved.heldSnapshot();
                     var priorObjects = s.pendingObjectsBefore;
+                    var priorHeld = s.pendingHeldBefore;
                     var objectsStart = confirming && priorObjects != null ? priorObjects : objectsNow;
+                    var heldStart = confirming && priorHeld != null ? priorHeld : heldNow;
                     if (confirming && priorObjects == null) s.pendingObjectsBefore = objectsNow;
-                    var objectsAfter = new LinkedHashMap<Integer, List<Point>>();
-                    for (var e : objectsStart.entrySet())
-                        objectsAfter.put(
-                                e.getKey(),
-                                ObjectRemap.apply(
-                                        e.getValue(), result.chain().source().keySet(), result.origin()));
-                    s.selection.combine(moved, Selection.Mode.REPLACE);
-                    s.saved.setPoints(objectsAfter);
+                    if (confirming && priorHeld == null) s.pendingHeldBefore = heldNow;
                     try {
+                        ModelTransform.Result result;
+                        Map<Integer, List<Point>> objectsAfter;
+                        if (ObjectMoves.touches(objectsStart, computed.source().keySet())) {
+                            // The selection holds BuildObject blocks: they move with the world winning, so what they
+                            // could not place is kept, not lost (see ObjectMove).
+                            var done =
+                                    ObjectMoves.transform(player.level(), s, plan, computed, objectsStart, heldStart);
+                            result = ModelTransform.finish(computed, done.moved());
+                            objectsAfter = done.applied().ownAfter();
+                        } else {
+                            result = ModelTransform.write(plan, computed);
+                            objectsAfter = new LinkedHashMap<>();
+                            for (var e : objectsStart.entrySet())
+                                objectsAfter.put(
+                                        e.getKey(),
+                                        ObjectRemap.apply(
+                                                e.getValue(),
+                                                result.chain().source().keySet(),
+                                                result.origin()));
+                            s.saved.setPoints(objectsAfter);
+                        }
+                        var moved = result.moved();
+                        s.selection.combine(moved, Selection.Mode.REPLACE);
                         var edit = plan.finish("Transform selection")
                                 .withSelection(new Session.SelectionChange(
                                                 original,
                                                 new ArrayList<>(moved),
                                                 pivotText(o, 0, 0, 0),
                                                 pivotText(o, o.offsetX, o.offsetY, o.offsetZ))
-                                        .withObjects(objectsStart, objectsAfter));
+                                        .withObjects(objectsStart, objectsAfter)
+                                        .withHeld(heldStart, s.saved.heldSnapshot()));
                         if (base != null)
                             edit = new Session.Edit(
                                     edit.name(),
@@ -989,8 +1009,10 @@ public final class EditorServer {
                     } catch (RuntimeException e) {
                         s.selection.restore(before);
                         s.saved.setPoints(objectsNow);
+                        s.saved.restoreHeld(heldNow);
                         s.pendingSelectionBefore = priorBefore;
                         s.pendingObjectsBefore = priorObjects;
+                        s.pendingHeldBefore = priorHeld;
                         if (confirming) s.pendingEdit = staged;
                         throw e;
                     }
