@@ -48,7 +48,7 @@ public final class KeybindGameTest {
         request(c,w,"select_box",null);pause();key(c,'F',2);settle(c,w);
         require(w.getServer().computeOnServer(server->server.overworld().getBlockState(new BlockPos(2,10,2)).is(Blocks.GOLD_BLOCK)),"Ctrl+F did not fill selection");
         pause();key(c,'C',2);settle(c,w);require(c.computeOnClient(mc->ClientState.status.clipboardSize()==2),"Ctrl+C did not copy");
-        key(c,'P',2);require(c.computeOnClient(mc->mc.gui.screen() instanceof SaveBlueprintScreen),"Ctrl+P did not open Save Blueprint");c.runOnClient(mc->mc.gui.screen().onClose());
+        key(c,'P',2);require(c.computeOnClient(mc->mc.gui.screen() instanceof StructureExportScreen),"Ctrl+P did not open the export window");c.runOnClient(mc->mc.gui.screen().onClose());
         c.runOnClient(mc->PlacementPreview.begin(new Point(6,10,6)));pause();key(c,'R',2);settle(c,w);require(c.computeOnClient(mc->ClientState.status.message().contains("rotated")),"Ctrl+R ran Quick Replace during placement");
         pause();key(c,'F',2);settle(c,w);require(c.computeOnClient(mc->ClientState.status.message().contains("mirrored")),"Ctrl+F ran Quick Fill during placement");key(c,GLFW_KEY_DELETE,0);
         pause();key(c,'J',2);settle(c,w);require(c.computeOnClient(mc->PlacementPreview.active()),"Ctrl+J did not generate a duplicate placement");key(c,GLFW_KEY_DELETE,0);

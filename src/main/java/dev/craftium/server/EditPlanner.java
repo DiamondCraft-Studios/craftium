@@ -33,6 +33,11 @@ final class EditPlanner {
     final HeightmapImage heightmap;
     static final Point[] NEIGHBOURS = {new Point(1,0,0),new Point(-1,0,0),new Point(0,1,0),new Point(0,-1,0),new Point(0,0,1),new Point(0,0,-1)};
 
+    /** Whether the player's block limit applies; off for actions on a selection or the clipboard, which only answer to {@link Selection#LIMIT}. */
+    boolean limited=true;
+    /** A planner for an action on the selection or the clipboard (paste, cut, fill, stack): the block limit is for the tools, so only the largest edit and the history budget bound it. */
+    static EditPlanner forSelection(ServerLevel level, Session session, Options options) {var plan=new EditPlanner(level,session,options);plan.limited=false;return plan;}
+
     EditPlanner(ServerLevel level, Session session, Options options) {
         this.level=level;this.session=session;this.o=options;
         material=options.transparency?Blocks.AIR.defaultBlockState():parse(options.block); secondary=parse(options.secondary);
@@ -171,8 +176,8 @@ final class EditPlanner {
         if(value.data()==null&&before.data()!=null&&before.state().is(value.state().getBlock()))value=new BlockSnapshot(value.state(),before.data());
         if(before.state()==value.state() && Objects.equals(before.data(),value.data())) { changes.remove(p); skip(Skip.SAME); return; }
         changes.put(p,new Session.Change(p,before,value));
-        int limit=Math.clamp(o.blockLimit,1,Selection.LIMIT);
-        if(changes.size()+biomes.size()>limit) throw new IllegalArgumentException(limit<Selection.LIMIT?"Operation exceeds your block limit of "+String.format("%,d",limit)+" changes; raise it in Options":"Operation exceeds 131,072 changes");
+        int limit=limited?Math.clamp(o.blockLimit,1,Selection.LIMIT):Selection.LIMIT;
+        if(changes.size()+biomes.size()>limit) throw new IllegalArgumentException(limit<Selection.LIMIT?"Operation exceeds your block limit of "+String.format("%,d",limit)+" changes; raise the Block limit in the tool's options":"Operation exceeds "+String.format("%,d",Selection.LIMIT)+" changes");
     }
     /**
      * Whether a block may stand at {@code p}. The upper half of a door or tall plant is judged by its lower half standing one

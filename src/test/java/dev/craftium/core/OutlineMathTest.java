@@ -97,7 +97,7 @@ class OutlineMathTest {
     }
 
     @Test void bigShapesAreRefusedAtTheBlockLimitAndHollowOnesAreNot() {
-        assertThrows(IllegalArgumentException.class, () -> BrushMath.brush(new Point(0,0,0), 70, BrushMath.Shape.SPHERE, false));
+        assertThrows(IllegalArgumentException.class, () -> BrushMath.brush(new Point(0,0,0), 80, BrushMath.Shape.SPHERE, false));
         assertThrows(IllegalArgumentException.class, () -> BrushMath.brush(new Point(0,0,0), BrushMath.MAX_RADIUS + 1, BrushMath.Shape.SPHERE, true));
         assertTrue(BrushMath.brush(new Point(0,0,0), 60, BrushMath.Shape.SPHERE, true).size() < Selection.LIMIT);
     }

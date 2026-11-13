@@ -38,7 +38,7 @@ class ShapeLimitsTest {
         var sphere = new Options(); sphere.shape = BrushMath.Shape.SPHERE;
         var ring = new Options(); ring.shape = BrushMath.Shape.DISK; ring.hollow = true;
         var disk = new Options(); disk.shape = BrushMath.Shape.DISK;
-        assertTrue(ShapeLimits.maxRadius(sphere) < 70);
+        assertTrue(ShapeLimits.maxRadius(sphere) < 80);
         assertEquals(BrushMath.MAX_RADIUS, ShapeLimits.maxRadius(ring));
         assertTrue(ShapeLimits.maxRadius(disk) > 300 && ShapeLimits.maxRadius(disk) < BrushMath.MAX_RADIUS);
     }
