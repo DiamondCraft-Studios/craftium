@@ -11,7 +11,7 @@ import java.util.zip.*;
  */
 public record StructurePreview(int sizeX,int sizeY,int sizeZ,List<Block> palette,int[] cells,List<String> notes,int blocks,int[] source){
     public static final int VOID=-1,AIR=-2,MAX_VOLUME=4_000_000;
-    /** A block type: {@code bounds} is its shape as {@code minX,minY,minZ,maxX,maxY,maxZ} in sixteenths; {@code occludes} means it hides the faces it touches. */
+    /** A block type: {@code name} is its full state, such as {@code minecraft:oak_stairs[facing=east]}; {@code bounds} is its shape as {@code minX,minY,minZ,maxX,maxY,maxZ} in sixteenths; {@code occludes} means it hides the faces it touches. */
     public record Block(String name,int[] bounds,boolean occludes){}
 
     public int index(int x,int y,int z){return (y*sizeZ+z)*sizeX+x;}

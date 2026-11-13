@@ -172,6 +172,43 @@ public final class VoxelOrbit {
      * @param hover     the colour of the highlight
      */
     public static void render(Scene s, View v, int w, int h, int[] pixels, int background, int[] highlight, int hover) {
+        render(s, v, w, h, pixels, background, highlight, hover, null);
+    }
+
+    /**
+     * Lines and dots drawn over the blocks, hidden where a block is in front of them: for the export window's bounding box, axes and markers for cells that
+     * hold air or nothing. Positions are in blocks from the scene's corner.
+     *
+     * @param lines   each {x0, y0, z0, x1, y1, z1}
+     * @param lineRgb the colour of each line (0xAARRGGBB)
+     * @param dots    each {x, y, z, colour} for the middle of a cell
+     */
+    public record Overlay(double[][] lines, int[] lineRgb, int[][] dots) {
+        public static Overlay box(int sx, int sy, int sz, int colour) {
+            var lines = new double[12][];
+            int n = 0;
+            for (int i = 0; i < 8; i++)
+                for (int bit = 0; bit < 3; bit++) {
+                    if (((i >> bit) & 1) != 0) continue;
+                    int j = i | 1 << bit;
+                    lines[n++] = new double[]{(i & 1) * sx, ((i >> 1) & 1) * sy, ((i >> 2) & 1) * sz, (j & 1) * sx, ((j >> 1) & 1) * sy, ((j >> 2) & 1) * sz};
+                }
+            int[] colours = new int[12];
+            java.util.Arrays.fill(colours, colour);
+            return new Overlay(lines, colours, new int[0][]);
+        }
+        public Overlay and(Overlay other) {
+            var l = new java.util.ArrayList<>(java.util.Arrays.asList(lines));
+            l.addAll(java.util.Arrays.asList(other.lines));
+            int[] c = java.util.Arrays.copyOf(lineRgb, lineRgb.length + other.lineRgb.length);
+            System.arraycopy(other.lineRgb, 0, c, lineRgb.length, other.lineRgb.length);
+            var d = new java.util.ArrayList<>(java.util.Arrays.asList(dots));
+            d.addAll(java.util.Arrays.asList(other.dots));
+            return new Overlay(l.toArray(new double[0][]), c, d.toArray(new int[0][]));
+        }
+    }
+
+    public static void render(Scene s, View v, int w, int h, int[] pixels, int background, int[] highlight, int hover, Overlay overlay) {
         java.util.Arrays.fill(pixels, 0, w * h, background);
         double yaw = Math.toRadians(v.yaw), pitch = Math.toRadians(v.pitch);
         double[] cam = {Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch), Math.cos(pitch) * Math.cos(yaw)};
@@ -228,6 +265,31 @@ public final class VoxelOrbit {
         }
         });
         if (hlInside) outline(highlight, cx, cy, cz, cam, right, up, scale, ox, oy, w, h, pixels, depth, hover);
+        if (overlay != null) overlay(overlay, cx, cy, cz, cam, right, up, scale, ox, oy, w, h, pixels, depth);
+    }
+
+    private static void overlay(Overlay o, double cx, double cy, double cz, double[] cam, double[] right, double[] up, double scale, double ox, double oy, int w, int h, int[] pixels, float[] depth) {
+        double[][] ends = new double[2][3];
+        for (int i = 0; i < o.lines().length; i++) {
+            var l = o.lines()[i];
+            for (int e = 0; e < 2; e++) {
+                double[] p = {l[e * 3] - cx, l[e * 3 + 1] - cy, l[e * 3 + 2] - cz};
+                ends[e][0] = ox + scale * dot(p, right); ends[e][1] = oy - scale * dot(p, up); ends[e][2] = -dot(p, cam);
+            }
+            line(ends[0], ends[1], w, h, pixels, depth, o.lineRgb()[i], false);
+        }
+        int size = scale >= 6 ? 2 : 1;
+        for (var dot : o.dots()) {
+            double[] p = {dot[0] + 0.5 - cx, dot[1] + 0.5 - cy, dot[2] + 0.5 - cz};
+            int px = (int) Math.round(ox + scale * dot(p, right)), py = (int) Math.round(oy - scale * dot(p, up));
+            float d = (float) -dot(p, cam);
+            for (int dx = 0; dx < size; dx++)
+                for (int dy = 0; dy < size; dy++) {
+                    int x = px + dx, y = py + dy;
+                    if (x < 0 || y < 0 || x >= w || y >= h || d - 0.6f > depth[y * w + x]) continue;
+                    pixels[y * w + x] = dot[3];
+                }
+        }
     }
 
     /**

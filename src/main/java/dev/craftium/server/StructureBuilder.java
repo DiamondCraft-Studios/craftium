@@ -271,7 +271,7 @@ final class StructureBuilder {
             else{var box=shape.bounds();bounds=new int[]{q(box.minX),q(box.minY),q(box.minZ),q(box.maxX),q(box.maxY),q(box.maxZ)};}
         }catch(RuntimeException e){ /* a shape that needs the world: show it whole */ }
         boolean full=bounds[0]==0&&bounds[1]==0&&bounds[2]==0&&bounds[3]==16&&bounds[4]==16&&bounds[5]==16;
-        return new StructurePreview.Block(BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString(),bounds,full&&state.canOcclude());
+        return new StructurePreview.Block(net.minecraft.commands.arguments.blocks.BlockStateParser.serialize(state),bounds,full&&state.canOcclude());
     }
     private static int q(double v){return Math.clamp((int)Math.round(v*16),0,16);}
 }

@@ -1,12 +1,10 @@
 package dev.craftium.client;
 
-import com.mojang.blaze3d.platform.NativeImage;
 import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
-import dev.craftium.client.compat.ReferenceTexture;
-import dev.craftium.client.compat.Tex;
 import dev.craftium.core.StructurePreview;
+import dev.craftium.core.VoxelOrbit;
 import dev.craftium.core.StructureRaster;
 import dev.craftium.core.StructureSettings;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -42,10 +40,9 @@ final class StructureExportScreen extends CraftiumScreen {
     /** Exporting several files: the pages still to do, the folder they go to, the one being waited for, and how it went. */
     private final ArrayDeque<Page> queue=new ArrayDeque<>();private java.nio.file.Path folder;private Page current;private int exported,total;private final List<String> failed=new ArrayList<>();
     private int left,top,panelWidth,panelHeight,viewX,viewY,viewWidth,viewHeight,formTop,formBottom,scroll,maxScroll;
-    // The preview: a software-rendered texture of the structure and the camera that renders it.
-    private Tex texture;private ReferenceTexture dynamic;private int[] pixels=new int[0];private int textureWidth,textureHeight;
-    private float yaw=-35,pitch=28,zoom=1;private boolean dragging,redraw=true;
-    private int[] colours=new int[0];private int shownPreviews=-1;
+    // The preview: the pool editor's picture of blocks (OrbitPreview), with the bounding box, axes and markers drawn over it.
+    private final OrbitPreview orbit=new OrbitPreview();private boolean redraw=true;
+    private int shownPreviews=-1;
     // Asking the server for a new preview once the player has stopped typing.
     private boolean dirty=true;private long changedAt,sentAt;private boolean waiting;
     /** The status the server had last sent when each request went out, to tell its reply from an older message. */
@@ -213,8 +210,9 @@ final class StructureExportScreen extends CraftiumScreen {
         String action=blueprint?(pages.size()>1?"Save all ("+pages.size()+")":"Save blueprint"):pages.size()>1?"Export all ("+pages.size()+")…":"Export…";
         addRenderableWidget(new FlatButton(left+panelWidth-12-130,bottom,130,24,action,this::export));
         addRenderableWidget(new FlatButton(left+panelWidth-12-130-8-90,bottom,90,24,"Close",this::onClose));
-        addRenderableWidget(new FlatButton(viewX,bottom,100,24,"Reset view",()->{yaw=-35;pitch=28;zoom=1;redraw=true;}));
-        makeTexture();
+        addRenderableWidget(new FlatButton(viewX,bottom,70,24,"Reset",orbit::reset));
+        addRenderableWidget(new FlatButton(viewX+74,bottom,50,24,"Top",orbit::top));
+        addRenderableWidget(new FlatButton(viewX+128,bottom,60,24,"Front",orbit::front));
     }
 
     private void row(String label,int x,int y){if(inForm(y,16))labels.add(new Label(label,x,y+6,false));}
@@ -258,22 +256,10 @@ final class StructureExportScreen extends CraftiumScreen {
     private void switchFormat(String format){keepPage();s.format=format;scroll=0;result="";changed();rebuildWidgets();}
     private void changed(){dirty=true;changedAt=System.currentTimeMillis();}
 
-    // --- Preview texture ---
+    // --- Preview overlay ---
 
-    private void makeTexture(){
-        releaseTexture();
-        double scale=Math.max(1,minecraft.getWindow().getGuiScale());
-        int w=(int)Math.max(16,viewWidth*scale),h=(int)Math.max(16,viewHeight*scale);
-        while((long)w*h>700_000){w=w*3/4;h=h*3/4;}
-        textureWidth=w;textureHeight=h;pixels=new int[w*h];
-        var image=new NativeImage(w,h,false);
-        dynamic=new ReferenceTexture(image);dynamic.filtering(true);
-        texture=Tex.of("craftium","structure_preview/"+UUID.randomUUID());
-        minecraft.getTextureManager().register(texture.id(),dynamic);redraw=true;
-    }
-    private void releaseTexture(){if(texture!=null){minecraft.getTextureManager().release(texture.id());texture=null;dynamic=null;}}
     @Override public void removed(){
-        releaseTexture();
+        orbit.releaseAll();
         s.objectId=priorObject;
         if(blueprintOnly)s.format=priorFormat;
         if(blueprintOnly||!pages.isEmpty())s.source=priorSource;
@@ -281,12 +267,23 @@ final class StructureExportScreen extends CraftiumScreen {
         ClientState.save();super.removed();
     }
 
-    private void render(){
-        var preview=ClientStructures.preview;if(preview==null||dynamic==null)return;
-        StructureRaster.render(preview,colours,new StructureRaster.View(yaw,pitch,zoom,s.showBounds,s.showInvisible,s.showAxes),pixels,textureWidth,textureHeight);
-        var image=dynamic.getPixels();
-        for(int y=0;y<textureHeight;y++)for(int x=0;x<textureWidth;x++)image.setPixel(x,y,pixels[y*textureWidth+x]);
-        dynamic.upload();
+    /** The lines and markers drawn over the blocks, as the window's checkboxes ask. */
+    private VoxelOrbit.Overlay overlay(StructurePreview preview){
+        var out=new VoxelOrbit.Overlay(new double[0][],new int[0],new int[0][]);
+        if(s.showBounds)out=out.and(VoxelOrbit.Overlay.box(preview.sizeX(),preview.sizeY(),preview.sizeZ(),StructureRaster.BOUNDS));
+        if(s.showAxes){
+            int[] sizes={preview.sizeX(),preview.sizeY(),preview.sizeZ()},colours={StructureRaster.AXIS_X,StructureRaster.AXIS_Y,StructureRaster.AXIS_Z};
+            int reach=Math.max(sizes[0],Math.max(sizes[1],sizes[2]));
+            var lines=new double[3][];
+            for(int axis=0;axis<3;axis++){double length=sizes[axis]+Math.max(1,reach/4.0);lines[axis]=new double[]{0,0,0,axis==0?length:0,axis==1?length:0,axis==2?length:0};}
+            out=out.and(new VoxelOrbit.Overlay(lines,colours,new int[0][]));
+        }
+        if(s.showInvisible){
+            var dots=new ArrayList<int[]>();int sx=preview.sizeX(),sz=preview.sizeZ();
+            for(int i=0;i<preview.cells().length;i++){int cell=preview.cells()[i];if(cell>=0)continue;dots.add(new int[]{i%sx,i/(sx*sz),i/sx%sz,cell==StructurePreview.AIR?StructureRaster.AIR_MARK:StructureRaster.VOID_MARK});}
+            out=out.and(new VoxelOrbit.Overlay(new double[0][],new int[0],dots.toArray(new int[0][])));
+        }
+        return out;
     }
 
     // --- Talking to the server ---
@@ -362,12 +359,12 @@ final class StructureExportScreen extends CraftiumScreen {
         g.fill(left,top,left+panelWidth,top+panelHeight,o.uiPanel);g.outline(left,top,panelWidth,panelHeight,o.uiBorder);
         if(ClientStructures.previews!=shownPreviews){
             shownPreviews=ClientStructures.previews;var preview=ClientStructures.preview;
-            if(preview!=null)colours=ClientStructures.colours(preview);
+            orbit.showScene("export",preview==null?null:PreviewScenes.of(preview));
             redraw=true;
             // Fields left on "detect" show the detected size, so they follow the structure when it changes.
             if(preview!=null&&!Arrays.equals(preview.source(),shownSource)&&(s.sizeX==0||s.sizeY==0||s.sizeZ==0))rebuildWidgets();
         }
-        if(redraw){redraw=false;render();}
+        if(redraw){redraw=false;var shown=ClientStructures.preview;orbit.overlay(shown==null?null:overlay(shown));}
 
         if(blueprintOnly)g.text(font,"SAVE BLUEPRINT",left+12,top+14,o.uiText,false);
         for(var label:labels)g.text(font,label.text(),label.x(),label.y(),label.muted()?o.uiMuted:o.uiText,false);
@@ -377,12 +374,11 @@ final class StructureExportScreen extends CraftiumScreen {
         }
 
         // The preview.
-        g.fill(viewX,viewY,viewX+viewWidth,viewY+viewHeight,StructureRaster.BACKGROUND);
+        g.fill(viewX,viewY,viewX+viewWidth,viewY+viewHeight,0xff1b2531);
         var preview=ClientStructures.preview;
-        if(preview!=null&&texture!=null)g.blit(texture,viewX,viewY,0,0,viewWidth,viewHeight,textureWidth,textureHeight,textureWidth,textureHeight,0xffffffff);
-        else g.centeredText(font,waiting?"Building the preview…":(problem.isEmpty()?"No preview yet":problem),viewX+viewWidth/2,viewY+viewHeight/2-4,o.uiMuted);
-        g.outline(viewX,viewY,viewWidth,viewHeight,dragging?o.uiAccent:o.uiBorder);
-        g.text(font,"Drag to rotate · scroll to zoom",viewX+6,viewY+viewHeight-12,o.uiMuted,false);
+        if(preview==null||!orbit.draw(g,viewX,viewY,viewWidth,viewHeight))g.centeredText(font,waiting?"Building the preview…":(problem.isEmpty()?"No preview yet":problem),viewX+viewWidth/2,viewY+viewHeight/2-4,o.uiMuted);
+        g.outline(viewX,viewY,viewWidth,viewHeight,orbit.dragging()?o.uiAccent:o.uiBorder);
+        g.text(font,"Drag to rotate · middle-drag to pan · scroll to zoom",viewX+6,viewY+viewHeight-12,o.uiMuted,false);
 
         int lineY=viewY+viewHeight+6,limit=top+panelHeight-36;
         if(preview!=null)g.text(font,preview.sizeX()+" × "+preview.sizeY()+" × "+preview.sizeZ()+" · "+preview.blocks()+" blocks"+(waiting?" · updating…":""),viewX,lineY,o.uiText,false);
@@ -404,16 +400,16 @@ final class StructureExportScreen extends CraftiumScreen {
     private boolean inView(double x,double y){return x>=viewX&&x<viewX+viewWidth&&y>=viewY&&y<viewY+viewHeight;}
     @Override public boolean mouseClicked(MouseButtonEvent event,boolean doubleClick){
         if(event.button()==1)for(var child:children())if(child instanceof FlatButton rb&&rb.rightClick(event.x(),event.y()))return true; // a cycling button steps back
-        if(event.button()==0&&inView(event.x(),event.y())){dragging=true;setFocused(null);return true;}
+        if(inView(event.x(),event.y())&&orbit.press(event.button())){setFocused(null);return true;}
         return super.mouseClicked(event,doubleClick);
     }
     @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy){
-        if(dragging){yaw+=(float)dx*.6f;pitch=Math.clamp(pitch+(float)dy*.6f,-89f,89f);redraw=true;return true;}
+        if(orbit.dragging()){orbit.drag(dx,dy);return true;}
         return super.mouseDragged(event,dx,dy);
     }
-    @Override public boolean mouseReleased(MouseButtonEvent event){dragging=false;return super.mouseReleased(event);}
+    @Override public boolean mouseReleased(MouseButtonEvent event){orbit.letGo();return super.mouseReleased(event);}
     @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){
-        if(inView(x,y)){zoom=Math.clamp(zoom*(float)Math.pow(1.15,vertical),.1f,40f);redraw=true;return true;}
+        if(inView(x,y)){orbit.zoom(vertical,x-(viewX+viewWidth/2.0),y-(viewY+viewHeight/2.0));return true;}
         if(maxScroll>0&&x<viewX&&y>=formTop&&y<formBottom){int next=Math.clamp(scroll-(int)Math.signum(vertical)*ROW,0,maxScroll);if(next!=scroll){scroll=next;rebuildWidgets();}return true;}
         return super.mouseScrolled(x,y,horizontal,vertical);
     }
