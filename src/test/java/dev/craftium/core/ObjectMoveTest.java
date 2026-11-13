@@ -152,4 +152,19 @@ class ObjectMoveTest{
         var later=ObjectMove.place(List.of(there,obj(3)),List.of(put(3,0,STONE)),view(world),ObjectMoveTest::solid);apply(world,later);
         assertEquals(STONE,world.get(p(0)));assertEquals(DIRT,later.objects().get(2).dormant().get(p(0)));assertTrue(later.objects().get(2).own().isEmpty());
     }
+    @Test void aBlockThatWasWaterloggedByCoveringWaterIsDryOnceItLeavesAndOneBuiltWaterloggedKeepsIt(){
+        var logged="minecraft:oak_slab[type=bottom,waterlogged=true]";
+        var world=new HashMap<>(Map.of(p(0),logged));
+        var held=obj(1,new PackedCells(),cells(p(0),WATER),p(0)); // it stands in water at 0
+        var out=move(List.of(held),Set.of(p(0)),5,world);apply(world,out);
+        assertEquals("minecraft:oak_slab[type=bottom,waterlogged=false]",world.get(p(5)),"the water it was waterlogged with stays behind");
+        assertEquals(WATER,world.get(p(0)));
+        var own=new HashMap<>(Map.of(p(0),logged));
+        var built=move(List.of(obj(1,p(0))),Set.of(p(0)),5,own);apply(own,built);
+        assertEquals(logged,own.get(p(5)),"nothing was covered at 0, so the block was waterlogged by the builder and stays so");
+    }
+    @Test void isWaterMeansWaterAndNotBlocksThatStartWithTheWord(){
+        assertTrue(ObjectMove.isWater("minecraft:water[level=0]"));assertTrue(ObjectMove.isWater("minecraft:water"));
+        assertFalse(ObjectMove.isWater("minecraft:water_cauldron[level=1]"));assertFalse(ObjectMove.isWater(null));
+    }
 }
