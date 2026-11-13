@@ -144,6 +144,14 @@ public final class Packets {
         public static final StreamCodec<RegistryFriendlyByteBuf,Report> CODEC=StreamCodec.of((buf,p)->buf.writeUtf(p.text,100_000),buf->new Report(buf.readUtf(100_000)));
         @Override public Type<Report> type(){return TYPE;}
     }
+    /** How far a big edit has got, sent about twice a second while it applies. A {@code total} of 0 says it has ended. */
+    public record Progress(String verb,String name,int done,int total) implements CustomPacketPayload {
+        public static final Type<Progress> TYPE=new Type<>(dev.craftium.compat.Compat.id("craftium","progress"));
+        public static final StreamCodec<RegistryFriendlyByteBuf,Progress> CODEC=StreamCodec.of(
+            (buf,p)->{buf.writeUtf(p.verb,32);buf.writeUtf(p.name,256);buf.writeVarInt(p.done);buf.writeVarInt(p.total);},
+            buf->new Progress(buf.readUtf(32),buf.readUtf(256),buf.readVarInt(),buf.readVarInt()));
+        @Override public Type<Progress> type(){return TYPE;}
+    }
     /** The blocks this world is missing, as {@code namespace:name[properties]} in the order of the world's table: sent when a player joins and whenever another one is found. */
     public record MissingBlocks(java.util.List<String> ids) implements CustomPacketPayload {
         public static final int LIMIT=2000;

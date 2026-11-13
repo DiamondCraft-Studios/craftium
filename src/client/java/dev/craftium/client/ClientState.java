@@ -14,6 +14,19 @@ public final class ClientState {
     public static Options options=new Options();
     /** The blocks the world is missing, as the server last told us, in the order of its table. Empty when none is, which keeps the Missing blocks window away. */
     public static java.util.List<String> missingBlocks=java.util.List.of();
+    /** How far the big edit the server is applying has got, for the Large edit window: null when there is none. A report not followed by another within {@link #PROGRESS_STALE_MS} is taken as the end. */
+    public record EditProgress(String verb,String name,int done,int total,long startedAt,long updatedAt){}
+    public static volatile EditProgress progress;
+    public static final long PROGRESS_STALE_MS=5000;
+    /** The server's report of a big edit: a total of 0 ends it, and a report of a different edit starts the clock again. */
+    public static void setProgress(String verb,String name,int done,int total){
+        long now=System.currentTimeMillis();var was=progress;
+        if(total<=0){progress=null;return;}
+        boolean same=was!=null&&was.verb().equals(verb)&&was.name().equals(name)&&done>=was.done();
+        progress=new EditProgress(verb,name,done,total,same?was.startedAt():now,now);
+    }
+    /** The progress to show now, or null when there is none or the server has stopped reporting it. */
+    public static EditProgress activeProgress(){var p=progress;return p!=null&&System.currentTimeMillis()-p.updatedAt()<PROGRESS_STALE_MS?p:null;}
     /** Takes the server's list; a longer one than before (the first on joining a world with some, or another found since) brings the window up again if it was closed. */
     public static void setMissingBlocks(java.util.List<String> ids){
         boolean more=ids.size()>missingBlocks.size();

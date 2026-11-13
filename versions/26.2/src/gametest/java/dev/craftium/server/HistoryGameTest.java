@@ -72,8 +72,35 @@ public final class HistoryGameTest {
         send("undo", null);
         require(mismatches(false) == 0, "a second undo should leave every block of the target as it was");
         require(mismatchesSource() == 0, "the copied area should be untouched");
+        checkProgressWindow();
         w.getServer().runCommand("forceload remove " + SX + " " + SZ + " " + (TX + W) + " " + (SZ + D));
         System.out.println("CRAFTIUM_HISTORY_PASS paste_over_block_limit undo redo undo packed");
+    }
+
+    /** A paste of over 100,000 blocks reports its progress to the player: the Large edit window comes up, fills, and goes away when the edit ends. */
+    private void checkProgressWindow() {
+        require(c.computeOnClient(mc -> ClientState.activeProgress() == null), "no progress should be showing before the edit");
+        Thread.yield();
+        c.runOnClient(mc -> CraftiumClient.send("paste_at", new Point(TX, Y, TZ), new Point(0, 1, 0)));
+        var seen = new java.util.ArrayList<ClientState.EditProgress>();
+        boolean shot = false;
+        for (int i = 0; i < 1500; i++) {
+            c.waitTicks(1);
+            var p = c.computeOnClient(mc -> ClientState.activeProgress());
+            if (p != null && (seen.isEmpty() || seen.getLast().updatedAt() != p.updatedAt())) seen.add(p);
+            if (p != null && !shot && p.done() > 0) { c.takeScreenshot("large-edit-window"); shot = true; }
+            if (!seen.isEmpty() && p == null) break;
+        }
+        w.getConnection().waitForClientboundPackets();
+        c.waitFor(mc -> !ClientState.status.busy(), 2000);
+        require(!seen.isEmpty(), "a paste of over 100,000 blocks should have reported its progress");
+        var first = seen.getFirst();
+        require(first.verb().equals("Applying") && first.total() > 100_000, "the report should name the edit and its size: " + first);
+        for (int i = 1; i < seen.size(); i++) require(seen.get(i).done() >= seen.get(i - 1).done(), "progress should only move forward");
+        System.out.println("CRAFTIUM_HISTORY_PROGRESS " + seen.size() + " reports, " + first.done() + " to " + seen.getLast().done() + " of " + first.total());
+        c.waitTicks(10);
+        require(c.computeOnClient(mc -> ClientState.activeProgress() == null), "the window should go away when the edit has ended");
+        send("undo", null);
     }
 
     private int mismatches(boolean pasted) {

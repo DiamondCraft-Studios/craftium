@@ -30,6 +30,21 @@ public final class EditorServer {
     private static int historyTicks;
     private record Job(UUID owner, ServerLevel level, Session session, Session.Edit edit,
                        boolean backwards, boolean history, int[] cursor, List<Session.Change> applied, long strokeId, boolean load, List<Session.Change> order, boolean record) {}
+    /** An edit of at least this many blocks reports its progress to its player, for the Large edit window. */
+    private static final int PROGRESS_MIN=100_000;
+    private static final long PROGRESS_EVERY_MS=400;
+    private static long lastProgress;
+    /** Tells the job's player how far a big edit has got, about twice a second, and, with {@code finished}, that it has ended. */
+    private static void progress(MinecraftServer server,Job j,boolean finished){
+        int total=j.order().size();
+        if(total<PROGRESS_MIN)return;
+        long now=System.currentTimeMillis();
+        if(!finished&&now-lastProgress<PROGRESS_EVERY_MS)return;
+        lastProgress=now;
+        var player=server.getPlayerList().getPlayer(j.owner);
+        if(player==null||!ServerPlatform.canSend(player))return;
+        ServerPlatform.send(player,new Packets.Progress(j.history?(j.backwards?"Undoing":"Redoing"):"Applying",j.edit.name(),finished?0:Math.min(j.cursor[0],total),finished?0:total));
+    }
     /** How many blocks are checked and then written together; a tick looks at the clock between slices. */
     private static final int SLICE=1024;
     /** An edit's blocks grouped by chunk, each chunk's in the order the edit has them, so a chunk can be written in one pass (see {@link BulkPlace}). */
@@ -1176,7 +1191,7 @@ public final class EditorServer {
                 int from=j.cursor[0],to=Math.min(list.size(),from+SLICE);j.cursor[0]=to;
                 applySlice(j,list.subList(from,to));
             }
-            if(j.cursor[0]<list.size())return;
+            if(j.cursor[0]<list.size()){progress(server,j,false);return;}
             if(!EditProtection.allowed(j.owner,j.level,new Session.Edit(j.edit.name(),List.of(),List.of(),j.edit.flags(),j.edit.entities(),j.edit.annotations())))throw new IllegalArgumentException("Entity or annotation access changed");
             var appliedBiomes=applyBiomes(j);
             var appliedEntities=EntityEdits.apply(j.level,j.edit.entities(),j.backwards);
@@ -1198,7 +1213,7 @@ public final class EditorServer {
                 j.session.remember(actual,j.strokeId);
                 if(actual.name().equals(DELETE_SELECTION)&&actual.selection()!=null)letGoOfSelection(j.session);
             }
-            j.session.busy=false;endJob();
+            j.session.busy=false;endJob();progress(server,j,true);
             if(j.history&&!j.backwards&&j.session.historyRemaining==0&&!j.applied.isEmpty()&&j.session.options!=null&&j.session.options.historyPulse)j.session.pulse="redo:700:"+SelectionCodec.encode(pulsePoints(j.applied.stream().map(Session.Change::pos).toList()));
             var player=server.getPlayerList().getPlayer(j.owner);
             if(player!=null)send(player,j.session,(j.backwards?"Undid ":j.history?"Redid ":"Applied ")+j.edit.name()+" · "+(j.applied.size()+appliedBiomes.size()+appliedEntities.size()+appliedAnnotations.size())+" changes"+(skipped>0?" · "+skipped+" changed or unavailable cells skipped":""),false);
@@ -1210,7 +1225,7 @@ public final class EditorServer {
             j.session.queued.clear();
             ServerPlatform.LOG.error("Craftium edit interrupted",e);
             rememberInterrupted(j);
-            j.session.busy=false;endJob();var player=server.getPlayerList().getPlayer(j.owner);
+            j.session.busy=false;endJob();progress(server,j,true);var player=server.getPlayerList().getPlayer(j.owner);
             if(player!=null)send(player,j.session,"Edit interrupted. Applied changes remain in history.",true);
             else release(j);
         }

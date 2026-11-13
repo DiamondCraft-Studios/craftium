@@ -27,6 +27,7 @@ public final class Craftium implements ModInitializer {
         dev.craftium.compat.FabricCompat.serverboundPlay().registerLarge(Packets.Edit.TYPE,Packets.Edit.CODEC,16_000_000);
         dev.craftium.compat.FabricCompat.clientboundPlay().registerLarge(Packets.Update.TYPE,Packets.Update.CODEC,16_000_000);
         dev.craftium.compat.FabricCompat.clientboundPlay().register(Packets.MissingBlocks.TYPE,Packets.MissingBlocks.CODEC);
+        dev.craftium.compat.FabricCompat.clientboundPlay().register(Packets.Progress.TYPE,Packets.Progress.CODEC);
         dev.craftium.compat.FabricCompat.clientboundPlay().registerLarge(Packets.Report.TYPE,Packets.Report.CODEC,400_000);
         dev.craftium.compat.FabricCompat.clientboundPlay().registerLarge(Packets.AiReply.TYPE,Packets.AiReply.CODEC,1_100_000);
         dev.craftium.compat.FabricCompat.clientboundPlay().registerLarge(Packets.Download.TYPE,Packets.Download.CODEC,4_500_000);

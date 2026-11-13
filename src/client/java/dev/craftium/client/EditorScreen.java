@@ -218,7 +218,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
         g.pose().pushMatrix();g.pose().scale(scale,scale);
         topbar(g);
-        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);hierarchyPanel(g);magicPanel(g);missingPanel(g);}
+        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);hierarchyPanel(g);magicPanel(g);missingPanel(g);progressPanel(g);}
         finishPanel(g);
         viewport(g);
         axisGizmo(g);
@@ -2231,6 +2231,29 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     }
     private static String modeName(Options.RulerMode mode){return mode==Options.RulerMode.CIRCLE?"Circle":"Line";}
     /** The Rulers panel: every ruler in this world as an entry to pick, and what can be done to the picked one. */
+    /** Whether the Large edit window has been shown for the edit in progress, so closing it with the cross keeps it closed until the next one. */
+    private boolean progressSeen;
+    /**
+     * How far a very large edit has got: a window that is only there while the server is applying one of 100,000 blocks or more and keeps reporting it. It is a window like
+     * the others, so it can be moved, resized and folded, and closing it only hides it for this edit.
+     */
+    private void progressPanel(Gfx g){
+        var p=ClientState.activeProgress();
+        if(p==null){progressSeen=false;return;}
+        int width=300,x=(w-width)/2,y=90;
+        panel(g,x,y,width,98,"Large edit");
+        if(!progressSeen){progressSeen=true;var window=WorkspaceLayout.windows.get("progress");if(window!=null&&!window.visible){window.visible=true;WorkspaceLayout.save();}}
+        String head=p.verb()+" "+p.name();
+        while(head.length()>4&&font.width(head)>pw-20)head=head.substring(0,head.length()-2)+"…";
+        text(g,head,x+10,y+26,TEXT);
+        int bx=x+10,bw=pw-20,done=(int)Math.round(bw*Math.clamp(p.done()/(double)p.total(),0,1));
+        g.fill(bx,y+42,bx+bw,y+54,0xff10151c);g.outline(bx,y+42,bw,12,LINE);g.fill(bx+1,y+43,bx+Math.max(1,done-1),y+53,ACCENT);
+        text(g,String.format(Locale.ROOT,"%,d of %,d blocks · %d%%",p.done(),p.total(),(int)Math.floor(100.0*p.done()/p.total())),x+10,y+62,MUTED);
+        long elapsed=System.currentTimeMillis()-p.startedAt();
+        String time=elapsed/1000+" s";
+        if(p.done()>0&&elapsed>1500){long left=Math.round(elapsed*(p.total()-p.done())/(double)p.done()/1000);time+=" · about "+left+" s left";}
+        text(g,time,x+10,y+76,MUTED);
+    }
     private void rulerPanel(Gfx g){
         if(ClientState.rulers.isEmpty()&&!(toolActive&&o().tool==Tool.RULER))return; // there is nothing to list until a ruler is made
         int x=w-RIGHT-244,y=27; // just left of the right-hand panels, clear of the viewport tools
