@@ -40,7 +40,28 @@ public final class VoxelTransform {
             int oy,
             int oz,
             long cellLimit) {
-        if (source.isEmpty()) return Set.of();
+        var from = landedFrom(source, pivot, yaw, pitch, roll, sx, sy, sz, ox, oy, oz, cellLimit);
+        return from == null ? null : new HashSet<>(from.keySet());
+    }
+
+    /**
+     * As {@link #landed}, with the cell each landed cell took its block from: what a preview needs to carry the blocks themselves through a rotate or a scale, not only
+     * their outline. Null when the result would cover more than {@code cellLimit} cells of space.
+     */
+    public static Map<Point, Point> landedFrom(
+            Collection<Point> source,
+            Geometry.Vector pivot,
+            double yaw,
+            double pitch,
+            double roll,
+            double sx,
+            double sy,
+            double sz,
+            int ox,
+            int oy,
+            int oz,
+            long cellLimit) {
+        if (source.isEmpty()) return Map.of();
         sx = scale(sx);
         sy = scale(sy);
         sz = scale(sz);
@@ -90,7 +111,7 @@ public final class VoxelTransform {
         return Math.abs(angle / 90 - Math.rint(angle / 90)) <= 1e-9;
     }
 
-    private static Set<Point> place(
+    private static Map<Point, Point> place(
             Set<Point> cells,
             Point min,
             Point max,
@@ -125,7 +146,7 @@ public final class VoxelTransform {
         int a0 = (int) Math.floor(lx + 1e-9), b0 = (int) Math.floor(ly + 1e-9), c0 = (int) Math.floor(lz + 1e-9);
         int a1 = (int) Math.ceil(hx - 1e-9), b1 = (int) Math.ceil(hy - 1e-9), c1 = (int) Math.ceil(hz - 1e-9);
         if ((long) (a1 - a0) * (b1 - b0) * (c1 - c0) > cellLimit) return null;
-        var landed = new HashSet<Point>();
+        var landed = new LinkedHashMap<Point, Point>();
         for (int x = a0; x < a1; x++)
             for (int y = b0; y < b1; y++)
                 for (int z = c0; z < c1; z++) {
@@ -139,7 +160,7 @@ public final class VoxelTransform {
                             (int) Math.floor(pivot.x() + r.x() / sx + 1e-9),
                             (int) Math.floor(pivot.y() + r.y() / sy + 1e-9),
                             (int) Math.floor(pivot.z() + r.z() / sz + 1e-9));
-                    if (cells.contains(from)) landed.add(new Point(x, y, z));
+                    if (cells.contains(from)) landed.put(new Point(x, y, z), from);
                 }
         return landed;
     }
