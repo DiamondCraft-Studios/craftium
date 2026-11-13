@@ -56,9 +56,16 @@ Known follow-ups: the whole tree is re-sent to each editor when it changes (abou
 
 ## Status
 
-Done, with tests (736 pass on 26.2; both versions compile): the BuildObject limit of 1,024; `ObjectVolume`; `OccupancyResolver`; `PackedCells` (the packed store); dormant and replaced cells on each BuildObject with the caps; saving and loading them; `ObjectMove`, the pure function that moves selected blocks by a one-to-one map of cells with the world winning (dormant, replaced and priority rules, resampling, block entity data; 12 tests). Dormant cells keep block entity data (a chest keeps its items), saved with the world.
+Done, with tests (753 pass on 26.2; both versions compile; rebased on main 2026-11-13):
+- the BuildObject limit of 1,024; `ObjectVolume`; `OccupancyResolver`;
+- `PackedCells` (packed store, with block entity data), dormant and replaced cells on each BuildObject with caps, saved with the world;
+- `ObjectMove`: the pure move with the world winning (dormant, replaced, priority, resampling, block entity data);
+- undo and redo carry the dormant and replaced stores (`SelectionChange`), and saved history keeps them;
+- **wired into the editor (not yet run in the game):** the Edit > Move action (`move`) and the transform path (`selection_transform`: the Move, Rotate and Scale tools and the gizmo), including the staged preview and Enter, and cancelling a staged edit. A dormant block of an object that moves whole goes through the same steps as the selection.
 
-Not built: using `ObjectMove` from the editor, the dormant data in undo entries, the x-ray preview, the Hierarchy scroll check at hundreds of rows. Nothing writes dormant data yet, because the Move, nudge and Transform actions in `EditorServer` still rewrite the selected cells directly.
+Not built: Duplicate and paste of a BuildObject (still overwrite), the **Place here** action, the x-ray preview of dormant cells, a gametest, the Hierarchy scroll check at hundreds of rows, a changelog entry.
+
+Known costs to measure in the game: every transform request now builds the whole BuildObject tree for `ObjectMove`, which may be slow per drag tick with very many or very large objects; an optimisation is to include only the objects that matter.
 
 ### What wiring it in involves (found while reading the edit path)
 - The Move, nudge and Transform actions work on selected *world* cells and the objects follow through `ObjectRemap`. A dormant block is not in the world, so those tools cannot carry it on their own.
