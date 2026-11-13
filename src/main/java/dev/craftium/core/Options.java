@@ -63,6 +63,8 @@ public final class Options {
     /** False: edit only the toggled blocks. True: edit everything but them. With none toggled the block mask does nothing. */
     /** Whether the toggled blocks only let blocks through (include, the default) or keep them out (exclude). Neither applies while {@link #maskOff} is set. */
     public boolean maskExclude;
+    /** For "select_missing": the missing block to select, as {@code namespace:name[properties]}. */
+    public String missingBlock="";
     /** Whether holding a gizmo handle hides the others, so only the one being dragged is drawn. */
     public boolean gizmoHideOthers=true;
     /** Whether the editor draws the world axes gizmo, which turns with the camera, in the top right. */
@@ -427,6 +429,7 @@ public final class Options {
         worldTime=Math.clamp(worldTime,0,2_000_000_000);randomTickSpeed=Math.clamp(randomTickSpeed,0,4096);
         exposedFaces=Math.clamp(exposedFaces,1,6);
         if(fluidType==null)throw new IllegalArgumentException("Choose a fluid");floodGap=Math.clamp(floodGap,0,MAX_FLOOD_GAP);flowLength=Math.clamp(flowLength,1,32);fluidQuality=Math.clamp(fluidQuality,1,4);
+        if (missingBlock==null || missingBlock.length()>256) throw new IllegalArgumentException("Invalid missing block");
         if (maskBlocks==null || maskActive==null || maskBlocks.size()>64 || maskActive.size()>64) throw new IllegalArgumentException("Block mask limit: 64 blocks");
         for (var list : java.util.List.of(maskBlocks, maskActive)) for (String entry : list) if (entry==null || entry.length()>256) throw new IllegalArgumentException("Invalid block mask entry");
         if (block == null || secondary == null || mask == null || biome == null || text == null)

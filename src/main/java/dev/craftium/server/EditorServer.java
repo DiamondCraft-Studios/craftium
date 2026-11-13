@@ -407,6 +407,14 @@ public final class EditorServer {
                     catch(RuntimeException e){s.selection.restore(before);s.saved.setPoints(objectsNow);s.pendingSelectionBefore=priorBefore;s.pendingObjectsBefore=priorObjects;if(confirming)s.pendingEdit=staged;throw e;}
                 }
                 case "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo" -> {var plan=new EditPlanner(player.level(),s,o);s.selection.combine(SelectionTransforms.apply(r.action(),plan),Selection.Mode.REPLACE);send(player,s,"Selection updated: "+s.selection.size()+" blocks",false);}
+                case "select_missing" -> {
+                    var wanted=dev.craftium.core.MissingBlockTable.Entry.parse(o.missingBlock);
+                    var found=MissingBlocks.loadedAround(player,wanted,Selection.LIMIT);
+                    if(found.isEmpty())throw new IllegalArgumentException("No "+wanted.text()+" in the chunks loaded around you");
+                    var points=new ArrayList<Point>(found.size());for(var at:found)points.add(EditPlanner.point(at));
+                    s.selection.combine(points,Selection.Mode.REPLACE);
+                    send(player,s,"Selected "+points.size()+" "+wanted.text()+" in the chunks loaded around you"+(points.size()>=Selection.LIMIT?" (the selection limit)":""),false);
+                }
                 case "clear" -> {s.saved.release(s.selection);s.selection.clear();s.corner=null;s.line=null;s.ruler=null;send(player,s,"Selection cleared",false);}
                 case "ruler_clear" -> {s.ruler=null;send(player,s,"Measurement cleared",false);}
                 case "asset_upload","blueprint_list","blueprint_save","blueprint_load","blueprint_data","blueprint_op","structure_export","schematic_export","schematic_import","selection_csv" -> {
@@ -1240,7 +1248,7 @@ public final class EditorServer {
     /** True for the actions that exist to change the selection, which the history records so they can be undone. */
     private static boolean changesSelection(String action,Options o){
         return switch(action){
-            case "select_box","select_box_adjust","lasso_select","clear","selection_move","selection_expand","selection_shrink","selection_invert","selection_convex","selection_outline",
+            case "select_box","select_box_adjust","lasso_select","select_missing","clear","selection_move","selection_expand","selection_shrink","selection_invert","selection_convex","selection_outline",
                  "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo"->true;
             case "use"->o.tool.selection();
             default->false;
