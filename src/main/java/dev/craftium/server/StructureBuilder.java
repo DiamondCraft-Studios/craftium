@@ -36,6 +36,17 @@ final class StructureBuilder {
     }
     int index(int x,int y,int z){return (y*sizeZ+z)*sizeX+x;}
 
+    /**
+     * A structure from blocks that are already in a grid, such as the cells of a stored template: nothing is mirrored, turned or thinned, and a null cell is
+     * void. {@code cells} holds one entry per cell as {@code (y*sizeZ+z)*sizeX+x}. Its Bedrock bytes and notes come from the same code as an exported selection.
+     */
+    static StructureBuilder ofCells(int sx,int sy,int sz,BlockSnapshot[] cells){
+        var settings=new StructureSettings();settings.format=StructureSettings.BEDROCK;
+        var built=new StructureBuilder(settings,sx,sy,sz,cells,List.of(),new Point(0,0,0));
+        built.source=new int[]{sx,sy,sz};
+        return built;
+    }
+
     /** Reads the source, then applies the settings. Throws {@link IllegalArgumentException} with a message for the player. */
     static StructureBuilder build(EditPlanner p,ServerPlayer player){
         var s=p.o.structure;s.validate();
@@ -172,6 +183,10 @@ final class StructureBuilder {
     /** The cells Bedrock can hold, with the blocks it has no equivalent for turned to void and counted in {@link #notes}. */
     private static final class Bedrock {
         final List<Map<String,Object>> palette=new ArrayList<>();final int[] primary,secondary;final Map<String,Integer> unmapped=new TreeMap<>();int blockEntities;int water=-1;
+        /** The jigsaw blocks' data by cell, for the file's block_position_data: without it a piece keeps its jigsaws but not what they connect to. */
+        final Map<Integer,Map<String,Object>> jigsaws=new LinkedHashMap<>();final boolean[] jigsawLossy={false};
+        /** Other block entities' converted data by cell, and what their conversion lost or leaves to check (each said once). */
+        final Map<Integer,Map<String,Object>> entities=new LinkedHashMap<>();final Set<String> lostNotes=new LinkedHashSet<>(),checkNotes=new LinkedHashSet<>();
         Bedrock(int cells){primary=new int[cells];secondary=new int[cells];Arrays.fill(primary,-1);Arrays.fill(secondary,-1);}
         int add(BedrockBlockTable.Bedrock block){
             var entry=new LinkedHashMap<String,Object>();entry.put("name",block.name());entry.put("states",new LinkedHashMap<String,Object>(block.states()));entry.put("version",BEDROCK_BLOCK_VERSION);
@@ -186,7 +201,14 @@ final class StructureBuilder {
             if(id==null&&!failed.contains(state)){var mapped=BedrockBlocks.toBedrock(state);if(mapped==null)failed.add(state);else{id=result.add(mapped);indices.put(state,id);}}
             if(id==null){result.unmapped.merge(BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString(),1,Integer::sum);continue;}
             result.primary[at]=id;
-            if(snapshot.data()!=null)result.blockEntities++;
+            if(snapshot.data()!=null){
+                if(state.getBlock()==Blocks.JIGSAW)result.jigsaws.put(at,jigsawEntity(snapshot.data(),x,y,z,result.jigsawLossy));
+                else if(BedrockBlockEntities.handles(state)){
+                    var converted=BedrockBlockEntities.convert(state,snapshot.data(),origin.x()+settings.offsetX+x,origin.y()+settings.offsetY+y,origin.z()+settings.offsetZ+z);
+                    result.entities.put(at,converted.data());result.lostNotes.addAll(converted.lost());result.checkNotes.addAll(converted.check());
+                }
+                else result.blockEntities++;
+            }
             if(state.hasProperty(BlockStateProperties.WATERLOGGED)&&state.getValue(BlockStateProperties.WATERLOGGED)){
                 if(result.water<0){var water=BedrockBlockTable.get().toBedrock("minecraft:water",Map.of("level","0"));result.water=water==null?-2:result.add(water);}
                 if(result.water>=0)result.secondary[at]=result.water;
@@ -196,16 +218,28 @@ final class StructureBuilder {
             int total=result.unmapped.values().stream().mapToInt(Integer::intValue).sum();
             notes.add(total+" blocks have no Bedrock equivalent and are left out ("+String.join(", ",result.unmapped.keySet().stream().limit(3).toList())+(result.unmapped.size()>3?", …":"")+")");
         }
-        if(result.blockEntities>0)notes.add(result.blockEntities+" block entities (chests, signs…) keep their block but not their contents in Bedrock files");
+        if(result.blockEntities>0)notes.add(result.blockEntities+" block entities (chests, signs…) keep their block but not their contents in Bedrock files (only chests, barrels and signs are converted)");
+        result.lostNotes.forEach(notes::add);result.checkNotes.forEach(n->notes.add("To check: "+n));
+        if(result.jigsawLossy[0])notes.add("A jigsaw's final state keeps its block but not its block states in Bedrock files");
         if(!entities.isEmpty())notes.add(entities.size()+" entities are not written to Bedrock files");
         return result;
+    }
+
+    /** A jigsaw's data as Bedrock keeps it, at the world position the file's origin puts the cell. Java's fields, with the pool as target_pool. */
+    private Map<String,Object> jigsawEntity(CompoundTag data,int x,int y,int z,boolean[] lossy){
+        var fields=new JigsawEntity.Fields(data.getStringOr("name",JigsawEntity.EMPTY),data.getStringOr("target",JigsawEntity.EMPTY),data.getStringOr("pool",JigsawEntity.EMPTY),
+                data.getStringOr("joint",JigsawEntity.ROLLABLE),data.getStringOr("final_state",JigsawEntity.AIR),data.getIntOr("selection_priority",0),data.getIntOr("placement_priority",0));
+        return JigsawEntity.toBedrock(fields,origin.x()+settings.offsetX+x,origin.y()+settings.offsetY+y,origin.z()+settings.offsetZ+z,BedrockBlockTable.get(),lossy);
     }
 
     byte[] bedrockBytes(){
         var b=bedrock();var structure=new LinkedHashMap<String,Object>();
         structure.put("block_indices",List.of(new BedrockNbt.IntList(b.primary),new BedrockNbt.IntList(b.secondary)));
         structure.put("entities",new ArrayList<Object>());
-        var defaults=new LinkedHashMap<String,Object>();defaults.put("block_palette",new ArrayList<Object>(b.palette));defaults.put("block_position_data",new LinkedHashMap<String,Object>());
+        var positions=new LinkedHashMap<String,Object>();
+        b.jigsaws.forEach((at,entity)->positions.put(String.valueOf(at),new LinkedHashMap<String,Object>(Map.of("block_entity_data",entity))));
+        b.entities.forEach((at,entity)->positions.put(String.valueOf(at),new LinkedHashMap<String,Object>(Map.of("block_entity_data",entity))));
+        var defaults=new LinkedHashMap<String,Object>();defaults.put("block_palette",new ArrayList<Object>(b.palette));defaults.put("block_position_data",positions);
         var palette=new LinkedHashMap<String,Object>();palette.put("default",defaults);structure.put("palette",palette);
         var root=new LinkedHashMap<String,Object>();root.put("format_version",1);root.put("size",List.of(sizeX,sizeY,sizeZ));root.put("structure",structure);
         root.put("structure_world_origin",List.of(origin.x()+settings.offsetX,origin.y()+settings.offsetY,origin.z()+settings.offsetZ));

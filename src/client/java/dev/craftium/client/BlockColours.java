@@ -15,13 +15,17 @@ final class BlockColours {
     /** The colour of the top, the sides (their average) and the underside of a block, from the textures its model puts on them. */
     record Faces(int top,int side,int bottom){}
     private static final Map<String,Faces> faceMap=new HashMap<>();
+    /** What a block's faces are made from, kept so their pictures can be read when wanted. */
+    private record Source(JsonArray elements,Map<String,String> textures,int tint){}
+    private static final Map<String,Source> sources=new HashMap<>();
+    private static final Map<String,int[]> pictures=new HashMap<>();
     private static final List<Entry> entries=new ArrayList<>();
     private static final Map<String,Integer> averages=new HashMap<>();
     private static final Map<String,JsonObject> models=new HashMap<>();
     private static Object resources;
     private BlockColours(){}
     static void build(){
-        var mc=Minecraft.getInstance();if(resources==mc.getResourceManager()&&!entries.isEmpty())return;resources=mc.getResourceManager();entries.clear();averages.clear();models.clear();faceMap.clear();
+        var mc=Minecraft.getInstance();if(resources==mc.getResourceManager()&&!entries.isEmpty())return;resources=mc.getResourceManager();entries.clear();averages.clear();models.clear();faceMap.clear();sources.clear();pictures.clear();
         for(var block:BuiltInRegistries.BLOCK){
             var state=block.defaultBlockState();if(state.isAir()||block.asItem()==net.minecraft.world.item.Items.AIR)continue;
             String id=BuiltInRegistries.BLOCK.getKey(block).toString();
@@ -35,7 +39,7 @@ final class BlockColours {
                 int tint=ClientCompat.blockTint(mc,state,mc.player==null?BlockPos.ZERO:mc.player.blockPosition());
                 if(tint!=-1)rgb=(((rgb>>16)&255)*((tint>>16)&255)/255)<<16|(((rgb>>8)&255)*((tint>>8)&255)/255)<<8|(rgb&255)*(tint&255)/255;
                 boolean full=state.isCollisionShapeFullBlock(mc.level,BlockPos.ZERO),solid=!state.getCollisionShape(mc.level,BlockPos.ZERO).isEmpty();
-                entries.add(new Entry(id,rgb,ColourMath.lab(rgb),full,solid,state.canOcclude(),paths.size()==1));faceMap.put(id,facesOf(elements[0],textures,tint,rgb));
+                entries.add(new Entry(id,rgb,ColourMath.lab(rgb),full,solid,state.canOcclude(),paths.size()==1));faceMap.put(id,facesOf(elements[0],textures,tint,rgb));sources.put(id,new Source(elements[0],textures,tint));
             }catch(Exception ignored){/* Blocks without an item model or a readable texture cannot be colour matched. */}
         }
     }
@@ -75,6 +79,52 @@ final class BlockColours {
         }
         return -1;
     }
+    /**
+     * The pictures of a block's top, side and underside, each 16 by 16 pixels of 0xAARRGGBB, tinted where the model tints the face; null for a block with no
+     * model to read them from. A face the model says nothing about falls back to the side, or to the block's plain colour.
+     */
+    static int[][] pictures(String id){
+        build();var source=sources.get(id);if(source==null)return null;
+        int plain=0xff000000|faceMap.get(id).side();
+        int[] top=picture(source,"up"),bottom=picture(source,"down"),side=null;
+        for(String name:new String[]{"north","south","east","west"}){side=picture(source,name);if(side!=null)break;}
+        if(side==null)side=top!=null?top:bottom!=null?bottom:flat(plain);
+        return new int[][]{top!=null?top:side,side,bottom!=null?bottom:side};
+    }
+    private static int[] flat(int colour){int[] out=new int[256];Arrays.fill(out,colour);return out;}
+    private static int[] picture(Source source,String direction){
+        if(source.elements()==null)return null;
+        for(var element:source.elements()){
+            var faces=element.isJsonObject()&&element.getAsJsonObject().has("faces")?element.getAsJsonObject().getAsJsonObject("faces"):null;
+            if(faces==null||!faces.has(direction))continue;
+            var face=faces.getAsJsonObject(direction);
+            String texture=face.has("texture")?face.get("texture").getAsString():"";
+            int attempts=0;while(texture.startsWith("#")&&attempts++<16)texture=source.textures().getOrDefault(texture.substring(1),"");
+            if(texture.isEmpty())continue;
+            var pixels=pictures.computeIfAbsent(texture,BlockColours::read);
+            if(pixels.length==0)continue;
+            int tint=face.has("tintindex")?source.tint():-1;
+            if(tint==-1)return pixels;
+            int[] out=new int[256];
+            for(int i=0;i<256;i++){int c=pixels[i];out[i]=(c&0xff000000)|(((c>>16)&255)*((tint>>16)&255)/255)<<16|(((c>>8)&255)*((tint>>8)&255)/255)<<8|(c&255)*(tint&255)/255;}
+            return out;
+        }
+        return null;
+    }
+    /** The first frame of a texture, shrunk or stretched to 16 by 16 by taking the nearest pixel; empty when it cannot be read. */
+    private static int[] read(String texture){
+        var id=dev.craftium.compat.Compat.parse(texture);
+        try(var stream=Minecraft.getInstance().getResourceManager().getResourceOrThrow(dev.craftium.compat.Compat.id(id.getNamespace(),"textures/"+id.getPath()+".png")).open()){
+            var image=ImageIO.read(stream);if(image==null)return new int[0];
+            int frame=Math.min(image.getWidth(),image.getHeight());int[] out=new int[256];
+            for(int y=0;y<16;y++)for(int x=0;x<16;x++)out[y*16+x]=image.getRGB(x*frame/16,y*frame/16);
+            return out;
+        }catch(Exception e){return new int[0];}
+    }
+    /** A texture (such as minecraft:block/stone) as 16 by 16 pixels of 0xAARRGGBB; empty when it cannot be read. */
+    static int[] texture(String name){build();return pictures.computeIfAbsent(name,BlockColours::read);}
+    /** The tint the game gives a block (grass, leaves, water), or -1 for one it does not tint. */
+    static int tint(String id){build();var source=sources.get(id);return source==null?-1:source.tint();}
     /** The faces of a block, or null for one with no model to read them from. */
     static Faces faces(String id){build();return faceMap.get(id);}
     private static int average(String texture){return averages.computeIfAbsent(texture,key->{

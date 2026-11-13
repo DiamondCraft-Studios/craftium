@@ -44,7 +44,8 @@ public enum Tool {
     MOVE("Move", "MV", "Transform", "Drag the arrows to move the selected blocks. Enter applies the move."),
     ROTATE("Rotate", "RT", "Transform", "Drag a ring to rotate the selected blocks around the pivot. Enter applies it."),
     SCALE("Scale", "SZ", "Transform", "Drag a square on a face to scale the selected blocks around the pivot. Enter applies it."),
-    PIVOT("Pivot", "PV", "Transform", "Click a block, or drag the arrows, to set the point Rotate and Scale work around.");
+    PIVOT("Pivot", "PV", "Transform", "Click a block, or drag the arrows, to set the point Rotate and Scale work around."),
+    INSPECT("Inspect", "IN", "Utility", "Point at a block to see its tags above it; right-click to list them all in chat. Changes nothing.");
 
     public final String label, icon, group, description;
     Tool(String label, String icon, String group, String description) {
@@ -79,7 +80,7 @@ public enum Tool {
         all.put("Paint", List.of(PAINTER, PAINT_BUCKET, GRADIENT_PAINTER, NOISE_PAINTER, SCRIPT_BRUSH, BIOME_PAINTER, CLENTAMINATOR));
         all.put("Sculpt", List.of(SMOOTH, ROUGHEN, DISTORT, MELT, WELD, SHATTER, EXTRUDE, SMEAR, SCULPT_DRAW, MODIFY, STAMP));
         all.put("Terrain", List.of(ELEVATION, FLATTEN, SLOPE, ROCK, FLOODFILL, FLUID_BALL));
-        all.put("Utility", List.of(RULER, TINKER, ANNOTATION));
+        all.put("Utility", List.of(RULER, TINKER, ANNOTATION, INSPECT));
         return Collections.unmodifiableMap(all);
     }
 }

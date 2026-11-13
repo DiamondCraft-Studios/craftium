@@ -108,7 +108,7 @@ final class JigsawPlannerScreen extends CraftiumScreen {
         tips.on(button("‹ Back", x + third + 4, by + 32, third, 22, () -> send("back")), "Goes back to the run before this one. The last 20 runs are kept.");
         tips.on(button("Next ›", x + 2 * (third + 4), by + 32, third, 22, () -> send("next")), "Goes forward to the run after this one, after stepping back.");
         tips.on(button("Pin seed", x, by + 58, third, 22, () -> send("pin")), "Keeps the seed of the run on show. The status line lists the pinned seeds; type one in the Seed box to bring its layout back.");
-        tips.on(button("View", x + third + 4, by + 58, third, 22, () -> send("view")), "Changes what the preview draws, one step each click: outlines and blocks, then outlines only (cheap for very large structures), then blocks only.");
+        tips.on(button("View", x + third + 4, by + 58, third, 22, () -> send("view")).back(() -> send("view_back")), "Changes what the preview draws, one step each click: outlines and blocks, then outlines only (cheap for very large structures), then blocks only.");
         tips.on(button("List pools", x + 2 * (third + 4), by + 58, third, 22, () -> send("pools")), "Lists every pool the planner can start from in the report: those of the datapacks the world uses and of datapacks/craftium.");
         tips.on(button("Apply (Enter)", x, by + 90, (FORM - 4) / 2, 24, () -> send("apply")), "Builds the preview in the world as one edit. You can undo it like any other edit.");
         tips.on(button("Cancel preview", x + (FORM - 4) / 2 + 4, by + 90, (FORM - 4) / 2, 24, () -> send("cancel")), "Throws the preview away without building anything. Escape does not: it keeps the preview, so you can leave the editor and walk around it.");
@@ -176,6 +176,7 @@ final class JigsawPlannerScreen extends CraftiumScreen {
 
     @Override public boolean mouseClicked(MouseButtonEvent raw, boolean twice) {
         var event = scaled(raw);
+        if (event.button() == 1) for (var child : children()) if (child instanceof FlatButton b && b.rightClick(event.x(), event.y())) return true; // a cycling button steps back
         if (showing() && event.button() == 0) {
             int x = SIDE, y = listTop(), rows = visibleRows();
             if (matches.size() > ROWS && Scrollbars.hit(event.x(), event.y(), x + FORM - Scrollbars.WIDTH - 2, y + 2, rows * ROW)) {

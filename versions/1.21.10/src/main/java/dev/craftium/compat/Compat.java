@@ -22,6 +22,8 @@ public final class Compat {
     public static ResourceLocation vanilla(String path){return ResourceLocation.withDefaultNamespace(path);}
     public static ResourceLocation tryParse(String id){return ResourceLocation.tryParse(id);}
     public static String keyName(ResourceKey<?> key){return key.location().toString();}
+    /** Namespaced name of a tag, e.g. {@code minecraft:infiniburn_overworld}. */
+    public static String tagName(net.minecraft.tags.TagKey<?> tag){return tag.location().toString();}
 
     public static boolean isGamemaster(ServerPlayer player){return player.hasPermissions(2);}
     public static CommandSourceStack gamemasterSource(ServerPlayer player){return player.createCommandSourceStack().withPermission(2);}

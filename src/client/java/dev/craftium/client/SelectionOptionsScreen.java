@@ -157,6 +157,7 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
     }
 
     @Override public boolean mouseClicked(MouseButtonEvent event,boolean twice){
+        if(event.button()==1)for(var child:children())if(child instanceof FlatButton rb&&rb.rightClick(event.x(),event.y()))return true; // a cycling button steps back
         if(picker!=null&&picker.mouseClicked(event.x(),event.y(),event.button()))return true;
         if(event.button()==0)for(int i=0;i<entries.size();i++){
             int y=rowY(i);

@@ -76,7 +76,12 @@ class SavedGroupsTest {
         var second=saved.createGroup("Second");saved.save(s);
         var empty=saved.createEmpty(second.id());
         assertEquals(0,empty.size());assertSame(second,empty.group());assertEquals(empty,saved.entries().getLast());
-        assertSame(saved.groups().getFirst(),saved.createEmpty(0).group(),"none asked for is the first group");
+        assertSame(saved.groups().getLast(),saved.createEmpty(0).group(),"none asked for is the last group, the very bottom");
+    }
+    @Test void aNewBuildObjectWithNothingSelectedOpensAFoldedLastGroup(){
+        var saved=new SavedSelections();var last=saved.createGroup("Last");saved.setGroupFolded(last.id(),true);
+        var made=saved.createEmpty(0);
+        assertSame(last,made.group());assertFalse(last.folded());
     }
     @Test void aNewBuildObjectGoesInTheGroupOfTheOneBeingLookedAt(){
         var saved=new SavedSelections();var s=live(A);

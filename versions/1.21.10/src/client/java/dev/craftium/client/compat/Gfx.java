@@ -37,13 +37,13 @@ public final class Gfx implements dev.craftium.client.Canvas {
         raw.fill(x+width-1,y+1,x+width,y+height-1,color);
     }
 
-    public void text(Font font,String text,int x,int y,int color){raw.drawString(font,text,x,y,color);}
-    public void text(Font font,String text,int x,int y,int color,boolean shadow){raw.drawString(font,text,x,y,color,shadow);}
-    public void text(Font font,Component text,int x,int y,int color){raw.drawString(font,text,x,y,color);}
-    public void text(Font font,Component text,int x,int y,int color,boolean shadow){raw.drawString(font,text,x,y,color,shadow);}
+    public void text(Font font,String text,int x,int y,int color){if(!dev.craftium.client.CrispText.draw(this,font,text,x,y,color,true,false))raw.drawString(font,text,x,y,color);}
+    public void text(Font font,String text,int x,int y,int color,boolean shadow){if(!dev.craftium.client.CrispText.draw(this,font,text,x,y,color,shadow,false))raw.drawString(font,text,x,y,color,shadow);}
+    public void text(Font font,Component text,int x,int y,int color){if(!text.getStyle().isEmpty()||!text.getSiblings().isEmpty()||!dev.craftium.client.CrispText.draw(this,font,text.getString(),x,y,color,true,false))raw.drawString(font,text,x,y,color);}
+    public void text(Font font,Component text,int x,int y,int color,boolean shadow){if(!text.getStyle().isEmpty()||!text.getSiblings().isEmpty()||!dev.craftium.client.CrispText.draw(this,font,text.getString(),x,y,color,shadow,false))raw.drawString(font,text,x,y,color,shadow);}
     public void text(Font font,FormattedCharSequence text,int x,int y,int color,boolean shadow){raw.drawString(font,text,x,y,color,shadow);}
-    public void centeredText(Font font,String text,int x,int y,int color){raw.drawCenteredString(font,text,x,y,color);}
-    public void centeredText(Font font,Component text,int x,int y,int color){raw.drawCenteredString(font,text,x,y,color);}
+    public void centeredText(Font font,String text,int x,int y,int color){if(!dev.craftium.client.CrispText.draw(this,font,text,x,y,color,true,true))raw.drawCenteredString(font,text,x,y,color);}
+    public void centeredText(Font font,Component text,int x,int y,int color){if(!text.getStyle().isEmpty()||!text.getSiblings().isEmpty()||!dev.craftium.client.CrispText.draw(this,font,text.getString(),x,y,color,true,true))raw.drawCenteredString(font,text,x,y,color);}
 
     public void item(ItemStack stack,int x,int y){raw.renderItem(stack,x,y);}
     /** The count and durability bar over an item drawn with {@link #item}. */

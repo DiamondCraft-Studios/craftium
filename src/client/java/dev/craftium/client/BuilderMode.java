@@ -137,7 +137,9 @@ public final class BuilderMode {
         if(CraftiumClient.held(CraftiumClient.contextKey)){
             if(button==0){int flag=flagAt(mc);if(flag>=0){var f=FLAGS.get(flag);f.flip().accept(ClientState.options);ClientState.save();ClientState.notify(f.label()+(f.get().test(ClientState.options)?": on":": off"));return true;}}
             if(button==0){double x=mc.mouseHandler.xpos()*mc.getWindow().getGuiScaledWidth()/mc.getWindow().getScreenWidth(),y=mc.mouseHandler.ypos()*mc.getWindow().getGuiScaledHeight()/mc.getWindow().getScreenHeight();int left=mc.getWindow().getGuiScaledWidth()/2+95,top=mc.getWindow().getGuiScaledHeight()-26-Options.BuilderTool.values().length*22;int row=(int)((y-top)/22);if(x>=left&&x<left+140&&y>=top&&row>=0&&row<Options.BuilderTool.values().length)select(Options.BuilderTool.values()[row]);}return true;
-        }BlockHitResult hit=mc.hitResult instanceof BlockHitResult b&&b.getType()==HitResult.Type.BLOCK?b:null;
+        }
+        if(ClientState.options.builderSwapButtons&&button<2)button=1-button; // from here on 0 selects and 1 confirms, whichever physical button that is
+        BlockHitResult hit=mc.hitResult instanceof BlockHitResult b&&b.getType()==HitResult.Type.BLOCK?b:null;
         if(heldFirst!=null){if(button==1)acceptHeld();else if(button==0)discardHeld();return true;}
         if(ClientState.status.busy()){ClientState.notify("Wait for the current edit");return true;}
         var o=ClientState.options;
@@ -196,13 +198,16 @@ public final class BuilderMode {
             retool();offset=new Point(0,0,0);cells=List.of();cellBlocksFor=null;refreshIn=3;
         }catch(NumberFormatException ignored){}
     }
+    /** The name of the mouse button that confirms and places, for the hints. */
+    private static String confirmHint(){return ClientState.options.builderSwapButtons?"left-click":"right-click";}
     /** The button (0 left, 1 right) that last set a corner of the box and is still held, so moving over the blocks drags that corner; -1 when none. */
     private static int dragButton=-1;
     /** Holding the button that set a corner drags it to each block the pointer crosses, and the box follows in real time. */
     private static void dragCorner(){
         if(dragButton<0)return;
         var mc=Minecraft.getInstance();int button=dragButton;
-        boolean held=GLFW.glfwGetMouseButton(mc.getWindow().handle(),button==0?GLFW.GLFW_MOUSE_BUTTON_LEFT:GLFW.GLFW_MOUSE_BUTTON_RIGHT)==GLFW.GLFW_PRESS;
+        boolean physicalLeft=(button==0)!=ClientState.options.builderSwapButtons; // dragButton is the logical button; the one to watch may be the other one
+        boolean held=GLFW.glfwGetMouseButton(mc.getWindow().handle(),physicalLeft?GLFW.GLFW_MOUSE_BUTTON_LEFT:GLFW.GLFW_MOUSE_BUTTON_RIGHT)==GLFW.GLFW_PRESS;
         if(!held||!active()||heldFirst!=null||magicStarted||first==null){dragButton=-1;return;}
         if(!(mc.hitResult instanceof BlockHitResult hit)||hit.getType()!=HitResult.Type.BLOCK)return;
         Point at=CraftiumClient.point(hit.getBlockPos());
@@ -238,7 +243,7 @@ public final class BuilderMode {
         int x0=Integer.MAX_VALUE,y0=x0,z0=x0,x1=Integer.MIN_VALUE,y1=x1,z1=x1;
         for(Point p:all){x0=Math.min(x0,p.x());y0=Math.min(y0,p.y());z0=Math.min(z0,p.z());x1=Math.max(x1,p.x());y1=Math.max(y1,p.y());z1=Math.max(z1,p.z());}
         magicStarted=magicMode=true;first=new Point(x0,y0,z0);second=new Point(x1,y1,z1);cells=List.copyOf(all);cellBlocksFor=null;offset=new Point(0,0,0);preview=false;
-        ClientState.notify("Selected "+cells.size()+" blocks · scroll to nudge · right-click places · Esc cancels");
+        ClientState.notify("Selected "+cells.size()+" blocks · scroll to nudge · "+confirmHint()+" places · Esc cancels");
     }
     /** Takes the blocks a magic select found out of the selection, which is left as the box round what remains. */
     private static void subtractBlocks(Collection<Point> found){
@@ -256,7 +261,7 @@ public final class BuilderMode {
         Point a=min(),b=max();
         stackX=Math.floorDiv(at.x()-a.x(),b.x()-a.x()+1);stackY=Math.floorDiv(at.y()-a.y(),b.y()-a.y()+1);stackZ=Math.floorDiv(at.z()-a.z(),b.z()-a.z()+1);
         preview=true;clonePlaced=false;
-        ClientState.notify("Stack "+stackX+" × "+stackY+" × "+stackZ+" · right-click places · Esc cancels");
+        ClientState.notify("Stack "+stackX+" × "+stackY+" × "+stackZ+" · "+confirmHint()+" places · Esc cancels");
     }
     /** With one corner set and the live box on, the block aimed at, which is where the box reaches until the second corner is placed; otherwise null. */
     private static Point liveCorner(){
@@ -266,7 +271,7 @@ public final class BuilderMode {
     private static Point min(){Point b=second==null?first:second;return new Point(Math.min(first.x(),b.x()),Math.min(first.y(),b.y()),Math.min(first.z(),b.z()));}
     private static Point max(){Point b=second==null?first:second;return new Point(Math.max(first.x(),b.x()),Math.max(first.y(),b.y()),Math.max(first.z(),b.z()));}
     public static void corners(Point a,Point b){magicStarted=magicMode=false;first=a;second=b;offset=new Point(0,0,0);preview=false;refresh();}
-    private static void refresh(){try{var mc=Minecraft.getInstance();if(!magicStarted)cells=Selection.box(first,second).stream().filter(p->!mc.level.getBlockState(new net.minecraft.core.BlockPos(p.x(),p.y(),p.z())).isAir()).toList();ClientState.notify("Selection ready · scroll to nudge · right-click places · Esc cancels");}catch(Exception e){ClientState.notify(e.getMessage());clear();}}
+    private static void refresh(){try{var mc=Minecraft.getInstance();if(!magicStarted)cells=Selection.box(first,second).stream().filter(p->!mc.level.getBlockState(new net.minecraft.core.BlockPos(p.x(),p.y(),p.z())).isAir()).toList();ClientState.notify("Selection ready · scroll to nudge · "+confirmHint()+" places · Esc cancels");}catch(Exception e){ClientState.notify(e.getMessage());clear();}}
     public static void confirm(){
         if(first==null||second==null)return;var o=ClientState.options;
         String packed="";if(blocksOnly()){try{packed=SelectionCodec.encode(cells);}catch(IllegalArgumentException e){ClientState.notify(e.getMessage());return;}}
@@ -337,9 +342,21 @@ public final class BuilderMode {
                 var shown=preview(o,min,size,steps);
                 if(leaving&&!cells.isEmpty()&&cells.size()<=PREVIEW_LIMIT)Overlay.blocks(cellBlocks(),o.removedTint); // the blocks that are moving, where they are now
                 if(shown==null)boxShape(min.add(offset.x(),offset.y(),offset.z()),max.add(offset.x()+1,offset.y()+1,offset.z()+1)).drawPlain(Vec3.ZERO,o.previewColor,(float)o.builderPreviewWidth,0,false,false);
-                else{shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.builderPreviewWidth,o.previewFill,true,false);if(!shown.places().isEmpty())Overlay.blockStates(turned(shown.models(),o),shown.places(),o.previewTint);}
+                else{drawDestination(o,shown);if(!shown.places().isEmpty())Overlay.blockStates(turned(shown.models(),o),shown.places(),o.previewTint);}
             }
         }
+    }
+    private static SceneShape destScene=SceneShape.EMPTY;
+    private static Preview destOf;private static long destAt;
+    /** The destination as the world hides it, like the selection (see {@link SceneShape}): dim faces on the ground, an outline in open air, nothing showing through terrain. Worked out again when the preview changes or, once a second, the world does. */
+    private static void drawDestination(Options o,Preview shown){
+        var level=Minecraft.getInstance().level;
+        if(level==null){shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.builderPreviewWidth,o.previewFill,true,false);return;}
+        long second=level.getGameTime()/20;
+        if(shown!=destOf||second!=destAt){destScene=SceneShape.of(level,shown.landing(),true);destOf=shown;destAt=second;}
+        if(destScene.tooLarge()){shown.shape().drawPlain(Vec3.ZERO,o.previewColor,(float)o.builderPreviewWidth,o.previewFill,true,false);return;}
+        int fill=(o.previewFill>>>24)!=0?o.previewFill:o.previewColor&0xffffff|SceneShape.FACE_ALPHA;
+        destScene.draw(fill,o.previewColor,(float)o.builderPreviewWidth,o.previewFill);
     }
     private static final Map<Object,OutlineShape> boxes=new HashMap<>();
     /** The outline of the box between two block corners, kept for as long as it is drawn so its silhouette is not worked out again every frame. */
@@ -397,7 +414,7 @@ public final class BuilderMode {
     /** Past this many blocks the preview is just a box around where they land. */
     private static final int PREVIEW_LIMIT=4096;
     /** Where the cells would land: one outline around them, plus each block's model drawn at its destination. */
-    private record Preview(OutlineShape shape,List<net.minecraft.core.BlockPos> models,List<net.minecraft.core.BlockPos> places){}
+    private record Preview(OutlineShape shape,Set<Point> landing,List<net.minecraft.core.BlockPos> models,List<net.minecraft.core.BlockPos> places){}
     private static Preview cachedPreview;
     private static Object[] cachedFor;
     private static List<Point> cachedCells;
@@ -415,7 +432,7 @@ public final class BuilderMode {
         if(landing!=null){
             var models=new ArrayList<net.minecraft.core.BlockPos>(landing.size());var places=new ArrayList<net.minecraft.core.BlockPos>(landing.size());
             landing.forEach((to,from)->{places.add(new net.minecraft.core.BlockPos(to.x(),to.y(),to.z()));models.add(new net.minecraft.core.BlockPos(from.x(),from.y(),from.z()));});
-            built=new Preview(OutlineShape.of(landing.keySet()),models,places);
+            built=new Preview(OutlineShape.of(landing.keySet()),landing.keySet(),models,places);
         }
         cachedFor=key;cachedCells=cells;cachedPreview=built;
         return built;

@@ -403,6 +403,7 @@ final class StructureExportScreen extends CraftiumScreen {
 
     private boolean inView(double x,double y){return x>=viewX&&x<viewX+viewWidth&&y>=viewY&&y<viewY+viewHeight;}
     @Override public boolean mouseClicked(MouseButtonEvent event,boolean doubleClick){
+        if(event.button()==1)for(var child:children())if(child instanceof FlatButton rb&&rb.rightClick(event.x(),event.y()))return true; // a cycling button steps back
         if(event.button()==0&&inView(event.x(),event.y())){dragging=true;setFocused(null);return true;}
         return super.mouseClicked(event,doubleClick);
     }

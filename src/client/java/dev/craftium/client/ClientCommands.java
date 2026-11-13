@@ -1,6 +1,7 @@
 package dev.craftium.client;
 
 import dev.craftium.client.compat.ClientCompat;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import dev.craftium.core.*;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -15,6 +16,7 @@ final class ClientCommands {
     private static Runnable pending;
     private static Point pos1,pos2;
     private static final List<String> CAPABILITIES=List.of("blockStep","bulldozer","replaceMode","forcePlace","noUpdates","tinker","fastPlace","angelPlacement","noClip","solidFluids","preventInteractions","expandHitboxes");
+    private static final List<String> WORLD_RULES=List.of("doBlockDrops","doBlockGravity","doTrampleFarmland","doDestructiveExplosions","doFluidSpread","doLeafDecay","doBlockSpread","doPlantGrowth","doBlockWeathering","doSnowAndIce","doFluidInteractions","doBlockSupportBreak","doDripstoneAndAmethyst","playerInvulnerability");
     private ClientCommands(){}
     static void register(){
         ClientCommandRegistrationCallback.EVENT.register((dispatcher,access)->{
@@ -31,6 +33,9 @@ final class ClientCommands {
             root.then(literal("update").executes(c->{ClientHandshake.checkForUpdates(true);c.getSource().sendFeedback(dev.craftium.core.Chat.say("Checking for a newer release.\nRun /craftium update again in a moment.\n"+ClientHandshake.describe()));return 1;})
                 .then(literal("on").executes(c->{ClientState.options.checkForUpdates=true;ClientState.save();c.getSource().sendFeedback(dev.craftium.core.Chat.say("Update checks are on.\nCraftium checks once per game session."));return 1;}))
                 .then(literal("off").executes(c->{ClientState.options.checkForUpdates=false;ClientState.save();c.getSource().sendFeedback(dev.craftium.core.Chat.say("Update checks are off."));return 1;})));
+            // The client owns the /craftium root, so a server-only branch is rejected here as an incorrect argument and never leaves the client. This branch only forwards the command.
+            root.then(literal("gamerule").then(argument("rule",StringArgumentType.word()).suggests((c,b)->{for(String name:WORLD_RULES)b.suggest(name);return b.buildFuture();})
+                .then(argument("value",BoolArgumentType.bool()).executes(c->{var connection=Minecraft.getInstance().getConnection();if(connection==null)return 0;connection.sendCommand("craftium gamerule "+StringArgumentType.getString(c,"rule")+" "+BoolArgumentType.getBool(c,"value"));return 1;}))));
             root.then(literal("handshake").executes(c->{CraftiumClient.send("status",null,null);return 1;}));
             root.then(literal("enablecheats").executes(c->{var server=Minecraft.getInstance().getSingleplayerServer();if(server==null){c.getSource().sendError(dev.craftium.core.Chat.say("This command works only in your local singleplayer world."));return 0;}server.execute(()->ClientCompat.enableCheats(server));c.getSource().sendFeedback(dev.craftium.core.Chat.say("Cheats are enabled for this local world."));return 1;}));
             root.then(literal("toggle").then(argument("capability",StringArgumentType.word()).suggests((c,b)->{for(String name:CAPABILITIES)b.suggest(name);return b.buildFuture();}).executes(c->{String name=StringArgumentType.getString(c,"capability");if(!CAPABILITIES.contains(name)){c.getSource().sendError(dev.craftium.core.Chat.say("Unknown builder capability."));return 0;}try{var field=Options.class.getField(name);boolean enabled=!field.getBoolean(ClientState.options);field.setBoolean(ClientState.options,enabled);ClientState.save();CraftiumClient.send("capabilities",null,null);c.getSource().sendFeedback(dev.craftium.core.Chat.say(name+(enabled?" is on.":" is off.")));return 1;}catch(Exception e){return 0;}})));

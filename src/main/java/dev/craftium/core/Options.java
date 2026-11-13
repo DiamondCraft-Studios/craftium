@@ -53,6 +53,8 @@ public final class Options {
     public boolean historyPulse = true;
     /** How many screen pixels Craftium's screens draw each pixel of their text and icons with, in halves (2 is 1x, 3 is 1.5x); 0 is Auto, the game's own GUI scale (the editor lowers it to fit). */
     public int interfaceHalves = 2;
+    /** How text is drawn at a half-step interface scale such as 1.5x, where a font pixel lands on whole screen pixels in some places and not in others: "vanilla" (as the game draws it), "linear" (the font texture is blended) or "supersampled" (drawn at a larger size and averaged down). */
+    public String textSmoothing = "linear";
     public String block = "minecraft:stone";
     public String secondary = "minecraft:andesite";
     public String mask = "";
@@ -88,7 +90,7 @@ public final class Options {
     /** The builder selection's own blocks, packed by {@link SelectionCodec}, when it is not the whole box between its corners (as after a magic select). Blank for the box. */
     public String builderCells = "";
     public Compare compare=Compare.BLOCK;
-    public int selectLimit=100_000,selectRange=1,lassoDepth=64;
+    public int selectLimit=250_000,selectRange=1,lassoDepth=64;
     /** How many blocks the Select menu's Expand and Shrink move the selection's surface. */
     /** Edits that place or remove blocks are shown as a ghost first and only applied when confirmed with Enter. */
     public boolean confirmEdits=true;
@@ -140,6 +142,8 @@ public final class Options {
     public boolean largeSelectionWarnings=true;
     /** Whether deleting a BuildObject together with its blocks asks first (until "Don't show this message again" is ticked). */
     public boolean warnDeleteBlocks=true;
+    /** Hover BuildObjects (Hierarchy): the BuildObject the pointer is over in a viewport shows its outline and is lit in the Hierarchy. */
+    public boolean hoverBuildObjects=true;
     /** Whether the Rulers window has been shown once, the first time a ruler was used: it starts out of the way and is only brought up that once. */
     public boolean rulersIntroduced;
     /** A selection this many blocks bigger than before is confirmed with the player first, in the editor and in the Builder. */
@@ -159,6 +163,8 @@ public final class Options {
     public boolean builderRuler=true;
     /** Builder tools: after the first click, the box between that block and the one aimed at is drawn, and follows the aim. */
     public boolean builderLiveBox=true;
+    /** Builder tools: the select and confirm buttons trade places, so the right button selects (the first corner, then the second) and the left button places. */
+    public boolean builderSwapButtons;
     /** Builder tools: blocks already where the selection lands are not overwritten. Apart from the editor's Keep existing, which the Builder does not follow. */
     public boolean builderKeepExisting;
     /** Brush flow, 1 to 100: how often a stroke applies the brush. 100 is as often as the server allows (about 30 times a second), 25 the usual rate (about 7 a second), less leaves wider gaps along the stroke. */
@@ -369,6 +375,7 @@ public final class Options {
         flySpeed = Float.isFinite(flySpeed) ? Math.clamp(flySpeed,0.1f,10f) : 1;
         copies=Math.max(1,copies); // offsets and copies have no upper limit
         if(builderMagicCompare==null)builderMagicCompare=Compare.BLOCK;
+        if(textSmoothing==null||!(textSmoothing.equals("vanilla")||textSmoothing.equals("linear")||textSmoothing.equals("supersampled")))textSmoothing="linear";
         if(compare==null)compare=Compare.ANY; // Gson reads a constant that no longer exists, the old SOLID, as null
         if(noise==null||pathMode==null||modelMode==null||modifyMode==null||shapeKind==null||rulerMode==null)throw new IllegalArgumentException("Missing advanced options");
         if(modifyAxis==null||modifyType==null)throw new IllegalArgumentException("Missing advanced options");

@@ -53,6 +53,7 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
             new Cycle("Builder magic select matches","What the Builder's magic select treats as connected when it does not follow the editor: any block, the same block, the same block state, a shared tag, or the same block entity data",o->o.builderMagicCompare.name().charAt(0)+o.builderMagicCompare.name().substring(1).toLowerCase(),o->o.builderMagicCompare=Options.Compare.values()[(o.builderMagicCompare.ordinal()+1)%Options.Compare.values().length],(o,d)->o.builderMagicCompare=d.builderMagicCompare),
             new Field("Builder magic select limit","The most blocks the Builder's magic select looks for when it does not follow the editor. A bigger area is cut off at this many",1,dev.craftium.core.Selection.LIMIT,o->o.builderMagicLimit,(o,v)->o.builderMagicLimit=v),
             new Toggle("Live Builder selection box","After the first Builder click, draw the box to the block you aim at and let it follow your aim",o->o.builderLiveBox,(o,v)->o.builderLiveBox=v),
+            new Toggle("Swap Builder mouse buttons","On: the right button selects and the left button confirms, placing or building what the Builder is showing. Off: left selects, right confirms. Holding Alt for the tool list is not affected",o->o.builderSwapButtons,(o,v)->o.builderSwapButtons=v),
             new Toggle("Bulldozer same blocks","On: a full Bulldozer sweep only breaks blocks like the first one it met, states included, and a different block stops it until you let go. Off: it breaks everything it passes over",o->o.bulldozerSameBlocks,(o,v)->o.bulldozerSameBlocks=v)));
         GROUPS.put("Gizmos & Rulers",List.of(
             new Toggle("Show axis gizmo","Draw the X, Y and Z axes at the top right of the editor; click an end to look along that axis",o->o.showAxisGizmo,(o,v)->o.showAxisGizmo=v),
@@ -60,8 +61,17 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
             new Link("Ruler options","The colours of the ruler's line, its knobs and its span label",SelectionOptionsScreen::ruler)));
         GROUPS.put("UI",List.of(
             new Number("Interface size","How big the text and buttons of every Craftium screen are. Auto keeps the game's GUI scale (the editor lowers it until it fits the window); 1x to 8x draw every pixel of the text with that many screen pixels, in half steps. Whole steps stay perfectly sharp; a half step is only exact in the editor, and every other screen rounds it up to the next whole step. A size bigger than the window fits can push panels off the screen; Ctrl and - (or Auto) bring it back. Ctrl and + / - change it inside the editor",0,16,o->o.interfaceHalves,(o,v)->o.interfaceHalves=v,InterfaceScale::name)));
+        GROUPS.put("UI",List.copyOf(withTextSmoothing(GROUPS.get("UI"))));
         GROUPS.put("AI",List.of(
             new Number("AI preview models","How many block models an AI preview draws; the rest of a bigger preview shows as its outline. More looks fuller but costs frame rate",Options.AI_GHOST_DRAW_MIN,Options.AI_GHOST_DRAW_MAX,o->o.aiGhostDrawLimit,(o,v)->o.aiGhostDrawLimit=v)));
+    }
+    private static List<Row> withTextSmoothing(List<Row> rows){
+        var out=new java.util.ArrayList<>(rows);
+        out.add(new Cycle("Text smoothing","How the letters of Craftium screens are drawn at a half-step interface size such as 1.5x, where a font pixel is one screen pixel wide in some places and two in others. Linear blends the edges of the game's font; Supersampled draws the letters larger and averages them down (a little thinner, and not in text boxes); Vanilla is the game's own drawing, sharp but uneven. Whole sizes are always sharp, whatever this says",
+                o->o.textSmoothing.substring(0,1).toUpperCase()+o.textSmoothing.substring(1),
+                o->o.textSmoothing=switch(o.textSmoothing){case "vanilla"->"linear";case "linear"->"supersampled";default->"vanilla";},
+                (o,d)->o.textSmoothing=d.textSmoothing));
+        return out;
     }
     private static final List<String> TABS=List.copyOf(GROUPS.keySet());
 
@@ -106,7 +116,7 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
                 track(base,new FlatButton(x+245,y,180,20,t.get().apply(o)?"On":"Off",()->{t.set().accept(o,!t.get().apply(o));init();}));
                 track(base,new FlatButton(x+430,y,50,20,"Reset",()->{t.set().accept(o,t.get().apply(DEFAULTS));init();}));
             }else if(ROWS.get(i) instanceof Cycle c){
-                track(base,new FlatButton(x+245,y,180,20,c.get().apply(o),()->{c.next().accept(o);init();}));
+                track(base,new FlatButton(x+245,y,180,20,c.get().apply(o),()->{c.next().accept(o);init();}).back(()->{stepBack(c);init();}));
                 track(base,new FlatButton(x+430,y,50,20,"Reset",()->{c.reset().accept(o,DEFAULTS);init();}));
             }else if(ROWS.get(i) instanceof Link link){
                 track(base,new FlatButton(x+245,y,180,20,"Open…",()->ClientCompat.setScreen(minecraft,link.open().apply(this))));
@@ -181,7 +191,14 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
         if(travel<=0)return;
         scroll=Math.clamp((y-viewTop()-thumbHeight()/2.0)/travel*maxScroll(),0,maxScroll());layout();
     }
+    /** Goes to the value before this one, for a cycle that only knows how to go on: it goes round once to count the values, then stops one short of the start. */
+    private void stepBack(Cycle c){
+        var o=ClientState.options;String start=c.get().apply(o);int n=0;
+        do{c.next().accept(o);n++;}while(!c.get().apply(o).equals(start)&&n<64);
+        for(int i=0;i<n-1;i++)c.next().accept(o);
+    }
     @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event,boolean twice){
+        if(event.button()==1)for(var child:children())if(child instanceof FlatButton rb&&rb.rightClick(event.x(),event.y()))return true; // a cycling button steps back
         if(event.button()==0&&maxScroll()>0&&event.x()>=barX()-3&&event.x()<barX()+BAR+4&&event.y()>=viewTop()&&event.y()<viewTop()+viewHeight()){draggingBar=true;dragTo(event.y());return true;}
         // A control that is partly scrolled out of the list is still there under the tabs and the footer: a click outside the list does not reach it.
         boolean inList=event.y()>=viewTop()&&event.y()<viewBottom();

@@ -15,22 +15,38 @@ import org.lwjgl.glfw.GLFW;
 import java.util.*;
 
 /**
- * The jigsaw pool editor. On the left the pools (the craftium pack's, and every other pack's, which are overridden in the craftium pack when edited), in
- * the middle the elements of the pool as cards with a picture, a weight and a projection, on the right the connectors of the selected element, each
+ * The jigsaw pool editor. At the top left a dropdown picks the pool (the craftium pack's, and every other pack's, which are overridden in the craftium pack when edited); on
+ * the left the elements of the pool as cards with a picture, a weight and a projection, in the middle the preview of the selected element, on the right its connectors, each
  * with how many elements it can meet, and a graph of how the pools lead to each other. The server does all the editing, by changing the pack's files
  * (so the live preview follows) and answering with a model; every change is one undo step. A text box applies what is typed when Enter is pressed.
  */
 final class JigsawEditorScreen extends CraftiumScreen {
-    private static final int SIDE = 12, TOP = 50, FOOT = 12, CARD_H = 98, CARD_GAP = 6, ROW_H = 160, FOLDED_H = 22, LIST_ROW = 20;
+    private static final int SIDE = 12, TOP = 50, FOOT = 12, CARD_H = 98, CARD_GAP = 6, ROW_H = 160, FOLDED_H = 22, LIST_ROW = 20, MENU_ROWS = 12, CONN_HEAD = 72, THUMB_W = 60, THUMB_H = 42, DROP = 18, TARGET_ROW = 38;
+    /** The preview of the selected element, in the middle column: a label line and then the picture, in canvas pixels. */
+    private static final int PREVIEW_LABEL = 14, MIN_RIGHT = 220, MIN_CENTRE = 200, MIN_PREVIEW = 160, GAP = 10;
+    /** The widths of the preview column and the connectors column, as the player has dragged them (0: as laid out); kept while the game runs. */
+    private static int rightPref, previewPref;
+    /** The connectors column shows its connectors as a List (each folded or open), or Single: the picked one in a window on top with the others listed under it. Kept while the game runs. */
+    private static boolean singleView;
+    /** Which divider is being dragged (2 elements | preview, 3 preview | connectors), where the pointer was and what the size was then. */
+    private int resizing, resizeFrom, resizeStart;
+    /** The width of the Back and Forward tabs under the header, which the messages start after. */
+    private static final int NAV_W = 160, LINK = 26;
+    private static final String[] SORTS = {"Pool order", "Name", "Weight", "Connectors", "Size", "Type", "Problems"};
     private static final int PANEL = 0xe0172330, CARD = 0xff223247, MUTED = 0xff9db5cb, TEXT = 0xffdce6ef, WARN = 0xffffd479, ERROR = 0xffff8a80, OK = 0xff8fe3a0;
 
     private final Screen parent;
+    private final ElementPreview preview = new ElementPreview();
+    private int sortMode;
+    private boolean sortDesc;
     private JsonObject model = new JsonObject();
     private int seenVersion = -1, selected, page, jigPage;
     private boolean graph, adding;
     private String filter = "", name = "", query = "", selectionName = "";
     private double poolScroll, graphScroll;
-    private boolean draggingPoolBar, draggingGraphBar;
+    private boolean draggingGraphBar, draggingPoolBar, poolMenuOpen;
+    private EditBox poolBox;
+    private int pickW;
     private final Map<EditBox, Runnable> commits = new HashMap<>();
     /** What to say when the pointer rests on a button; drawn inside the scaled canvas, so it sits at the pointer whatever the window size. */
     private final Tips tips = new Tips();
@@ -83,7 +99,21 @@ final class JigsawEditorScreen extends CraftiumScreen {
     private String featureQuery = "";
     private boolean helpOpen;
     private String dialogMode, dialogText = "";
-    private int leftW, rightW, centreX, centreW;
+    private int rightW, previewW, centreX, centreW;
+    /** The connector the player picked in the preview (its fold key), shown lit until another is picked; and which one the pointer is over in the preview, or -1. */
+    private String pickedJig;
+    private int previewJig = -1;
+    private double pressPreviewX, pressPreviewY;
+    /** The pools the target boxes show elements of, as the server sent them (by pool id), and the ones last asked for. */
+    private final Map<String, JsonObject> targetPools = new HashMap<>();
+    private String askedPools = "";
+    /** The open target dropdown: the connector it belongs to (its fold key), where it hangs, which pool it lists, what choosing a row does, and how far it is scrolled. */
+    private String targetMenuKey;
+    private int targetMenuX, targetMenuY, targetMenuW, targetMenuButtonX, targetMenuButtonY;
+    private String targetMenuPool = "", targetMenuCurrent = "";
+    private java.util.function.Consumer<String> targetMenuPick;
+    private double targetMenuScroll;
+    private boolean draggingTargetBar;
     /** The editor is laid out on a canvas at least 860 by 460 and scaled down to fit a smaller window, like the Studio inspector. */
     private float uiScale = 1;
     private int cw, ch;
@@ -129,7 +159,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     /** Notes in this screen's own history that a command changed something on the server, so undo can tell it from a move in the graph. */
     private void note(String op) {
         switch (op) {
-            case "open", "templates", "features", "names", "undo", "redo", "retarget_check" -> { }
+            case "open", "templates", "features", "names", "undo", "redo", "retarget_check", "used_by", "target_pools", "bedrock_plan", "bedrock_export" -> { }
             case "apply", "discard" -> { localUndo.clear(); localRedo.clear(); }
             default -> { localUndo.push(new Local(Kind.SERVER, null, null, null, null)); localRedo.clear(); }
         }
@@ -169,14 +199,12 @@ final class JigsawEditorScreen extends CraftiumScreen {
         seenVersion = ClientState.jigsawModelVersion;
         try { model = ClientState.jigsawModel.isBlank() ? new JsonObject() : JsonParser.parseString(ClientState.jigsawModel).getAsJsonObject(); }
         catch (RuntimeException e) { model = new JsonObject(); }
+        if (model.has("usedBy")) { usedModel = model.getAsJsonArray("usedBy"); usedFor = poolId(); usedTruncated = model.has("usedByTruncated") && model.get("usedByTruncated").getAsBoolean(); }
+        targetPools.clear();
+        if (model.has("targetPools")) for (var each : model.getAsJsonArray("targetPools")) { var one = each.getAsJsonObject(); targetPools.put(str(one, "id", ""), one); }
+        resolveTarget();
         var elements = elements();
         if (selected >= elements.size()) selected = Math.max(0, elements.size() - 1);
-        var pools = visiblePools();
-        for (int i = 0; i < pools.size(); i++)
-            if (pools.get(i).get("id").getAsString().equals(poolId())) {
-                int y = i * LIST_ROW, room = listBottom() - listTop();
-                if (y < poolScroll || y + LIST_ROW > poolScroll + room) poolScroll = Math.max(0, y - room / 2);
-            }
     }
     private JsonObject pool() { return model.has("pool") ? model.getAsJsonObject("pool") : null; }
     private String poolId() { var p = pool(); return p == null ? "" : p.get("id").getAsString(); }
@@ -204,7 +232,38 @@ final class JigsawEditorScreen extends CraftiumScreen {
         return field;
     }
 
+    /** A box that applies what is typed: on Enter, when the focus leaves it, and before the screen is rebuilt, so an edit is never lost by clicking elsewhere. */
+    private EditBox applyBox(int x, int y, int w, String value, int max, java.util.function.Consumer<String> apply) {
+        var field = box(x, y, w, value, max, null, null);
+        applied.put(field, apply);
+        original.put(field, value);
+        return field;
+    }
+
+    private final Map<EditBox, java.util.function.Consumer<String>> applied = new HashMap<>();
+    private final Map<EditBox, String> original = new HashMap<>();
+    private EditBox lastFocusedApply;
+
+    /** Applies the box if it holds something other than what it was made with. */
+    private void applyIfChanged(EditBox field) {
+        var apply = applied.get(field);
+        if (apply == null || field.getValue().equals(original.get(field))) return;
+        original.put(field, field.getValue());
+        apply.accept(field.getValue());
+    }
+
+    private static void selectAll(EditBox box) {
+        box.moveCursorToEnd(false);
+        box.setHighlightPos(0);
+    }
+
+    private void flushEdits() { for (var field : new ArrayList<>(applied.keySet())) applyIfChanged(field); }
+
     @Override protected void init() {
+        flushEdits(); // typed but not yet applied: send it before the widgets are made again
+        applied.clear();
+        original.clear();
+        lastFocusedApply = null;
         parseModel();
         PoolThumbnails.newFrame();
         clearWidgets();
@@ -214,10 +273,13 @@ final class JigsawEditorScreen extends CraftiumScreen {
         commits.clear();
         suggestSources.clear();
         tips.clear();
-        leftW = Math.clamp(cw / 5, 150, 210);
-        rightW = Math.clamp(cw * 3 / 10, 230, 300);
-        centreX = SIDE + leftW + 10;
-        centreW = Math.max(200, cw - SIDE - rightW - 10 - centreX);
+        int third = (cw - 2 * SIDE - 2 * GAP) / 3; // by default the elements, the preview and the connectors each take a third
+        rightW = rightPref > 0 ? rightPref : third;
+        rightW = Math.clamp(rightW, MIN_RIGHT, Math.max(MIN_RIGHT, cw - 2 * SIDE - 2 * GAP - MIN_CENTRE - MIN_PREVIEW));
+        previewW = previewPref > 0 ? previewPref : third;
+        previewW = Math.clamp(previewW, MIN_PREVIEW, Math.max(MIN_PREVIEW, cw - 2 * SIDE - 2 * GAP - MIN_CENTRE - rightW));
+        centreX = SIDE;
+        centreW = Math.max(200, cw - SIDE - rightW - GAP - previewW - GAP - centreX);
         int unapplied = unappliedCount();
         int redoCount = localRedo.isEmpty() ? num(model, "redo", 0) : localRedo.size(), undoCount = localUndo.isEmpty() ? num(model, "undo", 0) : localUndo.size();
         button("Close", cw - SIDE - 70, 10, 70, 20, this::onClose);
@@ -226,19 +288,23 @@ final class JigsawEditorScreen extends CraftiumScreen {
         button("Discard", cw - SIDE - 70 - 152 - 76, 10, 70, 20, () -> edit("discard")).active = unapplied > 0;
         button("Apply (" + unapplied + ")", cw - SIDE - 70 - 152 - 76 - 102, 10, 96, 20, () -> edit("apply")).lit(unapplied > 0).active = unapplied > 0;
         button("?", cw - SIDE - 70 - 152 - 76 - 102 - 28, 10, 22, 20, () -> { helpOpen = true; init(); });
+        button("Bedrock pack…", cw - SIDE - 70 - 152 - 76 - 102 - 28 - 112, 10, 106, 20, this::openBedrock).active = pool() != null;
         if (retargetPrompt) { retargetButtons(); applyTips(); return; }
         if (confirmLeave) { leavePrompt(); applyTips(); return; }
         if (dialogMode != null) { dialogButtons(); applyTips(); return; }
         if (helpOpen) { helpButtons(); applyTips(); return; }
         if (adding) { overlay(); applyTips(); return; }
-        leftPane();
+        button("‹ Back", SIDE, 24, 70, 18, () -> stepHistory(-1)).active = historyAt > 0;
+        button("Forward ›", SIDE + 74, 24, 78, 18, () -> stepHistory(1)).active = historyAt >= 0 && historyAt < poolHistory.size() - 1;
+        poolPicker();
         if (pool() != null) {
             centreHeader();
-            if (!graph) {
+            if (!graph && !usedView) {
                 cards();
                 button("+ Add element", centreX, ch - FOOT - 22, centreW, 20, () -> { adding = true; addTab = 0; query = ""; init(); });
             }
         }
+        previewButtons();
         rightPane();
         applyTips();
     }
@@ -248,7 +314,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         for (var child : children()) {
             if (!(child instanceof FlatButton b) || tips.has(b)) continue;
             String label = b.getMessage().getString();
-            String key = label.startsWith("Create pool ") ? "Create connector pool" : label.startsWith("Undo") ? "Undo" : label.startsWith("Redo") ? "Redo" : label.startsWith("Apply (") ? "Apply" : label;
+            String key = label.startsWith("Sort: ") ? "Sort" : label.startsWith("Create pool ") ? "Create connector pool" : label.startsWith("Undo") ? "Undo" : label.startsWith("Redo") ? "Redo" : label.startsWith("Apply (") ? "Apply" : label;
             String tip = switch (key) {
                 case "Close" -> adding || helpOpen || dialogMode != null ? "Closes this panel." : confirmLeave ? "Keeps editing." : "Back to the planner. If changes are not applied you are asked what to do with them.";
                 case "Apply" -> "Writes the changes you have made here into datapacks/craftium, where the game reads them. Until then they wait in a draft: this editor and the preview use the draft, the datapack does not. Undo history ends here.";
@@ -256,12 +322,16 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 case "Apply and leave" -> "Applies the waiting changes to datapacks/craftium, then goes back to the planner.";
                 case "Discard and leave" -> "Throws the waiting changes away, then goes back to the planner.";
                 case "Keep editing" -> "Stays in the editor with the changes still waiting.";
+                case "‹ Back" -> "Goes back to the pool you had open before this one.";
+                case "Forward ›" -> "Goes forward again to the pool you came back from.";
+                case "Used by" -> "Lists the connectors of every pool that draw from this pool: where this pool is used from. Click one to go to its pool and element.";
                 case "Auto-align" -> "Puts every pool back in its column and row, as the automatic layout places them. You can undo it.";
                 case "Retarget" -> "Points those connectors at the new pool. It is one undo step, and nothing reaches the datapack until you Apply.";
                 case "Cancel" -> retargetPrompt ? "Leaves the connectors as they are." : "Closes this without making anything.";
                 case "Undo" -> "Takes back your last change here: an edit to a pool or template, or a move of a pool in the graph.";
                 case "Redo" -> "Puts back a change you took back, including a move in the graph.";
-                case "New pool…" -> "Makes an empty pool. You are asked for its name: without a namespace it goes in craftium.";
+                case "Bedrock pack…" -> "Makes a file for Minecraft Bedrock Edition (an .mcpack) from the open pool and every pool and piece it leads to. You name it, see what Bedrock cannot hold, then choose where to save it.";
+                case "New…" -> "Makes an empty pool. You are asked for its name: without a namespace it goes in craftium.";
                 case "?" -> "A short guide: what a pool is, how to make a structure, and what the connector fields mean.";
                 case "Template" -> "Adds a template that already exists: one of the game's, another pack's, or one you saved.";
                 case "Selection" -> "Saves the blocks you selected as a new template and adds it.";
@@ -275,6 +345,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 case "Rename…" -> "Renames the open pool, if it is in the craftium pack. Connectors that point at the old name are not changed.";
                 case "Delete" -> "Deletes the open pool from the craftium pack. A pool of another pack that it overrode shows again. You can undo it.";
                 case "Preview from here" -> "Runs the planner with this pool as the start pool, using the depth, distance and seed of the planner.";
+                case "Reset" -> "Puts the view of the preview back: the angle, the zoom and where it was moved to.";
+                case "Top" -> "Looks straight down at the piece, with north at the top.";
+                case "Front" -> "Looks at the piece from the south, level.";
+                case "Sort" -> "Changes how the elements are listed here: pool order, name, weight, connectors, size, type, or the ones with problems first. It only changes the list: the pool keeps its own order, which you can change with the arrows in Pool order.";
+                case "Asc", "Desc" -> "Turns the sort the other way round.";
                 case "Elements" -> "Shows the elements of this pool as cards.";
                 case "Graph" -> "Shows how this pool leads to other pools through the connectors of its templates. Click a pool to open it.";
                 case "+ Add element" -> "Adds an element to this pool: a template (found, or made from your selection), a feature such as a tree, or an empty slot.";
@@ -292,43 +367,265 @@ final class JigsawEditorScreen extends CraftiumScreen {
         }
     }
 
-    private void leftPane() {
-        tips.on(box(SIDE, TOP, leftW, filter, 64, v -> { filter = v; poolScroll = 0; }, null), "Type part of a pool name to narrow the list. Start a word with @ to narrow by namespace: @minecraft shows only the pools of minecraft, and @craftium town only the town pools of craftium.");
-        int y = ch - FOOT - 44;
-        int half = leftW / 2 - 2;
-        button("New pool…", SIDE, y, half, 18, () -> openDialog("pool_new"));
-        button("Copy…", SIDE + half + 4, y, half, 18, () -> { if (!poolId().isEmpty()) openDialog("pool_copy"); });
-        button("Rename…", SIDE, y + 22, half, 18, () -> { if (!poolId().isEmpty()) openDialog("pool_rename"); });
-        button("Delete", SIDE + half + 4, y + 22, half, 18, () -> { if (!poolId().isEmpty()) edit("pool_delete", "id", poolId()); });
+    /** The dropdown that picks the pool, and the buttons that make, copy, rename and delete one, along the top of the middle. */
+    private void poolPicker() {
+        int y = TOP - 4, buttons = buttonsW();
+        pickW = Math.clamp(centreW - 24 - 6 - buttons - 8, 90, 320);
+        poolBox = box(centreX, y, pickW, filter, 64, v -> { filter = v; poolMenuOpen = true; poolScroll = 0; }, this::pickFirstPool);
+        tips.on(poolBox, "Type part of a pool name to narrow the list, then pick a pool. Start a word with @ to narrow by namespace: @minecraft shows only the pools of minecraft, and @craftium town only the town pools of craftium. Enter opens the first one.");
+        var arrow = button(poolMenuOpen ? "▴" : "▾", centreX + pickW + 2, y, 22, 18, () -> toggleMenu());
+        tips.on(arrow, "Shows the list of pools to pick from.");
+        int x = centreX + pickW + 24 + 6;
+        int unit = (buttons - 3 * 4) * 100 / 224; // New, Copy, Rename and Delete share the room in the ratio 54 : 54 : 62 : 54
+        int newW = unit * 54 / 100, copyW = unit * 54 / 100, renameW = unit * 62 / 100, deleteW = buttons - 3 * 4 - newW - copyW - renameW;
+        button("New…", x, y, newW, 18, () -> openDialog("pool_new"));
+        button("Copy…", x + newW + 4, y, copyW, 18, () -> { if (!poolId().isEmpty()) openDialog("pool_copy"); });
+        button("Rename…", x + newW + copyW + 8, y, renameW, 18, () -> { if (!poolId().isEmpty()) openDialog("pool_rename"); });
+        button("Delete", x + newW + copyW + renameW + 12, y, deleteW, 18, () -> { if (!poolId().isEmpty()) edit("pool_delete", "id", poolId()); });
     }
+
+    /** The room the four pool buttons take: all of it in a wide window, less in a narrow one so the dropdown keeps some. */
+    private int buttonsW() { return Math.clamp(centreW * 45 / 100, 176, 236); }
+
+    private void toggleMenu() {
+        poolMenuOpen = !poolMenuOpen;
+        if (poolMenuOpen) scrollMenuToOpenPool();
+        else filter = "";
+        init();
+    }
+
+    /** Scrolls the menu so the open pool shows, as the left list used to when the editor opened. */
+    private void scrollMenuToOpenPool() {
+        var pools = visiblePools();
+        for (int i = 0; i < pools.size(); i++)
+            if (pools.get(i).get("id").getAsString().equals(poolId())) { poolScroll = Math.clamp((i - menuRows(pools.size()) / 2) * LIST_ROW, 0, Math.max(0, (pools.size() - menuRows(pools.size())) * LIST_ROW)); return; }
+        poolScroll = 0;
+    }
+
+    private void pickFirstPool() {
+        var pools = visiblePools();
+        if (pools.isEmpty()) return;
+        closeMenu();
+        openPool(pools.get(0).get("id").getAsString(), 0);
+    }
+
+    private void closeMenu() { poolMenuOpen = false; filter = ""; }
+
+    private int menuRows(int count) { return Math.max(1, Math.min(Math.min(MENU_ROWS, count), (ch - FOOT - menuY() - 22) / LIST_ROW)); }
+    private int menuY() { return TOP + 16; }
+    private int menuH(int count) { return menuRows(count) * LIST_ROW + 4 + 14; }
 
     private void centreHeader() {
         int y = TOP + 16;
-        tips.on(box(centreX + 54, y, Math.min(260, centreW - 54 - 130), str(pool(), "fallback", "minecraft:empty"), 120, null, () -> edit("fallback_set", "pool", poolId(), "fallback", focusedText())), "The pool used when no element can be attached, usually minecraft:empty. Enter applies.");
+        final String pool0 = poolId();
+        int fallbackW = Math.min(260, centreW - 54 - 130) - LINK;
+        var fallbackLink = button("↗", centreX + 54 + fallbackW + 4, y - 1, LINK - 2, 20, () -> followPool(str(pool(), "fallback", ""))).scale(2f);
+        fallbackLink.active = canOpen(str(pool(), "fallback", ""));
+        tips.on(fallbackLink, "Goes to the fallback pool.");
+        tips.on(applyBox(centreX + 54, y, fallbackW, str(pool(), "fallback", "minecraft:empty"), 120, v -> edit("fallback_set", "pool", pool0, "fallback", v)), "The pool used when no element can be attached, usually minecraft:empty. Enter applies.");
         button("Preview from here", centreX + centreW - 124, y - 1, 124, 20, () -> { ClientState.options.jigsawPool = poolId(); CraftiumClient.send("craftium:jigsaw_generate", null, null); });
-        tips.on(box(centreX + 70, y + 24, centreW - 70, str(pool(), "description", ""), 300, null, () -> edit("description_set", "pool", poolId(), "text", focusedText())),
+        tips.on(applyBox(centreX + 70, y + 24, centreW - 70, str(pool(), "description", ""), 300, v -> edit("description_set", "pool", pool0, "text", v)),
                 "A note about this pool, saved in its file as $comment. The game ignores that key, so it is safe, and the editor keeps it. Enter applies; empty removes it.");
         int tabs = y + 50;
-        button("Elements", centreX, tabs, 78, 20, () -> { graph = false; init(); }).lit(!graph);
-        button("Graph", centreX + 82, tabs, 78, 20, () -> { graph = true; init(); }).lit(graph);
-        if (graph) button("Auto-align", centreX + centreW - 96, tabs, 96, 20, this::resetLayout);
-        if (!graph) {
-            int pages = Math.max(1, (elements().size() + perPage() - 1) / perPage());
+        button("Elements", centreX, tabs, 68, 20, () -> { graph = false; usedView = false; init(); }).lit(!graph && !usedView);
+        button("Graph", centreX + 72, tabs, 68, 20, () -> { graph = true; usedView = false; init(); }).lit(graph);
+        button("Used by", centreX + 144, tabs, 68, 20, () -> { graph = false; usedView = true; usedScroll = 0; usedAsked = poolId(); edit("used_by"); }).lit(usedView);
+        if (graph) {
+            button("Auto-align", centreX + centreW - 80, tabs, 80, 20, this::resetLayout);
+        }
+        if (!graph && !usedView) {
+            int pages = Math.max(1, (shown().size() + perPage() - 1) / perPage());
             page = Math.clamp(page, 0, pages - 1);
             button("‹", centreX + centreW - 96, tabs, 24, 20, () -> { page = Math.max(0, page - 1); init(); });
             button("›", centreX + centreW - 24, tabs, 24, 20, () -> { page = Math.min(pages - 1, page + 1); init(); });
+            int sortW = Math.min(150, centreW - 60);
+            button("Sort: " + SORTS[sortMode], centreX, tabs + 24, sortW, 18, () -> stepSort(1)).back(() -> stepSort(-1));
+            button(sortDesc ? "Desc" : "Asc", centreX + sortW + 4, tabs + 24, 52, 18, this::flipSort).back(this::flipSort);
+            int searchX = centreX + sortW + 4 + 52 + 4, searchW = centreW - (searchX - centreX);
+            if (searchW >= 50) {
+                searchBox = box(searchX, tabs + 24, searchW, elementFilter, 60, v -> { elementFilter = v; page = 0; searchChanged = true; }, null);
+                searchBox.setHint(Component.literal("search"));
+                tips.on(searchBox, "Narrows the elements to those with all the words typed in their name, type, template, or the names and pools of their connectors.");
+            }
         }
     }
 
-    private String focusedText() { return getFocused() instanceof EditBox e ? e.getValue() : ""; }
-    private int cardsTop() { return TOP + 92; }
+    /** Where the player has been: a pool and which of its elements was selected (-1 for none). Back and Forward walk along it like a browser's. */
+    private record Nav(String pool, int element) {}
+    private final List<Nav> poolHistory = new ArrayList<>();
+    private int historyAt = -1;
+    /** A Target link waiting for its pool to arrive: the pool, and the connector name the element to select has. */
+    private String pendingPool, pendingTarget;
+
+    /** Keeps which element is selected in the place of the history that is open. */
+    private void rememberElement() {
+        if (historyAt >= 0 && historyAt < poolHistory.size()) poolHistory.set(historyAt, new Nav(poolHistory.get(historyAt).pool(), selected));
+    }
+
+    /** Opens a pool the player chose with this element selected (-1 for none), and remembers it so that Back can return to the one that was open. */
+    private void openPool(String id, int element) {
+        pendingPool = null; pendingTarget = null;
+        if (!id.equals(poolId())) elementFilter = ""; // a search belongs to the pool it was typed in
+        rememberElement();
+        if (!id.equals(poolId()) || element != selected) {
+            while (poolHistory.size() > historyAt + 1) poolHistory.remove(poolHistory.size() - 1); // a new choice drops what Forward would have gone to
+            if (historyAt < 0 && !poolId().isEmpty()) { poolHistory.add(new Nav(poolId(), selected)); historyAt = 0; }
+            poolHistory.add(new Nav(id, element));
+            historyAt = poolHistory.size() - 1;
+        }
+        selected = element; page = 0; jigPage = 0;
+        edit("open", "pool", id);
+    }
+
+    private void stepHistory(int by) {
+        int to = historyAt + by;
+        if (to < 0 || to >= poolHistory.size()) return;
+        rememberElement();
+        historyAt = to;
+        var at = poolHistory.get(to);
+        pendingPool = null; pendingTarget = null;
+        if (!at.pool().equals(poolId())) elementFilter = "";
+        selected = at.element(); page = 0; jigPage = 0;
+        edit("open", "pool", at.pool());
+    }
+
+    /** A pool name as the editor knows it: with a namespace, craftium when none is typed. */
+    private static String fullPool(String name) { return name.contains(":") ? name : "craftium:" + name; }
+
+    /** Whether a pool name is one the editor can open: a pool that is loaded, and not the one that means nothing attaches. */
+    private boolean canOpen(String name) {
+        if (name.isBlank() || name.strip().equals("minecraft:empty")) return false;
+        return poolIds().contains(fullPool(name.strip()));
+    }
+
+    /** The pool link of a connector: opens that pool with no element selected. */
+    private void followPool(String pool) {
+        if (pool.isBlank()) return;
+        openPool(fullPool(pool.strip()), -1);
+    }
+
+    /** The target link of a connector: opens its pool and selects the element that has a connector of that name. The element is found once the pool has arrived. */
+    private void followTarget(String pool, String target) {
+        if (pool.isBlank() || target.isBlank()) return;
+        openPool(fullPool(pool.strip()), -1);
+        pendingPool = fullPool(pool.strip());
+        pendingTarget = target.strip();
+        elementFilter = pendingTarget; // every element that has the name is listed, and the first is selected
+    }
+
+    /** Selects the element of the open pool whose connector has the name the player followed, when the pool is the one asked for. */
+    private void resolveTarget() {
+        if (pendingTarget == null || !poolId().equals(pendingPool)) return;
+        var names = Set.of(pendingTarget, "minecraft:" + pendingTarget, "craftium:" + pendingTarget);
+        pendingTarget = null; pendingPool = null;
+        int found = -1;
+        var list = elements();
+        for (int i = 0; i < list.size() && found < 0; i++) {
+            var element = list.get(i).getAsJsonObject();
+            if (element.has("jigsaws")) for (var j : element.getAsJsonArray("jigsaws")) if (names.contains(str(j.getAsJsonObject(), "name", ""))) { found = i; break; }
+        }
+        selected = found;
+        jigPage = 0;
+        rememberElement();
+        if (found < 0) localMessage = "No element of " + poolId() + " has a connector named " + names.iterator().next() + ".";
+    }
+
+    // ---- the connectors that draw from the open pool
+
+    private static final int USED_ROW = 30;
+    private boolean usedView, usedTruncated;
+    private double usedScroll;
+    private JsonArray usedModel = new JsonArray();
+    /** The pool the list is of, and the pool it was last asked for, so a pool opened while the tab is showing asks for its own list once. */
+    private String usedFor = "", usedAsked = "";
+
+    private JsonArray usedList() { return poolId().equals(usedFor) ? usedModel : new JsonArray(); }
+
+    private void drawUsed(Gfx g, int mx, int my) {
+        int top = cardsTop() - 4, bottom = ch - FOOT;
+        var list = usedList();
+        boolean ready = poolId().equals(usedFor);
+        String head = !ready ? "Looking for the connectors that draw from this pool…" : list.size() == 0 ? "No connector of any pool draws from this pool." : list.size() + (list.size() == 1 ? " connector draws" : " connectors draw") + " from this pool" + (usedTruncated ? " (the search stopped early: there may be more)" : "") + ":";
+        g.text(font, font.plainSubstrByWidth(head, centreW), centreX, top - 2, MUTED, false);
+        top += 12;
+        g.enableScissor(centreX, top, centreX + centreW, bottom);
+        for (int i = 0; i < list.size(); i++) {
+            int y = top + i * USED_ROW - (int) usedScroll;
+            if (y + USED_ROW < top || y > bottom) continue;
+            var u = list.get(i).getAsJsonObject();
+            boolean hover = mx >= centreX && mx < centreX + centreW && my >= Math.max(y, top) && my < Math.min(y + USED_ROW - 2, bottom);
+            g.fill(centreX, y, centreX + centreW, y + USED_ROW - 2, hover ? 0xff2a3d55 : CARD);
+            g.text(font, font.plainSubstrByWidth(shortName(str(u, "pool", "")) + "  ·  element " + (num(u, "element", 0) + 1), centreW - 12), centreX + 6, y + 4, 0xffffffff, false);
+            String detail = str(u, "template", "").replaceAll("^.*/", "") + "  ·  " + shortName(str(u, "name", "")) + " → " + shortName(str(u, "target", ""));
+            g.text(font, font.plainSubstrByWidth(detail, centreW - 12), centreX + 6, y + 15, MUTED, false);
+        }
+        g.disableScissor();
+    }
+
+    private int cardsTop() { return TOP + 116; }
     private int perPage() { return Math.max(1, (ch - FOOT - 26 - cardsTop() + CARD_GAP) / (CARD_H + CARD_GAP)); } // the last 26 is the add button
 
-    private void cards() {
+    /** The elements in the order they are listed, as indexes into the pool's own list (the order the game reads, which the sort leaves alone). */
+    private List<Integer> order() {
         var list = elements();
+        var out = new ArrayList<Integer>();
+        for (int i = 0; i < list.size(); i++) out.add(i);
+        Comparator<Integer> by = switch (sortMode) {
+            case 1 -> Comparator.comparing(i -> title(list.get(i).getAsJsonObject()).toLowerCase(Locale.ROOT));
+            case 2 -> Comparator.comparingInt(i -> num(list.get(i).getAsJsonObject(), "weight", 1));
+            case 3 -> Comparator.comparingInt(i -> { var e = list.get(i).getAsJsonObject(); return e.has("jigsaws") ? e.getAsJsonArray("jigsaws").size() : 0; });
+            case 4 -> Comparator.comparingLong(i -> { var e = list.get(i).getAsJsonObject(); if (!e.has("size")) return 0L; var n = e.getAsJsonArray("size"); return (long) n.get(0).getAsInt() * n.get(1).getAsInt() * n.get(2).getAsInt(); });
+            case 5 -> Comparator.comparing(i -> str(list.get(i).getAsJsonObject(), "type", ""));
+            case 6 -> Comparator.comparingInt(i -> { var e = list.get(i).getAsJsonObject(); return issues(e) + (e.has("missing") ? 1000 : 0); });
+            default -> Comparator.naturalOrder();
+        };
+        out.sort((sortDesc ? by.reversed() : by).thenComparing(Comparator.naturalOrder()));
+        return out;
+    }
+
+    private String elementFilter = "";
+    private EditBox searchBox;
+    private boolean searchChanged;
+
+    private void stepSort(int by) {
+        sortMode = Math.floorMod(sortMode + by, SORTS.length);
+        sortDesc = sortMode == 2 || sortMode == 3 || sortMode == 4 || sortMode == 6;
+        page = 0;
+        init();
+    }
+
+    private void flipSort() { sortDesc = !sortDesc; page = 0; init(); }
+
+    /** The elements in the order they are listed, less those that do not have every word of the search. */
+    private List<Integer> shown() {
+        var all = order();
+        var words = new ArrayList<String>();
+        for (var word : elementFilter.toLowerCase(Locale.ROOT).strip().split("\\s+")) if (!word.isEmpty()) words.add(word);
+        if (words.isEmpty()) return all;
+        var list = elements();
+        var out = new ArrayList<Integer>();
+        for (int i : all) {
+            var e = list.get(i).getAsJsonObject();
+            var text = new StringBuilder(title(e)).append(' ').append(str(e, "type", "")).append(' ').append(str(e, "template", "")).append(' ').append(str(e, "feature", "")).append(' ').append(str(e, "projection", ""));
+            if (e.has("jigsaws")) for (var j : e.getAsJsonArray("jigsaws")) { var jig = j.getAsJsonObject(); text.append(' ').append(str(jig, "name", "")).append(' ').append(str(jig, "pool", "")); }
+            String hay = text.toString().toLowerCase(Locale.ROOT);
+            if (words.stream().allMatch(hay::contains)) out.add(i);
+        }
+        return out;
+    }
+
+    private static String title(JsonObject element) {
+        return element.has("template") ? str(element, "template", "").replaceAll("^.*/", "") : str(element, "type", "?") + (element.has("feature") ? " " + shortName(str(element, "feature", "")) : "") + (element.has("count") ? " of " + num(element, "count", 0) : "");
+    }
+
+    private void cards() {
+        final String pool0 = poolId();
+        var list = elements();
+        var order = shown();
+        boolean poolOrder = sortMode == 0 && !sortDesc; // moving an element up or down only means something in the pool's own order
         int first = page * perPage();
         for (int slot = 0; slot < perPage() && first + slot < list.size(); slot++) {
-            int index = first + slot;
+            int index = order.get(first + slot);
             var element = list.get(index).getAsJsonObject();
             int x = centreX, y = cardsTop() + slot * (CARD_H + CARD_GAP), tx = x + 6 + PoolThumbnails.WIDTH + 8, w = centreW - (tx - x) - 8;
             boolean editable = element.has("editable") && element.get("editable").getAsBoolean();
@@ -340,17 +637,22 @@ final class JigsawEditorScreen extends CraftiumScreen {
             }.range(1, 150, weight);
             slider.setRaw((weight - 1) / 149.0);
             addRenderableWidget(tips.on(slider, "How often this element is chosen compared with the others in the pool, 1 to 150. The percentage is its share. Ctrl-click to type a number."));
+            button("↑", tx, y + 70, 22, 20, () -> edit("element_move", "pool", pool0, "index", index, "to", index - 1)).active = poolOrder && index > 0;
+            button("↓", tx + 26, y + 70, 22, 20, () -> edit("element_move", "pool", pool0, "index", index, "to", index + 1)).active = poolOrder && index < list.size() - 1;
+            button("Remove", tx + 52, y + 70, 64, 20, () -> edit("element_remove", "pool", pool0, "index", index));
             boolean rigid = str(element, "projection", "rigid").equals("rigid");
-            var projection = button(rigid ? "Rigid" : "Follow terrain", tx, y + 48, 96, 18, () -> edit("element_set", "pool", poolId(), "index", index, "projection", rigid ? "terrain_matching" : "rigid"));
+            Runnable flipProjection = () -> edit("element_set", "pool", pool0, "index", index, "projection", rigid ? "terrain_matching" : "rigid");
+            var projection = button(rigid ? "Rigid" : "Follow terrain", tx, y + 48, 96, 18, flipProjection).back(flipProjection);
             projection.active = editable || element.has("projection");
             tips.on(projection, rigid ? RIGID_TIP : FOLLOW_TIP);
             if (editable && element.has("processors")) {
-                var processors = tips.on(box(tx + 100, y + 48, Math.max(40, w - 100), str(element, "processors", "minecraft:empty"), 120, null, () -> edit("element_set", "pool", poolId(), "index", index, "processors", focusedText())), "The processor list applied to this element when it is placed, such as minecraft:mossify_10_percent. Enter applies.");
+                var processors = tips.on(applyBox(tx + 100, y + 48, Math.max(40, w - 100), str(element, "processors", "minecraft:empty"), 120, v -> edit("element_set", "pool", pool0, "index", index, "processors", v)), "The processor list applied to this element when it is placed, such as minecraft:mossify_10_percent. Enter applies.");
+                var lists = new ArrayList<String>();
+                if (model.has("processorLists")) for (var n : model.getAsJsonArray("processorLists")) lists.add(n.getAsString());
+                if (!lists.contains("minecraft:empty")) lists.add("minecraft:empty");
+                suggestSources.put(processors, lists);
                 if (str(element, "processors", "").equals("(inline)")) processors.setEditable(false); // a processor list written in the pool file is kept as it is
             }
-            button("↑", tx, y + 70, 22, 20, () -> edit("element_move", "pool", poolId(), "index", index, "to", index - 1)).active = index > 0;
-            button("↓", tx + 26, y + 70, 22, 20, () -> edit("element_move", "pool", poolId(), "index", index, "to", index + 1)).active = index < list.size() - 1;
-            button("Remove", tx + 52, y + 70, 64, 20, () -> edit("element_remove", "pool", poolId(), "index", index));
         }
     }
 
@@ -361,22 +663,108 @@ final class JigsawEditorScreen extends CraftiumScreen {
         return total == 0 ? 0 : (int) Math.round(weight * 100.0 / total);
     }
 
-    /** The connectors whose fields are folded away; kept by template and place, so a fold survives a redraw. */
-    private final Set<String> foldedConnectors = new HashSet<>();
+    /** The connectors whose fields are shown; every other connector is folded away, so a fold survives a redraw. Kept by template and place. */
+    private final Set<String> openConnectors = new HashSet<>();
+    private boolean folded(String template, JsonObject jig) { return !openConnectors.contains(foldKey(template, jig)); }
 
     private static String foldKey(String template, JsonObject jig) { return template + "@" + jig.getAsJsonArray("pos"); }
 
-    /** The connectors that fit on each page, as from (included) and to (excluded): a folded one is short, so more of them fit. */
+    /** The order the connectors are listed in: the template's own. In Single none is listed, only the window. */
+    private List<Integer> orderList(JsonArray jigsaws, String template) {
+        var order = new ArrayList<Integer>();
+        if (singleView) return order; // the window is all there is: a connector is picked by clicking its jigsaw block in the preview
+        for (int i = 0; i < jigsaws.size(); i++) order.add(i);
+        return order;
+    }
+
+    /** The connector the window of Single shows: the one picked in the preview or by its button, or else the first. */
+    private int selectedIndex(JsonArray jigsaws, String template) {
+        for (int i = 0; i < jigsaws.size(); i++) if (foldKey(template, jigsaws.get(i).getAsJsonObject()).equals(pickedJig)) return i;
+        return jigsaws.isEmpty() ? -1 : 0;
+    }
+
+    /** The connectors that fit on each page, as from (included) and to (excluded) in {@link #orderList}: a folded one is short, so more of them fit. In Single the window takes room on every page. */
     private List<int[]> jigPages(JsonArray jigsaws, String template) {
-        int room = ch - FOOT - (TOP + 52), used = 0, start = 0;
+        var order = orderList(jigsaws, template);
+        int room = ch - FOOT - (connY() + CONN_HEAD) - (singleView && !jigsaws.isEmpty() ? ROW_H : 0), used = 0, start = 0;
         var pages = new ArrayList<int[]>();
-        for (int i = 0; i < jigsaws.size(); i++) {
-            int height = foldedConnectors.contains(foldKey(template, jigsaws.get(i).getAsJsonObject())) ? FOLDED_H : ROW_H;
+        for (int i = 0; i < order.size(); i++) {
+            int height = singleView || folded(template, jigsaws.get(order.get(i)).getAsJsonObject()) ? FOLDED_H : ROW_H;
             if (used + height > room && i > start) { pages.add(new int[]{start, i}); start = i; used = 0; }
             used += height;
         }
-        pages.add(new int[]{start, jigsaws.size()});
+        pages.add(new int[]{start, order.size()});
         return pages;
+    }
+
+    /** One connector as it is laid out: which one, where its heading is, whether its fields show, and whether it is the window of Single. */
+    private record Row(int index, int y, boolean open, boolean window) {}
+
+    /** The rows of the connectors column: the window of Single first, then the connectors of the current page. */
+    private List<Row> rows(JsonArray jigsaws, String template) {
+        var out = new ArrayList<Row>();
+        var order = orderList(jigsaws, template);
+        var pages = jigPages(jigsaws, template);
+        jigPage = Math.clamp(jigPage, 0, pages.size() - 1);
+        int cursor = connY() + CONN_HEAD;
+        if (singleView && !jigsaws.isEmpty()) { out.add(new Row(selectedIndex(jigsaws, template), cursor, true, true)); cursor += ROW_H; }
+        var range = pages.get(jigPage);
+        for (int p = range[0]; p < range[1]; p++) {
+            int index = order.get(p);
+            boolean open = !singleView && !folded(template, jigsaws.get(index).getAsJsonObject());
+            out.add(new Row(index, cursor, open, false));
+            cursor += open ? ROW_H : FOLDED_H;
+        }
+        return out;
+    }
+
+    /** The preview fills its column from under its label to the foot; the connectors start at the top of theirs. */
+    private int previewH() { return Math.max(40, ch - FOOT - previewY()); }
+    private int connY() { return TOP; }
+    private int connX() { return cw - SIDE - rightW; }
+
+    // ---- the dividers between the panels
+
+    /** The divider between the elements and the preview, and the one between the preview and the connectors. */
+    private boolean overPreviewDivider(double x, double y) { return x >= centreX + centreW && x < previewX() && y >= TOP - 4 && y < ch - FOOT; }
+    private boolean overRightDivider(double x, double y) { return x >= previewX() + previewW && x < connX() && y >= TOP - 4 && y < ch - FOOT; }
+
+    /** Starts dragging a divider, if the pointer is on one. */
+    private boolean pressDivider(double x, double y) {
+        if (overPreviewDivider(x, y)) { resizing = 2; resizeFrom = (int) x; resizeStart = previewW; return true; }
+        if (overRightDivider(x, y)) { resizing = 3; resizeFrom = (int) x; resizeStart = rightW; return true; }
+        return false;
+    }
+
+    private void dragDivider(double x, double y) {
+        switch (resizing) {
+            case 2 -> previewPref = (int) Math.round(resizeStart - (x - resizeFrom));
+            default -> rightPref = (int) Math.round(resizeStart - (x - resizeFrom));
+        }
+        init(); // lays everything out again at the new sizes; init limits each size to what fits
+    }
+
+    /** A grip on each divider, brighter when the pointer is on it or it is being dragged. */
+    private void drawDividers(Gfx g, int mx, int my) {
+        int midY = (TOP + ch - FOOT) / 2;
+        grip(g, centreX + centreW + GAP / 2 - 1, midY - 12, 3, 24, resizing == 2 || (resizing == 0 && overPreviewDivider(mx, my)));
+        grip(g, previewX() + previewW + GAP / 2 - 1, midY - 12, 3, 24, resizing == 3 || (resizing == 0 && overRightDivider(mx, my)));
+    }
+
+    private void grip(Gfx g, int x, int y, int w, int h, boolean active) { g.fill(x, y, x + w, y + h, active ? ClientState.options.uiAccent : 0xff4a5c70); }
+    private int previewX() { return centreX + centreW + GAP; }
+    private int previewY() { return TOP + PREVIEW_LABEL; }
+    private boolean overPreview(double mx, double my) { return mx >= previewX() && mx < previewX() + previewW && my >= previewY() && my < previewY() + previewH(); }
+    private boolean graphDragging() { return pressNode != null || pressEdge != null; }
+    private boolean modal() { return adding || helpOpen || dialogMode != null || confirmLeave || retargetPrompt; }
+
+    /** The buttons that put the view of the preview back: where it started, straight down, level. */
+    private void previewButtons() {
+        if (element(selected) == null) return;
+        int bx = previewX() + previewW - 50, by = previewY() + 4;
+        button("Reset", bx, by, 46, 16, preview::reset);
+        button("Top", bx, by + 20, 46, 16, preview::top);
+        button("Front", bx, by + 40, 46, 16, preview::front);
     }
 
     private void rightPane() {
@@ -385,40 +773,58 @@ final class JigsawEditorScreen extends CraftiumScreen {
         if (element == null || !element.has("jigsaws")) return;
         var jigsaws = element.getAsJsonArray("jigsaws");
         String template = str(element, "template", "");
-        var pageList = jigPages(jigsaws, template);
-        int pages = pageList.size();
-        jigPage = Math.clamp(jigPage, 0, pages - 1);
-        button("‹", x + rightW - 56, TOP, 24, 18, () -> { jigPage = Math.max(0, jigPage - 1); init(); });
-        button("›", x + rightW - 28, TOP, 24, 18, () -> { jigPage = Math.min(pages - 1, jigPage + 1); init(); });
-        int cursor = TOP + 52;
-        for (int index = pageList.get(jigPage)[0]; index < pageList.get(jigPage)[1]; index++) {
-            var jig = jigsaws.get(index).getAsJsonObject();
+        var rowList = rows(jigsaws, template);
+        int pages = jigPages(jigsaws, template).size();
+        tips.on(button("List", x, connY() + 18, 60, 18, () -> setView(false)).lit(!singleView), "Every connector of the element in a list: open it to edit its fields, or fold it to leave its heading.");
+        tips.on(button("Single", x + 64, connY() + 18, 60, 18, () -> setView(true)).lit(singleView), "One connector at a time, in a window that stays where it is: click a jigsaw block in the preview to show its connector there. What you change shows there as you go.");
+        if (!singleView) {
+            button("‹", x + rightW - 56, connY(), 24, 18, () -> { jigPage = Math.max(0, jigPage - 1); init(); });
+            button("›", x + rightW - 28, connY(), 24, 18, () -> { jigPage = Math.min(pages - 1, jigPage + 1); init(); });
+        }
+        askForTargetPools(jigsaws, rowList);
+        for (var row : rowList) {
+            var jig = jigsaws.get(row.index()).getAsJsonObject();
             String key = foldKey(template, jig);
-            boolean isFolded = foldedConnectors.contains(key);
-            int y = cursor;
-            cursor += isFolded ? FOLDED_H : ROW_H;
-            tips.on(button(isFolded ? "+" : "-", x, y - 1, 16, 14, () -> { if (!foldedConnectors.remove(key)) foldedConnectors.add(key); init(); }), isFolded ? "Show the fields of this connector." : "Fold this connector away, leaving only its heading.");
+            boolean isFolded = !row.open();
+            int y = row.y();
+            if (!singleView) tips.on(button(isFolded ? "+" : "-", x, y - 1, 16, 14, () -> { if (!openConnectors.remove(key)) openConnectors.add(key); init(); }), isFolded ? "Show the fields of this connector." : "Fold this connector away, leaving only its heading.");
             if (isFolded) continue;
             var at = jig.getAsJsonArray("pos");
             JsonObject base = cmd("jigsaw_set", "template", template);
             base.add("pos", at);
             int half = rightW / 2 - 3;
-            tips.on(box(x + 52, y + 14, rightW - 52, str(jig, "name", ""), 80, null, () -> { var c = base.deepCopy(); c.addProperty("name", focusedText()); change(c); }), "Name: the name of this connector. When another piece asks for a connector with this name, this is the one it joins. Enter applies.");
-            var poolBox = box(x + 52, y + 38, rightW - 52, str(jig, "pool", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("pool", focusedText()); change(c); });
+            tips.on(applyBox(x + 52, y + 14, rightW - 52, str(jig, "name", ""), 80, v -> { var c = base.deepCopy(); c.addProperty("name", v); change(c); }), "Name: the name of this connector. When another piece asks for a connector with this name, this is the one it joins. Enter applies.");
+            int linkX = x + rightW - LINK + 2 - THUMB_W - 4;
+            var poolBox = applyBox(x + 52, y + 38, rightW - 52 - LINK - THUMB_W - 4, str(jig, "pool", ""), 100, v -> { var c = base.deepCopy(); c.addProperty("pool", v); change(c); });
             tips.on(poolBox, "Pool: the pool the next piece is chosen from, by chance. minecraft:empty means nothing attaches here. Type to see the loaded pools; a pool that another mod adds can be typed in even though it is not loaded here. Enter applies.");
             suggestSources.put(poolBox, poolIds());
+            var poolLink = button("↗", linkX, y + 38, LINK - 2, 18, () -> followPool(poolBox.getValue())).scale(2f);
+            poolLink.active = canOpen(poolBox.getValue()); // not minecraft:empty, and a pool that is loaded
+            tips.on(poolLink, "Goes to this pool: it is chosen in the pool list, with no element selected.");
             var offered = new ArrayList<String>();
             if (jig.has("offered")) for (var n : jig.getAsJsonArray("offered")) offered.add(n.getAsString());
             if (!offered.contains("minecraft:empty")) offered.add("minecraft:empty");
-            var targetBox = box(x + 52, y + 62, rightW - 52, str(jig, "target", ""), 100, null, () -> { var c = base.deepCopy(); c.addProperty("target", focusedText()); change(c); });
+            int targetW = rightW - 52 - LINK - THUMB_W - 4 - DROP - 2;
+            var targetBox = applyBox(x + 52, y + 62, targetW, str(jig, "target", ""), 100, v -> { var c = base.deepCopy(); c.addProperty("target", v); change(c); });
             tips.on(targetBox, "Target: the name the connector of the next piece must have to join this one. Suggestions are the names the pieces of the pool offer. Enter applies.");
             suggestSources.put(targetBox, offered);
+            var dropdown = button(key.equals(targetMenuKey) ? "▴" : "▾", x + 52 + targetW + 2, y + 62, DROP, 18, () -> { targetMenuKey = key.equals(targetMenuKey) ? null : key; targetMenuScroll = 0; init(); });
+            tips.on(dropdown, "Lists the elements of the pool above, each with its picture, name and path. Choosing one writes the name of its connector in the box.");
+            if (key.equals(targetMenuKey)) {
+                targetMenuX = x; targetMenuY = y + 62 + 20; targetMenuW = rightW; targetMenuButtonX = x + 52 + targetW + 2; targetMenuButtonY = y + 62;
+                targetMenuPool = poolBox.getValue(); targetMenuCurrent = str(jig, "target", "");
+                targetMenuPick = name -> { var c = base.deepCopy(); c.addProperty("target", name); change(c); };
+            }
+            var targetLink = button("↗", linkX, y + 62, LINK - 2, 18, () -> followTarget(poolBox.getValue(), targetBox.getValue())).scale(2f);
+            targetLink.active = canOpen(poolBox.getValue()) && !targetBox.getValue().isBlank();
+            tips.on(targetLink, "Goes to the element of the pool above that has a connector with this name: its pool is chosen in the pool list and the element is selected, so its preview and connectors show.");
             boolean vertical = !jig.has("vertical") || jig.get("vertical").getAsBoolean(); // only a connector that faces up or down has a joint that matters
             boolean rollable = str(jig, "joint", "rollable").equals("rollable");
-            button(rollable ? "Rollable" : "Aligned", x, y + 86, 76, 18, () -> { var c = base.deepCopy(); c.addProperty("joint", rollable ? "aligned" : "rollable"); change(c); }).active = vertical; // greyed out for a connector that faces sideways
-            tips.on(box(x + 114, y + 86, 40, String.valueOf(num(jig, "placement", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "placement", focusedText()); change(c); }), "Placement priority: when several pieces wait to be attached, those from connectors with a higher number are placed first. Enter applies.");
-            tips.on(box(x + 204, y + 86, 40, String.valueOf(num(jig, "selection", 0)), 4, null, () -> { var c = base.deepCopy(); setInt(c, "selection", focusedText()); change(c); }), "Selection priority: among the connectors of a piece, those with a higher number are tried first. Enter applies.");
-            var turns = box(x + 58, y + 110, rightW - 58, str(jig, "final", "minecraft:air"), 120, null, () -> { var c = base.deepCopy(); c.addProperty("final", focusedText()); change(c); });
+            Runnable flipJoint = () -> { var c = base.deepCopy(); c.addProperty("joint", rollable ? "aligned" : "rollable"); change(c); };
+            button(rollable ? "Rollable" : "Aligned", x, y + 86, 76, 18, flipJoint).back(flipJoint).active = vertical; // greyed out for a connector that faces sideways
+            tips.on(applyBox(x + 114, y + 86, 40, String.valueOf(num(jig, "placement", 0)), 4, v -> { var c = base.deepCopy(); setInt(c, "placement", v); change(c); }), "Placement priority: when several pieces wait to be attached, those from connectors with a higher number are placed first. Enter applies.");
+            tips.on(applyBox(x + 204, y + 86, 40, String.valueOf(num(jig, "selection", 0)), 4, v -> { var c = base.deepCopy(); setInt(c, "selection", v); change(c); }), "Selection priority: among the connectors of a piece, those with a higher number are tried first. Enter applies.");
+            var turns = applyBox(x + 58, y + 110, rightW - 58, str(jig, "final", "minecraft:air"), 120, v -> { var c = base.deepCopy(); c.addProperty("final", v); change(c); });
             suggestSources.put(turns, blocks());
             tips.on(turns, "Turns into: the block this connector is replaced with once the structure has grown, such as minecraft:stone_bricks, or minecraft:air to leave a gap. Type to see matching blocks; Enter picks the highlighted one, Enter again applies. A block state may follow in brackets.");
             if (str(jig, "issue", "").endsWith("is not loaded")) {
@@ -426,6 +832,165 @@ final class JigsawEditorScreen extends CraftiumScreen {
                 button("Create pool " + shortName(missing), x, y + 134, rightW, 18, () -> edit("pool_new", "id", missing));
             }
         }
+    }
+
+    /** The index of the connector of the element whose jigsaw block is at this cell, or -1. */
+    private static int jigAt(JsonObject element, int[] cell) {
+        if (cell == null || !element.has("jigsaws")) return -1;
+        var jigsaws = element.getAsJsonArray("jigsaws");
+        for (int i = 0; i < jigsaws.size(); i++) {
+            var pos = jigsaws.get(i).getAsJsonObject().getAsJsonArray("pos");
+            if (pos.get(0).getAsInt() == cell[0] && pos.get(1).getAsInt() == cell[1] && pos.get(2).getAsInt() == cell[2]) return i;
+        }
+        return -1;
+    }
+
+    /** Asks the server for the pools the open connectors point at, so their elements' pictures can be shown; only when the set has changed. */
+    private void askForTargetPools(JsonArray jigsaws, List<Row> rowList) {
+        var wanted = new TreeSet<String>();
+        for (var row : rowList) {
+            if (!row.open()) continue;
+            String pool = str(jigsaws.get(row.index()).getAsJsonObject(), "pool", "").strip();
+            if (!pool.isEmpty() && !pool.equals("minecraft:empty")) wanted.add(pool);
+            if (wanted.size() >= 4) break;
+        }
+        String joined = String.join(",", wanted);
+        if (joined.equals(askedPools)) return;
+        askedPools = joined;
+        edit("target_pools", "pools", joined);
+    }
+
+    /** What the elements of a pool offer for a connector: the names its jigsaws have, as the element lists them. */
+    private record Offer(String template, String name, String path, JsonObject thumb, String connector, boolean matches) {}
+
+    private List<Offer> offers(String pool, String target) {
+        var out = new ArrayList<Offer>();
+        var found = targetPools.get(pool.strip());
+        if (found == null || !found.has("elements")) return out;
+        var wanted = target.isBlank() ? Set.<String>of() : Set.of(target.strip(), "minecraft:" + target.strip(), "craftium:" + target.strip());
+        for (var each : found.getAsJsonArray("elements")) {
+            var element = each.getAsJsonObject();
+            if (!element.has("template") || !element.has("jigsaws")) continue;
+            String connector = "";
+            boolean matches = false;
+            for (var jig : element.getAsJsonArray("jigsaws")) {
+                String name = str(jig.getAsJsonObject(), "name", "");
+                if (connector.isEmpty()) connector = name;
+                if (wanted.contains(name)) { connector = name; matches = true; break; }
+            }
+            if (connector.isEmpty()) continue; // no connector, so nothing could attach to it
+            String path = str(element, "template", "");
+            out.add(new Offer(path, path.substring(path.indexOf(':') + 1).replaceAll(".*/", ""), path, element.has("thumb") ? element.getAsJsonObject("thumb") : null, connector, matches));
+        }
+        return out;
+    }
+
+    /** The picture of the first element of the connector's pool that has a connector with the target's name, in a frame at (x, y). */
+    private void drawTargetThumbnail(Gfx g, int x, int y, String pool, String target) {
+        g.fill(x, y, x + THUMB_W, y + THUMB_H, 0xff2a3441);
+        g.outline(x, y, THUMB_W, THUMB_H, ClientState.options.uiBorder);
+        Offer shown = null;
+        for (var offer : offers(pool, target)) if (offer.matches()) { shown = offer; break; }
+        if (shown == null) { g.centeredText(font, targetPools.containsKey(pool.strip()) ? "no match" : "…", x + THUMB_W / 2, y + THUMB_H / 2 - 4, 0xff7e8fa0); return; }
+        var tex = PoolThumbnails.of(shown.template(), shown.thumb());
+        if (tex != null) g.blit(tex, x + 1, y + 1, 0, 0, THUMB_W - 2, THUMB_H - 2, PoolThumbnails.WIDTH * 2, PoolThumbnails.HEIGHT * 2, PoolThumbnails.WIDTH * 2, PoolThumbnails.HEIGHT * 2, 0xffffffff);
+        else g.centeredText(font, shown.thumb() == null ? "no picture" : "…", x + THUMB_W / 2, y + THUMB_H / 2 - 4, 0xff7e8fa0);
+    }
+
+    private static final int TARGET_MENU_ROW = 38, TARGET_MENU_ROWS = 6;
+
+    private int targetMenuRows(int count) { return Math.max(1, Math.min(Math.min(TARGET_MENU_ROWS, count), (ch - FOOT - targetMenuY - 6) / TARGET_MENU_ROW)); }
+
+    private boolean overTargetMenu(double x, double y) {
+        if (targetMenuKey == null) return false;
+        int count = Math.max(1, offers(targetMenuPool, targetMenuCurrent).size());
+        return x >= targetMenuX && x < targetMenuX + targetMenuW && y >= targetMenuY && y < targetMenuY + targetMenuRows(count) * TARGET_MENU_ROW + 4;
+    }
+
+    /** The open target dropdown: the elements of the pool with their picture, name and path, over everything else. */
+    private void drawTargetMenu(Gfx g, int mx, int my) {
+        if (targetMenuKey == null || modal()) return;
+        var list = offers(targetMenuPool, targetMenuCurrent);
+        int rows = targetMenuRows(Math.max(1, list.size())), h = rows * TARGET_MENU_ROW + 4, x = targetMenuX, y = targetMenuY, w = targetMenuW;
+        boolean bar = list.size() > rows;
+        targetMenuScroll = Math.clamp(targetMenuScroll, 0, Math.max(0, (list.size() - rows) * TARGET_MENU_ROW));
+        g.fill(x, y, x + w, y + h, 0xf0101923);
+        g.outline(x, y, w, h, ClientState.options.uiAccent);
+        int rowW = w - 4 - (bar ? Scrollbars.WIDTH + 2 : 0);
+        g.enableScissor(x + 2, y + 2, x + w - 2, y + 2 + rows * TARGET_MENU_ROW);
+        if (list.isEmpty()) g.text(font, targetPools.containsKey(targetMenuPool.strip()) ? "No element of this pool has a connector." : "Working out the elements…", x + 8, y + 8, MUTED, false);
+        for (int i = 0; i < list.size(); i++) {
+            int ry = y + 2 + i * TARGET_MENU_ROW - (int) targetMenuScroll;
+            if (ry + TARGET_MENU_ROW < y + 2 || ry > y + 2 + rows * TARGET_MENU_ROW) continue;
+            var offer = list.get(i);
+            boolean hover = mx >= x + 2 && mx < x + 2 + rowW && my >= Math.max(ry, y + 2) && my < Math.min(ry + TARGET_MENU_ROW, y + 2 + rows * TARGET_MENU_ROW);
+            g.fill(x + 2, ry, x + 2 + rowW, ry + TARGET_MENU_ROW - 2, offer.matches() ? 0xff315473 : hover ? 0xff2a3d55 : CARD);
+            int th = TARGET_MENU_ROW - 8, tw = th * PoolThumbnails.WIDTH / PoolThumbnails.HEIGHT; // the picture's own proportions
+            g.fill(x + 6, ry + 3, x + 6 + tw, ry + 3 + th, 0xff2a3441);
+            var tex = PoolThumbnails.of(offer.template(), offer.thumb());
+            if (tex != null) g.blit(tex, x + 6, ry + 3, 0, 0, tw, th, PoolThumbnails.WIDTH * 2, PoolThumbnails.HEIGHT * 2, PoolThumbnails.WIDTH * 2, PoolThumbnails.HEIGHT * 2, 0xffffffff);
+            int room = rowW - tw - 18;
+            g.text(font, font.plainSubstrByWidth(offer.name(), room), x + 6 + tw + 6, ry + 7, TEXT, false);
+            g.text(font, font.plainSubstrByWidth(offer.path(), room), x + 6 + tw + 6, ry + 19, MUTED, false);
+        }
+        g.disableScissor();
+        if (bar) Scrollbars.draw(g, x + w - Scrollbars.WIDTH - 2, y + 2, rows * TARGET_MENU_ROW, targetMenuScroll, list.size() * TARGET_MENU_ROW, draggingTargetBar);
+    }
+
+    /** A click while the target dropdown is open: a row writes that element's connector name as the target; a click elsewhere (not on its own button) closes it. */
+    private boolean clickTargetMenu(double x, double y) {
+        var list = offers(targetMenuPool, targetMenuCurrent);
+        int rows = targetMenuRows(Math.max(1, list.size()));
+        if (overTargetMenu(x, y)) {
+            int top = targetMenuY + 2;
+            if (list.size() > rows && Scrollbars.hit(x, y, targetMenuX + targetMenuW - Scrollbars.WIDTH - 2, top, rows * TARGET_MENU_ROW)) { draggingTargetBar = true; targetMenuScroll = Scrollbars.scrollAt(y, top, rows * TARGET_MENU_ROW, list.size() * TARGET_MENU_ROW); return true; }
+            int i = (int) ((y - top + targetMenuScroll) / TARGET_MENU_ROW);
+            if (y >= top && y < top + rows * TARGET_MENU_ROW && i >= 0 && i < list.size()) {
+                var pick = targetMenuPick;
+                String name = list.get(i).connector();
+                targetMenuKey = null;
+                if (pick != null) pick.accept(name);
+            }
+            return true;
+        }
+        boolean onButton = x >= targetMenuButtonX && x < targetMenuButtonX + DROP && y >= targetMenuButtonY && y < targetMenuButtonY + 18;
+        if (!onButton) { targetMenuKey = null; init(); }
+        return false;
+    }
+
+    private void setView(boolean single) {
+        if (singleView == single) return;
+        singleView = single;
+        jigPage = 0;
+        init();
+    }
+
+    /** A click on a jigsaw block in the preview: its connector is picked and, in List, unfolded and its page opened; in Single it fills the window. */
+    private void pickJigsawInPreview(double x, double y) {
+        var element = element(selected);
+        if (element == null || !element.has("jigsaws") || !preview.hasScene()) return;
+        int index = jigAt(element, preview.cellAt(x, y, previewX(), previewY(), previewW, previewH()));
+        if (index < 0) return;
+        var jigsaws = element.getAsJsonArray("jigsaws");
+        String template = str(element, "template", "");
+        var jig = jigsaws.get(index).getAsJsonObject();
+        pickedJig = foldKey(template, jig);
+        if (!singleView) {
+            openConnectors.add(pickedJig); // opened, so its fields show
+            var pages = jigPages(jigsaws, template);
+            for (int page = 0; page < pages.size(); page++) if (index >= pages.get(page)[0] && index < pages.get(page)[1]) jigPage = page;
+        }
+        init();
+    }
+
+    /** For the game test: a point of the preview where the jigsaw block of connector {@code index} can be seen, as {x, y}, or null. */
+    double[] jigsawPoint(int index) {
+        var element = element(selected);
+        if (element == null || !preview.hasScene()) return null;
+        for (int y = previewY(); y < previewY() + previewH(); y += 2)
+            for (int x = previewX(); x < previewX() + previewW; x += 2)
+                if (jigAt(element, preview.cellAt(x, y, previewX(), previewY(), previewW, previewH())) == index) return new double[]{x, y};
+        return null;
     }
 
     private void setInt(JsonObject json, String key, String text) {
@@ -637,6 +1202,15 @@ final class JigsawEditorScreen extends CraftiumScreen {
     @Override public void tick() {
         if (awaitTicks > 0) awaitTicks--;
         followSuggestBox();
+        if (usedView && pool() != null && !poolId().equals(usedFor) && !poolId().equals(usedAsked)) { usedAsked = poolId(); edit("used_by"); }
+        if (searchChanged) { // the cards are widgets: they are made again for the new list, and the search box keeps the keyboard
+            searchChanged = false;
+            init();
+            if (searchBox != null) { setFocused(searchBox); searchBox.setFocused(true); searchBox.moveCursorToEnd(false); }
+        }
+        var nowFocused = getFocused() instanceof EditBox e && applied.containsKey(e) ? e : null;
+        if (lastFocusedApply != null && lastFocusedApply != nowFocused) applyIfChanged(lastFocusedApply);
+        lastFocusedApply = nowFocused;
         if (ClientState.jigsawModelVersion != seenVersion) {
             init();
             if (awaitTicks > 0 && model.has("retarget")) { awaitTicks = 0; retargetPrompt = true; init(); }
@@ -671,9 +1245,6 @@ final class JigsawEditorScreen extends CraftiumScreen {
         return out;
     }
 
-    private int listTop() { return TOP + 24; }
-    private int listBottom() { return ch - FOOT - 70; }
-
     @Override protected void draw(Gfx g, int mx, int my, float delta) {
         PoolThumbnails.newFrame();
         g.fill(0, 0, this.width, this.height, 0xf2101923);
@@ -684,49 +1255,57 @@ final class JigsawEditorScreen extends CraftiumScreen {
         my = smy;
         g.text(font, "Jigsaw pools", SIDE, 12, 0xffb5dcfc, false);
         String message = !localMessage.isEmpty() ? localMessage : str(model, "message", "").isEmpty() ? ClientState.status.message() : str(model, "message", "");
-        g.text(font, font.plainSubstrByWidth(message, cw - 2 * SIDE - 470), SIDE, 28, 0xffffdca8, false);
+        g.text(font, font.plainSubstrByWidth(message, cw - 2 * SIDE - 470 - NAV_W), SIDE + NAV_W, 28, 0xffffdca8, false);
         int waiting = unappliedCount();
         if (waiting > 0) { String note = waiting + (waiting == 1 ? " unapplied change" : " unapplied changes"); g.text(font, note, cw - SIDE - font.width(note), 34, WARN, false); }
-        if (model.has("registryError")) g.text(font, font.plainSubstrByWidth("A pool file has a problem: " + str(model, "registryError", ""), cw - 2 * SIDE - 200), SIDE, 38, ERROR, false);
+        if (model.has("registryError")) g.text(font, font.plainSubstrByWidth("A pool file has a problem: " + str(model, "registryError", ""), cw - 2 * SIDE - 200 - NAV_W), SIDE + NAV_W, 38, ERROR, false);
         if (retargetPrompt) { drawRetargetPrompt(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
         if (confirmLeave) { drawLeavePrompt(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
         if (dialogMode != null) { drawDialog(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
         if (helpOpen) { drawHelp(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
         if (adding) { drawOverlay(g); drawWidgets(g, mx, my, delta); tips.draw(g, font, mx, my, cw, ch); g.pose().popMatrix(); return; }
-        drawPools(g, mx, my);
-        if (pool() == null) g.text(font, "Pick a pool on the left, or make a new one.", centreX, TOP + 20, MUTED, false);
-        else { drawCentre(g); if (graph) drawGraph(g, mx, my); else drawCards(g, mx, my); }
-        drawConnections(g);
+        if (pool() == null) g.text(font, "Pick a pool from the list above, or make a new one.", centreX, TOP + 20, MUTED, false);
+        else { drawCentre(g); if (graph) drawGraph(g, mx, my); else if (usedView) drawUsed(g, mx, my); else drawCards(g, mx, my); }
+        drawConnections(g, mx, my);
+        drawDividers(g, mx, my);
         drawWidgets(g, mx, my, delta);
         drawSuggestions(g, mx, my);
+        if (poolBox != null && poolBox.getValue().isEmpty() && !poolBox.isFocused()) g.text(font, font.plainSubstrByWidth(pool() == null ? "Pick a pool · " + (model.has("pools") ? model.getAsJsonArray("pools").size() : 0) + " pools" : poolId(), pickW - 10), centreX + 5, TOP, pool() == null ? 0xff5f7186 : TEXT, false);
+        drawPoolMenu(g, mx, my);
+        drawTargetMenu(g, mx, my);
         tips.draw(g, font, mx, my, cw, ch);
-        if (filter.isEmpty()) g.text(font, "filter " + (model.has("pools") ? model.getAsJsonArray("pools").size() : 0) + " pools · @namespace", SIDE + 5, TOP + 5, 0xff5f7186, false);
         g.pose().popMatrix();
     }
 
-    private void drawPools(Gfx g, int mx, int my) {
-        g.fill(SIDE - 4, TOP - 4, SIDE + leftW + 4, ch - FOOT + 2, PANEL);
-        g.enableScissor(SIDE, listTop(), SIDE + leftW, listBottom());
+    /** The open dropdown: the pools that fit what is typed, over everything else, with what each pool is (craftium's, another pack's, the game's) and its problems. */
+    private void drawPoolMenu(Gfx g, int mx, int my) {
+        if (!poolMenuOpen || modal()) return;
         var pools = visiblePools();
-        int rowW = leftW - Scrollbars.WIDTH - 3; // the bar has its own strip
+        int x = centreX, y = menuY(), w = pickW + 24, rows = menuRows(pools.size()), h = menuH(pools.size());
+        boolean bar = pools.size() > rows;
+        poolScroll = Math.clamp(poolScroll, 0, Math.max(0, (pools.size() - rows) * LIST_ROW));
+        g.fill(x, y, x + w, y + h, 0xf0101923);
+        g.outline(x, y, w, h, ClientState.options.uiAccent);
+        int rowW = w - 4 - (bar ? Scrollbars.WIDTH + 2 : 0);
+        g.enableScissor(x + 2, y + 2, x + w - 2, y + 2 + rows * LIST_ROW);
+        if (pools.isEmpty()) g.text(font, "No pool matches.", x + 8, y + 7, MUTED, false);
         for (int i = 0; i < pools.size(); i++) {
-            int y = listTop() + i * LIST_ROW - (int) poolScroll;
-            if (y + LIST_ROW < listTop() || y > listBottom()) continue;
+            int ry = y + 2 + i * LIST_ROW - (int) poolScroll;
+            if (ry + LIST_ROW < y + 2 || ry > y + 2 + rows * LIST_ROW) continue;
             var p = pools.get(i);
-            boolean current = p.get("id").getAsString().equals(poolId()), hover = mx >= SIDE && mx < SIDE + rowW && my >= Math.max(y, listTop()) && my < Math.min(y + LIST_ROW, listBottom());
-            g.fill(SIDE, y, SIDE + rowW, y + LIST_ROW - 2, current ? 0xff315473 : hover ? 0xff2a3d55 : CARD);
+            boolean current = p.get("id").getAsString().equals(poolId()), hover = mx >= x + 2 && mx < x + 2 + rowW && my >= Math.max(ry, y + 2) && my < Math.min(ry + LIST_ROW, y + 2 + rows * LIST_ROW);
+            g.fill(x + 2, ry, x + 2 + rowW, ry + LIST_ROW - 2, current ? 0xff315473 : hover ? 0xff2a3d55 : CARD);
             String source = str(p, "source", "");
-            g.fill(SIDE, y, SIDE + 3, y + LIST_ROW - 2, source.equals("craftium") ? OK : source.equals("pack") ? 0xff8fd3ff : 0xff5a6b7d);
+            g.fill(x + 2, ry, x + 5, ry + LIST_ROW - 2, source.equals("craftium") ? OK : source.equals("pack") ? 0xff8fd3ff : 0xff5a6b7d);
             int errors = num(p, "errors", 0), warnings = num(p, "warnings", 0);
             String badge = errors > 0 ? errors + "!" : warnings > 0 ? warnings + "?" : "";
-            int room = rowW - 12 - (badge.isEmpty() ? 0 : font.width(badge) + 6);
-            g.text(font, font.plainSubstrByWidth(shortName(p.get("id").getAsString()), room), SIDE + 7, y + 5, TEXT, false);
-            if (!badge.isEmpty()) g.text(font, badge, SIDE + rowW - font.width(badge) - 4, y + 5, errors > 0 ? ERROR : WARN, false);
+            int room = rowW - 14 - (badge.isEmpty() ? 0 : font.width(badge) + 6);
+            g.text(font, font.plainSubstrByWidth(shortName(p.get("id").getAsString()), room), x + 9, ry + 5, TEXT, false);
+            if (!badge.isEmpty()) g.text(font, badge, x + 2 + rowW - font.width(badge) - 4, ry + 5, errors > 0 ? ERROR : WARN, false);
         }
         g.disableScissor();
-        Scrollbars.draw(g, SIDE + leftW - Scrollbars.WIDTH, listTop(), listBottom() - listTop(), poolScroll, pools.size() * LIST_ROW, draggingPoolBar);
-        int ly = ch - FOOT - 62;
-        int lx = SIDE;
+        if (bar) Scrollbars.draw(g, x + w - Scrollbars.WIDTH - 2, y + 2, rows * LIST_ROW, poolScroll, pools.size() * LIST_ROW, draggingPoolBar);
+        int lx = x + 6, ly = y + h - 12;
         for (var key : new String[][]{{"craftium", "" + OK}, {"pack", "" + 0xff8fd3ff}, {"vanilla", "" + 0xff5a6b7d}}) {
             g.fill(lx, ly + 1, lx + 6, ly + 8, Integer.parseInt(key[1]));
             g.text(font, key[0], lx + 9, ly, 0xff6f8296, false);
@@ -734,51 +1313,59 @@ final class JigsawEditorScreen extends CraftiumScreen {
         }
     }
 
+    private boolean overPoolMenu(double x, double y) {
+        if (!poolMenuOpen) return false;
+        int count = visiblePools().size();
+        return x >= centreX && x < centreX + pickW + 24 && y >= menuY() && y < menuY() + menuH(count);
+    }
+
     private void drawCentre(Gfx g) {
         var p = pool();
         g.fill(centreX - 4, TOP - 4, centreX + centreW + 4, ch - FOOT + 2, PANEL);
         boolean ours = p.has("overridden") && p.get("overridden").getAsBoolean();
         String tag = ours ? "in the craftium pack" : "another pack: an edit overrides it here";
-        g.text(font, tag, centreX + centreW - font.width(tag), TOP, ours ? OK : MUTED, false);
-        g.text(font, font.plainSubstrByWidth(p.get("id").getAsString(), centreW - font.width(tag) - 12), centreX, TOP, 0xffffffff, false);
+        int tagX = centreX + pickW + 24 + 6 + buttonsW() + 12;
+        if (tagX + font.width(tag) <= centreX + centreW) g.text(font, tag, centreX + centreW - font.width(tag), TOP + 1, ours ? OK : MUTED, false);
         g.text(font, "Fallback", centreX + 2, TOP + 21, MUTED, false);
         g.text(font, "Description", centreX + 2, TOP + 45, MUTED, false);
-        if (!graph) {
-            int pages = Math.max(1, (elements().size() + perPage() - 1) / perPage());
+        if (!graph && !usedView) {
+            int pages = Math.max(1, (shown().size() + perPage() - 1) / perPage());
             String label = (page + 1) + "/" + pages;
             g.text(font, label, centreX + centreW - 48 - font.width(label) / 2, TOP + 16 + 50 + 6, MUTED, false);
-            String count = elements().size() + (elements().size() == 1 ? " element" : " elements");
+            int total = elements().size(), matching = shown().size();
+            String count = (matching == total ? "" + total : matching + " of " + total) + (total == 1 ? " element" : " elements");
             g.text(font, count, centreX + centreW - 150 - font.width(count), TOP + 16 + 50 + 6, MUTED, false);
         }
     }
 
     private void drawCards(Gfx g, int mx, int my) {
         var list = elements();
+        var order = shown();
         int first = page * perPage();
         if (list.size() == 0) {
             var rows = font.split(Component.literal("This pool has no elements yet. A pool is a list of pieces that a connector can pick from. Press + Add element below to add a template (or turn your selection into one), a feature such as a tree, or an empty slot. Press ? at the top for a short guide."), centreW - 8);
             for (int i = 0; i < rows.size(); i++) g.text(font, rows.get(i), centreX, cardsTop() + 6 + i * 10, MUTED, false);
         }
         for (int slot = 0; slot < perPage() && first + slot < list.size(); slot++) {
-            int index = first + slot, x = centreX, y = cardsTop() + slot * (CARD_H + CARD_GAP);
+            int index = order.get(first + slot), x = centreX, y = cardsTop() + slot * (CARD_H + CARD_GAP);
             var element = list.get(index).getAsJsonObject();
             boolean current = index == selected;
             g.fill(x, y, x + centreW, y + CARD_H, current ? 0xff2b4766 : CARD);
             g.outline(x, y, centreW, CARD_H, current ? ClientState.options.uiAccent : ClientState.options.uiBorder);
             g.fill(x + 6, y + 6, x + 6 + PoolThumbnails.WIDTH, y + 6 + PoolThumbnails.HEIGHT, 0xff2a3441);
             var tex = PoolThumbnails.of(str(element, "template", "?"), element.has("thumb") ? element.getAsJsonObject("thumb") : null);
-            if (tex != null) g.blit(tex, x + 6, y + 6, 0, 0, PoolThumbnails.WIDTH, PoolThumbnails.HEIGHT, PoolThumbnails.WIDTH, PoolThumbnails.HEIGHT, PoolThumbnails.WIDTH, PoolThumbnails.HEIGHT, 0xffffffff);
+            if (tex != null) g.blit(tex, x + 6, y + 6, 0, 0, PoolThumbnails.WIDTH, PoolThumbnails.HEIGHT, PoolThumbnails.WIDTH * 2, PoolThumbnails.HEIGHT * 2, PoolThumbnails.WIDTH * 2, PoolThumbnails.HEIGHT * 2, 0xffffffff);
             else g.centeredText(font, noPicture(element), x + 6 + PoolThumbnails.WIDTH / 2, y + 6 + PoolThumbnails.HEIGHT / 2 - 4, element.has("missing") ? ERROR : 0xff7e8fa0);
             int tx = x + 6 + PoolThumbnails.WIDTH + 8, w = centreW - (tx - x) - 8;
             int jigsaws = element.has("jigsaws") ? element.getAsJsonArray("jigsaws").size() : 0, issues = issues(element);
-            String verdict = issues > 0 ? issues + (issues == 1 ? " problem" : " problems") : jigsaws == 0 ? (element.has("template") ? "no connectors" : "") : jigsaws + (jigsaws == 1 ? " connector, ok" : " connectors, ok");
+            String verdict = element.has("missing") ? "template missing" : issues > 0 ? issues + (issues == 1 ? " problem" : " problems") : jigsaws == 0 ? (element.has("template") ? "no connectors" : "") : jigsaws + (jigsaws == 1 ? " connector, ok" : " connectors, ok");
             int verdictW = font.width(verdict) + 6;
-            if (!verdict.isEmpty()) g.text(font, verdict, x + centreW - 8 - font.width(verdict), y + 6, issues > 0 ? ERROR : jigsaws == 0 ? MUTED : OK, false);
-            String title = element.has("template") ? str(element, "template", "").replaceAll("^.*/", "") : str(element, "type", "?") + (element.has("feature") ? " " + shortName(str(element, "feature", "")) : "") + (element.has("count") ? " of " + num(element, "count", 0) : "");
-            g.text(font, font.plainSubstrByWidth((index + 1) + ". " + title, w - verdictW), tx, y + 6, 0xffffffff, false);
-            g.text(font, font.plainSubstrByWidth(str(element, "type", "") + (element.has("template") ? " · " + shortName(str(element, "template", "")) : ""), w), tx, y + 16, MUTED, false);
+            if (!verdict.isEmpty()) g.text(font, verdict, x + centreW - 8 - font.width(verdict), y + 6, element.has("missing") || issues > 0 ? ERROR : jigsaws == 0 ? MUTED : OK, false);
+            g.text(font, font.plainSubstrByWidth((index + 1) + ". " + title(element), w - verdictW), tx, y + 6, 0xffffffff, false);
             var size = element.has("size") ? element.getAsJsonArray("size") : null;
+            String sub = str(element, "type", "") + (element.has("template") ? " · " + shortName(str(element, "template", "")) : "") + "";
             if (size != null) g.text(font, size.get(0) + " × " + size.get(1) + " × " + size.get(2) + " blocks", x + 6, y + 6 + PoolThumbnails.HEIGHT + 4, MUTED, false);
+            g.text(font, font.plainSubstrByWidth(sub, w), tx, y + 16, MUTED, false);
         }
     }
 
@@ -798,31 +1385,74 @@ final class JigsawEditorScreen extends CraftiumScreen {
         return n;
     }
 
-    private void drawConnections(Gfx g) {
-        int x = cw - SIDE - rightW;
+    /** The middle and right columns: the preview of the selected element and its connectors. Pointing at a connector lights up its jigsaw block in the preview, and pointing at a jigsaw block there lights up its connector; a click on the block picks it. */
+    private void drawConnections(Gfx g, int mx, int my) {
+        int x = connX(), px = previewX();
+        g.fill(px - 4, TOP - 4, px + previewW + 4, ch - FOOT + 2, PANEL);
         g.fill(x - 4, TOP - 4, x + rightW + 4, ch - FOOT + 2, PANEL);
         var element = element(selected);
-        g.text(font, "Connections", x, TOP + 4, 0xffb5dcfc, false);
-        if (element == null || !element.has("jigsaws")) { g.text(font, "Select an element to see its connectors.", x, TOP + 24, MUTED, false); return; }
+        // the jigsaw block under the pointer in the preview lights its entry in the list, as an entry lights its block in the preview
+        previewJig = -1;
+        if (element != null && element.has("jigsaws") && !modal() && !preview.dragging() && preview.hasScene() && overPreview(mx, my))
+            previewJig = jigAt(element, preview.cellAt(mx, my, px, previewY(), previewW, previewH()));
+        int[] hover = drawConnectorList(g, mx, my, x, element);
+        drawPreview(g, px, element, hover);
+    }
+
+    private void drawPreview(Gfx g, int x, JsonObject element, int[] hover) {
+        int y = previewY();
+        g.text(font, "Preview", x, TOP + 4, 0xffb5dcfc, false);
+        if (element == null) { preview.show(null, null); g.fill(x, y, x + previewW, y + previewH(), 0xff1b2531); g.centeredText(font, "Select an element.", x + previewW / 2, y + previewH() / 2 - 4, MUTED); return; }
+        var thumb = element.has("thumb") ? element.getAsJsonObject("thumb") : null;
+        preview.show(str(element, "template", "?"), thumb);
+        preview.highlight(hover);
+        g.enableScissor(x, y, x + previewW, y + previewH());
+        if (!preview.draw(g, x, y, previewW, previewH())) {
+            g.fill(x, y, x + previewW, y + previewH(), 0xff1b2531);
+            g.centeredText(font, noPicture(element), x + previewW / 2, y + previewH() / 2 - 4, element.has("missing") ? ERROR : 0xff7e8fa0);
+        } else g.text(font, "drag: turn · middle drag: pan · wheel: zoom", x + 4, y + previewH() - 11, 0xff7e8fa0, false);
+        g.disableScissor();
+        g.outline(x, y, previewW, previewH(), ClientState.options.uiBorder);
+        var size = element.has("size") ? element.getAsJsonArray("size") : null;
+        if (size != null) { String text = size.get(0) + " × " + size.get(1) + " × " + size.get(2) + " blocks"; g.text(font, text, x + previewW - font.width(text), TOP + 4, MUTED, false); }
+    }
+
+    /** Draws the connectors and answers the place of the jigsaw block of the one under the pointer, or null. */
+    private int[] drawConnectorList(Gfx g, int mx, int my, int x, JsonObject element) {
+        int top = connY();
+        int[] hover = null;
+        g.text(font, "Connections", x, top + 4, 0xffb5dcfc, false);
+        if (element == null || !element.has("jigsaws")) { g.text(font, "Select an element to see its connectors.", x, top + 24, MUTED, false); return null; }
         var jigsaws = element.getAsJsonArray("jigsaws");
-        g.text(font, font.plainSubstrByWidth(str(element, "template", ""), rightW), x, TOP + 18, TEXT, false);
-        g.text(font, font.plainSubstrByWidth("Enter applies what you typed.", rightW), x, TOP + 30, 0xff6f8296, false);
-        if (jigsaws.size() == 0) { g.text(font, "This template has no connectors, so nothing grows from it.", x, TOP + 52, MUTED, false); return; }
+        g.text(font, font.plainSubstrByWidth(str(element, "template", ""), rightW), x, top + 42, TEXT, false);
+        g.text(font, font.plainSubstrByWidth("Enter or leaving a box applies what you typed.", rightW), x, top + 54, 0xff6f8296, false);
+        if (jigsaws.size() == 0) { g.text(font, "This template has no connectors, so nothing grows from it.", x, top + CONN_HEAD, MUTED, false); return null; }
         String template = str(element, "template", "");
-        var pageList = jigPages(jigsaws, template);
-        int pages = pageList.size();
-        jigPage = Math.clamp(jigPage, 0, pages - 1);
-        int cursor = TOP + 52;
-        for (int index = pageList.get(jigPage)[0]; index < pageList.get(jigPage)[1]; index++) {
+        int pages = jigPages(jigsaws, template).size();
+        var rowList = rows(jigsaws, template);
+        // lit in the preview when nothing else is: the entry the pointer is over in the preview, or else the one picked there
+        for (int i = 0; i < jigsaws.size(); i++) {
+            var other = jigsaws.get(i).getAsJsonObject();
+            if (i == previewJig || (previewJig < 0 && foldKey(template, other).equals(pickedJig))) { var pos = other.getAsJsonArray("pos"); hover = new int[]{pos.get(0).getAsInt(), pos.get(1).getAsInt(), pos.get(2).getAsInt()}; break; }
+        }
+        for (var row : rowList) {
+            int index = row.index();
             var jig = jigsaws.get(index).getAsJsonObject();
-            boolean isFolded = foldedConnectors.contains(foldKey(template, jig));
-            int y = cursor;
-            cursor += isFolded ? FOLDED_H : ROW_H;
+            boolean isFolded = !row.open();
+            int y = row.y();
             var at = jig.getAsJsonArray("pos");
             String issue = str(jig, "issue", "");
             int fits = num(jig, "fits", -1);
             boolean notLoaded = issue.endsWith("is not loaded"); // fine when another mod adds the pool
-            g.fill(x - 2, y - 2, x + rightW + 2, y + (isFolded ? FOLDED_H - 6 : ROW_H - 8), issue.isEmpty() ? 0x40223247 : notLoaded ? 0x40ffc857 : 0x40ff5a4d);
+            int rowBottom = y + (isFolded ? FOLDED_H - 6 : ROW_H - 8);
+            int headingBottom = y + FOLDED_H - 6; // the heading, open or folded
+            boolean pointed = (mx >= x - 2 && mx < x + rightW + 2 && my >= y - 2 && my < headingBottom) || index == previewJig;
+            // the whole entry lights its block up in the preview, but only its heading takes the hover look
+            if (mx >= x - 2 && mx < x + rightW + 2 && my >= y - 2 && my < rowBottom) hover = new int[]{at.get(0).getAsInt(), at.get(1).getAsInt(), at.get(2).getAsInt()};
+            if (row.window()) g.outline(x - 3, y - 3, rightW + 6, rowBottom - y + 6, ClientState.options.uiAccent);
+            else if (foldKey(template, jig).equals(pickedJig)) g.outline(x - 2, y - 2, rightW + 4, headingBottom - y + 2, ClientState.options.uiAccent);
+            g.fill(x - 2, y - 2, x + rightW + 2, rowBottom, issue.isEmpty() ? 0x40223247 : notLoaded ? 0x40ffc857 : 0x40ff5a4d);
+            if (pointed) { g.fill(x - 2, y - 2, x + rightW + 2, headingBottom, ClientState.options.hoverColor & 0xffffff | 0x58000000); g.outline(x - 2, y - 2, rightW + 4, headingBottom - y + 2, ClientState.options.hoverColor); }
             g.text(font, "#" + (index + 1) + " at " + at.get(0) + " " + at.get(1) + " " + at.get(2), x + 22, y + 2, MUTED, false);
             String verdict = notLoaded ? issue + " (fine if a mod adds it)" : !issue.isEmpty() ? issue : fits < 0 ? "ends here (empty pool)" : "meets " + fits + (fits == 1 ? " element" : " elements");
             g.text(font, font.plainSubstrByWidth(verdict, rightW - 130), x + rightW - 4 - Math.min(font.width(verdict), rightW - 130), y + 2, notLoaded ? WARN : !issue.isEmpty() ? ERROR : fits < 0 ? MUTED : OK, false);
@@ -830,11 +1460,14 @@ final class JigsawEditorScreen extends CraftiumScreen {
             g.text(font, "Name", x, y + 18, MUTED, false);
             g.text(font, "Pool", x, y + 42, MUTED, false);
             g.text(font, "Target", x, y + 66, MUTED, false);
+            drawTargetThumbnail(g, x + rightW - THUMB_W, y + 38, str(jig, "pool", ""), str(jig, "target", ""));
             g.text(font, "Turns into", x, y + 114, MUTED, false);
             g.text(font, "place", x + 82, y + 90, MUTED, false);
             g.text(font, "select", x + 160, y + 90, MUTED, false);
         }
-        g.text(font, (jigPage + 1) + "/" + pages, x + rightW - 62 - font.width((jigPage + 1) + "/" + pages), TOP + 4, MUTED, false);
+        if (singleView) g.text(font, font.plainSubstrByWidth("Click a jigsaw block in the preview to change this.", rightW), x, top + CONN_HEAD + ROW_H + 2, 0xff6f8296, false);
+        if (!singleView) g.text(font, (jigPage + 1) + "/" + pages, x + rightW - 62 - font.width((jigPage + 1) + "/" + pages), top + 4, MUTED, false);
+        return hover;
     }
 
     private void drawOverlay(Gfx g) {
@@ -944,7 +1577,30 @@ final class JigsawEditorScreen extends CraftiumScreen {
         init();
     }
 
+    /** Opens the window that names a Bedrock pack made from the open pool, and asks the server what the pack would hold and lose. */
+    private void openBedrock() {
+        if (poolId().isEmpty()) return;
+        dialogMode = "bedrock_pack";
+        dialogText = dev.craftium.core.BedrockPack.defaultName(poolId());
+        localMessage = "";
+        edit("bedrock_plan", "pool", poolId(), "name", dialogText);
+        init();
+    }
+
+    private int bedrockHeight() { return Math.min(ch - 40, 330); }
+
     private void dialogButtons() {
+        if ("bedrock_pack".equals(dialogMode)) {
+            int w = Math.min(520, cw - 40), x = (cw - w) / 2, h = bedrockHeight(), y = Math.max(20, (ch - h) / 2);
+            var field = box(x + 10, y + 36, w - 20, dialogText, 80, v -> dialogText = v, this::confirmDialog);
+            setFocused(field);
+            field.setFocused(true);
+            var bedrock = model.has("bedrock") ? model.getAsJsonObject("bedrock") : null;
+            var export = button("Export…", x + 10, y + h - 32, 120, 22, this::confirmDialog);
+            export.active = bedrock != null && !(bedrock.has("tooBig") && bedrock.get("tooBig").getAsBoolean());
+            button("Cancel", x + 136, y + h - 32, 90, 22, () -> { dialogMode = null; init(); });
+            return;
+        }
         int w = Math.min(420, cw - 40), x = (cw - w) / 2, y = Math.max(60, ch / 2 - 70);
         var field = box(x + 10, y + 56, w - 20, dialogText, 120, v -> dialogText = v, this::confirmDialog);
         setFocused(field);
@@ -960,13 +1616,64 @@ final class JigsawEditorScreen extends CraftiumScreen {
         String mode = dialogMode;
         dialogMode = null;
         switch (mode) {
+            case "bedrock_pack" -> {
+                String pool = poolId();
+                // the save dialog first (it starts in Documents), then the server builds the pack and sends it to the path that was chosen
+                ClientBedrockPack.choose(dev.craftium.core.BedrockPack.fileName(text), path -> { ClientBedrockPack.expect(path); edit("bedrock_export", "pool", pool, "name", text); });
+                init();
+            }
             case "pool_new" -> edit("pool_new", "id", text);
             case "pool_copy" -> edit("pool_copy", "from", poolId(), "to", text);
             default -> edit("pool_rename", "from", poolId(), "to", text);
         }
     }
 
+    private void drawBedrockDialog(Gfx g) {
+        int w = Math.min(520, cw - 40), x = (cw - w) / 2, h = bedrockHeight(), y = Math.max(20, (ch - h) / 2);
+        g.fill(0, 0, cw, ch, 0xaa000000);
+        g.fill(x, y, x + w, y + h, 0xff172330);
+        g.outline(x, y, w, h, ClientState.options.uiAccent);
+        g.text(font, "Export Bedrock pack", x + 10, y + 10, 0xffb5dcfc, false);
+        g.text(font, "Pack name", x + 10, y + 25, MUTED, false);
+        int line = y + 62, bottom = y + h - 40;
+        var bedrock = model.has("bedrock") ? model.getAsJsonObject("bedrock") : null;
+        if (bedrock == null) {
+            String say = localMessage.isEmpty() ? "Working out what the pack holds…" : localMessage;
+            g.text(font, say, x + 10, line, localMessage.isEmpty() ? MUTED : ERROR, false);
+        } else {
+            String structures = num(bedrock, "structures", 0) > 0 ? ", " + num(bedrock, "structures", 0) + (num(bedrock, "structures", 0) == 1 ? " structure" : " structures") : "";
+            String head = shortName(str(bedrock, "pool", "")) + " and everything it leads to: " + num(bedrock, "pools", 0) + (num(bedrock, "pools", 0) == 1 ? " pool, " : " pools, ")
+                    + num(bedrock, "pieces", 0) + (num(bedrock, "pieces", 0) == 1 ? " piece" : " pieces") + structures;
+            for (var row : font.split(Component.literal(head), w - 20)) { g.text(font, row, x + 10, line, TEXT, false); line += 10; }
+            boolean tooBig = bedrock.has("tooBig") && bedrock.get("tooBig").getAsBoolean();
+            int kib = (num(bedrock, "bytes", 0) + 1023) / 1024;
+            g.text(font, kib + " KiB" + (tooBig ? " is over the 1,024 KiB the game can send you: export a pool that leads to fewer or smaller pieces" : ""), x + 10, line, tooBig ? ERROR : MUTED, false);
+            line += 14;
+            int lost = num(bedrock, "lost", 0), changed = num(bedrock, "changed", 0), check = num(bedrock, "check", 0);
+            g.text(font, (lost + changed + check == 0 ? "Nothing is lost, changed or left unchecked." : "Left out: " + lost + "   Changed: " + changed + "   To check in Bedrock: " + check), x + 10, line, lost > 0 ? WARN : TEXT, false);
+            line += 14;
+            if (bedrock.has("notes")) for (var item : bedrock.getAsJsonArray("notes")) {
+                if (line > bottom - 10) break;
+                var note = item.getAsJsonObject();
+                String kind = str(note, "kind", "");
+                int colour = kind.equals("LOST") ? WARN : kind.equals("CHANGED") ? TEXT : MUTED;
+                String text = (kind.equals("LOST") ? "Left out: " : kind.equals("CHANGED") ? "Changed: " : "Check: ") + str(note, "text", "");
+                for (var row : font.split(Component.literal(text), w - 20)) {
+                    if (line > bottom - 10) break;
+                    g.text(font, row, x + 10, line, colour, false);
+                    line += 10;
+                }
+                line += 2;
+            }
+            int more = Math.max(0, num(bedrock, "moreNotes", 0));
+            if (more > 0 || line > bottom - 10) { g.text(font, "The whole list is in craftium-export-report.txt inside the pack.", x + 10, bottom - 2, MUTED, false); }
+        }
+        g.text(font, "Next you choose where to save it (it starts in your Documents).", x + 236, y + h - 26, MUTED, false);
+        if (!localMessage.isEmpty() && bedrock != null) g.text(font, localMessage, x + 10, y + h - 44, ERROR, false);
+    }
+
     private void drawDialog(Gfx g) {
+        if ("bedrock_pack".equals(dialogMode)) { drawBedrockDialog(g); return; }
         int w = Math.min(420, cw - 40), x = (cw - w) / 2, y = Math.max(60, ch / 2 - 70);
         g.fill(0, 0, cw, ch, 0xaa000000);
         g.fill(x, y, x + w, y + 136, 0xff172330);
@@ -1240,7 +1947,14 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     @Override public boolean mouseReleased(MouseButtonEvent raw) {
         var event = scaled(raw);
-        if (draggingPoolBar || draggingGraphBar) { draggingPoolBar = false; draggingGraphBar = false; return true; }
+        if (resizing != 0) { resizing = 0; return true; }
+        if (preview.dragging()) {
+            boolean turn = event.button() == 0 && Math.hypot(event.x() - pressPreviewX, event.y() - pressPreviewY) <= 3; // let go in place: a click, not a turn
+            preview.letGo();
+            if (turn) pickJigsawInPreview(event.x(), event.y());
+            return true;
+        }
+        if (draggingPoolBar || draggingGraphBar || draggingTargetBar) { draggingPoolBar = false; draggingGraphBar = false; draggingTargetBar = false; return true; }
         if (pressEdge != null && event.button() == 0) {
             var edge = pressEdge;
             boolean carried = edgeDragging;
@@ -1263,7 +1977,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
                     localRedo.clear();
                 }
                 init();
-            } else if (!pressMissing) { selected = 0; page = 0; edit("open", "pool", id); }
+            } else if (!pressMissing) openPool(id, 0);
             return true;
         }
         return super.mouseReleased(event);
@@ -1271,7 +1985,10 @@ final class JigsawEditorScreen extends CraftiumScreen {
 
     @Override public boolean mouseDragged(MouseButtonEvent raw, double dx, double dy) {
         var event = scaled(raw);
-        if (draggingPoolBar) { poolScroll = Scrollbars.scrollAt(event.y(), listTop(), listBottom() - listTop(), visiblePools().size() * LIST_ROW); return true; }
+        if (resizing != 0) { dragDivider(event.x(), event.y()); return true; }
+        if (preview.dragging()) { preview.drag(dx / uiScale, dy / uiScale); return true; }
+        if (draggingTargetBar) { var list = offers(targetMenuPool, targetMenuCurrent); targetMenuScroll = Scrollbars.scrollAt(event.y(), targetMenuY + 2, targetMenuRows(Math.max(1, list.size())) * TARGET_MENU_ROW, list.size() * TARGET_MENU_ROW); return true; }
+        if (draggingPoolBar) { int rows = menuRows(visiblePools().size()); poolScroll = Scrollbars.scrollAt(event.y(), menuY() + 2, rows * LIST_ROW, visiblePools().size() * LIST_ROW); return true; }
         if (draggingGraphBar) { var bar = graphBar(); if (bar != null) graphScroll = Scrollbars.scrollAt(event.y(), bar[1], bar[2], bar[3]); return true; }
         if (pressEdge != null) {
             if (!edgeDragging && Math.hypot(event.x() - edgePressX, event.y() - edgePressY) > 3) edgeDragging = true;
@@ -1288,24 +2005,54 @@ final class JigsawEditorScreen extends CraftiumScreen {
         return super.mouseDragged(event, dx / uiScale, dy / uiScale);
     }
 
+    /** A click while the dropdown is open: a row opens that pool, the bar scrolls, and a click anywhere but the box and its arrow closes the menu (and goes on to whatever was clicked). */
+    private boolean clickPoolMenu(double x, double y) {
+        var pools = visiblePools();
+        int rows = menuRows(pools.size());
+        if (overPoolMenu(x, y)) {
+            int top = menuY() + 2;
+            boolean bar = pools.size() > rows;
+            if (bar && Scrollbars.hit(x, y, centreX + pickW + 24 - Scrollbars.WIDTH - 2, top, rows * LIST_ROW)) { draggingPoolBar = true; poolScroll = Scrollbars.scrollAt(y, top, rows * LIST_ROW, pools.size() * LIST_ROW); return true; }
+            if (y >= top && y < top + rows * LIST_ROW) {
+                int i = (int) ((y - top + poolScroll) / LIST_ROW);
+                if (i >= 0 && i < pools.size()) { closeMenu(); openPool(pools.get(i).get("id").getAsString(), 0); }
+            }
+            return true;
+        }
+        boolean onBox = x >= centreX && x < centreX + pickW + 24 && y >= TOP - 4 && y < TOP + 14;
+        if (!onBox) { closeMenu(); init(); }
+        return false;
+    }
+
     @Override public boolean mouseClicked(MouseButtonEvent raw, boolean twice) {
         var event = scaled(raw);
+        if (event.button() == 1) for (var child : children()) if (child instanceof FlatButton b && b.rightClick(event.x(), event.y())) return true; // a cycling button steps back
+        if ((event.button() == 3 || event.button() == 4) && !modal()) { stepHistory(event.button() == 3 ? -1 : 1); return true; } // the mouse's back and forward buttons
         if (event.button() == 0 && clickSuggestion(event.x(), event.y())) return true;
-        if (super.mouseClicked(event, twice)) return true;
+        if (event.button() == 0 && !modal() && targetMenuKey != null && clickTargetMenu(event.x(), event.y())) return true;
+        if (event.button() == 0 && !modal() && poolMenuOpen && clickPoolMenu(event.x(), event.y())) return true;
+        flushEdits(); // leaving a box applies it, before this click changes anything
+        if (event.button() == 0 && !modal() && !graphDragging() && pressDivider(event.x(), event.y())) return true;
+        EditBox focusedBefore = getFocused() instanceof EditBox before && before.isFocused() ? before : null;
+        if (super.mouseClicked(event, twice)) {
+            // a click that puts the focus in a box selects all of its text, so typing replaces it; a click in the box that already has the focus moves the cursor as usual
+            if (event.button() == 0 && getFocused() instanceof EditBox now && now.isFocused() && now != focusedBefore) selectAll(now);
+            if (event.button() == 0 && !modal() && poolBox != null && poolBox.isFocused() && !poolMenuOpen) { poolMenuOpen = true; scrollMenuToOpenPool(); }
+            return true;
+        }
+        if (!modal() && pool() != null && overPreview(event.x(), event.y()) && preview.hasScene() && preview.press(event.button())) { pressPreviewX = event.x(); pressPreviewY = event.y(); return true; }
         if (event.button() != 0 || adding) return false;
         double x = event.x(), y = event.y();
-        int poolRoom = listBottom() - listTop(), poolContent = visiblePools().size() * LIST_ROW;
-        if (poolContent > poolRoom && Scrollbars.hit(x, y, SIDE + leftW - Scrollbars.WIDTH, listTop(), poolRoom)) { draggingPoolBar = true; poolScroll = Scrollbars.scrollAt(y, listTop(), poolRoom, poolContent); return true; }
         var graphBar = graphBar();
         if (graphBar != null && Scrollbars.hit(x, y, graphBar[0], graphBar[1], graphBar[2])) { draggingGraphBar = true; graphScroll = Scrollbars.scrollAt(y, graphBar[1], graphBar[2], graphBar[3]); return true; }
-        if (x >= SIDE && x < SIDE + leftW - Scrollbars.WIDTH - 3 && y >= listTop() && y < listBottom()) {
-            int i = (int) ((y - listTop() + poolScroll) / LIST_ROW);
-            var pools = visiblePools();
-            if (i >= 0 && i < pools.size()) { selected = 0; page = 0; jigPage = 0; edit("open", "pool", pools.get(i).get("id").getAsString()); return true; }
+        if (pool() != null && usedView && x >= centreX && x < centreX + centreW && y >= cardsTop() - 4 && y < ch - FOOT) {
+            int row = (int) ((y - (cardsTop() - 4) + usedScroll) / USED_ROW);
+            var list = usedList();
+            if (row >= 0 && row < list.size()) { var u = list.get(row).getAsJsonObject(); openPool(str(u, "pool", ""), num(u, "element", 0)); return true; }
         }
-        if (pool() != null && !graph && x >= centreX && x < centreX + centreW && y >= cardsTop()) {
-            int slot = (int) ((y - cardsTop()) / (CARD_H + CARD_GAP)), index = page * perPage() + slot;
-            if (index < elements().size()) { selected = index; jigPage = 0; init(); return true; }
+        if (pool() != null && !graph && !usedView && x >= centreX && x < centreX + centreW && y >= cardsTop()) {
+            int slot = (int) ((y - cardsTop()) / (CARD_H + CARD_GAP)), position = page * perPage() + slot;
+            if (slot < perPage() && position < shown().size()) { selected = shown().get(position); jigPage = 0; init(); return true; }
         }
         if (pool() != null && graph && model.has("graph")) {
             var nodes = layout(model.getAsJsonObject("graph"));
@@ -1335,9 +2082,13 @@ final class JigsawEditorScreen extends CraftiumScreen {
     @Override public boolean mouseScrolled(double rawX, double rawY, double horizontal, double vertical) {
         double x = rawX / uiScale;
         if (adding) return false;
-        if (suggestionsShowing() && overSuggestions(x, rawY / uiScale)) { suggestScroll = Math.clamp(suggestScroll - (int) Math.signum(vertical) * 3, 0, Math.max(0, suggestMatches.size() - SUGGEST_ROWS)); return true; }
-        if (x < SIDE + leftW + 6) { poolScroll = Math.clamp(poolScroll - vertical * 30, 0, Math.max(0, visiblePools().size() * LIST_ROW - (listBottom() - listTop()))); return true; }
-        if (graph && x < cw - SIDE - rightW) { var bar = graphBar(); graphScroll = Math.clamp(graphScroll - vertical * 30, 0, bar == null ? 0 : bar[3] - bar[2]); return true; }
+        double y = rawY / uiScale;
+        if (!modal() && pool() != null && overPreview(x, y) && preview.hasScene()) { preview.zoom(vertical, x - (previewX() + previewW / 2.0), y - (previewY() + previewH() / 2.0)); return true; }
+        if (suggestionsShowing() && overSuggestions(x, y)) { suggestScroll = Math.clamp(suggestScroll - (int) Math.signum(vertical) * 3, 0, Math.max(0, suggestMatches.size() - SUGGEST_ROWS)); return true; }
+        if (targetMenuKey != null && overTargetMenu(x, y)) { int count = offers(targetMenuPool, targetMenuCurrent).size(); targetMenuScroll = Math.clamp(targetMenuScroll - vertical * 30, 0, Math.max(0, (count - targetMenuRows(Math.max(1, count))) * TARGET_MENU_ROW)); return true; }
+        if (poolMenuOpen && overPoolMenu(x, y)) { int count = visiblePools().size(); poolScroll = Math.clamp(poolScroll - vertical * 30, 0, Math.max(0, (count - menuRows(count)) * LIST_ROW)); return true; }
+        if (usedView && x < centreX + centreW + GAP && x >= centreX) { usedScroll = Math.clamp(usedScroll - vertical * 30, 0, Math.max(0, usedList().size() * USED_ROW - (ch - FOOT - (cardsTop() - 4)))); return true; }
+        if (graph && x < centreX + centreW + GAP) { var bar = graphBar(); graphScroll = Math.clamp(graphScroll - vertical * 30, 0, bar == null ? 0 : bar[3] - bar[2]); return true; }
         return false;
     }
 
@@ -1355,8 +2106,11 @@ final class JigsawEditorScreen extends CraftiumScreen {
             }
         }
         if (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER) {
+            if (getFocused() instanceof EditBox box && applied.containsKey(box)) { applyIfChanged(box); return true; }
             if (getFocused() instanceof EditBox box && commits.containsKey(box)) { commits.get(box).run(); return true; }
         }
+        if (event.key() == GLFW.GLFW_KEY_ESCAPE && targetMenuKey != null && !modal()) { targetMenuKey = null; init(); return true; }
+        if (event.key() == GLFW.GLFW_KEY_ESCAPE && poolMenuOpen && !modal()) { closeMenu(); init(); return true; }
         if (event.key() == GLFW.GLFW_KEY_ESCAPE && adding) { adding = false; init(); return true; }
         return super.keyPressed(event);
     }
@@ -1364,7 +2118,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
     /** The size this screen is laid out for: at Auto the interface takes the largest whole scale at which it fits, instead of shrinking it to fit. */
     @Override protected int[] canvas() { return new int[]{800, 440}; }
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void removed() { PoolThumbnails.releaseAll(); }
+    @Override public void removed() { preview.releaseAll(); PoolThumbnails.releaseAll(); }
     @Override public void onClose() {
         if (dialogMode != null) { dialogMode = null; init(); return; }
         if (helpOpen) { helpOpen = false; init(); return; }
