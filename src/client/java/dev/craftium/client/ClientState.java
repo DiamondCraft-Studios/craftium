@@ -103,11 +103,17 @@ public final class ClientState {
             if(!savedColorPending.containsKey(saved.id())){ // the colour everyone sees it in, unless this player is in the middle of changing it; none chosen is the selection colour
                 if(saved.color()!=0)savedColors.put(saved.id(),saved.color());else savedColors.remove(saved.id());
             }
+            if(saved.hidden()==0)savedXray.remove(saved.id());
+            else if(saved.hiddenData()!=null){ // null: unchanged, and the x-ray made for it is still right
+                if(saved.hiddenData().isEmpty())savedXray.remove(saved.id()); // too many to draw, or left out because the status was too big
+                else savedXray.put(saved.id(),OutlineShape.ofLater(SelectionCodec.decode(saved.hiddenData())));
+            }
             if(saved.data()==null)continue; // unchanged: the outline already made for it is still right
             if(saved.data().isEmpty())savedShapes.remove(saved.id()); // left out because the status was too big: nothing is drawn for it
             else{var blocks=SelectionCodec.decode(saved.data());savedBlocks.put(saved.id(),blocks);savedShapes.put(saved.id(),OutlineShape.ofLater(blocks));}
         }
-        savedShapes.keySet().retainAll(present);savedBlocks.keySet().retainAll(savedShapes.keySet());
+        savedShapes.keySet().retainAll(present);savedBlocks.keySet().retainAll(savedShapes.keySet());savedXray.keySet().retainAll(present);
+        hiddenBoxFor=-1;
         // an older server sends no GUID, so there is nothing to keep an eye by: a BuildObject seen for the first time starts closed
         for(var saved:savedSelections)if(saved.guid()==null&&savedWithoutGuid.add(saved.id()))savedHidden.add(saved.id());
         savedWithoutGuid.retainAll(present);
@@ -127,6 +133,37 @@ public final class ClientState {
     }
     /** The outline of each saved selection by id, drawn in the selection style. A selection with none is drawn as a box. */
     private static final Map<Integer,OutlineShape> savedShapes=new HashMap<>();
+    /** The blocks each BuildObject keeps out of the world, drawn as an x-ray so they can be seen inside what hides them. */
+    private static final Map<Integer,OutlineShape> savedXray=new HashMap<>();
+    static OutlineShape xrayShape(int id){return savedXray.get(id);}
+    /** Whether the x-ray of a BuildObject shows: while it is selected (or something it is under is), or while its eye is open, as its outline does. */
+    static boolean xrayShown(Packets.SavedSelection saved){
+        if(saved.active()||!savedHidden(saved.id()))return true;
+        for(var other:savedSelections)if(other.active()&&savedUnder(saved,other.id()))return true;
+        return false;
+    }
+
+    /** The box around the hidden blocks of the BuildObjects shown that hold nothing in the world, and how many blocks: what the gizmo is about when nothing is selected. */
+    private record HiddenBox(Point min,Point max,int count){}
+    private static HiddenBox hiddenBox;private static int hiddenBoxFor=-1;
+    private static HiddenBox hiddenBox(){
+        if(status.selectionSize()>0)return null;
+        if(hiddenBoxFor==hierarchyVersion)return hiddenBox;
+        Point lo=null,hi=null;int count=0;
+        for(var e:savedSelections){
+            if(e.size()!=0||e.hidden()<=0||e.hiddenMin()==null||e.hiddenMax()==null)continue;
+            boolean shown=e.active();if(!shown)for(var other:savedSelections)if(other.active()&&savedUnder(e,other.id())){shown=true;break;}
+            if(!shown)continue;
+            lo=lo==null?e.hiddenMin():new Point(Math.min(lo.x(),e.hiddenMin().x()),Math.min(lo.y(),e.hiddenMin().y()),Math.min(lo.z(),e.hiddenMin().z()));
+            hi=hi==null?e.hiddenMax():new Point(Math.max(hi.x(),e.hiddenMax().x()),Math.max(hi.y(),e.hiddenMax().y()),Math.max(hi.z(),e.hiddenMax().z()));
+            count+=e.hidden();
+        }
+        hiddenBoxFor=hierarchyVersion;return hiddenBox=lo==null?null:new HiddenBox(lo,hi,count);
+    }
+    /** What the transform tools and the gizmo work on: the selection, or with none, the hidden blocks of a BuildObject that is not in the world at all. */
+    static int gizmoSize(){var h=hiddenBox();return status.selectionSize()>0||h==null?status.selectionSize():h.count();}
+    static Point gizmoMin(){var h=hiddenBox();return status.selectionSize()>0||h==null?status.min():h.min();}
+    static Point gizmoMax(){var h=hiddenBox();return status.selectionSize()>0||h==null?status.max():h.max();}
     static OutlineShape savedShape(int id){return savedShapes.get(id);}
     /** The blocks of each saved selection by id, kept to tell which BuildObject a block under the pointer belongs to. */
     private static final Map<Integer,Set<dev.craftium.core.Point>> savedBlocks=new HashMap<>();
@@ -202,7 +239,7 @@ public final class ClientState {
         hierarchyVersion++;
         var guid=guidOf(id);if(guid!=null&&view.setFolded(guid,folded))viewChanged();
     }
-    static void clearSavedSelections(){savedSelections=List.of();savedById=Map.of();hierarchyVersion++;savedGroups=List.of();groupFolded.clear();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedBlocks.clear();savedIndex.clear();hoverWorld=0;}
+    static void clearSavedSelections(){savedSelections=List.of();savedById=Map.of();hierarchyVersion++;savedXray.clear();hiddenBoxFor=-1;savedGroups=List.of();groupFolded.clear();savedColors.clear();savedHidden.clear();savedFolded.clear();savedColorPending.clear();savedShapes.clear();savedBlocks.clear();savedIndex.clear();hoverWorld=0;}
     public static int savedColor(int id){return savedColors.getOrDefault(id,options.selectionColor);}
     private static final Set<Integer> savedWithoutGuid=new HashSet<>();
     /** Whether a colour was chosen for it: every BuildObject is drawn in the selection colour until one is. */

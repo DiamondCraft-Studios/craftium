@@ -396,6 +396,12 @@ public final class CraftiumClient implements ClientModInitializer {
             // the same style, width and fills as the selection, in the entry's colour
             shape.drawPlain(Vec3.ZERO,colour,(float)o.selectionWidth,colour&0xffffff|o.selectionFill&0xff000000,colour&0xffffff|o.selectionInsideFill&0xff000000,true,false);
         }
+        // The blocks a BuildObject keeps out of the world because something solid was in the way, as an x-ray: lines only, in its colour, faint where blocks hide them.
+        for(var saved:ClientState.savedSelections()){
+            var xray=ClientState.xrayShape(saved.id());if(xray==null||!ClientState.xrayShown(saved))continue;
+            int colour=ClientState.savedColor(saved.id())|0xff000000;
+            xray.drawPlain(Vec3.ZERO,colour,(float)ClientState.options.selectionWidth,0,0,false,false);
+        }
     }
     /** Every ruler: its line (or circle), its length, and a knob at each end. The end being dragged shows where it will land, and the length with it. */
     private static void drawRulers(EditorScreen screen){
