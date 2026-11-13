@@ -58,9 +58,14 @@ public final class EditorServer {
         var due=new ArrayList<Session.Change>(slice.size());
         for(var c:slice){
             BlockPos at=EditPlanner.pos(c.pos());var expected=j.backwards?c.after():c.before();
-            if((j.load||j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) && expected.matches(j.level,at)) {
+            boolean loaded=j.load||j.level.hasChunk(at.getX()>>4,at.getZ()>>4);
+            // A new edit goes over several ticks, and the world moves meanwhile (water flows, leaves decay): a block that is no longer what the plan saw
+            // is still part of the build, so it is written over what is there now, and undo gives back that. Only undo and redo leave such a block be.
+            boolean fresh=!j.history&&!j.backwards;
+            boolean same=loaded&&expected.matches(j.level,at);
+            if(loaded&&(same||fresh)) {
                 if(!ServerPlatform.canChange(j.owner,j.level,c.pos()))throw new IllegalArgumentException("Edit permission or region access changed");
-                due.add(c);
+                due.add(same?c:new Session.Change(c.pos(),BlockSnapshot.capture(j.level,at),c.after()));
             } else if(j.level.hasChunk(at.getX()>>4,at.getZ()>>4)) {
                 // Skipped: resend the block as it is, so a client that predicted this edit puts it back.
                 var now=j.level.getBlockState(at);j.level.sendBlockUpdated(at,now,now,2);
