@@ -53,9 +53,10 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
         entry("Other players' AI preview","Fill",o->o.sharedAiFill,(o,c)->o.sharedAiFill=c),
         entry("Other players' AI preview","Blocks tint",o->o.sharedAiTint,(o,c)->o.sharedAiTint=c));
     private static final List<Width> WIDTHS=List.of(
-        new Width("Selection line width",o->o.selectionWidth,(o,v)->o.selectionWidth=v),
-        new Width("Builder selection line width",o->o.builderSelectionWidth,(o,v)->o.builderSelectionWidth=v),
-        new Width("Destination line width",o->o.builderPreviewWidth,(o,v)->o.builderPreviewWidth=v));
+        new Width("Line width (all selections)",o->o.selectionWidth,(o,v)->o.selectionWidth=v),
+        // the opacity of the destination's ghost blocks is the alpha of their tint, so it is the same setting as the tint colour above
+        new Width("Block preview opacity",o->(o.previewTint>>>24)/255d,(o,v)->o.previewTint=((int)Math.round(v*255)<<24)|(o.previewTint&0xffffff),5,100,true),
+        new Width("AI block preview opacity",o->(o.aiTint>>>24)/255d,(o,v)->o.aiTint=((int)Math.round(v*255)<<24)|(o.aiTint&0xffffff),5,100,true));
 
     private static final List<Entry> RULER_ENTRIES=List.of(
         entry("Ruler","Line",o->o.rulerLineColor,(o,c)->o.rulerLineColor=c),
