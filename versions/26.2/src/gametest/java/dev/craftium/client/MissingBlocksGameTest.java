@@ -103,6 +103,10 @@ public final class MissingBlocksGameTest {
         clickMenuItem(1);
         c.waitFor(mc -> ClientState.status.selectionSize() == 5, 400);
         c.takeScreenshot("missing-blocks-selected");
+
+        // and what the window cannot show: comparison, masks, bucket fill, import and export, on the live server
+        var failures = w.getServer().computeOnServer(server -> dev.craftium.server.MissingBlocksServerCheck.run(server));
+        require(failures.isEmpty(), "server-side checks failed: " + failures);
     }
 
     // ---- driving the window -----------------------------------------------------------------------------------------------------------------
