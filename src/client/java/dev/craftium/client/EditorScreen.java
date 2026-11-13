@@ -2367,7 +2367,24 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     /** A small picture drawn pixel by pixel from rows of X, centred on the given box. */
     private void glyph(Gfx g,int x,int y,int width,int height,String[] rows,int colour){
         int gw=rows[0].length(),ox=x+(width-gw)/2,oy=y+(height-rows.length)/2;
-        for(int r=0;r<rows.length;r++)for(int c=0;c<gw;c++)if(rows[r].charAt(c)=='X')g.fill(ox+c,oy+r,ox+c+1,oy+r+1,colour);
+        var rects=glyphRects(rows);
+        IconBake.draw(g,rows,colour,ox,oy,Math.max(gw,rows.length),c->{for(int[] r:rects)c.fill(r[0],r[1],r[2],r[3],colour);}); // one quad from a texture made once, as the Tools panel's icons are
+    }
+    /** The rectangles a glyph is made of, worked out once: runs of lit pixels in a row, joined with the identical run in the row below. A cube of fifty pixels is a handful of fills, not fifty. */
+    private static final Map<String[],int[][]> GLYPH_RECTS=new java.util.IdentityHashMap<>();
+    private static int[][] glyphRects(String[] rows){
+        var known=GLYPH_RECTS.get(rows);if(known!=null)return known;
+        var out=new ArrayList<int[]>();var open=new ArrayList<int[]>(); // open: {x0,y0,x1,y1} runs that may still grow downwards
+        for(int r=0;r<=rows.length;r++){
+            var runs=new ArrayList<int[]>();
+            if(r<rows.length){String row=rows[r];for(int c=0;c<row.length();){if(row.charAt(c)!='X'){c++;continue;}int s=c;while(c<row.length()&&row.charAt(c)=='X')c++;runs.add(new int[]{s,r,c,r+1});}}
+            var next=new ArrayList<int[]>();
+            for(var run:runs){int[] above=null;for(var o:open)if(o[3]==r&&o[0]==run[0]&&o[2]==run[2]){above=o;break;}if(above!=null){above[3]=r+1;next.add(above);}else next.add(run);}
+            for(var o:open)if(!next.contains(o))out.add(o);
+            open=next;
+        }
+        for(var o:open)out.add(o);
+        var made=out.toArray(new int[0][]);GLYPH_RECTS.put(rows,made);return made;
     }
     /** "3 x 4 x 2": how many blocks a saved selection spans along each axis. */
     private static String savedSpan(dev.craftium.net.Packets.SavedSelection s){return (s.max().x()-s.min().x()+1)+" x "+(s.max().y()-s.min().y()+1)+" x "+(s.max().z()-s.min().z()+1);}
@@ -2543,10 +2560,12 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
      * of four rows pointing down when open and four columns pointing right when folded. It sits one pixel higher than the font's own arrows did.
      */
     private static void foldArrow(Gfx g,int x,int y,boolean folded,int color){
-        for(int i=0;i<4;i++){
-            int span=7-2*i; // 7, 5, 3, 1
-            if(folded)g.fill(x+i,y+i,x+i+1,y+i+span,color);else g.fill(x+i,y+i,x+i+span,y+i+1,color);
-        }
+        IconBake.draw(g,folded?"fold-right":"fold-down",color,x,y,7,c->{
+            for(int i=0;i<4;i++){
+                int span=7-2*i; // 7, 5, 3, 1
+                if(folded)c.fill(i,i,i+1,i+span,color);else c.fill(i,i,i+span,i+1,color);
+            }
+        });
     }
     /** Opens or closes the eye of a BuildObject; with Ctrl, of everything under it as well, all to the new state. */
     private void eyeClick(dev.craftium.net.Packets.SavedSelection entry,boolean below){
