@@ -14,11 +14,12 @@ class ObjectMoveTest{
     private static ObjectMove.Obj obj(int id,Point... own){return new ObjectMove.Obj(id,new HashSet<>(List.of(own)),new PackedCells(),new PackedCells());}
     private static ObjectMove.Obj obj(int id,PackedCells dormant,PackedCells replaced,Point... own){return new ObjectMove.Obj(id,new HashSet<>(List.of(own)),dormant,replaced);}
     private static PackedCells cells(Object... pairs){var c=new PackedCells();for(int i=0;i<pairs.length;i+=2)c.put((Point)pairs[i],(String)pairs[i+1]);return c;}
+    private static Function<Point,ObjectMove.Block> view(Map<Point,String> world){return c->ObjectMove.Block.of(world.get(c));}
     private static ObjectMove.Result move(List<ObjectMove.Obj> objects,Set<Point> source,int dx,Map<Point,String> world){
-        return ObjectMove.move(objects,source,shift(dx),world::get,ObjectMoveTest::solid,false);
+        return ObjectMove.shift(objects,source,shift(dx),view(world),ObjectMoveTest::solid,false);
     }
     /** Applies a result to a world map the way the server will. */
-    private static void apply(Map<Point,String> world,ObjectMove.Result r){for(var e:r.writes().entrySet()){if(ObjectMove.isAir(e.getValue()))world.remove(e.getKey());else world.put(e.getKey(),e.getValue());}}
+    private static void apply(Map<Point,String> world,ObjectMove.Result r){for(var e:r.writes().entrySet()){if(e.getValue().isAir())world.remove(e.getKey());else world.put(e.getKey(),e.getValue().state());}}
 
     @Test void anObjectMovesIntoFreeSpaceAndTheOldPlaceIsCleared(){
         var world=new HashMap<>(Map.of(p(0),STONE,p(1),STONE));
@@ -86,12 +87,36 @@ class ObjectMoveTest{
     @Test void aQuarterTurnMapsDormantBlocksToo(){
         var world=new HashMap<>(Map.of(p(1),STONE));
         var held=obj(1,cells(p(2),STAIRS),new PackedCells(),p(1));
-        var r=ObjectMove.move(List.of(held),Set.of(p(1)),Point::rotateY,world::get,ObjectMoveTest::solid,false);apply(world,r);
+        var r=ObjectMove.shift(List.of(held),Set.of(p(1)),Point::rotateY,view(world),ObjectMoveTest::solid,false);apply(world,r);
         assertEquals(Map.of(new Point(0,0,1),STONE,new Point(0,0,2),STAIRS),world);
     }
     @Test void airInTheSelectionClearsItsPlaceButIsNotPastedUnlessAsked(){
         var world=new HashMap<>(Map.of(p(0),STONE));
-        var r=ObjectMove.move(List.of(),Set.of(p(0),p(1)),shift(5),world::get,ObjectMoveTest::solid,false);apply(world,r);
+        var r=ObjectMove.shift(List.of(),Set.of(p(0),p(1)),shift(5),view(world),ObjectMoveTest::solid,false);apply(world,r);
         assertEquals(Map.of(p(5),STONE),world);
+    }
+    @Test void aChestKeepsItsContentsWhileItIsDormant(){
+        var world=new HashMap<>(Map.of(p(0),"minecraft:chest[facing=north]",p(5),DIRT));
+        var data=new HashMap<Point,String>(Map.of(p(0),"{Items:[{id:\"minecraft:diamond\",count:3}]}"));
+        Function<Point,ObjectMove.Block> view=c->world.get(c)==null?null:new ObjectMove.Block(world.get(c),data.get(c));
+        var r=ObjectMove.shift(List.of(obj(1,p(0))),Set.of(p(0)),c->c.add(5,0,0),view,ObjectMoveTest::solid,false);
+        var o=r.objects().get(1);
+        assertEquals("{Items:[{id:\"minecraft:diamond\",count:3}]}",o.dormant().data(p(5)),"hidden under the dirt, it still has its items");
+    }
+    @Test void aResamplingMoveSendsOneBlockToManyCellsAndEachIsResolvedOnItsOwn(){
+        // A block scaled up to three cells, one of which has a world block: two are written, one is dormant.
+        var world=new HashMap<>(Map.of(p(0),STONE,p(11),DIRT));
+        var origin=new LinkedHashMap<Point,Point>();origin.put(p(10),p(0));origin.put(p(11),p(0));origin.put(p(12),p(0));
+        var r=ObjectMove.move(List.of(obj(1,p(0))),Set.of(p(0)),origin,Map.of(),view(world),ObjectMoveTest::solid,false);apply(world,r);
+        assertEquals(Map.of(p(10),STONE,p(11),DIRT,p(12),STONE),world);
+        var o=r.objects().get(1);assertEquals(Set.of(p(10),p(12)),o.own());assertEquals(STONE,o.dormant().get(p(11)));
+    }
+    @Test void dormantBlocksAreSampledLikeSelectedOnesAndWhatIsSampledAwayIsGone(){
+        var world=new HashMap<>(Map.of(p(0),STONE,p(1),DIRT));
+        var held=obj(1,cells(p(1),STAIRS,p(2),STAIRS),new PackedCells(),p(0));
+        var dormantOrigin=Map.of(1,Map.<Point,Point>of(p(21),p(1))); // the block at 2 lands nowhere, as in scaling down
+        var r=ObjectMove.move(List.of(held),Set.of(p(0)),Map.of(p(20),p(0)),dormantOrigin,view(world),ObjectMoveTest::solid,false);apply(world,r);
+        assertEquals(Map.of(p(1),DIRT,p(20),STONE,p(21),STAIRS),world);
+        assertTrue(r.objects().get(1).dormant().isEmpty());
     }
 }
