@@ -7348,6 +7348,12 @@ public final class EditorScreen extends CraftiumScreen {
                 row.active() && row.editing()
                         ? item("Stop editing", "", () -> action("saved_selection:release"))
                         : item("Edit blocks", "", () -> action("saved_selection:edit:" + id)));
+        items.add(item(
+                n > 1 ? "Place here (" + n + ")" : "Place here",
+                "",
+                () -> action("saved_selection:placehere:"
+                        + csv))); // blocks it keeps out of the world, because something solid was there, are placed
+        // where it is free now
         items.add(divider());
         items.add(
                 n > 1
