@@ -550,6 +550,7 @@ final class ProtocolSnapshot {
         enum dev.craftium.core.Tool.FREEHAND_DRAW
         enum dev.craftium.core.Tool.FREEHAND_SELECT
         enum dev.craftium.core.Tool.GRADIENT_PAINTER
+        enum dev.craftium.core.Tool.INSPECT
         enum dev.craftium.core.Tool.LASSO_SELECT
         enum dev.craftium.core.Tool.LINE
         enum dev.craftium.core.Tool.MAGIC_SELECT
