@@ -139,6 +139,26 @@ final class ObjectMoves {
         return new Transformed(commit(s,plan,result,ownBefore,heldBefore),result.landed());
     }
 
+    /**
+     * Places the dormant blocks of these BuildObjects where they stand, with the world winning: each is written where the world is free now, and kept dormant where it is
+     * not. A block that was hidden because of a block that has gone, or because of the order of the Hierarchy, comes back. Returns null when none of them keeps anything.
+     */
+    static Transformed placeHere(ServerLevel level,Session s,EditPlanner plan,Set<Integer> ids){
+        var ownBefore=s.saved.snapshot();var heldBefore=s.saved.heldSnapshot();
+        var ordered=new ArrayList<ObjectMove.Obj>();var placements=new ArrayList<ObjectMove.Placement>();
+        for(var e:s.saved.entries()){
+            boolean here=ids.contains(e.id());
+            ordered.add(new ObjectMove.Obj(e.id(),new HashSet<>(e.points()),here?new PackedCells():e.dormant(),e.replaced()));
+            if(here)e.dormant().forEach((p,state)->placements.add(new ObjectMove.Placement(e.id(),p,new ObjectMove.Block(state,e.dormant().data(p)))));
+        }
+        if(placements.isEmpty())return null;
+        var solidCache=new HashMap<String,Boolean>();
+        Predicate<String> solid=text->solidCache.computeIfAbsent(text,t->beats(plan.parse(t)));
+        Function<Point,ObjectMove.Block> world=p->block(BlockSnapshot.capture(level,EditPlanner.pos(p)));
+        var result=ObjectMove.place(ordered,placements,world,solid);
+        return new Transformed(commit(s,plan,result,ownBefore,heldBefore),result.landed());
+    }
+
     private static ObjectMove.Block block(BlockSnapshot snapshot){
         return new ObjectMove.Block(BlockStateParser.serialize(snapshot.state()),snapshot.data()==null?null:snapshot.data().toString());
     }

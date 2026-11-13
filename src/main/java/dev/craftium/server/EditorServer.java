@@ -279,6 +279,23 @@ public final class EditorServer {
                     try{start(player,s,edit);}catch(RuntimeException e){s.saved.restore(hierarchyBefore,s.selection);throw e;}
                     return;
                 }
+                if(r.action().startsWith(SavedSelectionActions.PREFIX+"placehere:")){ // placehere:<ids separated by commas>: what these BuildObjects keep out of the world is placed where it is free now
+                    HierarchyPermissions.require(player,"edit");
+                    var named=new LinkedHashSet<Integer>();
+                    for(var text:r.action().substring((SavedSelectionActions.PREFIX+"placehere:").length()).split(","))if(!text.isBlank())named.add(Integer.parseInt(text.trim()));
+                    var everything=s.saved.withDescendants(named);
+                    var hidden=new ArrayList<Point>();for(var id:everything){var kept=s.saved.byId(id);if(kept!=null)hidden.addAll(kept.dormant().points());}
+                    if(hidden.isEmpty())throw new IllegalArgumentException("Nothing is hidden: every block of "+(everything.size()==1?"that BuildObject":"those BuildObjects")+" is already in the world");
+                    ChunkLease.planning(ChunkLease.area().points(hidden,0,0).lease(player.level())); // the blocks may be far from every player
+                    var plan=EditPlanner.forSelection(player.level(),s,o);
+                    var placed=ObjectMoves.placeHere(player.level(),s,plan,everything);
+                    var placeEdit=plan.finish("Place BuildObject");
+                    if(placed==null||placeEdit.changes().isEmpty()){if(placed!=null)placed.applied().undo(s);throw new IllegalArgumentException("Nothing could be placed: the world still holds every cell that the hidden blocks need");}
+                    try{start(player,s,placeEdit.withSelection(placed.applied().change()));}
+                    catch(RuntimeException ex){placed.applied().undo(s);throw ex;}
+                    if(!s.saved.viewed().isEmpty())s.saved.viewSet(s.saved.viewed().stream().map(SavedSelections.Entry::id).toList(),s.selection); // what is shown now includes the blocks that came back
+                    return;
+                }
                 if(r.action().equals(SavedSelectionActions.PREFIX+"duplicate")){ // copies the blocks shown and remembers the BuildObjects they belong to, for the paste that follows
                     HierarchyPermissions.require(player,"create");
                     requireSelection(s);
