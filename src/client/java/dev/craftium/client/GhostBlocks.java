@@ -143,11 +143,13 @@ final class GhostBlocks {
     }
 
     /** Draws the ghost with its blocks moved by {@code origin}. */
-    void draw(Point origin,boolean outline){
+    void draw(Point origin,boolean outline){draw(origin,outline,true);}
+    /** With {@code outlines} off, only the blocks themselves are drawn (and the tint on those that go), with no outline or fill round them: how an edit waiting to be built is shown. */
+    void draw(Point origin,boolean outline,boolean outlines){
         if(data==null||!resolve())return;
         Vec3 at=new Vec3(origin.x(),origin.y(),origin.z());
         if(outline)drawLayout(at);
-        if(outline){
+        if(outline&&outlines){
             var o=ClientState.options;
             int line=shared?o.sharedAiColor:ai?dev.craftium.core.AiSessions.shade(o.aiColor,slot):o.hoverColor,fill=shared?o.sharedAiFill:ai?dev.craftium.core.AiSessions.shade(o.aiFill,slot):o.hoverFill;
             if(!placedShape.isEmpty())placedShape.drawPlain(at,line,(float)ClientState.options.selectionWidth,fill,true,false);

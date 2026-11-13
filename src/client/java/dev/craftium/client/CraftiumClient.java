@@ -499,7 +499,7 @@ public final class CraftiumClient implements ClientModInitializer {
             ReplaceGhost.draw(mc);
             HistoryPulse.draw();
             if(screen!=null&&screen.bucketDragging())MagicPreview.drawBucket(mc,screen.bucketTarget());else{MagicPreview.draw(mc,hit);ClickPreview.draw(mc,screen!=null&&screen.toolActive()?hit:null);}
-            ClientState.pending.draw(new Point(0,0,0),true);
+            ClientState.pending.draw(new Point(0,0,0),true,false); // the waiting edit: its blocks only, no outlines
             ClientState.pluginPending.draw(new Point(0,0,0),true);
             drawAiSessions(mc);
             // The AI previews other players are holding, in their own colour and with the owner's name, as far away as they are worth drawing.
