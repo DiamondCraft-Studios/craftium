@@ -12,13 +12,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Measures, and checks nothing: the live heap while a paste of about a million blocks is planned and applied, and then undone.
+ * Measures, and checks nothing: the live heap while a paste of two million blocks is planned and applied, and then undone.
  * A sampler forces a collection every 150 ms so that what it reads is what is still referenced, not garbage waiting to be freed.
  * <p>
  * Run it with {@code CRAFTIUM_TEST_SCOPE=historymem}.
  */
 public final class HistoryMemoryGameTest {
-    private static final int SX = 300, SZ = 300, TX = 420, TZ = 300, Y = 60, W = 100, H = 100, D = 104;
+    private static final int SX = 300, SZ = 300, TX = 440, TZ = 300, Y = 60, W = 125, H = 125, D = 128;
 
     public static void run(ClientGameTestContext c, TestSingleplayerContext w) {
         w.getServer().runCommand("gamerule minecraft:random_tick_speed 0");
