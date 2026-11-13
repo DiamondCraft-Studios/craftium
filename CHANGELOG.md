@@ -5,6 +5,7 @@
 Changes since 1.5.0-beta.1.
 
 ### Interface
+- Changes to the settings in the Tool options window are in the undo history now, in one order with block edits: Ctrl+Z undoes whichever you did last, and a note on screen says which setting it put back ("Undid: Radius 5 → 9"). A slider dragged through many values is one step. Setting changes are kept on your computer, never touch the server's history or its limit, and only the last 100 are kept.
 - Window titles are no longer in capitals: History, Report, Options, Palette, Keyboard shortcuts, Save blueprint and the others read as written.
 - Ctrl+= and Ctrl+- (and the keypad + and -) change the interface size on every Craftium screen, not only in the editor.
 - New Hierarchy window at the top of the right column, where the Selections window was: it lists your saved selections. The Block palette and Tool masks sit together below it and take 3/8 of the column.

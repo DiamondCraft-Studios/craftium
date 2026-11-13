@@ -64,7 +64,9 @@ final class EntityShortcuts {
                 return true;
             }
             if (EditorBindings.matches(Action.UNDO, event) || EditorBindings.matches(Action.REDO, event)) {
-                CraftiumClient.send(EditorBindings.matches(Action.UNDO, event) ? "undo" : "redo", null, null);
+                boolean undo = EditorBindings.matches(Action.UNDO, event);
+                if (undo ? !ClientOptionHistory.undo() : !ClientOptionHistory.redo())
+                    CraftiumClient.send(undo ? "undo" : "redo", null, null);
                 return true;
             }
         }
