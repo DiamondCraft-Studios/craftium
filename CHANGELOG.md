@@ -5,6 +5,7 @@
 Changes since 1.5.0-beta.1.
 
 ### Interface
+- Window titles are no longer in capitals: History, Report, Options, Palette, Keyboard shortcuts, Save blueprint and the others read as written.
 - Ctrl+= and Ctrl+- (and the keypad + and -) change the interface size on every Craftium screen, not only in the editor.
 - New Hierarchy window at the top of the right column, where the Selections window was: it lists your saved selections. The Block palette and Tool masks sit together below it and take 3/8 of the column.
 - The Hierarchy window has a "+" button along the bottom that creates a BuildObject from what is selected, replacing the Save selection button. New ones are named BuildObject, BuildObject (1), BuildObject (2) and so on, and double-clicking a row renames it where it stands (Enter keeps the name, Esc drops it). The colour moved to the right of each row, beside the show, edit and delete buttons.
@@ -61,6 +62,7 @@ Changes since 1.5.0-beta.1.
 ### Editing
 - Edits and selections go up to 2,097,152 blocks, twice as many as before.
 - Undo history is kept packed, at about 16 bytes a block instead of about 128, so a big edit takes far less of the history budget.
+- A Large edit window shows how far an edit of 100,000 blocks or more has got (blocks done, percent, time left) while the server applies, undoes or redoes it. It is a window like the others: move it, resize it, fold it, or close it for the rest of that edit.
 - Paste, cut, fill, stack and the other actions on a selection or the clipboard no longer stop at the Block limit setting, which only applies to the tools that place blocks. They answer to the largest edit and the history budget.
 
 ### Missing blocks

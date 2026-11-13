@@ -160,7 +160,7 @@ final class PreferencesOptionsScreen extends CraftiumScreen {
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){
         g.fill(0,0,width,height,0xf510151c);
         int x=left();var ROWS=rows(); // the rows of the chosen tab
-        g.text(font,"OPTIONS",tabsLeft(),14,0xffdce6ef,false);
+        g.text(font,"Options",tabsLeft(),14,0xffdce6ef,false);
         g.text(font,"Pick a category on the left. Ctrl-click a slider to type a value; middle-click resets it.",tabsLeft(),27,0xff8595a8,false);
         String about="";
         g.enableScissor(0,viewTop(),width,viewBottom()); // the rows scroll under this: whatever is above or below the list is cut off

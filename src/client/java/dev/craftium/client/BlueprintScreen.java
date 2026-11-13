@@ -320,7 +320,7 @@ public final class BlueprintScreen extends CraftiumScreen {
     @Override protected void draw(Gfx g,int x,int y,float delta){
         BlueprintThumbnails.newFrame();g.pose().pushMatrix();g.pose().scale(scale,scale);g.fill(0,0,canvasW,canvasH,0xef101923);g.fill(left-12,top-25,left+672,top+414,0xff172330);
         double mx=x/scale,my=y/scale;boolean quiet=dialog!=null||menu!=null;
-        g.text(font,font.plainSubstrByWidth(folder.isEmpty()?(folderChoice!=null?"CHOOSE A FOLDER TO SAVE IN":picker==null?"BLUEPRINTS":"DOUBLE-CLICK ONE TO USE"):(folderChoice!=null?"SAVE IN / ":picker==null?"BLUEPRINTS / ":"USE / ")+folder.replace("/"," / "),200),left,top-17,0xffb5dcfc,false);
+        g.text(font,font.plainSubstrByWidth(folder.isEmpty()?(folderChoice!=null?"Choose a folder to save in":picker==null?"Blueprints":"Double-click one to use"):(folderChoice!=null?"Save in / ":picker==null?"Blueprints / ":"Use / ")+folder.replace("/"," / "),200),left,top-17,0xffb5dcfc,false);
         frames++;boolean loading=loading();
         if(loading){var note="Loading blueprints…";g.text(font,note,left+(660-font.width(note))/2,top+190,0xffb5dcfc,false);}
         else{
