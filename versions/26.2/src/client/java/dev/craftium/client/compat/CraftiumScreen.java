@@ -12,7 +12,8 @@ public abstract class CraftiumScreen extends Screen {
     protected CraftiumScreen(Component title){super(title);}
 
     @Override public final void extractBackground(GuiGraphicsExtractor g,int mouseX,int mouseY,float delta){drawBackground(Gfx.of(g),mouseX,mouseY,delta);}
-    @Override public final void extractRenderState(GuiGraphicsExtractor g,int mouseX,int mouseY,float delta){fitScale();var gfx=Gfx.of(g);double zoom=dev.craftium.client.InterfaceScale.zoom();if(zoom==1){draw(gfx,mouseX,mouseY,delta);return;}gfx.pose().pushMatrix();gfx.pose().scale((float)zoom,(float)zoom);try{draw(gfx,mouseX,mouseY,delta);}finally{gfx.pose().popMatrix();}}
+    @Override public final void extractRenderState(GuiGraphicsExtractor g,int mouseX,int mouseY,float delta){dev.craftium.client.FontTextures.drawing(true);try{extractOwn(g,mouseX,mouseY,delta);}finally{dev.craftium.client.FontTextures.drawing(false);}}
+    private void extractOwn(GuiGraphicsExtractor g,int mouseX,int mouseY,float delta){fitScale();var gfx=Gfx.of(g);double zoom=dev.craftium.client.InterfaceScale.zoom();if(zoom==1){draw(gfx,mouseX,mouseY,delta);return;}gfx.pose().pushMatrix();gfx.pose().scale((float)zoom,(float)zoom);try{draw(gfx,mouseX,mouseY,delta);}finally{gfx.pose().popMatrix();}}
 
     /** Draws the backdrop. The default is the vanilla one; override with an empty body to suppress it. */
     /** The canvas, in interface units, that this screen needs to fit; null for one that takes any size. */

@@ -9,7 +9,8 @@ public abstract class CraftiumScreen extends Screen {
     protected CraftiumScreen(Component title){super(title);}
 
     @Override public final void renderBackground(GuiGraphics g,int mouseX,int mouseY,float delta){drawBackground(Gfx.of(g),mouseX,mouseY,delta);}
-    @Override public final void render(GuiGraphics g,int mouseX,int mouseY,float delta){fitScale();var gfx=Gfx.of(g);double zoom=dev.craftium.client.InterfaceScale.zoom();if(zoom==1){draw(gfx,mouseX,mouseY,delta);return;}gfx.pose().pushMatrix();gfx.pose().scale((float)zoom,(float)zoom);try{draw(gfx,mouseX,mouseY,delta);}finally{gfx.pose().popMatrix();}}
+    @Override public final void render(GuiGraphics g,int mouseX,int mouseY,float delta){dev.craftium.client.FontTextures.drawing(true);try{renderOwn(g,mouseX,mouseY,delta);}finally{dev.craftium.client.FontTextures.drawing(false);}}
+    private void renderOwn(GuiGraphics g,int mouseX,int mouseY,float delta){fitScale();var gfx=Gfx.of(g);double zoom=dev.craftium.client.InterfaceScale.zoom();if(zoom==1){draw(gfx,mouseX,mouseY,delta);return;}gfx.pose().pushMatrix();gfx.pose().scale((float)zoom,(float)zoom);try{draw(gfx,mouseX,mouseY,delta);}finally{gfx.pose().popMatrix();}}
 
     /** The canvas, in interface units, that this screen needs to fit; null for one that takes any size. */
     protected int[] canvas(){return null;}
