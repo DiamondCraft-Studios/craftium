@@ -1755,6 +1755,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(event.button()==0&&pipetting&&menu<0&&!help&&!transform){
             var hit=pipetteTarget(event.x(),event.y());
             if(hit!=null&&minecraft.level!=null){
+                if(pickMissing(hit.getBlockPos())){ClientState.save();return true;}
                 String picked=BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos()));
                 // Ctrl keeps the pipette in hand and adds each block to the palette; a plain click sets the foreground and puts it away.
                 if(minecraft.hasControlDown()){if(ClientState.addToPalette(picked))ClientState.notify("Added to the palette: "+picked);}
@@ -1847,8 +1848,22 @@ public final class EditorScreen extends CraftiumScreen {
         minecraft.player.setDeltaMovement(Vec3.ZERO);minecraft.player.setOldPosAndRot();
     }
     private BlockHitResult pickedHit;private boolean pendingPick,middleDragged;
+    /**
+     * A placeholder cannot be the foreground block, which has to exist, but it can be a mask: its original block goes into the block mask, so the
+     * fill and replace tools change only blocks that were that one. Returns whether the block was a placeholder.
+     */
+    private boolean pickMissing(net.minecraft.core.BlockPos at){
+        var missing=dev.craftium.server.MissingBlocks.at(minecraft.level,at,minecraft.level.getBlockState(at));
+        if(missing==null)return false;
+        var entry=missing.entry();
+        if(entry==null){ClientState.notify("The original name of that missing block is not known yet");return true;}
+        addMaskBlock(entry.text());
+        ClientState.notify("Added to the block mask: "+entry.text());
+        return true;
+    }
     private void pickBlock(BlockHitResult hit){
         if(hit==null||minecraft.level==null)return;
+        if(pickMissing(hit.getBlockPos()))return;
         String block=BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(hit.getBlockPos()).getBlock()).toString();
         ClientState.pick(block);
     }
