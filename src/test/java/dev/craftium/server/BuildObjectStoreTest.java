@@ -26,6 +26,25 @@ class BuildObjectStoreTest {
         assertSame(t,r.parent());assertEquals(0xffaa3366,r.color());
         assertEquals(saved.tree().nextId(),back.tree().nextId());
     }
+    @Test void dormantAndReplacedBlocksComeBackAfterTheServerRestarts(@TempDir Path dir) throws Exception {
+        var saved=new SavedSelections();var tower=saved.save(live(A,B));
+        var dormant=new PackedCells();dormant.put(B,"minecraft:oak_stairs[facing=north]");dormant.put(C,"minecraft:stone");
+        var replaced=new PackedCells();replaced.put(A,"minecraft:water[level=0]");
+        assertTrue(saved.setHeld(tower.id(),dormant,replaced));assertFalse(saved.setHeld(tower.id(),dormant,replaced),"the same again is no change");
+        var file=dir.resolve("held.nbt");BuildObjectStore.write(file,saved.tree().nextId(),saved.tree().saved());
+
+        var back=new SavedSelections(BuildObjectStore.load(file)).byId(tower.id());
+        assertEquals("minecraft:oak_stairs[facing=north]",back.dormant().get(B));assertEquals("minecraft:stone",back.dormant().get(C));
+        assertEquals("minecraft:water[level=0]",back.replaced().get(A));assertEquals(2,back.dormant().size());assertEquals(1,back.replaced().size());
+    }
+    @Test void aWorldWithoutDormantBlocksStaysInTheFormatOlderBuildsRead(@TempDir Path dir) throws Exception {
+        var saved=new SavedSelections();saved.save(live(A));
+        var file=dir.resolve("plain.nbt");BuildObjectStore.write(file,saved.tree().nextId(),saved.tree().saved());
+        assertEquals(1,net.minecraft.nbt.NbtIo.readCompressed(file,net.minecraft.nbt.NbtAccounter.unlimitedHeap()).getIntOr("format",0));
+        var tower=saved.entries().getFirst();var dormant=new PackedCells();dormant.put(B,"minecraft:stone");saved.setHeld(tower.id(),dormant,PackedCells.EMPTY);
+        BuildObjectStore.write(file,saved.tree().nextId(),saved.tree().saved());
+        assertEquals(2,net.minecraft.nbt.NbtIo.readCompressed(file,net.minecraft.nbt.NbtAccounter.unlimitedHeap()).getIntOr("format",0));
+    }
     @Test void aWorldWithNoFileStartsEmpty(@TempDir Path dir){
         assertTrue(new SavedSelections(BuildObjectStore.load(dir.resolve("none.nbt"))).entries().isEmpty());
     }
