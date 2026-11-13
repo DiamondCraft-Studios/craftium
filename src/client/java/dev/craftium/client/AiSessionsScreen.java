@@ -48,7 +48,7 @@ final class AiSessionsScreen extends CraftiumScreen {
         AiThumbnails.newFrame();
         g.fill(0, 0, width, height, 0xf5101923);
         var sessions = ClientState.aiSessions;
-        g.text(font, "AI BUILD SESSIONS", SIDE, 12, 0xffb5dcfc, false);
+        g.text(font, "AI build sessions", SIDE, 12, 0xffb5dcfc, false);
         long busy = sessions.stream().filter(v -> AiSessionUi.working(v) || v.info().state().equals("applying")).count();
         g.text(font, sessions.size() + (sessions.size() == 1 ? " session" : " sessions") + " · " + busy + " working", SIDE, 28, 0xff9db5cb, false);
         g.text(font, font.plainSubstrByWidth(ClientState.status.message(), width - 2 * SIDE), SIDE, 40, 0xffffdca8, false);
