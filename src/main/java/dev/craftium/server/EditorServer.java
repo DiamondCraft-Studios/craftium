@@ -378,7 +378,7 @@ public final class EditorServer {
                 case "history_undo_many","history_redo_many" -> {s.historyRemaining=(r.action().equals("history_undo_many")?1:-1)*(o.historySteps-1);history(player,s,r.action().equals("history_undo_many"));}
                 case "analyze" -> {var plan=new EditPlanner(player.level(),s,o);String report=SelectionTransforms.analyze(plan);ServerPlatform.send(player,new Packets.Report(report));send(player,s,"Selection analyzed",false);}
                 case "selection_transform" -> {
-                    var plan=new EditPlanner(player.level(),s,o);
+                    var plan=EditPlanner.forSelection(player.level(),s,o);
                     var before=new ArrayList<>(s.selection.points());
                     // While transforms wait for confirmation, a new one works from the original blocks, not from the preview of the last.
                     var staged=s.pendingEdit;boolean confirming=s.confirmEdits&&!s.bypassConfirm;
@@ -463,7 +463,7 @@ public final class EditorServer {
                     var plan=new EditPlanner(player.level(),s,o);for(Point p:next)plan.validate(p);s.selection.combine(next,Selection.Mode.REPLACE);send(player,s,"Selection updated: "+s.selection.size()+" blocks",false);
                 }
                 case "fill_outline","fill_walls","fill_top","fill_bottom","fill_nearest","replace","set_biome","autoshade","drain","waterlog","smooth_snow","gravity","trigger_updates","hollow","fill_gaps" -> {
-                    var plan=new EditPlanner(player.level(),s,o);if(r.action().equals("autoshade"))Autoshade.apply(plan,player);else SelectionOperations.apply(r.action(),plan);start(player,s,plan.finish(r.action().replace('_',' ')));
+                    var plan=EditPlanner.forSelection(player.level(),s,o);if(r.action().equals("autoshade"))Autoshade.apply(plan,player);else SelectionOperations.apply(r.action(),plan);start(player,s,plan.finish(r.action().replace('_',' ')));
                 }
                 case "rotate", "flip", "flip_facing" -> {var look=player.getLookAngle();int axis=r.action().equals("flip_facing")?net.minecraft.core.Direction.getApproximateNearest(look.x,look.y,look.z).getAxis().ordinal():0;transform(player,s,r.action().equals("rotate"),axis);}
                 case "flip_x","flip_y","flip_z" -> transform(player,s,false,r.action().charAt(5)-'x');
@@ -479,7 +479,7 @@ public final class EditorServer {
                     var reach=ChunkLease.area().points(s.selection.points(),0,0);
                     for(int i=1;i<=count;i++)reach.points(s.selection.points(),o.offsetX*i,o.offsetZ*i);
                     ChunkLease.planning(reach.lease(player.level()));
-                    var plan=new EditPlanner(player.level(),s,o);
+                    var plan=EditPlanner.forSelection(player.level(),s,o);
                     var source=new LinkedHashMap<Point,BlockSnapshot>();
                     for(Point p:s.selection.points()){plan.validate(p);source.put(p,BlockSnapshot.capture(player.level(),EditPlanner.pos(p)));}
                     if(r.action().equals("move"))for(Point p:source.keySet())plan.put(p,Blocks.AIR.defaultBlockState());
@@ -508,7 +508,7 @@ public final class EditorServer {
                     if(r.action().equals("undo"))undoAnimated(player,s);else history(player,s,false);
                 }
                 case "fill", "delete" -> {
-                    requireSelection(s);var plan=new EditPlanner(player.level(),s,o);
+                    requireSelection(s);var plan=EditPlanner.forSelection(player.level(),s,o);
                     boolean deleting=r.action().equals("delete");
                     for(Point p:s.selection.points())plan.put(p,deleting?Blocks.AIR.defaultBlockState():plan.material);
                     var edit=plan.finish(deleting?DELETE_SELECTION:"Fill selection");
@@ -523,7 +523,7 @@ public final class EditorServer {
                     if(inPlace&&s.clipboardOrigin==null)throw new IllegalArgumentException("These blocks were not copied from the world, so there is no place to paste them back to");
                     if(target==null&&!inPlace)throw new IllegalArgumentException("Point at a block to place the clipboard");
                     if(s.clipboard.isEmpty()&&s.clipboardEntities.isEmpty())throw new IllegalArgumentException("Copy a selection first");
-                    var plan=new EditPlanner(player.level(),s,o);
+                    var plan=EditPlanner.forSelection(player.level(),s,o);
                     Point origin=inPlace?s.clipboardOrigin:r.action().equals("paste")?target.add(normal.x(),normal.y(),normal.z()):target;
                     var placed=new LinkedHashSet<Point>();
                     for(var entry:s.clipboard.entrySet()) {
@@ -655,7 +655,7 @@ public final class EditorServer {
         s.clipboardEpoch++;s.clipboard.clear();s.clipboard.putAll(next);s.clipboardEntities.clear();s.clipboardEntities.addAll(entities.relative());
         s.clipboardOrigin=min;
         s.clipboardDirty=true;
-        if(cut){var plan=new EditPlanner(player.level(),s,o);for(Point p:s.selection.points())plan.put(p,Blocks.AIR.defaultBlockState());var edit=plan.finish("Cut selection");start(player,s,new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),entities.removals()));}
+        if(cut){var plan=EditPlanner.forSelection(player.level(),s,o);for(Point p:s.selection.points())plan.put(p,Blocks.AIR.defaultBlockState());var edit=plan.finish("Cut selection");start(player,s,new Session.Edit(edit.name(),edit.changes(),edit.biomes(),edit.flags(),entities.removals()));}
         else send(player,s,"Copied "+next.size()+" blocks",false);
     }
     private static void transform(ServerPlayer player,Session s,boolean rotate,int axis) {
