@@ -130,6 +130,16 @@ public final class PackedCells {
         return out;
     }
 
+    /** Whether both hold the same cells, states and block entity data, whatever order they were put in. */
+    public boolean sameContent(PackedCells o) {
+        return size == o.size
+                && Arrays.equals(keysArray(), o.keysArray())
+                && paletteList().equals(o.paletteList())
+                && Arrays.equals(indexesArray(), o.indexesArray())
+                && Arrays.equals(dataKeysArray(), o.dataKeysArray())
+                && dataList().equals(o.dataList());
+    }
+
     /** A copy that shares nothing with this one. */
     public PackedCells copy() {
         var c = new PackedCells();
