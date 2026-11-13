@@ -83,8 +83,10 @@ public final class StatusFit {
             if (biggest == null) break; // nothing left to leave out: the rest is not ours to shrink
             if (session >= 0) { // that entry's longest piece of data is left out, the entry stays listed
                 var entry = status.getAsJsonArray(biggest).get(session).getAsJsonObject();
-                entry.addProperty(
-                        length(entry.get("hiddenData")) > length(entry.get("data")) ? "hiddenData" : "data", "");
+                String longest = "data";
+                for (String key : List.of("hiddenData", "hiddenGhost"))
+                    if (length(entry.get(key)) > length(entry.get(longest))) longest = key;
+                entry.addProperty(longest, "");
             } else if (status.get(biggest).isJsonArray())
                 status.add(biggest, new JsonArray()); // a list of previews is left empty: none to show
             else status.addProperty(biggest, "");
@@ -100,7 +102,8 @@ public final class StatusFit {
 
     private static int sessionDataLength(JsonObject status, String list, int index) {
         var entry = status.getAsJsonArray(list).get(index).getAsJsonObject();
-        return Math.max(length(entry.get("data")), length(entry.get("hiddenData")));
+        return Math.max(
+                length(entry.get("data")), Math.max(length(entry.get("hiddenData")), length(entry.get("hiddenGhost"))));
     }
 
     private static int length(com.google.gson.JsonElement value) {
