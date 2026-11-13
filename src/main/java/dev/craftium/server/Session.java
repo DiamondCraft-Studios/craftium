@@ -142,14 +142,17 @@ final class Session {
                            /** The own blocks of the BuildObjects an edit moved, by id, before and after, so undo and redo move them back with the blocks. */
                            Map<Integer,List<Point>> objectsBefore,Map<Integer,List<Point>> objectsAfter,
                            /** The BuildObjects before and after something done in the Hierarchy (made, renamed, moved, deleted): null for any other change. */
-                           dev.craftium.core.SavedSelections.State hierarchyBefore,dev.craftium.core.SavedSelections.State hierarchyAfter){
+                           dev.craftium.core.SavedSelections.State hierarchyBefore,dev.craftium.core.SavedSelections.State hierarchyAfter,
+                           /** What the BuildObjects keep outside the world (dormant blocks, and the world blocks they replaced) before and after, by id: only those that differ. */
+                           Map<Integer,dev.craftium.core.SavedSelections.Held> heldBefore,Map<Integer,dev.craftium.core.SavedSelections.Held> heldAfter){
+        SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter,Map<String,String> restoreBefore,Map<String,String> restoreAfter,Map<Integer,List<Point>> objectsBefore,Map<Integer,List<Point>> objectsAfter,dev.craftium.core.SavedSelections.State hierarchyBefore,dev.craftium.core.SavedSelections.State hierarchyAfter){this(before,after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,objectsBefore,objectsAfter,hierarchyBefore,hierarchyAfter,Map.of(),Map.of());}
         SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter,Map<String,String> restoreBefore,Map<String,String> restoreAfter,Map<Integer,List<Point>> objectsBefore,Map<Integer,List<Point>> objectsAfter){this(before,after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,objectsBefore,objectsAfter,null,null);}
         /** A change to the Hierarchy alone: the player's selection and everything else are left as they are. */
         static SelectionChange hierarchy(dev.craftium.core.SavedSelections.State before,dev.craftium.core.SavedSelections.State after){return new SelectionChange(null,null,null,null,Map.of(),Map.of(),Map.of(),Map.of(),before,after);}
         boolean hasHierarchy(){return hierarchyBefore!=null&&hierarchyAfter!=null;}
         /** The same change, also giving back the BuildObjects as they were before and after (a paste that made one). */
         SelectionChange withHierarchy(dev.craftium.core.SavedSelections.State before,dev.craftium.core.SavedSelections.State after){
-            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,objectsBefore,objectsAfter,before,after);
+            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,objectsBefore,objectsAfter,before,after,heldBefore,heldAfter);
         }
         SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter,Map<String,String> restoreBefore,Map<String,String> restoreAfter){this(before,after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,Map.of(),Map.of());}
         SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter){this(before,after,pivotBefore,pivotAfter,Map.of(),Map.of());}
@@ -157,9 +160,20 @@ final class Session {
         SelectionChange withObjects(Map<Integer,List<Point>> before,Map<Integer,List<Point>> after){
             var b=new LinkedHashMap<Integer,List<Point>>();var a=new LinkedHashMap<Integer,List<Point>>();
             for(var e:after.entrySet()){var was=before.get(e.getKey());if(was!=null&&!was.equals(e.getValue())){b.put(e.getKey(),was);a.put(e.getKey(),e.getValue());}}
-            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,b,a,hierarchyBefore,hierarchyAfter);
+            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,b,a,hierarchyBefore,hierarchyAfter,heldBefore,heldAfter);
         }
         boolean hasObjects(){return !objectsBefore.isEmpty();}
+        /** The same change, also giving back what these BuildObjects keep outside the world (only those that differ are kept). */
+        SelectionChange withHeld(Map<Integer,dev.craftium.core.SavedSelections.Held> before,Map<Integer,dev.craftium.core.SavedSelections.Held> after){
+            var b=new LinkedHashMap<Integer,dev.craftium.core.SavedSelections.Held>(heldBefore);var a=new LinkedHashMap<Integer,dev.craftium.core.SavedSelections.Held>(heldAfter);
+            for(var e:after.entrySet()){
+                var was=before.getOrDefault(e.getKey(),dev.craftium.core.SavedSelections.Held.NONE);
+                if(was.same(e.getValue())){if(!heldBefore.containsKey(e.getKey())){b.remove(e.getKey());a.remove(e.getKey());}continue;}
+                b.putIfAbsent(e.getKey(),was);a.put(e.getKey(),e.getValue());
+            }
+            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,objectsBefore,objectsAfter,hierarchyBefore,hierarchyAfter,b,a);
+        }
+        boolean hasHeld(){return !heldBefore.isEmpty();}
         /**
          * The same change, also moving these BuildObjects' blocks (only the ones named in {@code after}, which are the ones that changed), after the blocks it already moved:
          * where an object began is where this change's own earlier part left it, and where it ends is the new place.
@@ -168,7 +182,7 @@ final class Session {
             var ob=new LinkedHashMap<Integer,List<Point>>();for(var id:after.keySet())if(before.containsKey(id))ob.put(id,before.get(id));
             ob.putAll(objectsBefore); // the earlier part's start is where it began
             var oa=new LinkedHashMap<>(objectsAfter);oa.putAll(after);
-            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,ob,oa,hierarchyBefore,hierarchyAfter);
+            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,ob,oa,hierarchyBefore,hierarchyAfter,heldBefore,heldAfter);
         }
         SelectionChange(List<Point> before,List<Point> after){this(before,after,null,null);}
         /** A change to client-side state alone (see {@link dev.craftium.core.Restore}): the player's own selection is left as it is. */
@@ -178,14 +192,15 @@ final class Session {
         /** The same change, also handing back these values of client-side state. */
         SelectionChange with(Map<String,String> before,Map<String,String> after){
             var b=new LinkedHashMap<>(restoreBefore);b.putAll(before);var a=new LinkedHashMap<>(restoreAfter);a.putAll(after);
-            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,b,a,objectsBefore,objectsAfter,hierarchyBefore,hierarchyAfter);
+            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,b,a,objectsBefore,objectsAfter,hierarchyBefore,hierarchyAfter,heldBefore,heldAfter);
         }
         /** This change followed by a later one, as one: it starts where this began and ends where the later one did. */
         SelectionChange then(SelectionChange later){
             var b=new LinkedHashMap<>(later.restoreBefore);b.putAll(restoreBefore);var a=new LinkedHashMap<>(restoreAfter);a.putAll(later.restoreAfter);
             var ob=new LinkedHashMap<>(later.objectsBefore);ob.putAll(objectsBefore); // the earlier change's blocks are where it began
             var oa=new LinkedHashMap<>(objectsAfter);oa.putAll(later.objectsAfter);
-            return new SelectionChange(before!=null?before:later.before,later.after!=null?later.after:after,pivotBefore,later.pivotAfter,b,a,ob,oa,hierarchyBefore!=null?hierarchyBefore:later.hierarchyBefore,later.hierarchyAfter!=null?later.hierarchyAfter:hierarchyAfter);
+            var hb=new LinkedHashMap<>(later.heldBefore);hb.putAll(heldBefore);var ha=new LinkedHashMap<>(heldAfter);ha.putAll(later.heldAfter); // as for the blocks: it began where the earlier change did
+            return new SelectionChange(before!=null?before:later.before,later.after!=null?later.after:after,pivotBefore,later.pivotAfter,b,a,ob,oa,hierarchyBefore!=null?hierarchyBefore:later.hierarchyBefore,later.hierarchyAfter!=null?later.hierarchyAfter:hierarchyAfter,hb,ha);
         }
     }
     /** {@code time} is when the edit was made, in epoch milliseconds, or 0 when unknown (history from before it was kept). */

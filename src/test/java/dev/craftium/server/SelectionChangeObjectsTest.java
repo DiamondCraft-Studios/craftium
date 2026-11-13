@@ -43,4 +43,25 @@ class SelectionChangeObjectsTest {
         assertTrue(edit.hierarchyOnly());assertFalse(edit.selectionOnly(),"a Hierarchy step is its own kind, labelled by name alone");
         assertTrue(edit.estimatedBytes()>=4*96,"two snapshots of two rows each: "+edit.estimatedBytes());
     }
+    private static dev.craftium.core.SavedSelections.Held held(Point at,String state){var d=new dev.craftium.core.PackedCells();d.put(at,state);return new dev.craftium.core.SavedSelections.Held(d,dev.craftium.core.PackedCells.EMPTY);}
+    @Test void whatAnObjectKeepsOutsideTheWorldIsKeptOnlyWhereItDiffersAndAnEmptyBeforeIsNone(){
+        var none=dev.craftium.core.SavedSelections.Held.NONE;
+        var change=Session.SelectionChange.restoring(Map.of(),Map.of()).withHeld(Map.of(1,none,2,held(A,"minecraft:dirt")),Map.of(1,held(B,"minecraft:stone"),2,held(A,"minecraft:dirt")));
+        assertTrue(change.hasHeld());assertEquals(java.util.Set.of(1),change.heldBefore().keySet(),"object 2 did not change");
+        assertTrue(change.heldBefore().get(1).isEmpty());assertEquals("minecraft:stone",change.heldAfter().get(1).dormant().get(B));
+        assertFalse(Session.SelectionChange.restoring(Map.of(),Map.of()).withHeld(Map.of(1,none),Map.of(1,none)).hasHeld());
+    }
+    @Test void twoChangesInARunBeginWhereTheFirstBeganAndEndWhereTheLastEnded(){
+        var first=Session.SelectionChange.restoring(Map.of(),Map.of()).withHeld(Map.of(1,dev.craftium.core.SavedSelections.Held.NONE),Map.of(1,held(A,"minecraft:dirt")));
+        var second=Session.SelectionChange.restoring(Map.of(),Map.of()).withHeld(Map.of(1,held(A,"minecraft:dirt")),Map.of(1,held(B,"minecraft:stone")));
+        var both=first.then(second);
+        assertTrue(both.heldBefore().get(1).isEmpty(),"Undo goes back to before the run");
+        assertEquals("minecraft:stone",both.heldAfter().get(1).dormant().get(B),"Redo goes forward to the end of it");
+    }
+    @Test void theOtherWaysOfBuildingAChangeKeepWhatIsHeld(){
+        var change=Session.SelectionChange.restoring(Map.of(),Map.of()).withHeld(Map.of(1,dev.craftium.core.SavedSelections.Held.NONE),Map.of(1,held(A,"minecraft:dirt")));
+        assertTrue(change.withObjects(Map.of(1,List.of(A)),Map.of(1,List.of(B))).hasHeld());
+        assertTrue(change.andObjects(Map.of(1,List.of(A)),Map.of(1,List.of(B))).hasHeld());
+        assertTrue(change.with(Map.of("a","b"),Map.of("a","c")).hasHeld());
+    }
 }

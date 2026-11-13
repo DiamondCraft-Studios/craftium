@@ -1124,6 +1124,7 @@ public final class EditorServer {
         if(change.hasHierarchy())s.saved.restore(backwards?change.hierarchyBefore():change.hierarchyAfter(),s.selection); // first: letting go of a BuildObject that is gone puts back a selection, which the next line then replaces
         if(change.hasPoints())s.selection.restore(backwards?change.before():change.after());
         if(change.hasObjects())s.saved.setPoints(backwards?change.objectsBefore():change.objectsAfter()); // the BuildObjects go back with their blocks
+        if(change.hasHeld())s.saved.restoreHeld(backwards?change.heldBefore():change.heldAfter()); // and so do the blocks they keep outside the world
         String pivot=backwards?change.pivotBefore():change.pivotAfter();
         if(pivot!=null)s.pivotUpdate=pivot;
         var values=backwards?change.restoreBefore():change.restoreAfter();
