@@ -18,7 +18,7 @@ final class GhostCodec {
      * What an AI preview describes. The client draws only as many models as the player allows, but an outline of all of it, so the
      * describing can go further than the drawing; the blocks that show come first, so a cut never leaves a hole in the outer surface.
      */
-    static final int AI_LIMIT=32_768;
+    static final int AI_LIMIT=49_152;
     /**
      * {@code layout} and {@code names} are only there for a jigsaw preview: one box per piece (x0, y0, z0, x1, y1, z1 and a hue, or -1 for the start piece)
      * and the template each piece comes from. {@code large} says the preview may hold more blocks than a frame can draw, so the client draws only as many

@@ -60,6 +60,8 @@ Changes since 1.5.0-beta.1.
 - The Builder's destination preview (where a move, clone, stack or smear would land) is drawn like its selection: dim faces on the ground and an outline in open air, hidden by terrain in front of it.
 
 ### Editing
+- The clipboard is kept packed, at about 14 bytes a block instead of about 128, so copying two million blocks holds roughly 190 MB less memory.
+- An AI or jigsaw preview describes up to 49,152 blocks (was 32,768), and an edit may reach up to 256 chunks that are not loaded (was 128), which can make the server pause longer while they generate.
 - Edits and selections go up to 2,097,152 blocks, twice as many as before.
 - Undo history is kept packed, at about 16 bytes a block instead of about 128, so a big edit takes far less of the history budget.
 - A Large edit window shows how far an edit of 100,000 blocks or more has got (blocks done, percent, time left) while the server applies, undoes or redoes it. It is a window like the others: move it, resize it, fold it, or close it for the rest of that edit.

@@ -10,7 +10,7 @@ import java.util.*;
 
 final class Session {
     final Selection selection = new Selection();
-    final LinkedHashMap<Point,BlockSnapshot> clipboard = new LinkedHashMap<>();
+    final ClipboardMap clipboard = new ClipboardMap();
     final List<net.minecraft.nbt.CompoundTag> clipboardEntities=new ArrayList<>();
     final Deque<Edit> undo = new ArrayDeque<>(), redo = new ArrayDeque<>();
     final List<String> events = new ArrayList<>();
