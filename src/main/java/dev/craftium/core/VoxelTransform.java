@@ -24,7 +24,16 @@ public final class VoxelTransform {
      * Sizes are scale factors with a negative one meaning a flip, as in the Options.
      */
     public static Set<Point> landed(Collection<Point> source,Geometry.Vector pivot,double yaw,double pitch,double roll,double sx,double sy,double sz,int ox,int oy,int oz,long cellLimit){
-        if(source.isEmpty())return Set.of();
+        var from=landedFrom(source,pivot,yaw,pitch,roll,sx,sy,sz,ox,oy,oz,cellLimit);
+        return from==null?null:new HashSet<>(from.keySet());
+    }
+
+    /**
+     * As {@link #landed}, with the cell each landed cell took its block from: what a preview needs to carry the blocks themselves through a rotate or a scale, not only
+     * their outline. Null when the result would cover more than {@code cellLimit} cells of space.
+     */
+    public static Map<Point,Point> landedFrom(Collection<Point> source,Geometry.Vector pivot,double yaw,double pitch,double roll,double sx,double sy,double sz,int ox,int oy,int oz,long cellLimit){
+        if(source.isEmpty())return Map.of();
         sx=scale(sx);sy=scale(sy);sz=scale(sz);
         var cells=new HashSet<>(source);
         int x0=Integer.MAX_VALUE,y0=x0,z0=x0,x1=Integer.MIN_VALUE,y1=x1,z1=x1;
@@ -45,7 +54,7 @@ public final class VoxelTransform {
     private static double scale(double size){return (size<0?-1:1)*Math.max(.05,Math.abs(size));}
     private static boolean quarter(double angle){return Math.abs(angle/90-Math.rint(angle/90))<=1e-9;}
 
-    private static Set<Point> place(Set<Point> cells,Point min,Point max,Geometry.Vector pivot,double yaw,double pitch,double roll,double sx,double sy,double sz,int ox,int oy,int oz,long cellLimit){
+    private static Map<Point,Point> place(Set<Point> cells,Point min,Point max,Geometry.Vector pivot,double yaw,double pitch,double roll,double sx,double sy,double sz,int ox,int oy,int oz,long cellLimit){
         double lx=Double.POSITIVE_INFINITY,ly=lx,lz=lx,hx=-lx,hy=-lx,hz=-lx;
         for(double x:new double[]{min.x(),max.x()+1})for(double y:new double[]{min.y(),max.y()+1})for(double z:new double[]{min.z(),max.z()+1}){
             var r=Geometry.rotate(new Geometry.Vector((x-pivot.x())*sx,(y-pivot.y())*sy,(z-pivot.z())*sz),yaw,pitch,roll);
@@ -55,11 +64,11 @@ public final class VoxelTransform {
         int a0=(int)Math.floor(lx+1e-9),b0=(int)Math.floor(ly+1e-9),c0=(int)Math.floor(lz+1e-9);
         int a1=(int)Math.ceil(hx-1e-9),b1=(int)Math.ceil(hy-1e-9),c1=(int)Math.ceil(hz-1e-9);
         if((long)(a1-a0)*(b1-b0)*(c1-c0)>cellLimit)return null;
-        var landed=new HashSet<Point>();
+        var landed=new LinkedHashMap<Point,Point>();
         for(int x=a0;x<a1;x++)for(int y=b0;y<b1;y++)for(int z=c0;z<c1;z++){
             var r=Geometry.inverseRotate(new Geometry.Vector(x+.5-ox-pivot.x(),y+.5-oy-pivot.y(),z+.5-oz-pivot.z()),yaw,pitch,roll);
             var from=new Point((int)Math.floor(pivot.x()+r.x()/sx+1e-9),(int)Math.floor(pivot.y()+r.y()/sy+1e-9),(int)Math.floor(pivot.z()+r.z()/sz+1e-9));
-            if(cells.contains(from))landed.add(new Point(x,y,z));
+            if(cells.contains(from))landed.put(new Point(x,y,z),from);
         }
         return landed;
     }
