@@ -11,14 +11,15 @@ import net.minecraft.client.renderer.texture.AbstractTexture;
 import java.util.WeakHashMap;
 
 /**
- * The textures the game keeps the letters of its fonts in. In {@link TextMode.Mode#LINEAR} they are sampled with linear filtering while a Craftium screen is
- * shown at a fractional interface scale, and the way the game sampled them at any other time.
+ * The textures the game keeps the letters of its fonts in. In {@link TextMode.Mode#LINEAR} they are sampled with linear filtering only while the game draws its
+ * interface (see {@link #begin}) with a Craftium screen shown at a fractional interface scale. Text drawn in the world, such as signs, name tags and the
+ * labels of the viewport overlay, is drawn earlier in the frame and is sampled the way the game does.
  */
 public final class FontTextures {
     private FontTextures(){}
     /** Each font texture with the sampler the game gave it. */
     private static final Map<AbstractTexture,GpuSampler> ALL=Collections.synchronizedMap(new WeakHashMap<>());
-    private static boolean linear;
+    private static boolean linear,wanted;
 
     static{InterfaceScale.listener=FontTextures::update;}
 
@@ -28,11 +29,18 @@ public final class FontTextures {
         set(texture,texture.getSampler(),linear);
     }
 
-    /** Sets every font texture to what the mode and the interface scale now call for. */
-    public static void update(){
-        boolean want=TextMode.mode()==TextMode.Mode.LINEAR&&InterfaceScale.zoom()!=1;
-        if(want==linear)return;
-        linear=want;
+    /** Notes whether the interface is to be drawn smoothed; {@link #begin} puts it into effect. */
+    public static void update(){wanted=TextMode.mode()==TextMode.Mode.LINEAR&&InterfaceScale.zoom()!=1;if(!wanted)apply(false);}
+
+    /** The game is about to draw its interface: smooth the letters if they are to be. */
+    public static void begin(){if(wanted)apply(true);}
+
+    /** The interface is drawn: the letters are the game's own again for everything drawn after it. */
+    public static void end(){apply(false);}
+
+    private static void apply(boolean on){
+        if(on==linear)return;
+        linear=on;
         synchronized(ALL){for(var entry:ALL.entrySet())set(entry.getKey(),entry.getValue(),linear);}
     }
 
