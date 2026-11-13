@@ -195,6 +195,34 @@ final class ObjectMoves {
         return new Transformed(commit(s,plan,result,ownBefore,heldBefore),result.landed());
     }
 
+    /** The BuildObjects as the move sees them, in the order of the Hierarchy. */
+    private static List<ObjectMove.Obj> ordered(Session s){
+        var out=new ArrayList<ObjectMove.Obj>();
+        for(var e:s.saved.entries())out.add(new ObjectMove.Obj(e.id(),new HashSet<>(e.points()),e.dormant(),e.replaced()));
+        return out;
+    }
+
+    /** The cells where a hidden block now outranks the BuildObject standing in it, after the order of the Hierarchy changed. Empty for most worlds: nothing is hidden. */
+    static List<Point> outranked(Session s){
+        if(s.saved.tree().held()==0)return List.of();
+        var out=new ArrayList<Point>();for(var pl:ObjectMove.outranked(ordered(s)))out.add(pl.cell());
+        return out;
+    }
+
+    /**
+     * After the order of the Hierarchy changed: gives each cell to the BuildObject that outranks the one standing in it now (see {@link ObjectMove#reorder}), the other keeping
+     * its block as dormant. Returns null when nothing changes. Nothing is left changed if it throws.
+     */
+    static Transformed reorder(ServerLevel level,Session s,EditPlanner plan){
+        var ownBefore=s.saved.snapshot();var heldBefore=s.saved.heldSnapshot();
+        var solidCache=new HashMap<String,Boolean>();
+        Predicate<String> solid=text->solidCache.computeIfAbsent(text,t->beats(plan.parse(t)));
+        Function<Point,ObjectMove.Block> world=p->block(BlockSnapshot.capture(level,EditPlanner.pos(p)));
+        var result=ObjectMove.reorder(ordered(s),world,solid);
+        if(result.writes().isEmpty()&&result.objects().isEmpty())return null;
+        return new Transformed(commit(s,plan,result,ownBefore,heldBefore),result.landed());
+    }
+
     private static ObjectMove.Block block(BlockSnapshot snapshot){
         return new ObjectMove.Block(BlockStateParser.serialize(snapshot.state()),snapshot.data()==null?null:snapshot.data().toString());
     }

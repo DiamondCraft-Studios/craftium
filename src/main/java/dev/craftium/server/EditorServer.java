@@ -309,6 +309,11 @@ public final class EditorServer {
                 var before=SavedSelectionActions.changesHierarchy(r.action())?s.saved.state():null; // what is done in the Hierarchy is in the history, so Undo and Redo reach it
                 String said=SavedSelectionActions.run(s,r.action());
                 if(before!=null){var after=s.saved.state();if(!after.equals(before))s.remember(Session.Edit.selecting(SavedSelectionActions.historyName(r.action()),Session.SelectionChange.hierarchy(before,after)));}
+                if(SavedSelectionActions.changesPriority(r.action())){
+                    // The order of the Hierarchy is the priority between BuildObjects: where a hidden block now outranks the one standing in its cell, they change places, as a step of its own.
+                    try{if(reorderObjects(player,s,o))return;}
+                    catch(RuntimeException ex){said=said+" · Not re-resolved: "+ex.getMessage();}
+                }
                 send(player,s,said,false);return;
             }
             if(ActionRegistry.isNamespaced(r.action())){ // an action of a plugin's: only the registry answers, and a name nobody registered is an error, never one of the editor's
@@ -1085,6 +1090,22 @@ public final class EditorServer {
         return new Session.Edit(merged.name(),out,List.of(),merged.flags());
     }
     /** Every edit comes in here: it is checked by the {@link EditGate}, then built, or held as a ghost until the player confirms it. */
+    /** Applies what a new order of the Hierarchy means for the BuildObjects that overlap, in one undo step, without waiting for confirmation. Returns whether it applied anything. */
+    private static boolean reorderObjects(ServerPlayer player,Session s,Options o){
+        var cells=ObjectMoves.outranked(s);
+        if(cells.isEmpty())return false;
+        ChunkLease.planning(ChunkLease.area().points(cells,0,0).lease(player.level())); // the cells may be far from every player
+        var plan=EditPlanner.forSelection(player.level(),s,o);
+        var done=ObjectMoves.reorder(player.level(),s,plan);
+        var edit=plan.finish("Reorder BuildObjects");
+        if(done==null||edit.changes().isEmpty()){if(done!=null)done.applied().undo(s);return false;}
+        var wasBypassing=s.bypassConfirm;s.bypassConfirm=true; // a change of order is not an edit to confirm
+        try{start(player,s,edit.withSelection(done.applied().change()));}
+        catch(RuntimeException ex){done.applied().undo(s);throw ex;}
+        finally{s.bypassConfirm=wasBypassing;}
+        if(!s.saved.viewed().isEmpty())s.saved.viewSet(s.saved.viewed().stream().map(SavedSelections.Entry::id).toList(),s.selection); // what is shown now holds the cells that changed hands
+        return true;
+    }
     static void start(ServerPlayer player,Session s,Session.Edit edit) {
         if(s.fromBuilder)edit=edit.withBuilder(true);
         if(s.shapeAtRequest!=null&&!edit.changes().isEmpty()){ // a shape that was built goes back to waiting to be built when it is undone

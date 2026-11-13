@@ -74,6 +74,8 @@ final class SavedSelectionActions {
     /** Whether the action changes the BuildObjects themselves (and so goes in the history), as against only what is being looked at. */
     static boolean changesHierarchy(String action){return switch(verb(action)){case "save","delete","deleteset","rename","place","placeset","group","createchild","colour","ungroup","groupnew","grouprename","groupmove","groupdelete","empty"->true;default->false;};}
     /** What the action asks permission for (see {@link HierarchyPermissions}), or null for one everybody may do: looking, which changes nothing of the BuildObjects. */
+    /** Whether the action can change which BuildObject outranks which: where one is put, grouped or taken out, or a group moved. */
+    static boolean changesPriority(String action){return switch(verb(action)){case "place","placeset","group","ungroup","groupmove"->true;default->false;};}
     static String permission(String action){
         return switch(verb(action)){
             case "save","group","createchild","groupnew","empty"->"create";
