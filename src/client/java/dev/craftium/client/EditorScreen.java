@@ -1812,7 +1812,7 @@ public final class EditorScreen extends CraftiumScreen {
             if(index>=0){selectedNode=index;if(!toolActive)ClientState.selectedRuler=rulerOfNode(index);draggingNode=true;placementDragOrigin=points.get(index);placementDragX=event.x();placementDragY=event.y();return true;}
             if(!toolActive){var line=rulerAt(event.x(),event.y());if(line!=null){ClientState.selectedRuler=line;selectedNode=-1;TransformGizmo.cancel();return true;}} // no tool chosen: a click on a ruler picks it, without choosing the Ruler tool
         }
-        if(event.button()==0&&!toolActive&&!PlacementPreview.active()){objectPickHit=target();objectPickPending=objectPickHit!=null;objectPickX=event.x();objectPickY=event.y();} // resolved on release, if it was a click and not a drag
+        if(event.button()==0&&o().hoverBuildObjects&&!toolActive&&!PlacementPreview.active()){objectPickHit=target();objectPickPending=objectPickHit!=null;objectPickX=event.x();objectPickY=event.y();} // resolved on release, if it was a click and not a drag
         if(PlacementPreview.active()){
             if(event.button()==1){var hit=target();if(hit!=null){Point p=CraftiumClient.point(hit.getBlockPos()),n=CraftiumClient.normal(hit);PlacementPreview.origin=p.add(n.x(),n.y(),n.z());}return true;}
             if(event.button()==0&&pickPlacementAxis(event.x(),event.y())){draggingPlacement=true;placementDragOrigin=PlacementPreview.origin;placementDragX=event.x();placementDragY=event.y();return true;}
