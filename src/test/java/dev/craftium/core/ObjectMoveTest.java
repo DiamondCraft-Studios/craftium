@@ -119,4 +119,21 @@ class ObjectMoveTest{
         assertEquals(Map.of(p(1),DIRT,p(20),STONE,p(21),STAIRS),world);
         assertTrue(r.objects().get(1).dormant().isEmpty());
     }
+    @Test void theSelectionAfterAMoveHoldsOnlyTheCellsWhereABlockLanded(){
+        var world=new HashMap<>(Map.of(p(0),STONE,p(1),STONE,p(6),DIRT));
+        var r=move(List.of(obj(1,p(0),p(1))),Set.of(p(0),p(1)),5,world);
+        assertEquals(Set.of(p(5)),r.landed(),"the block that went dormant at 6 is not part of the selection, or the next move would carry the dirt");
+    }
+    @Test void aTransformCanLandABlockTurnedAndItIsWrittenAsItLands(){
+        var world=new HashMap<>(Map.of(p(0),"minecraft:oak_stairs[facing=north]"));
+        var landed=Map.of(p(5),new ObjectMove.Landing(p(0),new ObjectMove.Block("minecraft:oak_stairs[facing=east]",null)));
+        var r=ObjectMove.moveLanded(List.of(obj(1,p(0))),Set.of(p(0)),landed,Map.of(),view(world),ObjectMoveTest::solid,false);apply(world,r);
+        assertEquals(Map.of(p(5),"minecraft:oak_stairs[facing=east]"),world);
+    }
+    @Test void anAirBlockOfAnObjectThatLosesACellIsDroppedNotKept(){
+        var world=new HashMap<>(Map.of(p(0),STONE,p(5),DIRT));
+        var landed=Map.of(p(5),new ObjectMove.Landing(p(0),new ObjectMove.Block(ObjectMove.AIR,null)));
+        var r=ObjectMove.moveLanded(List.of(obj(1,p(0))),Set.of(p(0)),landed,Map.of(),view(world),ObjectMoveTest::solid,true);apply(world,r);
+        assertEquals(DIRT,world.get(p(5)));assertTrue(r.objects().get(1).dormant().isEmpty(),"nothing worth keeping");
+    }
 }
