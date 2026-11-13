@@ -50,4 +50,16 @@ class PackedCellsTest{
         assertThrows(UnsupportedOperationException.class,()->PackedCells.EMPTY.put(new Point(0,0,0),STONE));
         assertNull(PackedCells.EMPTY.get(new Point(0,0,0)));assertTrue(PackedCells.EMPTY.points().isEmpty());
     }
+    @Test void blockEntityDataStaysWithItsCellThroughChangesCopiesAndTheSavedForm(){
+        var c=new PackedCells();var a=new Point(1,0,0);var b=new Point(2,0,0);
+        c.put(a,"minecraft:chest[facing=north]","{Items:[]}");c.put(b,STONE);
+        assertEquals("{Items:[]}",c.data(a));assertNull(c.data(b));
+        assertFalse(c.put(a,"minecraft:chest[facing=north]","{Items:[]}"));assertTrue(c.put(a,"minecraft:chest[facing=north]","{Items:[1]}"),"the data alone is a change");
+        var back=PackedCells.of(c.keysArray(),c.paletteList(),c.indexesArray(),c.dataKeysArray(),c.dataList());
+        assertEquals("{Items:[1]}",back.data(a));assertNull(back.data(b));
+        assertEquals("{Items:[1]}",c.copy().data(a));
+        c.put(a,STONE);assertNull(c.data(a),"a new block there has none of the old block's data");
+        c.put(b,STONE,"{x:1}");c.remove(b);assertNull(c.data(b));
+        assertThrows(IllegalArgumentException.class,()->PackedCells.of(new long[]{PackedCells.pack(a)},List.of(STONE),new int[]{0},new long[]{PackedCells.pack(b)},List.of("{}")));
+    }
 }
