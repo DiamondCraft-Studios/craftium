@@ -56,16 +56,18 @@ Known follow-ups: the whole tree is re-sent to each editor when it changes (abou
 
 ## Status
 
-Done, with tests (732 pass on 26.2; both versions compile): the BuildObject limit of 1,024; `ObjectVolume`; `OccupancyResolver`; `PackedCells` (the packed store); dormant and replaced cells on each BuildObject with the caps; saving and loading them; `ObjectMove`, the pure function that moves selected blocks by a one-to-one map of cells with the world winning (dormant, replaced and priority rules, 10 tests).
+Done, with tests (736 pass on 26.2; both versions compile): the BuildObject limit of 1,024; `ObjectVolume`; `OccupancyResolver`; `PackedCells` (the packed store); dormant and replaced cells on each BuildObject with the caps; saving and loading them; `ObjectMove`, the pure function that moves selected blocks by a one-to-one map of cells with the world winning (dormant, replaced and priority rules, resampling, block entity data; 12 tests). Dormant cells keep block entity data (a chest keeps its items), saved with the world.
 
 Not built: using `ObjectMove` from the editor, the dormant data in undo entries, the x-ray preview, the Hierarchy scroll check at hundreds of rows. Nothing writes dormant data yet, because the Move, nudge and Transform actions in `EditorServer` still rewrite the selected cells directly.
 
 ### What wiring it in involves (found while reading the edit path)
-- The Move, nudge and Transform actions work on selected *world* cells and the objects follow through `ObjectRemap`. A dormant block is not in the world, so those tools cannot carry it; `ObjectMove` has to own the whole move (vacate, restore, arrive).
-- `ObjectMove` takes any one-to-one map of cells, so a shift, a quarter turn and a mirror are covered. Scale and free-angle rotation resample and are not one-to-one: when an object holds dormant blocks, those transforms should be refused with a message rather than lose them.
+- The Move, nudge and Transform actions work on selected *world* cells and the objects follow through `ObjectRemap`. A dormant block is not in the world, so those tools cannot carry it on their own.
+- **Decision (2026-11-13): dormant blocks are lifted while a move or transform runs.** `ModelTransform.apply` builds a map of cell to block from the selected cells and samples it. For an object that moves whole (all its world blocks selected), its dormant blocks are sampled the same way, per object and with the same box and steps, so a shift, a turn, a scale or a free-angle rotation treats them like any other block. While the transform is previewed they show as ghost blocks. When it is placed (release, or Enter), each landed block goes through the world-wins rule again: written where the world is free, dormant again where it is not. Nothing is refused.
+- `ObjectMove.move` takes where each landed cell came from (and the same for each moving object's dormant blocks), so it covers shifts, turns, mirrors and resampling. `ObjectMove.shift` is the convenience for one-to-one maps.
 - `Session.SelectionChange` carries only each object's own cells for undo and redo. It must also carry the dormant and replaced stores (before and after), merged correctly in `then`, `andObjects` and `withObjects`, applied in `handBack`, and saved by `HistoryStore`.
 - The staged flow (preview, then Enter) already keeps `pendingObjectsBefore`; the held stores need the same.
-- `ObjectMove` needs a block-state-text view of the world and a `solid` test (not air, not a fluid, not replaceable) built from the live `BlockState`.
+- The server needs a view of the world as block state text plus block entity data, and a `solid` test (not air, not a fluid, not replaceable) built from the live `BlockState`.
+- **Place here** (Hierarchy action, decided 2026-11-13): re-resolves an object where it stands, so dormant blocks whose cell is now free are written. It is the only way to bring back an object whose blocks are all dormant (it has no world cells to select), and it picks up a changed hierarchy order or a removed blocker.
 
 ## Open questions
 
