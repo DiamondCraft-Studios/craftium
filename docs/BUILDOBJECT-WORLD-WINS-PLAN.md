@@ -32,9 +32,9 @@ The ghost preview shows dormant cells (faint outline or x-ray) before the player
 - **Where:** the same per-dimension file as the objects, `craftium/buildobjects/<dimension>.nbt`, on the server only. The file format is bumped when the dormant data is added; older files load with none.
 - **Written cells:** no copy of their state is kept. The world already holds it.
 - **Dormant cells:** a packed `long[]` of positions plus a `short[]` of indexes into a per-object palette of block-state strings, about 10 bytes per cell.
-- **Replaced blocks** (open question 1): the same structure, only for replaced blocks that were not air.
+- **Replaced blocks** (decided 2026-11-13: moving an object gives them back): the same structure, only for world blocks that were not air.
 - **Clients** get dormant positions for the x-ray, not states.
-- **Safeguards:** a cap on dormant cells per object and per dimension, held server-side only (not copied into each player's session), and undo entries that store dormant changes in the same packed form.
+- **Safeguards:** up to `Selection.LIMIT` dormant and as many replaced cells per object, and 8,388,608 held cells per dimension (`Tree.HELD_LIMIT`, about 80 MB at most). Held server-side only (not copied into each player's session). Undo entries that store dormant changes in the same packed form are still to do.
 
 Estimates, not measurements. A typical partly overlapping object has thousands of dormant cells (tens of KB). The worst case, an object of `Selection.LIMIT` (2,097,152) cells buried in terrain, is about 20 MB. Today's `List<Point>` already costs roughly 36 bytes a cell, so a packed `long[]` for an object's own cells would be a separate saving.
 
@@ -56,9 +56,10 @@ Known follow-ups: the whole tree is re-sent to each editor when it changes (abou
 
 ## Status
 
-Core classes `ObjectVolume` and `OccupancyResolver` exist with tests. Nothing else is built.
+Done, with tests (722 pass on 26.2; both versions compile): the BuildObject limit of 1,024; `ObjectVolume`; `OccupancyResolver`; `PackedCells` (the packed store); dormant and replaced cells on each BuildObject with the caps; saving and loading them.
+
+Not built: resolving on place and move, giving replaced blocks back, re-resolving overlapping objects, the dormant data in undo entries, the x-ray preview, the Hierarchy scroll check at hundreds of rows. Nothing writes dormant data yet, because placement does not use the resolver.
 
 ## Open questions
 
-1. When a block is written over air, water or grass, should moving the object restore the replaced block, or leave air? Recommended: restore.
-2. Non-90-degree rotate and scale resample and are lossy, as in the BuildObjects plan; dormant cells are resampled with the rest.
+1. Non-90-degree rotate and scale resample and are lossy, as in the BuildObjects plan; dormant cells are resampled with the rest.
