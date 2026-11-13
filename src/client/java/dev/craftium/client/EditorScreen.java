@@ -453,7 +453,7 @@ public final class EditorScreen extends CraftiumScreen {
     /** Chooses a tool as a click in the tool list does. Not private, so the game tests can choose one the way a player does. */
     void select(Tool tool) {
         cancelSelectionJobs();
-        if (tool.transform() && tool != Tool.PIVOT && ClientState.status.selectionSize() == 0 && !ShapeObject.active())
+        if (tool.transform() && tool != Tool.PIVOT && ClientState.gizmoSize() == 0 && !ShapeObject.active())
             ClientState.notify("Select blocks first, then use " + tool.label);
         toolActive = true;
         previousTool = o().tool;
@@ -6956,7 +6956,19 @@ public final class EditorScreen extends CraftiumScreen {
                 box.setX(nameX);
                 box.setY(ry + 4);
                 box.setWidth(eye - 4 - nameX);
-            } else text(g, shorten(entry.name(), eye - 4 - nameX), nameX, ry + 6, entry.active() ? TEXT : MUTED);
+            } else {
+                int markerRoom = entry.hidden() > 0
+                        ? 10
+                        : 0; // a small amber square: some of its blocks are kept out of the world
+                text(
+                        g,
+                        shorten(entry.name(), eye - 4 - nameX - markerRoom),
+                        nameX,
+                        ry + 6,
+                        entry.active() ? TEXT : MUTED);
+                if (entry.hidden() > 0)
+                    g.fill(eye - 9, ry + rowHeight / 2 - 2, eye - 5, ry + rowHeight / 2 + 2, 0xffe0a040);
+            }
             if (rowDragMoved && rowDragIds.contains(id))
                 g.fill(
                         x + 9,
@@ -6971,8 +6983,12 @@ public final class EditorScreen extends CraftiumScreen {
                     rowRight - (x + 9),
                     rowHeight,
                     () -> rowClick(entry),
-                    HIDDEN_TIP + savedSpan(entry) + " blocks · "
-                            + (entry.active() && !entry.editing() ? "Let go" : "Select this BuildObject"));
+                    HIDDEN_TIP + savedSpan(entry) + " blocks"
+                            + (entry.hidden() > 0
+                                    ? " · " + String.format("%,d", entry.hidden())
+                                            + " kept out of the world by what is in the way, shown as an x-ray · Right-click > Place here puts them where it is free"
+                                    : "")
+                            + " · " + (entry.active() && !entry.editing() ? "Let go" : "Select this BuildObject"));
             controls.add(rowControl);
             renameAreas.add(new RenameArea(rowControl, id));
             if (parents.contains(id)) { // something is under it: an arrow folds it
