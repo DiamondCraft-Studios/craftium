@@ -47,6 +47,7 @@ final class HistoryStore {
             var biomes=new ListTag();for(var c:edit.biomes()){var item=new CompoundTag();point(item,"pos",c.cell());item.putString("before",dev.craftium.compat.Compat.keyName(c.before().unwrapKey().orElseThrow()));item.putString("after",dev.craftium.compat.Compat.keyName(c.after().unwrapKey().orElseThrow()));biomes.add(item);}tag.put("biomes",biomes);
             var entities=new ListTag();for(var c:edit.entities()){var item=new CompoundTag();item.putString("uuid",c.id().toString());item.putBoolean("moving",c.moving());if(c.before()!=null)item.put("before",c.before().copy());if(c.after()!=null)item.put("after",c.after().copy());entities.add(item);}tag.put("entities",entities);
             tag.putString("annotations",Packets.JSON.toJson(edit.annotations()));
+            if(edit.selection()!=null&&edit.selection().hasHeld())tag.put("held",heldTag(edit.selection())); // the dormant blocks that went with them
             if(edit.selection()!=null&&edit.selection().hasObjects())tag.put("objects",objectsTag(edit.selection())); // where the BuildObjects' blocks were and went, so Undo after a restart moves them back with the blocks
             list.add(tag);
         }return list;
@@ -75,6 +76,32 @@ final class HistoryStore {
         }
         return Session.SelectionChange.restoring(Map.of(),Map.of()).withObjects(before,after);
     }
+    /** What an edit did to the blocks BuildObjects keep outside the world (dormant blocks, and world blocks they replaced), by BuildObject id: before and after. */
+    static ListTag heldTag(Session.SelectionChange change){
+        var list=new ListTag();
+        for(var e:change.heldBefore().entrySet()){
+            var after=change.heldAfter().get(e.getKey());if(after==null)continue;
+            var item=new CompoundTag();item.putInt("id",e.getKey());
+            BuildObjectStore.putCells(item,"dormantBefore",e.getValue().dormant());BuildObjectStore.putCells(item,"replacedBefore",e.getValue().replaced());
+            BuildObjectStore.putCells(item,"dormantAfter",after.dormant());BuildObjectStore.putCells(item,"replacedAfter",after.replaced());
+            list.add(item);
+        }
+        return list;
+    }
+    /** The change that {@link #heldTag} wrote, put on {@code base}; just {@code base} (which may be null) when there was none. */
+    static Session.SelectionChange readHeld(ListTag list,Session.SelectionChange base){
+        if(list.isEmpty())return base;
+        if(list.size()>SavedSelections.MAX)throw new IllegalArgumentException("Invalid stored BuildObject change");
+        var before=new LinkedHashMap<Integer,SavedSelections.Held>();var after=new LinkedHashMap<Integer,SavedSelections.Held>();
+        for(int i=0;i<list.size();i++){
+            var item=list.getCompoundOrEmpty(i);int id=item.getIntOr("id",0);
+            if(id<=0)throw new IllegalArgumentException("Invalid stored BuildObject id");
+            before.put(id,new SavedSelections.Held(BuildObjectStore.readCells(item,"dormantBefore"),BuildObjectStore.readCells(item,"replacedBefore")));
+            after.put(id,new SavedSelections.Held(BuildObjectStore.readCells(item,"dormantAfter"),BuildObjectStore.readCells(item,"replacedAfter")));
+        }
+        var change=base!=null?base:Session.SelectionChange.restoring(Map.of(),Map.of());
+        return change.withHeld(before,after);
+    }
     private static int[] flatten(List<Point> points){var flat=new int[points.size()*3];int i=0;for(var p:points){flat[i++]=p.x();flat[i++]=p.y();flat[i++]=p.z();}return flat;}
     private static List<Point> unflatten(int[] flat){
         if(flat.length%3!=0||flat.length/3>Selection.LIMIT)throw new IllegalArgumentException("Invalid stored BuildObject blocks");
@@ -87,7 +114,7 @@ final class HistoryStore {
             var biomes=new ArrayList<Session.BiomeChange>();entries=tag.getListOrEmpty("biomes");if(entries.size()>Selection.LIMIT)throw new IllegalArgumentException("Stored biome edit exceeds limit");var registry=player.registryAccess().lookupOrThrow(Registries.BIOME);
             for(int j=0;j<entries.size();j++){var item=entries.getCompoundOrEmpty(j);biomes.add(new Session.BiomeChange(point(item,"pos"),registry.get(ResourceKey.create(Registries.BIOME,dev.craftium.compat.Compat.parse(item.getStringOr("before","")))).orElseThrow(),registry.get(ResourceKey.create(Registries.BIOME,dev.craftium.compat.Compat.parse(item.getStringOr("after","")))).orElseThrow()));}
             var entities=new ArrayList<Session.EntityChange>();entries=tag.getListOrEmpty("entities");if(entries.size()>128)throw new IllegalArgumentException("Stored entity edit exceeds limit");for(int j=0;j<entries.size();j++){var item=entries.getCompoundOrEmpty(j);entities.add(new Session.EntityChange(UUID.fromString(item.getStringOr("uuid","")),item.getCompound("before").orElse(null),item.getCompound("after").orElse(null),item.getBooleanOr("moving",false)));}
-            var notes=Packets.JSON.fromJson(tag.getStringOr("annotations","[]"),Annotation.Change[].class);if(notes==null||notes.length>128)throw new IllegalArgumentException("Invalid stored annotations");result.add(new Session.Edit(tag.getStringOr("name","Edit"),List.copyOf(blocks),List.copyOf(biomes),tag.getIntOr("flags",2),List.copyOf(entities),List.of(notes),readObjects(tag.getListOrEmpty("objects")),tag.getLongOr("time",0L)));
+            var notes=Packets.JSON.fromJson(tag.getStringOr("annotations","[]"),Annotation.Change[].class);if(notes==null||notes.length>128)throw new IllegalArgumentException("Invalid stored annotations");result.add(new Session.Edit(tag.getStringOr("name","Edit"),List.copyOf(blocks),List.copyOf(biomes),tag.getIntOr("flags",2),List.copyOf(entities),List.of(notes),readHeld(tag.getListOrEmpty("held"),readObjects(tag.getListOrEmpty("objects"))),tag.getLongOr("time",0L)));
         }return List.copyOf(result);
     }
 }
