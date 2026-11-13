@@ -401,26 +401,39 @@ public final class EditorServer {
                     var chain=confirming&&staged!=null&&staged==s.pendingChainEdit?s.pendingChain:null;
                     var base=chain!=null?s.pendingChainBase:confirming?staged:null; // what was staged before the run of transforms began
                     if(base!=null)for(var c:base.changes())plan.changes.put(c.pos(),c);
-                    var result=ModelTransform.apply(plan,s,o,chain);var moved=result.moved();
+                    var computed=ModelTransform.compute(plan,s,o,chain);
                     // The selection follows its blocks; if the edit is cancelled it goes back.
                     var priorBefore=s.pendingSelectionBefore;
                     var original=confirming&&priorBefore!=null?priorBefore:before; // undo puts back the selection from before the whole run
                     if(confirming&&priorBefore==null)s.pendingSelectionBefore=before;
                     // The BuildObjects' blocks follow their blocks: each is worked out again from where it began, so a run of transforms is never remapped twice over.
-                    var objectsNow=s.saved.snapshot();var priorObjects=s.pendingObjectsBefore;
+                    // What they keep outside the world (dormant blocks, replaced blocks) begins where it did too.
+                    var objectsNow=s.saved.snapshot();var heldNow=s.saved.heldSnapshot();var priorObjects=s.pendingObjectsBefore;var priorHeld=s.pendingHeldBefore;
                     var objectsStart=confirming&&priorObjects!=null?priorObjects:objectsNow;
+                    var heldStart=confirming&&priorHeld!=null?priorHeld:heldNow;
                     if(confirming&&priorObjects==null)s.pendingObjectsBefore=objectsNow;
-                    var objectsAfter=new LinkedHashMap<Integer,List<Point>>();
-                    for(var e:objectsStart.entrySet())objectsAfter.put(e.getKey(),ObjectRemap.apply(e.getValue(),result.chain().source().keySet(),result.origin()));
-                    s.selection.combine(moved,Selection.Mode.REPLACE);s.saved.setPoints(objectsAfter);
+                    if(confirming&&priorHeld==null)s.pendingHeldBefore=heldNow;
                     try{
-                        var edit=plan.finish("Transform selection").withSelection(new Session.SelectionChange(original,new ArrayList<>(moved),pivotText(o,0,0,0),pivotText(o,o.offsetX,o.offsetY,o.offsetZ)).withObjects(objectsStart,objectsAfter));
+                        ModelTransform.Result result;Map<Integer,List<Point>> objectsAfter;
+                        if(ObjectMoves.touches(objectsStart,computed.source().keySet())){
+                            // The selection holds BuildObject blocks: they move with the world winning, so what they could not place is kept, not lost (see ObjectMove).
+                            var done=ObjectMoves.transform(player.level(),s,plan,computed,objectsStart,heldStart);
+                            result=ModelTransform.finish(computed,done.moved());objectsAfter=done.applied().ownAfter();
+                        }else{
+                            result=ModelTransform.write(plan,computed);
+                            objectsAfter=new LinkedHashMap<>();
+                            for(var e:objectsStart.entrySet())objectsAfter.put(e.getKey(),ObjectRemap.apply(e.getValue(),result.chain().source().keySet(),result.origin()));
+                            s.saved.setPoints(objectsAfter);
+                        }
+                        var moved=result.moved();
+                        s.selection.combine(moved,Selection.Mode.REPLACE);
+                        var edit=plan.finish("Transform selection").withSelection(new Session.SelectionChange(original,new ArrayList<>(moved),pivotText(o,0,0,0),pivotText(o,o.offsetX,o.offsetY,o.offsetZ)).withObjects(objectsStart,objectsAfter).withHeld(heldStart,s.saved.heldSnapshot()));
                         if(base!=null)edit=new Session.Edit(edit.name(),edit.changes(),base.biomes(),edit.flags(),base.entities(),base.annotations(),edit.selection());
                         if(confirming)s.pendingEdit=null; // the new edit already holds what was staged, so it replaces it
                         start(player,s,edit);
                         if(confirming&&s.pendingEdit!=null){s.pendingChain=result.chain();s.pendingChainBase=base;s.pendingChainEdit=s.pendingEdit;}
                     }
-                    catch(RuntimeException e){s.selection.restore(before);s.saved.setPoints(objectsNow);s.pendingSelectionBefore=priorBefore;s.pendingObjectsBefore=priorObjects;if(confirming)s.pendingEdit=staged;throw e;}
+                    catch(RuntimeException e){s.selection.restore(before);s.saved.setPoints(objectsNow);s.saved.restoreHeld(heldNow);s.pendingSelectionBefore=priorBefore;s.pendingObjectsBefore=priorObjects;s.pendingHeldBefore=priorHeld;if(confirming)s.pendingEdit=staged;throw e;}
                 }
                 case "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo" -> {var plan=new EditPlanner(player.level(),s,o);s.selection.combine(SelectionTransforms.apply(r.action(),plan),Selection.Mode.REPLACE);send(player,s,"Selection updated: "+s.selection.size()+" blocks",false);}
                 case "select_missing" -> {
