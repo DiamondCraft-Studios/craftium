@@ -61,7 +61,7 @@ class PackedChangesTest {
     @Test void costsAFractionOfTheObjects() {
         var original = changes(100_000, true);
         var edit = new Session.Edit("test", original, List.of(), 0);
-        long loose = edit.estimatedBytes();
+        long loose = (long) original.size() * 128; // what the objects of a block change cost
         var packed = edit.packed();
         assertInstanceOf(PackedChanges.class, packed.changes());
         long compact = packed.estimatedBytes();

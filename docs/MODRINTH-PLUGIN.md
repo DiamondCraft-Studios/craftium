@@ -33,4 +33,4 @@ WorldGuard integration checks protected edits, including undo and redo. Bulk edi
 
 Craftium's custom gravity, farmland, block-drop and invulnerability rules require a Fabric server. They are unavailable in this companion. Spigot, Folia, other Minecraft versions and proxy routing are not validated.
 
-**Current release: 1.6.0-beta.1.** This is a development preview. Editing is limited to 1,048,576 cells per selection/operation, and large planning operations can still stall a server tick.
+**Current release: 1.6.0-beta.1.** This is a development preview. Editing is limited to 2,097,152 cells per selection/operation, and large planning operations can still stall a server tick.

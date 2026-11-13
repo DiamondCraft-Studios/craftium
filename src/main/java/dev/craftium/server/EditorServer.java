@@ -647,11 +647,11 @@ public final class EditorServer {
             BlockPos at=EditPlanner.pos(p);
             if(!player.level().hasChunk(p.x()>>4,p.z()>>4))throw new IllegalArgumentException("Selection reaches unloaded chunks");
             var snapshot=BlockSnapshot.capture(player.level(),at);bytes+=128+(snapshot.data()==null?0:snapshot.data().toString().length()*2);
-            if(bytes>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Clipboard exceeds "+Selection.HISTORY_BYTES/1024/1024+" MiB; select a smaller area");
+            if(bytes>Selection.CLIPBOARD_BYTES)throw new IllegalArgumentException("Clipboard exceeds "+Selection.CLIPBOARD_BYTES/1024/1024+" MiB; select a smaller area");
             next.put(p.subtract(min),snapshot);
         }
         var entities=o.copyEntities?ClipboardEntities.capture(player,s):new ClipboardEntities.Capture(List.of(),List.of());
-        for(var tag:entities.relative()){bytes+=tag.toString().length()*2;if(bytes>Selection.HISTORY_BYTES)throw new IllegalArgumentException("Clipboard exceeds "+Selection.HISTORY_BYTES/1024/1024+" MiB including entities");}
+        for(var tag:entities.relative()){bytes+=tag.toString().length()*2;if(bytes>Selection.CLIPBOARD_BYTES)throw new IllegalArgumentException("Clipboard exceeds "+Selection.CLIPBOARD_BYTES/1024/1024+" MiB including entities");}
         s.clipboardEpoch++;s.clipboard.clear();s.clipboard.putAll(next);s.clipboardEntities.clear();s.clipboardEntities.addAll(entities.relative());
         s.clipboardOrigin=min;
         s.clipboardDirty=true;

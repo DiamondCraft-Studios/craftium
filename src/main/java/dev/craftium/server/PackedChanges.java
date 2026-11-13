@@ -17,6 +17,8 @@ import java.util.RandomAccess;
  * element is built when it is asked for and is as short-lived as any other.
  */
 final class PackedChanges extends AbstractList<Session.Change> implements RandomAccess {
+    /** What a change costs once packed, which is what an edit that is not packed yet is counted at: the history keeps every big edit packed. */
+    static final int BYTES_PER_CHANGE = 16;
     /** A smaller list is not worth the palette. */
     static final int MIN_SIZE = 256;
     /** The most distinct snapshots a palette index can name. */
@@ -31,7 +33,7 @@ final class PackedChanges extends AbstractList<Session.Change> implements Random
 
     private PackedChanges(int[] x, int[] y, int[] z, char[] before, char[] after, BlockSnapshot[] palette) {
         this.x = x; this.y = y; this.z = z; this.before = before; this.after = after; this.palette = palette;
-        long total = 64 + (long) x.length * 16;
+        long total = 64 + (long) x.length * BYTES_PER_CHANGE;
         for (var snapshot : palette) {
             total += ENTRY_BYTES;
             if (snapshot.data() != null) total += snapshot.data().toString().length() * 2L;

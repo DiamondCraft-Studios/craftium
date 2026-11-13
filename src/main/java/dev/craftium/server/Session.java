@@ -209,7 +209,7 @@ final class Session {
         Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags,List<EntityChange> entities){this(name,changes,biomes,flags,entities,List.of());}
         int estimatedBytes() {
             boolean packed = changes instanceof PackedChanges;
-            int size = (packed ? ((PackedChanges) changes).bytes() : changes.size()*128) + biomes.size()*96;
+            int size = (packed ? ((PackedChanges) changes).bytes() : changes.size()*PackedChanges.BYTES_PER_CHANGE) + biomes.size()*96;
             if(selection!=null&&selection.hasPoints())size+=(selection.before().size()+selection.after().size())*24;
             if(selection!=null)for(var list:selection.objectsBefore().values())size+=list.size()*48; // before and after of each BuildObject moved
             if(selection!=null&&selection.hasHierarchy())size+=(selection.hierarchyBefore().rows().size()+selection.hierarchyAfter().rows().size())*96; // the rows of the snapshots (the blocks in them are shared with the BuildObjects)
