@@ -28,13 +28,13 @@ class BuildObjectStoreTest {
     }
     @Test void dormantAndReplacedBlocksComeBackAfterTheServerRestarts(@TempDir Path dir) throws Exception {
         var saved=new SavedSelections();var tower=saved.save(live(A,B));
-        var dormant=new PackedCells();dormant.put(B,"minecraft:oak_stairs[facing=north]");dormant.put(C,"minecraft:stone");
+        var dormant=new PackedCells();dormant.put(B,"minecraft:oak_stairs[facing=north]");dormant.put(C,"minecraft:chest[facing=north]","{Items:[{id:\"minecraft:diamond\",count:3}]}");
         var replaced=new PackedCells();replaced.put(A,"minecraft:water[level=0]");
         assertTrue(saved.setHeld(tower.id(),dormant,replaced));assertFalse(saved.setHeld(tower.id(),dormant,replaced),"the same again is no change");
         var file=dir.resolve("held.nbt");BuildObjectStore.write(file,saved.tree().nextId(),saved.tree().saved());
 
         var back=new SavedSelections(BuildObjectStore.load(file)).byId(tower.id());
-        assertEquals("minecraft:oak_stairs[facing=north]",back.dormant().get(B));assertEquals("minecraft:stone",back.dormant().get(C));
+        assertEquals("minecraft:oak_stairs[facing=north]",back.dormant().get(B));assertEquals("minecraft:chest[facing=north]",back.dormant().get(C));assertEquals("{Items:[{id:\"minecraft:diamond\",count:3}]}",back.dormant().data(C),"a chest keeps its items");assertNull(back.dormant().data(B));
         assertEquals("minecraft:water[level=0]",back.replaced().get(A));assertEquals(2,back.dormant().size());assertEquals(1,back.replaced().size());
     }
     @Test void aWorldWithoutDormantBlocksStaysInTheFormatOlderBuildsRead(@TempDir Path dir) throws Exception {

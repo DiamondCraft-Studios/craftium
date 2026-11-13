@@ -82,6 +82,11 @@ final class BuildObjectStore {
     private static void putCells(CompoundTag tag,String name,PackedCells cells){
         if(cells.isEmpty())return;
         var c=new CompoundTag();c.putLongArray("cells",cells.keysArray());c.putString("states",String.join("\n",cells.paletteList()));c.putIntArray("index",cells.indexesArray());
+        if(cells.dataKeysArray().length>0){ // block entities (a chest's items), as text, one entry each
+            c.putLongArray("dataCells",cells.dataKeysArray());
+            var texts=new ListTag();for(var d:cells.dataList()){var t=new CompoundTag();t.putString("v",d);texts.add(t);}
+            c.put("data",texts);
+        }
         tag.put(name,c);
     }
     /** The cells {@link #putCells} wrote, or none when absent. A store that does not add up throws, so the file is kept as .bad like any damaged one. */
@@ -91,7 +96,10 @@ final class BuildObjectStore {
         if(keys.length==0)return PackedCells.EMPTY;
         if(keys.length>Selection.LIMIT)throw new IllegalArgumentException("Invalid BuildObject dormant blocks");
         var states=List.of(c.getStringOr("states","").split("\n",-1));
-        return PackedCells.of(keys,states,c.getIntArray("index").orElse(new int[0]));
+        long[] dataKeys=c.getLongArray("dataCells").orElse(new long[0]);
+        var list=c.getListOrEmpty("data");var texts=new ArrayList<String>();
+        for(int i=0;i<list.size();i++)texts.add(list.getCompoundOrEmpty(i).getStringOr("v",""));
+        return PackedCells.of(keys,states,c.getIntArray("index").orElse(new int[0]),dataKeys,texts);
     }
     static SavedSelections.Tree load(Path file){
         if(!Files.exists(file))return new SavedSelections.Tree();

@@ -263,7 +263,7 @@ public final class SavedSelections {
         return true;
     }
     private static boolean same(PackedCells a,PackedCells b){
-        return a.size()==b.size()&&Arrays.equals(a.keysArray(),b.keysArray())&&a.paletteList().equals(b.paletteList())&&Arrays.equals(a.indexesArray(),b.indexesArray());
+        return a.size()==b.size()&&Arrays.equals(a.keysArray(),b.keysArray())&&a.paletteList().equals(b.paletteList())&&Arrays.equals(a.indexesArray(),b.indexesArray())&&Arrays.equals(a.dataKeysArray(),b.dataKeysArray())&&a.dataList().equals(b.dataList());
     }
     /** The blocks of the BuildObject and of everything under it: what looking at it shows. */
     public Set<Point> effective(Entry entry){var out=new LinkedHashSet<Point>();for(var e:subtree(entry))out.addAll(e.points);return out;}
