@@ -74,7 +74,10 @@ public interface Interaction {
      * edit). The default is the outline of the brush, for the tools that have one and while no shape is being placed.
      */
     default void drawWorld(EditorContext editor, Minecraft mc, BlockHitResult hit) {
-        if (showsBrush(editor, hit)) BrushPreview.draw(mc, hit.getBlockPos(), editor.options());
+        if (!showsBrush(editor, hit)) return;
+        // Fluid Ball and Fluid Block show the blocks the flow would place, not the ball around the click.
+        if (dev.craftium.client.FluidPreview.handles(editor.options().tool)) dev.craftium.client.FluidPreview.draw(mc, hit, editor.options());
+        else BrushPreview.draw(mc, hit.getBlockPos(), editor.options());
     }
 
     /**
