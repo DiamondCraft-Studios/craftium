@@ -31,7 +31,7 @@ final class WorkspaceLayout {
     /** The canvas the editor is laid out on now. */
     private static int currentW,currentH;
     private WorkspaceLayout(){}
-    static String key(String title){return switch(title){case "Tools"->"tools";case "Tool options","Builder controls"->"options";case "Target info"->"target";case "Clipboard"->"clipboard";case "Block palette"->"palette";case "History"->"history";case "Tool masks"->"masks";case "Rulers"->"rulers";case "Magic select"->"magic";case "Hierarchy"->"hierarchy";default->"";};}
+    static String key(String title){return switch(title){case "Tools"->"tools";case "Tool options","Builder controls"->"options";case "Target info"->"target";case "Clipboard"->"clipboard";case "Block palette"->"palette";case "History"->"history";case "Tool masks"->"masks";case "Rulers"->"rulers";case "Magic select"->"magic";case "Hierarchy"->"hierarchy";case "Missing blocks"->"missing";default->"";};}
     private static void load(){if(!loaded){loaded=true;try{if(Files.exists(FILE))importJson(Files.readString(FILE));}catch(Exception e){ClientState.notify("Could not load workspace layout");}}}
     /**
      * Called when the editor is laid out on a canvas of {@code w} by {@code h} units, which changes with the window and the interface size.

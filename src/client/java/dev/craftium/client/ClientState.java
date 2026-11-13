@@ -12,6 +12,14 @@ import java.util.*;
 public final class ClientState {
     private static final Path CONFIG=FabricLoader.getInstance().getConfigDir().resolve("craftium.json");
     public static Options options=new Options();
+    /** The blocks the world is missing, as the server last told us, in the order of its table. Empty when none is, which keeps the Missing blocks window away. */
+    public static java.util.List<String> missingBlocks=java.util.List.of();
+    /** Takes the server's list; a longer one than before (the first on joining a world with some, or another found since) brings the window up again if it was closed. */
+    public static void setMissingBlocks(java.util.List<String> ids){
+        boolean more=ids.size()>missingBlocks.size();
+        missingBlocks=ids;
+        if(more){var window=WorkspaceLayout.windows.get("missing");if(window!=null&&!window.visible){window.visible=true;WorkspaceLayout.save();}}
+    }
     public static Packets.Status status=new Packets.Status("Ready · Right-click to use your tool",false,false,0,new Point(0,0,0),new Point(0,0,0),0,List.of(),0,0);
     /** The values of the settings tools declare for themselves, by the id of the tool's spec. */
     public static final java.util.Map<String,dev.craftium.core.PropertyValues> toolProperties=new java.util.HashMap<>();

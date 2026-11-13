@@ -218,7 +218,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
         g.pose().pushMatrix();g.pose().scale(scale,scale);
         topbar(g);
-        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);hierarchyPanel(g);magicPanel(g);}
+        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);hierarchyPanel(g);magicPanel(g);missingPanel(g);}
         finishPanel(g);
         viewport(g);
         axisGizmo(g);
@@ -227,6 +227,7 @@ public final class EditorScreen extends CraftiumScreen {
         rowDragGhost(g);
         if(menu==ROW_MENU)rowMenuDraw(g);else if(menu>=0)dropdown(g);
         if(ctxCell>=0)maskMenu(g);
+        if(missingMenu>=0)missingMenuDraw(g);
         if(shapeMenu)shapeMenu(g);
         if(help)help(g);
         if(transform)transform(g);
@@ -1766,11 +1767,20 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(event.button()!=0)for(var field:fields.values())field.setFocused(false); // a right or middle click is not typing in a box either, so the shortcuts work
         if(shapeMenu){shapeMenu=false;var picked=event.button()==0?shapeAt(x,y):null;if(picked!=null)o().shape=picked;return true;} // any click closes the picker
+        if(missingMenu>=0){ // its menu takes the click: one of its two items, or anywhere else to close it
+            int row=missingMenu;missingMenu=-1;
+            if(x>=missingMenuX&&x<missingMenuX+MISSING_MENU_WIDTH&&y>=missingMenuY&&y<missingMenuY+MISSING_MENU_LABELS.length*MASK_MENU_ROW&&row<ClientState.missingBlocks.size()){
+                String id=ClientState.missingBlocks.get(row);
+                if((int)((y-missingMenuY)/MASK_MENU_ROW)==0)addMissingToMask(id);else selectMissing(id);
+            }
+            return true;
+        }
         if(ctxCell>=0){int cell=ctxCell;ctxCell=-1;if(x>=ctxX&&x<ctxX+MASK_MENU_WIDTH&&y>=ctxY&&y<ctxY+BLOCK_MENU_LABELS.length*MASK_MENU_ROW&&cell<blocksOf(ctxList).size()){switch((int)((y-ctxY)/MASK_MENU_ROW)){case 0->changeBlock(ctxList,cell);case 1->editBlockState(ctxList,cell);default->removeBlock(ctxList,cell);}}return true;}
         if(event.button()==2&&!help&&!transform&&menu<0)for(int i=sliderAreas.size()-1;i>=0;i--){var a=sliderAreas.get(i);if(a.control().contains(x,y)){a.slider().reset();return true;}} // back to the default, at once
         if(event.button()==0&&pipetting&&menu<0&&!help&&!transform){
             var hit=pipetteTarget(event.x(),event.y());
             if(hit!=null&&minecraft.level!=null){
+                if(pickMissing(hit.getBlockPos())){ClientState.save();return true;}
                 String picked=BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos()));
                 // Ctrl keeps the pipette in hand and adds each block to the palette; a plain click sets the foreground and puts it away.
                 if(minecraft.hasControlDown()){if(ClientState.addToPalette(picked))ClientState.notify("Added to the palette: "+picked);}
@@ -1866,8 +1876,22 @@ public final class EditorScreen extends CraftiumScreen {
         minecraft.player.setDeltaMovement(Vec3.ZERO);minecraft.player.setOldPosAndRot();
     }
     private BlockHitResult pickedHit;private boolean pendingPick,middleDragged;
+    /**
+     * A placeholder cannot be the foreground block, which has to exist, but it can be a mask: its original block goes into the block mask, so the
+     * fill and replace tools change only blocks that were that one. Returns whether the block was a placeholder.
+     */
+    private boolean pickMissing(net.minecraft.core.BlockPos at){
+        var missing=dev.craftium.server.MissingBlocks.at(minecraft.level,at,minecraft.level.getBlockState(at));
+        if(missing==null)return false;
+        var entry=missing.entry();
+        if(entry==null){ClientState.notify("The original name of that missing block is not known yet");return true;}
+        addMaskBlock(entry.text());
+        ClientState.notify("Added to the block mask: "+entry.text());
+        return true;
+    }
     private void pickBlock(BlockHitResult hit){
         if(hit==null||minecraft.level==null)return;
+        if(pickMissing(hit.getBlockPos()))return;
         String block=BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(hit.getBlockPos()).getBlock()).toString();
         ClientState.pick(block);
     }
@@ -1926,6 +1950,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("palette")){paletteScroll=Math.max(0,paletteScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("hierarchy")){savedScroll=Math.max(0,savedScroll+(vertical<0?1:-1));return true;}
+        if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("missing")){missingScroll=Math.max(0,missingScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("rulers")){rulerScroll=Math.max(0,rulerScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("masks")){maskScroll=Math.max(0,maskScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("tools")){toolScroll=Math.clamp(toolScroll+(vertical<0?1:-1),0,maxToolScroll());return true;}
@@ -2163,6 +2188,47 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     }
     private void clearRulers(){ClientState.rulers.clear();ClientState.selectedRuler=null;selectedNode=-1;TransformGizmo.cancel();}
     private int rulerScroll;
+    // --- The Missing blocks window: the blocks this world holds as placeholders because no installed mod provides them ---
+    private int missingScroll,missingPick=-1,missingMenu=-1,missingMenuX,missingMenuY;
+    private static final int MISSING_MENU_WIDTH=124;
+    private static final String[] MISSING_MENU_LABELS={"Add to mask","Select all"};
+    /**
+     * Lists the blocks the server says the world is missing, one row each. The window is only there while the list is not empty, so it comes up by itself when
+     * a world with missing blocks is joined or one is found, and is not in the way otherwise. Right-click a row to put its block in the block mask, or to
+     * select every one of it in the chunks loaded around you. There is no replace here: blocks in chunks that are not loaded would be left behind.
+     */
+    private void missingPanel(Gfx g){
+        var ids=ClientState.missingBlocks;
+        if(ids.isEmpty()){missingMenu=-1;return;}
+        int x=w-RIGHT-244,y=27+238; // under the Rulers window's place, just left of the right-hand panels
+        panel(g,x,y,236,196,"Missing blocks");
+        text(g,"No installed mod provides these",x+10,y+24,MUTED);
+        int top=y+40,bottom=y+ph-8,rowHeight=18,rows=Math.max(1,(bottom-top)/rowHeight),total=ids.size();
+        g.fill(x+8,top-2,x+pw-8,top+rows*rowHeight+1,0xff141c26);g.outline(x+8,top-2,pw-16,rows*rowHeight+3,LINE);
+        missingScroll=Math.clamp(missingScroll,0,Math.max(0,total-rows));
+        for(int i=0;i<rows&&missingScroll+i<total;i++){
+            final int row=missingScroll+i;String id=ids.get(row);int ry=top+i*rowHeight;boolean chosen=row==missingPick;
+            if(chosen)g.fill(x+9,ry,x+pw-9,ry+rowHeight,0xff315b84);
+            BlockPickerScreen.missingSwatch(g,x+14,ry+1);
+            text(g,shorten(id,pw-(total>rows?62:48)),x+34,ry+5,chosen?TEXT:MUTED);
+            controls.add(new Control(x+9,ry,pw-18,rowHeight,()->missingPick=row,()->{missingPick=row;missingMenu=row;missingMenuX=Math.min(mx,w-MISSING_MENU_WIDTH-4);missingMenuY=Math.min(my,h-MISSING_MENU_LABELS.length*MASK_MENU_ROW-4);},id+" \u00b7 Right-click for options"));
+        }
+        if(total>rows){ // a thin bar shows where the list is
+            int track=rows*rowHeight,thumb=Math.max(10,track*rows/total),thumbY=top+(track-thumb)*missingScroll/Math.max(1,total-rows);
+            g.fill(x+pw-14,top,x+pw-10,top+track,0xff1b2b40);g.fill(x+pw-14,thumbY,x+pw-10,thumbY+thumb,ACCENT);
+        }
+    }
+    private void missingMenuDraw(Gfx g){
+        int rows=MISSING_MENU_LABELS.length;
+        g.fill(missingMenuX,missingMenuY,missingMenuX+MISSING_MENU_WIDTH,missingMenuY+rows*MASK_MENU_ROW,0xf5222d3b);g.outline(missingMenuX,missingMenuY,MISSING_MENU_WIDTH,rows*MASK_MENU_ROW,LINE);
+        for(int i=0;i<rows;i++){int y=missingMenuY+i*MASK_MENU_ROW;if(mx>=missingMenuX&&mx<missingMenuX+MISSING_MENU_WIDTH&&my>=y&&my<y+MASK_MENU_ROW)g.fill(missingMenuX+1,y,missingMenuX+MISSING_MENU_WIDTH-1,y+MASK_MENU_ROW,0xff34485e);text(g,MISSING_MENU_LABELS[i],missingMenuX+8,y+5,TEXT);}
+    }
+    private void addMissingToMask(String id){addMaskBlock(id);ClientState.notify("Added to the block mask: "+id);}
+    /** Asks the server for every one of the block in the chunks loaded around the player. The id travels in an option that is cleared at once, so it is not kept with the tool settings. */
+    private void selectMissing(String id){
+        ClientState.options.missingBlock=id;
+        try{CraftiumClient.send("select_missing",null,null);}finally{ClientState.options.missingBlock="";}
+    }
     private static String modeName(Options.RulerMode mode){return mode==Options.RulerMode.CIRCLE?"Circle":"Line";}
     /** The Rulers panel: every ruler in this world as an entry to pick, and what can be done to the picked one. */
     private void rulerPanel(Gfx g){

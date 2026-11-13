@@ -83,11 +83,11 @@ final class BlueprintLibrary {
     private static BlueprintFiles.Listing list()throws IOException{return BlueprintFiles.list(ServerPlatform.assets().resolve("blueprints"),700_000,40_000_000L);}
     private static ListTag ints(int... values){var list=new ListTag();for(int i:values)list.add(IntTag.valueOf(i));return list;}
     static CompoundTag structure(EditPlanner p){
-        var root=new CompoundTag();var palette=new ListTag();var indices=new LinkedHashMap<net.minecraft.world.level.block.state.BlockState,Integer>();var blocks=new ListTag();int sx=1,sy=1,sz=1;
+        var root=new CompoundTag();var palette=new ListTag();var indices=new LinkedHashMap<Object,Integer>();var blocks=new ListTag();int sx=1,sy=1,sz=1;
         for(var e:p.session.clipboard.entrySet()){
             var at=e.getKey();var s=e.getValue();sx=Math.max(sx,at.x()+1);sy=Math.max(sy,at.y()+1);sz=Math.max(sz,at.z()+1);
-            int index=indices.computeIfAbsent(s.state(),state->{palette.add(NbtUtils.writeBlockState(state));return palette.size()-1;});
-            var block=new CompoundTag();block.put("pos",ints(at.x(),at.y(),at.z()));block.putInt("state",index);if(s.data()!=null)block.put("nbt",s.data().copy());blocks.add(block);
+            int index=indices.computeIfAbsent(AssetNbt.paletteKey(s),key->{palette.add(AssetNbt.paletteTag(s));return palette.size()-1;});
+            var block=new CompoundTag();block.put("pos",ints(at.x(),at.y(),at.z()));block.putInt("state",index);var fileData=AssetNbt.fileData(s);if(fileData!=null)block.put("nbt",fileData.copy());blocks.add(block);
         }
         if(palette.isEmpty())palette.add(NbtUtils.writeBlockState(net.minecraft.world.level.block.Blocks.AIR.defaultBlockState()));
         root.putInt("DataVersion",net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());root.put("size",ints(sx,sy,sz));root.put("palette",palette);root.put("blocks",blocks);root.put("entities",AssetNbt.structureEntities(p.session));return root;
@@ -98,9 +98,9 @@ final class BlueprintLibrary {
         root.putInt("Version",2);root.putInt("DataVersion",net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());root.putShort("Width",(short)sx);root.putShort("Height",(short)sy);root.putShort("Length",(short)sz);root.putIntArray("Offset",new int[]{0,0,0});
         var palette=new CompoundTag();var indices=new LinkedHashMap<String,Integer>();var bytes=new ByteArrayOutputStream();var entities=new ListTag();
         for(int y=0;y<sy;y++)for(int z=0;z<sz;z++)for(int x=0;x<sx;x++){
-            var snapshot=p.session.clipboard.get(new Point(x,y,z));String state=snapshot==null?"minecraft:air":BlockStateParser.serialize(snapshot.state());int index=indices.computeIfAbsent(state,s->indices.size());
+            var snapshot=p.session.clipboard.get(new Point(x,y,z));String state=snapshot==null?"minecraft:air":AssetNbt.paletteText(snapshot);int index=indices.computeIfAbsent(state,s->indices.size());
             int value=index;while((value&~0x7f)!=0){bytes.write((value&0x7f)|0x80);value>>>=7;}bytes.write(value);
-            if(snapshot!=null&&snapshot.data()!=null){var tag=snapshot.data().copy();tag.putString("Id",tag.getStringOr("id",""));tag.remove("id");tag.remove("x");tag.remove("y");tag.remove("z");tag.putIntArray("Pos",new int[]{x,y,z});entities.add(tag);}
+            var fileData=snapshot==null?null:AssetNbt.fileData(snapshot);if(fileData!=null){var tag=fileData.copy();tag.putString("Id",tag.getStringOr("id",""));tag.remove("id");tag.remove("x");tag.remove("y");tag.remove("z");tag.putIntArray("Pos",new int[]{x,y,z});entities.add(tag);}
         }
         indices.forEach(palette::putInt);root.put("Palette",palette);root.putInt("PaletteMax",indices.size());root.putByteArray("BlockData",bytes.toByteArray());root.put("BlockEntities",entities);root.put("Entities",AssetNbt.schematicEntities(p.session));return root;
     }
@@ -110,18 +110,18 @@ final class BlueprintLibrary {
         if(root.contains("palette")){
             var palette=root.getListOrEmpty("palette");var blocks=root.getListOrEmpty("blocks");if(blocks.size()>Selection.LIMIT)throw new IllegalArgumentException("Blueprint too large");
             for(int i=0;i<blocks.size();i++){var block=blocks.getCompoundOrEmpty(i);var at=block.getListOrEmpty("pos");int state=block.getIntOr("state",0);if(state<0||state>=palette.size())throw new IllegalArgumentException("Invalid palette index");
-                result.put(new Point(at.getIntOr(0,0),at.getIntOr(1,0),at.getIntOr(2,0)),new BlockSnapshot(AssetNbt.state(palette.getCompoundOrEmpty(state),p),block.getCompound("nbt").orElse(null)));}
+                result.put(new Point(at.getIntOr(0,0),at.getIntOr(1,0),at.getIntOr(2,0)),AssetNbt.snapshot(palette.getCompoundOrEmpty(state),block.getCompound("nbt").orElse(null),p));}
         }else{
             int sx=root.getShort("Width").orElse((short)0)&0xffff,sy=root.getShort("Height").orElse((short)0)&0xffff,sz=root.getShort("Length").orElse((short)0)&0xffff;
             if(sx==0||sy==0||sz==0||(long)sx*sy*sz>Selection.LIMIT)throw new IllegalArgumentException("Invalid schematic dimensions");
             var dataRoot=root.contains("Blocks")&&root.get("Blocks") instanceof CompoundTag?root.getCompoundOrEmpty("Blocks"):root;
-            var palette=dataRoot.getCompoundOrEmpty("Palette");var states=new HashMap<Integer,net.minecraft.world.level.block.state.BlockState>();for(String key:palette.keySet())states.put(palette.getIntOr(key,0),AssetNbt.state(key,root.getIntOr("DataVersion",AssetNbt.current()),p));
+            var palette=dataRoot.getCompoundOrEmpty("Palette");var states=new HashMap<Integer,BlockSnapshot>();for(String key:palette.keySet())states.put(palette.getIntOr(key,0),AssetNbt.snapshot(key,root.getIntOr("DataVersion",AssetNbt.current()),p));
             byte[] data=dataRoot.getByteArray(root.getIntOr("Version",2)>=3?"Data":"BlockData").orElse(new byte[0]);int cursor=0;
             for(int i=0;i<sx*sy*sz;i++){
                 int value=0,shift=0,b;do{if(cursor>=data.length||shift>28)throw new IllegalArgumentException("Truncated schematic block data");b=data[cursor++]&255;value|=(b&127)<<shift;shift+=7;}while((b&128)!=0);
-                var state=states.get(value);if(state==null)throw new IllegalArgumentException("Invalid schematic palette index");result.put(new Point(i%sx,i/(sx*sz),(i/sx)%sz),new BlockSnapshot(state));
+                var state=states.get(value);if(state==null)throw new IllegalArgumentException("Invalid schematic palette index");result.put(new Point(i%sx,i/(sx*sz),(i/sx)%sz),state);
             }
-            var entities=dataRoot.getListOrEmpty("BlockEntities");for(int i=0;i<entities.size();i++){var tag=entities.getCompoundOrEmpty(i);var coordinates=tag.getIntArray("Pos").orElse(new int[0]);if(coordinates.length==3){Point at=new Point(coordinates[0],coordinates[1],coordinates[2]);var old=result.get(at);if(old!=null)result.put(at,new BlockSnapshot(old.state(),AssetNbt.blockEntity(tag,root.getIntOr("DataVersion",AssetNbt.current()),p)));}}
+            var entities=dataRoot.getListOrEmpty("BlockEntities");for(int i=0;i<entities.size();i++){var tag=entities.getCompoundOrEmpty(i);var coordinates=tag.getIntArray("Pos").orElse(new int[0]);if(coordinates.length==3){Point at=new Point(coordinates[0],coordinates[1],coordinates[2]);var old=result.get(at);if(old!=null)result.put(at,AssetNbt.withEntity(old,AssetNbt.blockEntity(tag,root.getIntOr("DataVersion",AssetNbt.current()),p)));}}
         }
         return result;
     }

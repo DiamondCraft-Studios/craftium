@@ -58,6 +58,14 @@ Changes since 1.5.0-beta.1.
 - New Inspect tool, in Utility: point at a block to see its name and the first few of its block tags floating above it, and use the tool (right-click by default) to list every block and fluid tag in chat. It changes nothing in the world and sends nothing to the server.
 - The Builder's destination preview (where a move, clone, stack or smear would land) is drawn like its selection: dim faces on the ground and an outline in open air, hidden by terrain in front of it.
 
+### Missing blocks
+- A block that no installed mod provides (a mod you removed, a build from another modpack) is no longer turned into air when its chunk loads or when a blueprint, structure or schematic is pasted. It becomes a Missing Block that remembers the block it stood for, with its properties and any block entity data it had.
+- The editor tools work on them: the Magic Wand, Paint Bucket and dropping a block in the world treat Missing Blocks for different original blocks as different blocks, even when they touch (in every select type but Any). Pick one with the pipette or the middle button to add its original block to the block mask, then Fill, Replace or the brushes change only those blocks. A mask entry may also be typed as the original id, like othermod:marble.
+- A Missing blocks window lists the original ids of what the world is missing. It is only there while there are some, and comes up by itself when you join such a world or one is found. Right-click a row: Add to mask puts that block in the block mask, and Select all selects every one of it in the chunks loaded around you. The Missing Block has its own red and black texture.
+- Saving a blueprint, structure or schematic writes a Missing Block back out under its original name, so the file stays portable.
+- Chunks that were loaded and saved without Craftium before this version already turned their missing blocks into air, and those cannot be recovered.
+- A world saved with Missing Blocks needs Craftium to be installed when it is opened again: without it, they are air as before.
+
 ## 1.5.0-beta.1
 
 Changes since 1.4.0-beta.1.

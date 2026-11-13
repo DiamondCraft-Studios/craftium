@@ -26,14 +26,22 @@ final class EditPlanner {
     final List<BlockState> materials;
     final List<BlockState> blockMask=new ArrayList<>();
     final List<Boolean> blockMaskExact=new ArrayList<>();
+    /** Mask entries naming a block no mod provides, like {@code othermod:marble}; they pick the placeholders for that block. */
+    final List<MissingBlockTable.Entry> missingMask=new ArrayList<>();
+    /** The mask block when it names a missing block. */
+    final MissingBlockTable.Entry maskMissing;
     final HeightmapImage heightmap;
     static final Point[] NEIGHBOURS = {new Point(1,0,0),new Point(-1,0,0),new Point(0,1,0),new Point(0,-1,0),new Point(0,0,1),new Point(0,0,-1)};
 
     EditPlanner(ServerLevel level, Session session, Options options) {
         this.level=level;this.session=session;this.o=options;
         material=options.transparency?Blocks.AIR.defaultBlockState():parse(options.block); secondary=parse(options.secondary);
-        mask=options.mask.isBlank()?null:parse(options.mask);
-        if(!options.maskOff)for(String entry:options.maskActive){blockMask.add(parse(entry));blockMaskExact.add(entry.contains("["));}
+        maskMissing=isMissingName(options.mask)?MissingBlockTable.Entry.parse(options.mask):null;
+        mask=options.mask.isBlank()||maskMissing!=null?null:parse(options.mask);
+        if(!options.maskOff)for(String entry:options.maskActive){
+            if(isMissingName(entry)){missingMask.add(MissingBlockTable.Entry.parse(entry));continue;}
+            blockMask.add(parse(entry));blockMaskExact.add(entry.contains("["));
+        }
         noise=new NoiseField(options);
         materials=new ArrayList<>();for(String block:MaterialList.split(options.materials))materials.add(parse(block));
         if(materials.isEmpty())materials.add(material);
@@ -47,6 +55,12 @@ final class EditPlanner {
         });
         maskLua=options.maskScript.isBlank()?null:new LuaBrush(this,options.maskScript,true);
         heightmap=options.tool!=Tool.ELEVATION||options.heightmap.isBlank()?null:HeightmapImage.load(options.heightmap);
+    }
+    /** Whether the text names a block that no installed mod provides, which only a placeholder can hold. */
+    static boolean isMissingName(String text){
+        if(text==null||text.isBlank())return false;
+        int open=text.indexOf('[');
+        return !MissingBlocks.exists(open<0?text.trim():text.substring(0,open).trim());
     }
     static BlockPos pos(Point p) { return new BlockPos(p.x(),p.y(),p.z()); }
     static Point point(BlockPos p) { return new Point(p.getX(),p.getY(),p.getZ()); }
@@ -70,14 +84,23 @@ final class EditPlanner {
         if(builder&&!o.maskInBuilder)return true;
         if(p.y()<o.minY || p.y()>o.maxY) return false;
         if(o.inSelection && !session.selection.contains(p)) return false;
-        if(!blockMask.isEmpty()&&inBlockMask(p)==o.maskExclude) return false;
+        if((!blockMask.isEmpty()||!missingMask.isEmpty())&&inBlockMask(p)==o.maskExclude) return false;
+        if(maskMissing!=null&&!sameMissing(maskMissing,p)) return false;
         return (mask==null || (o.mask.contains("[")?state(p)==mask:state(p).is(mask.getBlock())))&&expression.test(p)&&(maskLua==null||maskLua.evaluate(p).toboolean());
     }
     /** Whether the block at {@code p} is one of the toggled mask blocks: an exact state where the entry names one, else any state of the block. */
     boolean inBlockMask(Point p) {
         var s=state(p);
         for(int i=0;i<blockMask.size();i++)if(blockMaskExact.get(i)?s==blockMask.get(i):s.is(blockMask.get(i).getBlock()))return true;
+        for(var wanted:missingMask)if(sameMissing(wanted,p))return true;
         return false;
+    }
+    /** Whether the block at {@code p} is a placeholder for the block {@code wanted} names; properties it lists must all match. */
+    private boolean sameMissing(MissingBlockTable.Entry wanted,Point p){
+        var found=AdvancedTools.missingEntry(this,p);
+        if(found==null||!found.name().equals(wanted.name()))return false;
+        for(var property:wanted.properties().entrySet())if(!property.getValue().equals(found.properties().get(property.getKey())))return false;
+        return true;
     }
     boolean solid(Point p) { return !state(p).isAir() && state(p).getFluidState().isEmpty(); }
     int adjacent(Point p) { int count=0;for(Point n:NEIGHBOURS)if(solid(p.add(n.x(),n.y(),n.z())))count++;return count; }
