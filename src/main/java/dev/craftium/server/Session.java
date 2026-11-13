@@ -100,6 +100,8 @@ final class Session {
     List<Point> pendingSelectionBefore;
     /** The BuildObjects' own blocks before the run of transforms that is waiting for confirmation, so cancelling can put them back with the selection. */
     Map<Integer,List<Point>> pendingObjectsBefore;
+    /** What the BuildObjects kept outside the world (dormant blocks, replaced blocks) before the edit that is waiting for confirmation, so cancelling it gives them back. */
+    Map<Integer,dev.craftium.core.SavedSelections.Held> pendingHeldBefore;
     /**
      * The transforms behind {@link #pendingEdit} when it holds a run of them, the edit that was staged before the first of them, and the
      * pending edit they produced (to tell that nothing else has been added to it since). A further transform starts again from the

@@ -230,12 +230,12 @@ public final class EditorServer {
             if(r.action().equals("pending_confirm")){
                 var edit=s.pendingEdit;
                 if(edit==null){send(player,s,"Nothing to confirm",false);return;}
-                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingDirty=true;start(player,s,edit);return;
+                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingHeldBefore=null;s.pendingDirty=true;start(player,s,edit);return;
             }
             if(r.action().equals("stroke_end")){ // a Sculpt stroke was released: build what it staged, with nothing said when it staged nothing
                 var edit=s.pendingEdit;
                 if(edit==null)return;
-                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingDirty=true;start(player,s,edit);return;
+                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingHeldBefore=null;s.pendingDirty=true;start(player,s,edit);return;
             }
             if(r.action().equals("pending_cancel")){
                 if(s.pendingEdit!=null&&s.pendingEdit==s.layoutFor)return; // a jigsaw preview stays until it is built or cancelled in the planner
@@ -243,12 +243,13 @@ public final class EditorServer {
                     s.pendingEdit=null;s.pendingDirty=true;
                     if(s.pendingSelectionBefore!=null){s.selection.restore(s.pendingSelectionBefore);s.pendingSelectionBefore=null;}
                     if(s.pendingObjectsBefore!=null){s.saved.setPoints(s.pendingObjectsBefore);s.pendingObjectsBefore=null;}
+                    if(s.pendingHeldBefore!=null){s.saved.restoreHeld(s.pendingHeldBefore);s.pendingHeldBefore=null;}
                     send(player,s,"Edit cancelled",false);
                 }
                 return;
             }
             if(r.action().equals("editor_reset")){ // the way out of a stuck editor: forgets whatever is half done, but never an edit being applied
-                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingChain=null;s.pendingChainBase=s.pendingChainEdit=null;s.pendingDirty=true;s.selectionBefore=null;s.queued.clear();
+                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingHeldBefore=null;s.pendingChain=null;s.pendingChainBase=s.pendingChainEdit=null;s.pendingDirty=true;s.selectionBefore=null;s.queued.clear();
                 s.selection.clear();s.corner=s.ruler=s.line=null;s.selectedEntity=null;s.historyRemaining=0;s.pulse="";
                 if((job==null||!job.owner.equals(player.getUUID()))&&!AnimatedRebuild.owned(player.getUUID()))s.busy=false;
                 send(player,s,"Editor reset",false);return;
@@ -493,8 +494,22 @@ public final class EditorServer {
                     // The selection and where it lands may both be far from every player: lease their chunks while the edit is planned and applied.
                     var reach=ChunkLease.area().points(s.selection.points(),0,0);
                     for(int i=1;i<=count;i++)reach.points(s.selection.points(),o.offsetX*i,o.offsetZ*i);
+                    if(r.action().equals("move"))reach.points(ObjectMoves.hidden(s),o.offsetX,o.offsetZ); // the dormant blocks of a BuildObject go with it, so where they land has to be loaded too
                     ChunkLease.planning(reach.lease(player.level()));
                     var plan=EditPlanner.forSelection(player.level(),s,o);
+                    if(r.action().equals("move")&&ObjectMoves.involves(s)){
+                        // A BuildObject moves with the world winning: its blocks do not overwrite solid blocks, and what it could not place is kept, not lost (see ObjectMove).
+                        int dx=o.offsetX,dy=o.offsetY,dz=o.offsetZ;var chosen=new LinkedHashSet<Point>(s.selection.points());
+                        for(Point p:chosen)plan.validate(p);
+                        var applied=ObjectMoves.apply(player.level(),s,plan,(ordered,world,solid)->ObjectMove.shift(ordered,chosen,c->c.add(dx,dy,dz),world,solid,o.pasteAir));
+                        var objectEdit=plan.finish("Move selection");
+                        if(applied==null||objectEdit.changes().isEmpty()){if(applied!=null)applied.undo(s);start(player,s,objectEdit);return;}
+                        boolean stagingObjects=s.confirmEdits&&!s.bypassConfirm;var priorOwn=s.pendingObjectsBefore;var priorHeld=s.pendingHeldBefore;
+                        if(stagingObjects&&priorOwn==null){s.pendingObjectsBefore=applied.ownBefore();s.pendingHeldBefore=applied.heldBefore();}
+                        try{start(player,s,objectEdit.withSelection(applied.change()));}
+                        catch(RuntimeException ex){applied.undo(s);s.pendingObjectsBefore=priorOwn;s.pendingHeldBefore=priorHeld;throw ex;}
+                        return;
+                    }
                     var source=new LinkedHashMap<Point,BlockSnapshot>();
                     for(Point p:s.selection.points()){plan.validate(p);source.put(p,BlockSnapshot.capture(player.level(),EditPlanner.pos(p)));}
                     if(r.action().equals("move"))for(Point p:source.keySet())plan.put(p,Blocks.AIR.defaultBlockState());
