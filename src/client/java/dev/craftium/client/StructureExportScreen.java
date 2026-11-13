@@ -211,6 +211,8 @@ final class StructureExportScreen extends CraftiumScreen {
         addRenderableWidget(new FlatButton(left+panelWidth-12-130,bottom,130,24,action,this::export));
         addRenderableWidget(new FlatButton(left+panelWidth-12-130-8-90,bottom,90,24,"Close",this::onClose));
         addRenderableWidget(new FlatButton(viewX,bottom,100,24,"Reset view",()->{yaw=-35;pitch=28;zoom=1;redraw=true;}));
+        addRenderableWidget(new FlatButton(viewX+108,bottom,120,24,"Show in world",()->{CraftiumClient.send("structure_world_preview",null,null);onClose();}));
+        if(ClientState.pluginPreviewBlocks()>0)addRenderableWidget(new FlatButton(viewX+236,bottom,110,24,"Clear in world",()->CraftiumClient.send("structure_world_clear",null,null)));
         makeTexture();
     }
 

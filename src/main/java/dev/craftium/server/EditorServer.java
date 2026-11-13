@@ -241,7 +241,7 @@ public final class EditorServer {
             long now=System.nanoTime();
             // A builder commit is a deliberate click, not a stream, so it is never dropped by the throttle below: a lost one would leave the selection placed on the client only.
             // The export pop-up asks for a new preview as fields change and must not lose one, or an export, to a request just before it.
-            boolean popup=Set.of("structure_preview","structure_export_file","structure_import_file","blueprint_save_source").contains(r.action());
+            boolean popup=Set.of("structure_preview","structure_world_preview","structure_world_clear","structure_export_file","structure_import_file","blueprint_save_source").contains(r.action());
             if(!replaying&&!r.action().equals("builder_commit")&&now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             if(!popup)s.lastRequest=now;
             if(r.action().equals("tool_preview")){toolPreview(player,s,o,r.target(),r.normal());return;} // the ghost of a plugin's tool, which is not an edit and answers with the ghost alone
@@ -413,7 +413,7 @@ public final class EditorServer {
                     if(r.action().equals("blueprint_op")&&!dev.craftium.compat.Compat.isGamemaster(player))throw new IllegalArgumentException("Only operators can change the server's blueprint library");
                     var plan=new EditPlanner(player.level(),s,o);String result=BlueprintLibrary.act(r.action(),plan);if(Set.of("blueprint_save","structure_export","schematic_export","selection_csv","blueprint_data").contains(r.action()))result+=BlueprintLibrary.download(r.action(),plan,player);send(player,s,result,false);
                 }
-                case "structure_preview","structure_export_file","structure_import_file","blueprint_save_source" -> {
+                case "structure_preview","structure_world_preview","structure_world_clear","structure_export_file","structure_import_file","blueprint_save_source" -> {
                     var plan=new EditPlanner(player.level(),s,o);String result=StructureLibrary.act(r.action(),plan,player);if(!result.isEmpty())send(player,s,result,false);
                 }
                 case "entity_copy","entity_cut" -> {
@@ -614,6 +614,7 @@ public final class EditorServer {
      * nothing else, so moving the cursor never changes the status line. A tool that shows nothing, or whose plan is past the block limit, shows no ghost.
      */
     private static void toolPreview(ServerPlayer player,Session s,Options o,Point target,Point normal){
+        if(s.exportGhost&&o.pluginTool==null)return; // the export window's preview stays until it is cleared
         Session.Edit edit=null;
         if(o.pluginTool!=null&&target!=null){
             var tool=pluginTool(o);
@@ -626,7 +627,7 @@ public final class EditorServer {
         s.pluginPreview=edit;s.pluginPreviewDirty=true;
         sendPluginPreview(player,s);
     }
-    private static void sendPluginPreview(ServerPlayer player,Session s){
+    static void sendPluginPreview(ServerPlayer player,Session s){
         if(s.pluginPreviewDirty){s.pluginPreviewData=s.pluginPreview==null?"":GhostCodec.encodeEdit(s.pluginPreview);s.pluginPreviewDirty=false;}
         var json=Packets.JSON.toJson(Packets.pluginOnly(s.pluginPreviewData));
         ServerPlatform.send(player,new Packets.Update(StatusFit.fit(json,STATUS_LIMIT,"Too big to draw: the preview is not shown")));
