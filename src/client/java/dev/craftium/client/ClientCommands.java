@@ -16,7 +16,7 @@ final class ClientCommands {
     private static Runnable pending;
     private static Point pos1,pos2;
     private static final List<String> CAPABILITIES=List.of("blockStep","bulldozer","replaceMode","forcePlace","noUpdates","tinker","fastPlace","angelPlacement","noClip","solidFluids","preventInteractions","expandHitboxes");
-    private static final List<String> WORLD_RULES=List.of("doBlockDrops","doBlockGravity","doTrampleFarmland","doDestructiveExplosions","playerInvulnerability");
+    private static final List<String> WORLD_RULES=List.of("doBlockDrops","doBlockGravity","doTrampleFarmland","doDestructiveExplosions","doFluidSpread","doLeafDecay","doBlockSpread","doPlantGrowth","doBlockWeathering","doSnowAndIce","doFluidInteractions","doBlockSupportBreak","doDripstoneAndAmethyst","playerInvulnerability");
     private ClientCommands(){}
     static void register(){
         ClientCommandRegistrationCallback.EVENT.register((dispatcher,access)->{
