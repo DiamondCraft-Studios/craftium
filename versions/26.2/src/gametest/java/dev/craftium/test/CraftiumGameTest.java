@@ -489,7 +489,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
         ctx.runOnClient(mc->mc.gui.setScreen(new StudioScreen((EditorScreen)mc.gui.screen())));ctx.waitTicks(4);
         require(ctx.computeOnClient(mc->mc.gui.screen() instanceof StudioScreen),"Inspector did not open");ctx.takeScreenshot("craftium-inspector");
         ctx.runOnClient(mc->{var studio=(StudioScreen)mc.gui.screen();mc.gui.setScreen(new ColourScreen(studio));});ctx.waitTicks(5);ctx.takeScreenshot("craftium-colour-studio");
-        ctx.runOnClient(mc->{mc.gui.screen().onClose();mc.gui.setScreen(new PaletteScreen(mc.gui.screen()));});ctx.waitTicks(4);ctx.takeScreenshot("craftium-weighted-palette");
+        ctx.runOnClient(mc->{mc.gui.screen().onClose();CraftiumClient.showMaterials();});ctx.waitTicks(4);ctx.takeScreenshot("craftium-weighted-palette");
         ctx.runOnClient(mc->{mc.gui.screen().onClose();ClientState.options.maskExpression="all(block(minecraft:stone),not(above(minecraft:air)),any(surface,sky))";mc.gui.setScreen(new MaskScreen(mc.gui.screen()));});ctx.waitTicks(4);ctx.takeScreenshot("craftium-visual-masks");ctx.runOnClient(mc->{mc.gui.screen().onClose();ClientState.options.maskExpression="";mc.gui.setScreen(new ColourScreen(mc.gui.screen()));});
         ctx.getInput().pressKey(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);ctx.waitTicks(2);
         ctx.runOnClient(mc->mc.gui.setScreen(new BlueprintScreen((StudioScreen)mc.gui.screen())));ctx.waitTicks(5);ctx.takeScreenshot("craftium-blueprint-browser");

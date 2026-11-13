@@ -9,7 +9,7 @@ public enum Tool {
     RULER("Ruler", "RL", "Utility", "Add measurement points; use the inspector for circles, splits and center selection."),
     PAINTER("Painter", "PA", "Paint", "Paint existing blocks with your active material."),
     PAINT_BUCKET("Paint Bucket", "PB", "Paint", "Fill the connected blocks you click with your foreground block. Directions and select type work as in the Magic Wand."),
-    NOISE_PAINTER("Noise Painter", "NP", "Paint", "Blend two materials with coherent seeded noise."),
+    NOISE_PAINTER("Noise Painter", "NP", "Paint", "Blend the Materials palette with coherent seeded noise."),
     BIOME_PAINTER("Biome Painter", "BP", "Paint", "Paint biome cells inside the brush. Biomes use 4-block cells."),
     CLENTAMINATOR("Clentaminator", "CL", "Paint", "Convert biome and matching surface materials together."),
     FREEHAND_DRAW("Freehand Draw", "DR", "Draw", "Draw solid shapes; invert to carve."),

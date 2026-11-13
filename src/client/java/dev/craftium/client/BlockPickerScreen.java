@@ -145,7 +145,8 @@ public final class BlockPickerScreen extends CraftiumScreen {
         row=Math.clamp(row,0,maxRow());
     }
     private int maxRow(){return Math.max(0,(shown.size()+COLS-1)/COLS-ROWS);}
-    private static String name(String block){var id=dev.craftium.compat.Compat.tryParse(block);return id==null?block:BuiltInRegistries.BLOCK.getOptional(id).map(b->b.getName().getString()).orElse(block);}
+    /** The block's name in the player's language, without its state; the id itself for a block this game does not have. */
+    static String name(String block){int state=block.indexOf('[');var id=dev.craftium.compat.Compat.tryParse(state<0?block:block.substring(0,state));return id==null?block:BuiltInRegistries.BLOCK.getOptional(id).map(b->b.getName().getString()).orElse(block);}
     private int cellAt(double x,double y){int c=(int)Math.floor((x-left)/CELL),r=(int)Math.floor((y-top-34)/CELL);if(x<left||y<top+34||c<0||c>=COLS||r<0||r>=ROWS)return -1;int i=(row+r)*COLS+c;return i<shown.size()?i:-1;}
     @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){
