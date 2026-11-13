@@ -326,7 +326,8 @@ final class OutlineShape {
     /** The box round a shape too detailed to draw, filled; with {@code scene} depth-tested like the rest of the shape, so blocks in front of it hide it. */
     private static void sceneBox(AABB box,int stroke,int fill,boolean scene){
         if(!scene){Overlay.box(box,stroke,1,fill);return;}
-        for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)Overlay.sceneLine(corner(box,i),corner(box,i|bit),stroke,1);
+        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
+        for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0&&!farEdge(box,i,bit,eye))Overlay.sceneLine(corner(box,i),corner(box,i|bit),stroke,1);
         if((fill>>>24)==0)return;
         for(int axis=0;axis<3;axis++){int u=(axis+1)%3,v=(axis+2)%3;
             for(int side=0;side<2;side++){Vec3[] c=new Vec3[4];int[][] ring={{0,0},{1,0},{1,1},{0,1}};
@@ -334,7 +335,19 @@ final class OutlineShape {
                 if(side==0)Overlay.sceneFace(c[3],c[2],c[1],c[0],fill);else Overlay.sceneFace(c[0],c[1],c[2],c[3],fill);}}
     }
     private static void boxLines(AABB box,Lines lines){
-        for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)lines.line(corner(box,i),corner(box,i|bit));
+        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
+        for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0&&!farEdge(box,i,bit,eye))lines.line(corner(box,i),corner(box,i|bit));
+    }
+    /** Whether the box edge from corner {@code i} along {@code bit} lies on the far side of the box: neither of its two faces points toward the eye, which is outside the box. */
+    private static boolean farEdge(AABB box,int i,int bit,Vec3 eye){
+        if(box.contains(eye))return false;
+        Vec3 c=corner(box,i);double[] e={eye.x,eye.y,eye.z},p={c.x,c.y,c.z};
+        for(int axis=0;axis<3;axis++){
+            int b=1<<axis;if(b==bit)continue;
+            double sign=(i&b)==0?-1:1;
+            if(sign*(e[axis]-p[axis])>0)return false;
+        }
+        return true;
     }
     private static Vec3 corner(AABB box,int i){return new Vec3((i&1)==0?box.minX:box.maxX,(i&2)==0?box.minY:box.maxY,(i&4)==0?box.minZ:box.maxZ);}
 

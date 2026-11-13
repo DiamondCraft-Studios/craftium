@@ -1,6 +1,5 @@
 package dev.craftium.client;
 
-import dev.craftium.client.compat.Overlay;
 import dev.craftium.core.SelectionCodec;
 import dev.craftium.net.Packets;
 import net.minecraft.world.phys.Vec3;
@@ -39,6 +38,6 @@ final class HistoryPulse {
         // One flash at full strength that dies away exponentially (ease out expo).
         double t=elapsed/(double)duration,level=1-(1-Math.pow(2,-10*t));
         int stroke=((int)(level*255)<<24)|(undo?RED:LIME);
-        shape.draw(Vec3.ZERO,(a,b)->Overlay.line(a,b,stroke,2),stroke,0,false); // outlines only, no fill
+        shape.draw(Vec3.ZERO,(a,b)->OutlineShape.edge(a,b,stroke,2),stroke,0,false); // outlines only, no fill
     }
 }

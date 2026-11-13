@@ -45,7 +45,7 @@ public final class FluidPreview {
         try{
             Point origin=CraftiumClient.point(at).add(normal.x(),normal.y(),normal.z());
             if(block)FluidFlow.powder(cells,o,origin);else FluidFlow.ball(cells,o,origin);
-            shape=SceneShape.of(level,placed);
+            shape=SceneShape.of(level,placed,true); // outlined all round like a selection
         }catch(IllegalArgumentException e){shape=SceneShape.EMPTY;} // over the limit, as the server would refuse it
     }
 }
