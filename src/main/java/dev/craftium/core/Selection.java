@@ -3,10 +3,12 @@ package dev.craftium.core;
 import java.util.*;
 
 public final class Selection {
-    /** The most blocks one edit or selection may hold: 2^20. */
-    public static final int LIMIT = 1_048_576;
-    /** What an edit of that many blocks takes to remember for undo, at 128 bytes a block, with room for block entity data. One player's history may hold about this much. */
+    /** The most blocks one edit or selection may hold: 2^21. */
+    public static final int LIMIT = 2_097_152;
+    /** What the undo history of one player may hold. An edit is kept packed, at about 16 bytes a block plus its block entity data, so an edit of that many blocks takes about a fifth of it. */
     public static final int HISTORY_BYTES = 160 * 1024 * 1024;
+    /** What one player's clipboard may hold. It is kept as loose objects, at about 128 bytes a block, so it is sized for a full edit with room for block entity data. */
+    public static final int CLIPBOARD_BYTES = 320 * 1024 * 1024;
     public enum Mode { REPLACE, ADD, SUBTRACT, INTERSECT }
     private final LinkedHashSet<Point> points = new LinkedHashSet<>();
     private long revision;

@@ -31,7 +31,7 @@ final class WorkspaceLayout {
     /** The canvas the editor is laid out on now. */
     private static int currentW,currentH;
     private WorkspaceLayout(){}
-    static String key(String title){return switch(title){case "Tools"->"tools";case "Tool options","Builder controls"->"options";case "Target info"->"target";case "Clipboard"->"clipboard";case "Block palette"->"palette";case "History"->"history";case "Tool masks"->"masks";case "Rulers"->"rulers";case "Magic select"->"magic";case "Hierarchy"->"hierarchy";case "Missing blocks"->"missing";default->"";};}
+    static String key(String title){return switch(title){case "Tools"->"tools";case "Tool options","Builder controls"->"options";case "Target info"->"target";case "Clipboard"->"clipboard";case "Block palette"->"palette";case "History"->"history";case "Tool masks"->"masks";case "Rulers"->"rulers";case "Magic select"->"magic";case "Hierarchy"->"hierarchy";case "Missing blocks"->"missing";case "Large edit"->"progress";default->"";};}
     private static void load(){if(!loaded){loaded=true;try{if(Files.exists(FILE))importJson(Files.readString(FILE));}catch(Exception e){ClientState.notify("Could not load workspace layout");}}}
     /**
      * Called when the editor is laid out on a canvas of {@code w} by {@code h} units, which changes with the window and the interface size.
@@ -84,7 +84,7 @@ final class WorkspaceLayout {
         if(saved<7)continue; // places are kept with the canvas and edges they were chosen on now; earlier ones could have been moved off their edge as the editor opened
         if(saved<5&&Set.of("tools","options","hierarchy","palette","masks","history","clipboard","rulers").contains(e.getKey()))continue; // the Tools window is taller, Tool options starts below it, and the right-hand column is wider
         if(saved<4&&e.getKey().equals("rulers"))continue; // the Rulers window starts out of the way now
-        if(!Set.of("tools","options","target","clipboard","palette","history","masks","rulers","hierarchy").contains(e.getKey()))continue;
+        if(!Set.of("tools","options","target","clipboard","palette","history","masks","rulers","hierarchy","progress").contains(e.getKey()))continue;
         var r=Packets.JSON.fromJson(e.getValue(),Rect.class);r.x=Math.clamp(r.x,0,4000);r.y=Math.clamp(r.y,24,3000);r.w=Math.clamp(r.w,110,1600);r.h=Math.clamp(r.h,60,1600);next.put(e.getKey(),r);
     }windows.clear();windows.putAll(next);}
     static String fieldPanel(String field){return switch(field){case "block"->"palette";case "mask","minY","maxY"->"masks";case "rename"->"hierarchy";case "offsetX","offsetY","offsetZ","copies"->"";default->"options";};}

@@ -199,6 +199,8 @@ final class Session {
         /** An edit that changed the Hierarchy and nothing else, so undo and redo put it back directly. */
         boolean hierarchyOnly(){return selection!=null&&selection.hasHierarchy()&&changes.isEmpty()&&biomes.isEmpty()&&entities.isEmpty()&&annotations.isEmpty();}
         boolean selectionOnly(){return selection!=null&&selection.hasPoints()&&changes.isEmpty()&&biomes.isEmpty()&&entities.isEmpty()&&annotations.isEmpty();}
+        /** The same edit with its block changes packed for the history, or this edit when they are too few or do not pack. */
+        Edit packed(){var list=PackedChanges.pack(changes);return list==changes?this:new Edit(name,list,biomes,flags,entities,annotations,selection,time,builder);}
         /** The same edit, also moving the selection from {@code before} to {@code after} when it is undone or redone. */
         Edit withSelection(SelectionChange change){return new Edit(name,changes,biomes,flags,entities,annotations,change,time,builder);}
         /** An entry in the history for a change to the selection alone, which has no blocks to restore. */
@@ -206,11 +208,12 @@ final class Session {
         Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags){this(name,changes,biomes,flags,List.of(),List.of());}
         Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags,List<EntityChange> entities){this(name,changes,biomes,flags,entities,List.of());}
         int estimatedBytes() {
-            int size = changes.size()*128 + biomes.size()*96;
+            boolean packed = changes instanceof PackedChanges;
+            int size = (packed ? ((PackedChanges) changes).bytes() : changes.size()*PackedChanges.BYTES_PER_CHANGE) + biomes.size()*96;
             if(selection!=null&&selection.hasPoints())size+=(selection.before().size()+selection.after().size())*24;
             if(selection!=null)for(var list:selection.objectsBefore().values())size+=list.size()*48; // before and after of each BuildObject moved
             if(selection!=null&&selection.hasHierarchy())size+=(selection.hierarchyBefore().rows().size()+selection.hierarchyAfter().rows().size())*96; // the rows of the snapshots (the blocks in them are shared with the BuildObjects)
-            for (var c : changes) {
+            if (!packed) for (var c : changes) { // a packed list has counted the data of its palette already
                 if(c.before.data()!=null) size += c.before.data().toString().length()*2;
                 if(c.after.data()!=null) size += c.after.data().toString().length()*2;
             }
@@ -254,5 +257,13 @@ final class Session {
         while (undo.size()>32 || (bytes>Selection.HISTORY_BYTES && undo.size()>1)) bytes-=undo.removeLast().estimatedBytes();
         event(edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())+" changes");
     }
-    void recalculateBytes() {bytes=0;for(var e:undo)bytes+=e.estimatedBytes();for(var e:redo)bytes+=e.estimatedBytes();}
+    /** Every edit in the history is kept packed (see {@link PackedChanges}), whichever way it got there: made, undone, redone, interrupted or loaded. */
+    private static void pack(Deque<Edit> history) {
+        boolean any=false;
+        for(var e:history)if(e.changes().size()>=PackedChanges.MIN_SIZE&&!(e.changes() instanceof PackedChanges)){any=true;break;}
+        if(!any)return;
+        var all=new ArrayList<>(history);history.clear();
+        for(var e:all)history.addLast(e.packed());
+    }
+    void recalculateBytes() {pack(undo);pack(redo);bytes=0;for(var e:undo)bytes+=e.estimatedBytes();for(var e:redo)bytes+=e.estimatedBytes();}
 }

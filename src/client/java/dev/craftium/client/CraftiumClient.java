@@ -50,6 +50,7 @@ public final class CraftiumClient implements ClientModInitializer {
             toolKeys.put(tool,ClientCompat.registerKey(new KeyMapping("key.craftium.tool."+spec.path(),InputConstants.Type.KEYSYM,spec.defaultKey(),category)));
         }
         ClientPlayNetworking.registerGlobalReceiver(Packets.MissingBlocks.TYPE,(payload,context)->context.client().execute(()->ClientState.setMissingBlocks(payload.ids())));
+        ClientPlayNetworking.registerGlobalReceiver(Packets.Progress.TYPE,(payload,context)->context.client().execute(()->ClientState.setProgress(payload.verb(),payload.name(),payload.done(),payload.total())));
         ClientPlayNetworking.registerGlobalReceiver(Packets.Report.TYPE,(payload,context)->context.client().execute(()->ClientCompat.setScreen(context.client(),new ReportScreen(ClientCompat.screen(context.client()),payload.text()))));
         ClientPlayNetworking.registerGlobalReceiver(Packets.AiReply.TYPE,(payload,context)->AiBridge.dataReceived(payload.json()));
         ClientPlayNetworking.registerGlobalReceiver(Packets.Hello.TYPE,(payload,context)->context.client().execute(()->ClientHandshake.receive(payload.json(),false)));
@@ -146,6 +147,7 @@ public final class CraftiumClient implements ClientModInitializer {
             switch(message.kind()){
                 case "status" -> receiveStatus(message.data());
                 case "report" -> ClientCompat.setScreen(mc,new ReportScreen(ClientCompat.screen(mc),message.data()));
+                case "progress" -> {var p=Packets.JSON.fromJson(message.data(),Packets.Progress.class);ClientState.setProgress(p.verb(),p.name(),p.done(),p.total());}
                 case "ai_reply" -> AiBridge.dataReceived(message.data());
                 case "download" -> ClientAssets.receive(Packets.JSON.fromJson(message.data(),Packets.Download.class));
                 case "hello" -> {ClientHandshake.receive(message.data(),true);if(ClientHandshake.problem()==null)send("status",null,null);}

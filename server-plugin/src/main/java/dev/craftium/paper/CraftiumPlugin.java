@@ -111,6 +111,7 @@ public final class CraftiumPlugin extends JavaPlugin implements Listener,PluginM
         Player bukkit=getServer().getPlayer(player.getUUID());if(bukkit==null)return;
         if(payload instanceof Packets.Update p)enqueue(bukkit,"status",p.json());
         else if(payload instanceof Packets.Report p)enqueue(bukkit,"report",p.text());
+        else if(payload instanceof Packets.Progress p)enqueue(bukkit,"progress",Packets.JSON.toJson(p));
         else if(payload instanceof Packets.AiReply p)enqueue(bukkit,"ai_reply",p.json());
         else if(payload instanceof Packets.Download p)enqueue(bukkit,"download",Packets.JSON.toJson(p));
         else throw new IllegalArgumentException("Unsupported Craftium payload");

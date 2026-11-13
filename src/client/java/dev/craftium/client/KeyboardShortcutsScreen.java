@@ -122,7 +122,7 @@ final class KeyboardShortcutsScreen extends CraftiumScreen {
     @Override protected void draw(Gfx g,int mouseX,int mouseY,float delta){
         g.fill(0,0,width,height,0xf510151c);
         int x=left(),per=rowsPerPage();
-        g.text(font,"KEYBOARD SHORTCUTS",x,14,0xffdce6ef,false);
+        g.text(font,"Keyboard shortcuts",x,14,0xffdce6ef,false);
         g.text(font,tab.about+". Choose a shortcut, then press the new key; Esc cancels, Backspace clears.",x,27,0xff8595a8,false);
         var rows=rows();
         for(int i=page*per;i<Math.min(rows.size(),(page+1)*per);i++){
