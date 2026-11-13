@@ -110,8 +110,15 @@ final class BuildObjectStore {
             int nextGroupId,
             List<SavedSelections.SavedGroup> groups) {
         try {
+            boolean held = rows.stream()
+                    .anyMatch(r -> !r.dormant().isEmpty() || !r.replaced().isEmpty());
             var root = new CompoundTag();
-            root.putInt("format", 1);
+            root.putInt(
+                    "format",
+                    held
+                            ? 2
+                            : 1); // 2 only when something holds dormant blocks, so a world that does not use them still
+            // opens in an older build
             root.putInt("nextId", nextId);
             root.putInt("nextGroupId", nextGroupId);
             var groupList = new ListTag();
@@ -142,6 +149,8 @@ final class BuildObjectStore {
                     flat[i++] = p.z();
                 }
                 tag.putIntArray("points", flat);
+                putCells(tag, "dormant", r.dormant());
+                putCells(tag, "replaced", r.replaced());
                 list.add(tag);
             }
             root.put("entries", list);
@@ -157,12 +166,31 @@ final class BuildObjectStore {
             ServerPlatform.LOG.error("Cannot write BuildObjects {}", file, e);
         }
     }
+    /** Writes packed cells as {@code name}: sorted cell keys, the states in use as one text of lines (a block state never has a line break), and each cell's index. Nothing is written for none. */
+    private static void putCells(CompoundTag tag, String name, PackedCells cells) {
+        if (cells.isEmpty()) return;
+        var c = new CompoundTag();
+        c.putLongArray("cells", cells.keysArray());
+        c.putString("states", String.join("\n", cells.paletteList()));
+        c.putIntArray("index", cells.indexesArray());
+        tag.put(name, c);
+    }
+    /** The cells {@link #putCells} wrote, or none when absent. A store that does not add up throws, so the file is kept as .bad like any damaged one. */
+    private static PackedCells readCells(CompoundTag tag, String name) {
+        var c = tag.getCompoundOrEmpty(name);
+        long[] keys = c.getLongArray("cells").orElse(new long[0]);
+        if (keys.length == 0) return PackedCells.EMPTY;
+        if (keys.length > Selection.LIMIT) throw new IllegalArgumentException("Invalid BuildObject dormant blocks");
+        var states = List.of(c.getStringOr("states", "").split("\n", -1));
+        return PackedCells.of(keys, states, c.getIntArray("index").orElse(new int[0]));
+    }
 
     static SavedSelections.Tree load(Path file) {
         if (!Files.exists(file)) return new SavedSelections.Tree();
         try {
             var root = NbtIo.readCompressed(file, NbtAccounter.create(256L * 1024 * 1024));
-            if (root.getIntOr("format", 0) != 1) throw new IllegalArgumentException("Unknown BuildObject file format");
+            int format = root.getIntOr("format", 0);
+            if (format != 1 && format != 2) throw new IllegalArgumentException("Unknown BuildObject file format");
             var list = root.getListOrEmpty("entries");
             if (list.size() > SavedSelections.MAX) throw new IllegalArgumentException("Too many BuildObjects");
             var rows = new ArrayList<SavedSelections.Saved>();
@@ -181,7 +209,9 @@ final class BuildObjectStore {
                         tag.getIntOr("color", 0),
                         points,
                         tag.getIntOr("group", 0),
-                        tag.getBooleanOr("folded", false)));
+                        tag.getBooleanOr("folded", false),
+                        format >= 2 ? readCells(tag, "dormant") : PackedCells.EMPTY,
+                        format >= 2 ? readCells(tag, "replaced") : PackedCells.EMPTY));
             }
             var groups = new ArrayList<SavedSelections.SavedGroup>();
             var groupList = root.getListOrEmpty("groups");
