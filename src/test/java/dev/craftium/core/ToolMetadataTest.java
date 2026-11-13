@@ -16,9 +16,9 @@ class ToolMetadataTest {
         BOX_SELECT @@ Box Select @@ BX @@ Select @@ Right-click two corners to select a cuboid. @@ NONE @@ false @@ false @@ false @@ true @@ 66
         FREEHAND_SELECT @@ Freehand Select @@ FS @@ Select @@ Brush a selection; use selection mode to add or subtract. @@ SHAPE @@ true @@ false @@ false @@ true @@ 78
         RULER @@ Ruler @@ RL @@ Utility @@ Add measurement points; use the inspector for circles, splits and center selection. @@ NONE @@ false @@ false @@ false @@ false @@ -1
-        PAINTER @@ Painter @@ PA @@ Paint @@ Paint existing blocks with your active material. @@ SHAPE @@ true @@ false @@ true @@ false @@ 80
+        PAINTER @@ Surface Painter @@ PA @@ Paint @@ Paint existing blocks with your active material. @@ SHAPE @@ true @@ false @@ true @@ false @@ 80
         PAINT_BUCKET @@ Paint Bucket @@ PB @@ Paint @@ Fill the connected blocks you click with your foreground block. Directions and select type work as in the Magic Wand. @@ NONE @@ false @@ false @@ true @@ false @@ -1
-        NOISE_PAINTER @@ Noise Painter @@ NP @@ Paint @@ Blend the Materials palette with coherent seeded noise. @@ SHAPE @@ true @@ false @@ true @@ false @@ 79
+        NOISE_PAINTER @@ Surface Noise Painter @@ NP @@ Paint @@ Blend the Materials palette with coherent seeded noise. @@ SHAPE @@ true @@ false @@ true @@ false @@ 79
         BIOME_PAINTER @@ Biome Painter @@ BP @@ Paint @@ Paint biome cells inside the brush. Biomes use 4-block cells. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
         CLENTAMINATOR @@ Clentaminator @@ CL @@ Paint @@ Convert biome and matching surface materials together. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
         FREEHAND_DRAW @@ Freehand Draw @@ DR @@ Draw @@ Draw solid shapes; invert to carve. @@ SHAPE @@ true @@ false @@ true @@ false @@ 71
