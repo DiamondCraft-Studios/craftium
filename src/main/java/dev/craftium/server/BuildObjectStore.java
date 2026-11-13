@@ -49,6 +49,7 @@ final class BuildObjectStore {
         session.savedAttached = true;
         session.savedSent = -1;
         session.savedDataSent.clear();
+        session.savedHiddenSent.clear();
     }
 
     private static Slot slot(ServerPlayer player) {

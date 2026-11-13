@@ -987,7 +987,15 @@ public final class EditorServer {
                             ? s.pendingChainBase
                             : confirming ? staged : null; // what was staged before the run of transforms began
                     if (base != null) for (var c : base.changes()) plan.changes.put(c.pos(), c);
-                    var computed = ModelTransform.compute(plan, s, o, chain);
+                    var hiddenBox = ObjectMoves.hiddenBox(
+                            s); // with nothing selected, a BuildObject that is all hidden is what moves
+                    var computed = ModelTransform.compute(
+                            plan,
+                            s,
+                            o,
+                            chain,
+                            hiddenBox == null ? null : hiddenBox[0],
+                            hiddenBox == null ? null : hiddenBox[1]);
                     // The selection follows its blocks; if the edit is cancelled it goes back.
                     var priorBefore = s.pendingSelectionBefore;
                     var original = confirming && priorBefore != null
@@ -1008,7 +1016,9 @@ public final class EditorServer {
                     try {
                         ModelTransform.Result result;
                         Map<Integer, List<Point>> objectsAfter;
-                        if (ObjectMoves.touches(objectsStart, computed.source().keySet())) {
+                        if (ObjectMoves.touches(objectsStart, computed.source().keySet())
+                                || !ObjectMoves.carried(s, objectsStart, heldStart)
+                                        .isEmpty()) {
                             // The selection holds BuildObject blocks: they move with the world winning, so what they
                             // could not place is kept, not lost (see ObjectMove).
                             var done =
@@ -1053,7 +1063,12 @@ public final class EditorServer {
                             s.pendingChain = result.chain();
                             s.pendingChainBase = base;
                             s.pendingChainEdit = s.pendingEdit;
-                        }
+                        } else if (confirming) {
+                            s.pendingObjectsBefore = null;
+                            s.pendingHeldBefore = null;
+                            s.pendingSelectionBefore = null;
+                        } // nothing was staged (only what the BuildObjects keep changed, and that is in the history):
+                        // there is nothing to cancel
                     } catch (RuntimeException e) {
                         s.selection.restore(before);
                         s.saved.setPoints(objectsNow);
@@ -2414,11 +2429,13 @@ public final class EditorServer {
                 && edit.entities().isEmpty()
                 && edit.annotations().isEmpty()
                 && edit.selection() != null
-                && edit.selection().hasHierarchy()) {
+                && (edit.selection().hasHierarchy()
+                        || edit.selection().hasObjects()
+                        || edit.selection().hasHeld())) {
             s.remember(edit);
             send(player, s, edit.name(), false);
-            return; // nothing to build (a copy put back in place, or blocks that were air already), but what it did to
-            // the BuildObjects is in the history
+            return; // nothing to build (a copy put back in place, blocks that were air already, or hidden blocks that
+            // moved but are still hidden), but what it did to the BuildObjects is in the history
         }
         if (edit.changes().isEmpty()
                 && edit.biomes().isEmpty()

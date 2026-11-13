@@ -260,6 +260,7 @@ final class SavedSelectionActions {
                             e.points().stream().mapToInt(Point::x).max().getAsInt(),
                             e.points().stream().mapToInt(Point::y).max().getAsInt(),
                             e.points().stream().mapToInt(Point::z).max().getAsInt());
+            var hidden = e.hiddenBounds();
             out.add(new Packets.SavedSelection(
                     e.id(),
                     e.name(),
@@ -273,7 +274,11 @@ final class SavedSelectionActions {
                     e.parentId(),
                     e.color(),
                     e.groupId(),
-                    e.folded()));
+                    e.folded(),
+                    e.dormant().size(),
+                    withData ? hiddenData(s, e) : null,
+                    hidden == null ? null : new Point(hidden[0], hidden[1], hidden[2]),
+                    hidden == null ? null : new Point(hidden[3], hidden[4], hidden[5])));
         }
         return out;
     }
@@ -287,12 +292,19 @@ final class SavedSelectionActions {
     static List<Packets.SavedSelection> forStatus(Session s, boolean supported) {
         if (!supported || s.savedSent == s.saved.revision()) return null;
         s.savedSent = s.saved.revision();
-        s.savedDataSent
-                .keySet()
-                .retainAll(s.saved.entries().stream()
-                        .map(e -> e.id())
-                        .collect(java.util.stream.Collectors.toSet())); // forget what was sent of deleted ones
+        var ids = s.saved.entries().stream().map(e -> e.id()).collect(java.util.stream.Collectors.toSet());
+        s.savedDataSent.keySet().retainAll(ids);
+        s.savedHiddenSent.keySet().retainAll(ids); // forget what was sent of deleted ones
         return list(s, true);
+    }
+    /** The most hidden blocks sent to be drawn for one BuildObject: more are counted, boxed and kept, but not drawn. */
+    static final int HIDDEN_DRAW_LIMIT = 262_144;
+    /** The blocks an entry keeps hidden, once for each time they change; null when the client has them, and empty when there are none or too many to draw. */
+    private static String hiddenData(Session s, dev.craftium.core.SavedSelections.Entry e) {
+        if (Integer.valueOf(e.heldVersion()).equals(s.savedHiddenSent.get(e.id()))) return null;
+        s.savedHiddenSent.put(e.id(), e.heldVersion());
+        if (e.dormant().isEmpty() || e.dormant().size() > HIDDEN_DRAW_LIMIT) return "";
+        return dev.craftium.core.SelectionCodec.encode(e.dormant().points());
     }
     /** The blocks of an entry, once for each time they change; null when the client has them. */
     private static String data(Session s, dev.craftium.core.SavedSelections.Entry e) {
