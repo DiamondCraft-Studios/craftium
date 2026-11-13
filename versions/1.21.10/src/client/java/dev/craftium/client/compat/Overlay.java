@@ -112,7 +112,7 @@ public final class Overlay {
             var states=new ArrayList<net.minecraft.world.level.block.state.BlockState>(models.size());
             for(var at:models)states.add(level.getBlockState(at));
             if(known!=null&&known.models==models&&known.states.equals(states))known.second=second; // nothing changed: what was worked out about it stays
-            else{known=new Resolved(models,states,second);RESOLVED.put(places,known);PREPARED.remove(places);}
+            else{known=new Resolved(models,states,second);RESOLVED.put(places,known);{var old=PREPARED.remove(places);if(old!=null)old.close();}}
         }
         cachedBlockStates(known.states,places,tint);
     }
@@ -132,14 +132,14 @@ public final class Overlay {
             try{frame.run();}finally{out=saved;}
             prims=extra;
         }
-        if(prims.isEmpty()||mc.level==null){PREPARED.clear();RESOLVED.clear();return;}
+        if(prims.isEmpty()||mc.level==null){closeAll();RESOLVED.clear();return;}
         var camera=ClientCompat.camera(mc);
         var view=new View(camera.position(),camera.getLeftVector(),camera.getUpVector(),
             2*Math.tan(Math.toRadians(ClientCompat.fov(mc,camera))/2)/Math.max(1,mc.getWindow().getHeight()));
         // Block ghosts go first, then the lines, boxes and points over them, so handles and outlines are never covered by a ghost.
         TOUCHED.clear();
         for(var prim:prims)if(prim instanceof Blocks g)blocks(context,mc,view,g);
-        PREPARED.keySet().retainAll(TOUCHED);RESOLVED.keySet().retainAll(TOUCHED); // a ghost that was not drawn this frame is gone
+        PREPARED.values().removeIf(p->{if(TOUCHED.contains(p.places))return false;p.close();return true;});RESOLVED.keySet().retainAll(TOUCHED); // a ghost that was not drawn this frame is gone
         var pose=context.matrices().last();
         var quads=context.consumers().getBuffer(RenderType.textBackgroundSeeThrough());
         for(var prim:prims)switch(prim){
@@ -257,10 +257,14 @@ public final class Overlay {
         final List<Boolean> loose=new ArrayList<>();
         final List<List<net.minecraft.client.renderer.block.model.BlockModelPart>> parts=new ArrayList<>();
         int[] tints;
-        Object source;
+        Object source;List<BlockPos> places;
+        GhostMesh mesh;boolean meshTried;
+        void close(){if(mesh!=null){mesh.close();mesh=null;}}
     }
     private static final java.util.Map<List<BlockPos>,Prepared> PREPARED=new java.util.IdentityHashMap<>();
     private static final java.util.Set<List<BlockPos>> TOUCHED=java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+
+    private static void closeAll(){for(var p:PREPARED.values())p.close();PREPARED.clear();}
 
     private static Prepared prepare(Minecraft mc,Blocks ghost){
         var level=mc.level;var out=new Prepared();
@@ -289,7 +293,18 @@ public final class Overlay {
     private static void cachedBlocks(WorldRenderContext context,Minecraft mc,View view,Blocks ghost){
         TOUCHED.add(ghost.places);
         var prepared=PREPARED.get(ghost.places);
-        if(prepared==null||prepared.source!=ghost.states){prepared=prepare(mc,ghost);prepared.source=ghost.states;PREPARED.put(ghost.places,prepared);} // new states for the same places (a turn, an edit) are worked out again
+        if(prepared==null||prepared.source!=ghost.states){if(prepared!=null)prepared.close();prepared=prepare(mc,ghost);prepared.source=ghost.states;prepared.places=ghost.places;PREPARED.put(ghost.places,prepared);} // new states for the same places (a turn, an edit) are worked out again
+        if(!prepared.meshTried&&GhostMesh.usable()){
+            prepared.meshTried=true;
+            final var tints=prepared.tints;final var source=prepared;
+            prepared.mesh=GhostMesh.bake(prepared.pos,prepared.outer,prepared.loose,prepared.parts,ghost.tint,(i,index)->{
+                if(index<0||index>=4)return -1;
+                if(tints[i*4+index]==-2){int t=ClientCompat.blockTint(mc,source.states.get(i),source.pos.get(i),index);tints[i*4+index]=t==-1?0xFFFFFF:t&0xFFFFFF;}
+                return tints[i*4+index];
+            });
+        }
+        if(prepared.mesh!=null&&prepared.mesh.draw(view.eye))return; // the whole ghost in a few draw calls
+        if(prepared.mesh!=null){prepared.mesh.close();prepared.mesh=null;}
         var consumer=context.consumers().getBuffer(RenderType.entityTranslucent(TextureAtlas.LOCATION_BLOCKS));
         var stack=context.matrices();
         float a=(ghost.tint>>>24)/255f,r=(ghost.tint>>16&255)/255f,g=(ghost.tint>>8&255)/255f,b=(ghost.tint&255)/255f;

@@ -114,6 +114,7 @@ public final class GhostDrawCostGameTest implements FabricClientGameTest {
                 ClientState.setAiGhost("", ghost);
             });
             c.waitTicks(SETTLE_TICKS);
+            if (drawLimit == 32768 && cells.size() > 0 && cells.size() < 20000) c.takeScreenshot("ghostperf-" + shape.name() + "-" + cells.size());
             long gc0 = gcMillis();
             STAMPS.clear();
             c.waitTicks(MEASURE_TICKS);
