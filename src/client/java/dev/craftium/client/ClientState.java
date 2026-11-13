@@ -231,6 +231,12 @@ public final class ClientState {
     static OutlineShape xrayShape(int id) {
         return savedXray.get(id);
     }
+    /** Whether a BuildObject is selected, or is under one that is: it is part of what the player is working on. */
+    static boolean savedSelected(Packets.SavedSelection saved) {
+        if (saved.active()) return true;
+        for (var other : savedSelections) if (other.active() && savedUnder(saved, other.id())) return true;
+        return false;
+    }
     /** Whether the x-ray of a BuildObject shows: while it is selected (or something it is under is), or while its eye is open, as its outline does. */
     static boolean xrayShown(Packets.SavedSelection saved) {
         if (saved.active() || !savedHidden(saved.id())) return true;

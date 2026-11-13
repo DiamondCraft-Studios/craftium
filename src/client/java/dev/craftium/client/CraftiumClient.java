@@ -839,12 +839,17 @@ public final class CraftiumClient implements ClientModInitializer {
                     false);
         }
         // The blocks a BuildObject keeps out of the world because something solid was in the way, as an x-ray: lines
-        // only, in its colour, faint where blocks hide them.
+        // only, in its colour, seen through what hides them.
+        // While it is selected they are as strong as its outline, so that the shape of the whole BuildObject can be
+        // followed while it is dragged out of the ground
+        // (the selection itself is only the blocks that are in the world, so that no tool can reach what is under the
+        // hidden ones); otherwise they are fainter.
         for (var saved : ClientState.savedSelections()) {
             var xray = ClientState.xrayShape(saved.id());
             if (xray == null || !ClientState.xrayShown(saved)) continue;
-            int colour = ClientState.savedColor(saved.id()) | 0xff000000;
-            xray.drawPlain(Vec3.ZERO, colour, (float) ClientState.options.selectionWidth, 0, 0, false, false);
+            int alpha = ClientState.savedSelected(saved) ? 0xe0 : 0x80;
+            xray.drawThrough(Vec3.ZERO, ClientState.savedColor(saved.id()) & 0xffffff | alpha << 24, (float)
+                    ClientState.options.selectionWidth);
         }
     }
     /** Every ruler: its line (or circle), its length, and a knob at each end. The end being dragged shows where it will land, and the length with it. */
