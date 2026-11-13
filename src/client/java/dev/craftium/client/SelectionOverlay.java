@@ -9,8 +9,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
 final class SelectionOverlay {
-    /** Past this many blocks the real models are not drawn, because a frame would have to draw all of them. */
-    private static final int MAX_GHOST_BLOCKS=4096;
     private static String encoded="";
     private static boolean unreadableLogged;
     private static OutlineShape shape=OutlineShape.EMPTY;
@@ -29,7 +27,6 @@ final class SelectionOverlay {
     private static List<Point> selected=List.of();
     /** The selected blocks as last received; replaced, never changed, so the same list means the same selection. */
     static List<Point> points(){return selected;}
-    private static Set<BlockPos> blockSet=Set.of();
     private static Set<Point> pointSet=Set.of();
     /** Whether the block is one of the selected blocks, however many there are. */
     static boolean contains(BlockPos at){return !pointSet.isEmpty()&&pointSet.contains(new Point(at.getX(),at.getY(),at.getZ()));}
@@ -47,8 +44,9 @@ final class SelectionOverlay {
         final Set<Point> read=points;selected=List.copyOf(read);
         if(read.isEmpty()){building.cancel();shape=OutlineShape.EMPTY;} // nothing to wait for: an empty selection must not linger on screen
         else building.submit(()->OutlineShape.of(read)); // the decoded set is not touched again here: the lists below are copies
-        blocks=read.size()>MAX_GHOST_BLOCKS?List.of():read.stream().map(p->new BlockPos(p.x(),p.y(),p.z())).toList();
-        blockSet=new HashSet<>(blocks);pointSet=new HashSet<>(selected);contactsAt=0;
+        // A frame cannot draw the model of every block of a big selection, so it draws as many as the player allows, the outer surface first; the outline above covers all of it.
+        blocks=Exposed.first(selected,ClientState.options.aiGhostDrawLimit).stream().map(p->new BlockPos(p.x(),p.y(),p.z())).toList();
+        pointSet=new HashSet<>(selected);contactsAt=0;
     }
     /**
      * The faces of the selection that touch a solid block outside it, so it is clear whether the selection sits inside a solid
@@ -63,7 +61,7 @@ final class SelectionOverlay {
         var found=new ArrayList<Vec3[]>();
         for(BlockPos at:blocks)for(Direction d:Direction.values()){
             BlockPos next=at.relative(d);
-            if(blockSet.contains(next)||level.getBlockState(next).getCollisionShape(level,next).isEmpty())continue;
+            if(pointSet.contains(new Point(next.getX(),next.getY(),next.getZ()))||level.getBlockState(next).getCollisionShape(level,next).isEmpty())continue; // the whole selection, not just the blocks drawn
             found.add(quad(at,d));
         }
         return contacts=found;
@@ -106,8 +104,8 @@ final class SelectionOverlay {
         Point moving=TransformGizmo.moveDelta();
         if(moving!=null){ // the blocks being dragged, shown where they would land
             if(!moving.equals(movedBy)||movedFor!=blocks){movedBy=moving;movedFor=blocks;moved=blocks.stream().map(b->b.offset(moving.x(),moving.y(),moving.z())).toList();}
-            Overlay.blocks(blocks,moved,ClientState.options.previewTint);
+            Overlay.cachedBlocks(blocks,moved,ClientState.options.previewTint);
         }else if(!transforming&&!ClientState.hasPending()) // a waiting edit shows its own blocks
-            Overlay.blocks(blocks,ClientState.options.selectionTint);
+            Overlay.cachedBlocks(blocks,blocks,ClientState.options.selectionTint);
     }
 }

@@ -162,9 +162,9 @@ final class GhostBlocks {
             for(Point p:relative)places.add(new BlockPos(p.x()+origin.x(),p.y()+origin.y(),p.z()+origin.z()));
             cachedPlaces=places;cachedOrigin=origin;
         }
-        // An AI preview can hold far more blocks than a frame can draw as models; the server sends the visible ones first, so the first few are the ones that show.
-        // Another player's AI preview is one too, so it is held to the same limit.
-        int models=ai||shared||data.large()?Math.min(states.size(),ClientState.options.aiGhostDrawLimit):states.size();
+        // A preview can hold far more blocks than a frame can draw as models; the server sends the visible ones first, so the first few are the ones that show.
+        // Every preview is held to the player's limit: a waiting edit, the clipboard, an AI preview and another player's alike.
+        int models=Math.min(states.size(),ClientState.options.aiGhostDrawLimit);
         if(drawnPlaces==null||drawnPlaces.size()!=models||drawnFor!=cachedPlaces){ // the same list objects every frame, so the renderer can keep what it worked out about them
             drawnPlaces=models<states.size()?cachedPlaces.subList(0,models):cachedPlaces;
             drawnStates=models<states.size()?states.subList(0,models):states;drawnFor=cachedPlaces;

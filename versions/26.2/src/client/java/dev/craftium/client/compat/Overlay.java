@@ -99,6 +99,25 @@ public final class Overlay {
      * the world changing around it after that first frame.
      */
     public static void cachedBlockStates(List<net.minecraft.world.level.block.state.BlockState> states,List<BlockPos> places,int tint){OverlayLog.blocks("cachedBlockStates",places,tint);building.add(new Ghost(places,places,null,states,tint,true));}
+    /**
+     * As {@link #cachedBlockStates}, for a ghost whose blocks are those of the world at {@code models} (a selection, a move, a result being
+     * previewed). The states are read once, and again once a second so an edit does not leave the ghost showing what the blocks were;
+     * the same two list objects must be passed for as long as the ghost stays the same.
+     */
+    public static void cachedBlocks(List<BlockPos> models,List<BlockPos> places,int tint){
+        var level=Minecraft.getInstance().level;if(level==null)return;
+        long second=level.getGameTime()/20;
+        var known=RESOLVED.get(places);
+        if(known==null||known.models!=models||known.second!=second){
+            var states=new ArrayList<net.minecraft.world.level.block.state.BlockState>(models.size());
+            for(var at:models)states.add(level.getBlockState(at));
+            if(known!=null&&known.models==models&&known.states.equals(states))known.second=second; // nothing changed: what was worked out about it stays
+            else{known=new Resolved(models,states,second);RESOLVED.put(places,known);PREPARED.remove(places);}
+        }
+        cachedBlockStates(known.states,places,tint);
+    }
+    private static final class Resolved{final List<BlockPos> models;final List<net.minecraft.world.level.block.state.BlockState> states;long second;Resolved(List<BlockPos> m,List<net.minecraft.world.level.block.state.BlockState> s,long t){models=m;states=s;second=t;}}
+    private static final java.util.Map<List<BlockPos>,Resolved> RESOLVED=new java.util.IdentityHashMap<>();
     public static void point(Vec3 at,int color,float size){OverlayLog.point(at,color,size);Gizmos.point(at,color,size).setAlwaysOnTop();}
     /**
      * A label that always faces the camera, floating over the block at {@code pos}. {@code scale} is world
@@ -152,7 +171,7 @@ public final class Overlay {
         var mc=Minecraft.getInstance();
         var hook=frame;
         if(hook!=null&&mc.level!=null)try(var collector=mc.levelRenderer.collectPerFrameRenderThreadGizmos()){hook.run();}
-        if(ghosts.isEmpty()||mc.level==null){PREPARED.clear();return;}
+        if(ghosts.isEmpty()||mc.level==null){PREPARED.clear();RESOLVED.clear();return;}
         TOUCHED.clear();
         var eye=ClientCompat.camera(mc).position();
         var stack=context.poseStack();
@@ -198,7 +217,7 @@ public final class Overlay {
                 stack.popPose();
             }
         }
-        PREPARED.keySet().retainAll(TOUCHED); // a ghost that was not drawn this frame is gone
+        PREPARED.keySet().retainAll(TOUCHED);RESOLVED.keySet().retainAll(TOUCHED); // a ghost that was not drawn this frame is gone
     }
 
     /** What a cached ghost needs for every block that has anything to show, worked out once: see {@link #cachedBlockStates}. */
@@ -211,6 +230,7 @@ public final class Overlay {
         final List<Boolean> loose=new ArrayList<>();
         final List<List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart>> parts=new ArrayList<>();
         int[] tints;
+        Object source;
     }
     private static final java.util.Map<List<BlockPos>,Prepared> PREPARED=new java.util.IdentityHashMap<>();
     private static final java.util.Set<List<BlockPos>> TOUCHED=java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
@@ -242,7 +262,8 @@ public final class Overlay {
 
     private static void cachedBlocks(LevelRenderContext context,Minecraft mc,Vec3 eye,net.minecraft.client.renderer.rendertype.RenderType type,Ghost ghost){
         TOUCHED.add(ghost.places());
-        var prepared=PREPARED.computeIfAbsent(ghost.places(),k->prepare(mc,ghost));
+        var prepared=PREPARED.get(ghost.places());
+        if(prepared==null||prepared.source!=ghost.states()){prepared=prepare(mc,ghost);prepared.source=ghost.states();PREPARED.put(ghost.places(),prepared);} // new states for the same places (a turn, an edit) are worked out again
         var stack=context.poseStack();
         var quad=new QuadInstance();
         quad.setColor(ghost.tint());
