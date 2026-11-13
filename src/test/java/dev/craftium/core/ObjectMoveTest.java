@@ -167,4 +167,24 @@ class ObjectMoveTest{
         assertTrue(ObjectMove.isWater("minecraft:water[level=0]"));assertTrue(ObjectMove.isWater("minecraft:water"));
         assertFalse(ObjectMove.isWater("minecraft:water_cauldron[level=1]"));assertFalse(ObjectMove.isWater(null));
     }
+    @Test void aCarriedObjectThatHoldsNothingInTheWorldMovesItsHiddenBlocksWithTheSelection(){
+        var world=new HashMap<>(Map.of(p(0),DIRT,p(1),DIRT,p(20),WATER));
+        var buried=new ObjectMove.Obj(1,new HashSet<>(),cells(p(0),STONE,p(1),STAIRS),new PackedCells(),true);
+        var r=ObjectMove.shift(List.of(buried),Set.of(),shift(20),view(world),ObjectMoveTest::solid,false);apply(world,r);
+        assertEquals(Map.of(p(0),DIRT,p(1),DIRT,p(20),STONE,p(21),STAIRS),world,"they land where the world is free, and the dirt is untouched");
+        var o=r.objects().get(1);assertEquals(Set.of(p(20),p(21)),o.own());assertTrue(o.dormant().isEmpty());assertEquals(WATER,o.replaced().get(p(20)));
+        assertEquals(Set.of(p(20),p(21)),r.landed());
+    }
+    @Test void aCarriedObjectWhoseBlocksAreAllBlockedAgainKeepsThemAtTheNewPlace(){
+        var world=new HashMap<>(Map.of(p(0),DIRT,p(5),DIRT));
+        var buried=new ObjectMove.Obj(1,new HashSet<>(),cells(p(0),STONE),new PackedCells(),true);
+        var r=ObjectMove.shift(List.of(buried),Set.of(),shift(5),view(world),ObjectMoveTest::solid,false);apply(world,r);
+        assertTrue(r.writes().isEmpty());assertEquals(STONE,r.objects().get(1).dormant().get(p(5)));assertTrue(r.landed().isEmpty());
+    }
+    @Test void anObjectThatIsNotCarriedAndHoldsNothingStaysWhereItIs(){
+        var world=new HashMap<Point,String>();
+        var buried=new ObjectMove.Obj(1,new HashSet<>(),cells(p(0),STONE),new PackedCells());
+        var r=ObjectMove.shift(List.of(buried),Set.of(),shift(5),view(world),ObjectMoveTest::solid,false);
+        assertTrue(r.objects().isEmpty());
+    }
 }

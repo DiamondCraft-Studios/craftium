@@ -489,4 +489,15 @@ class SavedSelectionsTest {
         assertEquals(List.of(child.id()),List.copyOf(saved.withDescendants(List.of(child.id(),999))));
         assertEquals(java.util.Set.of(parent.id(),child.id(),other.id()),saved.withDescendants(List.of(other.id(),parent.id())));
     }
+    @Test void whatABuildObjectKeepsHiddenHasAVersionABoxAndMakesTheClientsHearOfIt(){
+        var saved=new SavedSelections();var one=saved.save(live(A));
+        assertNull(saved.byId(one.id()).hiddenBounds());var version=saved.byId(one.id()).heldVersion();var revision=saved.tree().mutations();
+        var dormant=new PackedCells();dormant.put(new Point(5,-3,7),"minecraft:stone");dormant.put(new Point(-2,10,0),"minecraft:dirt");
+        long before=saved.revision();
+        assertTrue(saved.setHeld(one.id(),dormant,PackedCells.EMPTY));
+        assertTrue(saved.byId(one.id()).heldVersion()>version);assertTrue(saved.revision()>before,"the clients are sent the new list");assertTrue(saved.tree().mutations()>revision);
+        assertArrayEquals(new int[]{-2,-3,0,5,10,7},saved.byId(one.id()).hiddenBounds());
+        int again=saved.byId(one.id()).heldVersion();saved.setHeld(one.id(),dormant,PackedCells.EMPTY);assertEquals(again,saved.byId(one.id()).heldVersion(),"the same again is no change");
+        saved.restoreHeld(Map.of(one.id(),SavedSelections.Held.NONE));assertNull(saved.byId(one.id()).hiddenBounds());assertTrue(saved.byId(one.id()).heldVersion()>again);
+    }
 }

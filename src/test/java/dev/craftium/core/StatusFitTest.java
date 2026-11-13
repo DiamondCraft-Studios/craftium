@@ -116,4 +116,15 @@ class StatusFitTest {
         assertEquals(3_000, fitted.get("pendingData").getAsString().length());
         assertEquals(1_000, fitted.get("selectionData").getAsString().length());
     }
+    @Test void theHiddenBlocksOfABuildObjectAreLeftOutLikeItsBlocksAndItStaysListed() {
+        var entry = new JsonObject();
+        entry.addProperty("id", 3);entry.addProperty("data", "d".repeat(1_000));entry.addProperty("hiddenData", "h".repeat(3_000_000));entry.addProperty("hidden", 40);
+        var list = new com.google.gson.JsonArray();list.add(entry);
+        var o = new JsonObject();o.addProperty("message", "Ready");o.add("savedSelections", list);
+        var fitted = JsonParser.parseString(StatusFit.fit(o.toString(), 1_500_000, "too big")).getAsJsonObject();
+        var kept = fitted.getAsJsonArray("savedSelections").get(0).getAsJsonObject();
+        assertEquals("", kept.get("hiddenData").getAsString(), "the 3 MB of hidden blocks is what does not fit");
+        assertEquals(1_000, kept.get("data").getAsString().length(), "its own blocks are kept");
+        assertEquals(40, kept.get("hidden").getAsInt(), "how many are hidden is still said");
+    }
 }

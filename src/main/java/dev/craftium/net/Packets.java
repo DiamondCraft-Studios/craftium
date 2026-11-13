@@ -93,7 +93,18 @@ public final class Packets {
                                  /** The id of the group it is in (that of the BuildObject at the top that it is under), or 0 from a server that predates groups. */
                                  int group,
                                  /** Whether what is under it is folded away in the Hierarchy: kept by the server, and false from one that predates it. */
-                                 boolean folded) {}
+                                 boolean folded,
+                                 /** How many of its blocks it keeps out of the world because something solid was in the way (see {@code ObjectMove}): 0 from a server that predates them. */
+                                 int hidden,
+                                 /** Those blocks as {@code SelectionCodec} text, to draw them as an x-ray: null means the client already has them, and empty means none or left out because the status was too big. */
+                                 String hiddenData,
+                                 /** The corners of the box around the hidden blocks, or null when there are none: where the gizmo is when nothing of it is in the world. */
+                                 Point hiddenMin,Point hiddenMax) {
+        /** A BuildObject from a server that predates hidden blocks, or one with none. */
+        public SavedSelection(int id, String name, int size, Point min, Point max, boolean active, boolean editing, String data, String guid, int parent, int color, int group, boolean folded) {
+            this(id, name, size, min, max, active, editing, data, guid, parent, color, group, folded, 0, null, null, null);
+        }
+    }
     /** One group of the Hierarchy: a heading that BuildObjects at the top level sit under. */
     public record SavedGroup(int id, String guid, String name, boolean folded) {}
     /** A status that carries only the list of plugin tools, sent when it changes: not a reply to anything, so the client takes the list and nothing else from it. */

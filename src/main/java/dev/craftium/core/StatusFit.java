@@ -56,7 +56,10 @@ public final class StatusFit {
                 }
             }
             if (biggest == null) break; // nothing left to leave out: the rest is not ours to shrink
-            if (session >= 0) status.getAsJsonArray(biggest).get(session).getAsJsonObject().addProperty("data", ""); // that entry's data is left out, the entry stays listed
+            if (session >= 0) { // that entry's longest piece of data is left out, the entry stays listed
+                var entry = status.getAsJsonArray(biggest).get(session).getAsJsonObject();
+                entry.addProperty(length(entry.get("hiddenData")) > length(entry.get("data")) ? "hiddenData" : "data", "");
+            }
             else if (status.get(biggest).isJsonArray()) status.add(biggest, new JsonArray()); // a list of previews is left empty: none to show
             else status.addProperty(biggest, "");
             dropped.add(biggest);
@@ -70,8 +73,12 @@ public final class StatusFit {
     }
 
     private static int sessionDataLength(JsonObject status, String list, int index) {
-        var data = status.getAsJsonArray(list).get(index).getAsJsonObject().get("data");
-        return data != null && data.isJsonPrimitive() ? data.getAsString().length() : 0;
+        var entry = status.getAsJsonArray(list).get(index).getAsJsonObject();
+        return Math.max(length(entry.get("data")), length(entry.get("hiddenData")));
+    }
+
+    private static int length(com.google.gson.JsonElement value) {
+        return value != null && value.isJsonPrimitive() ? value.getAsString().length() : 0;
     }
 
     /** The index in {@code aiSessions} of the entry with the most ghost data, or -1 when none carries any. */
