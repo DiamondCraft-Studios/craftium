@@ -55,6 +55,7 @@ class ToolMetadataTest {
         SCALE @@ Scale @@ SZ @@ Transform @@ Drag a square on a face to scale the selected blocks around the pivot. Enter applies it. @@ NONE @@ false @@ true @@ true @@ false @@ 67
         PIVOT @@ Pivot @@ PV @@ Transform @@ Click a block, or drag the arrows, to set the point Rotate and Scale work around. @@ NONE @@ false @@ true @@ false @@ false @@ 73
         FLUID_BLOCK @@ Fluid Block @@ FK @@ Terrain @@ Pour your blocks over terrain like powder: they fall, settle and spread thinner towards the edges. @@ SPHERE @@ false @@ false @@ true @@ false @@ -1
+        INSPECT @@ Inspect @@ IN @@ Utility @@ Point at a block to see its tags above it; right-click to list them all in chat. Changes nothing. @@ NONE @@ false @@ false @@ false @@ false @@ -1
         """;
 
     /** The sections of the Tools panel, in order, with the tools in each in the order shown. */
@@ -64,7 +65,7 @@ class ToolMetadataTest {
         Paint: PAINTER,PAINT_BUCKET,GRADIENT_PAINTER,NOISE_PAINTER,SCRIPT_BRUSH,BIOME_PAINTER,CLENTAMINATOR
         Sculpt: SMOOTH,ROUGHEN,DISTORT,MELT,WELD,SHATTER,EXTRUDE,SMEAR,SCULPT_DRAW,MODIFY,STAMP
         Terrain: ELEVATION,FLATTEN,SLOPE,ROCK,FLOODFILL,FLUID_BALL,FLUID_BLOCK
-        Utility: RULER,TINKER,ANNOTATION
+        Utility: RULER,TINKER,ANNOTATION,INSPECT
         """;
 
     private static String describe(Tool t) {

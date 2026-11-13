@@ -6,15 +6,17 @@ package dev.craftium.core;
  * format. Mirror, rotation, integrity and the seed change the exported blocks, because a file has no place to keep them.
  */
 public final class StructureSettings {
-    public static final String JAVA="java",BEDROCK="bedrock",NBT="nbt",SCHEM="schem",SELECTION="selection",CLIPBOARD="clipboard";
+    public static final String JAVA="java",BEDROCK="bedrock",BLUEPRINT="blueprint",NBT="nbt",SCHEM="schem",SELECTION="selection",CLIPBOARD="clipboard";
     public static final int MAX_SIZE=256;
 
-    /** Which tab the export pop-up is on, and so which file it writes. */
+    /** Which tab the export pop-up is on, and so which file it writes: a Java or Bedrock structure, or a blueprint for the library. */
     public String format=JAVA;
     /** The Java tab writes a vanilla structure ({@link #NBT}) or a Sponge schematic ({@link #SCHEM}). */
     public String javaFile=NBT;
     /** Where the blocks come from: the selection, or what was last copied. */
     public String source=SELECTION;
+    /** When above zero, the blocks come from this BuildObject (and everything under it) and not from the selection or the clipboard. */
+    public int objectId;
     /** The structure's name as a structure block takes it: {@code namespace:path}, with {@code minecraft} when no namespace is typed. */
     public String name="structure";
     /** Bedrock's structure origin is the selection's lowest corner plus this, and a schematic keeps it as its offset; a structure NBT has no place for it. */
@@ -29,7 +31,8 @@ public final class StructureSettings {
     public boolean includeEntities=true,includeBlocks=true,airToVoid,showInvisible,showBounds=true,showAxes=true;
 
     public void validate(){
-        if(!JAVA.equals(format)&&!BEDROCK.equals(format))format=JAVA;
+        if(!JAVA.equals(format)&&!BEDROCK.equals(format)&&!BLUEPRINT.equals(format))format=JAVA;
+        objectId=Math.max(0,objectId);
         if(!NBT.equals(javaFile)&&!SCHEM.equals(javaFile))javaFile=NBT;
         if(!SELECTION.equals(source)&&!CLIPBOARD.equals(source))source=SELECTION;
         if(name==null||!name.matches("[a-z0-9_.-]+:[a-z0-9_./-]+|[a-z0-9_./-]+"))name="structure";
@@ -50,6 +53,8 @@ public final class StructureSettings {
     public String extension(){return bedrock()?".mcstructure":schematic()?".schem":".nbt";}
     public String fileName(){return fileStem()+extension();}
     public boolean bedrock(){return BEDROCK.equals(format);}
+    /** A blueprint keeps the blocks as they are: the fields that change them (mirror, rotation, size, integrity, void) do not apply. */
+    public boolean blueprint(){return BLUEPRINT.equals(format);}
     public boolean schematic(){return !bedrock()&&SCHEM.equals(javaFile);}
     /** Whether the file has a place for the position fields: Bedrock's structure origin and a schematic's offset. */
     public boolean storesOffset(){return bedrock()||schematic();}

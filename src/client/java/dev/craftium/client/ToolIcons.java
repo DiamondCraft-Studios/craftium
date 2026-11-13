@@ -107,6 +107,7 @@ final class ToolIcons {
             }
             case SHATTER -> {for(int i=0;i<8;i++){double a=i*Math.PI/4;line(g,x+12,y+12,x+12+(int)(Math.cos(a)*10),y+12+(int)(Math.sin(a)*10),color);}star(g,x+12,y+12,color);}
             case ERASE -> {line(g,x+3,y+14,x+14,y+3,color);line(g,x+14,y+3,x+22,y+11,color);line(g,x+22,y+11,x+11,y+22,color);line(g,x+11,y+22,x+3,y+14,color);line(g,x+7,y+10,x+15,y+18,color);}
+            case INSPECT -> {ring(g,x+10,y+10,7,7,color);line(g,x+15,y+15,x+21,y+21,color);line(g,x+16,y+16,x+22,y+22,color);}
             case TINKER -> {line(g,x+4,y+21,x+17,y+8,color);g.fill(x+14,y+3,x+18,y+9,color);g.fill(x+18,y+7,x+22,y+12,color);}
         }
     }

@@ -80,7 +80,7 @@ final class TransformGizmo {
     static boolean click(EditorScreen screen,double x,double y){
         if(ClientState.status.busy())return false;Target t=target(screen);if(t==null)return selectEntity(x,y);
         int chosen=pick(t,x,y);
-        if(chosen<0)return selectEntity(x,y);dragging=t;handle=chosen;startX=slowX=lastX=x;startY=slowY=lastY=y;if(chosen==3&&mode==Options.GizmoMode.MOVE)grabFree(t.anchor,x,y);dragFlips=t.kind==Kind.NODE?flipsFor(t.anchor):null;delta=smooth=angles=Vec3.ZERO;size=new Vec3(1,1,1);startAngle=mode==Options.GizmoMode.ROTATE?(chosen==7?screenAngle(x,y,t.anchor):chosen<3?angle(x,y,t.anchor,handle):0):0;return true;
+        if(chosen<0)return selectEntity(x,y);dragging=t;handle=chosen;startX=slowX=lastX=x;startY=slowY=lastY=y;grabAxes(chosen,x,y);dragFlips=t.kind==Kind.NODE?flipsFor(t.anchor):null;delta=smooth=angles=Vec3.ZERO;size=new Vec3(1,1,1);startAngle=mode==Options.GizmoMode.ROTATE?(chosen==7?screenAngle(x,y,t.anchor):chosen<3?angle(x,y,t.anchor,handle):0):0;return true;
     }
     /** The axes the editor's X, Y and Z keys have locked the gizmo to (X is 1, Y is 2, Z is 4), or 0 when none is held. */
     private static int lockedAxes;
@@ -97,7 +97,7 @@ final class TransformGizmo {
         mode=effectiveMode(t);localBasis=t.kind==Kind.SHAPE&&mode==Options.GizmoMode.SCALE;basis=axesAt(t.anchor);pickScale=screenScale(t.anchor);pickExtent=extent(t);pickReach=reach(t,pickExtent);double best=100;int chosen=-1;double[] center=project(t.anchor);
         boolean plain=t.kind==Kind.MODEL||t.kind==Kind.PIVOT||t.kind==Kind.SHAPE&&ClientState.options.tool.transform(); // the transform tools show only their own handles
         // The centre: free move, even scaling for the Scale tool's circle; Rotate has the trackball instead, below.
-        if(mask==ALL_AXES&&(!plain||mode==Options.GizmoMode.SCALE&&blocky(t.kind))&&mode!=Options.GizmoMode.ROTATE&&center!=null&&Math.pow(x-center[0],2)+Math.pow(y-center[1],2)<81)chosen=3;
+        if(mask==ALL_AXES&&(!plain||mode==Options.GizmoMode.MOVE||mode==Options.GizmoMode.SCALE&&blocky(t.kind))&&mode!=Options.GizmoMode.ROTATE&&center!=null&&Math.pow(x-center[0],2)+Math.pow(y-center[1],2)<81)chosen=3;
         if(chosen<0)for(int i=0;i<3;i++){
             if((mask>>i&1)==0)continue; // a locked axis leaves the others out
             if(mode==Options.GizmoMode.ROTATE){Vec3 a=basis[(i+1)%3],b=basis[(i+2)%3];for(int j=0;j<96;j++){double v=j*Math.PI/48,w=(j+1)*Math.PI/48;double d=distance(x,y,project(t.anchor.add(a.scale(Math.cos(v)*3.5*pickScale)).add(b.scale(Math.sin(v)*3.5*pickScale))),project(t.anchor.add(a.scale(Math.cos(w)*3.5*pickScale)).add(b.scale(Math.sin(w)*3.5*pickScale))));if(d<best){best=d;chosen=i;}}}
@@ -136,18 +136,16 @@ final class TransformGizmo {
             return true;
         }
         if(mode==Options.GizmoMode.ROTATE){double degrees=Math.toDegrees(angle(x,y,dragging.anchor,handle)-startAngle);degrees=Math.IEEEremainder(degrees,360);degrees=snap(degrees,mc.hasShiftDown()?1:mc.hasControlDown()?(blocky(dragging.kind)?5:15):entity||ClientState.options.unlockRotation?5:blocky(dragging.kind)?15:90);Vec3 vector=basis[handle].scale(degrees);angles=new Vec3(vector.x,vector.y,vector.z);return true;}
-        var center=project(dragging.anchor);if(center==null)return true;
         if(handle==3&&mode==Options.GizmoMode.MOVE){
-            // The handle stays under the pointer at the depth it was grabbed, so it goes along when the camera does.
-            Vec3 point=freePoint(ClientCompat.camera(mc).position(),pointerRay(x,y));
-            Vec3 move=point.subtract(dragging.anchor);
+            // Over the plane that faced the camera when it was grabbed, a step at a time (see DragMath).
+            double[] s=relative(x,y);if(s==null)return true;
+            Vec3 move=dragAxes[0].scale(s[0]).add(dragAxes[1].scale(s[1]));
             moveTo(move,new Vec3(snap(move.x,increment),snap(move.y,increment),snap(move.z,increment)));return true;
         }
         if(handle>=4&&mode==Options.GizmoMode.SCALE){ // a square in a plane scales the two axes of that plane together
             int a=(handle-4+1)%3,b=(handle-4+2)%3;
-            double[] pa=project(dragging.anchor.add(basis[a])),pb=project(dragging.anchor.add(basis[b]));if(pa==null||pb==null)return true;
-            double sx=(pa[0]-center[0])+(pb[0]-center[0]),sy=(pa[1]-center[1])+(pb[1]-center[1]),span=sx*sx+sy*sy;if(span<.001)return true;
-            double amount=((x-startX)*sx+(y-startY)*sy)/span; // blocks along each of the two axes
+            double[] uv=relative(x,y);if(uv==null)return true;
+            double amount=(uv[0]+uv[1])/2; // blocks along each of the two axes
             double[] factor={1,1,1};
             if(blocky(dragging.kind)&&pickExtent!=null){
                 double[] blocks={pickExtent.x,pickExtent.y,pickExtent.z};
@@ -164,8 +162,8 @@ final class TransformGizmo {
             }else size=new Vec3(all,all,all);
             return true;
         }
-        if(handle>=4){int a=(handle-4+1)%3,b=(handle-4+2)%3;double[] pa=project(dragging.anchor.add(basis[a])),pb=project(dragging.anchor.add(basis[b]));if(pa==null||pb==null)return true;double ax=pa[0]-center[0],ay=pa[1]-center[1],bx=pb[0]-center[0],by=pb[1]-center[1],det=ax*by-ay*bx;if(Math.abs(det)<.001)return true;double dx=x-startX,dy=y-startY;double u=(dx*by-dy*bx)/det,v=(dy*ax-dx*ay)/det;moveTo(basis[a].scale(u).add(basis[b].scale(v)),basis[a].scale(snap(u,increment)).add(basis[b].scale(snap(v,increment))));return true;}
-        int axis=handle==3?1:handle;var end=project(dragging.anchor.add(basis[axis]));if(end==null)return true;double dx=end[0]-center[0],dy=end[1]-center[1],length=dx*dx+dy*dy;if(length<.001)return true;double amount=((x-startX)*dx+(y-startY)*dy)/length;
+        if(handle>=4){int a=(handle-4+1)%3,b=(handle-4+2)%3;double[] uv=relative(x,y);if(uv==null)return true;double u=uv[0],v=uv[1];moveTo(basis[a].scale(u).add(basis[b].scale(v)),basis[a].scale(snap(u,increment)).add(basis[b].scale(snap(v,increment))));return true;}
+        int axis=handle==3?1:handle;double[] sum=relative(x,y);if(sum==null)return true;double amount=sum[0];
         if(mode==Options.GizmoMode.SCALE&&blocky(dragging.kind)&&pickExtent!=null){
             // The handle sits on a face, so the face follows the pointer: the far side stays put, or with Alt the centre does.
             // The size is a whole number of blocks unless Ctrl is held, which allows any size.
@@ -298,7 +296,7 @@ final class TransformGizmo {
     static void draw(EditorScreen screen){
         lock(screen.axisLock());
         Target t=dragging==null?target(screen):dragging;if(t==null)return;
-        if(dragging==null)updateHover(screen);else followCamera(screen);
+        if(dragging==null)updateHover(screen);
         localBasis=t.kind==Kind.SHAPE&&effectiveMode(t)==Options.GizmoMode.SCALE;
         faceBase=faceBase(t).add(delta);plainHandles=t.kind==Kind.MODEL||t.kind==Kind.PIVOT||t.kind==Kind.SHAPE&&ClientState.options.tool.transform();
         axisMask=lockMask();
@@ -439,30 +437,42 @@ final class TransformGizmo {
         double n=Math.max(1,blocks),target=smooth?wanted:Math.rint(wanted);
         return Math.clamp(Math.max(target,smooth?.1:1)/n,.01,64);
     }
-    /** The depth and offset at which the centre handle was grabbed, so a drag keeps following the pointer as the camera moves. */
-    private static Vec3 freeOrigin=Vec3.ZERO,freeNormal=new Vec3(0,0,1),freeOffset=Vec3.ZERO;
     private static double[] dragFlips;
     private static Vec3 pointerRay(double x,double y){
         var mc=Minecraft.getInstance();var camera=ClientCompat.camera(mc);
         return ClientCompat.ray(camera,(float)(x/mc.getWindow().getGuiScaledWidth()*2-1),(float)(1-y/mc.getWindow().getGuiScaledHeight()*2));
     }
-    private static void grabFree(Vec3 anchor,double x,double y){
-        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
-        // The handle slides over a plane that stays where it was grabbed, facing the camera then. Flying about moves the pointer's ray but not the plane, so the blocks follow the pointer and are not carried along with the player.
-        freeOrigin=anchor;freeNormal=pointerCentre();freeOffset=Vec3.ZERO;
-        freeOffset=anchor.subtract(freePoint(eye,pointerRay(x,y))); // so the handle does not jump to the pointer
+    /**
+     * How far each handle of a Move or Scale drag has gone along its axes, in lengths of the axis: an arrow has one, a plane square two, and the centre
+     * handle two, along the right and up of the camera as it was when it was grabbed. They are the sum of what each pointer step is worth at the
+     * handle's place then (see {@link DragMath}), so only the pointer moves the handle and flying about does not.
+     */
+    private static Vec3[] dragAxes;
+    private static final double[] dragSum=new double[2];
+    private static double stepX,stepY;
+    private static void grabAxes(int chosen,double x,double y){
+        stepX=x;stepY=y;dragSum[0]=dragSum[1]=0;dragAxes=null;
+        if(chosen<0)return;
+        if(chosen==3&&mode==Options.GizmoMode.MOVE){var camera=cameraAxes();dragAxes=new Vec3[]{camera[0],camera[1]};} // the plane that faces the camera
+        else if(chosen==3)dragAxes=new Vec3[]{basis[1]};
+        else if(chosen<3)dragAxes=new Vec3[]{basis[chosen]};
+        else dragAxes=new Vec3[]{basis[(chosen-3)%3],basis[(chosen-2)%3]}; // the plane square of axis chosen-4: the other two
     }
-    private static Vec3 pointerCentre(){return pointerRay(Minecraft.getInstance().getWindow().getGuiScaledWidth()/2d,Minecraft.getInstance().getWindow().getGuiScaledHeight()/2d);}
-    /** Where the pointer's ray from {@code eye} meets the grab plane, moved by the grab offset; the plane's own anchor when the ray runs along it. */
-    private static Vec3 freePoint(Vec3 eye,Vec3 ray){
-        double facing=ray.dot(freeNormal);if(Math.abs(facing)<1e-3)return freeOrigin;
-        double reach=freeOrigin.subtract(eye).dot(freeNormal)/facing;
-        return eye.add(ray.scale(Math.clamp(reach,0,4096))).add(freeOffset);
+    /** The sums after the pointer's step since the last call, or null when no handle is held that works this way. */
+    private static double[] relative(double x,double y){
+        if(dragging==null||dragAxes==null)return null;
+        double dx=x-stepX,dy=y-stepY;stepX=x;stepY=y;
+        if(dx==0&&dy==0)return dragSum;
+        var mc=Minecraft.getInstance();var camera=ClientCompat.camera(mc);var near=ClientCompat.nearPlane(camera);
+        Vec3 centre=near.getPointOnPlane(0,0),right=near.getPointOnPlane(1,0).subtract(centre).normalize(),up=near.getPointOnPlane(0,1).subtract(centre).normalize(),forward=centre.normalize();
+        double focal=mc.getWindow().getGuiScaledHeight()/(2*Math.tan(Math.toRadians(ClientCompat.fov(mc,camera))/2));
+        Vec3 at=dragging.anchor;for(int i=0;i<dragAxes.length;i++)at=at.add(dragAxes[i].scale(dragSum[i]));
+        double[][] axes=new double[dragAxes.length][];for(int i=0;i<axes.length;i++)axes[i]=vector(dragAxes[i]);
+        double[] amounts=DragMath.step(vector(at.subtract(camera.position())),axes,vector(right),vector(up),vector(forward),focal,dx,dy);
+        for(int i=0;i<amounts.length;i++)dragSum[i]=Math.clamp(dragSum[i]+amounts[i],-65536,65536);
+        return dragSum;
     }
-    /** While the centre handle is held, keeps it with the pointer when only the camera moves (the player flying about). */
-    static void followCamera(EditorScreen screen){
-        if(dragging!=null&&(handle==3&&mode==Options.GizmoMode.MOVE||dragging.kind==Kind.MODEL&&mode==Options.GizmoMode.SCALE))drag(screen.pointerX(),screen.pointerY());
-    }
+    private static double[] vector(Vec3 v){return new double[]{v.x,v.y,v.z};}
     /**
      * For the corner handles of a box selection: which way each arrow points, so that it leads away from the box.
      * A corner on the low side of an axis points down it, one on the high side points up it. Null for any other handle.
@@ -591,7 +601,7 @@ final class TransformGizmo {
         if(currentMode==Options.GizmoMode.SCALE&&plainHandles&&!(held&&active!=3)){ // the Scale tool's circle in the middle scales every axis
             Vec3[] cam=cameraAxes();circle(anchor,cam[0],cam[1],.32*k,active==3?CENTER_ACTIVE:CENTER,active==3?3:2f);
         }
-        if(showFaces&&currentMode!=Options.GizmoMode.ROTATE&&!plainHandles&&axisMask==ALL_AXES&&!(held&&active!=3)){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
+        if(showFaces&&currentMode!=Options.GizmoMode.ROTATE&&(!plainHandles||currentMode==Options.GizmoMode.MOVE)&&axisMask==ALL_AXES&&!(held&&active!=3)){int color=active==3?CENTER_ACTIVE:CENTER;Overlay.box(new AABB(anchor.add(-.17*k,-.17*k,-.17*k),anchor.add(.17*k,.17*k,.17*k)),color,2,color&0x00ffffff|0x88000000);}
     }
     /** Names the handle under the pointer next to it. */
     private static void label(Vec3 anchor,Vec3[] directions,double k,Vec3 extent,Options.GizmoMode mode,int handle){

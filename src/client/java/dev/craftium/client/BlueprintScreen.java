@@ -56,16 +56,26 @@ public final class BlueprintScreen extends CraftiumScreen {
     private int loads,frames,waitTicks,waitVersion;
     /** Set when something else asked the player to choose a blueprint: choosing one (a double-click or Enter) closes the browser and hands it over, and whether it is from the client's library. */
     private final java.util.function.BiConsumer<Boolean,BlueprintInfo> picker;
+    /** Set when the browser is only there to choose the folder a blueprint is saved in: it answers with the open folder ("" for the top level). */
+    private java.util.function.Consumer<String> folderChoice;
+    private boolean priorClient;
+    /** The browser on the server's library with a Save here button; {@code choose} gets the folder the player is in when they press it. */
+    public static BlueprintScreen chooseFolder(Screen parent,java.util.function.Consumer<String> choose){
+        var screen=new BlueprintScreen(parent,null);screen.folderChoice=choose;
+        screen.priorClient=ClientState.options.libraryClient;ClientState.options.libraryClient=false; // a blueprint saved from the export window goes to the server's library
+        return screen;
+    }
     public BlueprintScreen(Screen parent){this(parent,null);}
     public BlueprintScreen(Screen parent,java.util.function.BiConsumer<Boolean,BlueprintInfo> picker){super(Component.literal("Craftium Blueprint Browser"));this.parent=parent;this.picker=picker;}
     @Override protected void init(){
         scale=Math.min(1f,Math.min(width/700f,height/460f));canvasW=Math.round(width/scale);canvasH=Math.round(height/scale);left=(canvasW-660)/2;top=(canvasH-420)/2;clearWidgets();boxes.clear();
         var search=new EditBox(font,left+8,top+5,420,22,Component.literal("Search blueprints"));search.setHint(Component.literal("Search names, folders, authors and tags…"));search.setValue(query);search.setResponder(value->{query=value;scroll=0;filter();});addRenderableWidget(search);
-        button(ClientState.options.libraryClient?"Source: Client":"Source: Server",left+500,top-21,150,20,()->{ClientState.options.libraryClient=!ClientState.options.libraryClient;folder="";scroll=0;selected.clear();reload();init();});
+        if(folderChoice==null)button(ClientState.options.libraryClient?"Source: Client":"Source: Server",left+500,top-21,150,20,()->{ClientState.options.libraryClient=!ClientState.options.libraryClient;folder="";scroll=0;selected.clear();reload();init();});
         button("View: "+MODES[mode],left+212,top-21,136,20,()->setMode((mode+1)%MODES.length)).back(()->setMode(Math.floorMod(mode-1,MODES.length)));button("Sort: "+SORTS[sort],left+354,top-21,140,20,()->{sort=(sort+1)%SORTS.length;scroll=0;init();}).back(()->{sort=Math.floorMod(sort-1,SORTS.length);scroll=0;init();});
         button("Refresh",left+437,top+5,100,22,this::refresh);button("Import…",left+545,top+5,105,22,this::importFile);
         button("Return",left+530,top+375,120,23,this::onClose);
         if(!folder.isEmpty())button("Up",left+400,top+375,120,23,this::up);
+        if(folderChoice!=null){var choose=folderChoice;button("Save here",left+270,top+375,124,23,()->{onClose();choose.accept(folder);}).lit(true);}
         if(dialog!=null)buildDialog();
         if(loads==0)reload();filter(); // the list is asked for first, so a list that has not arrived is not taken for an empty library
     }
@@ -140,6 +150,7 @@ public final class BlueprintScreen extends CraftiumScreen {
     }
     private void activate(Item item){
         if(item.folder()){query="";enter(item.path());return;}
+        if(folderChoice!=null)return; // choosing where to save: a blueprint is not what is asked for
         if(picker==null){useAsClipboard(item.info());return;}
         boolean client=ClientState.options.libraryClient;var choose=picker;var info=item.info();
         onClose(); // back to the screen that asked first, so what it does with the choice lands on it
@@ -309,7 +320,7 @@ public final class BlueprintScreen extends CraftiumScreen {
     @Override protected void draw(Gfx g,int x,int y,float delta){
         BlueprintThumbnails.newFrame();g.pose().pushMatrix();g.pose().scale(scale,scale);g.fill(0,0,canvasW,canvasH,0xef101923);g.fill(left-12,top-25,left+672,top+414,0xff172330);
         double mx=x/scale,my=y/scale;boolean quiet=dialog!=null||menu!=null;
-        g.text(font,font.plainSubstrByWidth(folder.isEmpty()?(picker==null?"BLUEPRINTS":"DOUBLE-CLICK ONE TO USE"):(picker==null?"BLUEPRINTS / ":"USE / ")+folder.replace("/"," / "),200),left,top-17,0xffb5dcfc,false);
+        g.text(font,font.plainSubstrByWidth(folder.isEmpty()?(folderChoice!=null?"CHOOSE A FOLDER TO SAVE IN":picker==null?"BLUEPRINTS":"DOUBLE-CLICK ONE TO USE"):(folderChoice!=null?"SAVE IN / ":picker==null?"BLUEPRINTS / ":"USE / ")+folder.replace("/"," / "),200),left,top-17,0xffb5dcfc,false);
         frames++;boolean loading=loading();
         if(loading){var note="Loading blueprints…";g.text(font,note,left+(660-font.width(note))/2,top+190,0xffb5dcfc,false);}
         else{
@@ -392,6 +403,6 @@ public final class BlueprintScreen extends CraftiumScreen {
         return super.keyPressed(event);
     }
     @Override public boolean isPauseScreen(){return false;}
-    @Override public void removed(){BlueprintThumbnails.releaseAll();} // whichever way the screen goes (closed, a disconnect, another screen), its pictures are freed
+    @Override public void removed(){BlueprintThumbnails.releaseAll();if(folderChoice!=null)ClientState.options.libraryClient=priorClient;} // whichever way the screen goes (closed, a disconnect, another screen), its pictures are freed
     @Override public void onClose(){ClientCompat.setScreen(minecraft,parent);}
 }

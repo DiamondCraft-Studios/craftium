@@ -82,13 +82,17 @@ final class MagicPreview {
     static MagicWand.World world(Minecraft mc,BlockPos at,Options o,Options.Compare compare,boolean masked){
         var level=mc.level;var origin=level.getBlockState(at);var blockMask=masked?dev.craftium.server.BlockMask.of(o):null; // read now: a search may outlast a change of setting
         var originData=compare==Options.Compare.NBT?data(level,at):null;
+        int originKey=dev.craftium.server.MissingBlocks.keyAt(level,at,origin); // a placeholder only matches ones for the same original block
         return new MagicWand.World(){
             public boolean loaded(Point p){return level.hasChunk(p.x()>>4,p.z()>>4);}
             public boolean air(Point p){return level.getBlockState(pos(p)).isAir();}
             public boolean matches(Point p){
                 var s=level.getBlockState(pos(p));
-                if(blockMask!=null&&!blockMask.allows(s))return false;
+                var here=pos(p);
+                var missing=dev.craftium.server.MissingBlocks.at(level,here,s);
+                if(blockMask!=null&&!blockMask.allows(s,missing==null?null:missing.entry()))return false;
                 if(masked&&!o.selectLiquids&&s.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock)return false; // the Magic Wand's own search passes over liquids unless asked
+                if(compare!=Options.Compare.ANY&&originKey>=0&&(missing==null?-1:missing.key())!=originKey)return false;
                 return switch(compare){
                     case ANY->!s.isAir();
                     case BLOCK->s.is(origin.getBlock());

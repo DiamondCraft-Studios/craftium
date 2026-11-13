@@ -47,6 +47,8 @@ public final class EditorScreen extends CraftiumScreen {
     private int dragOriginX,dragOriginY;
     private double dragPointerX,dragPointerY;
     private final List<Control> controls=new ArrayList<>();
+    /** The fold arrows of the Hierarchy: they sit inside their row, so the row's hover look runs under them instead of leaving a hole. */
+    private final Set<Control> foldControls=Collections.newSetFromMap(new IdentityHashMap<>());
     private final Map<String,EditBox> fields=new LinkedHashMap<>();
     private Slider dragging;
     private String draggingSliderPanel="";
@@ -208,13 +210,15 @@ public final class EditorScreen extends CraftiumScreen {
         BG=o().uiBackground;PANEL=o().uiPanel;LINE=o().uiBorder;ACCENT=o().uiAccent;TEXT=o().uiText;MUTED=o().uiMuted;
         if(!suspended&&layoutKey!=layoutKey())init();
         runAfterStatus();
-        pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();renameAreas.clear();sliderAreas.clear();dragSources.clear();dropTargets.clear();PanelLog.frame();
+        pointerX=mouseX;pointerY=mouseY;
+        // A held gizmo has the pointer: the interface under it is not lit, as the cursor is hidden and only steers the handle.
+        boolean steering=TransformGizmo.dragging();mx=steering?-100000:(int)(mouseX/scale);my=steering?-100000:(int)(mouseY/scale);controls.clear();foldControls.clear();renameAreas.clear();sliderAreas.clear();dragSources.clear();dropTargets.clear();PanelLog.frame();
         syncCrosshair();
         SelectionOverlay.tint(g); // under the panels, so only the world is washed
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
         g.pose().pushMatrix();g.pose().scale(scale,scale);
         topbar(g);
-        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);hierarchyPanel(g);magicPanel(g);}
+        if(panels){tools(g);options(g);targetInfo(g);clipboard(g);palette(g);history(g);masks(g);rulerPanel(g);hierarchyPanel(g);magicPanel(g);missingPanel(g);}
         finishPanel(g);
         viewport(g);
         axisGizmo(g);
@@ -223,6 +227,7 @@ public final class EditorScreen extends CraftiumScreen {
         rowDragGhost(g);
         if(menu==ROW_MENU)rowMenuDraw(g);else if(menu>=0)dropdown(g);
         if(ctxCell>=0)maskMenu(g);
+        if(missingMenu>=0)missingMenuDraw(g);
         if(shapeMenu)shapeMenu(g);
         if(help)help(g);
         if(transform)transform(g);
@@ -250,7 +255,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(dragBlock!=null&&dragMoved){
             for(int i=dropTargets.size()-1;i>=0;i--){var t=dropTargets.get(i).area();if(t.contains(mx,my)){g.pose().pushMatrix();WorkspaceLayout.apply(g,t.panel());g.outline(t.x(),t.y(),t.width(),t.height(),ACCENT);g.pose().popMatrix();break;}} // the cell the block would land in
             BlockDragCursor.draw(g,font,dragBlock,mx,my,w,h,ACCENT,inViewport(mx,my));}else BlockDragCursor.release();
-        g.pose().popMatrix();ReferenceImages.draw(g,true,mouseX,mouseY);
+        g.pose().popMatrix();ReferenceImages.draw(g,true,steering?-100000:mouseX,steering?-100000:mouseY);
     }
     /** A tooltip laid out: its wrapped rows, how many belong to the first paragraph, and the widest row. */
     private record TooltipPane(String text,List<net.minecraft.util.FormattedCharSequence> rows,int firstRows,int paragraphs,int widest){}
@@ -299,7 +304,7 @@ public final class EditorScreen extends CraftiumScreen {
             boolean clipped=c.clipTop()!=Integer.MIN_VALUE;if(clipped)g.enableScissor(0,c.clipTop(),w,c.clipBottom()); // a control half scrolled out of view stays inside its area
             // A control drawn later and no bigger sits on top of this one (the foreground slot over the background slot), so the hover look skips what it covers.
             var covers=new ArrayList<int[]>();
-            for(int j=i+1;j<controls.size();j++){var o=controls.get(j);if(o.panel().equals(c.panel())&&o.width()<=c.width()&&o.height()<=c.height()&&o.x()<c.x()+c.width()&&o.x()+o.width()>c.x()&&o.y()<c.y()+c.height()&&o.y()+o.height()>c.y())covers.add(new int[]{o.x(),o.y(),o.x()+o.width(),o.y()+o.height()});}
+            for(int j=i+1;j<controls.size();j++){var o=controls.get(j);if(!foldControls.contains(o)&&o.panel().equals(c.panel())&&o.width()<=c.width()&&o.height()<=c.height()&&o.x()<c.x()+c.width()&&o.x()+o.width()>c.x()&&o.y()<c.y()+c.height()&&o.y()+o.height()>c.y())covers.add(new int[]{o.x(),o.y(),o.x()+o.width(),o.y()+o.height()});}
             int x0=c.x(),y0=c.y(),x1=x0+c.width(),y1=y0+c.height();
             hoverPiece(g,x0,y0,x1,y1,Hover.OVERLAY,covers);
             hoverPiece(g,x0,y0,x1,y0+1,ACCENT,covers);hoverPiece(g,x0,y1-1,x1,y1,ACCENT,covers);
@@ -1539,6 +1544,20 @@ public final class EditorScreen extends CraftiumScreen {
     /** Mirrors a placement waiting to be put down, or else the selection, across the plane through its centre or pivot normal to axis 0, 1 or 2 (X, Y, Z). */
     /** Opens the structure export pop-up on the given source, and on a format when one is named. */
     private void exportStructure(String source){exportStructure(source,null,null);}
+    /** Opens the export window on these BuildObjects, a page for each. */
+    private void exportObjects(List<Integer> ids){
+        var objects=new ArrayList<StructureExportScreen.Target>();
+        for(int id:ids){var row=savedById(id);if(row!=null)objects.add(new StructureExportScreen.Target(id,row.name()));}
+        if(objects.isEmpty())return;
+        ClientCompat.setScreen(minecraft,new StructureExportScreen(this,objects));
+    }
+    /** Opens the export window on the Blueprint tab for these BuildObjects, a page for each. */
+    private void blueprintObjects(List<Integer> ids){
+        var objects=new ArrayList<StructureExportScreen.Target>();
+        for(int id:ids){var row=savedById(id);if(row!=null)objects.add(new StructureExportScreen.Target(id,row.name()));}
+        if(objects.isEmpty())return;
+        ClientCompat.setScreen(minecraft,StructureExportScreen.blueprintOf(this,objects));
+    }
     private void exportStructure(String source,String format,String javaFile){
         var settings=o().structure;settings.source=source;if(format!=null){settings.format=format;settings.javaFile=javaFile;}
         ClientCompat.setScreen(minecraft,new StructureExportScreen(this));
@@ -1748,11 +1767,20 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(event.button()!=0)for(var field:fields.values())field.setFocused(false); // a right or middle click is not typing in a box either, so the shortcuts work
         if(shapeMenu){shapeMenu=false;var picked=event.button()==0?shapeAt(x,y):null;if(picked!=null)o().shape=picked;return true;} // any click closes the picker
+        if(missingMenu>=0){ // its menu takes the click: one of its two items, or anywhere else to close it
+            int row=missingMenu;missingMenu=-1;
+            if(x>=missingMenuX&&x<missingMenuX+MISSING_MENU_WIDTH&&y>=missingMenuY&&y<missingMenuY+MISSING_MENU_LABELS.length*MASK_MENU_ROW&&row<ClientState.missingBlocks.size()){
+                String id=ClientState.missingBlocks.get(row);
+                if((int)((y-missingMenuY)/MASK_MENU_ROW)==0)addMissingToMask(id);else selectMissing(id);
+            }
+            return true;
+        }
         if(ctxCell>=0){int cell=ctxCell;ctxCell=-1;if(x>=ctxX&&x<ctxX+MASK_MENU_WIDTH&&y>=ctxY&&y<ctxY+BLOCK_MENU_LABELS.length*MASK_MENU_ROW&&cell<blocksOf(ctxList).size()){switch((int)((y-ctxY)/MASK_MENU_ROW)){case 0->changeBlock(ctxList,cell);case 1->editBlockState(ctxList,cell);default->removeBlock(ctxList,cell);}}return true;}
         if(event.button()==2&&!help&&!transform&&menu<0)for(int i=sliderAreas.size()-1;i>=0;i--){var a=sliderAreas.get(i);if(a.control().contains(x,y)){a.slider().reset();return true;}} // back to the default, at once
         if(event.button()==0&&pipetting&&menu<0&&!help&&!transform){
             var hit=pipetteTarget(event.x(),event.y());
             if(hit!=null&&minecraft.level!=null){
+                if(pickMissing(hit.getBlockPos())){ClientState.save();return true;}
                 String picked=BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos()));
                 // Ctrl keeps the pipette in hand and adds each block to the palette; a plain click sets the foreground and puts it away.
                 if(minecraft.hasControlDown()){if(ClientState.addToPalette(picked))ClientState.notify("Added to the palette: "+picked);}
@@ -1810,6 +1838,10 @@ public final class EditorScreen extends CraftiumScreen {
             if(index>=0){selectedNode=index;if(!toolActive)ClientState.selectedRuler=rulerOfNode(index);draggingNode=true;placementDragOrigin=points.get(index);placementDragX=event.x();placementDragY=event.y();return true;}
             if(!toolActive){var line=rulerAt(event.x(),event.y());if(line!=null){ClientState.selectedRuler=line;selectedNode=-1;TransformGizmo.cancel();return true;}} // no tool chosen: a click on a ruler picks it, without choosing the Ruler tool
         }
+        if(event.button()==0&&o().hoverBuildObjects&&!PlacementPreview.active()){ // whatever tool is chosen
+            objectPickHit=target();objectPickPending=objectPickHit!=null&&ClientState.savedAt(CraftiumClient.point(objectPickHit.getBlockPos()))!=0;objectPickX=event.x();objectPickY=event.y(); // resolved on release, if it was a click and not a drag
+            if(objectPickPending)return true; // a click on a BuildObject picks it, and the tool does not also act on it
+        }
         if(PlacementPreview.active()){
             if(event.button()==1){var hit=target();if(hit!=null){Point p=CraftiumClient.point(hit.getBlockPos()),n=CraftiumClient.normal(hit);PlacementPreview.origin=p.add(n.x(),n.y(),n.z());}return true;}
             if(event.button()==0&&pickPlacementAxis(event.x(),event.y())){draggingPlacement=true;placementDragOrigin=PlacementPreview.origin;placementDragX=event.x();placementDragY=event.y();return true;}
@@ -1844,12 +1876,26 @@ public final class EditorScreen extends CraftiumScreen {
         minecraft.player.setDeltaMovement(Vec3.ZERO);minecraft.player.setOldPosAndRot();
     }
     private BlockHitResult pickedHit;private boolean pendingPick,middleDragged;
+    /**
+     * A placeholder cannot be the foreground block, which has to exist, but it can be a mask: its original block goes into the block mask, so the
+     * fill and replace tools change only blocks that were that one. Returns whether the block was a placeholder.
+     */
+    private boolean pickMissing(net.minecraft.core.BlockPos at){
+        var missing=dev.craftium.server.MissingBlocks.at(minecraft.level,at,minecraft.level.getBlockState(at));
+        if(missing==null)return false;
+        var entry=missing.entry();
+        if(entry==null){ClientState.notify("The original name of that missing block is not known yet");return true;}
+        addMaskBlock(entry.text());
+        ClientState.notify("Added to the block mask: "+entry.text());
+        return true;
+    }
     private void pickBlock(BlockHitResult hit){
         if(hit==null||minecraft.level==null)return;
+        if(pickMissing(hit.getBlockPos()))return;
         String block=BuiltInRegistries.BLOCK.getKey(minecraft.level.getBlockState(hit.getBlockPos()).getBlock()).toString();
         ClientState.pick(block);
     }
-    @Override public boolean mouseReleased(MouseButtonEvent event){if(rowDragId>=0&&event.button()==0){mx=(int)(event.x()/scale);my=(int)(event.y()/scale);finishRowDrag();return true;}if(selectingText){selectingText=false;return true;}if(dragBlock!=null&&event.button()==0){finishBlockDrag(event);return true;}if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting)Interactions.of(o().tool).strokeEnded(context);if(painting&&sculpts(o().tool))CraftiumClient.send("stroke_end",null,null);painting=false;ClientState.strokeId=0;Interactions.of(o().tool).released(context);}return true;}
+    @Override public boolean mouseReleased(MouseButtonEvent event){if(event.button()==0&&objectPickPending){objectPickPending=false;if(Math.hypot(event.x()-objectPickX,event.y()-objectPickY)<=3)pickBuildObject(objectPickHit);}if(rowDragId>=0&&event.button()==0){mx=(int)(event.x()/scale);my=(int)(event.y()/scale);finishRowDrag();return true;}if(selectingText){selectingText=false;return true;}if(dragBlock!=null&&event.button()==0){finishBlockDrag(event);return true;}if(cameraGesture!=CameraGesture.NONE&&event.button()==cameraButton){if(pendingPick&&!middleDragged)pickBlock(pickedHit);pendingPick=false;cameraGesture=CameraGesture.NONE;cameraButton=-1;return true;}if(event.button()==0&&TransformGizmo.release(this))return true;ReferenceImages.release();if(draggingNode)handlesMoved();draggingNode=false;draggingPlacement=false;dragging=null;if(!draggedPanel.isBlank()){WorkspaceLayout.snap(draggedPanel,w,h);WorkspaceLayout.save();draggedPanel="";}if(event.button()==EditorBindings.get(Action.USE_TOOL).key()&&EditorBindings.get(Action.USE_TOOL).mouse()){if(painting)Interactions.of(o().tool).strokeEnded(context);if(painting&&sculpts(o().tool))CraftiumClient.send("stroke_end",null,null);painting=false;ClientState.strokeId=0;Interactions.of(o().tool).released(context);}return true;}
     @Override public boolean mouseDragged(MouseButtonEvent event,double dx,double dy) {
         if(rowDragId>=0){mx=(int)(event.x()/scale);my=(int)(event.y()/scale);if(!rowDragMoved&&Math.hypot(event.x()-rowDragX,event.y()-rowDragY)>5)rowDragMoved=true;return true;}
         if(dragBlock!=null){if(!dragMoved&&Math.hypot(event.x()-dragStartX,event.y()-dragStartY)>5)dragMoved=true;return true;}
@@ -1904,6 +1950,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("palette")){paletteScroll=Math.max(0,paletteScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("hierarchy")){savedScroll=Math.max(0,savedScroll+(vertical<0?1:-1));return true;}
+        if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("missing")){missingScroll=Math.max(0,missingScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("rulers")){rulerScroll=Math.max(0,rulerScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("masks")){maskScroll=Math.max(0,maskScroll+(vertical<0?1:-1));return true;} // clamped when drawn
         if(panels&&WorkspaceLayout.hit(x/scale,y/scale,false).equals("tools")){toolScroll=Math.clamp(toolScroll+(vertical<0?1:-1),0,maxToolScroll());return true;}
@@ -2025,7 +2072,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
             case ROTATE_PLACEMENT -> {if(!PlacementPreview.active())return false;action("rotate");}
             case FLIP_PLACEMENT -> {if(!PlacementPreview.active())return false;action("flip_facing");}
             case EXTRUDE_POINT -> {if(!Interactions.of(o().tool).extrudePoint(context))return false;}
-            case SAVE_BLUEPRINT -> {if(ClientState.status.clipboardSize()==0&&ClientState.status.clipboardEntityCount()==0)ClientState.notify("Copy a selection first");else ClientCompat.setScreen(minecraft,new SaveBlueprintScreen(this));}
+            case SAVE_BLUEPRINT -> {if(ClientState.status.clipboardSize()==0&&ClientState.status.clipboardEntityCount()==0)ClientState.notify("Copy a selection first");else ClientCompat.setScreen(minecraft,StructureExportScreen.blueprintOnly(this));}
             case SHOW_BIOMES -> o().showBiomes=!o().showBiomes;
             case CYCLE_SELECTION_STYLE -> CraftiumClient.cycleSelectionStyle();
             case SHOW_SELECTION -> showSelection=!showSelection;case SHOW_ANNOTATIONS -> o().showAnnotations=!o().showAnnotations;
@@ -2141,6 +2188,47 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
     }
     private void clearRulers(){ClientState.rulers.clear();ClientState.selectedRuler=null;selectedNode=-1;TransformGizmo.cancel();}
     private int rulerScroll;
+    // --- The Missing blocks window: the blocks this world holds as placeholders because no installed mod provides them ---
+    private int missingScroll,missingPick=-1,missingMenu=-1,missingMenuX,missingMenuY;
+    private static final int MISSING_MENU_WIDTH=124;
+    private static final String[] MISSING_MENU_LABELS={"Add to mask","Select all"};
+    /**
+     * Lists the blocks the server says the world is missing, one row each. The window is only there while the list is not empty, so it comes up by itself when
+     * a world with missing blocks is joined or one is found, and is not in the way otherwise. Right-click a row to put its block in the block mask, or to
+     * select every one of it in the chunks loaded around you. There is no replace here: blocks in chunks that are not loaded would be left behind.
+     */
+    private void missingPanel(Gfx g){
+        var ids=ClientState.missingBlocks;
+        if(ids.isEmpty()){missingMenu=-1;return;}
+        int x=w-RIGHT-244,y=27+238; // under the Rulers window's place, just left of the right-hand panels
+        panel(g,x,y,236,196,"Missing blocks");
+        text(g,"No installed mod provides these",x+10,y+24,MUTED);
+        int top=y+40,bottom=y+ph-8,rowHeight=18,rows=Math.max(1,(bottom-top)/rowHeight),total=ids.size();
+        g.fill(x+8,top-2,x+pw-8,top+rows*rowHeight+1,0xff141c26);g.outline(x+8,top-2,pw-16,rows*rowHeight+3,LINE);
+        missingScroll=Math.clamp(missingScroll,0,Math.max(0,total-rows));
+        for(int i=0;i<rows&&missingScroll+i<total;i++){
+            final int row=missingScroll+i;String id=ids.get(row);int ry=top+i*rowHeight;boolean chosen=row==missingPick;
+            if(chosen)g.fill(x+9,ry,x+pw-9,ry+rowHeight,0xff315b84);
+            BlockPickerScreen.missingSwatch(g,x+14,ry+1);
+            text(g,shorten(id,pw-(total>rows?62:48)),x+34,ry+5,chosen?TEXT:MUTED);
+            controls.add(new Control(x+9,ry,pw-18,rowHeight,()->missingPick=row,()->{missingPick=row;missingMenu=row;missingMenuX=Math.min(mx,w-MISSING_MENU_WIDTH-4);missingMenuY=Math.min(my,h-MISSING_MENU_LABELS.length*MASK_MENU_ROW-4);},id+" \u00b7 Right-click for options"));
+        }
+        if(total>rows){ // a thin bar shows where the list is
+            int track=rows*rowHeight,thumb=Math.max(10,track*rows/total),thumbY=top+(track-thumb)*missingScroll/Math.max(1,total-rows);
+            g.fill(x+pw-14,top,x+pw-10,top+track,0xff1b2b40);g.fill(x+pw-14,thumbY,x+pw-10,thumbY+thumb,ACCENT);
+        }
+    }
+    private void missingMenuDraw(Gfx g){
+        int rows=MISSING_MENU_LABELS.length;
+        g.fill(missingMenuX,missingMenuY,missingMenuX+MISSING_MENU_WIDTH,missingMenuY+rows*MASK_MENU_ROW,0xf5222d3b);g.outline(missingMenuX,missingMenuY,MISSING_MENU_WIDTH,rows*MASK_MENU_ROW,LINE);
+        for(int i=0;i<rows;i++){int y=missingMenuY+i*MASK_MENU_ROW;if(mx>=missingMenuX&&mx<missingMenuX+MISSING_MENU_WIDTH&&my>=y&&my<y+MASK_MENU_ROW)g.fill(missingMenuX+1,y,missingMenuX+MISSING_MENU_WIDTH-1,y+MASK_MENU_ROW,0xff34485e);text(g,MISSING_MENU_LABELS[i],missingMenuX+8,y+5,TEXT);}
+    }
+    private void addMissingToMask(String id){addMaskBlock(id);ClientState.notify("Added to the block mask: "+id);}
+    /** Asks the server for every one of the block in the chunks loaded around the player. The id travels in an option that is cleared at once, so it is not kept with the tool settings. */
+    private void selectMissing(String id){
+        ClientState.options.missingBlock=id;
+        try{CraftiumClient.send("select_missing",null,null);}finally{ClientState.options.missingBlock="";}
+    }
     private static String modeName(Options.RulerMode mode){return mode==Options.RulerMode.CIRCLE?"Circle":"Line";}
     /** The Rulers panel: every ruler in this world as an entry to pick, and what can be done to the picked one. */
     private void rulerPanel(Gfx g){
@@ -2172,11 +2260,30 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         }
         button(g,x+10,y+ph-26,pw-20,20,"Clear all",false,this::clearRulers,"Delete every ruler in this world");
     }
-    private int savedScroll;
+    private int savedScroll,revealId;private long revealUntil;
+    /** The ids there were when a BuildObject was asked for, to find the new one among the list that comes back. */
+    private Set<Integer> newKnown;private long newUntil;
+    private void expectNewBuildObject(){newKnown=new HashSet<>();for(var e:ClientState.savedSelections())newKnown.add(e.id());newUntil=System.currentTimeMillis()+5000;}
+    private BlockHitResult objectPickHit;private boolean objectPickPending;private double objectPickX,objectPickY;
+    /** A plain click (no drag) on a block of a BuildObject in a viewport picks it as a click on its row does, opens what hides its row, and scrolls the Hierarchy to it. */
+    private void pickBuildObject(BlockHitResult hit){
+        if(hit==null)return;
+        int id=ClientState.savedAt(CraftiumClient.point(hit.getBlockPos()));
+        if(id==0)return;
+        hierarchyAll=ClientState.savedSelections();
+        var entry=savedById(id);if(entry==null)return;
+        int n=0;for(var p=savedById(entry.parent());p!=null&&n++<64;p=savedById(p.parent()))if(ClientState.savedFolded(p.id()))ClientState.toggleSavedFolded(p.id());
+        var group=groupById(groupIdOf(entry));if(group!=null&&ClientState.groupFolded(group.id()))ClientState.toggleGroupFolded(group.id());
+        rowClick(entry);
+        revealId=id;revealUntil=System.currentTimeMillis()+1000;
+    }
     private static final String[] PENCIL={"......XX.",".....XXXX","....XXXX.","...XXXX..","..XXXX...",".XXXX....",".XXX.....","XX......."};
     private static final String[] PLUS={"....X....","....X....","....X....","....X....","XXXXXXXXX","....X....","....X....","....X....","....X...."};
     private static final String[] EYE={"..XXXXX..",".X.....X.","X..XXX..X",".X.....X.","..XXXXX.."};
     private static final String[] CURSOR={"X........","XX.......","XXX......","XXXX.....","XXXXX....","XXXXXX...","XXXXXXX..","XXXXX....","XX.XX....","X..XX....","...XXX...","....XX..."};
+    /** An isometric cube: filled for a BuildObject that holds blocks, outline only for one that holds none. */
+    private static final String[] CUBE_FILLED={"....XX....","..XXXXXX..","XXXXXXXXXX","XXXXXXXXXX","XXXXXXXXXX","XXXXXXXXXX","..XXXXXX..","....XX...."};
+    private static final String[] CUBE_OUTLINE={"....XX....","..XX..XX..","XX..XX..XX","X...XX...X","X...XX...X","XX..XX..XX","..XX..XX..","....XX...."};
     private static final String[] CROSS={"X.......X",".X.....X.","..X...X..","...X.X...","....X....","...X.X...","..X...X..",".X.....X.","X.......X"};
     /** A small picture drawn pixel by pixel from rows of X, centred on the given box. */
     private void glyph(Gfx g,int x,int y,int width,int height,String[] rows,int colour){
@@ -2231,6 +2338,15 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(o().hoverBuildObjects&&menu<0&&pointerFree()&&rowDragId<0&&inViewport(pointerX/scale,pointerY/scale)){
             var hit=target();if(hit!=null)ClientState.hoverWorld=ClientState.savedAt(CraftiumClient.point(hit.getBlockPos()));
         }
+        if(newKnown!=null){ // a BuildObject was just created: it is the one that was not there before, and its row is scrolled to once it is listed
+            if(System.currentTimeMillis()>newUntil)newKnown=null;
+            else for(var e:hierarchyAll)if(!newKnown.contains(e.id())){revealId=e.id();revealUntil=newUntil;newKnown=null;break;}
+        }
+        if(revealId!=0){ // a BuildObject was picked in a viewport or created: scroll the Hierarchy to its row
+            boolean found=false;
+            for(int i=0;i<total;i++)if(saved.get(i).entry()!=null&&saved.get(i).entry().id()==revealId){savedScroll=Math.clamp(savedScroll,Math.max(0,i-rows+1),i);found=true;break;}
+            if(found||System.currentTimeMillis()>revealUntil)revealId=0; // a row still folded away or not yet sent is waited for
+        }
         savedScroll=Math.clamp(savedScroll,0,Math.max(0,total-rows));
         if(hierarchyAll.isEmpty()&&groups.isEmpty())text(g,"No BuildObjects yet",x+16,top+6,MUTED);
         for(int i=0;i<rows&&savedScroll+i<total;i++){
@@ -2245,7 +2361,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
                 if(rowDragMoved&&rowDragId==gid)g.fill(x+9,ry,x+pw-9,ry+rowHeight,0xaa141c26);
                 var headControl=new Control(x+9,ry,rowRight-(x+9),rowHeight,()->{},HIDDEN_TIP+"Group · The arrow folds it · Double-click to rename · Drag to move it · Right-click for more");controls.add(headControl);renameAreas.add(new RenameArea(headControl,gid));
                 foldArrow(g,x+15,folded?ry+6:ry+7,folded,GROUP_TEXT);
-                controls.add(new Control(x+11,ry,14,rowHeight,()->ClientState.toggleGroupFolded(group.id()),HIDDEN_TIP+(folded?"Show this group's BuildObjects":"Fold this group's BuildObjects"))); // no tooltip: the arrow says what it does
+                var groupFold=new Control(x+11,ry,14,rowHeight,()->ClientState.toggleGroupFolded(group.id()),HIDDEN_TIP+(folded?"Show this group's BuildObjects":"Fold this group's BuildObjects"));controls.add(groupFold);foldControls.add(groupFold); // no tooltip: the arrow says what it does
                 var members=new ArrayList<Integer>();for(var e:hierarchyAll)if(groupIdOf(e)==group.id())members.add(e.id());
                 boolean allHidden=!members.isEmpty()&&members.stream().allMatch(ClientState::savedHidden);
                 button(g,eye,ry+2,18,rowHeight-4,"",false,()->{for(int m:members)ClientState.setSavedHidden(m,!allHidden);},allHidden?"Show the outlines of everything in this group":"Hide the outlines of everything in this group");
@@ -2254,9 +2370,10 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
                 continue;
             }
             var entry=shownRow.entry();int id=entry.id();
-            int indent=Math.min(depthOf(entry),6)*12,nameX=x+14+indent+12; // a level in is 12 further right; the arrow takes the first 12
+            int indent=Math.min(depthOf(entry),6)*12,nameX=x+14+indent+24+5; // a level in is 12 further right; the arrow takes the first 12, the cube the next 12, and a space (5) separates the cube from the name
             if(entry.active())g.fill(x+9,ry,rowRight,ry+rowHeight,entry.editing()?0xff5b4a84:0xff315b84);
             else if(ClientState.hoverWorld==id)g.fill(x+9,ry,rowRight,ry+rowHeight,ClientState.savedColor(id)&0xffffff|0x66000000); // under the pointer in a viewport: tinted with the outline colour it has in the world
+            glyph(g,x+14+indent+12,ry,12,rowHeight,entry.size()>0?CUBE_FILLED:CUBE_OUTLINE,entry.active()?TEXT:MUTED); // blocks of its own: a filled cube; none (a parent, or air): an outline; drawn over the row's highlight
             if(renaming==id){
                 renameShown=true;var box=renameBox(entry.name());box.setX(nameX);box.setY(ry+4);box.setWidth(eye-4-nameX);
             }else text(g,shorten(entry.name(),eye-4-nameX),nameX,ry+6,entry.active()?TEXT:MUTED);
@@ -2265,7 +2382,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
             var rowControl=new Control(x+9,ry,rowRight-(x+9),rowHeight,()->rowClick(entry),HIDDEN_TIP+savedSpan(entry)+" blocks · "+(entry.active()&&!entry.editing()?"Let go":"Select this BuildObject")); controls.add(rowControl);renameAreas.add(new RenameArea(rowControl,id));
             if(parents.contains(id)){ // something is under it: an arrow folds it
                 boolean folded=ClientState.savedFolded(id);foldArrow(g,x+15+indent,folded?ry+6:ry+7,folded,MUTED); // centred a pixel above the middle of the row
-                controls.add(new Control(x+11+indent,ry,14,rowHeight,()->ClientState.toggleSavedFolded(id),HIDDEN_TIP+(folded?"Show what is under this BuildObject":"Fold what is under this BuildObject"))); // no tooltip: the arrow says what it does
+                var fold=new Control(x+11+indent,ry,14,rowHeight,()->ClientState.toggleSavedFolded(id),HIDDEN_TIP+(folded?"Show what is under this BuildObject":"Fold what is under this BuildObject"));controls.add(fold);foldControls.add(fold); // no tooltip: the arrow says what it does
             }
             boolean hidden=ClientState.savedHidden(id);
             button(g,eye,ry+2,18,rowHeight-4,"",false,()->eyeClick(entry,minecraft.hasControlDown()),hidden?"Show this BuildObject's outline in the world · It shows while it is selected, whatever the eye · Ctrl+click does the same for everything under it":"Hide this BuildObject's outline in the world · Ctrl+click does the same for everything under it");
@@ -2293,10 +2410,10 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(renaming>=0&&!renameShown)cancelRename(); // scrolled out of view or deleted
         else if(renaming>=0&&fields.get("rename")!=null&&!fields.get("rename").isFocused())commitRename(); // a click elsewhere keeps the name
         g.fill(x+1,y+ph-30,x+pw-1,y+ph-29,LINE); // the buttons along the bottom
-        button(g,x+10,y+ph-25,24,20,"",false,()->action("saved_selection:save"),looking?"Create a BuildObject from what is selected now · While one is shown, the new one goes inside it":"Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole");
+        button(g,x+10,y+ph-25,24,20,"",false,()->{expectNewBuildObject();action("saved_selection:save");},looking?"Create a BuildObject from what is selected now · While one is shown, the new one goes inside it":"Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole");
         glyph(g,x+10,y+ph-25,24,20,PLUS,TEXT);
         boolean hoverOn=o().hoverBuildObjects;
-        button(g,x+38,y+ph-25,24,20,"",hoverOn,()->{o().hoverBuildObjects=!o().hoverBuildObjects;ClientState.save();},"Hover BuildObjects: "+(hoverOn?"on":"off")+" · While on, the BuildObject under the pointer in a viewport shows its outline and is lit in the Hierarchy");
+        button(g,x+38,y+ph-25,24,20,"",hoverOn,()->{o().hoverBuildObjects=!o().hoverBuildObjects;ClientState.save();},"Hover BuildObjects: "+(hoverOn?"on":"off")+" · While on, the BuildObject under the pointer in a viewport shows its outline and is lit in the Hierarchy · Clicking it picks it, with any tool");
         glyph(g,x+38,y+ph-25,24,20,CURSOR,TEXT);
     }
     /**
@@ -2435,12 +2552,14 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         var items=new ArrayList<MenuItem>();
         var kids=new ArrayList<Integer>();for(var e:hierarchyAll)if(e.parent()==id)kids.add(e.id());
         boolean only=n==1&&row.active()&&!row.editing();
+        items.add(item(n>1?"Copy paths ("+n+")":"Copy path","",()->copyPaths(targets)));
+        items.add(divider());
         if(!only||n>1)items.add(item("Select","",()->action("saved_selection:view:"+id)));
         if(!kids.isEmpty())items.add(item("Select children only","",()->action("saved_selection:viewset:"+String.join(",",kids.stream().map(String::valueOf).toList()))));
         items.add(row.active()&&row.editing()?item("Stop editing","",()->action("saved_selection:release")):item("Edit blocks","",()->action("saved_selection:edit:"+id)));
         items.add(divider());
         items.add(n>1?item("Group selected ("+n+")","Ctrl+G",()->action("saved_selection:group:"+csv)):item("Create empty parent",row.active()?"Ctrl+G":"",()->action("saved_selection:group:"+id)));
-        items.add(item("Create empty BuildObject","",()->action("saved_selection:createchild:"+id)));
+        items.add(item("Create empty BuildObject","",()->{expectNewBuildObject();action("saved_selection:createchild:"+id);}));
         items.add(divider());
         items.add(item("Rename",n==1&&row.active()?"F2":"",()->startRename(new RenameArea(null,id))));
         items.add(item("Duplicate","Ctrl+D",this::duplicateObjects));
@@ -2449,7 +2568,8 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(ClientState.status.clipboardSize()>0&&ClientState.status.clipboardOrigin()!=null)items.add(item("Paste","",()->pasteAsObject(id)));
         items.add(n>1?item("Delete selected ("+n+")","",()->action("saved_selection:deleteset:"+csv)):item("Delete","",()->action("saved_selection:delete:"+id)));
         items.add(item(n>1?"Delete selected + blocks ("+n+")":"Delete blocks","",()->deleteWithBlocks(targets))); // the BuildObjects and the blocks they hold
-        items.add(item("Export…","",()->exportStructure(StructureSettings.SELECTION))); // the blocks shown, which are everything under each BuildObject
+        items.add(item(n>1?"Export selected ("+n+")…":"Export…","",()->exportObjects(targets))); // each BuildObject with everything under it, a page of the window for each
+        items.add(item(n>1?"Save selected as blueprints ("+n+")…":"Save as blueprint…","",()->blueprintObjects(targets)));
         var moves=new ArrayList<MenuItem>();
         if(row.parent()!=0){var up=savedById(row.parent());if(up!=null)moves.add(item(up.parent()==0?"Ungroup":"Move out of parent","",()->action(up.parent()==0?"saved_selection:ungroup:"+id:"saved_selection:place:"+id+":"+up.parent()+":"+(siblingIndex(up)+1))));}
         if(row.parent()==0&&ClientState.savedGroups().size()>1)for(var gr:ClientState.savedGroups()){ // a BuildObject at the top goes to the end of another group
@@ -2464,8 +2584,6 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         if(n==1)items.add(item("Change colour…","",()->ColourPickerScreen.open(this,row.name()+" colour",()->ClientState.savedColor(id),c->ClientState.setSavedColor(id,c),()->dev.craftium.core.SavedSelectionColors.forIndex(ClientState.options.selectionColor,0))));
         var box=subtreeBounds(id);
         if(box!=null)items.add(item("Focus","F",()->focusOn(box[0],box[1])));
-        items.add(divider());
-        items.add(item(n>1?"Copy paths ("+n+")":"Copy path","",()->copyPaths(targets)));
         rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=id;menu=ROW_MENU;openSub="";openSub2="";
     }
     /** The path of a BuildObject as an agent would name it: its group, what it is under, then its own name, joined by "/" (the group is left out on a server without groups). */
@@ -2484,18 +2602,27 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         minecraft.keyboardHandler.setClipboard(String.join("\n",lines));
         ClientState.notify(lines.size()==1?"Copied "+lines.getFirst():"Copied "+lines.size()+" paths");
     }
+    /** Deletes a group; one with BuildObjects in it asks first, since they all move to the group before it. */
+    private void deleteGroup(int groupId){
+        Runnable go=()->action("saved_selection:groupdelete:"+groupId);
+        int n=0;for(var e:hierarchyAll)if(groupIdOf(e)==groupId)n++;
+        if(n==0){go.run();return;}
+        var group=groupById(groupId);
+        confirm=new Confirm("Delete the group "+(group==null?"":"\""+shorten(group.name(),200)+"\" ")+"with "+n+(n==1?" BuildObject":" BuildObjects")+" in it?\nThey move to the group before it.","Delete group",go);
+    }
     /** The right-click menu of a group's heading. */
     private void openGroupMenu(int groupId,int x,int y){
         var group=groupById(groupId);if(group==null)return;
         var groups=ClientState.savedGroups();
         var items=new ArrayList<MenuItem>();
+        items.add(item("Copy path","",()->{var text="\""+group.name()+"\"";minecraft.keyboardHandler.setClipboard(text);ClientState.notify("Copied "+text);}));
+        items.add(divider());
         items.add(item("Rename","",()->startRename(new RenameArea(null,GROUP_BASE+groupId))));
-        items.add(item("Create empty BuildObject here","",()->action("saved_selection:empty:"+groupId)));
+        items.add(item("Create empty BuildObject here","",()->{expectNewBuildObject();action("saved_selection:empty:"+groupId);}));
         items.add(item("Create new Group","",()->action("saved_selection:groupnew")));
         boolean folded=ClientState.groupFolded(groupId);
         items.add(item(folded?"Unfold":"Fold","",()->ClientState.toggleGroupFolded(groupId)));
-        items.add(item("Copy path","",()->{var text="\""+group.name()+"\"";minecraft.keyboardHandler.setClipboard(text);ClientState.notify("Copied "+text);}));
-        if(groups.size()>1){items.add(divider());items.add(item("Delete group","",()->action("saved_selection:groupdelete:"+groupId)));} // what is in it goes to the group before
+        if(groups.size()>1){items.add(divider());items.add(item("Delete group","",()->deleteGroup(groupId)));} // what is in it goes to the group before
         rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=0;menu=ROW_MENU;openSub="";openSub2="";
     }
     /** The right-click menu of the empty space in the Hierarchy. */
@@ -2503,7 +2630,7 @@ case REDO -> action("redo");case COPY -> action("copy");case CUT -> cutShown();c
         var items=new ArrayList<MenuItem>();
         var groups=ClientState.savedGroups();
         if(!groups.isEmpty())items.add(item("Create new Group","",()->action("saved_selection:groupnew")));
-        items.add(item("Create empty BuildObject","",()->action("saved_selection:empty"+(groups.isEmpty()?"":":"+groups.getLast().id())))); // at the end of the last group, which is where the empty space is
+        items.add(item("Create empty BuildObject","",()->{expectNewBuildObject();action("saved_selection:empty"+(groups.isEmpty()?"":":"+groups.getLast().id()));})); // at the end of the last group, which is where the empty space is
         rowMenu=List.copyOf(items);rowMenuX=x;rowMenuY=y;rowMenuRow=0;menu=ROW_MENU;openSub="";openSub2="";
     }
     /** The corners of the box round the blocks of the BuildObject and everything under it, or null when there are none. */

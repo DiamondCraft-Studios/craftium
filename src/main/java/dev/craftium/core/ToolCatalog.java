@@ -27,9 +27,9 @@ public final class ToolCatalog {
         return new ToolSpec("craftium:" + tool.name().toLowerCase(Locale.ROOT), tool.label, tool.icon, IconCatalog.tool(tool), tool.group, tool.description,
             brushUse(tool), interaction(tool), defaultKey(tool), useHint(tool),
             transform && tool != Tool.PIVOT || tool == Tool.SHAPE,
-            !selection && !transform && tool != Tool.RULER && tool != Tool.ANNOTATION && tool != Tool.MODIFY && tool != Tool.LINE && tool != Tool.PATH && tool != Tool.MODELLING && tool != Tool.SHAPE,
+            !selection && !transform && tool != Tool.RULER && tool != Tool.ANNOTATION && tool != Tool.MODIFY && tool != Tool.LINE && tool != Tool.PATH && tool != Tool.MODELLING && tool != Tool.SHAPE && tool != Tool.INSPECT,
             tool.group.equals("Sculpt") && tool != Tool.MODIFY || tool.group.equals("Paint"),
-            !selection && tool != Tool.RULER && tool != Tool.ANNOTATION && tool != Tool.TINKER && tool != Tool.PIVOT,
+            !selection && tool != Tool.RULER && tool != Tool.ANNOTATION && tool != Tool.TINKER && tool != Tool.PIVOT && tool != Tool.INSPECT,
             selection, transform, java.util.List.of());
     }
 
@@ -59,6 +59,7 @@ public final class ToolCatalog {
             case MOVE, ROTATE, SCALE -> InteractionKind.TRANSFORM;
             case GRADIENT_PAINTER -> InteractionKind.SHIFT_POINTS;
             case SLOPE -> InteractionKind.ANCHOR_PAIR;
+            case INSPECT -> InteractionKind.INSPECT;
             default -> InteractionKind.CLICK;
         };
     }
@@ -89,6 +90,7 @@ public final class ToolCatalog {
             case MODIFY -> "Fix preview";
             case ANNOTATION -> "Annotate";
             case TINKER -> "Tinker with block";
+            case INSPECT -> "List tags";
             case TEXT -> "Place text";
             case STAMP -> "Stamp clipboard";
             case ERASE -> "Erase";

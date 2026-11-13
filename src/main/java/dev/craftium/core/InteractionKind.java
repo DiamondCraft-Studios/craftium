@@ -35,7 +35,9 @@ public enum InteractionKind {
     /** Clicks work as {@link #CLICK} does, and a click with Shift held adds an anchor point instead. Built in for the Gradient Painter. */
     SHIFT_POINTS(false),
     /** The first click sets an anchor; the next ones move a second point and send the request. Built in for the Slope tool. */
-    ANCHOR_PAIR(false);
+    ANCHOR_PAIR(false),
+    /** A click lists the tags of the block under the cursor in chat, and nothing is sent to the server. Built in for the Inspect tool. */
+    INSPECT(false);
 
     /** Whether a tool that is not one of the editor's own can choose this kind. */
     public final boolean forPlugins;

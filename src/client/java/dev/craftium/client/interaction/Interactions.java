@@ -7,7 +7,7 @@ import dev.craftium.core.Tool;
 public final class Interactions {
     private static final Interaction CLICK = new ClickInteraction(), POINTS = new PointsInteraction(), BOX = new BoxInteraction(), LASSO = new LassoInteraction(), CONFIRMED_CLICK = new ConfirmedClickInteraction(), LINE = new LineInteraction(),
         SHAPE_PLACEMENT = new ShapeInteraction(), MODIFY_ANCHOR = new ModifyInteraction(), RULER = new RulerInteraction(), PIVOT = new PivotInteraction(), ANNOTATION = new AnnotationInteraction(), TRANSFORM = new TransformInteraction(),
-        SHIFT_POINTS = new ShiftPointsInteraction(), ANCHOR_PAIR = new AnchorPairInteraction();
+        SHIFT_POINTS = new ShiftPointsInteraction(), ANCHOR_PAIR = new AnchorPairInteraction(), INSPECT = new InspectInteraction();
 
     private Interactions() {}
 
@@ -29,6 +29,7 @@ public final class Interactions {
             case TRANSFORM -> TRANSFORM;
             case SHIFT_POINTS -> SHIFT_POINTS;
             case ANCHOR_PAIR -> ANCHOR_PAIR;
+            case INSPECT -> INSPECT;
         };
     }
 }

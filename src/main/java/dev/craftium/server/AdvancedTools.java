@@ -132,9 +132,16 @@ final class AdvancedTools {
     /** For a block with no position of its own, such as the active material, so NBT has no data to compare and falls back to the same block. */
     static boolean matches(EditPlanner p,BlockState original,Point at){return p.o.compare==Options.Compare.NBT?p.state(at).is(original.getBlock()):matches(p,original,null,at);}
     /** {@code originData} is the block entity data of the block the search started on, used by the NBT comparison. */
-    static boolean matches(EditPlanner p,BlockState original,net.minecraft.nbt.CompoundTag originData,Point at){
+    static boolean matches(EditPlanner p,BlockState original,net.minecraft.nbt.CompoundTag originData,Point at){return matches(p.o.compare,p,original,-1,originData,at);}
+    /**
+     * The comparison the Magic Wand, the Paint Bucket and the Select by tools share. {@code originKey} is the number of the missing block the
+     * search started on, or -1: a placeholder is then only the same as one for the same original block, however many of them touch, and
+     * -1 on a placeholder means any placeholder. Every mode but Any looks at it, as the block they compare is the original one.
+     */
+    static boolean matches(Options.Compare compare,EditPlanner p,BlockState original,int originKey,net.minecraft.nbt.CompoundTag originData,Point at){
         var s=p.state(at);
-        return switch(p.o.compare){
+        if(compare!=Options.Compare.ANY&&originKey>=0&&MissingBlocks.keyAt(p.level,EditPlanner.pos(at),s)!=originKey)return false;
+        return switch(compare){
             case ANY->!s.isAir();
             case BLOCK->s.is(original.getBlock());
             case STATE->s==original;
@@ -142,6 +149,10 @@ final class AdvancedTools {
             case NBT->s.is(original.getBlock())&&Objects.equals(originData,data(p,at));
         };
     }
+    /** The number of the missing block at {@code at}, or -1 when it is not a placeholder. */
+    static int missingKey(EditPlanner p,Point at){return MissingBlocks.keyAt(p.level,EditPlanner.pos(at),p.state(at));}
+    /** What the block at {@code at} stands for when it is a placeholder, else null. */
+    static dev.craftium.core.MissingBlockTable.Entry missingEntry(EditPlanner p,Point at){var missing=MissingBlocks.at(p.level,EditPlanner.pos(at),p.state(at));return missing==null?null:missing.entry();}
     static net.minecraft.nbt.CompoundTag data(EditPlanner p,Point at){var entity=p.level.getBlockEntity(EditPlanner.pos(at));return entity==null?null:entity.saveWithFullMetadata(p.level.registryAccess());}
     /** Modify: translate copies, revolve, rotate copies or twist the selection. The placement comes from {@link ModifyMath}, which the live preview shares. */
     static void modify(EditPlanner p,Point cursor){

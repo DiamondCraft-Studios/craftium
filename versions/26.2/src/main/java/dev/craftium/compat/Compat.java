@@ -28,6 +28,8 @@ public final class Compat {
     public static Identifier vanilla(String path){return Identifier.withDefaultNamespace(path);}
     /** Namespaced name of a registry or dimension key, e.g. {@code minecraft:overworld}. */
     public static String keyName(ResourceKey<?> key){return key.identifier().toString();}
+    /** Namespaced name of a tag, e.g. {@code minecraft:infiniburn_overworld}. */
+    public static String tagName(net.minecraft.tags.TagKey<?> tag){return tag.location().toString();}
 
     public static boolean isGamemaster(ServerPlayer player){return player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);}
     /** The player's command source raised to game-master (operator level 2) permission. */
@@ -41,4 +43,6 @@ public final class Compat {
     public static Set<String> entityTags(Entity entity){return entity.entityTags();}
     public static long chunkKey(int x,int z){return net.minecraft.world.level.ChunkPos.pack(x,z);}
     public static Transformation identityTransform(){return Transformation.IDENTITY;}
+    /** A block entity type for one block; the constructor is public here. */
+    public static <T extends net.minecraft.world.level.block.entity.BlockEntity> net.minecraft.world.level.block.entity.BlockEntityType<T> blockEntityType(net.minecraft.world.level.block.entity.BlockEntityType.BlockEntitySupplier<T> factory,net.minecraft.world.level.block.Block block){return new net.minecraft.world.level.block.entity.BlockEntityType<>(factory,Set.of(block));}
 }

@@ -50,6 +50,8 @@ final class StructureBuilder {
     /** Reads the source, then applies the settings. Throws {@link IllegalArgumentException} with a message for the player. */
     static StructureBuilder build(EditPlanner p,ServerPlayer player){
         var s=p.o.structure;s.validate();
+        if(s.blueprint()){s.mirror="none";s.rotation=0;s.integrity=100;s.sizeX=s.sizeY=s.sizeZ=0;s.airToVoid=false;s.includeBlocks=true;} // a blueprint holds the blocks as they are
+        var from=s.objectId>0?objectView(p,s.objectId):p.session; // the selection, or a BuildObject standing in for it
         boolean clipboard=s.source.equals(StructureSettings.CLIPBOARD);
         Map<Point,BlockSnapshot> source=new LinkedHashMap<>();List<CompoundTag> entities=new ArrayList<>();Point min;int dx,dy,dz;
         if(clipboard){
@@ -61,11 +63,11 @@ final class StructureBuilder {
             if(s.includeBlocks)for(var entry:p.session.clipboard.entrySet())source.put(new Point(entry.getKey().x()-x0,entry.getKey().y()-y0,entry.getKey().z()-z0),entry.getValue());
             if(s.includeEntities)for(var saved:p.session.clipboardEntities){var copy=saved.copy();ClipboardEntities.offset(copy,-x0,-y0,-z0);entities.add(copy);}
         }else{
-            if(p.session.selection.size()==0)throw new IllegalArgumentException("Create a selection first");
-            min=p.session.selection.min();var max=p.session.selection.max();dx=max.x()-min.x()+1;dy=max.y()-min.y()+1;dz=max.z()-min.z()+1;
+            if(from.selection.size()==0)throw new IllegalArgumentException("Create a selection first");
+            min=from.selection.min();var max=from.selection.max();dx=max.x()-min.x()+1;dy=max.y()-min.y()+1;dz=max.z()-min.z()+1;
             if((long)dx*dy*dz>MAX_VOLUME)throw new IllegalArgumentException("The selection's bounding box is too large to export");
-            if(s.includeBlocks)for(var at:p.session.selection.points())source.put(new Point(at.x()-min.x(),at.y()-min.y(),at.z()-min.z()),null); // read below, once the size is known
-            if(s.includeEntities)entities.addAll(ClipboardEntities.capture(player,p.session).relative());
+            if(s.includeBlocks)for(var at:from.selection.points())source.put(new Point(at.x()-min.x(),at.y()-min.y(),at.z()-min.z()),null); // read below, once the size is known
+            if(s.includeEntities)entities.addAll(ClipboardEntities.capture(player,from).relative());
         }
         int sx=s.sizeX>0?s.sizeX:dx,sy=s.sizeY>0?s.sizeY:dy,sz=s.sizeZ>0?s.sizeZ:dz;
         if((long)sx*sy*sz>MAX_VOLUME)throw new IllegalArgumentException("The structure is too large to export");
@@ -79,6 +81,15 @@ final class StructureBuilder {
         var built=new StructureBuilder(s,sx,sy,sz,cells,entities,clipboard?new Point(0,0,0):min);
         built.source=new int[]{sx,sy,sz};
         var result=built.transformed().thinned().voided();result.source=built.source;return result;
+    }
+
+    /** A session whose selection is the blocks of one BuildObject and everything under it, so it can be exported as the selection is. */
+    private static Session objectView(EditPlanner p,int id){
+        var entry=p.session.saved.byId(id);
+        if(entry==null)throw new IllegalArgumentException("That BuildObject no longer exists");
+        var points=p.session.saved.effective(entry);
+        if(points.isEmpty())throw new IllegalArgumentException("The BuildObject "+entry.name()+" has no blocks");
+        var view=new Session();view.selection.restore(points);return view;
     }
 
     private static Mirror mirrorOf(String name){return switch(name){case "left_right"->Mirror.LEFT_RIGHT;case "front_back"->Mirror.FRONT_BACK;default->Mirror.NONE;};}
@@ -134,12 +145,12 @@ final class StructureBuilder {
     // --- Java structure NBT ---
 
     CompoundTag javaNbt(){
-        var root=new CompoundTag();var palette=new ListTag();var indices=new HashMap<BlockState,Integer>();var blocks=new ListTag();
+        var root=new CompoundTag();var palette=new ListTag();var indices=new HashMap<Object,Integer>();var blocks=new ListTag();
         for(int y=0;y<sizeY;y++)for(int z=0;z<sizeZ;z++)for(int x=0;x<sizeX;x++){
             var snapshot=cells[index(x,y,z)];if(snapshot==null)continue;
-            int state=indices.computeIfAbsent(snapshot.state(),key->{palette.add(NbtUtils.writeBlockState(key));return palette.size()-1;});
+            int state=indices.computeIfAbsent(AssetNbt.paletteKey(snapshot),key->{palette.add(AssetNbt.paletteTag(snapshot));return palette.size()-1;});
             var block=new CompoundTag();block.put("pos",ints(x,y,z));block.putInt("state",state);
-            if(snapshot.data()!=null){var data=snapshot.data().copy();data.remove("x");data.remove("y");data.remove("z");block.put("nbt",data);}
+            var fileData=AssetNbt.fileData(snapshot);if(fileData!=null){var data=fileData.copy();data.remove("x");data.remove("y");data.remove("z");block.put("nbt",data);}
             blocks.add(block);
         }
         root.putInt("DataVersion",net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());
@@ -157,9 +168,9 @@ final class StructureBuilder {
         for(int y=0;y<sizeY;y++)for(int z=0;z<sizeZ;z++)for(int x=0;x<sizeX;x++){
             var snapshot=cells[index(x,y,z)];if(snapshot==null)gaps++;
             // A schematic has no void: a cell nothing is placed in is air.
-            String state=snapshot==null?"minecraft:air":net.minecraft.commands.arguments.blocks.BlockStateParser.serialize(snapshot.state());
+            String state=snapshot==null?"minecraft:air":AssetNbt.paletteText(snapshot);
             int value=indices.computeIfAbsent(state,key->indices.size());while((value&~0x7f)!=0){bytes.write((value&0x7f)|0x80);value>>>=7;}bytes.write(value);
-            if(snapshot!=null&&snapshot.data()!=null){var tag=snapshot.data().copy();tag.putString("Id",tag.getStringOr("id",""));tag.remove("id");tag.remove("x");tag.remove("y");tag.remove("z");tag.putIntArray("Pos",new int[]{x,y,z});blockEntities.add(tag);}
+            var fileData=snapshot==null?null:AssetNbt.fileData(snapshot);if(fileData!=null){var tag=fileData.copy();tag.putString("Id",tag.getStringOr("id",""));tag.remove("id");tag.remove("x");tag.remove("y");tag.remove("z");tag.putIntArray("Pos",new int[]{x,y,z});blockEntities.add(tag);}
         }
         indices.forEach(palette::putInt);root.put("Palette",palette);root.putInt("PaletteMax",indices.size());root.putByteArray("BlockData",bytes.toByteArray());
         root.put("BlockEntities",blockEntities);root.put("Entities",AssetNbt.schematicEntities(entities));
@@ -260,7 +271,7 @@ final class StructureBuilder {
             else{var box=shape.bounds();bounds=new int[]{q(box.minX),q(box.minY),q(box.minZ),q(box.maxX),q(box.maxY),q(box.maxZ)};}
         }catch(RuntimeException e){ /* a shape that needs the world: show it whole */ }
         boolean full=bounds[0]==0&&bounds[1]==0&&bounds[2]==0&&bounds[3]==16&&bounds[4]==16&&bounds[5]==16;
-        return new StructurePreview.Block(BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString(),bounds,full&&state.canOcclude());
+        return new StructurePreview.Block(net.minecraft.commands.arguments.blocks.BlockStateParser.serialize(state),bounds,full&&state.canOcclude());
     }
     private static int q(double v){return Math.clamp((int)Math.round(v*16),0,16);}
 }

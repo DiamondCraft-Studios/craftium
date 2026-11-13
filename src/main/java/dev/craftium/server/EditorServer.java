@@ -241,7 +241,7 @@ public final class EditorServer {
             long now=System.nanoTime();
             // A builder commit is a deliberate click, not a stream, so it is never dropped by the throttle below: a lost one would leave the selection placed on the client only.
             // The export pop-up asks for a new preview as fields change and must not lose one, or an export, to a request just before it.
-            boolean popup=Set.of("structure_preview","structure_export_file","structure_import_file").contains(r.action());
+            boolean popup=Set.of("structure_preview","structure_export_file","structure_import_file","blueprint_save_source").contains(r.action());
             if(!replaying&&!r.action().equals("builder_commit")&&now-s.lastRequest<65_000_000L&&!popup&&!r.action().equals("blueprint_list")&&!r.action().equals("hotbar_list"))return;
             if(!popup)s.lastRequest=now;
             if(r.action().equals("tool_preview")){toolPreview(player,s,o,r.target(),r.normal());return;} // the ghost of a plugin's tool, which is not an edit and answers with the ghost alone
@@ -407,13 +407,21 @@ public final class EditorServer {
                     catch(RuntimeException e){s.selection.restore(before);s.saved.setPoints(objectsNow);s.pendingSelectionBefore=priorBefore;s.pendingObjectsBefore=priorObjects;if(confirming)s.pendingEdit=staged;throw e;}
                 }
                 case "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo" -> {var plan=new EditPlanner(player.level(),s,o);s.selection.combine(SelectionTransforms.apply(r.action(),plan),Selection.Mode.REPLACE);send(player,s,"Selection updated: "+s.selection.size()+" blocks",false);}
+                case "select_missing" -> {
+                    var wanted=dev.craftium.core.MissingBlockTable.Entry.parse(o.missingBlock);
+                    var found=MissingBlocks.loadedAround(player,wanted,Selection.LIMIT);
+                    if(found.isEmpty())throw new IllegalArgumentException("No "+wanted.text()+" in the chunks loaded around you");
+                    var points=new ArrayList<Point>(found.size());for(var at:found)points.add(EditPlanner.point(at));
+                    s.selection.combine(points,Selection.Mode.REPLACE);
+                    send(player,s,"Selected "+points.size()+" "+wanted.text()+" in the chunks loaded around you"+(points.size()>=Selection.LIMIT?" (the selection limit)":""),false);
+                }
                 case "clear" -> {s.saved.release(s.selection);s.selection.clear();s.corner=null;s.line=null;s.ruler=null;send(player,s,"Selection cleared",false);}
                 case "ruler_clear" -> {s.ruler=null;send(player,s,"Measurement cleared",false);}
                 case "asset_upload","blueprint_list","blueprint_save","blueprint_load","blueprint_data","blueprint_op","structure_export","schematic_export","schematic_import","selection_csv" -> {
                     if(r.action().equals("blueprint_op")&&!dev.craftium.compat.Compat.isGamemaster(player))throw new IllegalArgumentException("Only operators can change the server's blueprint library");
                     var plan=new EditPlanner(player.level(),s,o);String result=BlueprintLibrary.act(r.action(),plan);if(Set.of("blueprint_save","structure_export","schematic_export","selection_csv","blueprint_data").contains(r.action()))result+=BlueprintLibrary.download(r.action(),plan,player);send(player,s,result,false);
                 }
-                case "structure_preview","structure_export_file","structure_import_file" -> {
+                case "structure_preview","structure_export_file","structure_import_file","blueprint_save_source" -> {
                     var plan=new EditPlanner(player.level(),s,o);String result=StructureLibrary.act(r.action(),plan,player);if(!result.isEmpty())send(player,s,result,false);
                 }
                 case "entity_copy","entity_cut" -> {
@@ -594,7 +602,7 @@ public final class EditorServer {
     /** The points a selection tool would add, less any the block mask rules out. */
     static List<Point> masked(EditPlanner plan,Options o,Iterable<Point> points){
         var mask=BlockMask.of(o);var kept=new ArrayList<Point>();
-        for(Point p:points)if(mask.allows(plan.state(p)))kept.add(p);
+        for(Point p:points)if(mask.allows(plan.state(p),AdvancedTools.missingEntry(plan,p)))kept.add(p);
         return kept;
     }
     /** What the player's tool does with a click on the world: whatever the tool's behaviour makes of it. */
@@ -1240,7 +1248,7 @@ public final class EditorServer {
     /** True for the actions that exist to change the selection, which the history records so they can be undone. */
     private static boolean changesSelection(String action,Options o){
         return switch(action){
-            case "select_box","select_box_adjust","lasso_select","clear","selection_move","selection_expand","selection_shrink","selection_invert","selection_convex","selection_outline",
+            case "select_box","select_box_adjust","lasso_select","select_missing","clear","selection_move","selection_expand","selection_shrink","selection_invert","selection_convex","selection_outline",
                  "selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale","selection_gizmo"->true;
             case "use"->o.tool.selection();
             default->false;

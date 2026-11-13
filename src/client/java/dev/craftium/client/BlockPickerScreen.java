@@ -55,9 +55,14 @@ public final class BlockPickerScreen extends CraftiumScreen {
         return all;
     }
     /** An item icon for the block; Air has none, so it is drawn as a label. */
+    /** A block that does not exist here, as a red and black checker like the texture of Craftium's Missing Block. */
+    static void missingSwatch(Gfx g,int x,int y){
+        g.fill(x,y,x+8,y+8,0xffe21b1b);g.fill(x+8,y,x+16,y+8,0xff000000);
+        g.fill(x,y+8,x+8,y+16,0xff000000);g.fill(x+8,y+8,x+16,y+16,0xffe21b1b);
+    }
     static void icon(Gfx g,Font font,String block,int x,int y){
         var look=looks(block);
-        if(look==null)return;
+        if(look==null){missingSwatch(g,x,y);return;} // a block this game does not have: the colours of Craftium's Missing Block, 16 pixels like an item
         if(look.stack!=null)g.item(look.stack,x,y);
         else if(look.liquid!=0)liquid(g,x,y,look.liquid); // no item of its own: a liquid is drawn as its block
         else g.text(font,look.label,x+8-look.labelWidth(font)/2,y+4,0xff9db5cb,false);

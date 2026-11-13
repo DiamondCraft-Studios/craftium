@@ -144,6 +144,15 @@ public final class Packets {
         public static final StreamCodec<RegistryFriendlyByteBuf,Report> CODEC=StreamCodec.of((buf,p)->buf.writeUtf(p.text,100_000),buf->new Report(buf.readUtf(100_000)));
         @Override public Type<Report> type(){return TYPE;}
     }
+    /** The blocks this world is missing, as {@code namespace:name[properties]} in the order of the world's table: sent when a player joins and whenever another one is found. */
+    public record MissingBlocks(java.util.List<String> ids) implements CustomPacketPayload {
+        public static final int LIMIT=2000;
+        public static final Type<MissingBlocks> TYPE=new Type<>(dev.craftium.compat.Compat.id("craftium","missing_blocks"));
+        public static final StreamCodec<RegistryFriendlyByteBuf,MissingBlocks> CODEC=StreamCodec.of(
+            (buf,p)->{int n=Math.min(LIMIT,p.ids.size());buf.writeVarInt(n);for(int i=0;i<n;i++)buf.writeUtf(p.ids.get(i),256);},
+            buf->{int n=Math.min(LIMIT,buf.readVarInt());var ids=new java.util.ArrayList<String>(n);for(int i=0;i<n;i++)ids.add(buf.readUtf(256));return new MissingBlocks(java.util.List.copyOf(ids));});
+        @Override public Type<MissingBlocks> type(){return TYPE;}
+    }
     /** What the server read for an AI client: a JSON object, never shown to the player. */
     public record AiReply(String json) implements CustomPacketPayload {
         public static final Type<AiReply> TYPE=new Type<>(dev.craftium.compat.Compat.id("craftium","ai_reply"));

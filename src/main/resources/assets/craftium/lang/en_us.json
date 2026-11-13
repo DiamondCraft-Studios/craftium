@@ -1,5 +1,6 @@
 {
   "key.category.craftium.studio": "Craftium Building Studio",
+  "block.craftium.missing_block": "Missing Block",
   "key.craftium.editor": "Toggle editor",
   "key.craftium.context": "Hold for builder controls",
   "key.craftium.hotbar": "Swap hotbar with inventory row",

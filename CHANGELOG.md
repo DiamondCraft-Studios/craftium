@@ -50,6 +50,21 @@ Changes since 1.5.0-beta.1.
 - Target info moved to the bottom of the left column, under Tool options.
 - The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
 - Your saved window layout is reset once, to the new places.
+- The Export structure window has a third tab, Blueprint, that saves the source into the blueprint library with a name, author and tags. Ctrl + P opens the same window with only that form, replacing the old Save blueprint dialog.
+- Several BuildObjects can be exported at once: right-click them in the Hierarchy and choose Export selected. The window has a page for each, with its own name, position and size and a preview of it (the other settings are shared), and exports them all as structures to one folder, or all as blueprints.
+- Save blueprint in the Export structure window opens the Blueprint library so you choose the folder to save in; press Save here to save into the folder you are in.
+- Dragging a gizmo handle (an arrow, a plane square or the centre) is now worked out from each step of the pointer, so flying about while you drag no longer slows it, stops it or sends the selection back towards you, even when you look along the arrow. The selection stays where it is while only the camera moves.
+- The Move tool's gizmo now has the free move handle in the middle: drag it to move the selection anywhere on the screen's plane.
+- New Inspect tool, in Utility: point at a block to see its name and the first few of its block tags floating above it, and use the tool (right-click by default) to list every block and fluid tag in chat. It changes nothing in the world and sends nothing to the server.
+- The Builder's destination preview (where a move, clone, stack or smear would land) is drawn like its selection: dim faces on the ground and an outline in open air, hidden by terrain in front of it.
+
+### Missing blocks
+- A block that no installed mod provides (a mod you removed, a build from another modpack) is no longer turned into air when its chunk loads or when a blueprint, structure or schematic is pasted. It becomes a Missing Block that remembers the block it stood for, with its properties and any block entity data it had.
+- The editor tools work on them: the Magic Wand, Paint Bucket and dropping a block in the world treat Missing Blocks for different original blocks as different blocks, even when they touch (in every select type but Any). Pick one with the pipette or the middle button to add its original block to the block mask, then Fill, Replace or the brushes change only those blocks. A mask entry may also be typed as the original id, like othermod:marble.
+- A Missing blocks window lists the original ids of what the world is missing. It is only there while there are some, and comes up by itself when you join such a world or one is found. Right-click a row: Add to mask puts that block in the block mask, and Select all selects every one of it in the chunks loaded around you. The Missing Block has its own red and black texture.
+- Saving a blueprint, structure or schematic writes a Missing Block back out under its original name, so the file stays portable.
+- Chunks that were loaded and saved without Craftium before this version already turned their missing blocks into air, and those cannot be recovered.
+- A world saved with Missing Blocks needs Craftium to be installed when it is opened again: without it, they are air as before.
 
 ## 1.5.0-beta.1
 

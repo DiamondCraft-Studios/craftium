@@ -22,6 +22,8 @@ public final class Compat {
     public static ResourceLocation vanilla(String path){return ResourceLocation.withDefaultNamespace(path);}
     public static ResourceLocation tryParse(String id){return ResourceLocation.tryParse(id);}
     public static String keyName(ResourceKey<?> key){return key.location().toString();}
+    /** Namespaced name of a tag, e.g. {@code minecraft:infiniburn_overworld}. */
+    public static String tagName(net.minecraft.tags.TagKey<?> tag){return tag.location().toString();}
 
     public static boolean isGamemaster(ServerPlayer player){return player.hasPermissions(2);}
     public static CommandSourceStack gamemasterSource(ServerPlayer player){return player.createCommandSourceStack().withPermission(2);}
@@ -33,4 +35,5 @@ public final class Compat {
     public static Set<String> entityTags(Entity entity){return entity.getTags();}
     public static long chunkKey(int x,int z){return net.minecraft.world.level.ChunkPos.asLong(x,z);}
     public static Transformation identityTransform(){return Transformation.identity();}
+    public static <T extends net.minecraft.world.level.block.entity.BlockEntity> net.minecraft.world.level.block.entity.BlockEntityType<T> blockEntityType(net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder.Factory<T> factory,net.minecraft.world.level.block.Block block){return net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder.<T>create(factory,block).build();}
 }
