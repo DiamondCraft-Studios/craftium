@@ -150,6 +150,9 @@ public final class ObjectMove {
             var b = current.get(p);
             return b != null ? b : orAir(worldState.apply(p));
         };
+        var dried = new HashSet<
+                Point>(); // cells where the mover stood in water: a block that was waterlogged there is not any more
+        // where it goes
 
         // 1. Vacate every selected cell: another object's hidden block comes back, else what the mover replaced, else
         // air.
@@ -172,6 +175,7 @@ public final class ObjectMove {
                 owner.put(c, back);
                 back.touched = true;
             } else if (mover != null && mover.replaced.has(c)) {
+                if (isWater(mover.replaced.get(c))) dried.add(c);
                 current.put(c, new Block(mover.replaced.get(c), mover.replaced.data(c)));
                 mover.replaced.remove(c);
             } else current.put(c, new Block(AIR, null));
@@ -183,6 +187,8 @@ public final class ObjectMove {
         for (var e : landed.entrySet()) {
             var b = e.getValue().block();
             if (b == null || (b.isAir() && !pasteAir)) continue;
+            if (dried.contains(e.getValue().from()) && b.state().contains("waterlogged=true"))
+                b = new Block(b.state().replace("waterlogged=true", "waterlogged=false"), b.data());
             var w = ownerBefore.get(e.getValue().from());
             arrivals.add(new Arrival(w, e.getKey(), b, w == null ? -1 : priority.get(w.id)));
         }
@@ -296,6 +302,11 @@ public final class ObjectMove {
         var changed = new LinkedHashMap<Integer, Obj>();
         for (var w : work.values()) if (w.touched) changed.put(w.id, new Obj(w.id, w.own, w.dormant, w.replaced));
         return new Result(writes, changed, landedCells);
+    }
+
+    /** Water, as a block state text (not a block that only starts with the word, such as a water cauldron). */
+    public static boolean isWater(String state) {
+        return state != null && (state.equals("minecraft:water") || state.startsWith("minecraft:water["));
     }
 
     /** Air in any of its three kinds, or nothing. */
