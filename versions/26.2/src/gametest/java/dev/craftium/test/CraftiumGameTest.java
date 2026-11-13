@@ -49,6 +49,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             if("overlay".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.OverlayGameTest.run(ctx,world);return;}
             if("toolhints".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.ToolHintsGameTest.run(ctx);return;}
             if("branding".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){screenshot();return;}
+            if("gizmodrag".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.GizmoDragGameTest.run(ctx,world);return;}
             if("gizmos".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){gizmoControls();return;}
             if("builder".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){builderToolsAndLighting();return;}
             if("bulk".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){bulkChunkWrite();return;}

@@ -208,7 +208,9 @@ public final class EditorScreen extends CraftiumScreen {
         BG=o().uiBackground;PANEL=o().uiPanel;LINE=o().uiBorder;ACCENT=o().uiAccent;TEXT=o().uiText;MUTED=o().uiMuted;
         if(!suspended&&layoutKey!=layoutKey())init();
         runAfterStatus();
-        pointerX=mouseX;pointerY=mouseY;mx=(int)(mouseX/scale);my=(int)(mouseY/scale);controls.clear();renameAreas.clear();sliderAreas.clear();dragSources.clear();dropTargets.clear();PanelLog.frame();
+        pointerX=mouseX;pointerY=mouseY;
+        // A held gizmo has the pointer: the interface under it is not lit, as the cursor is hidden and only steers the handle.
+        boolean steering=TransformGizmo.dragging();mx=steering?-100000:(int)(mouseX/scale);my=steering?-100000:(int)(mouseY/scale);controls.clear();renameAreas.clear();sliderAreas.clear();dragSources.clear();dropTargets.clear();PanelLog.frame();
         syncCrosshair();
         SelectionOverlay.tint(g); // under the panels, so only the world is washed
         if(cameraGesture==CameraGesture.ROTATE&&cameraButton==GLFW.GLFW_MOUSE_BUTTON_RIGHT){g.crosshair(width/2,height/2);} // the first-person look aims with the vanilla crosshair
@@ -250,7 +252,7 @@ public final class EditorScreen extends CraftiumScreen {
         if(dragBlock!=null&&dragMoved){
             for(int i=dropTargets.size()-1;i>=0;i--){var t=dropTargets.get(i).area();if(t.contains(mx,my)){g.pose().pushMatrix();WorkspaceLayout.apply(g,t.panel());g.outline(t.x(),t.y(),t.width(),t.height(),ACCENT);g.pose().popMatrix();break;}} // the cell the block would land in
             BlockDragCursor.draw(g,font,dragBlock,mx,my,w,h,ACCENT,inViewport(mx,my));}else BlockDragCursor.release();
-        g.pose().popMatrix();ReferenceImages.draw(g,true,mouseX,mouseY);
+        g.pose().popMatrix();ReferenceImages.draw(g,true,steering?-100000:mouseX,steering?-100000:mouseY);
     }
     /** A tooltip laid out: its wrapped rows, how many belong to the first paragraph, and the widest row. */
     private record TooltipPane(String text,List<net.minecraft.util.FormattedCharSequence> rows,int firstRows,int paragraphs,int widest){}
