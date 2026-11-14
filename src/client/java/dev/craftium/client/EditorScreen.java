@@ -4528,7 +4528,27 @@ public final class EditorScreen extends CraftiumScreen {
         exportStructure(source, null, null);
     }
     /** Opens the export window on these BuildObjects, a page for each. */
+    /** How many blocks the BuildObjects among {@code ids}, and everything under them, keep out of the world: what an action that works on the blocks in the world leaves out. */
+    private int hiddenIn(List<Integer> ids) {
+        int n = 0;
+        for (var row : ClientState.savedSelections())
+            for (int id : ids)
+                if (ClientState.savedUnder(row, id)) {
+                    n += row.hidden();
+                    break;
+                }
+        return n;
+    }
+    /** Says so when an action works on the blocks in the world and the BuildObjects have more than that: nothing is lost, they are only not part of it. */
+    private void warnHidden(List<Integer> ids, String what) {
+        int n = hiddenIn(ids);
+        if (n > 0)
+            ClientState.notify(String.format(
+                    "%,d hidden blocks are not part of the %s: Place here puts them in the world first", n, what));
+    }
+
     private void exportObjects(List<Integer> ids) {
+        warnHidden(ids, "export");
         var objects = new ArrayList<StructureExportScreen.Target>();
         for (int id : ids) {
             var row = savedById(id);
@@ -4539,6 +4559,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** Opens the export window on the Blueprint tab for these BuildObjects, a page for each. */
     private void blueprintObjects(List<Integer> ids) {
+        warnHidden(ids, "blueprint");
         var objects = new ArrayList<StructureExportScreen.Target>();
         for (int id : ids) {
             var row = savedById(id);
@@ -7201,6 +7222,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** Cuts the blocks of the BuildObjects shown, and then the BuildObjects themselves, so a paste is where they live now. */
     private void cutObjects(List<Integer> ids) {
+        warnHidden(ids, "cut");
         action("cut");
         afterNextStatus(() -> {
             if (!ClientState.status.error())
@@ -7385,7 +7407,10 @@ public final class EditorScreen extends CraftiumScreen {
         items.add(divider());
         items.add(item("Rename", n == 1 && row.active() ? "F2" : "", () -> startRename(new RenameArea(null, id))));
         items.add(item("Duplicate", "Ctrl+D", this::duplicateObjects));
-        items.add(item("Copy", "Ctrl+C", () -> action("copy")));
+        items.add(item("Copy", "Ctrl+C", () -> {
+            warnHidden(targets, "copy");
+            action("copy");
+        }));
         items.add(item("Cut", "Ctrl+X", () -> cutObjects(targets)));
         if (ClientState.status.clipboardSize() > 0 && ClientState.status.clipboardOrigin() != null)
             items.add(item("Paste", "", () -> pasteAsObject(id)));
