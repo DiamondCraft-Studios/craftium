@@ -67,7 +67,7 @@ Known follow-ups: the whole tree is re-sent to each editor when it changes (abou
 
 ## Status
 
-Rebased on main on 2026-11-14. 794 unit tests pass on 26.2; both versions, their game-test sources and Paper 26.2 compile. Four client game tests pass in a real client: `buildobjectcrash` (what is saved while an edit waits, every way a waiting edit is dropped, and another player's change surviving a cancel), `buildobjectorder` (undoing a reorder), `buildobjectduplicate` (duplicating a half-buried and a buried BuildObject).
+Rebased on main on 2026-11-14. 793 unit tests pass on 26.2; both versions, their game-test sources and Paper 26.2 compile. Four client game tests pass in a real client: `buildobjectcrash` (what is saved while an edit waits, every way a waiting edit is dropped, and another player's change surviving a cancel), `buildobjectorder` (undoing a reorder), `buildobjectduplicate` (duplicating a half-buried and a buried BuildObject).
 
 Done:
 - the BuildObject limit of 1,024;
