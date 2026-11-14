@@ -284,6 +284,21 @@ final class ObjectMoves {
         return new Transformed(commit(s, plan, result, ownBefore, heldBefore), result.landed());
     }
 
+    /** The blocks kept hidden by the BuildObjects that are shown, and by everything under them, by cell (where two keep one in the same cell, the first). */
+    static Map<Point, ObjectMove.Block> shownHidden(Session s) {
+        var shown = new ArrayList<Integer>();
+        for (var e : s.saved.viewed()) shown.add(e.id());
+        var out = new LinkedHashMap<Point, ObjectMove.Block>();
+        for (int id : s.saved.withDescendants(shown)) {
+            var e = s.saved.byId(id);
+            if (e == null) continue;
+            e.dormant()
+                    .forEach((p, state) -> out.putIfAbsent(
+                            p, new ObjectMove.Block(state, e.dormant().data(p))));
+        }
+        return out;
+    }
+
     /** The BuildObjects as the move sees them, in the order of the Hierarchy. */
     private static List<ObjectMove.Obj> ordered(Session s) {
         var out = new ArrayList<ObjectMove.Obj>();
@@ -322,7 +337,7 @@ final class ObjectMoves {
     }
 
     /** A block text and its block entity text as something that can be placed. */
-    private static BlockSnapshot snapshot(EditPlanner plan, ObjectMove.Block block) {
+    static BlockSnapshot snapshot(EditPlanner plan, ObjectMove.Block block) {
         var state = plan.parse(block.state());
         if (block.data() == null) return new BlockSnapshot(state);
         try {

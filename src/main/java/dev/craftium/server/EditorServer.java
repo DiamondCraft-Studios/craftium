@@ -709,11 +709,13 @@ public final class EditorServer {
                                 + "duplicate")) { // copies the blocks shown and remembers the BuildObjects they
                     // belong to, for the paste that follows
                     HierarchyPermissions.require(player, "create");
-                    requireSelection(s);
                     if (s.saved.viewed().isEmpty())
                         throw new IllegalArgumentException("Show a BuildObject to duplicate it");
-                    var nodes = s.saved.captureCopy(s.selection.min());
-                    copy(player, s, o, false);
+                    var nodes = s.saved.captureCopy(
+                            copyOrigin(s, true),
+                            true); // with what it keeps hidden: a copy of a BuildObject is all of it, not only what can
+                    // be seen
+                    copy(player, s, o, false, true);
                     s.duplicateNodes = nodes;
                     s.duplicateEpoch = s.clipboardEpoch;
                     return;
@@ -1783,10 +1785,29 @@ public final class EditorServer {
     private static void requireSelection(Session s) {
         if (s.selection.size() == 0) throw new IllegalArgumentException("Create a selection first");
     }
+    /**
+     * The corner a copy is taken from: that of the selection, or, when a BuildObject that holds nothing in the world is being copied with what it keeps hidden, that of its
+     * hidden blocks. Throws when there is nothing to copy.
+     */
+    private static Point copyOrigin(Session s, boolean withHidden) {
+        if (s.selection.size() > 0) return s.selection.min();
+        var hidden = withHidden ? ObjectMoves.shownHidden(s) : Map.<Point, ObjectMove.Block>of();
+        if (hidden.isEmpty()) throw new IllegalArgumentException("Create a selection first");
+        int x = Integer.MAX_VALUE, y = x, z = x;
+        for (var p : hidden.keySet()) {
+            x = Math.min(x, p.x());
+            y = Math.min(y, p.y());
+            z = Math.min(z, p.z());
+        }
+        return new Point(x, y, z);
+    }
 
     private static void copy(ServerPlayer player, Session s, Options o, boolean cut) {
-        requireSelection(s);
-        Point min = s.selection.min();
+        copy(player, s, o, cut, false);
+    }
+    /** With {@code withHidden}, the blocks that the BuildObjects shown keep out of the world are copied with the selection, as the blocks they are. */
+    private static void copy(ServerPlayer player, Session s, Options o, boolean cut, boolean withHidden) {
+        Point min = copyOrigin(s, withHidden);
         var next = new LinkedHashMap<Point, BlockSnapshot>();
         int bytes = 0;
         for (Point p : s.selection.points()) {
@@ -1800,6 +1821,23 @@ public final class EditorServer {
                 throw new IllegalArgumentException(
                         "Clipboard exceeds " + Selection.CLIPBOARD_BYTES / 1024 / 1024 + " MiB; select a smaller area");
             next.put(p.subtract(min), snapshot);
+        }
+        if (withHidden) {
+            var plan = EditPlanner.forSelection(player.level(), s, o);
+            for (var e : ObjectMoves.shownHidden(s).entrySet()) {
+                var key = e.getKey().subtract(min);
+                if (next.containsKey(key))
+                    continue; // a block of the selection is in that cell: the one in the world is kept
+                var snapshot = ObjectMoves.snapshot(plan, e.getValue());
+                bytes += 128
+                        + (snapshot.data() == null
+                                ? 0
+                                : snapshot.data().toString().length() * 2);
+                if (bytes > Selection.CLIPBOARD_BYTES)
+                    throw new IllegalArgumentException("Clipboard exceeds " + Selection.CLIPBOARD_BYTES / 1024 / 1024
+                            + " MiB; select a smaller area");
+                next.put(key, snapshot);
+            }
         }
         var entities = o.copyEntities
                 ? ClipboardEntities.capture(player, s)
