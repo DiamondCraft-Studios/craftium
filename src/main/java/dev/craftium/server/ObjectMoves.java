@@ -69,8 +69,7 @@ final class ObjectMoves {
      */
     static Applied apply(ServerLevel level, Session s, EditPlanner plan, Mover mover) {
         var ordered = new ArrayList<ObjectMove.Obj>();
-        for (var e : s.saved.entries())
-            ordered.add(new ObjectMove.Obj(e.id(), new HashSet<>(e.points()), e.dormant(), e.replaced()));
+        for (var e : s.saved.entries()) ordered.add(new ObjectMove.Obj(e.id(), e.points(), e.dormant(), e.replaced()));
         var ownBefore = s.saved.snapshot();
         var heldBefore = s.saved.heldSnapshot();
         var solidCache = new HashMap<String, Boolean>();
@@ -179,8 +178,8 @@ final class ObjectMoves {
             var carried = carried(s, ownStart, heldStart);
             var ordered = new ArrayList<ObjectMove.Obj>();
             for (var e : s.saved.entries())
-                ordered.add(new ObjectMove.Obj(
-                        e.id(), new HashSet<>(e.points()), e.dormant(), e.replaced(), carried.contains(e.id())));
+                ordered.add(
+                        new ObjectMove.Obj(e.id(), e.points(), e.dormant(), e.replaced(), carried.contains(e.id())));
             var source = c.source().keySet();
             var solidCache = new HashMap<String, Boolean>();
             Predicate<String> solid = text -> solidCache.computeIfAbsent(text, t -> beats(plan.parse(t)));
@@ -236,10 +235,7 @@ final class ObjectMoves {
         var ordered = new ArrayList<ObjectMove.Obj>();
         for (var e : s.saved.entries())
             ordered.add(new ObjectMove.Obj(
-                    e.id(),
-                    fresh.containsKey(e.id()) ? new HashSet<>() : new HashSet<>(e.points()),
-                    e.dormant(),
-                    e.replaced()));
+                    e.id(), fresh.containsKey(e.id()) ? List.<Point>of() : e.points(), e.dormant(), e.replaced()));
         var placements = new ArrayList<ObjectMove.Placement>();
         for (var e : fresh.entrySet())
             for (var p : e.getValue()) {
@@ -267,8 +263,7 @@ final class ObjectMoves {
         var placements = new ArrayList<ObjectMove.Placement>();
         for (var e : s.saved.entries()) {
             boolean here = ids.contains(e.id());
-            ordered.add(new ObjectMove.Obj(
-                    e.id(), new HashSet<>(e.points()), here ? new PackedCells() : e.dormant(), e.replaced()));
+            ordered.add(new ObjectMove.Obj(e.id(), e.points(), here ? new PackedCells() : e.dormant(), e.replaced()));
             if (here)
                 e.dormant()
                         .forEach((p, state) -> placements.add(new ObjectMove.Placement(
@@ -302,8 +297,7 @@ final class ObjectMoves {
     /** The BuildObjects as the move sees them, in the order of the Hierarchy. */
     private static List<ObjectMove.Obj> ordered(Session s) {
         var out = new ArrayList<ObjectMove.Obj>();
-        for (var e : s.saved.entries())
-            out.add(new ObjectMove.Obj(e.id(), new HashSet<>(e.points()), e.dormant(), e.replaced()));
+        for (var e : s.saved.entries()) out.add(new ObjectMove.Obj(e.id(), e.points(), e.dormant(), e.replaced()));
         return out;
     }
 

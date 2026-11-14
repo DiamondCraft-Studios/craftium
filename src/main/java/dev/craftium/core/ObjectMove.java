@@ -39,8 +39,8 @@ public final class ObjectMove {
      * A BuildObject as the move sees it: the cells it holds in the world, and what it keeps outside it. {@code carried} is set for one that holds nothing in the
      * world (everything it has is dormant) but is shown with the selection: it moves with it, so its hidden blocks go through the same steps.
      */
-    public record Obj(int id, Set<Point> own, PackedCells dormant, PackedCells replaced, boolean carried) {
-        public Obj(int id, Set<Point> own, PackedCells dormant, PackedCells replaced) {
+    public record Obj(int id, Collection<Point> own, PackedCells dormant, PackedCells replaced, boolean carried) {
+        public Obj(int id, Collection<Point> own, PackedCells dormant, PackedCells replaced) {
             this(id, own, dormant, replaced, false);
         }
     }
