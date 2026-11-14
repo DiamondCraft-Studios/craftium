@@ -97,6 +97,10 @@ public final class CraftiumGameTest implements FabricClientGameTest {
                 dev.craftium.client.BuildObjectCrashGameTest.run(ctx, world);
                 return;
             }
+            if ("buildobjectorder".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))) {
+                dev.craftium.client.BuildObjectOrderUndoGameTest.run(ctx, world);
+                return;
+            }
             if ("selectionperf".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))) {
                 dev.craftium.client.SelectionDrawCostGameTest.run(ctx, world);
                 return;
