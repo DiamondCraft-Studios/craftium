@@ -396,23 +396,29 @@ public final class CraftiumClient implements ClientModInitializer {
             // the same style, width and fills as the selection, in the entry's colour
             shape.drawPlain(Vec3.ZERO,colour,(float)o.selectionWidth,colour&0xffffff|o.selectionFill&0xff000000,colour&0xffffff|o.selectionInsideFill&0xff000000,true,false);
         }
-        // The blocks a BuildObject keeps out of the world because something solid was in the way, as an x-ray: lines only, in its colour, seen through what hides them.
-        // While it is selected they are as strong as its outline, so that the shape of the whole BuildObject can be followed while it is dragged out of the ground
-        // (the selection itself is only the blocks that are in the world, so that no tool can reach what is under the hidden ones); otherwise they are fainter.
+        // The blocks a BuildObject keeps out of the world because something solid was in the way are part of its selection and are drawn as such: the same outline, whole where nothing is
+        // in front of it and translucent behind blocks, so the whole shape can be followed even where it is buried. They show with the BuildObject: while it is selected or hovered
+        // (only its blocks in the world can be pointed at, never the buried ones), or while its eye is open.
+        var o=ClientState.options;float lineWidth=(float)o.selectionWidth;
         boolean dragged=TransformGizmo.draggingModel(); // the hidden blocks of what is selected are dragged with it, drawn below where they would land, not where they were
         if(dragged!=hiddenWereDragged){if(dragged)ClientState.requestHiddenBlocks();else ClientState.clearHiddenBlocks();hiddenWereDragged=dragged;} // the blocks themselves are asked for when a drag begins, and let go of when it ends
         for(var saved:ClientState.savedSelections()){
-            var xray=ClientState.xrayShape(saved.id());if(xray==null||!ClientState.xrayShown(saved))continue;
+            var xray=ClientState.xrayShape(saved.id());if(xray==null)continue;
             boolean selected=ClientState.savedSelected(saved);
             if(dragged&&selected)continue;
-            xray.drawThrough(Vec3.ZERO,ClientState.savedColor(saved.id())&0xffffff|(selected?0xe0:0x80)<<24,(float)ClientState.options.selectionWidth);
+            if(!selected&&!ClientState.xrayShown(saved)&&!ClientState.savedHovered(saved))continue;
+            int colour=ClientState.savedColor(saved.id());
+            if(selected)xray.drawPlain(Vec3.ZERO,colour,lineWidth,o.selectionFill,o.selectionInsideFill,true,false); // as the selection itself
+            else xray.drawPlain(Vec3.ZERO,colour,lineWidth,colour&0xffffff|o.selectionFill&0xff000000,colour&0xffffff|o.selectionInsideFill&0xff000000,true,false); // as a BuildObject that is not selected
         }
         if(dragged){
             var ghost=ClientState.hiddenGhost(); // client-side only: the selection itself holds just the blocks in the world, so no tool can reach what is under the hidden ones
             if(ghost!=null){
+                // exactly as the selection's own destination preview is drawn (see SelectionOverlay#draw), so it is depth-tested in the same way
+                var looking=ClientState.activeSaved();int colour=looking!=null?ClientState.savedColor(looking.id()):o.selectionColor;
                 var landing=TransformGizmo.landingHidden(ghost.points()); // a rotate or scale: the cells they land in, as for the selection
-                if(landing!=null)landing.drawLiveThrough(Vec3.ZERO,ClientState.options.previewColor&0xffffff|0xe0000000,(float)ClientState.options.selectionWidth);
-                else ghost.shape().draw(Vec3.ZERO,TransformGizmo::hiddenLine,ClientState.options.previewColor,0,false,ClientState.options.selectionStyle,TransformGizmo::eyeInShape);
+                if(landing!=null)landing.drawLive(Vec3.ZERO,colour,lineWidth,o.selectionFill,true);
+                else ghost.shape().draw(Vec3.ZERO,TransformGizmo::shapeLine,colour,o.selectionFill,false,o.selectionStyle,TransformGizmo::eyeInShape);
                 drawHiddenBlocks(landing!=null);
             }
         }

@@ -99,19 +99,6 @@ final class OutlineShape {
         draw(at,lines,colour,fill,backFill,withFill,style,null,scene);
     }
     /**
-     * Every line drawn through everything at the colour's own opacity, not a quarter of it behind blocks: for blocks that are inside what hides them, such as the part
-     * of a BuildObject that is buried, so its shape can be followed.
-     */
-    void drawThrough(Vec3 at,int colour,float width){
-        Lines lines=(a,b)->Overlay.line(a,b,colour,width);
-        draw(at,lines,colour,0,0,false,ClientState.options.selectionStyle,null,false);
-    }
-    /** As {@link #drawThrough}, for a shape that is being changed as it is looked at (see {@link #drawLive}). */
-    void drawLiveThrough(Vec3 at,int colour,float width){
-        Lines lines=(a,b)->Overlay.line(a,b,colour,width);
-        draw(at,lines,colour,0,0,false,ClientState.options.selectionStyle,java.util.function.UnaryOperator.identity(),false);
-    }
-    /**
      * As the first drawPlain, for a shape that is being changed as it is looked at, such as the blocks a drag will leave, which are worked out
      * again at every step. Its silhouette is always found from this frame's camera, never from an earlier one.
      */

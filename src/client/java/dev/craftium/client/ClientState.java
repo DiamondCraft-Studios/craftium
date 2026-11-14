@@ -177,6 +177,8 @@ public final class ClientState {
         ghostFor=hierarchyVersion;
         return ghost=all.isEmpty()?null:new HiddenGhost(List.copyOf(all),OutlineShape.ofLater(all));
     }
+    /** Whether the pointer is on a BuildObject: on its row in the Hierarchy (with what is under it), or on one of its blocks in the world. Only its blocks that are in the world can be pointed at. */
+    static boolean savedHovered(Packets.SavedSelection saved){return hoverSaved!=0&&savedUnder(saved,hoverSaved)||hoverWorld==saved.id();}
     /** Whether a BuildObject is selected, or is under one that is: it is part of what the player is working on. */
     static boolean savedSelected(Packets.SavedSelection saved){
         if(saved.active())return true;

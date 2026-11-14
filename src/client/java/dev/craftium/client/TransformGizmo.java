@@ -274,10 +274,6 @@ final class TransformGizmo {
     static Map<Point,Point> landingHiddenCells(){return HIDDEN_LANDING.cells;}
     /** Whether the selected blocks (and what a BuildObject keeps hidden with them) are being dragged by the gizmo. */
     static boolean draggingModel(){return dragging!=null&&dragging.kind==Kind.MODEL;}
-    /** One outline segment of hidden blocks being transformed: moved by the transform in progress and drawn through everything, since they are inside what hides them. */
-    static void hiddenLine(Vec3 from,Vec3 to){
-        Overlay.line(transformed(from),transformed(to),ClientState.options.previewColor&0xffffff|0xe0000000,(float)ClientState.options.selectionWidth);
-    }
     /** True when the pointer is on one of the handles of a point gizmo at {@code at}, so a gizmo that is only shown can still be grabbed. */
     static boolean hitsPointHandles(Vec3 at,double x,double y){
         return pick(new Target(Kind.NODE,at,null),x,y)>=0;
