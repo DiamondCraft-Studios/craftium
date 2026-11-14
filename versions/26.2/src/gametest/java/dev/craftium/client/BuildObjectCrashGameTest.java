@@ -125,6 +125,32 @@ public final class BuildObjectCrashGameTest {
         }); // leaving the world
         expectBuried("leaving the world");
 
+        // someone else changes another BuildObject while this edit waits: cancelling gives back the house and nothing
+        // else
+        action("saved_selection:release");
+        cmd("setblock " + (baseX + 10) + " " + (baseY + 6) + " " + baseZ + " stone");
+        c.waitTicks(5);
+        select(List.of(new Point(baseX + 10, baseY + 6, baseZ)));
+        action("saved_selection:save");
+        int other = c.computeOnClient(mc -> ClientState.savedSelections().get(1).id());
+        action("saved_selection:release");
+        stageUp();
+        serverChangesOwn(
+                other,
+                List.of(
+                        new Point(baseX + 10, baseY + 6, baseZ),
+                        new Point(baseX + 11, baseY + 6, baseZ))); // another player adds a block to it
+        action("pending_cancel");
+        c.waitTicks(10);
+        action("saved_selection:view:" + id());
+        require(
+                saved().size() == 18 && saved().hidden() == 9,
+                "cancelling gives the house back, got " + saved().size() + " and " + saved().hidden());
+        require(
+                byId(other).size() == 2,
+                "and leaves what someone else did to the other BuildObject alone, it holds "
+                        + byId(other).size() + " blocks instead of 2");
+
         // Enter: the file follows once the edit is applied
         stageUp();
         action("pending_confirm");
@@ -158,6 +184,35 @@ public final class BuildObjectCrashGameTest {
 
     private int id() {
         return saved().id();
+    }
+
+    private dev.craftium.net.Packets.SavedSelection byId(int id) {
+        return c.computeOnClient(mc -> {
+            for (var e : ClientState.savedSelections()) if (e.id() == id) return e;
+            throw new AssertionError("no BuildObject " + id);
+        });
+    }
+
+    /** What another player's edit does to a BuildObject: its blocks change on the server, without going through this player's session. */
+    private void serverChangesOwn(int id, List<Point> cells) {
+        w.getServer().computeOnServer(server -> {
+            try {
+                var sessions = dev.craftium.server.EditorServer.class.getDeclaredField("SESSIONS");
+                sessions.setAccessible(true);
+                var session = ((java.util.Map<?, ?>) sessions.get(null))
+                        .values()
+                        .iterator()
+                        .next();
+                var field = session.getClass().getDeclaredField("saved");
+                field.setAccessible(true);
+                var saved = (dev.craftium.core.SavedSelections) field.get(session);
+                saved.setPoints(java.util.Map.of(id, cells));
+            } catch (ReflectiveOperationException e) {
+                throw new AssertionError(e);
+            }
+            return true;
+        });
+        c.waitTicks(10);
     }
 
     /** Selects the house and moves it up out of the ground, without confirming. */
