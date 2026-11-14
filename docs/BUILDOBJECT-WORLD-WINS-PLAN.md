@@ -54,7 +54,7 @@ Estimates, not measurements. A typical partly overlapping object has thousands o
 Each phase is its own PR, with one commit per logical change, and nothing is pushed until asked.
 
 1. **Raise the object limit** from 64 to 1,024 per dimension (see below). Independent of the rest.
-2. **Core.** `ObjectVolume` and `OccupancyResolver` (done), plus the packed dormant storage.
+2. **Core.** `ObjectMove` (the rules) and the packed dormant storage (`PackedCells`): done.
 3. **Server.** Resolution on place and move, re-resolving overlapping objects, dormant data in the store and in history entries, caps.
 4. **Preview.** Dormant cells in the ghost preview; the Enter flow and release-to-place for BuildObjects.
 5. **Tool tie-ins and docs.**
@@ -68,7 +68,7 @@ Known follow-ups: the whole tree is re-sent to each editor when it changes (abou
 ## Status
 
 Done, with tests (765 pass on 26.2; both versions, their game-test sources and Paper 26.2 compile; rebased on main 2026-11-13; pushed to origin as `feat/buildobject-world-wins` up to the waterlogging commit):
-- the BuildObject limit of 1,024; `ObjectVolume`; `OccupancyResolver`;
+- the BuildObject limit of 1,024;
 - `PackedCells` (packed store, with block entity data), dormant and replaced cells on each BuildObject with caps, saved with the world;
 - `ObjectMove`: the pure move and placement with the world winning (dormant, replaced, priority, resampling, block entity data, waterlogging, carried objects);
 - undo and redo carry the dormant and replaced stores (`SelectionChange`), and saved history keeps them;
