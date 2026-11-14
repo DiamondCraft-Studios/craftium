@@ -67,7 +67,7 @@ Known follow-ups: the whole tree is re-sent to each editor when it changes (abou
 
 ## Status
 
-Rebased on main on 2026-11-14 (65 commits). 792 unit tests pass on 26.2; both versions, their game-test sources and Paper 26.2 compile. Two client game tests pass in a real client (`buildobjectcrash`, `buildobjectorder`).
+Rebased on main on 2026-11-14. 794 unit tests pass on 26.2; both versions, their game-test sources and Paper 26.2 compile. Four client game tests pass in a real client: `buildobjectcrash` (what is saved while an edit waits, every way a waiting edit is dropped, and another player's change surviving a cancel), `buildobjectorder` (undoing a reorder), `buildobjectduplicate` (duplicating a half-buried and a buried BuildObject).
 
 Done:
 - the BuildObject limit of 1,024;
@@ -77,18 +77,22 @@ Done:
 - wired into the editor: Edit > Move, the transform path (the Move, Rotate and Scale tools and the gizmo) with the Enter preview and cancel, Duplicate and paste, Place here, and reordering the Hierarchy (one history step with the drag);
 - fully hidden BuildObjects: x-ray (depth-tested, on hover and when selected), an amber marker and a count on the row, the gizmo works on the box of the hidden blocks, drag previews of the hidden part as an outline and as blocks;
 - priority between BuildObjects is the order of the Hierarchy (lower wins), fixed by `HierarchyPriorityTest`;
-- crash safety (see below), and what happens to a waiting edit that is dropped;
-- changelog entries.
+- crash safety and what happens to a waiting edit that is dropped (below); a waiting edit gives back only the BuildObjects it changed, so on a shared world it never undoes what someone else did to the others;
+- Duplicate copies the hidden blocks too (a buried BuildObject can be duplicated); Copy, Cut, Export and Save as blueprint say when hidden blocks are not part of them;
+- documentation: `FEATURES.md`, the changelog (with the note that an older Craftium cannot read a world file that holds hidden blocks).
 
 How a fully hidden BuildObject is moved: the status carries, for each Hierarchy row, a count of hidden blocks, the blocks themselves (up to 262,144, for the x-ray) and the box around them, all additive; with the blocks' states (up to 16,384) only when a drag asks for them. With nothing selected, the client takes the gizmo box from the rows that are shown and hold nothing in the world, and the server's transform works from that box and treats those BuildObjects as carried: their hidden blocks go through the same steps as a selection. The live selection stays empty, so no other tool can reach the terrain under the hidden blocks.
 
+Speed (the pure move logic on a cold JVM, so only a guide; the world reads, the network and drawing are not in it): with 1,024 BuildObjects of 2,000 blocks each (2,000,000 blocks), moving one takes about 0.5 s; moving one of 200,000 blocks with 10,000 hidden about 0.4 s; a reorder in which each BuildObject hides 200 blocks under the one before (about 205,000 cells change hands) about 1 s. That is a pause when a drag is let go, not a cost per frame. A cell-to-owner index kept with the tree would remove most of it; not done.
+
 Not built:
 - **live reveal** (hidden blocks appearing when the block hiding them disappears): planned, with five open questions (editor edits or every world change, undo for changes outside the editor, whether the Enter preview shows it, the reverse case, Paper);
-- the Edit > Move offset action for a fully hidden object (use the gizmo).
+- the Edit > Move offset action for a fully hidden object (use the gizmo);
+- lock, search or linked copies (prefabs) for BuildObjects.
 
-Not checked: speed with very large BuildObjects (every transform request builds the whole tree for `ObjectMove`), the Hierarchy at hundreds of rows, Paper 1.21.10 (its module does not build offline here), and BuildObject persistence and permissions on Paper.
+Not checked: speed in the game itself, the Hierarchy at hundreds of rows, anything on a real Paper server (it compiles on 26.2; the plugin flushes on stop and handles a player leaving; the Paper 1.21.10 module does not build offline here), and the dedicated-server game test (it needs the Minecraft EULA accepted for the run).
 
-Known, not ours: the existing `savedselections` client game test fails on main since "select a new BuildObject in the Hierarchy when it is created" (the new one is shown at once; the test expects it not to be).
+Known, not ours: the existing `savedselections` client game test fails on main since "select a new BuildObject in the Hierarchy when it is created" (the new one is shown at once; the test expects it not to be), and the `gizmos`, `overlay`, `panel`, `interaction` and `golden` scopes fail on main the same way as here (checked: identical output).
 
 ### What wiring it in involves (found while reading the edit path)
 - The Move, nudge and Transform actions work on selected *world* cells and the objects follow through `ObjectRemap`. A dormant block is not in the world, so those tools cannot carry it on their own.
