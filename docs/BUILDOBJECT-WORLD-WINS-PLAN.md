@@ -67,20 +67,28 @@ Known follow-ups: the whole tree is re-sent to each editor when it changes (abou
 
 ## Status
 
-Done, with tests (765 pass on 26.2; both versions, their game-test sources and Paper 26.2 compile; rebased on main 2026-11-13; pushed to origin as `feat/buildobject-world-wins` up to the waterlogging commit):
+Rebased on main on 2026-11-14 (65 commits). 792 unit tests pass on 26.2; both versions, their game-test sources and Paper 26.2 compile. Two client game tests pass in a real client (`buildobjectcrash`, `buildobjectorder`).
+
+Done:
 - the BuildObject limit of 1,024;
 - `PackedCells` (packed store, with block entity data), dormant and replaced cells on each BuildObject with caps, saved with the world;
-- `ObjectMove`: the pure move and placement with the world winning (dormant, replaced, priority, resampling, block entity data, waterlogging, carried objects);
-- undo and redo carry the dormant and replaced stores (`SelectionChange`), and saved history keeps them;
-- **wired into the editor (not yet run in the game):** the Edit > Move action, the transform path (the Move, Rotate and Scale tools and the gizmo) including the staged preview, Enter and cancel, Duplicate and paste of BuildObjects, and **Place here** in the Hierarchy menu;
-- findings from the first test (2026-11-13): waterlogging where a block covers water (done); a fully buried BuildObject could not be selected (done: x-ray of the hidden blocks, an amber marker and a count on its Hierarchy row, and the gizmo works on the box of its hidden blocks while nothing is selected);
+- `ObjectMove`: the move and the placement with the world winning (dormant, replaced, priority, resampling, block entity data, waterlogging, carried objects, reorder);
+- undo and redo and the saved history carry the hidden blocks (`SelectionChange`);
+- wired into the editor: Edit > Move, the transform path (the Move, Rotate and Scale tools and the gizmo) with the Enter preview and cancel, Duplicate and paste, Place here, and reordering the Hierarchy (one history step with the drag);
+- fully hidden BuildObjects: x-ray (depth-tested, on hover and when selected), an amber marker and a count on the row, the gizmo works on the box of the hidden blocks, drag previews of the hidden part as an outline and as blocks;
+- priority between BuildObjects is the order of the Hierarchy (lower wins), fixed by `HierarchyPriorityTest`;
+- crash safety (see below), and what happens to a waiting edit that is dropped;
 - changelog entries.
 
-How a fully hidden BuildObject is moved: the status carries, for each Hierarchy row, a count of hidden blocks, the blocks themselves (up to 262,144, as x-ray) and the box around them, all additive. With nothing selected, the client takes the gizmo box from the rows that are shown and hold nothing in the world, and the server's transform works from that box and treats those BuildObjects as carried: their hidden blocks go through the same steps as a selection. The live selection stays empty, so no other tool can reach the terrain under the hidden blocks. An edit that changes only what BuildObjects keep hidden is kept in the history.
+How a fully hidden BuildObject is moved: the status carries, for each Hierarchy row, a count of hidden blocks, the blocks themselves (up to 262,144, for the x-ray) and the box around them, all additive; with the blocks' states (up to 16,384) only when a drag asks for them. With nothing selected, the client takes the gizmo box from the rows that are shown and hold nothing in the world, and the server's transform works from that box and treats those BuildObjects as carried: their hidden blocks go through the same steps as a selection. The live selection stays empty, so no other tool can reach the terrain under the hidden blocks.
 
-Not built: the Edit > Move offset action for a fully hidden object (use the gizmo), a gametest, the Hierarchy scroll check at hundreds of rows, plain paste/clone/stack of non-object blocks (they overwrite by design).
+Not built:
+- **live reveal** (hidden blocks appearing when the block hiding them disappears): planned, with five open questions (editor edits or every world change, undo for changes outside the editor, whether the Enter preview shows it, the reverse case, Paper);
+- the Edit > Move offset action for a fully hidden object (use the gizmo).
 
-Known costs to measure in the game: every transform request builds the whole BuildObject tree for `ObjectMove`, which may be slow per drag tick with very many or very large objects; an optimisation is to include only the objects that matter.
+Not checked: speed with very large BuildObjects (every transform request builds the whole tree for `ObjectMove`), the Hierarchy at hundreds of rows, Paper 1.21.10 (its module does not build offline here), and BuildObject persistence and permissions on Paper.
+
+Known, not ours: the existing `savedselections` client game test fails on main since "select a new BuildObject in the Hierarchy when it is created" (the new one is shown at once; the test expects it not to be).
 
 ### What wiring it in involves (found while reading the edit path)
 - The Move, nudge and Transform actions work on selected *world* cells and the objects follow through `ObjectRemap`. A dormant block is not in the world, so those tools cannot carry it on their own.
