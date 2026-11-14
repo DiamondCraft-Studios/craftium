@@ -500,4 +500,15 @@ class SavedSelectionsTest {
         int again=saved.byId(one.id()).heldVersion();saved.setHeld(one.id(),dormant,PackedCells.EMPTY);assertEquals(again,saved.byId(one.id()).heldVersion(),"the same again is no change");
         saved.restoreHeld(Map.of(one.id(),SavedSelections.Held.NONE));assertNull(saved.byId(one.id()).hiddenBounds());assertTrue(saved.byId(one.id()).heldVersion()>again);
     }
+    @Test void theTreeCanBeSavedAsSomeOfItsBuildObjectsWere(){
+        var saved=new SavedSelections();var one=saved.save(live(A));var two=saved.save(live(B));
+        var dormant=new PackedCells();dormant.put(C,"minecraft:stone");saved.setHeld(one.id(),dormant,PackedCells.EMPTY);
+        var ownThen=Map.of(one.id(),List.of(D));var heldThen=Map.of(one.id(),SavedSelections.Held.NONE);
+        var rows=saved.tree().saved(ownThen,heldThen);
+        var first=rows.stream().filter(r->r.id()==one.id()).findFirst().orElseThrow();var second=rows.stream().filter(r->r.id()==two.id()).findFirst().orElseThrow();
+        assertEquals(List.of(D),first.points());assertTrue(first.dormant().isEmpty());
+        assertEquals(List.of(B),second.points(),"the others are as they are");
+        assertEquals(List.of(A),saved.byId(one.id()).points(),"and the tree itself is not changed");assertEquals(1,saved.byId(one.id()).dormant().size());
+        assertEquals(saved.tree().saved().get(0).points(),saved.tree().saved(Map.of(),Map.of()).get(0).points());
+    }
 }

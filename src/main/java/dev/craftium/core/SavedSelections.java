@@ -89,7 +89,20 @@ public final class SavedSelections {
         /** The groups to write to disk, in order. */
         public List<SavedGroup> savedGroups(){var out=new ArrayList<SavedGroup>();for(var g:groups)out.add(new SavedGroup(g.id,g.guid,g.name,g.folded));return out;}
         /** Everything to write to disk, in tree order. */
-        public List<Saved> saved(){var out=new ArrayList<Saved>();for(var e:entries)out.add(new Saved(e.id,e.guid,e.name,e.parentId(),e.color,e.points,e.ownGroupId(),e.folded,e.dormant,e.replaced));return out;}
+        public List<Saved> saved(){return saved(Map.of(),Map.of());}
+        /**
+         * As {@link #saved()}, with the blocks (and what is kept hidden) of some BuildObjects as they were, by id. What is written to disk while an edit that moved them is still
+         * waiting for confirmation or being applied: the world has not changed yet, so what is saved has to agree with the world, or a crash leaves a BuildObject that does not
+         * match its blocks, with the blocks it kept hidden gone (they are in no other place).
+         */
+        public List<Saved> saved(Map<Integer,List<Point>> own,Map<Integer,Held> held){
+            var out=new ArrayList<Saved>();
+            for(var e:entries){
+                var then=held.get(e.id);
+                out.add(new Saved(e.id,e.guid,e.name,e.parentId(),e.color,own.getOrDefault(e.id,e.points),e.ownGroupId(),e.folded,then!=null?then.dormant():e.dormant,then!=null?then.replaced():e.replaced));
+            }
+            return out;
+        }
         /** How many cells all the BuildObjects of a tree may hold between them, dormant and replaced: the memory guard (about 10 bytes a cell). */
         public static final int HELD_LIMIT=8_388_608;
         /** The cells every BuildObject holds, dormant and replaced. */
