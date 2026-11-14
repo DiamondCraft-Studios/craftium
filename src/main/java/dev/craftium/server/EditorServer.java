@@ -242,10 +242,10 @@ public final class EditorServer {
         for (var s : SESSIONS.values()) {
             if (s.saved.tree() != tree || s.pendingEdit == null)
                 continue; // waiting for Enter or Esc: the world has not changed
-            if (s.pendingObjectsBefore != null)
-                for (var e : s.pendingObjectsBefore.entrySet()) own.putIfAbsent(e.getKey(), e.getValue());
-            if (s.pendingHeldBefore != null)
-                for (var e : s.pendingHeldBefore.entrySet()) held.putIfAbsent(e.getKey(), e.getValue());
+            var changedOwn = ownChangedBy(s.pendingEdit);
+            if (changedOwn != null) for (var e : changedOwn.entrySet()) own.putIfAbsent(e.getKey(), e.getValue());
+            var changedHeld = heldChangedBy(s.pendingEdit);
+            if (changedHeld != null) for (var e : changedHeld.entrySet()) held.putIfAbsent(e.getKey(), e.getValue());
         }
         var j = job;
         if (j != null
@@ -510,8 +510,8 @@ public final class EditorServer {
                     send(player, s, "Nothing to confirm", false);
                     return;
                 }
-                var ownBefore = s.pendingObjectsBefore;
-                var heldBefore = s.pendingHeldBefore;
+                var ownBefore = ownChangedBy(edit);
+                var heldBefore = heldChangedBy(edit);
                 var selectionBefore = s.pendingSelectionBefore;
                 s.pendingEdit = null;
                 s.pendingSelectionBefore = null;
@@ -552,21 +552,19 @@ public final class EditorServer {
                 if (s.pendingEdit != null && s.pendingEdit == s.layoutFor)
                     return; // a jigsaw preview stays until it is built or cancelled in the planner
                 if (s.pendingEdit != null) {
+                    var changedOwn = ownChangedBy(s.pendingEdit);
+                    var changedHeld = heldChangedBy(
+                            s.pendingEdit); // only what the waiting edit changed: the rest may have been changed by
+                    // someone else since
                     s.pendingEdit = null;
                     s.pendingDirty = true;
                     if (s.pendingSelectionBefore != null) {
                         s.selection.restore(s.pendingSelectionBefore);
                         s.pendingSelectionBefore = null;
                     }
-                    if (s.pendingObjectsBefore != null) {
-                        s.saved.setPoints(s.pendingObjectsBefore);
-                        s.pendingObjectsBefore = null;
-                    }
-                    if (s.pendingHeldBefore != null) {
-                        s.saved.restoreHeld(s.pendingHeldBefore);
-                        s.pendingHeldBefore = null;
-                    }
-                    BuildObjectStore.flushSoon();
+                    s.pendingObjectsBefore = null;
+                    s.pendingHeldBefore = null;
+                    giveBack(s, null, changedOwn, changedHeld);
                     send(player, s, "Edit cancelled", false);
                 }
                 return;
@@ -2585,8 +2583,8 @@ public final class EditorServer {
             send(player, s, "Nothing to confirm", false);
             return;
         }
-        var ownBefore = s.pendingObjectsBefore;
-        var heldBefore = s.pendingHeldBefore;
+        var ownBefore = ownChangedBy(edit);
+        var heldBefore = heldChangedBy(edit);
         var selectionBefore = s.pendingSelectionBefore;
         s.pendingEdit = null;
         s.pendingSelectionBefore = null;
@@ -2620,7 +2618,11 @@ public final class EditorServer {
      */
     private static void abandonPending(Session s, boolean selection) {
         if (s.pendingEdit != null)
-            giveBack(s, selection ? s.pendingSelectionBefore : null, s.pendingObjectsBefore, s.pendingHeldBefore);
+            giveBack(
+                    s,
+                    selection ? s.pendingSelectionBefore : null,
+                    ownChangedBy(s.pendingEdit),
+                    heldChangedBy(s.pendingEdit));
         s.pendingEdit = null;
         s.pendingSelectionBefore = null;
         s.pendingObjectsBefore = null;
@@ -2628,6 +2630,19 @@ public final class EditorServer {
         s.pendingChain = null;
         s.pendingChainBase = s.pendingChainEdit = null;
         s.pendingDirty = true;
+    }
+    /**
+     * The BuildObjects an edit changed, as they were before it, and only those. A waiting edit gives back no more than that: the BuildObjects are shared by everyone in the
+     * world, and a snapshot of all of them would undo what someone else did to the others in the meantime. Null for none.
+     */
+    private static Map<Integer, List<Point>> ownChangedBy(Session.Edit edit) {
+        var change = edit == null ? null : edit.selection();
+        return change == null || !change.hasObjects() ? null : change.objectsBefore();
+    }
+    /** What the BuildObjects an edit changed kept hidden before it; see {@link #ownChangedBy}. */
+    private static Map<Integer, SavedSelections.Held> heldChangedBy(Session.Edit edit) {
+        var change = edit == null ? null : edit.selection();
+        return change == null || !change.hasHeld() ? null : change.heldBefore();
     }
     /** Puts back the selection and the BuildObjects as they were; any of them may be null for none. */
     private static void giveBack(
