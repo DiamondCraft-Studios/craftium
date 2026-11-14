@@ -111,7 +111,7 @@ public final class EditorServer {
         s.busy=true;job=new Job(player.getUUID(),player.level(),s,edit,backwards,history,new int[]{0},new ArrayList<>(),stroke,load,byChunk(edit.changes()),record);
     }
     /** Ends the running edit and lets its chunks go. */
-    private static void endJob(){job=null;jobLease.close();jobLease=ChunkLease.NONE;}
+    private static void endJob(){job=null;jobLease.close();jobLease=ChunkLease.NONE;BuildObjectStore.flushSoon();} // what is saved of the BuildObjects can now be what they are
     public static void clear() { SESSIONS.clear();AI_SESSIONS.clear();job=null;AnnotationEdits.clear();AnimatedRebuild.clear();ChunkLease.releaseAll();jobLease=ChunkLease.NONE; }
     /** Gives the player back the game mode the editor replaced, if it still has one to give back. */
     private static void restoreMode(ServerPlayer player,Session s){
@@ -122,13 +122,31 @@ public final class EditorServer {
     }
     public static void disconnect(ServerPlayer player){var s=SESSIONS.get(player.getUUID());if(s!=null)restoreMode(player,s);disconnect(player.getUUID());refreshShared(player.level().getServer());}
     public static void disconnect(UUID id) {var session=SESSIONS.get(id);if(session!=null)HistoryStore.save(session);if(AnimatedRebuild.owned(id)){AnimatedRebuild.cancel(id);return;}if(job==null || !job.owner.equals(id)){SESSIONS.remove(id);AI_SESSIONS.keySet().removeIf(key->key.owner().equals(id));}}
+    /**
+     * What edits that have not finished have done to the BuildObjects, as it was before them (see {@link BuildObjectStore.InFlight}): an edit waiting for Enter has already
+     * moved the BuildObjects with its preview, and one being applied has not yet finished moving the blocks, while the world is as it was. Server thread only.
+     */
+    static void collectInFlight(SavedSelections.Tree tree,Map<Integer,List<Point>> own,Map<Integer,SavedSelections.Held> held){
+        for(var s:SESSIONS.values()){
+            if(s.saved.tree()!=tree||s.pendingEdit==null)continue; // waiting for Enter or Esc: the world has not changed
+            if(s.pendingObjectsBefore!=null)for(var e:s.pendingObjectsBefore.entrySet())own.putIfAbsent(e.getKey(),e.getValue());
+            if(s.pendingHeldBefore!=null)for(var e:s.pendingHeldBefore.entrySet())held.putIfAbsent(e.getKey(),e.getValue());
+        }
+        var j=job;
+        if(j!=null&&j.session.saved.tree()==tree&&j.edit.selection()!=null){ // being applied: undoing it goes back to where it ended, applying or redoing it to where it began
+            var change=j.edit.selection();
+            var ownThen=j.backwards?change.objectsAfter():change.objectsBefore();var heldThen=j.backwards?change.heldAfter():change.heldBefore();
+            for(var e:ownThen.entrySet())own.putIfAbsent(e.getKey(),e.getValue());
+            for(var e:heldThen.entrySet())held.putIfAbsent(e.getKey(),e.getValue());
+        }
+    }
     public static void flushHistory(MinecraftServer server){
         AnimatedRebuild.finishOnStop(server);
         // Players are saved as the server stops, before they are disconnected, so a player still in the editor would be saved as a spectator.
         for(var entry:SESSIONS.entrySet()){var player=server.getPlayerList().getPlayer(entry.getKey());if(player!=null)restoreMode(player,entry.getValue());}
+        BuildObjectStore.shutdown(); // first: while an edit is still waiting or being applied, they are written as they were before it, which is what the world is
         if(job!=null){var j=job;rememberInterrupted(j);j.session.busy=false;endJob();}
         for(var session:SESSIONS.values())HistoryStore.save(session);try{HistoryStore.flush();}catch(java.util.concurrent.CompletionException e){ServerPlatform.LOG.error("Could not finish writing editor history during shutdown",e);}
-        BuildObjectStore.shutdown();
     }
     private static void rememberInterrupted(Job j){rememberInterrupted(j.session,j.edit,j.applied,j.backwards,j.history);}
     static void rememberInterrupted(Session session,Session.Edit edit,List<Session.Change> applied,boolean backwards,boolean history){
@@ -244,6 +262,7 @@ public final class EditorServer {
                     if(s.pendingSelectionBefore!=null){s.selection.restore(s.pendingSelectionBefore);s.pendingSelectionBefore=null;}
                     if(s.pendingObjectsBefore!=null){s.saved.setPoints(s.pendingObjectsBefore);s.pendingObjectsBefore=null;}
                     if(s.pendingHeldBefore!=null){s.saved.restoreHeld(s.pendingHeldBefore);s.pendingHeldBefore=null;}
+                    BuildObjectStore.flushSoon();
                     send(player,s,"Edit cancelled",false);
                 }
                 return;

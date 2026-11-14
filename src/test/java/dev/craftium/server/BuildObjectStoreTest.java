@@ -87,4 +87,42 @@ class BuildObjectStoreTest {
         var back=new SavedSelections(BuildObjectStore.load(file));
         assertTrue(back.byId(a.id()).folded());assertFalse(back.byId(b.id()).folded());assertTrue(back.groups().getFirst().folded());
     }
+    /** A BuildObject that a move has taken up out of the ground: it holds the blocks above, and what it kept hidden has gone up with it. */
+    private static SavedSelections movedUp(SavedSelections.Entry[] house){
+        var saved=new SavedSelections();house[0]=saved.save(live(A,B));
+        var hidden=new PackedCells();hidden.put(C,"minecraft:stone");
+        saved.setHeld(house[0].id(),hidden,PackedCells.EMPTY);
+        return saved;
+    }
+    @Test void whileAnEditIsWaitingForEnterTheBuildObjectsAreWrittenAsTheyWereBeforeIt(@TempDir Path dir) throws Exception {
+        var house=new SavedSelections.Entry[1];var saved=movedUp(house);
+        var before=saved.snapshot();var heldBefore=saved.heldSnapshot();
+        // the preview of the move: the blocks are up above, and what was hidden is no longer hidden, though the world has not changed
+        saved.setPoints(Map.of(house[0].id(),List.of(new Point(0,50,0),new Point(1,50,0),new Point(2,50,0))));
+        saved.setHeld(house[0].id(),PackedCells.EMPTY,PackedCells.EMPTY);
+        var file=dir.resolve("a/waiting.nbt");BuildObjectStore.track(file,saved.tree());
+        var was=BuildObjectStore.inFlight;
+        try{
+            BuildObjectStore.inFlight=(tree,own,held)->{if(tree==saved.tree()){own.putAll(before);held.putAll(heldBefore);}};
+            BuildObjectStore.shutdown(); // the game ends with the edit still waiting
+        }finally{BuildObjectStore.inFlight=was;}
+        var back=new SavedSelections(BuildObjectStore.load(file)).byId(house[0].id());
+        assertEquals(List.of(A,B),back.points(),"it is still where its blocks are");
+        assertEquals("minecraft:stone",back.dormant().get(C),"and what it kept hidden is still kept, not lost");
+    }
+    @Test void onceNothingIsWaitingTheBuildObjectsAreWrittenAsTheyAre(@TempDir Path dir) throws Exception {
+        var house=new SavedSelections.Entry[1];var saved=movedUp(house);
+        var before=saved.snapshot();var heldBefore=saved.heldSnapshot();
+        saved.setPoints(Map.of(house[0].id(),List.of(new Point(0,50,0))));saved.setHeld(house[0].id(),PackedCells.EMPTY,PackedCells.EMPTY);
+        var file=dir.resolve("a/applied.nbt");BuildObjectStore.track(file,saved.tree());
+        var was=BuildObjectStore.inFlight;
+        try{
+            BuildObjectStore.inFlight=(tree,own,held)->{own.putAll(before);held.putAll(heldBefore);};
+            BuildObjectStore.saveChanged(); // written while the edit is waiting
+            BuildObjectStore.inFlight=(tree,own,held)->{};
+            BuildObjectStore.shutdown(); // the edit was applied; the BuildObjects did not change since, but what is on disk is the older state
+        }finally{BuildObjectStore.inFlight=was;}
+        var back=new SavedSelections(BuildObjectStore.load(file)).byId(house[0].id());
+        assertEquals(List.of(new Point(0,50,0)),back.points());assertTrue(back.dormant().isEmpty());
+    }
 }

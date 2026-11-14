@@ -18,8 +18,20 @@ import java.util.concurrent.*;
 final class BuildObjectStore {
     /** How often, in ticks, a tree that changed is written: 5 seconds. A tree is also written when the server stops. */
     private static final int WRITE_EVERY=100;
-    private static final class Slot{final Path file;final SavedSelections.Tree tree;long written;Slot(Path file,SavedSelections.Tree tree,long written){this.file=file;this.tree=tree;this.written=written;}}
+    static final class Slot{final Path file;final SavedSelections.Tree tree;long written;boolean overlaid;Slot(Path file,SavedSelections.Tree tree,long written){this.file=file;this.tree=tree;this.written=written;}}
     private static final Map<Path,Slot> SLOTS=new HashMap<>();
+    /**
+     * What an edit that has not finished (one waiting for Enter, or being applied over several ticks) has already done to the BuildObjects, as it was before it. The world is
+     * unchanged until the edit is applied, so this is what gets written meanwhile: the BuildObjects then agree with the world however the game ends. Fills {@code own} (the
+     * blocks of each BuildObject) and {@code held} (what it keeps hidden) for the BuildObjects of {@code tree}.
+     */
+    interface InFlight{void collect(SavedSelections.Tree tree,Map<Integer,List<Point>> own,Map<Integer,SavedSelections.Held> held);}
+    static InFlight inFlight=EditorServer::collectInFlight;
+    private static volatile boolean flushNow;
+    /** Writes what changed at the next tick instead of at the next turn of the five seconds: an edit has just been applied or cancelled, and what is on disk is the older state. */
+    static void flushSoon(){flushNow=true;}
+    /** Starts keeping a tree for a file (what {@link #attach} does for a player's dimension). */
+    static Slot track(Path file,SavedSelections.Tree tree){var slot=new Slot(file,tree,-1);SLOTS.put(file,slot);return slot;}
     private static final ExecutorService IO=Executors.newSingleThreadExecutor(r->{var thread=new Thread(r,"Craftium BuildObject writer");thread.setDaemon(true);return thread;});
     private static CompletableFuture<Void> pending=CompletableFuture.completedFuture(null);
     private static int ticks;
@@ -37,14 +49,18 @@ final class BuildObjectStore {
 
     /** Writes what changed, now and then. */
     static void tick(MinecraftServer server){
+        if(flushNow){flushNow=false;saveChanged();return;}
         if(++ticks%WRITE_EVERY!=0)return;
         saveChanged();
     }
-    private static void saveChanged(){
+    static void saveChanged(){
         for(var slot:SLOTS.values()){
-            if(slot.tree.mutations()==slot.written)continue;
-            slot.written=slot.tree.mutations();
-            var rows=slot.tree.saved();var groups=slot.tree.savedGroups();int nextId=slot.tree.nextId(),nextGroupId=slot.tree.nextGroupId();Path file=slot.file;
+            var own=new HashMap<Integer,List<Point>>();var held=new HashMap<Integer,SavedSelections.Held>();
+            if(inFlight!=null)inFlight.collect(slot.tree,own,held);
+            boolean overlaid=!own.isEmpty()||!held.isEmpty();
+            if(slot.tree.mutations()==slot.written&&overlaid==slot.overlaid)continue; // nothing changed, and it is not the end of an edit that was being kept out of it
+            slot.written=slot.tree.mutations();slot.overlaid=overlaid;
+            var rows=slot.tree.saved(own,held);var groups=slot.tree.savedGroups();int nextId=slot.tree.nextId(),nextGroupId=slot.tree.nextGroupId();Path file=slot.file;
             synchronized(BuildObjectStore.class){pending=pending.handle((v,e)->null).thenRunAsync(()->write(file,nextId,rows,nextGroupId,groups),IO);}
         }
     }
