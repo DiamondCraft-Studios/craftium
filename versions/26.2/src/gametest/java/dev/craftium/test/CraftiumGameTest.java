@@ -37,6 +37,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             if("missingblocks".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.MissingBlocksGameTest.run(ctx,world);return;}
             if("savedselections".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.SavedSelectionsGameTest.run(ctx,world);return;}
             if("buildobjectcrash".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.BuildObjectCrashGameTest.run(ctx,world);return;}
+            if("buildobjectorder".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.BuildObjectOrderUndoGameTest.run(ctx,world);return;}
             if("selectionperf".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.SelectionDrawCostGameTest.run(ctx,world);return;}
             if("structures".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.StructureGameTest.run(ctx,world);return;}
             if("viewport".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))){dev.craftium.client.ViewportGameTest.run(ctx,world);return;}
