@@ -45,6 +45,8 @@ All of it is one list: each group in turn, each top-level BuildObject followed b
 - **Clients** get dormant positions for the x-ray, not states.
 - **Safeguards:** up to `Selection.LIMIT` dormant and as many replaced cells per object, and 8,388,608 held cells per dimension (`Tree.HELD_LIMIT`, about 80 MB at most). Held server-side only (not copied into each player's session). Undo entries that store dormant changes in the same packed form are still to do.
 
+**Crash safety.** A move or transform changes the BuildObjects when it is staged (the preview), but the world only when it is applied, and a hidden block exists nowhere but in the saved record. So while an edit is waiting for Enter or being applied, the record is written as it was *before* the edit (`BuildObjectStore.InFlight`, filled from the pending edit and the running job), which is what the world still is; it is written again at the next tick once the edit is applied or cancelled, and at a clean stop it is written before an interrupted job ends. A crash between a confirmation and the next write can leave stale cells on a BuildObject whose blocks have moved (a copy of the hidden blocks at the old place), never a BuildObject with its hidden blocks gone.
+
 Estimates, not measurements. A typical partly overlapping object has thousands of dormant cells (tens of KB). The worst case, an object of `Selection.LIMIT` (2,097,152) cells buried in terrain, is about 20 MB. Today's `List<Point>` already costs roughly 36 bytes a cell, so a packed `long[]` for an object's own cells would be a separate saving.
 
 ## Phases
