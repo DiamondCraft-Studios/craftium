@@ -777,6 +777,10 @@ public final class SavedSelections {
      * {@code origin} (the corner the clipboard was copied from), so they can be made again wherever the copy is put down.
      */
     public List<Copy> captureCopy(Point origin) {
+        return captureCopy(origin, false);
+    }
+    /** As above; with {@code withHidden} each one's hidden blocks are remembered as part of its blocks, to be placed (or kept hidden again) wherever the copy is put down. */
+    public List<Copy> captureCopy(Point origin, boolean withHidden) {
         var roots = entries.stream()
                 .filter(e -> viewed.contains(e) && viewed.stream().noneMatch(o -> o != e && isUnder(e, o)))
                 .toList();
@@ -786,6 +790,8 @@ public final class SavedSelections {
             for (var e : subtree(r)) {
                 var relative = new ArrayList<Point>(e.points.size());
                 for (var p : e.points) relative.add(p.subtract(origin));
+                if (withHidden)
+                    for (var p : e.dormant.points()) if (!e.points.contains(p)) relative.add(p.subtract(origin));
                 index.put(e, out.size());
                 out.add(new Copy(e.name, e == r ? -1 : index.get(e.parent), e.color, List.copyOf(relative)));
             }

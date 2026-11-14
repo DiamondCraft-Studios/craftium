@@ -1136,4 +1136,23 @@ class SavedSelectionsTest {
                 saved.tree().saved().get(0).points(),
                 saved.tree().saved(Map.of(), Map.of()).get(0).points());
     }
+
+    @Test
+    void aCopyCanRememberWhatABuildObjectKeepsHiddenAsPartOfIt() {
+        var saved = new SavedSelections();
+        var one = saved.save(live(A));
+        var dormant = new PackedCells();
+        dormant.put(C, "minecraft:stone");
+        saved.setHeld(one.id(), dormant, PackedCells.EMPTY);
+        saved.view(one.id(), live(A));
+        var plain = saved.captureCopy(ORIGIN);
+        var whole = saved.captureCopy(ORIGIN, true);
+        assertEquals(1, plain.get(0).relative().size(), "only what is in the world, as before");
+        assertEquals(
+                new HashSet<>(List.of(A.subtract(ORIGIN), C.subtract(ORIGIN))),
+                new HashSet<>(whole.get(0).relative()),
+                "and with what it keeps hidden");
+        var made = saved.createCopies(whole, ORIGIN, new HashSet<>(List.of(A, C)), 0);
+        assertEquals(2, made.get(0).size(), "the copy holds both, to be placed or kept hidden where it is put down");
+    }
 }
