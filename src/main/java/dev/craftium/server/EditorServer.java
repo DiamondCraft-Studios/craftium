@@ -121,7 +121,7 @@ public final class EditorServer {
         if(player.isCreative()){player.getAbilities().flying=true;player.onUpdateAbilities();}
     }
     public static void disconnect(ServerPlayer player){var s=SESSIONS.get(player.getUUID());if(s!=null)restoreMode(player,s);disconnect(player.getUUID());refreshShared(player.level().getServer());}
-    public static void disconnect(UUID id) {var session=SESSIONS.get(id);if(session!=null)HistoryStore.save(session);if(AnimatedRebuild.owned(id)){AnimatedRebuild.cancel(id);return;}if(job==null || !job.owner.equals(id)){SESSIONS.remove(id);AI_SESSIONS.keySet().removeIf(key->key.owner().equals(id));}}
+    public static void disconnect(UUID id) {var session=SESSIONS.get(id);if(session!=null){abandonPending(session,false);HistoryStore.save(session);}if(AnimatedRebuild.owned(id)){AnimatedRebuild.cancel(id);return;}if(job==null || !job.owner.equals(id)){SESSIONS.remove(id);AI_SESSIONS.keySet().removeIf(key->key.owner().equals(id));}}
     /**
      * What edits that have not finished have done to the BuildObjects, as it was before them (see {@link BuildObjectStore.InFlight}): an edit waiting for Enter has already
      * moved the BuildObjects with its preview, and one being applied has not yet finished moving the blocks, while the world is as it was. Server thread only.
@@ -248,12 +248,20 @@ public final class EditorServer {
             if(r.action().equals("pending_confirm")){
                 var edit=s.pendingEdit;
                 if(edit==null){send(player,s,"Nothing to confirm",false);return;}
-                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingHeldBefore=null;s.pendingDirty=true;start(player,s,edit);return;
+                var ownBefore=s.pendingObjectsBefore;var heldBefore=s.pendingHeldBefore;var selectionBefore=s.pendingSelectionBefore;
+                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingHeldBefore=null;s.pendingDirty=true;
+                try{start(player,s,edit);}
+                catch(RuntimeException ex){giveBack(s,selectionBefore,ownBefore,heldBefore);throw ex;} // refused (a permission, another edit applying): the world is as it was, so the BuildObjects and the selection are too
+                return;
             }
             if(r.action().equals("stroke_end")){ // a Sculpt stroke was released: build what it staged, with nothing said when it staged nothing
                 var edit=s.pendingEdit;
                 if(edit==null)return;
-                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingHeldBefore=null;s.pendingDirty=true;start(player,s,edit);return;
+                var ownBefore=s.pendingObjectsBefore;var heldBefore=s.pendingHeldBefore;var selectionBefore=s.pendingSelectionBefore;
+                s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingHeldBefore=null;s.pendingDirty=true;
+                try{start(player,s,edit);}
+                catch(RuntimeException ex){giveBack(s,selectionBefore,ownBefore,heldBefore);throw ex;} // refused (a permission, another edit applying): the world is as it was, so the BuildObjects are too
+                return;
             }
             if(r.action().equals("pending_cancel")){
                 if(s.pendingEdit!=null&&s.pendingEdit==s.layoutFor)return; // a jigsaw preview stays until it is built or cancelled in the planner
@@ -268,6 +276,7 @@ public final class EditorServer {
                 return;
             }
             if(r.action().equals("editor_reset")){ // the way out of a stuck editor: forgets whatever is half done, but never an edit being applied
+                abandonPending(s,false); // what a waiting edit did to the BuildObjects goes back with it
                 s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingHeldBefore=null;s.pendingChain=null;s.pendingChainBase=s.pendingChainEdit=null;s.pendingDirty=true;s.selectionBefore=null;s.queued.clear();
                 s.selection.clear();s.corner=s.ruler=s.line=null;s.selectedEntity=null;s.historyRemaining=0;s.pulse="";
                 if((job==null||!job.owner.equals(player.getUUID()))&&!AnimatedRebuild.owned(player.getUUID()))s.busy=false;
@@ -1157,16 +1166,35 @@ public final class EditorServer {
     static void applyPreview(ServerPlayer player){
         var s=playerSession(player);var edit=s.pendingEdit;
         if(edit==null){send(player,s,"Nothing to confirm",false);return;}
-        s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingDirty=true;
+        var ownBefore=s.pendingObjectsBefore;var heldBefore=s.pendingHeldBefore;var selectionBefore=s.pendingSelectionBefore;
+        s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingHeldBefore=null;s.pendingDirty=true; // nothing is left of it for the next edit to start from
         s.bypassConfirm=true; // confirming is the confirmation, so the edit is built and not held again
-        try{start(player,s,edit);}finally{s.bypassConfirm=false;}
+        try{start(player,s,edit);}
+        catch(RuntimeException ex){giveBack(s,selectionBefore,ownBefore,heldBefore);throw ex;}
+        finally{s.bypassConfirm=false;}
     }
-    /** Drops the waiting preview, as the Escape key does. */
+    /** Drops the waiting preview, as the Escape key does: the selection and the BuildObjects go back to what they were, as the world is. */
     static void cancelPreview(ServerPlayer player){
         var s=playerSession(player);
         if(s.pendingEdit==null){send(player,s,"Nothing to cancel",false);return;}
-        s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingDirty=true;
+        abandonPending(s,true);
         send(player,s,"Edit cancelled",false);
+    }
+    /**
+     * Gives back what a waiting edit had already done: its preview moves the BuildObjects (and the selection) at once, but the world only when it is applied, so an edit that is
+     * dropped without being applied must not leave them moved. For every way a waiting edit can end without being built: Escape, the editor's reset, the player leaving.
+     * With {@code selection} the selection goes back too.
+     */
+    private static void abandonPending(Session s,boolean selection){
+        if(s.pendingEdit!=null)giveBack(s,selection?s.pendingSelectionBefore:null,s.pendingObjectsBefore,s.pendingHeldBefore);
+        s.pendingEdit=null;s.pendingSelectionBefore=null;s.pendingObjectsBefore=null;s.pendingHeldBefore=null;s.pendingChain=null;s.pendingChainBase=s.pendingChainEdit=null;s.pendingDirty=true;
+    }
+    /** Puts back the selection and the BuildObjects as they were; any of them may be null for none. */
+    private static void giveBack(Session s,List<Point> selection,Map<Integer,List<Point>> own,Map<Integer,SavedSelections.Held> held){
+        if(selection!=null)s.selection.restore(selection);
+        if(own!=null)s.saved.setPoints(own);
+        if(held!=null)s.saved.restoreHeld(held);
+        BuildObjectStore.flushSoon();
     }
     private static void stage(ServerPlayer player,Session s,Session.Edit edit){
         s.pendingEdit=s.pendingEdit==null?edit:merge(s.pendingEdit,edit);s.pendingDirty=true;
