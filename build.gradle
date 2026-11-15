@@ -4,4 +4,19 @@ plugins {
     id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
     id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
     id 'io.papermc.paperweight.userdev' version '2.0.0-beta.24' apply false
+    id 'com.diffplug.spotless' version '8.0.0'
+}
+
+repositories {
+    mavenCentral()
+}
+
+// Formatting is done by Spotless, never by hand: run `./gradlew spotlessApply` before committing.
+// CI runs spotlessCheck. Palantir's formatter wraps at 120 columns.
+spotless {
+    java {
+        target 'src/**/*.java', 'server-plugin/src/**/*.java', 'versions/*/src/**/*.java', 'versions/*/server-plugin/src/**/*.java'
+        targetExclude 'src/main/java/dev/craftium/vendor/**'
+        palantirJavaFormat()
+    }
 }
