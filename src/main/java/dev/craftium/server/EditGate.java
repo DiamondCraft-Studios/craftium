@@ -24,16 +24,23 @@ final class EditGate {
     /** An edit has to fit in the history, which is what lets it be undone. */
     static void checkHistory(long bytes) {
         if (bytes > Selection.HISTORY_BYTES)
-            throw new IllegalArgumentException("Edit exceeds the " + Selection.HISTORY_BYTES / 1024 / 1024 + " MiB history budget; use a smaller region");
+            throw new IllegalArgumentException("Edit exceeds the " + Selection.HISTORY_BYTES / 1024 / 1024
+                    + " MiB history budget; use a smaller region");
     }
 
     /** The most blocks one edit of a plan from outside the planner may change: the player's block limit, never past the largest selection. */
-    static int limit(Options options) { return Math.clamp(options.blockLimit, 1, Selection.LIMIT); }
+    static int limit(Options options) {
+        return Math.clamp(options.blockLimit, 1, Selection.LIMIT);
+    }
 
     /** Holds a plan that was not made by the planner to the block limit. */
-    static void checkLimit(Session.Edit edit, int limit) { checkLimit(edit.changes().size(), limit); }
+    static void checkLimit(Session.Edit edit, int limit) {
+        checkLimit(edit.changes().size(), limit);
+    }
 
     static void checkLimit(int blocks, int limit) {
-        if (blocks > limit) throw new IllegalArgumentException("The plan changes " + blocks + " blocks, past the block limit of " + limit);
+        if (blocks > limit)
+            throw new IllegalArgumentException(
+                    "The plan changes " + blocks + " blocks, past the block limit of " + limit);
     }
 }

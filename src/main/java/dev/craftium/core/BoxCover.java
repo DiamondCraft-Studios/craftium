@@ -10,7 +10,9 @@ import java.util.*;
 public final class BoxCover {
     /** A box of cells of one kind, in grid coordinates, both corners inclusive. */
     public record Box(int x0, int y0, int z0, int x1, int y1, int z1, int id) {
-        public long volume() { return (long) (x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1); }
+        public long volume() {
+            return (long) (x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1);
+        }
     }
 
     private BoxCover() {}
@@ -20,7 +22,8 @@ public final class BoxCover {
      * @return the boxes in reading order, or null when more than {@code maxBoxes} would be needed (noise, where boxes stop helping)
      */
     public static List<Box> cover(int[] ids, int sx, int sy, int sz, int maxBoxes) {
-        if ((long) sx * sy * sz != ids.length) throw new IllegalArgumentException("The cells do not fill a " + sx + " by " + sy + " by " + sz + " grid");
+        if ((long) sx * sy * sz != ids.length)
+            throw new IllegalArgumentException("The cells do not fill a " + sx + " by " + sy + " by " + sz + " grid");
         var out = new ArrayList<Box>();
         var used = new BitSet(ids.length);
         for (int y = 0; y < sy; y++)

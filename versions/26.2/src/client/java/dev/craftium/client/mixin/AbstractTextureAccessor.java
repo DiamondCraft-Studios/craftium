@@ -8,5 +8,6 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 /** Lets {@code FontTextures} change how a texture is sampled. */
 @Mixin(AbstractTexture.class)
 public interface AbstractTextureAccessor {
-    @Accessor("sampler") void craftium$setSampler(GpuSampler sampler);
+    @Accessor("sampler")
+    void craftium$setSampler(GpuSampler sampler);
 }

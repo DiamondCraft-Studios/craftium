@@ -1,7 +1,6 @@
 package dev.craftium.server;
 
 import dev.craftium.core.Tool;
-
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -22,8 +21,12 @@ final class ToolBehaviours {
         BUILTIN.put(Tool.SHAPE, BuiltinTools.SHAPE);
     }
 
-    static ToolBehaviour of(Tool tool) { return BUILTIN.getOrDefault(tool, BuiltinTools.PLAIN); }
+    static ToolBehaviour of(Tool tool) {
+        return BUILTIN.getOrDefault(tool, BuiltinTools.PLAIN);
+    }
 
     /** Whether the tool has a behaviour of its own, apart from planning the way most tools do. */
-    static boolean hasOwn(Tool tool) { return BUILTIN.containsKey(tool); }
+    static boolean hasOwn(Tool tool) {
+        return BUILTIN.containsKey(tool);
+    }
 }

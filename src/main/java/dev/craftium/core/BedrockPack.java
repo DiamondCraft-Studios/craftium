@@ -23,6 +23,7 @@ public final class BedrockPack {
 
     /** The oldest game the pack asks for: 1.26.30. */
     public static final int[] MIN_ENGINE_VERSION = {1, 26, 30};
+
     public static final int[] PACK_VERSION = {1, 0, 0};
 
     private static JsonArray numbers(int[] values) {
@@ -61,14 +62,20 @@ public final class BedrockPack {
      * The pack as zip bytes: the manifest first, then every file by path in order. {@code uuids} makes the two ids (random in a real export, fixed in a test).
      * A path is relative to the root of the pack and uses {@code /}.
      */
-    public static byte[] zip(String name, String description, Map<String, byte[]> files, Supplier<UUID> uuids) throws IOException {
+    public static byte[] zip(String name, String description, Map<String, byte[]> files, Supplier<UUID> uuids)
+            throws IOException {
         var out = new ByteArrayOutputStream();
         var gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
         try (var zip = new ZipOutputStream(out, StandardCharsets.UTF_8)) {
-            add(zip, "manifest.json", gson.toJson(manifest(name, description, uuids.get(), uuids.get())).getBytes(StandardCharsets.UTF_8));
+            add(
+                    zip,
+                    "manifest.json",
+                    gson.toJson(manifest(name, description, uuids.get(), uuids.get()))
+                            .getBytes(StandardCharsets.UTF_8));
             for (var entry : new TreeMap<>(files).entrySet()) {
                 String path = entry.getKey();
-                if (path.startsWith("/") || path.contains("..") || path.contains("\\") || path.equals("manifest.json")) throw new IllegalArgumentException("Not a path inside the pack: " + path);
+                if (path.startsWith("/") || path.contains("..") || path.contains("\\") || path.equals("manifest.json"))
+                    throw new IllegalArgumentException("Not a path inside the pack: " + path);
                 add(zip, path, entry.getValue());
             }
         }
@@ -91,15 +98,20 @@ public final class BedrockPack {
     public static String defaultName(String pool) {
         String id = pool == null ? "" : pool.strip();
         int colon = id.indexOf(':');
-        String namespace = colon < 0 ? "craftium" : id.substring(0, colon), path = colon < 0 ? id : id.substring(colon + 1);
-        String base = path.contains("/") ? path.substring(0, path.indexOf('/')) : namespace.equals("craftium") || namespace.equals("minecraft") ? path : namespace;
+        String namespace = colon < 0 ? "craftium" : id.substring(0, colon),
+                path = colon < 0 ? id : id.substring(colon + 1);
+        String base = path.contains("/")
+                ? path.substring(0, path.indexOf('/'))
+                : namespace.equals("craftium") || namespace.equals("minecraft") ? path : namespace;
         String words = base.replace('_', ' ').replace('-', ' ').strip();
         return words.isEmpty() ? "Craftium pack" : Character.toUpperCase(words.charAt(0)) + words.substring(1);
     }
 
     /** The name of the {@code .mcpack} file for a pack called {@code name}: letters, digits, spaces, dots, dashes and underscores only. */
     public static String fileName(String name) {
-        String cleaned = name == null ? "" : name.replaceAll("[^A-Za-z0-9 ._-]+", "_").strip().replaceAll("^[._]+|[. ]+$", "");
+        String cleaned = name == null
+                ? ""
+                : name.replaceAll("[^A-Za-z0-9 ._-]+", "_").strip().replaceAll("^[._]+|[. ]+$", "");
         if (cleaned.length() > 60) cleaned = cleaned.substring(0, 60).strip();
         return (cleaned.isEmpty() ? "craftium_pack" : cleaned) + ".mcpack";
     }

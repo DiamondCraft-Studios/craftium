@@ -19,7 +19,8 @@ class ShowcaseSkillExamplesTest {
         return null;
     }
 
-    @Test void everyExampleBatchInTheSkillIsAcceptedByThePlanner() throws Exception {
+    @Test
+    void everyExampleBatchInTheSkillIsAcceptedByThePlanner() throws Exception {
         Path file = reference();
         assumeTrue(file != null, "the skill is not in this checkout");
         var blocks = Pattern.compile("```json\\s*(.*?)```", Pattern.DOTALL).matcher(Files.readString(file));
@@ -28,22 +29,38 @@ class ShowcaseSkillExamplesTest {
             String json = blocks.group(1);
             if (!json.contains("\"rooms\"")) continue;
             var saved = new ShowcasePlan.Selections() {
-                @Override public Point[] find(String name) { return new Point[]{new Point(0, 64, 0), new Point(9, 70, 9)}; }
-                @Override public java.util.List<String> names() { return java.util.List.of(); }
+                @Override
+                public Point[] find(String name) {
+                    return new Point[] {new Point(0, 64, 0), new Point(9, 70, 9)};
+                }
+
+                @Override
+                public java.util.List<String> names() {
+                    return java.util.List.of();
+                }
             };
-            var plan = ShowcasePlan.parse(ShowcasePlan.resolveSelections(JsonParser.parseString(json).getAsJsonObject(), saved), "20261110-120000");
+            var plan = ShowcasePlan.parse(
+                    ShowcasePlan.resolveSelections(JsonParser.parseString(json).getAsJsonObject(), saved),
+                    "20261110-120000");
             assertFalse(plan.entries().isEmpty());
             checked++;
         }
         assertEquals(4, checked, "castle, saved selections, retake and 4K examples");
     }
 
-    @Test void theInteriorCameraExampleIsAValidShot() throws Exception {
+    @Test
+    void theInteriorCameraExampleIsAValidShot() throws Exception {
         Path file = reference();
         assumeTrue(file != null, "the skill is not in this checkout");
-        var m = Pattern.compile("```json\\s*(\\{\"name\": \"altar\".*?)```", Pattern.DOTALL).matcher(Files.readString(file));
+        var m = Pattern.compile("```json\\s*(\\{\"name\": \"altar\".*?)```", Pattern.DOTALL)
+                .matcher(Files.readString(file));
         assertTrue(m.find());
-        var plan = ShowcasePlan.parse(JsonParser.parseString("{\"rooms\":[{\"name\":\"hall\",\"from\":[100,70,40],\"to\":[120,82,60],\"shots\":[" + m.group(1) + "]}]}").getAsJsonObject(), "x");
+        var plan = ShowcasePlan.parse(
+                JsonParser.parseString(
+                                "{\"rooms\":[{\"name\":\"hall\",\"from\":[100,70,40],\"to\":[120,82,60],\"shots\":["
+                                        + m.group(1) + "]}]}")
+                        .getAsJsonObject(),
+                "x");
         assertEquals(85, plan.entries().get(0).spec().fov());
         assertNull(plan.entries().get(0).orbit(), "a placed camera is not re-aimed");
     }

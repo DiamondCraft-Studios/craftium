@@ -1,6 +1,15 @@
 package dev.craftium.server;
 
 import com.google.gson.*;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.zip.Deflater;
+import java.util.zip.DeflaterOutputStream;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
@@ -19,15 +28,6 @@ import net.minecraft.world.level.levelgen.structure.pools.SinglePoolElement;
 import net.minecraft.world.level.levelgen.structure.pools.StructurePoolElement;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.zip.Deflater;
-import java.util.zip.DeflaterOutputStream;
 
 /**
  * The pool editor's side of the server. A pool is edited as the JSON of its file, so anything the editor does not understand (a custom element type, an
@@ -39,9 +39,14 @@ import java.util.zip.DeflaterOutputStream;
 final class JigsawEditor {
     private JigsawEditor() {}
 
-    private static final Gson PRETTY = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+    private static final Gson PRETTY =
+            new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final String POOLS = "worldgen/template_pool/";
-    private static final int THUMBNAIL_VOLUME = 200_000, THUMBNAILS = 30, MAX_TEMPLATES = 80, TARGET_POOLS = 4, TARGET_THUMBNAILS = 16;
+    private static final int THUMBNAIL_VOLUME = 200_000,
+            THUMBNAILS = 30,
+            MAX_TEMPLATES = 80,
+            TARGET_POOLS = 4,
+            TARGET_THUMBNAILS = 16;
 
     /** The bytes a file had before a command changed it (null: it was not there), so the command can be undone. */
     private record Snap(Path file, byte[] bytes) {}
@@ -60,20 +65,27 @@ final class JigsawEditor {
         JsonArray usedBy;
         /** The pools whose elements the target boxes of the open connectors show and offer, as ids separated by commas: asked for by the editor, kept until it asks for others. */
         String targetPools = "";
+
         boolean usedByTruncated;
         final Deque<List<Snap>> undo = new ArrayDeque<>(), redo = new ArrayDeque<>();
     }
+
     private static final Map<UUID, Memory> MEMORY = new ConcurrentHashMap<>();
-    static Memory memory(ServerPlayer player) { return MEMORY.computeIfAbsent(player.getUUID(), id -> new Memory()); }
+
+    static Memory memory(ServerPlayer player) {
+        return MEMORY.computeIfAbsent(player.getUUID(), id -> new Memory());
+    }
 
     /** The files a command changes, written through here so that they can be taken back. */
     private static final class Edit {
         final List<Snap> snaps = new ArrayList<>();
+
         void write(Path file, byte[] data) throws IOException {
             snaps.add(new Snap(file, Files.exists(file) ? Files.readAllBytes(file) : null));
             Files.createDirectories(file.getParent());
             Files.write(file, data);
         }
+
         void delete(Path file) throws IOException {
             if (!Files.exists(file)) return;
             snaps.add(new Snap(file, Files.readAllBytes(file)));
@@ -87,19 +99,30 @@ final class JigsawEditor {
     static String act(ServerPlayer player, String json, String data) {
         var memory = memory(player);
         JsonObject command;
-        try { command = JsonParser.parseString(json.isBlank() ? "{\"op\":\"open\"}" : json).getAsJsonObject(); }
-        catch (RuntimeException e) { throw new IllegalArgumentException("The pool editor could not read that command"); }
+        try {
+            command = JsonParser.parseString(json.isBlank() ? "{\"op\":\"open\"}" : json)
+                    .getAsJsonObject();
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("The pool editor could not read that command");
+        }
         if (data != null && !data.isEmpty()) command.addProperty("data", data); // a file that came with the command
         try {
             var server = player.level().getServer();
             JigsawPlanner.withPacks(server, env -> {
                 var edit = new Edit();
                 memory.message = run(player, env, memory, edit, command);
-                if (!edit.snaps.isEmpty()) { memory.undo.push(edit.snaps); memory.redo.clear(); }
+                if (!edit.snaps.isEmpty()) {
+                    memory.undo.push(edit.snaps);
+                    memory.redo.clear();
+                }
                 return null;
             });
-            // The answer is worked out with the packs opened again, so a draft this command has just made is part of what the player is shown.
-            JigsawPlanner.withPacks(server, env -> { EditorServer.session(player).jigsawModel(model(player, env, memory)); return null; });
+            // The answer is worked out with the packs opened again, so a draft this command has just made is part of
+            // what the player is shown.
+            JigsawPlanner.withPacks(server, env -> {
+                EditorServer.session(player).jigsawModel(model(player, env, memory));
+                return null;
+            });
             return memory.message;
         } catch (IOException e) {
             throw new IllegalArgumentException("The pool editor could not read or write its files: " + e.getMessage());
@@ -109,14 +132,20 @@ final class JigsawEditor {
     }
 
     private static byte[] fileData(JsonObject c) {
-        try { return Base64.getDecoder().decode(text(c, "data")); }
-        catch (IllegalArgumentException e) { throw new IllegalArgumentException("The file did not arrive whole"); }
+        try {
+            return Base64.getDecoder().decode(text(c, "data"));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("The file did not arrive whole");
+        }
     }
 
-    private static boolean isStructure(CompoundTag tag) { return tag.get("size") != null && (tag.get("palette") != null || tag.get("palettes") != null); }
+    private static boolean isStructure(CompoundTag tag) {
+        return tag.get("size") != null && (tag.get("palette") != null || tag.get("palettes") != null);
+    }
 
     /** Saves a structure as a template of the draft, named as the command says (a bare name goes in the pool's namespace), and adds it to the pool. */
-    private static String addTemplate(JigsawPlanner.Env env, Edit edit, JsonObject c, CompoundTag tag, String what) throws IOException {
+    private static String addTemplate(JigsawPlanner.Env env, Edit edit, JsonObject c, CompoundTag tag, String what)
+            throws IOException {
         var home = poolId(text(c, "pool"));
         var typed = text(c, "name").strip();
         var name = poolId(typed.contains(":") ? typed : home.getNamespace() + ":" + typed);
@@ -127,16 +156,27 @@ final class JigsawEditor {
         return what + " as " + name + " and added it to " + home;
     }
 
-    private static String run(ServerPlayer player, JigsawPlanner.Env env, Memory memory, Edit edit, JsonObject c) throws IOException {
+    private static String run(ServerPlayer player, JigsawPlanner.Env env, Memory memory, Edit edit, JsonObject c)
+            throws IOException {
         String op = text(c, "op");
         if (!op.equals("retarget_check")) memory.retarget = null;
         if (!op.equals("bedrock_plan") && !op.equals("bedrock_export")) memory.bedrock = null;
         if (!op.equals("used_by")) memory.usedBy = null;
         switch (op) {
-            case "open" -> { if (c.has("pool")) memory.pool = poolId(text(c, "pool")).toString(); return ""; }
-            case "templates" -> { memory.query = c.has("query") ? text(c, "query") : ""; return ""; }
-            case "undo" -> { return restore(memory.undo, memory.redo, "Undid the last change"); }
-            case "redo" -> { return restore(memory.redo, memory.undo, "Redid the change"); }
+            case "open" -> {
+                if (c.has("pool")) memory.pool = poolId(text(c, "pool")).toString();
+                return "";
+            }
+            case "templates" -> {
+                memory.query = c.has("query") ? text(c, "query") : "";
+                return "";
+            }
+            case "undo" -> {
+                return restore(memory.undo, memory.redo, "Undid the last change");
+            }
+            case "redo" -> {
+                return restore(memory.redo, memory.undo, "Redid the change");
+            }
             case "pool_new" -> {
                 var id = poolId(text(c, "id"));
                 if (exists(env, id)) throw new IllegalArgumentException("A pool called " + id + " already exists");
@@ -148,15 +188,19 @@ final class JigsawEditor {
                 return "Made pool " + id;
             }
             case "pool_copy" -> {
-                var from = poolId(text(c, "from")); var to = poolId(text(c, "to"));
+                var from = poolId(text(c, "from"));
+                var to = poolId(text(c, "to"));
                 if (exists(env, to)) throw new IllegalArgumentException("A pool called " + to + " already exists");
                 writePool(env, edit, to, readPool(env, from));
                 memory.pool = to.toString();
                 return "Copied " + from + " to " + to;
             }
             case "pool_rename" -> {
-                var from = poolId(text(c, "from")); var to = poolId(text(c, "to"));
-                if (!ours(env, from)) throw new IllegalArgumentException("Only a pool in the craftium pack can be renamed; copy it first");
+                var from = poolId(text(c, "from"));
+                var to = poolId(text(c, "to"));
+                if (!ours(env, from))
+                    throw new IllegalArgumentException(
+                            "Only a pool in the craftium pack can be renamed; copy it first");
                 if (exists(env, to)) throw new IllegalArgumentException("A pool called " + to + " already exists");
                 writePool(env, edit, to, readPool(env, from));
                 removePool(env, edit, from);
@@ -165,7 +209,8 @@ final class JigsawEditor {
             }
             case "pool_delete" -> {
                 var id = poolId(text(c, "id"));
-                if (!ours(env, id)) throw new IllegalArgumentException("Only a pool in the craftium pack can be deleted");
+                if (!ours(env, id))
+                    throw new IllegalArgumentException("Only a pool in the craftium pack can be deleted");
                 removePool(env, edit, id);
                 if (memory.pool.equals(id.toString())) memory.pool = "";
                 return "Deleted " + id + " (final when you apply)";
@@ -174,11 +219,14 @@ final class JigsawEditor {
                 var id = poolId(text(c, "pool"));
                 var pool = readPool(env, id);
                 var note = text(c, "text").strip();
-                if (note.length() > 1000) throw new IllegalArgumentException("A description is at most 1,000 characters");
-                // Kept as $comment, which the game ignores, and written first so it is the first thing a person reading the file sees.
+                if (note.length() > 1000)
+                    throw new IllegalArgumentException("A description is at most 1,000 characters");
+                // Kept as $comment, which the game ignores, and written first so it is the first thing a person reading
+                // the file sees.
                 var ordered = new JsonObject();
                 if (!note.isEmpty()) ordered.addProperty("$comment", note);
-                for (var entry : pool.entrySet()) if (!entry.getKey().equals("$comment")) ordered.add(entry.getKey(), entry.getValue());
+                for (var entry : pool.entrySet())
+                    if (!entry.getKey().equals("$comment")) ordered.add(entry.getKey(), entry.getValue());
                 writePool(env, edit, id, ordered);
                 return note.isEmpty() ? "Removed the description of " + id : "Described " + id;
             }
@@ -192,20 +240,34 @@ final class JigsawEditor {
             case "element_add" -> {
                 var id = poolId(text(c, "pool"));
                 var pool = readPool(env, id);
-                pool.getAsJsonArray("elements").add(single(text(c, "template"), c.has("weight") ? c.get("weight").getAsInt() : 1, c.has("projection") ? text(c, "projection") : "rigid"));
+                pool.getAsJsonArray("elements")
+                        .add(single(
+                                text(c, "template"),
+                                c.has("weight") ? c.get("weight").getAsInt() : 1,
+                                c.has("projection") ? text(c, "projection") : "rigid"));
                 writePool(env, edit, id, pool);
                 return "Added " + text(c, "template") + " to " + id;
             }
             case "element_from_selection" -> {
                 var selection = EditorServer.session(player).selection;
-                if (selection.size() == 0) throw new IllegalArgumentException("Select the blocks to turn into a template first");
-                var min = selection.min(); var max = selection.max();
+                if (selection.size() == 0)
+                    throw new IllegalArgumentException("Select the blocks to turn into a template first");
+                var min = selection.min();
+                var max = selection.max();
                 var home = poolId(text(c, "pool"));
                 var typed = text(c, "name").strip();
-                var name = poolId(typed.contains(":") ? typed : home.getNamespace() + ":" + typed); // a bare name goes in the namespace of the pool
+                var name = poolId(
+                        typed.contains(":")
+                                ? typed
+                                : home.getNamespace() + ":" + typed); // a bare name goes in the namespace of the pool
                 var size = new Vec3i(max.x() - min.x() + 1, max.y() - min.y() + 1, max.z() - min.z() + 1);
                 var template = new StructureTemplate();
-                template.fillFromWorld((ServerLevel) player.level(), new BlockPos(min.x(), min.y(), min.z()), size, false, List.of(Blocks.STRUCTURE_VOID));
+                template.fillFromWorld(
+                        (ServerLevel) player.level(),
+                        new BlockPos(min.x(), min.y(), min.z()),
+                        size,
+                        false,
+                        List.of(Blocks.STRUCTURE_VOID));
                 writeTemplate(env, edit, name, template.save(new CompoundTag()));
                 var id = poolId(text(c, "pool"));
                 var pool = readPool(env, id);
@@ -215,25 +277,39 @@ final class JigsawEditor {
             }
             case "element_from_file" -> {
                 CompoundTag tag;
-                try { tag = NbtIo.readCompressed(new java.io.ByteArrayInputStream(fileData(c)), NbtAccounter.create(32L * 1024 * 1024)); }
-                catch (IOException e) { throw new IllegalArgumentException("That is not a Java structure file (.nbt)"); }
-                if (!isStructure(tag)) throw new IllegalArgumentException("That file is not a Java structure: it has no size or palette");
+                try {
+                    tag = NbtIo.readCompressed(
+                            new java.io.ByteArrayInputStream(fileData(c)), NbtAccounter.create(32L * 1024 * 1024));
+                } catch (IOException e) {
+                    throw new IllegalArgumentException("That is not a Java structure file (.nbt)");
+                }
+                if (!isStructure(tag))
+                    throw new IllegalArgumentException("That file is not a Java structure: it has no size or palette");
                 return addTemplate(env, edit, c, tag, "Imported the structure");
             }
             case "element_from_blueprint" -> {
-                // A blueprint of the server's library is read here; one of the player's own comes with the request. A structure file is used as it is,
-                // jigsaw blocks and block entities included; a schematic is turned into one through the blocks of a clipboard.
+                // A blueprint of the server's library is read here; one of the player's own comes with the request. A
+                // structure file is used as it is,
+                // jigsaw blocks and block entities included; a schematic is turned into one through the blocks of a
+                // clipboard.
                 byte[] bytes;
                 if (c.has("data")) bytes = fileData(c);
                 else {
                     var path = BlueprintLibrary.file("blueprints", text(c, "file"));
-                    if (!Files.isRegularFile(path)) throw new IllegalArgumentException("There is no blueprint called " + text(c, "file") + " in the server's library");
-                    if (Files.size(path) > 1_048_576) throw new IllegalArgumentException("A blueprint over 1 MiB cannot be used");
+                    if (!Files.isRegularFile(path))
+                        throw new IllegalArgumentException(
+                                "There is no blueprint called " + text(c, "file") + " in the server's library");
+                    if (Files.size(path) > 1_048_576)
+                        throw new IllegalArgumentException("A blueprint over 1 MiB cannot be used");
                     bytes = Files.readAllBytes(path);
                 }
                 CompoundTag tag;
-                try { tag = NbtIo.readCompressed(new java.io.ByteArrayInputStream(bytes), NbtAccounter.create(32L * 1024 * 1024)); }
-                catch (IOException e) { throw new IllegalArgumentException("That blueprint could not be read"); }
+                try {
+                    tag = NbtIo.readCompressed(
+                            new java.io.ByteArrayInputStream(bytes), NbtAccounter.create(32L * 1024 * 1024));
+                } catch (IOException e) {
+                    throw new IllegalArgumentException("That blueprint could not be read");
+                }
                 if (!isStructure(tag)) {
                     var session = new Session();
                     var planner = new EditPlanner(player.level(), session, new dev.craftium.core.Options());
@@ -243,14 +319,18 @@ final class JigsawEditor {
                 }
                 return addTemplate(env, edit, c, tag, "Took the blueprint");
             }
-            case "features" -> { memory.featureQuery = c.has("query") ? text(c, "query") : ""; return ""; }
+            case "features" -> {
+                memory.featureQuery = c.has("query") ? text(c, "query") : "";
+                return "";
+            }
             case "element_add_empty" -> {
                 var id = poolId(text(c, "pool"));
                 var pool = readPool(env, id);
                 var empty = new JsonObject();
                 empty.addProperty("element_type", "minecraft:empty_pool_element");
                 var entry = new JsonObject();
-                entry.addProperty("weight", c.has("weight") ? Math.clamp(c.get("weight").getAsInt(), 1, 150) : 1);
+                entry.addProperty(
+                        "weight", c.has("weight") ? Math.clamp(c.get("weight").getAsInt(), 1, 150) : 1);
                 entry.add("element", empty);
                 pool.getAsJsonArray("elements").add(entry);
                 writePool(env, edit, id, pool);
@@ -259,8 +339,11 @@ final class JigsawEditor {
             case "element_add_feature" -> {
                 var id = poolId(text(c, "pool"));
                 var feature = poolId(text(c, "feature"));
-                if (env.server().registryAccess().lookupOrThrow(Registries.PLACED_FEATURE).get(ResourceKey.create(Registries.PLACED_FEATURE, feature)).isEmpty())
-                    throw new IllegalArgumentException("There is no placed feature called " + feature);
+                if (env.server()
+                        .registryAccess()
+                        .lookupOrThrow(Registries.PLACED_FEATURE)
+                        .get(ResourceKey.create(Registries.PLACED_FEATURE, feature))
+                        .isEmpty()) throw new IllegalArgumentException("There is no placed feature called " + feature);
                 var pool = readPool(env, id);
                 var element = new JsonObject();
                 element.addProperty("element_type", "minecraft:feature_pool_element");
@@ -302,58 +385,113 @@ final class JigsawEditor {
                 var elements = pool.getAsJsonArray("elements");
                 var entry = elements.get(index(c, elements)).getAsJsonObject();
                 var element = entry.getAsJsonObject("element");
-                if (c.has("weight")) entry.addProperty("weight", Math.clamp(c.get("weight").getAsInt(), 1, 150));
-                if (c.has("projection")) { var p = text(c, "projection"); if (!p.equals("rigid") && !p.equals("terrain_matching")) throw new IllegalArgumentException("A projection is rigid or terrain_matching"); element.addProperty("projection", p); }
-                if (c.has("processors")) { if (!element.has("processors")) throw new IllegalArgumentException("This element has no processor list"); element.addProperty("processors", poolId(text(c, "processors")).toString()); }
-                if (c.has("template")) { if (!element.has("location")) throw new IllegalArgumentException("This element has no template"); element.addProperty("location", poolId(text(c, "template")).toString()); }
+                if (c.has("weight"))
+                    entry.addProperty("weight", Math.clamp(c.get("weight").getAsInt(), 1, 150));
+                if (c.has("projection")) {
+                    var p = text(c, "projection");
+                    if (!p.equals("rigid") && !p.equals("terrain_matching"))
+                        throw new IllegalArgumentException("A projection is rigid or terrain_matching");
+                    element.addProperty("projection", p);
+                }
+                if (c.has("processors")) {
+                    if (!element.has("processors"))
+                        throw new IllegalArgumentException("This element has no processor list");
+                    element.addProperty(
+                            "processors", poolId(text(c, "processors")).toString());
+                }
+                if (c.has("template")) {
+                    if (!element.has("location")) throw new IllegalArgumentException("This element has no template");
+                    element.addProperty("location", poolId(text(c, "template")).toString());
+                }
                 writePool(env, edit, id, pool);
                 return "Changed element " + (index(c, elements) + 1) + " of " + id;
             }
-            case "jigsaw_set" -> { return setJigsaw(env, edit, c); }
-            case "names" -> { memory.names = true; return ""; }
-            case "retarget_check" -> { memory.retarget = retargetCheck(env, c); return ""; }
-            case "target_pools" -> { memory.targetPools = c.has("pools") ? text(c, "pools") : ""; return ""; }
+            case "jigsaw_set" -> {
+                return setJigsaw(env, edit, c);
+            }
+            case "names" -> {
+                memory.names = true;
+                return "";
+            }
+            case "retarget_check" -> {
+                memory.retarget = retargetCheck(env, c);
+                return "";
+            }
+            case "target_pools" -> {
+                memory.targetPools = c.has("pools") ? text(c, "pools") : "";
+                return "";
+            }
             case "used_by" -> {
                 if (memory.pool.isEmpty()) throw new IllegalArgumentException("Open a pool first");
-                var registry = JigsawPlanner.loadPools(env.server(), env.manager()).lookupOrThrow(Registries.TEMPLATE_POOL);
+                var registry =
+                        JigsawPlanner.loadPools(env.server(), env.manager()).lookupOrThrow(Registries.TEMPLATE_POOL);
                 var truncated = new boolean[1];
                 memory.usedBy = usedBy(env, registry, poolId(memory.pool), truncated);
                 memory.usedByTruncated = truncated[0];
                 return "";
             }
-            case "retarget" -> { return retarget(env, edit, c); }
-            case "apply" -> { return apply(env, memory); }
-            case "discard" -> { return discard(env, memory); }
+            case "retarget" -> {
+                return retarget(env, edit, c);
+            }
+            case "apply" -> {
+                return apply(env, memory);
+            }
+            case "discard" -> {
+                return discard(env, memory);
+            }
             case "bedrock_plan" -> {
                 if (!c.has("pool") && memory.pool.isEmpty()) throw new IllegalArgumentException("Open a pool first");
-                memory.bedrock = JigsawBedrockExport.build(env, c.has("pool") ? text(c, "pool") : memory.pool, c.has("name") ? text(c, "name") : "").summary();
+                memory.bedrock = JigsawBedrockExport.build(
+                                env,
+                                c.has("pool") ? text(c, "pool") : memory.pool,
+                                c.has("name") ? text(c, "name") : "")
+                        .summary();
                 return "";
             }
             case "bedrock_export" -> {
                 if (!c.has("pool") && memory.pool.isEmpty()) throw new IllegalArgumentException("Open a pool first");
-                var built = JigsawBedrockExport.build(env, c.has("pool") ? text(c, "pool") : memory.pool, c.has("name") ? text(c, "name") : "");
+                var built = JigsawBedrockExport.build(
+                        env, c.has("pool") ? text(c, "pool") : memory.pool, c.has("name") ? text(c, "name") : "");
                 memory.bedrock = built.summary();
                 if (built.pack().length > JigsawBedrockExport.LIMIT)
-                    throw new IllegalArgumentException("The pack is " + built.pack().length / 1024 + " KiB, over the 1 MiB limit for sending it to you. Export a pool that leads to fewer or smaller pieces.");
-                dev.craftium.runtime.ServerPlatform.send(player, new dev.craftium.net.Packets.Download("bedrockpack", built.fileName(), Base64.getEncoder().encodeToString(built.pack()), ""));
+                    throw new IllegalArgumentException(
+                            "The pack is " + built.pack().length / 1024
+                                    + " KiB, over the 1 MiB limit for sending it to you. Export a pool that leads to fewer or smaller pieces.");
+                dev.craftium.runtime.ServerPlatform.send(
+                        player,
+                        new dev.craftium.net.Packets.Download(
+                                "bedrockpack",
+                                built.fileName(),
+                                Base64.getEncoder().encodeToString(built.pack()),
+                                ""));
                 var summary = built.summary();
-                return "Made " + built.fileName() + ": " + summary.get("pools").getAsInt() + " pools, " + summary.get("pieces").getAsInt() + " pieces"
-                        + (summary.get("structures").getAsInt() > 0 ? ", " + summary.get("structures").getAsInt() + " structure" + (summary.get("structures").getAsInt() == 1 ? "" : "s") : "")
-                        + " · " + summary.get("lost").getAsInt() + " lost, " + summary.get("changed").getAsInt() + " changed, " + summary.get("check").getAsInt() + " to check (see the report in the pack)";
+                return "Made " + built.fileName() + ": " + summary.get("pools").getAsInt() + " pools, "
+                        + summary.get("pieces").getAsInt() + " pieces"
+                        + (summary.get("structures").getAsInt() > 0
+                                ? ", " + summary.get("structures").getAsInt() + " structure"
+                                        + (summary.get("structures").getAsInt() == 1 ? "" : "s")
+                                : "")
+                        + " · " + summary.get("lost").getAsInt() + " lost, "
+                        + summary.get("changed").getAsInt() + " changed, "
+                        + summary.get("check").getAsInt() + " to check (see the report in the pack)";
             }
             default -> throw new IllegalArgumentException("Unknown pool editor command: " + text(c, "op"));
         }
     }
 
     private static String restore(Deque<List<Snap>> from, Deque<List<Snap>> to, String message) throws IOException {
-        if (from.isEmpty()) throw new IllegalArgumentException("Nothing to " + (message.startsWith("Undid") ? "undo" : "redo"));
+        if (from.isEmpty())
+            throw new IllegalArgumentException("Nothing to " + (message.startsWith("Undid") ? "undo" : "redo"));
         var steps = from.pop();
         var now = new ArrayList<Snap>();
         for (int i = steps.size() - 1; i >= 0; i--) {
             var snap = steps.get(i);
             now.add(new Snap(snap.file(), Files.exists(snap.file()) ? Files.readAllBytes(snap.file()) : null));
             if (snap.bytes() == null) Files.deleteIfExists(snap.file());
-            else { Files.createDirectories(snap.file().getParent()); Files.write(snap.file(), snap.bytes()); }
+            else {
+                Files.createDirectories(snap.file().getParent());
+                Files.write(snap.file(), snap.bytes());
+            }
         }
         to.push(now);
         return message;
@@ -362,36 +500,65 @@ final class JigsawEditor {
     // ---- files
 
     private static String text(JsonObject c, String key) {
-        if (!c.has(key) || !c.get(key).isJsonPrimitive()) throw new IllegalArgumentException("The pool editor command needs '" + key + "'");
+        if (!c.has(key) || !c.get(key).isJsonPrimitive())
+            throw new IllegalArgumentException("The pool editor command needs '" + key + "'");
         return c.get(key).getAsString();
     }
+
     private static int index(JsonObject c, JsonArray elements) {
         int index = c.get("index").getAsInt();
-        if (index < 0 || index >= elements.size()) throw new IllegalArgumentException("There is no element " + (index + 1));
+        if (index < 0 || index >= elements.size())
+            throw new IllegalArgumentException("There is no element " + (index + 1));
         return index;
     }
+
     private static ResourceLocation poolId(String name) {
         var id = ResourceLocation.tryParse(name.contains(":") ? name : "craftium:" + name);
-        if (id == null) throw new IllegalArgumentException("Not a valid name: " + name + " (lower case letters, digits, / . _ -)");
+        if (id == null)
+            throw new IllegalArgumentException("Not a valid name: " + name + " (lower case letters, digits, / . _ -)");
         return id;
     }
-    private static ResourceLocation resource(ResourceLocation id) { return ResourceLocation.fromNamespaceAndPath(id.getNamespace(), POOLS + id.getPath() + ".json"); }
-    private static String relPool(ResourceLocation id) { return "data/" + id.getNamespace() + "/worldgen/template_pool/" + id.getPath() + ".json"; }
-    private static String relTemplate(ResourceLocation id) { return "data/" + id.getNamespace() + "/structure/" + id.getPath() + ".nbt"; }
+
+    private static ResourceLocation resource(ResourceLocation id) {
+        return ResourceLocation.fromNamespaceAndPath(id.getNamespace(), POOLS + id.getPath() + ".json");
+    }
+
+    private static String relPool(ResourceLocation id) {
+        return "data/" + id.getNamespace() + "/worldgen/template_pool/" + id.getPath() + ".json";
+    }
+
+    private static String relTemplate(ResourceLocation id) {
+        return "data/" + id.getNamespace() + "/structure/" + id.getPath() + ".nbt";
+    }
     /** The file in the craftium pack, which the game reads, and the one in the draft, which holds the changes not applied yet. */
-    private static Path poolFile(JigsawPlanner.Env env, ResourceLocation id) { return env.folder().resolve(relPool(id)); }
-    private static Path templateFile(JigsawPlanner.Env env, ResourceLocation id) { return env.folder().resolve(relTemplate(id)); }
-    private static Path draftPoolFile(JigsawPlanner.Env env, ResourceLocation id) { return env.draft().resolve(relPool(id)); }
-    private static Path draftTemplateFile(JigsawPlanner.Env env, ResourceLocation id) { return env.draft().resolve(relTemplate(id)); }
+    private static Path poolFile(JigsawPlanner.Env env, ResourceLocation id) {
+        return env.folder().resolve(relPool(id));
+    }
+
+    private static Path templateFile(JigsawPlanner.Env env, ResourceLocation id) {
+        return env.folder().resolve(relTemplate(id));
+    }
+
+    private static Path draftPoolFile(JigsawPlanner.Env env, ResourceLocation id) {
+        return env.draft().resolve(relPool(id));
+    }
+
+    private static Path draftTemplateFile(JigsawPlanner.Env env, ResourceLocation id) {
+        return env.draft().resolve(relTemplate(id));
+    }
 
     /** Files deleted in the draft but still in the pack, one path a line; they go when the changes are applied. */
     private static final String TOMBSTONES = "deleted.txt";
+
     private static Set<String> tombstones(JigsawPlanner.Env env) throws IOException {
         var file = env.draft().resolve(TOMBSTONES);
         var out = new LinkedHashSet<String>();
-        if (Files.exists(file)) for (var line : Files.readAllLines(file, StandardCharsets.UTF_8)) if (!line.isBlank()) out.add(line.strip());
+        if (Files.exists(file))
+            for (var line : Files.readAllLines(file, StandardCharsets.UTF_8))
+                if (!line.isBlank()) out.add(line.strip());
         return out;
     }
+
     private static void addTombstone(JigsawPlanner.Env env, Edit edit, String relative) throws IOException {
         var all = tombstones(env);
         if (!all.add(relative)) return;
@@ -400,11 +567,14 @@ final class JigsawEditor {
 
     /** Whether a pool is the craftium pack's own (or changed in the draft), and not deleted there. */
     private static boolean ours(JigsawPlanner.Env env, ResourceLocation id) throws IOException {
-        return Files.exists(draftPoolFile(env, id)) || Files.exists(poolFile(env, id)) && !tombstones(env).contains(relPool(id));
+        return Files.exists(draftPoolFile(env, id))
+                || Files.exists(poolFile(env, id)) && !tombstones(env).contains(relPool(id));
     }
     /** Whether a pool of this name exists in any pack, counting the draft and not counting a pool deleted in it. */
     private static boolean exists(JigsawPlanner.Env env, ResourceLocation id) throws IOException {
-        return Files.exists(draftPoolFile(env, id)) || !tombstones(env).contains(relPool(id)) && env.manager().getResource(resource(id)).isPresent();
+        return Files.exists(draftPoolFile(env, id))
+                || !tombstones(env).contains(relPool(id))
+                        && env.manager().getResource(resource(id)).isPresent();
     }
     /** Takes a pool out: its draft file goes, and its file in the pack is marked to go when the changes are applied. */
     private static void removePool(JigsawPlanner.Env env, Edit edit, ResourceLocation id) throws IOException {
@@ -412,7 +582,10 @@ final class JigsawEditor {
         if (Files.exists(poolFile(env, id))) addTombstone(env, edit, relPool(id));
     }
 
-    private static JsonObject parse(Path file) throws IOException { return JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject(); }
+    private static JsonObject parse(Path file) throws IOException {
+        return JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8))
+                .getAsJsonObject();
+    }
 
     /** A pool's JSON: from the draft when it has been changed there, else from the craftium pack, else from the pack that has it. */
     private static JsonObject readPool(JigsawPlanner.Env env, ResourceLocation id) throws IOException {
@@ -423,18 +596,26 @@ final class JigsawEditor {
         if (Files.exists(draft)) pool = parse(draft);
         else if (Files.exists(file) && !deleted) pool = parse(file);
         else {
-            var found = deleted ? java.util.Optional.<net.minecraft.server.packs.resources.Resource>empty() : env.manager().getResource(resource(id));
+            var found = deleted
+                    ? java.util.Optional.<net.minecraft.server.packs.resources.Resource>empty()
+                    : env.manager().getResource(resource(id));
             if (found.isEmpty()) throw new IllegalArgumentException("No pool called " + id);
-            try (var reader = found.get().openAsReader()) { pool = JsonParser.parseReader(reader).getAsJsonObject(); }
+            try (var reader = found.get().openAsReader()) {
+                pool = JsonParser.parseReader(reader).getAsJsonObject();
+            }
         }
         if (!pool.has("elements") || !pool.get("elements").isJsonArray()) pool.add("elements", new JsonArray());
         if (!pool.has("fallback")) pool.addProperty("fallback", "minecraft:empty");
         return pool;
     }
-    private static void writePool(JigsawPlanner.Env env, Edit edit, ResourceLocation id, JsonObject pool) throws IOException {
+
+    private static void writePool(JigsawPlanner.Env env, Edit edit, ResourceLocation id, JsonObject pool)
+            throws IOException {
         edit.write(draftPoolFile(env, id), PRETTY.toJson(pool).getBytes(StandardCharsets.UTF_8));
     }
-    private static void writeTemplate(JigsawPlanner.Env env, Edit edit, ResourceLocation id, CompoundTag tag) throws IOException {
+
+    private static void writeTemplate(JigsawPlanner.Env env, Edit edit, ResourceLocation id, CompoundTag tag)
+            throws IOException {
         var bytes = new ByteArrayOutputStream();
         NbtIo.writeCompressed(tag, bytes);
         edit.write(draftTemplateFile(env, id), bytes.toByteArray());
@@ -445,14 +626,18 @@ final class JigsawEditor {
     /** The templates a pool uses, as its JSON names them, the elements of a list element included. */
     private static Set<String> templatesOf(JsonObject pool) {
         var out = new LinkedHashSet<String>();
-        for (var e : pool.getAsJsonArray("elements")) if (e.isJsonObject()) collectTemplates(e.getAsJsonObject().get("element"), out);
+        for (var e : pool.getAsJsonArray("elements"))
+            if (e.isJsonObject()) collectTemplates(e.getAsJsonObject().get("element"), out);
         return out;
     }
+
     private static void collectTemplates(JsonElement element, Set<String> out) {
         if (element == null || !element.isJsonObject()) return;
         var o = element.getAsJsonObject();
-        if (o.has("location") && o.get("location").isJsonPrimitive()) out.add(poolId(o.get("location").getAsString()).toString());
-        if (o.has("elements") && o.get("elements").isJsonArray()) for (var inner : o.getAsJsonArray("elements")) collectTemplates(inner, out);
+        if (o.has("location") && o.get("location").isJsonPrimitive())
+            out.add(poolId(o.get("location").getAsString()).toString());
+        if (o.has("elements") && o.get("elements").isJsonArray())
+            for (var inner : o.getAsJsonArray("elements")) collectTemplates(inner, out);
     }
 
     /** A template as NBT: from the draft, else the craftium pack, else as the game has it; null when there is no such template. */
@@ -472,7 +657,9 @@ final class JigsawEditor {
         var blocks = tag.getListOrEmpty("blocks");
         for (int i = 0; i < blocks.size(); i++) {
             var nbt = blocks.getCompoundOrEmpty(i).getCompoundOrEmpty("nbt");
-            if (nbt.getStringOr("id", "").equals("minecraft:jigsaw") && nbt.getStringOr("pool", "").equals(pool)) names.add(nbt.getStringOr("target", "minecraft:empty"));
+            if (nbt.getStringOr("id", "").equals("minecraft:jigsaw")
+                    && nbt.getStringOr("pool", "").equals(pool))
+                names.add(nbt.getStringOr("target", "minecraft:empty"));
         }
         return names;
     }
@@ -484,7 +671,8 @@ final class JigsawEditor {
         for (int i = 0; i < blocks.size(); i++) {
             var block = blocks.getCompoundOrEmpty(i);
             var nbt = block.getCompoundOrEmpty("nbt");
-            if (!nbt.getStringOr("id", "").equals("minecraft:jigsaw") || !nbt.getStringOr("pool", "").equals(from)) continue;
+            if (!nbt.getStringOr("id", "").equals("minecraft:jigsaw")
+                    || !nbt.getStringOr("pool", "").equals(from)) continue;
             nbt.putString("pool", to);
             block.put("nbt", nbt);
             blocks.set(i, block);
@@ -513,7 +701,10 @@ final class JigsawEditor {
             connectors += names.size();
             affected.add(id);
             affectedIds.add(id);
-            for (var name : names) { asked.add(name); counts.merge(name, 1, Integer::sum); }
+            for (var name : names) {
+                asked.add(name);
+                counts.merge(name, 1, Integer::sum);
+            }
         }
         if (connectors == 0) throw new IllegalArgumentException("No connector of " + pool + " points at " + from);
         var out = new JsonObject();
@@ -526,14 +717,17 @@ final class JigsawEditor {
         int unmatched = 0;
         boolean toMissing = false;
         try {
-            Registry<StructureTemplatePool> pools = JigsawPlanner.loadPools(env.server(), env.manager()).lookupOrThrow(Registries.TEMPLATE_POOL);
+            Registry<StructureTemplatePool> pools =
+                    JigsawPlanner.loadPools(env.server(), env.manager()).lookupOrThrow(Registries.TEMPLATE_POOL);
             var all = pools.listElements().toList();
             for (var template : affectedIds) {
                 var users = new TreeSet<String>();
                 for (var holder : all) {
                     if (holder.key().location().equals(pool)) continue;
                     for (var pair : holder.value().getTemplates())
-                        for (var single : singles(pair.getFirst())) if (single.getTemplateLocation().toString().equals(template)) users.add(holder.key().location().toString());
+                        for (var single : singles(pair.getFirst()))
+                            if (single.getTemplateLocation().toString().equals(template))
+                                users.add(holder.key().location().toString());
                 }
                 if (users.isEmpty()) continue;
                 var item = new JsonObject();
@@ -547,9 +741,15 @@ final class JigsawEditor {
             if (!to.equals("minecraft:empty")) {
                 var target = pools.get(ResourceKey.create(Registries.TEMPLATE_POOL, ResourceLocation.parse(to)));
                 if (target.isEmpty()) toMissing = true;
-                else for (var name : asked) if (JigsawDiagnostics.fits(pools, env.templates(), target.get().value(), ResourceLocation.parse(name)) == 0) unmatched += counts.get(name);
+                else
+                    for (var name : asked)
+                        if (JigsawDiagnostics.fits(
+                                        pools, env.templates(), target.get().value(), ResourceLocation.parse(name))
+                                == 0) unmatched += counts.get(name);
             }
-        } catch (RuntimeException e) { /* without the pools there is nothing to say about sharing or fit */ }
+        } catch (RuntimeException e) {
+            /* without the pools there is nothing to say about sharing or fit */
+        }
         out.add("shared", shared);
         out.addProperty("unmatched", unmatched);
         out.addProperty("toMissing", toMissing);
@@ -573,7 +773,8 @@ final class JigsawEditor {
             templates++;
         }
         if (total == 0) throw new IllegalArgumentException("No connector of " + pool + " points at " + from);
-        return "Pointed " + total + (total == 1 ? " connector" : " connectors") + " of " + pool + " in " + templates + (templates == 1 ? " template" : " templates") + " at " + to + " instead of " + from;
+        return "Pointed " + total + (total == 1 ? " connector" : " connectors") + " of " + pool + " in " + templates
+                + (templates == 1 ? " template" : " templates") + " at " + to + " instead of " + from;
     }
 
     // ---- applying and discarding
@@ -582,21 +783,29 @@ final class JigsawEditor {
         var parts = relative.split("/", 3);
         if (parts.length < 3) return relative;
         var rest = parts[2];
-        rest = rest.startsWith("worldgen/template_pool/") ? rest.substring(23) : rest.startsWith("structure/") ? rest.substring(10) : rest;
+        rest = rest.startsWith("worldgen/template_pool/")
+                ? rest.substring(23)
+                : rest.startsWith("structure/") ? rest.substring(10) : rest;
         int dot = rest.lastIndexOf('.');
         return parts[1] + ":" + (dot > 0 ? rest.substring(0, dot) : rest);
     }
-    private static String relative(JigsawPlanner.Env env, Path file) { return env.draft().relativize(file).toString().replace(java.io.File.separatorChar, '/'); }
+
+    private static String relative(JigsawPlanner.Env env, Path file) {
+        return env.draft().relativize(file).toString().replace(java.io.File.separatorChar, '/');
+    }
 
     /** What the draft holds: the pools and templates changed and the pools deleted. */
     private static JsonObject unapplied(JigsawPlanner.Env env) throws IOException {
-        var pools = new JsonArray(); var templates = new JsonArray(); var deleted = new JsonArray();
+        var pools = new JsonArray();
+        var templates = new JsonArray();
+        var deleted = new JsonArray();
         if (Files.isDirectory(env.draft()))
             try (var walk = Files.walk(env.draft())) {
                 for (var file : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
                     var rel = relative(env, file);
                     if (rel.equals(TOMBSTONES)) continue;
-                    if (rel.contains("/worldgen/template_pool/")) pools.add(idOf(rel)); else if (rel.contains("/structure/")) templates.add(idOf(rel));
+                    if (rel.contains("/worldgen/template_pool/")) pools.add(idOf(rel));
+                    else if (rel.contains("/structure/")) templates.add(idOf(rel));
                 }
             }
         for (var rel : tombstones(env)) deleted.add(idOf(rel));
@@ -611,7 +820,8 @@ final class JigsawEditor {
     private static void deleteTree(Path folder) throws IOException {
         if (!Files.isDirectory(folder)) return;
         try (var walk = Files.walk(folder)) {
-            for (var path : (Iterable<Path>) walk.sorted(Comparator.reverseOrder())::iterator) Files.deleteIfExists(path);
+            for (var path : (Iterable<Path>) walk.sorted(Comparator.reverseOrder())::iterator)
+                Files.deleteIfExists(path);
         }
     }
 
@@ -644,7 +854,9 @@ final class JigsawEditor {
         deleteTree(env.draft());
         memory.undo.clear();
         memory.redo.clear();
-        return count == 0 ? "There was nothing to discard" : "Discarded " + count + (count == 1 ? " change" : " changes");
+        return count == 0
+                ? "There was nothing to discard"
+                : "Discarded " + count + (count == 1 ? " change" : " changes");
     }
 
     private static JsonObject single(String template, int weight, String projection) {
@@ -667,7 +879,8 @@ final class JigsawEditor {
         if (Files.exists(file)) tag = NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
         else {
             var template = env.templates().get(id);
-            if (template.isEmpty() || template.get().palettes.isEmpty()) throw new IllegalArgumentException("Template " + id + " is missing");
+            if (template.isEmpty() || template.get().palettes.isEmpty())
+                throw new IllegalArgumentException("Template " + id + " is missing");
             tag = template.get().save(new CompoundTag());
         }
         var at = c.getAsJsonArray("pos");
@@ -675,20 +888,35 @@ final class JigsawEditor {
         for (int i = 0; i < blocks.size(); i++) {
             var block = blocks.getCompoundOrEmpty(i);
             var pos = block.getListOrEmpty("pos");
-            if (pos.getIntOr(0, Integer.MIN_VALUE) != at.get(0).getAsInt() || pos.getIntOr(1, Integer.MIN_VALUE) != at.get(1).getAsInt() || pos.getIntOr(2, Integer.MIN_VALUE) != at.get(2).getAsInt()) continue;
+            if (pos.getIntOr(0, Integer.MIN_VALUE) != at.get(0).getAsInt()
+                    || pos.getIntOr(1, Integer.MIN_VALUE) != at.get(1).getAsInt()
+                    || pos.getIntOr(2, Integer.MIN_VALUE) != at.get(2).getAsInt()) continue;
             var nbt = block.getCompoundOrEmpty("nbt");
             if (!nbt.getStringOr("id", "").equals("minecraft:jigsaw")) continue;
             if (c.has("name")) nbt.putString("name", poolId(text(c, "name")).toString());
-            if (c.has("target")) nbt.putString("target", poolId(text(c, "target")).toString());
+            if (c.has("target"))
+                nbt.putString("target", poolId(text(c, "target")).toString());
             if (c.has("pool")) nbt.putString("pool", poolId(text(c, "pool")).toString());
-            if (c.has("joint")) { var joint = text(c, "joint"); if (!joint.equals("rollable") && !joint.equals("aligned")) throw new IllegalArgumentException("A joint is rollable or aligned"); nbt.putString("joint", joint); }
-            if (c.has("placement")) nbt.putInt("placement_priority", Math.clamp(c.get("placement").getAsInt(), 0, 1000));
-            if (c.has("selection")) nbt.putInt("selection_priority", Math.clamp(c.get("selection").getAsInt(), 0, 1000));
+            if (c.has("joint")) {
+                var joint = text(c, "joint");
+                if (!joint.equals("rollable") && !joint.equals("aligned"))
+                    throw new IllegalArgumentException("A joint is rollable or aligned");
+                nbt.putString("joint", joint);
+            }
+            if (c.has("placement"))
+                nbt.putInt("placement_priority", Math.clamp(c.get("placement").getAsInt(), 0, 1000));
+            if (c.has("selection"))
+                nbt.putInt("selection_priority", Math.clamp(c.get("selection").getAsInt(), 0, 1000));
             if (c.has("final")) {
                 var state = text(c, "final").strip();
                 if (state.isEmpty()) state = "minecraft:air";
-                try { BlockStateParser.parseForBlock(env.server().registryAccess().lookupOrThrow(Registries.BLOCK), state, false); }
-                catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) { throw new IllegalArgumentException("\"" + state + "\" is not a block the game knows: " + e.getMessage()); }
+                try {
+                    BlockStateParser.parseForBlock(
+                            env.server().registryAccess().lookupOrThrow(Registries.BLOCK), state, false);
+                } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+                    throw new IllegalArgumentException(
+                            "\"" + state + "\" is not a block the game knows: " + e.getMessage());
+                }
                 nbt.putString("final_state", state);
             }
             block.put("nbt", nbt);
@@ -712,28 +940,42 @@ final class JigsawEditor {
         root.add("unapplied", unapplied(env));
         if (memory.retarget != null) root.add("retarget", memory.retarget);
         if (memory.bedrock != null) root.add("bedrock", memory.bedrock);
-        if (memory.usedBy != null) { root.add("usedBy", memory.usedBy); root.addProperty("usedByTruncated", memory.usedByTruncated); }
+        if (memory.usedBy != null) {
+            root.add("usedBy", memory.usedBy);
+            root.addProperty("usedByTruncated", memory.usedByTruncated);
+        }
         Registry<StructureTemplatePool> pools = null;
-        try { pools = JigsawPlanner.loadPools(env.server(), env.manager()).lookupOrThrow(Registries.TEMPLATE_POOL); }
-        catch (RuntimeException e) { root.addProperty("registryError", String.valueOf(e.getMessage())); }
+        try {
+            pools = JigsawPlanner.loadPools(env.server(), env.manager()).lookupOrThrow(Registries.TEMPLATE_POOL);
+        } catch (RuntimeException e) {
+            root.addProperty("registryError", String.valueOf(e.getMessage()));
+        }
 
         var list = new JsonArray();
-        var found = env.manager().listResources("worldgen/template_pool", id -> id.getPath().endsWith(".json"));
+        var found = env.manager()
+                .listResources("worldgen/template_pool", id -> id.getPath().endsWith(".json"));
         var ids = new TreeMap<ResourceLocation, String>(Comparator.comparing(ResourceLocation::toString));
         for (var entry : found.entrySet()) {
             var path = entry.getKey().getPath();
-            ids.put(ResourceLocation.fromNamespaceAndPath(entry.getKey().getNamespace(), path.substring(POOLS.length(), path.length() - 5)), entry.getValue().sourcePackId());
+            ids.put(
+                    ResourceLocation.fromNamespaceAndPath(
+                            entry.getKey().getNamespace(), path.substring(POOLS.length(), path.length() - 5)),
+                    entry.getValue().sourcePackId());
         }
         var gone = tombstones(env);
         for (var entry : ids.entrySet()) {
-            if (gone.contains(relPool(entry.getKey())) && !Files.exists(draftPoolFile(env, entry.getKey()))) continue; // deleted in the draft
+            if (gone.contains(relPool(entry.getKey())) && !Files.exists(draftPoolFile(env, entry.getKey())))
+                continue; // deleted in the draft
             var item = new JsonObject();
             item.addProperty("id", entry.getKey().toString());
             boolean ours = ours(env, entry.getKey());
             item.addProperty("source", ours ? "craftium" : entry.getValue().equals("vanilla") ? "vanilla" : "pack");
             if (ours && pools != null) {
                 int errors = 0, warnings = 0;
-                for (var line : JigsawDiagnostics.lint(pools, env.templates(), entry.getKey(), false)) { if (line.startsWith("ERROR")) errors++; else warnings++; }
+                for (var line : JigsawDiagnostics.lint(pools, env.templates(), entry.getKey(), false)) {
+                    if (line.startsWith("ERROR")) errors++;
+                    else warnings++;
+                }
                 item.addProperty("errors", errors);
                 item.addProperty("warnings", warnings);
             }
@@ -741,32 +983,58 @@ final class JigsawEditor {
         }
         root.add("pools", list);
         var processorLists = new JsonArray(); // for the suggestions of the processor box of an element
-        var processorFiles = env.manager().listResources("worldgen/processor_list", id -> id.getPath().endsWith(".json"));
+        var processorFiles = env.manager()
+                .listResources("worldgen/processor_list", id -> id.getPath().endsWith(".json"));
         processorFiles.keySet().stream()
-                .map(key -> ResourceLocation.fromNamespaceAndPath(key.getNamespace(), key.getPath().substring("worldgen/processor_list/".length(), key.getPath().length() - 5)).toString())
-                .sorted(Comparator.comparing((String id) -> id.startsWith("minecraft:")).thenComparing(id -> id)).forEach(processorLists::add);
+                .map(key -> ResourceLocation.fromNamespaceAndPath(
+                                key.getNamespace(),
+                                key.getPath()
+                                        .substring(
+                                                "worldgen/processor_list/".length(),
+                                                key.getPath().length() - 5))
+                        .toString())
+                .sorted(Comparator.comparing((String id) -> id.startsWith("minecraft:"))
+                        .thenComparing(id -> id))
+                .forEach(processorLists::add);
         root.add("processorLists", processorLists);
-        if (memory.names) { memory.names = false; return PRETTY.toJson(root); }
+        if (memory.names) {
+            memory.names = false;
+            return PRETTY.toJson(root);
+        }
 
         var templates = new JsonArray();
         var query = memory.query.toLowerCase(Locale.ROOT);
-        env.templates().listTemplates().filter(id -> id.toString().contains(query))
-                .sorted(Comparator.comparing((ResourceLocation id) -> id.getNamespace().equals("minecraft")).thenComparing(ResourceLocation::toString))
-                .limit(MAX_TEMPLATES).forEach(id -> templates.add(id.toString()));
+        env.templates()
+                .listTemplates()
+                .filter(id -> id.toString().contains(query))
+                .sorted(Comparator.comparing(
+                                (ResourceLocation id) -> id.getNamespace().equals("minecraft"))
+                        .thenComparing(ResourceLocation::toString))
+                .limit(MAX_TEMPLATES)
+                .forEach(id -> templates.add(id.toString()));
         root.add("templates", templates);
         if (memory.featureQuery != null) {
             var features = new JsonArray();
             var wanted = memory.featureQuery.toLowerCase(Locale.ROOT);
-            env.server().registryAccess().lookupOrThrow(Registries.PLACED_FEATURE).keySet().stream().map(ResourceLocation::toString).filter(id -> id.contains(wanted))
-                    .sorted(Comparator.comparing((String id) -> id.startsWith("minecraft:")).thenComparing(id -> id)).limit(MAX_TEMPLATES).forEach(features::add);
+            env.server().registryAccess().lookupOrThrow(Registries.PLACED_FEATURE).keySet().stream()
+                    .map(ResourceLocation::toString)
+                    .filter(id -> id.contains(wanted))
+                    .sorted(Comparator.comparing((String id) -> id.startsWith("minecraft:"))
+                            .thenComparing(id -> id))
+                    .limit(MAX_TEMPLATES)
+                    .forEach(features::add);
             root.add("features", features);
         }
         root.addProperty("query", memory.query);
 
         if (!memory.pool.isEmpty()) {
             var id = poolId(memory.pool);
-            try { root.add("pool", poolModel(env, pools, id)); root.add("graph", graph(env, pools, id)); }
-            catch (IllegalArgumentException e) { root.addProperty("poolError", e.getMessage()); }
+            try {
+                root.add("pool", poolModel(env, pools, id));
+                root.add("graph", graph(env, pools, id));
+            } catch (IllegalArgumentException e) {
+                root.addProperty("poolError", e.getMessage());
+            }
         }
         if (!memory.targetPools.isEmpty()) {
             var asked = new JsonArray();
@@ -774,27 +1042,45 @@ final class JigsawEditor {
             for (var part : memory.targetPools.split(",")) {
                 var wanted = ResourceLocation.tryParse(part.strip());
                 if (wanted == null || count >= TARGET_POOLS) continue;
-                try { asked.add(poolModel(env, pools, wanted, TARGET_THUMBNAILS)); count++; }
-                catch (IOException | IllegalArgumentException e) { /* a pool that cannot be read has nothing to show */ }
+                try {
+                    asked.add(poolModel(env, pools, wanted, TARGET_THUMBNAILS));
+                    count++;
+                } catch (IOException | IllegalArgumentException e) {
+                    /* a pool that cannot be read has nothing to show */
+                }
             }
             root.add("targetPools", asked);
         }
         return PRETTY.toJson(root);
     }
 
-    private static JsonObject poolModel(JigsawPlanner.Env env, Registry<StructureTemplatePool> pools, ResourceLocation id) throws IOException { return poolModel(env, pools, id, THUMBNAILS); }
+    private static JsonObject poolModel(
+            JigsawPlanner.Env env, Registry<StructureTemplatePool> pools, ResourceLocation id) throws IOException {
+        return poolModel(env, pools, id, THUMBNAILS);
+    }
 
-    private static JsonObject poolModel(JigsawPlanner.Env env, Registry<StructureTemplatePool> pools, ResourceLocation id, int thumbnails) throws IOException {
+    private static JsonObject poolModel(
+            JigsawPlanner.Env env, Registry<StructureTemplatePool> pools, ResourceLocation id, int thumbnails)
+            throws IOException {
         var raw = readPool(env, id);
         var model = new JsonObject();
         model.addProperty("id", id.toString());
-        model.addProperty("description", raw.has("$comment") && raw.get("$comment").isJsonPrimitive() ? raw.get("$comment").getAsString() : "");
+        model.addProperty(
+                "description",
+                raw.has("$comment") && raw.get("$comment").isJsonPrimitive()
+                        ? raw.get("$comment").getAsString()
+                        : "");
         model.addProperty("overridden", ours(env, id));
-        model.addProperty("fallback", raw.get("fallback").isJsonPrimitive() ? raw.get("fallback").getAsString() : "(inline)");
+        model.addProperty(
+                "fallback",
+                raw.get("fallback").isJsonPrimitive() ? raw.get("fallback").getAsString() : "(inline)");
         var elements = new JsonArray();
         var entries = raw.getAsJsonArray("elements");
         int total = 0;
-        for (var e : entries) total += e.getAsJsonObject().has("weight") ? e.getAsJsonObject().get("weight").getAsInt() : 1;
+        for (var e : entries)
+            total += e.getAsJsonObject().has("weight")
+                    ? e.getAsJsonObject().get("weight").getAsInt()
+                    : 1;
         int thumbs = 0;
         for (int i = 0; i < entries.size(); i++) {
             var entry = entries.get(i).getAsJsonObject();
@@ -804,14 +1090,33 @@ final class JigsawEditor {
             int weight = entry.has("weight") ? entry.get("weight").getAsInt() : 1;
             out.addProperty("weight", weight);
             out.addProperty("share", total == 0 ? 0 : Math.round(weight * 1000.0 / total) / 10.0);
-            var type = element.has("element_type") ? element.get("element_type").getAsString().replace("minecraft:", "") : "?";
+            var type = element.has("element_type")
+                    ? element.get("element_type").getAsString().replace("minecraft:", "")
+                    : "?";
             out.addProperty("type", type.replace("_pool_element", ""));
-            out.addProperty("projection", element.has("projection") ? element.get("projection").getAsString() : "rigid");
+            out.addProperty(
+                    "projection",
+                    element.has("projection") ? element.get("projection").getAsString() : "rigid");
             boolean editable = type.equals("single_pool_element") || type.equals("legacy_single_pool_element");
             out.addProperty("editable", editable);
-            if (element.has("processors")) out.addProperty("processors", element.get("processors").isJsonPrimitive() ? element.get("processors").getAsString() : "(inline)");
-            if (element.has("feature")) out.addProperty("feature", element.get("feature").isJsonPrimitive() ? element.get("feature").getAsString() : "(inline)");
-            if (type.equals("list_pool_element")) out.addProperty("count", element.has("elements") ? element.getAsJsonArray("elements").size() : 0);
+            if (element.has("processors"))
+                out.addProperty(
+                        "processors",
+                        element.get("processors").isJsonPrimitive()
+                                ? element.get("processors").getAsString()
+                                : "(inline)");
+            if (element.has("feature"))
+                out.addProperty(
+                        "feature",
+                        element.get("feature").isJsonPrimitive()
+                                ? element.get("feature").getAsString()
+                                : "(inline)");
+            if (type.equals("list_pool_element"))
+                out.addProperty(
+                        "count",
+                        element.has("elements")
+                                ? element.getAsJsonArray("elements").size()
+                                : 0);
             if (element.has("location") && element.get("location").isJsonPrimitive()) {
                 var template = ResourceLocation.tryParse(element.get("location").getAsString());
                 out.addProperty("template", element.get("location").getAsString());
@@ -825,9 +1130,19 @@ final class JigsawEditor {
     }
 
     /** What the editor shows of a template: its size, its connectors with how many elements each can meet, and a small picture of it. */
-    private static void templateModel(JigsawPlanner.Env env, Registry<StructureTemplatePool> pools, ResourceLocation id, JsonObject out, boolean picture) {
+    private static void templateModel(
+            JigsawPlanner.Env env,
+            Registry<StructureTemplatePool> pools,
+            ResourceLocation id,
+            JsonObject out,
+            boolean picture) {
         var found = env.templates().get(id);
-        if (found.isEmpty() || found.get().palettes.isEmpty() || found.get().palettes.get(0).blocks().isEmpty()) { out.addProperty("missing", true); return; }
+        if (found.isEmpty()
+                || found.get().palettes.isEmpty()
+                || found.get().palettes.get(0).blocks().isEmpty()) {
+            out.addProperty("missing", true);
+            return;
+        }
         var template = found.get();
         var size = template.getSize();
         out.add("size", ints(size.getX(), size.getY(), size.getZ()));
@@ -843,21 +1158,35 @@ final class JigsawEditor {
             item.addProperty("joint", jigsaw.jointType().getSerializedName());
             item.addProperty("placement", jigsaw.placementPriority());
             item.addProperty("selection", jigsaw.selectionPriority());
-            item.addProperty("vertical", net.minecraft.world.level.block.JigsawBlock.getFrontFacing(jigsaw.info().state()).getAxis() == net.minecraft.core.Direction.Axis.Y);
-            item.addProperty("final", jigsaw.info().nbt() == null ? "minecraft:air" : jigsaw.info().nbt().getStringOr("final_state", "minecraft:air"));
+            item.addProperty(
+                    "vertical",
+                    net.minecraft.world.level.block.JigsawBlock.getFrontFacing(
+                                            jigsaw.info().state())
+                                    .getAxis()
+                            == net.minecraft.core.Direction.Axis.Y);
+            item.addProperty(
+                    "final",
+                    jigsaw.info().nbt() == null
+                            ? "minecraft:air"
+                            : jigsaw.info().nbt().getStringOr("final_state", "minecraft:air"));
             var at = jigsaw.info().pos();
             item.add("pos", ints(at.getX(), at.getY(), at.getZ()));
             String issue = "";
             int fits = -1;
-            if (!jigsaw.pool().location().equals(ResourceLocation.fromNamespaceAndPath("minecraft", "empty")) && pools != null) {
+            if (!jigsaw.pool().location().equals(ResourceLocation.fromNamespaceAndPath("minecraft", "empty"))
+                    && pools != null) {
                 var target = pools.get(jigsaw.pool());
                 if (target.isEmpty()) issue = "pool " + jigsaw.pool().location() + " is not loaded";
                 else {
                     var offered = new JsonArray();
-                    JigsawDiagnostics.offered(env.templates(), target.get().value()).forEach(offered::add);
+                    JigsawDiagnostics.offered(env.templates(), target.get().value())
+                            .forEach(offered::add);
                     item.add("offered", offered);
-                    fits = JigsawDiagnostics.fits(pools, env.templates(), target.get().value(), jigsaw.target());
-                    if (fits == 0) issue = "no element of " + jigsaw.pool().location() + " offers '" + jigsaw.target().getPath() + "'";
+                    fits = JigsawDiagnostics.fits(
+                            pools, env.templates(), target.get().value(), jigsaw.target());
+                    if (fits == 0)
+                        issue = "no element of " + jigsaw.pool().location() + " offers '"
+                                + jigsaw.target().getPath() + "'";
                 }
             }
             item.addProperty("fits", fits);
@@ -865,7 +1194,8 @@ final class JigsawEditor {
             jigsaws.add(item);
         }
         out.add("jigsaws", jigsaws);
-        if (picture && (long) size.getX() * size.getY() * size.getZ() <= THUMBNAIL_VOLUME) out.add("thumb", thumbnail(template, size));
+        if (picture && (long) size.getX() * size.getY() * size.getZ() <= THUMBNAIL_VOLUME)
+            out.add("thumb", thumbnail(template, size));
     }
 
     /** The blocks of a template as a byte per cell (0 is empty), x first, then z, then y, with the names the numbers stand for; deflated, as base64. */
@@ -877,14 +1207,25 @@ final class JigsawEditor {
             var state = info.state();
             if (state.isAir() || state.is(Blocks.STRUCTURE_VOID)) continue;
             var name = BlockStateParser.serialize(state);
-            int slot = index.computeIfAbsent(name, key -> { names.add(key); return names.size(); });
+            int slot = index.computeIfAbsent(name, key -> {
+                names.add(key);
+                return names.size();
+            });
             var at = info.pos();
-            if (at.getX() < 0 || at.getY() < 0 || at.getZ() < 0 || at.getX() >= size.getX() || at.getY() >= size.getY() || at.getZ() >= size.getZ()) continue;
+            if (at.getX() < 0
+                    || at.getY() < 0
+                    || at.getZ() < 0
+                    || at.getX() >= size.getX()
+                    || at.getY() >= size.getY()
+                    || at.getZ() >= size.getZ()) continue;
             cells[at.getX() + size.getX() * (at.getZ() + size.getZ() * at.getY())] = (byte) Math.min(slot, 255);
         }
         var packed = new ByteArrayOutputStream();
-        try (var out = new DeflaterOutputStream(packed, new Deflater(Deflater.BEST_COMPRESSION))) { out.write(cells); }
-        catch (IOException e) { throw new IllegalStateException(e); }
+        try (var out = new DeflaterOutputStream(packed, new Deflater(Deflater.BEST_COMPRESSION))) {
+            out.write(cells);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
         var thumb = new JsonObject();
         thumb.add("size", ints(size.getX(), size.getY(), size.getZ()));
         var palette = new JsonArray();
@@ -895,11 +1236,16 @@ final class JigsawEditor {
     }
 
     /** The pools a pool leads to, as nodes and arrows, to show loops and dead ends. */
-    private static JsonObject graph(JigsawPlanner.Env env, Registry<StructureTemplatePool> pools, ResourceLocation start) {
+    private static JsonObject graph(
+            JigsawPlanner.Env env, Registry<StructureTemplatePool> pools, ResourceLocation start) {
         var graph = new JsonObject();
         var nodes = new JsonArray();
         var edges = new JsonArray();
-        if (pools == null) { graph.add("nodes", nodes); graph.add("edges", edges); return graph; }
+        if (pools == null) {
+            graph.add("nodes", nodes);
+            graph.add("edges", edges);
+            return graph;
+        }
         var seen = new LinkedHashSet<ResourceLocation>();
         var queue = new ArrayDeque<ResourceLocation>(List.of(start));
         while (!queue.isEmpty() && seen.size() < 40) {
@@ -909,7 +1255,9 @@ final class JigsawEditor {
             var node = new JsonObject();
             node.addProperty("id", id.toString());
             node.addProperty("missing", holder.isEmpty());
-            node.addProperty("elements", holder.isEmpty() ? 0 : holder.get().value().getTemplates().size());
+            node.addProperty(
+                    "elements",
+                    holder.isEmpty() ? 0 : holder.get().value().getTemplates().size());
             nodes.add(node);
             if (holder.isEmpty()) continue;
             var counts = new TreeMap<String, Integer>();
@@ -919,14 +1267,36 @@ final class JigsawEditor {
                     if (template.isEmpty() || template.get().palettes.isEmpty()) continue;
                     for (var jigsaw : template.get().palettes.get(0).jigsaws()) {
                         var target = jigsaw.pool().location();
-                        if (target.getPath().equals("empty") && target.getNamespace().equals("minecraft")) continue;
+                        if (target.getPath().equals("empty")
+                                && target.getNamespace().equals("minecraft")) continue;
                         counts.merge(target.toString(), 1, Integer::sum);
                         queue.add(target);
                     }
                 }
-            counts.forEach((to, count) -> { var edge = new JsonObject(); edge.addProperty("from", id.toString()); edge.addProperty("to", to); edge.addProperty("count", count); edges.add(edge); });
+            counts.forEach((to, count) -> {
+                var edge = new JsonObject();
+                edge.addProperty("from", id.toString());
+                edge.addProperty("to", to);
+                edge.addProperty("count", count);
+                edges.add(edge);
+            });
         }
-        for (var edge : edges) { var to = edge.getAsJsonObject().get("to").getAsString(); var id = ResourceLocation.tryParse(to); if (id != null && !seen.contains(id) && nodes.size() < 48) { var node = new JsonObject(); node.addProperty("id", to); node.addProperty("missing", pools.get(ResourceKey.create(Registries.TEMPLATE_POOL, id)).isEmpty()); node.addProperty("elements", 0); node.addProperty("more", true); nodes.add(node); seen.add(id); } }
+        for (var edge : edges) {
+            var to = edge.getAsJsonObject().get("to").getAsString();
+            var id = ResourceLocation.tryParse(to);
+            if (id != null && !seen.contains(id) && nodes.size() < 48) {
+                var node = new JsonObject();
+                node.addProperty("id", to);
+                node.addProperty(
+                        "missing",
+                        pools.get(ResourceKey.create(Registries.TEMPLATE_POOL, id))
+                                .isEmpty());
+                node.addProperty("elements", 0);
+                node.addProperty("more", true);
+                nodes.add(node);
+                seen.add(id);
+            }
+        }
         graph.add("nodes", nodes);
         graph.add("edges", edges);
         return graph;
@@ -934,19 +1304,26 @@ final class JigsawEditor {
 
     /** How long the search for the users of a pool may take: every pool of the game and the packs is read, which can be a great many templates. */
     private static final long USED_BY_NANOS = 3_000_000_000L;
+
     private static final int USED_BY_MAX = 300;
 
     /** The connectors of the elements of every pool whose pool is this one: the pool, the element's number in it, its template and the connector's name and target. */
-    private static JsonArray usedBy(JigsawPlanner.Env env, Registry<StructureTemplatePool> pools, ResourceLocation id, boolean[] truncated) {
+    private static JsonArray usedBy(
+            JigsawPlanner.Env env, Registry<StructureTemplatePool> pools, ResourceLocation id, boolean[] truncated) {
         var out = new JsonArray();
         long end = System.nanoTime() + USED_BY_NANOS;
         var entries = new ArrayList<>(pools.entrySet());
-        entries.sort(Comparator.comparing((Map.Entry<ResourceKey<StructureTemplatePool>, StructureTemplatePool> e) -> !e.getKey().location().getNamespace().equals("craftium")).thenComparing(e -> e.getKey().location().toString()));
+        entries.sort(Comparator.comparing((Map.Entry<ResourceKey<StructureTemplatePool>, StructureTemplatePool> e) ->
+                        !e.getKey().location().getNamespace().equals("craftium"))
+                .thenComparing(e -> e.getKey().location().toString()));
         for (var entry : entries) {
             var from = entry.getKey().location();
             var templates = entry.getValue().getTemplates();
             for (int i = 0; i < templates.size(); i++) {
-                if (System.nanoTime() > end || out.size() >= USED_BY_MAX) { truncated[0] = true; return out; }
+                if (System.nanoTime() > end || out.size() >= USED_BY_MAX) {
+                    truncated[0] = true;
+                    return out;
+                }
                 for (var single : singles(templates.get(i).getFirst())) {
                     var template = env.templates().get(single.getTemplateLocation());
                     if (template.isEmpty() || template.get().palettes.isEmpty()) continue;
@@ -955,7 +1332,8 @@ final class JigsawEditor {
                         var item = new JsonObject();
                         item.addProperty("pool", from.toString());
                         item.addProperty("element", i);
-                        item.addProperty("template", single.getTemplateLocation().toString());
+                        item.addProperty(
+                                "template", single.getTemplateLocation().toString());
                         item.addProperty("name", jigsaw.name().toString());
                         item.addProperty("target", jigsaw.target().toString());
                         out.add(item);
@@ -968,9 +1346,17 @@ final class JigsawEditor {
 
     private static List<SinglePoolElement> singles(StructurePoolElement element) {
         if (element instanceof SinglePoolElement single) return List.of(single);
-        if (element instanceof ListPoolElement list) { var out = new ArrayList<SinglePoolElement>(); for (var inner : list.getElements()) out.addAll(singles(inner)); return out; }
+        if (element instanceof ListPoolElement list) {
+            var out = new ArrayList<SinglePoolElement>();
+            for (var inner : list.getElements()) out.addAll(singles(inner));
+            return out;
+        }
         return List.of();
     }
 
-    private static JsonArray ints(int... values) { var array = new JsonArray(); for (int v : values) array.add(v); return array; }
+    private static JsonArray ints(int... values) {
+        var array = new JsonArray();
+        for (int v : values) array.add(v);
+        return array;
+    }
 }

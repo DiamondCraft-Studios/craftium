@@ -1,8 +1,9 @@
 package dev.craftium.core;
 
-import org.junit.jupiter.api.Test;
-import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * The icon ids are what a tool, a setting or a plugin names to choose an icon, so an id that is listed keeps meaning the same icon at the same
@@ -11,7 +12,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class IconCatalogTest {
     /** id @@ category @@ size. */
-    private static final String ICONS = """
+    private static final String ICONS =
+            """
         craftium:tool/box_select @@ Tools/Select @@ 24x24
         craftium:tool/magic_select @@ Tools/Select @@ 24x24
         craftium:tool/lasso_select @@ Tools/Select @@ 24x24
@@ -82,22 +84,31 @@ class IconCatalogTest {
         craftium:ui/check @@ Interface @@ 12x12
         """;
 
-    private static List<String> lines() { return ICONS.lines().map(String::strip).filter(s -> !s.isEmpty()).toList(); }
+    private static List<String> lines() {
+        return ICONS.lines().map(String::strip).filter(s -> !s.isEmpty()).toList();
+    }
 
-    private static String describe(IconSpec icon) { return icon.id() + " @@ " + icon.category() + " @@ " + icon.width() + "x" + icon.height(); }
+    private static String describe(IconSpec icon) {
+        return icon.id() + " @@ " + icon.category() + " @@ " + icon.width() + "x" + icon.height();
+    }
 
-    @Test void everyIconThatWasListedIsStillListedWhereItWas() {
+    @Test
+    void everyIconThatWasListedIsStillListedWhereItWas() {
         var current = new HashSet<String>();
         for (IconSpec icon : IconCatalog.all()) current.add(describe(icon));
-        for (String line : lines()) assertTrue(current.contains(line), line + " was removed, renamed, moved or resized");
+        for (String line : lines())
+            assertTrue(current.contains(line), line + " was removed, renamed, moved or resized");
     }
 
-    @Test void everyIconInTheCatalogHasARow() {
+    @Test
+    void everyIconInTheCatalogHasARow() {
         var pinned = new HashSet<>(lines());
-        for (IconSpec icon : IconCatalog.all()) assertTrue(pinned.contains(describe(icon)), describe(icon) + " needs a row in IconCatalogTest");
+        for (IconSpec icon : IconCatalog.all())
+            assertTrue(pinned.contains(describe(icon)), describe(icon) + " needs a row in IconCatalogTest");
     }
 
-    @Test void idsAreUniqueNamespacedAndLabelled() {
+    @Test
+    void idsAreUniqueNamespacedAndLabelled() {
         var seen = new HashSet<String>();
         for (IconSpec icon : IconCatalog.all()) {
             assertTrue(seen.add(icon.id()), "duplicate " + icon.id());
@@ -107,21 +118,39 @@ class IconCatalogTest {
         }
     }
 
-    @Test void everyToolBlockMatchAndShapeHasAnIcon() {
-        for (Tool tool : Tool.values()) assertTrue(IconCatalog.find(IconCatalog.tool(tool)).isPresent(), tool.name());
-        for (Options.Compare compare : Options.Compare.values()) assertTrue(IconCatalog.find(IconCatalog.compare(compare)).isPresent(), compare.name());
-        for (BrushMath.Shape shape : BrushMath.Shape.values()) assertTrue(IconCatalog.find(IconCatalog.shape(shape)).isPresent(), shape.name());
+    @Test
+    void everyToolBlockMatchAndShapeHasAnIcon() {
+        for (Tool tool : Tool.values())
+            assertTrue(IconCatalog.find(IconCatalog.tool(tool)).isPresent(), tool.name());
+        for (Options.Compare compare : Options.Compare.values())
+            assertTrue(IconCatalog.find(IconCatalog.compare(compare)).isPresent(), compare.name());
+        for (BrushMath.Shape shape : BrushMath.Shape.values())
+            assertTrue(IconCatalog.find(IconCatalog.shape(shape)).isPresent(), shape.name());
     }
 
-    @Test void categoriesAreListedInOrderAndEveryIconIsInOne() {
-        assertEquals(List.of("Tools/Select", "Tools/Draw", "Tools/Paint", "Tools/Sculpt", "Tools/Terrain", "Tools/Utility", "Tools/Transform",
-            IconCatalog.CATEGORY_MATCHING, IconCatalog.CATEGORY_SHAPES, IconCatalog.CATEGORY_INTERFACE), IconCatalog.categories());
+    @Test
+    void categoriesAreListedInOrderAndEveryIconIsInOne() {
+        assertEquals(
+                List.of(
+                        "Tools/Select",
+                        "Tools/Draw",
+                        "Tools/Paint",
+                        "Tools/Sculpt",
+                        "Tools/Terrain",
+                        "Tools/Utility",
+                        "Tools/Transform",
+                        IconCatalog.CATEGORY_MATCHING,
+                        IconCatalog.CATEGORY_SHAPES,
+                        IconCatalog.CATEGORY_INTERFACE),
+                IconCatalog.categories());
         int listed = 0;
-        for (String category : IconCatalog.categories()) listed += IconCatalog.inCategory(category).size();
+        for (String category : IconCatalog.categories())
+            listed += IconCatalog.inCategory(category).size();
         assertEquals(IconCatalog.all().size(), listed);
     }
 
-    @Test void blockIconsAreNamedByTheirBlockAndAreNotListed() {
+    @Test
+    void blockIconsAreNamedByTheirBlockAndAreNotListed() {
         assertTrue(IconCatalog.isBlock(IconCatalog.block("minecraft:stone")));
         assertTrue(IconCatalog.exists("block:minecraft:oak_stairs"));
         assertEquals("minecraft:stone", IconCatalog.blockId("block:minecraft:stone"));
@@ -132,7 +161,8 @@ class IconCatalogTest {
         assertFalse(IconCatalog.all().stream().anyMatch(icon -> IconCatalog.isBlock(icon.id())));
     }
 
-    @Test void unknownIconsDoNotExist() {
+    @Test
+    void unknownIconsDoNotExist() {
         assertFalse(IconCatalog.exists("craftium:tool/not_a_tool"));
         assertFalse(IconCatalog.exists(""));
         assertTrue(IconCatalog.find("craftium:tool/painter").isPresent());

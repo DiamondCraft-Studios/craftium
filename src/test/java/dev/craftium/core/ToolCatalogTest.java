@@ -1,11 +1,13 @@
 package dev.craftium.core;
 
-import org.junit.jupiter.api.Test;
-import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.*;
+import org.junit.jupiter.api.Test;
+
 class ToolCatalogTest {
-    @Test void everyToolHasASpecWithAUniqueNamespacedId() {
+    @Test
+    void everyToolHasASpecWithAUniqueNamespacedId() {
         var ids = new HashSet<String>();
         for (Tool tool : Tool.values()) {
             var spec = ToolCatalog.of(tool);
@@ -16,7 +18,8 @@ class ToolCatalogTest {
         }
     }
 
-    @Test void aSpecCarriesTheToolsOwnLabelIconSectionAndDescription() {
+    @Test
+    void aSpecCarriesTheToolsOwnLabelIconSectionAndDescription() {
         for (Tool tool : Tool.values()) {
             var spec = tool.spec();
             assertEquals(tool.label, spec.label(), tool.name());
@@ -26,7 +29,8 @@ class ToolCatalogTest {
         }
     }
 
-    @Test void everyToolsIconIsInTheIconCatalog() {
+    @Test
+    void everyToolsIconIsInTheIconCatalog() {
         for (Tool tool : Tool.values()) {
             var icon = IconCatalog.find(tool.spec().iconId());
             assertTrue(icon.isPresent(), tool.name());
@@ -35,8 +39,10 @@ class ToolCatalogTest {
         }
     }
 
-    @Test void everyToolTakesInputTheWayItAlwaysDid() {
-        // The tools whose use button does something other than send a request for the block under the cursor, and what each does.
+    @Test
+    void everyToolTakesInputTheWayItAlwaysDid() {
+        // The tools whose use button does something other than send a request for the block under the cursor, and what
+        // each does.
         var special = new EnumMap<Tool, InteractionKind>(Tool.class);
         special.put(Tool.PATH, InteractionKind.POINTS);
         special.put(Tool.MODELLING, InteractionKind.POINTS);
@@ -57,10 +63,15 @@ class ToolCatalogTest {
         special.put(Tool.GRADIENT_PAINTER, InteractionKind.SHIFT_POINTS);
         special.put(Tool.SLOPE, InteractionKind.ANCHOR_PAIR);
         special.put(Tool.INSPECT, InteractionKind.INSPECT);
-        for (Tool tool : Tool.values()) assertEquals(special.getOrDefault(tool, InteractionKind.CLICK), tool.spec().interaction(), tool.name());
+        for (Tool tool : Tool.values())
+            assertEquals(
+                    special.getOrDefault(tool, InteractionKind.CLICK),
+                    tool.spec().interaction(),
+                    tool.name());
     }
 
-    @Test void thePaintAndSculptToolsBuildWhenTheButtonIsLetGoExceptModify() {
+    @Test
+    void thePaintAndSculptToolsBuildWhenTheButtonIsLetGoExceptModify() {
         for (Tool tool : Tool.values()) {
             boolean expected = tool.group.equals("Paint") || tool.group.equals("Sculpt") && tool != Tool.MODIFY;
             assertEquals(expected, tool.spec().buildsOnRelease(), tool.name());
@@ -71,7 +82,8 @@ class ToolCatalogTest {
         assertFalse(Tool.FREEHAND_DRAW.spec().buildsOnRelease());
     }
 
-    @Test void onlyTheGeneralInteractionKindsAreOpenToPlugins() {
+    @Test
+    void onlyTheGeneralInteractionKindsAreOpenToPlugins() {
         assertTrue(InteractionKind.CLICK.forPlugins);
         assertTrue(InteractionKind.POINTS.forPlugins);
         assertTrue(InteractionKind.BOX.forPlugins);
@@ -88,7 +100,8 @@ class ToolCatalogTest {
         assertFalse(InteractionKind.ANCHOR_PAIR.forPlugins);
     }
 
-    @Test void theToolMethodsAnswerFromTheSpec() {
+    @Test
+    void theToolMethodsAnswerFromTheSpec() {
         for (Tool tool : Tool.values()) {
             var spec = tool.spec();
             assertEquals(spec.brushUse(), tool.brushUse(), tool.name());
@@ -100,7 +113,8 @@ class ToolCatalogTest {
         }
     }
 
-    @Test void everyToolsDefaultKeyIsALetterOrUnbound() {
+    @Test
+    void everyToolsDefaultKeyIsALetterOrUnbound() {
         for (Tool tool : Tool.values()) {
             int key = ToolCatalog.of(tool).defaultKey();
             assertTrue(key == -1 || key >= 'A' && key <= 'Z', tool.name());

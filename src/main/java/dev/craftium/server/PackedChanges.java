@@ -1,7 +1,6 @@
 package dev.craftium.server;
 
 import dev.craftium.core.Point;
-
 import java.util.AbstractList;
 import java.util.HashMap;
 import java.util.List;
@@ -32,7 +31,12 @@ final class PackedChanges extends AbstractList<Session.Change> implements Random
     private final int bytes;
 
     private PackedChanges(int[] x, int[] y, int[] z, char[] before, char[] after, BlockSnapshot[] palette) {
-        this.x = x; this.y = y; this.z = z; this.before = before; this.after = after; this.palette = palette;
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.before = before;
+        this.after = after;
+        this.palette = palette;
         long total = 64 + (long) x.length * BYTES_PER_CHANGE;
         for (var snapshot : palette) {
             total += ENTRY_BYTES;
@@ -45,27 +49,48 @@ final class PackedChanges extends AbstractList<Session.Change> implements Random
     static List<Session.Change> pack(List<Session.Change> changes) {
         int n = changes.size();
         if (n < MIN_SIZE || changes instanceof PackedChanges) return changes;
-        var x = new int[n]; var y = new int[n]; var z = new int[n];
-        var before = new char[n]; var after = new char[n];
+        var x = new int[n];
+        var y = new int[n];
+        var z = new int[n];
+        var before = new char[n];
+        var after = new char[n];
         var index = new HashMap<BlockSnapshot, Integer>();
         var entries = new java.util.ArrayList<BlockSnapshot>();
-        BlockSnapshot lastSnapshot = null; int lastIndex = 0; // a run of the same block is the common case
+        BlockSnapshot lastSnapshot = null;
+        int lastIndex = 0; // a run of the same block is the common case
         int i = 0;
         for (var change : changes) {
             var pos = change.pos();
-            x[i] = pos.x(); y[i] = pos.y(); z[i] = pos.z();
-            var b = change.before(); var a = change.after();
+            x[i] = pos.x();
+            y[i] = pos.y();
+            z[i] = pos.z();
+            var b = change.before();
+            var a = change.after();
             if (b == null || a == null) return changes;
             int bi, ai;
-            if (b == lastSnapshot) bi = lastIndex; else { bi = indexOf(index, entries, b); if (bi < 0) return changes; lastSnapshot = b; lastIndex = bi; }
-            if (a == lastSnapshot) ai = lastIndex; else { ai = indexOf(index, entries, a); if (ai < 0) return changes; lastSnapshot = a; lastIndex = ai; }
-            before[i] = (char) bi; after[i] = (char) ai;
+            if (b == lastSnapshot) bi = lastIndex;
+            else {
+                bi = indexOf(index, entries, b);
+                if (bi < 0) return changes;
+                lastSnapshot = b;
+                lastIndex = bi;
+            }
+            if (a == lastSnapshot) ai = lastIndex;
+            else {
+                ai = indexOf(index, entries, a);
+                if (ai < 0) return changes;
+                lastSnapshot = a;
+                lastIndex = ai;
+            }
+            before[i] = (char) bi;
+            after[i] = (char) ai;
             i++;
         }
         return new PackedChanges(x, y, z, before, after, entries.toArray(new BlockSnapshot[0]));
     }
 
-    private static int indexOf(HashMap<BlockSnapshot, Integer> index, java.util.ArrayList<BlockSnapshot> entries, BlockSnapshot snapshot) {
+    private static int indexOf(
+            HashMap<BlockSnapshot, Integer> index, java.util.ArrayList<BlockSnapshot> entries, BlockSnapshot snapshot) {
         var known = index.get(snapshot);
         if (known != null) return known;
         if (entries.size() >= MAX_PALETTE) return -1;
@@ -75,12 +100,18 @@ final class PackedChanges extends AbstractList<Session.Change> implements Random
         return at;
     }
 
-    @Override public Session.Change get(int i) {
+    @Override
+    public Session.Change get(int i) {
         return new Session.Change(new Point(x[i], y[i], z[i]), palette[before[i]], palette[after[i]]);
     }
 
-    @Override public int size() { return x.length; }
+    @Override
+    public int size() {
+        return x.length;
+    }
 
     /** What this list holds in memory, for the history budget. */
-    int bytes() { return bytes; }
+    int bytes() {
+        return bytes;
+    }
 }

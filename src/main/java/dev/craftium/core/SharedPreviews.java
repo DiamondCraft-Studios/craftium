@@ -22,14 +22,16 @@ public final class SharedPreviews {
             if (entry.data() == null || entry.data().isEmpty()) continue;
             out.add(new Shown(entry.name(), entry.data(), entry.id()));
         }
-        out.sort(Comparator.comparing(Shown::owner).thenComparingLong(Shown::id)); // the same set is always in the same order, so its key is stable
+        out.sort(Comparator.comparing(Shown::owner)
+                .thenComparingLong(Shown::id)); // the same set is always in the same order, so its key is stable
         return out;
     }
 
     /** Names exactly what is shown, to tell whether it changed: who has a preview and which one. Equal keys mean nothing needs sending. */
     public static String key(List<Shown> shown) {
         var sb = new StringBuilder();
-        for (var one : shown) sb.append(one.owner()).append('#').append(one.id()).append(';');
+        for (var one : shown)
+            sb.append(one.owner()).append('#').append(one.id()).append(';');
         return sb.toString();
     }
 }

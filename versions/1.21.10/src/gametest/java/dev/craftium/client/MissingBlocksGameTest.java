@@ -3,15 +3,14 @@ package dev.craftium.client;
 import dev.craftium.block.MissingBlockEntity;
 import dev.craftium.core.Options;
 import dev.craftium.server.MissingBlocks;
+import java.util.ArrayList;
+import java.util.List;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.core.BlockPos;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * The Missing blocks window end to end on a real server: it is not there while nothing is missing, comes up by itself when blocks are found,
@@ -24,33 +23,61 @@ public final class MissingBlocksGameTest implements FabricClientGameTest {
     private final TestSingleplayerContext w;
 
     /** The launcher makes the test with no arguments; the world is made in {@link #runTest}. */
-    public MissingBlocksGameTest() { this.c = null; this.w = null; }
-    private MissingBlocksGameTest(ClientGameTestContext c, TestSingleplayerContext w) { this.c = c; this.w = w; }
+    public MissingBlocksGameTest() {
+        this.c = null;
+        this.w = null;
+    }
 
-    @Override public void runTest(ClientGameTestContext ctx) {
+    private MissingBlocksGameTest(ClientGameTestContext c, TestSingleplayerContext w) {
+        this.c = c;
+        this.w = w;
+    }
+
+    @Override
+    public void runTest(ClientGameTestContext ctx) {
         if (!"missingblocks".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))) return;
-        try (var world = ctx.worldBuilder().adjustSettings(st -> { st.setGameMode(net.minecraft.client.gui.screens.worldselection.WorldCreationUiState.SelectedGameMode.CREATIVE); st.setAllowCommands(true); }).create()) {
+        try (var world = ctx.worldBuilder()
+                .adjustSettings(st -> {
+                    st.setGameMode(
+                            net.minecraft.client.gui.screens.worldselection.WorldCreationUiState.SelectedGameMode
+                                    .CREATIVE);
+                    st.setAllowCommands(true);
+                })
+                .create()) {
             ctx.waitTicks(40);
             world.getClientWorld().waitForChunksDownload();
             new MissingBlocksGameTest(ctx, world).all();
         }
     }
 
-    private static void require(boolean ok, String message) { if (!ok) throw new AssertionError(message); }
+    private static void require(boolean ok, String message) {
+        if (!ok) throw new AssertionError(message);
+    }
 
     private static final List<String> IDS = List.of(
-        "fakemod:marble[axis=y]", "fakemod:marble_bricks", "fakemod:polished_marble[axis=x]",
-        "othermod:copper_pipe[waterlogged=false]", "othermod:glow_crystal[age=2]", "othermod:ancient_runestone");
+            "fakemod:marble[axis=y]",
+            "fakemod:marble_bricks",
+            "fakemod:polished_marble[axis=x]",
+            "othermod:copper_pipe[waterlogged=false]",
+            "othermod:glow_crystal[age=2]",
+            "othermod:ancient_runestone");
 
     private void all() {
-        c.runOnClient(mc -> { mc.getWindow().setWindowed(1200, 800); mc.options.guiScale().set(1); mc.resizeDisplay(); mc.player.getAbilities().flying = true; });
+        c.runOnClient(mc -> {
+            mc.getWindow().setWindowed(1200, 800);
+            mc.options.guiScale().set(1);
+            mc.resizeDisplay();
+            mc.player.getAbilities().flying = true;
+        });
         c.waitFor(mc -> mc.player.onGround() || mc.player.getAbilities().flying, 600);
         c.runOnClient(mc -> {
             ClientState.options = new Options();
             ClientState.options.confirmEdits = false;
             CraftiumClient.resetEditor();
             WorkspaceLayout.reset();
-            mc.player.setYRot(0f); mc.player.setXRot(20f); mc.player.setOldPosAndRot();
+            mc.player.setYRot(0f);
+            mc.player.setXRot(20f);
+            mc.player.setOldPosAndRot();
             CraftiumClient.open(false);
         });
         c.waitTicks(10);
@@ -58,7 +85,9 @@ public final class MissingBlocksGameTest implements FabricClientGameTest {
 
         // nothing is missing yet: the window is not there
         require(c.computeOnClient(mc -> ClientState.missingBlocks.isEmpty()), "no missing blocks to start with");
-        require(!lines().stream().anyMatch(l -> l.contains(" missing ")), "the window is not drawn while nothing is missing");
+        require(
+                !lines().stream().anyMatch(l -> l.contains(" missing ")),
+                "the window is not drawn while nothing is missing");
 
         // the world meets six kinds of missing block; five of the first and two of the second are placed in the world
         w.getServer().runOnServer(server -> {
@@ -77,8 +106,12 @@ public final class MissingBlocksGameTest implements FabricClientGameTest {
         });
         c.waitFor(mc -> ClientState.missingBlocks.size() == IDS.size(), 400);
         c.waitTicks(5);
-        require(c.computeOnClient(mc -> ClientState.missingBlocks.equals(IDS)), "the client lists the ids in the order of the table");
-        require(lines().stream().anyMatch(l -> l.startsWith("text missing ") && l.contains("fakemod:marble[axis=y]")), "the window lists the first id");
+        require(
+                c.computeOnClient(mc -> ClientState.missingBlocks.equals(IDS)),
+                "the client lists the ids in the order of the table");
+        require(
+                lines().stream().anyMatch(l -> l.startsWith("text missing ") && l.contains("fakemod:marble[axis=y]")),
+                "the window lists the first id");
         require(rows().size() == IDS.size(), "one row for each missing block, found " + rows().size());
         c.takeScreenshot("missing-blocks");
 
@@ -87,44 +120,69 @@ public final class MissingBlocksGameTest implements FabricClientGameTest {
         require(c.computeOnClient(mc -> menuOpen()), "right-clicking a row opens its menu");
         c.takeScreenshot("missing-blocks-menu");
         clickMenuItem(0);
-        require(c.computeOnClient(mc -> ClientState.options.maskActive.contains("fakemod:marble[axis=y]")), "Add to mask puts the original id in the block mask");
+        require(
+                c.computeOnClient(mc -> ClientState.options.maskActive.contains("fakemod:marble[axis=y]")),
+                "Add to mask puts the original id in the block mask");
         require(c.computeOnClient(mc -> !menuOpen()), "the menu closes after an item");
 
         // Select all: the five marble blocks in the loaded chunks, and not the two bricks
         rightClick(rows().get(0));
         clickMenuItem(1);
         c.waitFor(mc -> ClientState.status.selectionSize() == 5, 400);
-        require(c.computeOnClient(mc -> ClientState.status.selectionSize()) == 5, "Select all selects the five blocks of that id");
-        c.computeOnClient(mc -> { ClientState.options.missingBlock = ""; return null; });
-        require(c.computeOnClient(mc -> ClientState.options.missingBlock.isEmpty()), "the id is not kept in the tool settings");
+        require(
+                c.computeOnClient(mc -> ClientState.status.selectionSize()) == 5,
+                "Select all selects the five blocks of that id");
+        c.computeOnClient(mc -> {
+            ClientState.options.missingBlock = "";
+            return null;
+        });
+        require(
+                c.computeOnClient(mc -> ClientState.options.missingBlock.isEmpty()),
+                "the id is not kept in the tool settings");
 
         rightClick(rows().get(1));
         clickMenuItem(1);
         c.waitFor(mc -> ClientState.status.selectionSize() == 2, 400);
-        require(c.computeOnClient(mc -> ClientState.status.selectionSize()) == 2, "the other id selects its own two blocks");
+        require(
+                c.computeOnClient(mc -> ClientState.status.selectionSize()) == 2,
+                "the other id selects its own two blocks");
 
         // one with none placed says so instead of selecting nothing
         rightClick(rows().get(3));
         clickMenuItem(1);
         settle();
-        require(c.computeOnClient(mc -> ClientState.status.error() && ClientState.status.message().contains("No othermod:copper_pipe")), "an id with no block in the loaded chunks reports that");
-        c.runOnClient(mc -> { mc.player.setPos(base.getX() + 2.5, base.getY() + 3, base.getZ() - 6); mc.player.setYRot(0f); mc.player.setXRot(15f); mc.player.setOldPosAndRot(); });
+        require(
+                c.computeOnClient(mc -> ClientState.status.error()
+                        && ClientState.status.message().contains("No othermod:copper_pipe")),
+                "an id with no block in the loaded chunks reports that");
+        c.runOnClient(mc -> {
+            mc.player.setPos(base.getX() + 2.5, base.getY() + 3, base.getZ() - 6);
+            mc.player.setYRot(0f);
+            mc.player.setXRot(15f);
+            mc.player.setOldPosAndRot();
+        });
         rightClick(rows().get(0));
         clickMenuItem(1);
         c.waitFor(mc -> ClientState.status.selectionSize() == 5, 400);
         c.takeScreenshot("missing-blocks-selected");
 
         // and what the window cannot show: comparison, masks, bucket fill, import and export, on the live server
-        var failures = w.getServer().computeOnServer(server -> dev.craftium.server.MissingBlocksServerCheck.run(server));
+        var failures =
+                w.getServer().computeOnServer(server -> dev.craftium.server.MissingBlocksServerCheck.run(server));
         require(failures.isEmpty(), "server-side checks failed: " + failures);
     }
 
-    // ---- driving the window -----------------------------------------------------------------------------------------------------------------
+    // ---- driving the window
+    // -----------------------------------------------------------------------------------------------------------------
 
     private List<String> lines() {
         c.runOnClient(mc -> PanelLog.sink = new ArrayList<>());
         c.waitTicks(3);
-        return c.computeOnClient(mc -> { var copy = new ArrayList<>(PanelLog.sink); PanelLog.sink = null; return copy; });
+        return c.computeOnClient(mc -> {
+            var copy = new ArrayList<>(PanelLog.sink);
+            PanelLog.sink = null;
+            return copy;
+        });
     }
     /** The areas of the window's rows, {x, y, width, height}, top down. */
     private List<int[]> rows() {
@@ -133,26 +191,41 @@ public final class MissingBlocksGameTest implements FabricClientGameTest {
             if (!line.startsWith("control missing ")) continue;
             int quote = line.indexOf('\'');
             if (quote < 0 || !line.contains("Right-click for options")) continue;
-            var parts = line.substring("control missing ".length(), quote).trim().split(" ");
-            var at = parts[0].split(","); var size = parts[1].split("x");
-            out.add(new int[]{Integer.parseInt(at[0]), Integer.parseInt(at[1]), Integer.parseInt(size[0]), Integer.parseInt(size[1])});
+            var parts =
+                    line.substring("control missing ".length(), quote).trim().split(" ");
+            var at = parts[0].split(",");
+            var size = parts[1].split("x");
+            out.add(new int[] {
+                Integer.parseInt(at[0]), Integer.parseInt(at[1]), Integer.parseInt(size[0]), Integer.parseInt(size[1])
+            });
         }
         return out;
     }
-    private static boolean menuOpen() { return (int) field("missingMenu") >= 0; }
+
+    private static boolean menuOpen() {
+        return (int) field("missingMenu") >= 0;
+    }
+
     private static Object field(String name) {
         try {
-            var f = EditorScreen.class.getDeclaredField(name); f.setAccessible(true);
-            return f.get((EditorScreen) dev.craftium.client.compat.ClientCompat.screen(net.minecraft.client.Minecraft.getInstance()));
-        } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+            var f = EditorScreen.class.getDeclaredField(name);
+            f.setAccessible(true);
+            return f.get((EditorScreen)
+                    dev.craftium.client.compat.ClientCompat.screen(net.minecraft.client.Minecraft.getInstance()));
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
     }
+
     private void rightClick(int[] area) {
         require(area != null, "the row to right click is not in the window");
         c.runOnClient(mc -> {
             var screen = (EditorScreen) dev.craftium.client.compat.ClientCompat.screen(mc);
             double scale = (float) field("scale");
-            var event = new MouseButtonEvent((area[0] + area[2] / 2.0) * scale, (area[1] + area[3] / 2.0) * scale, new MouseButtonInfo(1, 0));
-            screen.mouseClicked(event, false); screen.mouseReleased(event);
+            var event = new MouseButtonEvent(
+                    (area[0] + area[2] / 2.0) * scale, (area[1] + area[3] / 2.0) * scale, new MouseButtonInfo(1, 0));
+            screen.mouseClicked(event, false);
+            screen.mouseReleased(event);
         });
         c.waitTicks(3);
     }
@@ -163,10 +236,12 @@ public final class MissingBlocksGameTest implements FabricClientGameTest {
             double scale = (float) field("scale");
             int x = (int) field("missingMenuX") + 20, y = (int) field("missingMenuY") + n * 18 + 9;
             var event = new MouseButtonEvent(x * scale, y * scale, new MouseButtonInfo(0, 0));
-            screen.mouseClicked(event, false); screen.mouseReleased(event);
+            screen.mouseClicked(event, false);
+            screen.mouseReleased(event);
         });
         settle();
     }
+
     private void settle() {
         c.waitTicks(8); // this version of the game test API cannot wait on packets, so give them ticks
         c.waitFor(mc -> !ClientState.status.busy(), 400);

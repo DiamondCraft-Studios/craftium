@@ -13,7 +13,9 @@ import net.minecraft.server.level.ServerPlayer;
  */
 record ActionUse(ServerPlayer player, Session session, Options options, Point target, Point normal) {
     /** A planner that reads the world as it will be once the edits waiting have been built. */
-    EditPlanner plan() { return new EditPlanner(player.level(), session, options); }
+    EditPlanner plan() {
+        return new EditPlanner(player.level(), session, options);
+    }
 
     /** Hands an edit in: held to the block limit, checked by the gate, then built or, when edits are confirmed first, shown as a ghost until the player says so. */
     void submit(Session.Edit edit) {
@@ -22,5 +24,7 @@ record ActionUse(ServerPlayer player, Session session, Options options, Point ta
     }
 
     /** Tells the player something in the status line. */
-    void say(String message) { EditorServer.send(player, session, message, false); }
+    void say(String message) {
+        EditorServer.send(player, session, message, false);
+    }
 }

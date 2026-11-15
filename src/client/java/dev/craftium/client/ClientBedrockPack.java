@@ -1,14 +1,14 @@
 package dev.craftium.client;
 
 import dev.craftium.net.Packets;
-import net.minecraft.client.Minecraft;
-import org.lwjgl.PointerBuffer;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.util.tinyfd.TinyFileDialogs;
 import java.nio.file.*;
 import java.util.Base64;
 import java.util.Locale;
 import java.util.function.Consumer;
+import net.minecraft.client.Minecraft;
+import org.lwjgl.PointerBuffer;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
 /**
  * The client's half of exporting a Bedrock pack: the save dialog (which starts in the Documents folder), writing the {@code .mcpack} the server sends to the place the
@@ -21,12 +21,19 @@ final class ClientBedrockPack {
     private static long pendingUntil;
     /** Whether a saved pack is shown in the file manager. A game test turns it off so no window opens. */
     static boolean revealAfterSaving = true;
+
     private ClientBedrockPack() {}
 
     /** Where the save dialog starts: a Craftium folder in the player's Documents, or the home folder when there is no Documents folder. */
     static Path defaultDirectory() {
         Path documents = null;
-        try { documents = javax.swing.filechooser.FileSystemView.getFileSystemView().getDefaultDirectory().toPath(); } catch (Throwable ignored) { /* no desktop classes: use the home folder */ }
+        try {
+            documents = javax.swing.filechooser.FileSystemView.getFileSystemView()
+                    .getDefaultDirectory()
+                    .toPath();
+        } catch (Throwable ignored) {
+            /* no desktop classes: use the home folder */
+        }
         if (documents == null || !Files.isDirectory(documents)) {
             Path home = Path.of(System.getProperty("user.home", "."));
             documents = Files.isDirectory(home.resolve("Documents")) ? home.resolve("Documents") : home;
@@ -37,23 +44,32 @@ final class ClientBedrockPack {
     /** The system's save dialog, started in {@link #defaultDirectory} with the pack's file name; {@code then} runs on the game thread with the chosen path, never when the dialog is cancelled. */
     static void choose(String fileName, Consumer<Path> then) {
         Path directory = defaultDirectory();
-        try { Files.createDirectories(directory); } catch (Exception ignored) { /* the dialog opens elsewhere */ }
+        try {
+            Files.createDirectories(directory);
+        } catch (Exception ignored) {
+            /* the dialog opens elsewhere */
+        }
         String start = directory.resolve(fileName).toString();
-        var thread = new Thread(() -> {
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                PointerBuffer filters = stack.mallocPointer(1);
-                filters.put(stack.UTF8("*.mcpack")).flip();
-                String chosen = TinyFileDialogs.tinyfd_saveFileDialog("Export Bedrock pack", start, filters, "Bedrock pack (*.mcpack)");
-                if (chosen == null) return;
-                Path path = Path.of(chosen);
-                String file = path.getFileName().toString();
-                if (!file.toLowerCase(Locale.ROOT).endsWith(".mcpack")) path = path.resolveSibling(file + ".mcpack");
-                Path result = path;
-                Minecraft.getInstance().execute(() -> then.accept(result));
-            } catch (Exception e) {
-                Minecraft.getInstance().execute(() -> ClientState.notify("Could not open the file dialog: " + e.getMessage()));
-            }
-        }, "Craftium Bedrock pack export");
+        var thread = new Thread(
+                () -> {
+                    try (MemoryStack stack = MemoryStack.stackPush()) {
+                        PointerBuffer filters = stack.mallocPointer(1);
+                        filters.put(stack.UTF8("*.mcpack")).flip();
+                        String chosen = TinyFileDialogs.tinyfd_saveFileDialog(
+                                "Export Bedrock pack", start, filters, "Bedrock pack (*.mcpack)");
+                        if (chosen == null) return;
+                        Path path = Path.of(chosen);
+                        String file = path.getFileName().toString();
+                        if (!file.toLowerCase(Locale.ROOT).endsWith(".mcpack"))
+                            path = path.resolveSibling(file + ".mcpack");
+                        Path result = path;
+                        Minecraft.getInstance().execute(() -> then.accept(result));
+                    } catch (Exception e) {
+                        Minecraft.getInstance()
+                                .execute(() -> ClientState.notify("Could not open the file dialog: " + e.getMessage()));
+                    }
+                },
+                "Craftium Bedrock pack export");
         thread.setDaemon(true);
         thread.start();
     }
@@ -89,11 +105,19 @@ final class ClientBedrockPack {
             String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
             if (os.contains("win")) new ProcessBuilder("explorer.exe", "/select," + file).start();
             else if (os.contains("mac")) new ProcessBuilder("open", "-R", file.toString()).start();
-            else new ProcessBuilder("xdg-open", file.getParent() == null ? "." : file.getParent().toString()).start();
+            else
+                new ProcessBuilder(
+                                "xdg-open",
+                                file.getParent() == null
+                                        ? "."
+                                        : file.getParent().toString())
+                        .start();
         } catch (Exception e) {
             ClientState.notify("Saved " + file + " (could not open the folder: " + e.getMessage() + ")");
         }
     }
 
-    static boolean exporting() { return pending != null && System.currentTimeMillis() < pendingUntil; }
+    static boolean exporting() {
+        return pending != null && System.currentTimeMillis() < pendingUntil;
+    }
 }

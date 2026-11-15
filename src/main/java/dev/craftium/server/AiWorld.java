@@ -25,15 +25,21 @@ final class AiWorld {
     static String blocks(ServerPlayer player, Point a, Point b) {
         require(a, b);
         var level = (ServerLevel) player.level();
-        int x0 = Math.min(a.x(), b.x()), x1 = Math.max(a.x(), b.x()), y0 = Math.min(a.y(), b.y()), y1 = Math.max(a.y(), b.y()), z0 = Math.min(a.z(), b.z()), z1 = Math.max(a.z(), b.z());
+        int x0 = Math.min(a.x(), b.x()),
+                x1 = Math.max(a.x(), b.x()),
+                y0 = Math.min(a.y(), b.y()),
+                y1 = Math.max(a.y(), b.y()),
+                z0 = Math.min(a.z(), b.z()),
+                z1 = Math.max(a.z(), b.z());
         long total = (long) (x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1);
-        if (total > MAX_BLOCKS) throw new IllegalArgumentException("Region has " + total + " blocks; read at most " + MAX_BLOCKS + " at a time");
+        if (total > MAX_BLOCKS)
+            throw new IllegalArgumentException(
+                    "Region has " + total + " blocks; read at most " + MAX_BLOCKS + " at a time");
         int fresh = unloaded(level, x0, z0, x1, z1);
         var runs = new BlockRuns();
         var at = new BlockPos.MutableBlockPos();
         for (int y = y0; y <= y1; y++)
-            for (int z = z0; z <= z1; z++)
-                for (int x = x0; x <= x1; x++) runs.add(name(level, at.set(x, y, z)));
+            for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) runs.add(name(level, at.set(x, y, z)));
         var out = new JsonObject();
         out.addProperty("ok", true);
         out.addProperty("source", "server");
@@ -44,7 +50,10 @@ final class AiWorld {
         var list = new JsonArray();
         for (int[] run : runs.runs()) list.add(ints(run[0], run[1]));
         out.add("runs", list);
-        out.addProperty("outsideWorld", BlockRuns.OUTSIDE + " marks a position above or below the world's height limits or past the world border");
+        out.addProperty(
+                "outsideWorld",
+                BlockRuns.OUTSIDE
+                        + " marks a position above or below the world's height limits or past the world border");
         out.addProperty("chunksLoadedForThisRead", fresh);
         return reply(out);
     }
@@ -57,9 +66,14 @@ final class AiWorld {
     static String surface(ServerPlayer player, Point a, Point b, boolean floor) {
         require(a, b);
         var level = (ServerLevel) player.level();
-        int x0 = Math.min(a.x(), b.x()), x1 = Math.max(a.x(), b.x()), z0 = Math.min(a.z(), b.z()), z1 = Math.max(a.z(), b.z());
+        int x0 = Math.min(a.x(), b.x()),
+                x1 = Math.max(a.x(), b.x()),
+                z0 = Math.min(a.z(), b.z()),
+                z1 = Math.max(a.z(), b.z());
         long columns = (long) (x1 - x0 + 1) * (z1 - z0 + 1);
-        if (columns > MAX_COLUMNS) throw new IllegalArgumentException("Area has " + columns + " columns; read at most " + MAX_COLUMNS + " (128 by 128) at a time");
+        if (columns > MAX_COLUMNS)
+            throw new IllegalArgumentException(
+                    "Area has " + columns + " columns; read at most " + MAX_COLUMNS + " (128 by 128) at a time");
         int fresh = unloaded(level, x0, z0, x1, z1);
         var type = floor ? Heightmap.Types.OCEAN_FLOOR : Heightmap.Types.MOTION_BLOCKING_NO_LEAVES;
         var names = new BlockRuns();
@@ -68,9 +82,17 @@ final class AiWorld {
         var at = new BlockPos.MutableBlockPos();
         for (int z = z0; z <= z1; z++)
             for (int x = x0; x <= x1; x++) {
-                if (!level.getWorldBorder().isWithinBounds(at.set(x, level.getMinY(), z))) { heights.add(Integer.MIN_VALUE); blocks.add(-1); continue; }
+                if (!level.getWorldBorder().isWithinBounds(at.set(x, level.getMinY(), z))) {
+                    heights.add(Integer.MIN_VALUE);
+                    blocks.add(-1);
+                    continue;
+                }
                 int top = level.getHeight(type, x, z) - 1;
-                if (top < level.getMinY()) { heights.add(Integer.MIN_VALUE); blocks.add(-1); continue; }
+                if (top < level.getMinY()) {
+                    heights.add(Integer.MIN_VALUE);
+                    blocks.add(-1);
+                    continue;
+                }
                 heights.add(top);
                 blocks.add(names.indexOf(name(level, at.set(x, top, z))));
             }
@@ -80,11 +102,15 @@ final class AiWorld {
         out.addProperty("kind", floor ? "floor" : "top");
         out.add("min", ints(x0, z0));
         out.add("size", ints(x1 - x0 + 1, z1 - z0 + 1));
-        out.addProperty("order", "x fastest, then z; heights[i] is the y of the column's top block, blocks[i] indexes the palette");
+        out.addProperty(
+                "order",
+                "x fastest, then z; heights[i] is the y of the column's top block, blocks[i] indexes the palette");
         out.add("palette", strings(names.palette()));
         out.add("heights", heights);
         out.add("blocks", blocks);
-        out.addProperty("noColumn", "A column past the world border or with no block in it has heights[i] = -2147483648 and blocks[i] = -1. A height of -1 is real: the top block is at y = -1 (as in a superflat world), not an empty column");
+        out.addProperty(
+                "noColumn",
+                "A column past the world border or with no block in it has heights[i] = -2147483648 and blocks[i] = -1. A height of -1 is real: the top block is at y = -1 (as in a superflat world), not an empty column");
         out.addProperty("chunksLoadedForThisRead", fresh);
         return reply(out);
     }
@@ -98,10 +124,12 @@ final class AiWorld {
         var needed = new java.util.ArrayList<int[]>();
         for (int cx = x0 >> 4; cx <= x1 >> 4; cx++)
             for (int cz = z0 >> 4; cz <= z1 >> 4; cz++) {
-                if (!level.getWorldBorder().isWithinBounds(new ChunkPos(cx, cz)) || level.getChunkSource().getChunkNow(cx, cz) != null) continue;
-                needed.add(new int[]{cx, cz});
+                if (!level.getWorldBorder().isWithinBounds(new ChunkPos(cx, cz))
+                        || level.getChunkSource().getChunkNow(cx, cz) != null) continue;
+                needed.add(new int[] {cx, cz});
                 if (needed.size() > MAX_BUILD_CHUNKS)
-                    throw new IllegalArgumentException("That build reaches more than " + MAX_BUILD_CHUNKS + " chunks that are not loaded; build closer to loaded ground, or in smaller pieces");
+                    throw new IllegalArgumentException("That build reaches more than " + MAX_BUILD_CHUNKS
+                            + " chunks that are not loaded; build closer to loaded ground, or in smaller pieces");
             }
         for (int[] at : needed) level.getChunk(at[0], at[1]);
     }
@@ -113,11 +141,14 @@ final class AiWorld {
     private static final class Palette {
         final java.util.List<String> names = new java.util.ArrayList<>();
         final java.util.Set<Integer> omit = new java.util.HashSet<>();
-        private final java.util.IdentityHashMap<net.minecraft.world.level.block.state.BlockState, Integer> ids = new java.util.IdentityHashMap<>();
+        private final java.util.IdentityHashMap<net.minecraft.world.level.block.state.BlockState, Integer> ids =
+                new java.util.IdentityHashMap<>();
         private final boolean hideAir;
         private int outside = -1;
 
-        Palette(boolean hideAir) { this.hideAir = hideAir; }
+        Palette(boolean hideAir) {
+            this.hideAir = hideAir;
+        }
 
         int of(net.minecraft.world.level.block.state.BlockState state) {
             Integer id = ids.get(state);
@@ -131,7 +162,10 @@ final class AiWorld {
         }
 
         int outside() {
-            if (outside < 0) { outside = names.size(); names.add(BlockRuns.OUTSIDE); }
+            if (outside < 0) {
+                outside = names.size();
+                names.add(BlockRuns.OUTSIDE);
+            }
             return outside;
         }
     }
@@ -145,19 +179,29 @@ final class AiWorld {
     static String previewBlocks(ServerPlayer player, Session ai, Point a, Point b, String view, String format) {
         require(a, b);
         if (view == null || view.isBlank()) view = "after";
-        if (!view.equals("after") && !view.equals("only") && !view.equals("world")) throw new IllegalArgumentException("\"view\" must be \"world\", \"after\" or \"only\"");
+        if (!view.equals("after") && !view.equals("only") && !view.equals("world"))
+            throw new IllegalArgumentException("\"view\" must be \"world\", \"after\" or \"only\"");
         var edit = ai.pendingEdit;
         if (edit == null && view.equals("only")) {
             var none = new JsonObject();
             none.addProperty("ok", true);
             none.addProperty("previewBlocks", 0);
-            none.addProperty("message", "There is no waiting preview. Call preview_build first, or read the world with source \"world\".");
+            none.addProperty(
+                    "message",
+                    "There is no waiting preview. Call preview_build first, or read the world with source \"world\".");
             return reply(none);
         }
-        int x0 = Math.min(a.x(), b.x()), x1 = Math.max(a.x(), b.x()), y0 = Math.min(a.y(), b.y()), y1 = Math.max(a.y(), b.y()), z0 = Math.min(a.z(), b.z()), z1 = Math.max(a.z(), b.z());
+        int x0 = Math.min(a.x(), b.x()),
+                x1 = Math.max(a.x(), b.x()),
+                y0 = Math.min(a.y(), b.y()),
+                y1 = Math.max(a.y(), b.y()),
+                z0 = Math.min(a.z(), b.z()),
+                z1 = Math.max(a.z(), b.z());
         int sx = x1 - x0 + 1, sy = y1 - y0 + 1, sz = z1 - z0 + 1;
         long total = (long) sx * sy * sz;
-        if (total > MAX_VIEW_CELLS) throw new IllegalArgumentException("Region has " + total + " blocks; read at most " + String.format(java.util.Locale.ROOT, "%,d", MAX_VIEW_CELLS) + " at a time");
+        if (total > MAX_VIEW_CELLS)
+            throw new IllegalArgumentException("Region has " + total + " blocks; read at most "
+                    + String.format(java.util.Locale.ROOT, "%,d", MAX_VIEW_CELLS) + " at a time");
         var level = (ServerLevel) player.level();
         boolean only = view.equals("only"), withPreview = !view.equals("world");
         var palette = new Palette(!only);
@@ -167,26 +211,53 @@ final class AiWorld {
             fresh = unloaded(level, x0, z0, x1, z1);
             fillFromWorld(level, palette, ids, x0, y0, z0, x1, y1, z1);
         } else java.util.Arrays.fill(ids, -1);
-        // The preview over it, in one pass over the edit's own changes: nothing is copied or indexed, so a read costs a walk of the list and
-        // the box. It counts what the preview places the way the game's ghost does, leaving out a change that keeps the block as it was.
+        // The preview over it, in one pass over the edit's own changes: nothing is copied or indexed, so a read costs a
+        // walk of the list and
+        // the box. It counts what the preview places the way the game's ghost does, leaving out a change that keeps the
+        // block as it was.
         int placed = 0;
-        if (edit != null) for (var change : edit.changes()) {
-            if (change.before().state() == change.after().state() && change.after().data() == null) continue;
-            placed++;
-            var at = change.pos();
-            if (!withPreview || at.x() < x0 || at.x() > x1 || at.y() < y0 || at.y() > y1 || at.z() < z0 || at.z() > z1) continue;
-            ids[(at.x() - x0) + sx * ((at.z() - z0) + sz * (at.y() - y0))] = palette.of(change.after().state());
-        }
-        var out = dev.craftium.core.BlockView.describe(x0, y0, z0, sx, sy, sz, ids, palette.names, palette.omit, format,
-            !only ? "Anything not listed is air." : "Anything not listed is not changed by the preview, and air means the preview clears that block.");
+        if (edit != null)
+            for (var change : edit.changes()) {
+                if (change.before().state() == change.after().state()
+                        && change.after().data() == null) continue;
+                placed++;
+                var at = change.pos();
+                if (!withPreview
+                        || at.x() < x0
+                        || at.x() > x1
+                        || at.y() < y0
+                        || at.y() > y1
+                        || at.z() < z0
+                        || at.z() > z1) continue;
+                ids[(at.x() - x0) + sx * ((at.z() - z0) + sz * (at.y() - y0))] =
+                        palette.of(change.after().state());
+            }
+        var out = dev.craftium.core.BlockView.describe(
+                x0,
+                y0,
+                z0,
+                sx,
+                sy,
+                sz,
+                ids,
+                palette.names,
+                palette.omit,
+                format,
+                !only
+                        ? "Anything not listed is air."
+                        : "Anything not listed is not changed by the preview, and air means the preview clears that block.");
         out.addProperty("source", "server");
         out.addProperty("view", view);
-        // How much of a waiting preview there is, also on a world read, so a read that leaves it out says that one is waiting.
+        // How much of a waiting preview there is, also on a world read, so a read that leaves it out says that one is
+        // waiting.
         out.addProperty("previewBlocks", placed);
         if (!only) out.addProperty("chunksLoadedForThisRead", fresh);
         String text = out.toString();
         if (text.length() > MAX_VIEW_REPLY)
-            throw new IllegalArgumentException("The answer is " + text.length() / 1000 + " KB; the limit is " + MAX_VIEW_REPLY / 1000 + " KB. Read a smaller box, or part of the build at a time (the preview holds " + placed + " blocks in all)");
+            throw new IllegalArgumentException(
+                    "The answer is " + text.length() / 1000 + " KB; the limit is " + MAX_VIEW_REPLY / 1000
+                            + " KB. Read a smaller box, or part of the build at a time (the preview holds " + placed
+                            + " blocks in all)");
         return text;
     }
 
@@ -195,19 +266,33 @@ final class AiWorld {
      * learns where the build went and what it is made of without another request. A change that keeps the block as it was is left out, as
      * the ghost and read_blocks leave it out.
      */
-    static String previewSummary(Session.Edit edit) { return summaryJson(edit).toString(); }
+    static String previewSummary(Session.Edit edit) {
+        return summaryJson(edit).toString();
+    }
 
     private static JsonObject summaryJson(Session.Edit edit) {
         var summary = new dev.craftium.core.PreviewSummary();
         var names = new java.util.IdentityHashMap<net.minecraft.world.level.block.Block, String>();
         for (var change : edit.changes()) {
-            if (change.before().state() == change.after().state() && change.after().data() == null) continue;
+            if (change.before().state() == change.after().state()
+                    && change.after().data() == null) continue;
             var state = change.after().state();
             var at = change.pos();
             String facing = null;
             for (var property : state.getProperties())
-                if (property.getName().equals("facing")) { facing = facing(state, property); break; }
-            summary.add(at.x(), at.y(), at.z(), names.computeIfAbsent(state.getBlock(), b -> net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(b).toString()), facing, state.isAir());
+                if (property.getName().equals("facing")) {
+                    facing = facing(state, property);
+                    break;
+                }
+            summary.add(
+                    at.x(),
+                    at.y(),
+                    at.z(),
+                    names.computeIfAbsent(state.getBlock(), b -> net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                            .getKey(b)
+                            .toString()),
+                    facing,
+                    state.isAir());
         }
         var out = summary.toJson();
         out.addProperty("ok", true);
@@ -216,7 +301,12 @@ final class AiWorld {
     }
 
     /** {@link #previewSummary(Session.Edit)} with what looks wrong in it, if anything: see {@link #warnings}. */
-    static String previewSummary(Session.Edit added, net.minecraft.server.level.ServerLevel level, Session.Edit whole, java.util.List<String> specWarnings, int takenBack) {
+    static String previewSummary(
+            Session.Edit added,
+            net.minecraft.server.level.ServerLevel level,
+            Session.Edit whole,
+            java.util.List<String> specWarnings,
+            int takenBack) {
         return previewSummary(added, level, whole, specWarnings, takenBack, java.util.List.of());
     }
 
@@ -224,7 +314,13 @@ final class AiWorld {
      * {@link #previewSummary(Session.Edit, net.minecraft.server.level.ServerLevel, Session.Edit, java.util.List, int)} with where the build runs into
      * other AI sessions' previews and recent builds, if it does: the AI is told which, so it can move the build or tell the player.
      */
-    static String previewSummary(Session.Edit added, net.minecraft.server.level.ServerLevel level, Session.Edit whole, java.util.List<String> specWarnings, int takenBack, java.util.List<String> conflicts) {
+    static String previewSummary(
+            Session.Edit added,
+            net.minecraft.server.level.ServerLevel level,
+            Session.Edit whole,
+            java.util.List<String> specWarnings,
+            int takenBack,
+            java.util.List<String> conflicts) {
         var out = summaryJson(added);
         if (takenBack > 0) out.addProperty("takenBack", takenBack);
         if (!conflicts.isEmpty()) {
@@ -251,13 +347,19 @@ final class AiWorld {
      * update pops them off). Each kind is one line, with how many and where the first is. Only what {@code added} placed is checked, against
      * the preview {@code whole} over the world.
      */
-    static java.util.List<String> warnings(net.minecraft.server.level.ServerLevel level, Session.Edit whole, Session.Edit added) {
+    static java.util.List<String> warnings(
+            net.minecraft.server.level.ServerLevel level, Session.Edit whole, Session.Edit added) {
         var planned = new java.util.HashMap<Point, net.minecraft.world.level.block.state.BlockState>();
-        for (var change : whole.changes()) planned.put(change.pos(), change.after().state());
+        for (var change : whole.changes())
+            planned.put(change.pos(), change.after().state());
         // A block in a chunk that is not loaded is unknown, not air: a torch backed by one is not warned about.
         java.util.function.Function<Point, net.minecraft.world.level.block.state.BlockState> at = p -> {
             var s = planned.get(p);
-            return s != null ? s : level.hasChunk(p.x() >> 4, p.z() >> 4) ? level.getBlockState(new net.minecraft.core.BlockPos(p.x(), p.y(), p.z())) : null;
+            return s != null
+                    ? s
+                    : level.hasChunk(p.x() >> 4, p.z() >> 4)
+                            ? level.getBlockState(new net.minecraft.core.BlockPos(p.x(), p.y(), p.z()))
+                            : null;
         };
         var halves = new java.util.LinkedHashMap<String, int[]>();
         var loose = new java.util.LinkedHashMap<String, int[]>();
@@ -265,14 +367,24 @@ final class AiWorld {
             var state = change.after().state();
             if (state.isAir()) continue;
             var p = change.pos();
-            String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
+            String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                    .getKey(state.getBlock())
+                    .getPath();
             Point other = null;
-            if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)) {
-                boolean lower = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF) == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER;
+            if (state.hasProperty(
+                    net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)) {
+                boolean lower = state.getValue(
+                                net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)
+                        == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER;
                 other = p.add(0, lower ? 1 : -1, 0);
-            } else if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.BED_PART) && state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)) {
-                var facing = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING);
-                boolean foot = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.BED_PART) == net.minecraft.world.level.block.state.properties.BedPart.FOOT;
+            } else if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.BED_PART)
+                    && state.hasProperty(
+                            net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)) {
+                var facing = state.getValue(
+                        net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING);
+                boolean foot =
+                        state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.BED_PART)
+                                == net.minecraft.world.level.block.state.properties.BedPart.FOOT;
                 other = p.add(facing.getStepX() * (foot ? 1 : -1), 0, facing.getStepZ() * (foot ? 1 : -1));
             }
             if (other != null) {
@@ -287,13 +399,19 @@ final class AiWorld {
             }
         }
         var out = new java.util.ArrayList<String>();
-        halves.forEach((id, n) -> out.add(n[0] + " " + id + " " + (n[0] == 1 ? "has" : "have") + " no other half (first at " + n[1] + " " + n[2] + " " + n[3] + "): set both halves, such as half=lower and half=upper"));
-        loose.forEach((id, n) -> out.add(n[0] + " " + id + " " + (n[0] == 1 ? "has" : "have") + " nothing to stand on or hang from (first at " + n[1] + " " + n[2] + " " + n[3] + "), so the game will drop " + (n[0] == 1 ? "it" : "them")));
+        halves.forEach(
+                (id, n) -> out.add(n[0] + " " + id + " " + (n[0] == 1 ? "has" : "have") + " no other half (first at "
+                        + n[1] + " " + n[2] + " " + n[3] + "): set both halves, such as half=lower and half=upper"));
+        loose.forEach((id, n) -> out.add(
+                n[0] + " " + id + " " + (n[0] == 1 ? "has" : "have") + " nothing to stand on or hang from (first at "
+                        + n[1] + " " + n[2] + " " + n[3] + "), so the game will drop " + (n[0] == 1 ? "it" : "them")));
         return out;
     }
 
     /** Whether {@code partner} is the other half of the door, tall plant or bed {@code state} is: the same block, with the opposite half or part. */
-    private static boolean isOtherHalf(net.minecraft.world.level.block.state.BlockState state, net.minecraft.world.level.block.state.BlockState partner) {
+    private static boolean isOtherHalf(
+            net.minecraft.world.level.block.state.BlockState state,
+            net.minecraft.world.level.block.state.BlockState partner) {
         if (!partner.is(state.getBlock())) return false;
         var half = net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF;
         if (state.hasProperty(half)) return partner.getValue(half) != state.getValue(half);
@@ -302,7 +420,7 @@ final class AiWorld {
     }
 
     private static void note(java.util.Map<String, int[]> found, String id, Point p) {
-        found.computeIfAbsent(id, k -> new int[]{0, p.x(), p.y(), p.z()})[0]++;
+        found.computeIfAbsent(id, k -> new int[] {0, p.x(), p.y(), p.z()})[0]++;
     }
 
     /** Where a block that hangs on something gets its support, or null for one that needs none. */
@@ -310,8 +428,10 @@ final class AiWorld {
         var FACING = net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING;
         // A grindstone is attached to a face as a button is, but the game keeps it wherever it is put.
         if (id.equals("grindstone")) return null;
-        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.ATTACH_FACE) && state.hasProperty(FACING)) {
-            var face = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.ATTACH_FACE);
+        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.ATTACH_FACE)
+                && state.hasProperty(FACING)) {
+            var face =
+                    state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.ATTACH_FACE);
             var facing = state.getValue(FACING);
             return switch (face) {
                 case FLOOR -> p.add(0, -1, 0);
@@ -319,38 +439,69 @@ final class AiWorld {
                 case WALL -> p.add(-facing.getStepX(), 0, -facing.getStepZ());
             };
         }
-        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HANGING) && (id.endsWith("lantern")))
-            return p.add(0, state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HANGING) ? 1 : -1, 0);
-        boolean wall = id.endsWith("wall_torch") || id.equals("ladder") || id.endsWith("wall_sign") || id.endsWith("wall_banner");
-        if (wall && state.hasProperty(FACING)) { var f = state.getValue(FACING); return p.add(-f.getStepX(), 0, -f.getStepZ()); }
-        if (id.equals("torch") || id.equals("soul_torch") || id.equals("redstone_torch") || id.equals("copper_torch") || (id.endsWith("_sign") && !id.endsWith("hanging_sign"))
-            || (id.endsWith("_banner") && !wall) || id.endsWith("pressure_plate") || id.endsWith("carpet") || id.endsWith("rail") || id.equals("flower_pot") || id.endsWith("candle"))
-            return p.add(0, -1, 0);
+        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HANGING)
+                && (id.endsWith("lantern")))
+            return p.add(
+                    0,
+                    state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HANGING)
+                            ? 1
+                            : -1,
+                    0);
+        boolean wall = id.endsWith("wall_torch")
+                || id.equals("ladder")
+                || id.endsWith("wall_sign")
+                || id.endsWith("wall_banner");
+        if (wall && state.hasProperty(FACING)) {
+            var f = state.getValue(FACING);
+            return p.add(-f.getStepX(), 0, -f.getStepZ());
+        }
+        if (id.equals("torch")
+                || id.equals("soul_torch")
+                || id.equals("redstone_torch")
+                || id.equals("copper_torch")
+                || (id.endsWith("_sign") && !id.endsWith("hanging_sign"))
+                || (id.endsWith("_banner") && !wall)
+                || id.endsWith("pressure_plate")
+                || id.endsWith("carpet")
+                || id.endsWith("rail")
+                || id.equals("flower_pot")
+                || id.endsWith("candle")) return p.add(0, -1, 0);
         return null;
     }
 
-    private static <T extends Comparable<T>> String facing(net.minecraft.world.level.block.state.BlockState state, net.minecraft.world.level.block.state.properties.Property<T> property) {
+    private static <T extends Comparable<T>> String facing(
+            net.minecraft.world.level.block.state.BlockState state,
+            net.minecraft.world.level.block.state.properties.Property<T> property) {
         return property.getName(state.getValue(property));
     }
 
     /** Fills {@code ids} with the world's blocks in the box, chunk by chunk, the world border and height limits reading as outside the world. */
-    private static void fillFromWorld(ServerLevel level, Palette palette, int[] ids, int x0, int y0, int z0, int x1, int y1, int z1) {
+    private static void fillFromWorld(
+            ServerLevel level, Palette palette, int[] ids, int x0, int y0, int z0, int x1, int y1, int z1) {
         int sx = x1 - x0 + 1, sz = z1 - z0 + 1, minY = level.getMinY(), maxY = minY + level.getHeight();
         var at = new BlockPos.MutableBlockPos();
         var border = level.getWorldBorder();
-        var inside = new boolean[sx * sz]; // per column, so the border is asked once for each and not for every block in it
-        for (int z = 0; z < sz; z++) for (int x = 0; x < sx; x++) inside[x + sx * z] = border.isWithinBounds(at.set(x0 + x, minY, z0 + z));
+        var inside =
+                new boolean[sx * sz]; // per column, so the border is asked once for each and not for every block in it
+        for (int z = 0; z < sz; z++)
+            for (int x = 0; x < sx; x++) inside[x + sx * z] = border.isWithinBounds(at.set(x0 + x, minY, z0 + z));
         for (int cx = x0 >> 4; cx <= x1 >> 4; cx++)
             for (int cz = z0 >> 4; cz <= z1 >> 4; cz++) {
                 net.minecraft.world.level.chunk.LevelChunk chunk = null;
-                int lx0 = Math.max(x0, cx << 4), lx1 = Math.min(x1, (cx << 4) + 15), lz0 = Math.max(z0, cz << 4), lz1 = Math.min(z1, (cz << 4) + 15);
+                int lx0 = Math.max(x0, cx << 4),
+                        lx1 = Math.min(x1, (cx << 4) + 15),
+                        lz0 = Math.max(z0, cz << 4),
+                        lz1 = Math.min(z1, (cz << 4) + 15);
                 for (int y = y0; y <= y1; y++) {
                     boolean outsideY = y < minY || y >= maxY;
                     for (int z = lz0; z <= lz1; z++) {
                         int row = (lx0 - x0) + sx * ((z - z0) + sz * (y - y0));
                         for (int x = lx0; x <= lx1; x++) {
                             int i = row + (x - lx0);
-                            if (outsideY || !inside[(x - x0) + sx * (z - z0)]) { ids[i] = palette.outside(); continue; }
+                            if (outsideY || !inside[(x - x0) + sx * (z - z0)]) {
+                                ids[i] = palette.outside();
+                                continue;
+                            }
                             if (chunk == null) chunk = level.getChunk(cx, cz);
                             ids[i] = palette.of(chunk.getBlockState(at.set(x, y, z)));
                         }
@@ -364,7 +515,9 @@ final class AiWorld {
      * pass over the blocks, because the selection lives on the server and can hold a million blocks: the answer is a few lines whatever its
      * size. It reads only chunks that are already loaded (a selection is made in loaded ground, and reading it must not make new ground).
      */
-    static String selection(ServerPlayer player, Session s) { return selection(player, s.selection.points(), null); }
+    static String selection(ServerPlayer player, Session s) {
+        return selection(player, s.selection.points(), null);
+    }
 
     /** As above for these points, with the entries of {@code extra} added to the answer (what an AI session is told about its pinned selection). */
     static String selection(ServerPlayer player, java.util.Set<Point> points, JsonObject extra) {
@@ -372,7 +525,8 @@ final class AiWorld {
         JsonObject out;
         if (points.isEmpty()) out = dev.craftium.core.SelectionReport.describe(points, null, 0, null);
         else {
-            out = dev.craftium.core.SelectionReport.describe(points, new LoadedBlocks(level), dev.craftium.core.SelectionReport.HEADROOM, null);
+            out = dev.craftium.core.SelectionReport.describe(
+                    points, new LoadedBlocks(level), dev.craftium.core.SelectionReport.HEADROOM, null);
             out.addProperty("source", "server");
         }
         if (extra != null) for (var entry : extra.entrySet()) out.add(entry.getKey(), entry.getValue());
@@ -389,17 +543,23 @@ final class AiWorld {
         private static final int SLOTS = 1024;
         private final ServerLevel level;
         private final BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
-        private final java.util.IdentityHashMap<net.minecraft.world.level.block.Block, String> names = new java.util.IdentityHashMap<>();
+        private final java.util.IdentityHashMap<net.minecraft.world.level.block.Block, String> names =
+                new java.util.IdentityHashMap<>();
         private final long[] keys = new long[SLOTS];
-        private final net.minecraft.world.level.chunk.LevelChunk[] chunks = new net.minecraft.world.level.chunk.LevelChunk[SLOTS];
+        private final net.minecraft.world.level.chunk.LevelChunk[] chunks =
+                new net.minecraft.world.level.chunk.LevelChunk[SLOTS];
         private final boolean[] inBorder = new boolean[SLOTS], filled = new boolean[SLOTS];
 
-        LoadedBlocks(ServerLevel level) { this.level = level; }
+        LoadedBlocks(ServerLevel level) {
+            this.level = level;
+        }
 
-        @Override public String at(int x, int y, int z) {
+        @Override
+        public String at(int x, int y, int z) {
             if (y < level.getMinY() || y >= level.getMinY() + level.getHeight()) return BlockRuns.OUTSIDE;
             int cx = x >> 4, cz = z >> 4;
-            long key = ((long) cx << 32) | (cz & 0xffffffffL); // our own key: ChunkPos's differs between Minecraft versions
+            long key = ((long) cx << 32)
+                    | (cz & 0xffffffffL); // our own key: ChunkPos's differs between Minecraft versions
             int slot = (int) ((key * 0x9E3779B97F4A7C15L) >>> 54) & (SLOTS - 1);
             if (!filled[slot] || keys[slot] != key) {
                 filled[slot] = true;
@@ -411,7 +571,9 @@ final class AiWorld {
             var chunk = chunks[slot];
             if (chunk == null) return null;
             var block = chunk.getBlockState(at.set(x, y, z)).getBlock();
-            return names.computeIfAbsent(block, b -> net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(b).toString());
+            return names.computeIfAbsent(block, b -> net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                    .getKey(b)
+                    .toString());
         }
     }
 
@@ -430,7 +592,8 @@ final class AiWorld {
             for (int cz = z0 >> 4; cz <= z1 >> 4; cz++) {
                 if (!level.getWorldBorder().isWithinBounds(new ChunkPos(cx, cz))) continue;
                 if (level.getChunkSource().getChunkNow(cx, cz) == null && ++fresh > MAX_NEW_CHUNKS)
-                    throw new IllegalArgumentException("That area needs more than " + MAX_NEW_CHUNKS + " chunks that are not loaded; read a smaller area, or one closer to what is loaded");
+                    throw new IllegalArgumentException("That area needs more than " + MAX_NEW_CHUNKS
+                            + " chunks that are not loaded; read a smaller area, or one closer to what is loaded");
             }
         return fresh;
     }
@@ -441,7 +604,8 @@ final class AiWorld {
 
     private static String reply(JsonObject out) {
         String text = out.toString();
-        if (text.length() > MAX_REPLY) throw new IllegalArgumentException("The result is too large to send; read a smaller area");
+        if (text.length() > MAX_REPLY)
+            throw new IllegalArgumentException("The result is too large to send; read a smaller area");
         return text;
     }
 

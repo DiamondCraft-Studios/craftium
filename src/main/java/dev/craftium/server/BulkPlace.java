@@ -1,5 +1,8 @@
 package dev.craftium.server;
 
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerLevel;
@@ -8,10 +11,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.lighting.LightEngine;
-
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.List;
 
 /**
  * Writes the blocks of one chunk in a single pass. {@code Level.setBlock} brings the chunk's heightmaps and sky light sources up
@@ -24,8 +23,11 @@ public final class BulkPlace {
     /** Below this many blocks in a chunk, the per-block bookkeeping costs less than redoing the whole chunk's. */
     static final int MIN_RUN = 64;
     /** The heightmaps a loaded chunk keeps up to date; the ones {@code LevelChunk.setBlockState} updates. */
-    private static final EnumSet<Heightmap.Types> HEIGHTMAPS = EnumSet.of(Heightmap.Types.MOTION_BLOCKING, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-            Heightmap.Types.OCEAN_FLOOR, Heightmap.Types.WORLD_SURFACE);
+    private static final EnumSet<Heightmap.Types> HEIGHTMAPS = EnumSet.of(
+            Heightmap.Types.MOTION_BLOCKING,
+            Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+            Heightmap.Types.OCEAN_FLOOR,
+            Heightmap.Types.WORLD_SURFACE);
     /** Lets a test turn the chunk write off to compare it with the per-block path. */
     public static boolean enabled = true;
     /** How many blocks have been written by this class; a test reads it to know the chunk write was the one used. */
@@ -35,7 +37,9 @@ public final class BulkPlace {
 
     /** Whether a run of this size, written with these flags, can be written as a run: the flags must be exactly the editor's own. */
     static boolean applies(int size, int flags) {
-        return enabled && size >= MIN_RUN && ((flags & ~Block.UPDATE_NEIGHBORS) | BlockSnapshot.NO_UPDATES) == BlockSnapshot.NO_UPDATES;
+        return enabled
+                && size >= MIN_RUN
+                && ((flags & ~Block.UPDATE_NEIGHBORS) | BlockSnapshot.NO_UPDATES) == BlockSnapshot.NO_UPDATES;
     }
 
     /** Writes every block of {@code run}, all of which are in {@code chunk}, to what the edit wants there. */
@@ -55,9 +59,15 @@ public final class BulkPlace {
             int x = pos.getX() & 15, y = pos.getY() & 15, z = pos.getZ() & 15;
             var old = section.getBlockState(x, y, z);
             // Block entities are made, kept and removed by more than a section write, so they keep the full path.
-            if (wanted.data() != null || wanted.state().hasBlockEntity() || old.hasBlockEntity()) { wanted.place(level, pos, flags); continue; }
+            if (wanted.data() != null || wanted.state().hasBlockEntity() || old.hasBlockEntity()) {
+                wanted.place(level, pos, flags);
+                continue;
+            }
             if (old == wanted.state()) continue;
-            if (touched[index] == null) { touched[index] = pos; emptyBefore[index] = section.hasOnlyAir(); }
+            if (touched[index] == null) {
+                touched[index] = pos;
+                emptyBefore[index] = section.hasOnlyAir();
+            }
             section.setBlockState(x, y, z, wanted.state());
             positions.add(pos);
             before.add(old);
@@ -65,7 +75,8 @@ public final class BulkPlace {
             if (LightEngine.hasDifferentLightProperties(old, wanted.state())) lightChanged = true;
         }
         if (positions.isEmpty()) return;
-        chunk.markUnsaved();blocksWritten += positions.size();
+        chunk.markUnsaved();
+        blocksWritten += positions.size();
         Heightmap.primeHeightmaps(chunk, HEIGHTMAPS);
         var chunkSource = level.getChunkSource();
         var lighting = chunkSource.getLightEngine();
@@ -74,7 +85,8 @@ public final class BulkPlace {
             boolean empty = sections[i].hasOnlyAir();
             if (empty == emptyBefore[i]) continue;
             lighting.updateSectionStatus(touched[i], empty);
-            chunkSource.onSectionEmptinessChanged(touched[i].getX() >> 4, touched[i].getY() >> 4, touched[i].getZ() >> 4, empty);
+            chunkSource.onSectionEmptinessChanged(
+                    touched[i].getX() >> 4, touched[i].getY() >> 4, touched[i].getZ() >> 4, empty);
         }
         // The light engine reads these sources when it runs a check, so they are right before any check is queued.
         if (lightChanged) chunk.getSkyLightSources().fillFrom(chunk);

@@ -13,7 +13,9 @@ public final class ToolCatalog {
 
     private ToolCatalog() {}
 
-    public static ToolSpec of(Tool tool) { return BUILTIN.get(tool); }
+    public static ToolSpec of(Tool tool) {
+        return BUILTIN.get(tool);
+    }
 
     private static Map<Tool, ToolSpec> build() {
         var specs = new EnumMap<Tool, ToolSpec>(Tool.class);
@@ -22,20 +24,64 @@ public final class ToolCatalog {
     }
 
     private static ToolSpec describe(Tool tool) {
-        boolean selection = tool == Tool.MAGIC_SELECT || tool == Tool.BOX_SELECT || tool == Tool.FREEHAND_SELECT || tool == Tool.LASSO_SELECT;
+        boolean selection = tool == Tool.MAGIC_SELECT
+                || tool == Tool.BOX_SELECT
+                || tool == Tool.FREEHAND_SELECT
+                || tool == Tool.LASSO_SELECT;
         boolean transform = tool == Tool.MOVE || tool == Tool.ROTATE || tool == Tool.SCALE || tool == Tool.PIVOT;
-        return new ToolSpec("craftium:" + tool.name().toLowerCase(Locale.ROOT), tool.label, tool.icon, IconCatalog.tool(tool), tool.group, tool.description,
-            brushUse(tool), interaction(tool), defaultKey(tool), useHint(tool),
-            transform && tool != Tool.PIVOT || tool == Tool.SHAPE,
-            !selection && !transform && tool != Tool.RULER && tool != Tool.ANNOTATION && tool != Tool.MODIFY && tool != Tool.LINE && tool != Tool.PATH && tool != Tool.MODELLING && tool != Tool.SHAPE && tool != Tool.INSPECT,
-            tool.group.equals("Sculpt") && tool != Tool.MODIFY || tool.group.equals("Paint"),
-            !selection && tool != Tool.RULER && tool != Tool.ANNOTATION && tool != Tool.TINKER && tool != Tool.PIVOT && tool != Tool.INSPECT,
-            selection, transform, java.util.List.of());
+        return new ToolSpec(
+                "craftium:" + tool.name().toLowerCase(Locale.ROOT),
+                tool.label,
+                tool.icon,
+                IconCatalog.tool(tool),
+                tool.group,
+                tool.description,
+                brushUse(tool),
+                interaction(tool),
+                defaultKey(tool),
+                useHint(tool),
+                transform && tool != Tool.PIVOT || tool == Tool.SHAPE,
+                !selection
+                        && !transform
+                        && tool != Tool.RULER
+                        && tool != Tool.ANNOTATION
+                        && tool != Tool.MODIFY
+                        && tool != Tool.LINE
+                        && tool != Tool.PATH
+                        && tool != Tool.MODELLING
+                        && tool != Tool.SHAPE
+                        && tool != Tool.INSPECT,
+                tool.group.equals("Sculpt") && tool != Tool.MODIFY || tool.group.equals("Paint"),
+                !selection
+                        && tool != Tool.RULER
+                        && tool != Tool.ANNOTATION
+                        && tool != Tool.TINKER
+                        && tool != Tool.PIVOT
+                        && tool != Tool.INSPECT,
+                selection,
+                transform,
+                java.util.List.of());
     }
 
     private static Tool.BrushUse brushUse(Tool tool) {
         return switch (tool) {
-            case FREEHAND_SELECT, PAINTER, NOISE_PAINTER, BIOME_PAINTER, CLENTAMINATOR, FREEHAND_DRAW, SHAPE, ERASE, SCULPT_DRAW, WELD, MELT, SMOOTH, DISTORT, ROUGHEN, SHATTER, GRADIENT_PAINTER, SCRIPT_BRUSH -> Tool.BrushUse.SHAPE;
+            case FREEHAND_SELECT,
+                    PAINTER,
+                    NOISE_PAINTER,
+                    BIOME_PAINTER,
+                    CLENTAMINATOR,
+                    FREEHAND_DRAW,
+                    SHAPE,
+                    ERASE,
+                    SCULPT_DRAW,
+                    WELD,
+                    MELT,
+                    SMOOTH,
+                    DISTORT,
+                    ROUGHEN,
+                    SHATTER,
+                    GRADIENT_PAINTER,
+                    SCRIPT_BRUSH -> Tool.BrushUse.SHAPE;
             case LINE, PATH -> Tool.BrushUse.SMALL_SHAPE;
             case ELEVATION, FLATTEN, SLOPE, STAMP -> Tool.BrushUse.DISC;
             case ROCK, FLUID_BALL, FLUID_BLOCK -> Tool.BrushUse.SPHERE;
@@ -67,9 +113,23 @@ public final class ToolCatalog {
     /** The key a tool starts on, from Axiom's published table where it names one; the rest start unbound. */
     private static int defaultKey(Tool tool) {
         return switch (tool) {
-            case MAGIC_SELECT -> 'M'; case BOX_SELECT -> 'B'; case FREEHAND_SELECT -> 'N'; case LASSO_SELECT -> 'L'; case PAINTER -> 'P'; case NOISE_PAINTER -> 'O';
-            case FREEHAND_DRAW -> 'G'; case MOVE -> 'V'; case ROTATE -> 'R'; case SCALE -> 'C'; case PIVOT -> 'I'; case ROCK -> 'H'; case WELD -> 'J'; case MELT -> 'K';
-            case ELEVATION -> 'E'; case SMOOTH -> 'U'; case EXTRUDE -> 'Z';
+            case MAGIC_SELECT -> 'M';
+            case BOX_SELECT -> 'B';
+            case FREEHAND_SELECT -> 'N';
+            case LASSO_SELECT -> 'L';
+            case PAINTER -> 'P';
+            case NOISE_PAINTER -> 'O';
+            case FREEHAND_DRAW -> 'G';
+            case MOVE -> 'V';
+            case ROTATE -> 'R';
+            case SCALE -> 'C';
+            case PIVOT -> 'I';
+            case ROCK -> 'H';
+            case WELD -> 'J';
+            case MELT -> 'K';
+            case ELEVATION -> 'E';
+            case SMOOTH -> 'U';
+            case EXTRUDE -> 'Z';
             default -> -1;
         };
     }
@@ -94,7 +154,8 @@ public final class ToolCatalog {
             case TEXT -> "Place text";
             case STAMP -> "Stamp clipboard";
             case ERASE -> "Erase";
-            case PAINTER, PAINT_BUCKET, NOISE_PAINTER, BIOME_PAINTER, CLENTAMINATOR, GRADIENT_PAINTER, SCRIPT_BRUSH -> "Paint";
+            case PAINTER, PAINT_BUCKET, NOISE_PAINTER, BIOME_PAINTER, CLENTAMINATOR, GRADIENT_PAINTER, SCRIPT_BRUSH ->
+                "Paint";
             default -> "Use " + tool.label;
         };
     }

@@ -11,9 +11,32 @@ public final class MaterialNames {
     private MaterialNames() {}
 
     /** The kinds a material can be asked for. */
-    public static final List<String> KINDS = List.of("block", "planks", "stairs", "slab", "wall", "fence", "fence_gate", "door", "trapdoor",
-        "button", "pressure_plate", "log", "wood", "stripped_log", "stripped_wood", "leaves", "pillar", "bricks", "tiles", "chiseled", "cut",
-        "smooth", "polished", "mossy", "cracked");
+    public static final List<String> KINDS = List.of(
+            "block",
+            "planks",
+            "stairs",
+            "slab",
+            "wall",
+            "fence",
+            "fence_gate",
+            "door",
+            "trapdoor",
+            "button",
+            "pressure_plate",
+            "log",
+            "wood",
+            "stripped_log",
+            "stripped_wood",
+            "leaves",
+            "pillar",
+            "bricks",
+            "tiles",
+            "chiseled",
+            "cut",
+            "smooth",
+            "polished",
+            "mossy",
+            "cracked");
 
     /** Whether a block name is a material reference ({@code spruce@stairs}, with or without a namespace and a state). */
     public static boolean isReference(String name) {
@@ -31,20 +54,47 @@ public final class MaterialNames {
         int at = plain.indexOf('@');
         if (at < 0) throw new IllegalArgumentException("\"" + reference + "\" is not a material@kind name");
         String material = plain.substring(0, at), kind = plain.substring(at + 1);
-        if (!KINDS.contains(kind)) throw new IllegalArgumentException("\"" + kind + "\" is not a kind of block; use one of " + String.join(", ", KINDS));
+        if (!KINDS.contains(kind))
+            throw new IllegalArgumentException(
+                    "\"" + kind + "\" is not a kind of block; use one of " + String.join(", ", KINDS));
         int colon = material.indexOf(':');
         String namespace = colon < 0 ? "minecraft:" : material.substring(0, colon + 1);
         String m = colon < 0 ? material : material.substring(colon + 1);
         var out = new LinkedHashSet<String>();
         for (String b : bases(m)) {
             switch (kind) {
-                case "block" -> { out.add(m); out.add(b + "_planks"); out.add(b + "s"); out.add(b + "_block"); out.add(b); }
-                case "log" -> { out.add(b + "_log"); out.add(b + "_stem"); }
-                case "wood" -> { out.add(b + "_wood"); out.add(b + "_hyphae"); }
-                case "stripped_log" -> { out.add("stripped_" + b + "_log"); out.add("stripped_" + b + "_stem"); }
-                case "stripped_wood" -> { out.add("stripped_" + b + "_wood"); out.add("stripped_" + b + "_hyphae"); }
-                case "chiseled", "cut", "smooth", "polished" -> { out.add(kind + "_" + m); out.add(kind + "_" + b); }
-                case "mossy", "cracked" -> { out.add(kind + "_" + m); out.add(kind + "_" + b + "s"); out.add(kind + "_" + b); }
+                case "block" -> {
+                    out.add(m);
+                    out.add(b + "_planks");
+                    out.add(b + "s");
+                    out.add(b + "_block");
+                    out.add(b);
+                }
+                case "log" -> {
+                    out.add(b + "_log");
+                    out.add(b + "_stem");
+                }
+                case "wood" -> {
+                    out.add(b + "_wood");
+                    out.add(b + "_hyphae");
+                }
+                case "stripped_log" -> {
+                    out.add("stripped_" + b + "_log");
+                    out.add("stripped_" + b + "_stem");
+                }
+                case "stripped_wood" -> {
+                    out.add("stripped_" + b + "_wood");
+                    out.add("stripped_" + b + "_hyphae");
+                }
+                case "chiseled", "cut", "smooth", "polished" -> {
+                    out.add(kind + "_" + m);
+                    out.add(kind + "_" + b);
+                }
+                case "mossy", "cracked" -> {
+                    out.add(kind + "_" + m);
+                    out.add(kind + "_" + b + "s");
+                    out.add(kind + "_" + b);
+                }
                 default -> out.add(b + "_" + kind);
             }
         }
@@ -58,7 +108,8 @@ public final class MaterialNames {
         var out = new LinkedHashSet<String>();
         out.add(m);
         for (String suffix : List.of("_planks", "_block", "_log", "_wood"))
-            if (m.endsWith(suffix) && m.length() > suffix.length()) out.add(m.substring(0, m.length() - suffix.length()));
+            if (m.endsWith(suffix) && m.length() > suffix.length())
+                out.add(m.substring(0, m.length() - suffix.length()));
         if (m.endsWith("s") && m.length() > 3 && !m.endsWith("ss")) out.add(m.substring(0, m.length() - 1));
         return new ArrayList<>(out);
     }

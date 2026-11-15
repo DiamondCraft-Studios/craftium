@@ -16,30 +16,51 @@ final class AiView {
     static final int MAX_SIDE = 128, MAX_BLOCKS = 262_144, TILE = 32, WIDTH = 1024, HEIGHT = 768, MAX_ANGLES = 3;
     private static final int VIOLET = 0xb57cf0, LEGEND = 12;
     /** Blocks nothing is drawn for: air, and the ones that exist only to be placed or to mark something. */
-    private static final Set<String> EMPTY = Set.of("minecraft:air", "minecraft:cave_air", "minecraft:void_air", "minecraft:light", "minecraft:structure_void", "minecraft:barrier", "craftium:outside_world");
+    private static final Set<String> EMPTY = Set.of(
+            "minecraft:air",
+            "minecraft:cave_air",
+            "minecraft:void_air",
+            "minecraft:light",
+            "minecraft:structure_void",
+            "minecraft:barrier",
+            "craftium:outside_world");
     /** Liquids have no block model to take a colour from. */
-    private static final Map<String, Integer> FLUIDS = Map.of("minecraft:water", 0x3f76e4, "minecraft:lava", 0xf56a1a, "minecraft:bubble_column", 0x3f76e4);
+    private static final Map<String, Integer> FLUIDS =
+            Map.of("minecraft:water", 0x3f76e4, "minecraft:lava", 0xf56a1a, "minecraft:bubble_column", 0x3f76e4);
+
     private record Ghost(List<String> names, int[] placed, int[] removed) {}
 
     static JsonObject render(JsonObject args) throws Exception {
         Point a = AiBridge.point(args, "from"), b = AiBridge.point(args, "to");
-        // "angles" draws the box from up to three angles off one read of the world, where separate calls would read it once each.
+        // "angles" draws the box from up to three angles off one read of the world, where separate calls would read it
+        // once each.
         var angles = new ArrayList<VoxelView.Angle>();
         boolean several = args.has("angles");
         if (several) {
-            if (!args.get("angles").isJsonArray() || args.getAsJsonArray("angles").isEmpty() || args.getAsJsonArray("angles").size() > MAX_ANGLES)
+            if (!args.get("angles").isJsonArray()
+                    || args.getAsJsonArray("angles").isEmpty()
+                    || args.getAsJsonArray("angles").size() > MAX_ANGLES)
                 throw new IllegalArgumentException("\"angles\" must list 1 to " + MAX_ANGLES + " angles");
             for (var each : args.getAsJsonArray("angles")) {
                 var parsed = VoxelView.Angle.parse(each.getAsString());
                 if (!angles.contains(parsed)) angles.add(parsed);
             }
-        } else angles.add(VoxelView.Angle.parse(args.has("angle") ? args.get("angle").getAsString() : "se"));
+        } else
+            angles.add(
+                    VoxelView.Angle.parse(args.has("angle") ? args.get("angle").getAsString() : "se"));
         boolean preview = !args.has("preview") || args.get("preview").getAsBoolean();
         int x0 = Math.min(a.x(), b.x()), y0 = Math.min(a.y(), b.y()), z0 = Math.min(a.z(), b.z());
         int sx = Math.abs(a.x() - b.x()) + 1, sy = Math.abs(a.y() - b.y()) + 1, sz = Math.abs(a.z() - b.z()) + 1;
-        if (sx > MAX_SIDE || sy > MAX_SIDE || sz > MAX_SIDE) throw new IllegalArgumentException("The box is " + sx + " by " + sy + " by " + sz + "; each side can be at most " + MAX_SIDE);
-        if ((long) sx * sy * sz > MAX_BLOCKS) throw new IllegalArgumentException("The box holds " + (long) sx * sy * sz + " blocks; draw at most " + MAX_BLOCKS + " (64 by 64 by 64, for example)");
-        AiBridge.onClient(() -> { BlockColours.build(); return null; });
+        if (sx > MAX_SIDE || sy > MAX_SIDE || sz > MAX_SIDE)
+            throw new IllegalArgumentException(
+                    "The box is " + sx + " by " + sy + " by " + sz + "; each side can be at most " + MAX_SIDE);
+        if ((long) sx * sy * sz > MAX_BLOCKS)
+            throw new IllegalArgumentException("The box holds " + (long) sx * sy * sz + " blocks; draw at most "
+                    + MAX_BLOCKS + " (64 by 64 by 64, for example)");
+        AiBridge.onClient(() -> {
+            BlockColours.build();
+            return null;
+        });
 
         // The world, read in tiles the server's limits allow, as indexes into one palette.
         var names = new ArrayList<String>();
@@ -50,15 +71,23 @@ final class AiView {
             for (int tz = 0; tz < sz; tz += TILE)
                 for (int tx = 0; tx < sx; tx += TILE) {
                     int tw = Math.min(TILE, sx - tx), th = Math.min(TILE, sy - ty), td = Math.min(TILE, sz - tz);
-                    var reply = AiBridge.read("ai_blocks", new Point(x0 + tx, y0 + ty, z0 + tz), new Point(x0 + tx + tw - 1, y0 + ty + th - 1, z0 + tz + td - 1));
+                    var reply = AiBridge.read(
+                            "ai_blocks",
+                            new Point(x0 + tx, y0 + ty, z0 + tz),
+                            new Point(x0 + tx + tw - 1, y0 + ty + th - 1, z0 + tz + td - 1));
                     reads++;
                     var palette = reply.getAsJsonArray("palette");
                     int[] global = new int[palette.size()];
-                    for (int i = 0; i < global.length; i++) global[i] = index.computeIfAbsent(palette.get(i).getAsString(), k -> { names.add(k); return names.size() - 1; });
+                    for (int i = 0; i < global.length; i++)
+                        global[i] = index.computeIfAbsent(palette.get(i).getAsString(), k -> {
+                            names.add(k);
+                            return names.size() - 1;
+                        });
                     int at = 0;
                     for (var element : reply.getAsJsonArray("runs")) {
                         var run = element.getAsJsonArray();
-                        int id = global[run.get(0).getAsInt()], count = run.get(1).getAsInt();
+                        int id = global[run.get(0).getAsInt()],
+                                count = run.get(1).getAsInt();
                         for (int k = 0; k < count; k++, at++) {
                             int lx = at % tw, lz = (at / tw) % td, ly = at / (tw * td);
                             ids[tx + lx + sx * (tz + lz + sz * (ty + ly))] = id;
@@ -76,12 +105,18 @@ final class AiView {
             if (colours[i] != 0) counts[ids[i]]++;
         }
 
-        // The preview, if the player has one waiting and it is wanted: its blocks over the world's, tinted, and its removals carved out.
+        // The preview, if the player has one waiting and it is wanted: its blocks over the world's, tinted, and its
+        // removals carved out.
         int shown = 0;
         if (preview) {
             var ghost = AiBridge.onClient(() -> {
                 var pending = ClientState.aiGhost(AiBridge.session());
-                return pending.total() == 0 ? null : new Ghost(pending.stateNames(), pending.placedCells().clone(), pending.removedCells().clone());
+                return pending.total() == 0
+                        ? null
+                        : new Ghost(
+                                pending.stateNames(),
+                                pending.placedCells().clone(),
+                                pending.removedCells().clone());
             });
             if (ghost != null) {
                 var cache = new HashMap<String, Integer>();
@@ -91,13 +126,20 @@ final class AiView {
                     states[i] = c == 0 ? 0 : tint(c);
                 }
                 for (int i = 0; i + 3 < ghost.placed().length; i += 4) {
-                    int cell = cell(ghost.placed()[i] - x0, ghost.placed()[i + 1] - y0, ghost.placed()[i + 2] - z0, sx, sy, sz);
+                    int cell = cell(
+                            ghost.placed()[i] - x0, ghost.placed()[i + 1] - y0, ghost.placed()[i + 2] - z0, sx, sy, sz);
                     if (cell < 0) continue;
                     colours[cell] = states[ghost.placed()[i + 3]];
                     shown++;
                 }
                 for (int i = 0; i + 2 < ghost.removed().length; i += 3) {
-                    int cell = cell(ghost.removed()[i] - x0, ghost.removed()[i + 1] - y0, ghost.removed()[i + 2] - z0, sx, sy, sz);
+                    int cell = cell(
+                            ghost.removed()[i] - x0,
+                            ghost.removed()[i + 1] - y0,
+                            ghost.removed()[i + 2] - z0,
+                            sx,
+                            sy,
+                            sz);
                     if (cell >= 0) colours[cell] = 0;
                 }
             }
@@ -129,8 +171,13 @@ final class AiView {
         out.addProperty("previewBlocksShown", shown);
         if (shown > 0) out.addProperty("previewLook", "blocks tinted violet are the preview, not yet built");
         if (preview) {
-            // previewBlocksShown above counts only what fell inside this box; these say whether the preview was cut short as a whole.
-            var report = AiBridge.onClient(() -> { var r = new JsonObject(); AiBridge.previewReport(r, ClientState.aiGhost(AiBridge.session())); return r; });
+            // previewBlocksShown above counts only what fell inside this box; these say whether the preview was cut
+            // short as a whole.
+            var report = AiBridge.onClient(() -> {
+                var r = new JsonObject();
+                AiBridge.previewReport(r, ClientState.aiGhost(AiBridge.session()));
+                return r;
+            });
             for (var entry : report.entrySet()) out.add(entry.getKey(), entry.getValue());
         }
         out.add("blocks", legend(names, counts, colourOf));
@@ -145,7 +192,8 @@ final class AiView {
     /** The commonest blocks and the colour each is drawn in, so a picture can be read back to block names. */
     private static JsonArray legend(List<String> names, int[] counts, Map<String, Integer> colours) {
         var merged = new LinkedHashMap<String, Integer>();
-        for (int i = 0; i < names.size(); i++) if (counts[i] > 0) merged.merge(baseId(names.get(i)), counts[i], Integer::sum);
+        for (int i = 0; i < names.size(); i++)
+            if (counts[i] > 0) merged.merge(baseId(names.get(i)), counts[i], Integer::sum);
         var list = new ArrayList<>(merged.entrySet());
         list.sort((p, q) -> q.getValue() - p.getValue());
         var out = new JsonArray();
@@ -187,12 +235,18 @@ final class AiView {
         var known = cache.get(id);
         if (known != null) return known;
         int[] colours;
-        if (EMPTY.contains(id)) colours = new int[]{0, 0, 0};
-        else if (FLUIDS.containsKey(id)) { int c = 0xff000000 | FLUIDS.get(id); colours = new int[]{c, c, c}; }
-        else {
+        if (EMPTY.contains(id)) colours = new int[] {0, 0, 0};
+        else if (FLUIDS.containsKey(id)) {
+            int c = 0xff000000 | FLUIDS.get(id);
+            colours = new int[] {c, c, c};
+        } else {
             var faces = BlockColours.faces(id);
-            if (faces != null) colours = new int[]{0xff000000 | faces.top(), 0xff000000 | faces.side(), 0xff000000 | faces.bottom()};
-            else { int c = colour(state, new HashMap<>()); colours = new int[]{c, c, c}; }
+            if (faces != null)
+                colours = new int[] {0xff000000 | faces.top(), 0xff000000 | faces.side(), 0xff000000 | faces.bottom()};
+            else {
+                int c = colour(state, new HashMap<>());
+                colours = new int[] {c, c, c};
+            }
         }
         cache.put(id, colours);
         return colours;
@@ -204,7 +258,9 @@ final class AiView {
     }
 
     private static int tint(int colour) {
-        int r = (((colour >> 16) & 255) * 4 + ((VIOLET >> 16) & 255) * 6) / 10, g = (((colour >> 8) & 255) * 4 + ((VIOLET >> 8) & 255) * 6) / 10, b = ((colour & 255) * 4 + (VIOLET & 255) * 6) / 10;
+        int r = (((colour >> 16) & 255) * 4 + ((VIOLET >> 16) & 255) * 6) / 10,
+                g = (((colour >> 8) & 255) * 4 + ((VIOLET >> 8) & 255) * 6) / 10,
+                b = ((colour & 255) * 4 + (VIOLET & 255) * 6) / 10;
         return 0xff000000 | r << 16 | g << 8 | b;
     }
 }

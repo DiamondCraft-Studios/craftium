@@ -47,7 +47,7 @@ jobs:
     uses: ./.github/workflows/build-version.yml
     with:
       artifact: craftium-1.21.10
-      tasks: ':versions:mc-1.21.10:build :paper-1.21.10:build :versions:mc-1.21.10:compileGametestJava'
+      tasks: 'spotlessCheck :versions:mc-1.21.10:build :paper-1.21.10:build :versions:mc-1.21.10:compileGametestJava'
       jars: |
         versions/1.21.10/build/libs/*.jar
         versions/1.21.10/server-plugin/build/libs/*.jar

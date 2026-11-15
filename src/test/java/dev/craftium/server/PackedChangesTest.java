@@ -1,18 +1,18 @@
 package dev.craftium.server;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import dev.craftium.core.Point;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
-
 class PackedChangesTest {
-    @BeforeAll static void bootstrap() {
+    @BeforeAll
+    static void bootstrap() {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();
     }
@@ -20,7 +20,8 @@ class PackedChangesTest {
     private static List<Session.Change> changes(int n, boolean withData) {
         var stone = new BlockSnapshot(Blocks.STONE.defaultBlockState());
         var air = new BlockSnapshot(Blocks.AIR.defaultBlockState());
-        var chest = new CompoundTag(); chest.putString("id", "minecraft:chest");
+        var chest = new CompoundTag();
+        chest.putString("id", "minecraft:chest");
         var chestSnapshot = new BlockSnapshot(Blocks.CHEST.defaultBlockState(), chest);
         var list = new ArrayList<Session.Change>();
         for (int i = 0; i < n; i++) {
@@ -31,7 +32,8 @@ class PackedChangesTest {
         return list;
     }
 
-    @Test void roundTripsEveryChange() {
+    @Test
+    void roundTripsEveryChange() {
         var original = changes(5_000, true);
         var packed = PackedChanges.pack(original);
         assertInstanceOf(PackedChanges.class, packed);
@@ -41,24 +43,28 @@ class PackedChangesTest {
         assertEquals(original.reversed(), packed.reversed());
     }
 
-    @Test void keepsBlockEntityData() {
+    @Test
+    void keepsBlockEntityData() {
         var original = changes(1_000, true);
         var packed = PackedChanges.pack(original);
         assertEquals("minecraft:chest", packed.get(0).before().data().getStringOr("id", ""));
         assertNull(packed.get(1).before().data());
     }
 
-    @Test void smallListsAreLeftAlone() {
+    @Test
+    void smallListsAreLeftAlone() {
         var small = changes(PackedChanges.MIN_SIZE - 1, false);
         assertSame(small, PackedChanges.pack(small));
     }
 
-    @Test void packingTwiceKeepsThePackedList() {
+    @Test
+    void packingTwiceKeepsThePackedList() {
         var packed = PackedChanges.pack(changes(1_000, false));
         assertSame(packed, PackedChanges.pack(packed));
     }
 
-    @Test void costsAFractionOfTheObjects() {
+    @Test
+    void costsAFractionOfTheObjects() {
         var original = changes(100_000, true);
         var edit = new Session.Edit("test", original, List.of(), 0);
         long loose = (long) original.size() * 128; // what the objects of a block change cost
@@ -69,7 +75,8 @@ class PackedChangesTest {
         assertEquals(original, packed.changes());
     }
 
-    @Test void historyKeepsBigEditsPacked() {
+    @Test
+    void historyKeepsBigEditsPacked() {
         var session = new Session();
         session.remember(new Session.Edit("big", changes(2_000, false), List.of(), 0));
         assertInstanceOf(PackedChanges.class, session.undo.peekFirst().changes());

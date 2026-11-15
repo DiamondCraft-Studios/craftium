@@ -42,5 +42,7 @@ public enum InteractionKind {
     /** Whether a tool that is not one of the editor's own can choose this kind. */
     public final boolean forPlugins;
 
-    InteractionKind(boolean forPlugins) { this.forPlugins = forPlugins; }
+    InteractionKind(boolean forPlugins) {
+        this.forPlugins = forPlugins;
+    }
 }

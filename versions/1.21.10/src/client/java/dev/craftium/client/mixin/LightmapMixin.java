@@ -1,4 +1,5 @@
 package dev.craftium.client.mixin;
+
 import dev.craftium.client.ClientState;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.world.level.dimension.DimensionType;
@@ -13,18 +14,26 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(LightTexture.class)
 abstract class LightmapMixin {
-    @Shadow private boolean updateLightTexture;
-    @Unique private double craftium$lastMinimum;
+    @Shadow
+    private boolean updateLightTexture;
 
-    @Inject(method="updateLightTexture",at=@At("HEAD"))
-    private void craftium$refresh(float partialTick,CallbackInfo ci){
-        double amount=ClientState.options.minimumBrightness;
-        if(amount!=craftium$lastMinimum){updateLightTexture=true;craftium$lastMinimum=amount;}
+    @Unique
+    private double craftium$lastMinimum;
+
+    @Inject(method = "updateLightTexture", at = @At("HEAD"))
+    private void craftium$refresh(float partialTick, CallbackInfo ci) {
+        double amount = ClientState.options.minimumBrightness;
+        if (amount != craftium$lastMinimum) {
+            updateLightTexture = true;
+            craftium$lastMinimum = amount;
+        }
     }
 
-    @Redirect(method="updateLightTexture",at=@At(value="INVOKE",target="Lnet/minecraft/world/level/dimension/DimensionType;ambientLight()F"))
-    private float craftium$minimum(DimensionType type){
-        float ambient=type.ambientLight(),amount=(float)ClientState.options.minimumBrightness;
-        return amount>0?Math.max(amount,ambient):ambient;
+    @Redirect(
+            method = "updateLightTexture",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/dimension/DimensionType;ambientLight()F"))
+    private float craftium$minimum(DimensionType type) {
+        float ambient = type.ambientLight(), amount = (float) ClientState.options.minimumBrightness;
+        return amount > 0 ? Math.max(amount, ambient) : ambient;
     }
 }

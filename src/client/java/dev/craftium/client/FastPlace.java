@@ -20,56 +20,92 @@ import net.minecraft.world.phys.Vec3;
  * Adapted from the approach of Accurate Block Placement: Reborn (MIT, see THIRD-PARTY-NOTICES.md).
  */
 public final class FastPlace {
-    private FastPlace(){}
-    private static BlockPos lastSeen,lastPlaced;
+    private FastPlace() {}
+
+    private static BlockPos lastSeen, lastPlaced;
     private static Vec3 lastPlayer;
-    private static boolean wasDown,grace,fresh;
+    private static boolean wasDown, grace, fresh;
 
     /** Tracks the use key: a new press forgets the earlier targets, and lets the game's own first click through. */
-    private static void observe(Minecraft mc){
-        boolean down=mc.options.keyUse.isDown();
-        if(down&&!wasDown){grace=true;fresh=true;}
-        if(!down){grace=false;fresh=false;lastSeen=null;lastPlaced=null;lastPlayer=null;}
-        wasDown=down;
+    private static void observe(Minecraft mc) {
+        boolean down = mc.options.keyUse.isDown();
+        if (down && !wasDown) {
+            grace = true;
+            fresh = true;
+        }
+        if (!down) {
+            grace = false;
+            fresh = false;
+            lastSeen = null;
+            lastPlaced = null;
+            lastPlayer = null;
+        }
+        wasDown = down;
     }
-    private static boolean active(Minecraft mc){
-        var o=ClientState.options;
-        if(!o.fastPlace||mc.player==null||mc.level==null||mc.gameMode==null||!mc.player.isCreative()||!CraftiumClient.vanillaPlacement()||ClientCompat.screen(mc)!=null||BuilderMode.active())return false;
-        if(!mc.options.keyUse.isDown()||mc.player.isUsingItem()||!(mc.player.getMainHandItem().getItem() instanceof BlockItem))return false;
-        if(!(mc.hitResult instanceof BlockHitResult hit)||hit.getType()!=HitResult.Type.BLOCK)return false;
+
+    private static boolean active(Minecraft mc) {
+        var o = ClientState.options;
+        if (!o.fastPlace
+                || mc.player == null
+                || mc.level == null
+                || mc.gameMode == null
+                || !mc.player.isCreative()
+                || !CraftiumClient.vanillaPlacement()
+                || ClientCompat.screen(mc) != null
+                || BuilderMode.active()) return false;
+        if (!mc.options.keyUse.isDown()
+                || mc.player.isUsingItem()
+                || !(mc.player.getMainHandItem().getItem() instanceof BlockItem)) return false;
+        if (!(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) return false;
         return true;
     }
     /** Called from the game's own item use. True to skip its slow repeat, which this replaces; the first click of a press is left to the game. */
-    public static boolean cancelVanilla(){
-        var mc=Minecraft.getInstance();observe(mc);
-        if(!active(mc))return false;
-        if(grace){grace=false;return false;}
+    public static boolean cancelVanilla() {
+        var mc = Minecraft.getInstance();
+        observe(mc);
+        if (!active(mc)) return false;
+        if (grace) {
+            grace = false;
+            return false;
+        }
         return true;
     }
     /** Called after every pick of the crosshair target. */
-    public static void afterPick(Minecraft mc){
+    public static void afterPick(Minecraft mc) {
         observe(mc);
-        if(!active(mc))return;
-        var hit=(BlockHitResult)mc.hitResult;var pos=hit.getBlockPos();var player=mc.player;
-        var context=new BlockPlaceContext(new UseOnContext(player,InteractionHand.MAIN_HAND,hit));
-        if(fresh){ // the press itself: the game places this one
-            fresh=false;lastSeen=pos;lastPlaced=context.getClickedPos();lastPlayer=player.position();return;
+        if (!active(mc)) return;
+        var hit = (BlockHitResult) mc.hitResult;
+        var pos = hit.getBlockPos();
+        var player = mc.player;
+        var context = new BlockPlaceContext(new UseOnContext(player, InteractionHand.MAIN_HAND, hit));
+        if (fresh) { // the press itself: the game places this one
+            fresh = false;
+            lastSeen = pos;
+            lastPlaced = context.getClickedPos();
+            lastPlayer = player.position();
+            return;
         }
-        boolean newTarget=!pos.equals(lastSeen)&&!pos.equals(lastPlaced);
-        if(newTarget||backedAway(player,hit,pos)){
-            var before=mc.level.getBlockState(context.getClickedPos());
-            var result=mc.gameMode.useItemOn(player,InteractionHand.MAIN_HAND,hit);
-            if(result.consumesAction())player.swing(InteractionHand.MAIN_HAND);
-            if(mc.level.getBlockState(context.getClickedPos())!=before){lastPlaced=context.getClickedPos();lastPlayer=player.position();}
+        boolean newTarget = !pos.equals(lastSeen) && !pos.equals(lastPlaced);
+        if (newTarget || backedAway(player, hit, pos)) {
+            var before = mc.level.getBlockState(context.getClickedPos());
+            var result = mc.gameMode.useItemOn(player, InteractionHand.MAIN_HAND, hit);
+            if (result.consumesAction()) player.swing(InteractionHand.MAIN_HAND);
+            if (mc.level.getBlockState(context.getClickedPos()) != before) {
+                lastPlaced = context.getClickedPos();
+                lastPlayer = player.position();
+            }
         }
-        lastSeen=pos;
+        lastSeen = pos;
     }
     /** Building toward yourself: the last block placed is the target again, and the player has stepped a block away from it since. */
-    private static boolean backedAway(Player player,BlockHitResult hit,BlockPos pos){
-        if(lastPlaced==null||lastPlayer==null||!pos.equals(lastPlaced))return false;
-        var axis=hit.getDirection().getAxis();
-        double now=player.position().get(axis),then=lastPlayer.get(axis);
-        double block=lastPlaced.get(axis)+(hit.getDirection().getAxisDirection()==net.minecraft.core.Direction.AxisDirection.NEGATIVE?1:0);
-        return Math.abs(now-then)>=.99&&Math.abs(then-block)<Math.abs(now-block);
+    private static boolean backedAway(Player player, BlockHitResult hit, BlockPos pos) {
+        if (lastPlaced == null || lastPlayer == null || !pos.equals(lastPlaced)) return false;
+        var axis = hit.getDirection().getAxis();
+        double now = player.position().get(axis), then = lastPlayer.get(axis);
+        double block = lastPlaced.get(axis)
+                + (hit.getDirection().getAxisDirection() == net.minecraft.core.Direction.AxisDirection.NEGATIVE
+                        ? 1
+                        : 0);
+        return Math.abs(now - then) >= .99 && Math.abs(then - block) < Math.abs(now - block);
     }
 }

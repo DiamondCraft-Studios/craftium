@@ -5,7 +5,6 @@ import dev.craftium.core.InteractionKind;
 import dev.craftium.core.PropertySpec;
 import dev.craftium.core.Tool;
 import dev.craftium.core.ToolSpec;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -31,14 +30,29 @@ public final class PluginToolCodec {
     /** What the server tells a client about a tool. */
     public static Packets.PluginTool toWire(ToolSpec spec) {
         var properties = new ArrayList<Packets.PluginProperty>();
-        for (PropertySpec p : spec.properties()) properties.add(new Packets.PluginProperty(p.id(), p.label(), p.kind().name(), p.min(), p.max(), p.number(), p.choices()));
-        return new Packets.PluginTool(spec.id(), spec.label(), spec.icon(), spec.iconId(), spec.section(), spec.description(), spec.useHint(), spec.interaction().name(), spec.confirms(), properties);
+        for (PropertySpec p : spec.properties())
+            properties.add(new Packets.PluginProperty(
+                    p.id(), p.label(), p.kind().name(), p.min(), p.max(), p.number(), p.choices()));
+        return new Packets.PluginTool(
+                spec.id(),
+                spec.label(),
+                spec.icon(),
+                spec.iconId(),
+                spec.section(),
+                spec.description(),
+                spec.useHint(),
+                spec.interaction().name(),
+                spec.confirms(),
+                properties);
     }
 
     /** The tool a client rebuilds from what it was told, or empty when it cannot be trusted or understood. */
     public static Optional<ToolSpec> fromWire(Packets.PluginTool wire) {
         try {
-            if (wire == null || wire.id() == null || !ID.matcher(wire.id()).matches() || wire.id().startsWith("craftium:")) return Optional.empty();
+            if (wire == null
+                    || wire.id() == null
+                    || !ID.matcher(wire.id()).matches()
+                    || wire.id().startsWith("craftium:")) return Optional.empty();
             if (wire.label() == null || wire.label().isBlank() || wire.interaction() == null) return Optional.empty();
             InteractionKind kind = InteractionKind.valueOf(wire.interaction());
             if (!kind.forPlugins) return Optional.empty();
@@ -55,8 +69,24 @@ public final class PluginToolCodec {
             String icon = wire.icon() == null || wire.icon().isBlank() ? initials(wire.label()) : wire.icon();
             String iconId = wire.iconId() != null && IconCatalog.exists(wire.iconId()) ? wire.iconId() : FALLBACK_ICON;
             String section = wire.section() == null || wire.section().isBlank() ? DEFAULT_SECTION : wire.section();
-            return Optional.of(new ToolSpec(wire.id(), wire.label(), icon, iconId, section, wire.description() == null ? "" : wire.description(), Tool.BrushUse.NONE, kind, -1,
-                wire.useHint() == null ? "" : wire.useHint(), wire.confirms(), false, false, true, false, false, properties));
+            return Optional.of(new ToolSpec(
+                    wire.id(),
+                    wire.label(),
+                    icon,
+                    iconId,
+                    section,
+                    wire.description() == null ? "" : wire.description(),
+                    Tool.BrushUse.NONE,
+                    kind,
+                    -1,
+                    wire.useHint() == null ? "" : wire.useHint(),
+                    wire.confirms(),
+                    false,
+                    false,
+                    true,
+                    false,
+                    false,
+                    properties));
         } catch (IllegalArgumentException e) {
             return Optional.empty(); // an interaction this build does not know, or a setting that is not valid
         }

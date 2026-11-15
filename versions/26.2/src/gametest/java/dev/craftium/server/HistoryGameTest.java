@@ -21,9 +21,14 @@ public final class HistoryGameTest {
     private final ClientGameTestContext c;
     private final TestSingleplayerContext w;
 
-    private HistoryGameTest(ClientGameTestContext c, TestSingleplayerContext w) { this.c = c; this.w = w; }
+    private HistoryGameTest(ClientGameTestContext c, TestSingleplayerContext w) {
+        this.c = c;
+        this.w = w;
+    }
 
-    public static void run(ClientGameTestContext c, TestSingleplayerContext w) { new HistoryGameTest(c, w).runAll(); }
+    public static void run(ClientGameTestContext c, TestSingleplayerContext w) {
+        new HistoryGameTest(c, w).runAll();
+    }
 
     /** The block that stands at a place in the copied area: a mix of stone, glass and air, so there are runs and breaks. */
     private static BlockState pattern(int x, int y, int z) {
@@ -42,10 +47,12 @@ public final class HistoryGameTest {
         w.getServer().runOnServer(server -> {
             var level = server.overworld();
             var pos = new BlockPos.MutableBlockPos();
-            for (int x = 0; x < W; x++) for (int y = 0; y < H; y++) for (int z = 0; z < D; z++) {
-                level.setBlock(pos.set(SX + x, Y + y, SZ + z), pattern(x, y, z), 2 | 16);
-                level.setBlock(pos.set(TX + x, Y + y, TZ + z), Blocks.AIR.defaultBlockState(), 2 | 16);
-            }
+            for (int x = 0; x < W; x++)
+                for (int y = 0; y < H; y++)
+                    for (int z = 0; z < D; z++) {
+                        level.setBlock(pos.set(SX + x, Y + y, SZ + z), pattern(x, y, z), 2 | 16);
+                        level.setBlock(pos.set(TX + x, Y + y, TZ + z), Blocks.AIR.defaultBlockState(), 2 | 16);
+                    }
         });
         c.runOnClient(mc -> {
             ClientState.options.confirmEdits = false;
@@ -59,10 +66,14 @@ public final class HistoryGameTest {
 
         send("paste_at", new Point(TX, Y, TZ));
         require(mismatches(true) == 0, "every block of the paste should be in place, with the block limit at 100");
-        var edit = w.getServer().computeOnServer(server -> EditorServer.session(server.getPlayerList().getPlayers().get(0)).undo.peekFirst());
+        var edit = w.getServer().computeOnServer(server -> EditorServer.session(
+                        server.getPlayerList().getPlayers().get(0))
+                .undo
+                .peekFirst());
         require(edit != null && edit.changes() instanceof PackedChanges, "the paste should be in the history packed");
         long packed = edit.estimatedBytes(), loose = (long) edit.changes().size() * 128;
-        System.out.println("CRAFTIUM_HISTORY " + edit.changes().size() + " changes cost " + packed / 1024 + " KiB packed, " + loose / 1024 + " KiB as objects");
+        System.out.println("CRAFTIUM_HISTORY " + edit.changes().size() + " changes cost " + packed / 1024
+                + " KiB packed, " + loose / 1024 + " KiB as objects");
         require(packed * 6 < loose, "the packed history should cost under a sixth of the objects");
 
         send("undo", null);
@@ -79,7 +90,9 @@ public final class HistoryGameTest {
 
     /** A paste of over 100,000 blocks reports its progress to the player: the Large edit window comes up, fills, and goes away when the edit ends. */
     private void checkProgressWindow() {
-        require(c.computeOnClient(mc -> ClientState.activeProgress() == null), "no progress should be showing before the edit");
+        require(
+                c.computeOnClient(mc -> ClientState.activeProgress() == null),
+                "no progress should be showing before the edit");
         Thread.yield();
         c.runOnClient(mc -> CraftiumClient.send("paste_at", new Point(TX, Y, TZ), new Point(0, 1, 0)));
         var seen = new java.util.ArrayList<ClientState.EditProgress>();
@@ -88,18 +101,27 @@ public final class HistoryGameTest {
             c.waitTicks(1);
             var p = c.computeOnClient(mc -> ClientState.activeProgress());
             if (p != null && (seen.isEmpty() || seen.getLast().updatedAt() != p.updatedAt())) seen.add(p);
-            if (p != null && !shot && p.done() > 0) { c.takeScreenshot("large-edit-window"); shot = true; }
+            if (p != null && !shot && p.done() > 0) {
+                c.takeScreenshot("large-edit-window");
+                shot = true;
+            }
             if (!seen.isEmpty() && p == null) break;
         }
         w.getConnection().waitForClientboundPackets();
         c.waitFor(mc -> !ClientState.status.busy(), 2000);
         require(!seen.isEmpty(), "a paste of over 100,000 blocks should have reported its progress");
         var first = seen.getFirst();
-        require(first.verb().equals("Applying") && first.total() > 100_000, "the report should name the edit and its size: " + first);
-        for (int i = 1; i < seen.size(); i++) require(seen.get(i).done() >= seen.get(i - 1).done(), "progress should only move forward");
-        System.out.println("CRAFTIUM_HISTORY_PROGRESS " + seen.size() + " reports, " + first.done() + " to " + seen.getLast().done() + " of " + first.total());
+        require(
+                first.verb().equals("Applying") && first.total() > 100_000,
+                "the report should name the edit and its size: " + first);
+        for (int i = 1; i < seen.size(); i++)
+            require(seen.get(i).done() >= seen.get(i - 1).done(), "progress should only move forward");
+        System.out.println("CRAFTIUM_HISTORY_PROGRESS " + seen.size() + " reports, " + first.done() + " to "
+                + seen.getLast().done() + " of " + first.total());
         c.waitTicks(10);
-        require(c.computeOnClient(mc -> ClientState.activeProgress() == null), "the window should go away when the edit has ended");
+        require(
+                c.computeOnClient(mc -> ClientState.activeProgress() == null),
+                "the window should go away when the edit has ended");
         send("undo", null);
     }
 
@@ -108,10 +130,12 @@ public final class HistoryGameTest {
             var level = server.overworld();
             var pos = new BlockPos.MutableBlockPos();
             int bad = 0;
-            for (int x = 0; x < W; x++) for (int y = 0; y < H; y++) for (int z = 0; z < D; z++) {
-                var expected = pasted ? pattern(x, y, z) : Blocks.AIR.defaultBlockState();
-                if (level.getBlockState(pos.set(TX + x, Y + y, TZ + z)) != expected) bad++;
-            }
+            for (int x = 0; x < W; x++)
+                for (int y = 0; y < H; y++)
+                    for (int z = 0; z < D; z++) {
+                        var expected = pasted ? pattern(x, y, z) : Blocks.AIR.defaultBlockState();
+                        if (level.getBlockState(pos.set(TX + x, Y + y, TZ + z)) != expected) bad++;
+                    }
             return bad;
         });
     }
@@ -121,22 +145,32 @@ public final class HistoryGameTest {
             var level = server.overworld();
             var pos = new BlockPos.MutableBlockPos();
             int bad = 0;
-            for (int x = 0; x < W; x++) for (int y = 0; y < H; y++) for (int z = 0; z < D; z++)
-                if (level.getBlockState(pos.set(SX + x, Y + y, SZ + z)) != pattern(x, y, z)) bad++;
+            for (int x = 0; x < W; x++)
+                for (int y = 0; y < H; y++)
+                    for (int z = 0; z < D; z++)
+                        if (level.getBlockState(pos.set(SX + x, Y + y, SZ + z)) != pattern(x, y, z)) bad++;
             return bad;
         });
     }
 
     private void send(String action, Point target) {
-        try { Thread.sleep(120); } catch (InterruptedException e) { throw new AssertionError(e); }
+        try {
+            Thread.sleep(120);
+        } catch (InterruptedException e) {
+            throw new AssertionError(e);
+        }
         c.runOnClient(mc -> CraftiumClient.send(action, target, new Point(0, 1, 0)));
         w.getConnection().waitForServerboundPackets();
         c.waitTicks(5);
         w.getConnection().waitForClientboundPackets();
         c.waitFor(mc -> !ClientState.status.busy(), 2000);
         w.getConnection().waitForClientboundPackets();
-        require(c.computeOnClient(mc -> !ClientState.status.error()), action + " failed: " + c.computeOnClient(mc -> ClientState.status.message()));
+        require(
+                c.computeOnClient(mc -> !ClientState.status.error()),
+                action + " failed: " + c.computeOnClient(mc -> ClientState.status.message()));
     }
 
-    private static void require(boolean condition, String message) { if (!condition) throw new AssertionError(message); }
+    private static void require(boolean condition, String message) {
+        if (!condition) throw new AssertionError(message);
+    }
 }

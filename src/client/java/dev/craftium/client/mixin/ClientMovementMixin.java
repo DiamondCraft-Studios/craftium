@@ -10,7 +10,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Entity.class)
 abstract class ClientMovementMixin {
-    @org.spongepowered.asm.mixin.Unique private boolean craftium$forcedNoPhysics;
-    @Inject(method="move",at=@At("HEAD"))
-    private void craftium$creativeNoClip(MoverType type,Vec3 delta,CallbackInfo ci){Entity self=(Entity)(Object)this;if(self instanceof LocalPlayer player){boolean enabled=player.isCreative()&&player.getAbilities().flying&&CraftiumClient.supported()&&ClientState.options.noClip;if(enabled)self.noPhysics=true;else if(craftium$forcedNoPhysics&&!player.isSpectator())self.noPhysics=false;craftium$forcedNoPhysics=enabled;}}
+    @org.spongepowered.asm.mixin.Unique
+    private boolean craftium$forcedNoPhysics;
+
+    @Inject(method = "move", at = @At("HEAD"))
+    private void craftium$creativeNoClip(MoverType type, Vec3 delta, CallbackInfo ci) {
+        Entity self = (Entity) (Object) this;
+        if (self instanceof LocalPlayer player) {
+            boolean enabled = player.isCreative()
+                    && player.getAbilities().flying
+                    && CraftiumClient.supported()
+                    && ClientState.options.noClip;
+            if (enabled) self.noPhysics = true;
+            else if (craftium$forcedNoPhysics && !player.isSpectator()) self.noPhysics = false;
+            craftium$forcedNoPhysics = enabled;
+        }
+    }
 }

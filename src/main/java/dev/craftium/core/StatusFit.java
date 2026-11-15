@@ -13,7 +13,16 @@ import java.util.*;
  */
 public final class StatusFit {
     /** Fields that carry data to draw, biggest first when dropped. The rest of a status is small. */
-    static final List<String> DRAWN = List.of("selectionData", "clipboardData", "clipboardGhost", "pendingData", "pluginPreviewData", "aiPendingData", "sharedAi", "pulse", "restore");
+    static final List<String> DRAWN = List.of(
+            "selectionData",
+            "clipboardData",
+            "clipboardGhost",
+            "pendingData",
+            "pluginPreviewData",
+            "aiPendingData",
+            "sharedAi",
+            "pulse",
+            "restore");
 
     /** The previews other players are holding: left out before anything of the player's own. */
     static final String OTHERS = "sharedAi";
@@ -40,24 +49,45 @@ public final class StatusFit {
             String biggest = null;
             int size = 0;
             int session = -1;
-            // What other players are doing goes first: the player's own selection, clipboard and previews matter more to them than somebody else's.
+            // What other players are doing goes first: the player's own selection, clipboard and previews matter more
+            // to them than somebody else's.
             var others = status.get(OTHERS);
-            if (others != null && others.isJsonArray() && !others.getAsJsonArray().isEmpty()) biggest = OTHERS;
-            else for (String name : DRAWN) {
-                var value = status.get(name);
-                int length = value == null ? 0 : value.isJsonPrimitive() ? value.getAsString().length() : value.isJsonArray() ? value.toString().length() : 0;
-                if (length > size) { size = length; biggest = name; }
-            }
-            // The player's own AI sessions and saved selections carry their data inside a list: the largest piece there competes with the rest.
+            if (others != null
+                    && others.isJsonArray()
+                    && !others.getAsJsonArray().isEmpty()) biggest = OTHERS;
+            else
+                for (String name : DRAWN) {
+                    var value = status.get(name);
+                    int length = value == null
+                            ? 0
+                            : value.isJsonPrimitive()
+                                    ? value.getAsString().length()
+                                    : value.isJsonArray() ? value.toString().length() : 0;
+                    if (length > size) {
+                        size = length;
+                        biggest = name;
+                    }
+                }
+            // The player's own AI sessions and saved selections carry their data inside a list: the largest piece there
+            // competes with the rest.
             if (!OTHERS.equals(biggest)) {
                 for (String list : List.of(SESSIONS, SAVED)) {
                     int at = largestSessionData(status, list);
-                    if (at >= 0 && sessionDataLength(status, list, at) > size) { biggest = list; session = at; size = sessionDataLength(status, list, at); }
+                    if (at >= 0 && sessionDataLength(status, list, at) > size) {
+                        biggest = list;
+                        session = at;
+                        size = sessionDataLength(status, list, at);
+                    }
                 }
             }
             if (biggest == null) break; // nothing left to leave out: the rest is not ours to shrink
-            if (session >= 0) status.getAsJsonArray(biggest).get(session).getAsJsonObject().addProperty("data", ""); // that entry's data is left out, the entry stays listed
-            else if (status.get(biggest).isJsonArray()) status.add(biggest, new JsonArray()); // a list of previews is left empty: none to show
+            if (session >= 0)
+                status.getAsJsonArray(biggest)
+                        .get(session)
+                        .getAsJsonObject()
+                        .addProperty("data", ""); // that entry's data is left out, the entry stays listed
+            else if (status.get(biggest).isJsonArray())
+                status.add(biggest, new JsonArray()); // a list of previews is left empty: none to show
             else status.addProperty(biggest, "");
             dropped.add(biggest);
         }
@@ -81,7 +111,10 @@ public final class StatusFit {
         int best = -1, size = 0;
         for (int i = 0; i < list.getAsJsonArray().size(); i++) {
             int length = sessionDataLength(status, name, i);
-            if (length > size) { size = length; best = i; }
+            if (length > size) {
+                size = length;
+                best = i;
+            }
         }
         return best;
     }
@@ -94,8 +127,14 @@ public final class StatusFit {
         for (String name : DRAWN) {
             var a = before.get(name);
             var b = after.get(name);
-            boolean had = a != null && (a.isJsonPrimitive() ? !a.getAsString().isEmpty() : a.isJsonArray() && !a.getAsJsonArray().isEmpty());
-            boolean has = b != null && (b.isJsonPrimitive() ? !b.getAsString().isEmpty() : b.isJsonArray() && !b.getAsJsonArray().isEmpty());
+            boolean had = a != null
+                    && (a.isJsonPrimitive()
+                            ? !a.getAsString().isEmpty()
+                            : a.isJsonArray() && !a.getAsJsonArray().isEmpty());
+            boolean has = b != null
+                    && (b.isJsonPrimitive()
+                            ? !b.getAsString().isEmpty()
+                            : b.isJsonArray() && !b.getAsJsonArray().isEmpty());
             if (had && !has) out.add(name);
         }
         return out;

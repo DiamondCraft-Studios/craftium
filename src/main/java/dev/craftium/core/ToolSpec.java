@@ -22,15 +22,34 @@ package dev.craftium.core;
  * @param transform      whether the tool moves, rotates or scales the selected blocks around a pivot
  * @param properties     the settings the tool declares for itself, which the options panel draws as a form instead of the built-in controls; none for the tools the editor ships with
  */
-public record ToolSpec(String id, String label, String icon, String iconId, String section, String description, Tool.BrushUse brushUse, InteractionKind interaction, int defaultKey, String useHint,
-                       boolean confirms, boolean radiusShortcut, boolean buildsOnRelease, boolean placesBlocks, boolean selection, boolean transform,
-                       java.util.List<PropertySpec> properties) {
+public record ToolSpec(
+        String id,
+        String label,
+        String icon,
+        String iconId,
+        String section,
+        String description,
+        Tool.BrushUse brushUse,
+        InteractionKind interaction,
+        int defaultKey,
+        String useHint,
+        boolean confirms,
+        boolean radiusShortcut,
+        boolean buildsOnRelease,
+        boolean placesBlocks,
+        boolean selection,
+        boolean transform,
+        java.util.List<PropertySpec> properties) {
     public ToolSpec {
         properties = properties == null ? java.util.List.of() : java.util.List.copyOf(properties);
     }
 
     /** The part of the id after the namespace, for names that must be unique per tool, such as a key binding's. */
-    public String path() { return id.substring(id.indexOf(':') + 1); }
+    public String path() {
+        return id.substring(id.indexOf(':') + 1);
+    }
     /** Whether the shape picker means anything for this tool. */
-    public boolean picksShape() { return brushUse == Tool.BrushUse.SHAPE || brushUse == Tool.BrushUse.SMALL_SHAPE; }
+    public boolean picksShape() {
+        return brushUse == Tool.BrushUse.SHAPE || brushUse == Tool.BrushUse.SMALL_SHAPE;
+    }
 }

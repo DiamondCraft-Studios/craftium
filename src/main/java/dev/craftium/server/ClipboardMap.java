@@ -1,7 +1,6 @@
 package dev.craftium.server;
 
 import dev.craftium.core.Point;
-
 import java.util.AbstractMap;
 import java.util.AbstractSet;
 import java.util.HashMap;
@@ -21,6 +20,7 @@ import java.util.Set;
 final class ClipboardMap extends AbstractMap<Point, BlockSnapshot> {
     /** A smaller clipboard is not worth the palette. */
     static final int MIN_PACK = 256;
+
     private static final int MAX_PALETTE = 0xFFFF;
 
     private LinkedHashMap<Point, BlockSnapshot> loose = new LinkedHashMap<>();
@@ -30,20 +30,26 @@ final class ClipboardMap extends AbstractMap<Point, BlockSnapshot> {
     /** Where each position is in the arrays, for {@link #get}: built when first asked for, and dropped when the clipboard changes. */
     private HashMap<Point, Integer> index;
 
-    boolean packed() { return x != null; }
+    boolean packed() {
+        return x != null;
+    }
 
     /** Packs the clipboard when it is big enough and its blocks are few enough kinds. Does nothing when it is packed already. */
     void pack() {
         if (packed() || loose.size() < MIN_PACK) return;
         int n = loose.size();
-        var xs = new int[n]; var ys = new int[n]; var zs = new int[n];
+        var xs = new int[n];
+        var ys = new int[n];
+        var zs = new int[n];
         var blocks = new char[n];
         var kinds = new HashMap<BlockSnapshot, Integer>();
         var list = new java.util.ArrayList<BlockSnapshot>();
         int i = 0;
         for (var e : loose.entrySet()) {
             var at = e.getKey();
-            xs[i] = at.x(); ys[i] = at.y(); zs[i] = at.z();
+            xs[i] = at.x();
+            ys[i] = at.y();
+            zs[i] = at.z();
             var snapshot = e.getValue();
             Integer known = kinds.get(snapshot);
             if (known == null) {
@@ -54,7 +60,11 @@ final class ClipboardMap extends AbstractMap<Point, BlockSnapshot> {
             }
             blocks[i++] = (char) (int) known;
         }
-        x = xs; y = ys; z = zs; block = blocks; palette = list.toArray(new BlockSnapshot[0]);
+        x = xs;
+        y = ys;
+        z = zs;
+        block = blocks;
+        palette = list.toArray(new BlockSnapshot[0]);
         loose = new LinkedHashMap<>();
         index = null;
     }
@@ -75,14 +85,24 @@ final class ClipboardMap extends AbstractMap<Point, BlockSnapshot> {
         var all = new LinkedHashMap<Point, BlockSnapshot>(Math.max(16, x.length * 4 / 3 + 1));
         for (int i = 0; i < x.length; i++) all.put(new Point(x[i], y[i], z[i]), palette[block[i]]);
         loose = all;
-        x = y = z = null; block = null; palette = null; index = null;
+        x = y = z = null;
+        block = null;
+        palette = null;
+        index = null;
     }
 
-    @Override public int size() { return packed() ? x.length : loose.size(); }
+    @Override
+    public int size() {
+        return packed() ? x.length : loose.size();
+    }
 
-    @Override public boolean isEmpty() { return size() == 0; }
+    @Override
+    public boolean isEmpty() {
+        return size() == 0;
+    }
 
-    @Override public BlockSnapshot get(Object key) {
+    @Override
+    public BlockSnapshot get(Object key) {
         if (!packed()) return loose.get(key);
         if (!(key instanceof Point)) return null;
         if (index == null) {
@@ -94,30 +114,57 @@ final class ClipboardMap extends AbstractMap<Point, BlockSnapshot> {
         return at == null ? null : palette[block[at]];
     }
 
-    @Override public boolean containsKey(Object key) {
+    @Override
+    public boolean containsKey(Object key) {
         if (!packed()) return loose.containsKey(key);
         return get(key) != null;
     }
 
-    @Override public BlockSnapshot put(Point key, BlockSnapshot value) { unpack(); return loose.put(key, value); }
+    @Override
+    public BlockSnapshot put(Point key, BlockSnapshot value) {
+        unpack();
+        return loose.put(key, value);
+    }
 
-    @Override public BlockSnapshot remove(Object key) { unpack(); return loose.remove(key); }
+    @Override
+    public BlockSnapshot remove(Object key) {
+        unpack();
+        return loose.remove(key);
+    }
 
-    @Override public void clear() {
-        x = y = z = null; block = null; palette = null; index = null;
+    @Override
+    public void clear() {
+        x = y = z = null;
+        block = null;
+        palette = null;
+        index = null;
         loose = new LinkedHashMap<>();
     }
 
-    @Override public Set<Entry<Point, BlockSnapshot>> entrySet() {
+    @Override
+    public Set<Entry<Point, BlockSnapshot>> entrySet() {
         if (!packed()) return loose.entrySet();
         return new AbstractSet<>() {
-            @Override public int size() { return x.length; }
-            @Override public Iterator<Entry<Point, BlockSnapshot>> iterator() {
-                final int[] xs = x, ys = y, zs = z; final char[] blocks = block; final BlockSnapshot[] colours = palette;
+            @Override
+            public int size() {
+                return x.length;
+            }
+
+            @Override
+            public Iterator<Entry<Point, BlockSnapshot>> iterator() {
+                final int[] xs = x, ys = y, zs = z;
+                final char[] blocks = block;
+                final BlockSnapshot[] colours = palette;
                 return new Iterator<>() {
                     int i;
-                    @Override public boolean hasNext() { return i < xs.length; }
-                    @Override public Entry<Point, BlockSnapshot> next() {
+
+                    @Override
+                    public boolean hasNext() {
+                        return i < xs.length;
+                    }
+
+                    @Override
+                    public Entry<Point, BlockSnapshot> next() {
                         if (i >= xs.length) throw new NoSuchElementException();
                         var entry = new SimpleImmutableEntry<>(new Point(xs[i], ys[i], zs[i]), colours[blocks[i]]);
                         i++;

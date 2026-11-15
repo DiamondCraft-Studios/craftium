@@ -7,54 +7,73 @@ import java.util.*;
 
 /** The shortcuts the bottom bar shows: the ones that do something with the tool that is selected, in the order they matter. */
 final class ToolHints {
-    private ToolHints(){}
+    private ToolHints() {}
 
     /**
      * The hints for {@code tool}, or for no tool chosen when it is null, most useful first so a narrow bar can drop the
      * last ones. {@code gizmo} is whether a transform gizmo is up (the wheel nudges), {@code shape} whether the Shape tool has one down.
      */
-    static List<String> of(Tool tool,boolean gizmo,boolean shape){
-        var hints=new ArrayList<String>();
-        hints.add(EditorBindings.label(Action.ROTATE_CAMERA)+" Drag: Camera");
-        if(tool!=null)hints.add(EditorBindings.label(Action.USE_TOOL)+": "+use(tool));
-        hints.add(EditorBindings.label(Action.PICK_BLOCK)+": Pick block");
-        if(tool!=null&&confirms(tool))hints.add(EditorBindings.label(Action.CONFIRM)+": Apply");
-        hints.add(wheel(tool,gizmo,shape));
-        if(tool!=null&&brush(tool))hints.add(EditorBindings.label(Action.ADJUST_RADIUS)+"+Wheel / [ ]: Radius");
+    static List<String> of(Tool tool, boolean gizmo, boolean shape) {
+        var hints = new ArrayList<String>();
+        hints.add(EditorBindings.label(Action.ROTATE_CAMERA) + " Drag: Camera");
+        if (tool != null) hints.add(EditorBindings.label(Action.USE_TOOL) + ": " + use(tool));
+        hints.add(EditorBindings.label(Action.PICK_BLOCK) + ": Pick block");
+        if (tool != null && confirms(tool)) hints.add(EditorBindings.label(Action.CONFIRM) + ": Apply");
+        hints.add(wheel(tool, gizmo, shape));
+        if (tool != null && brush(tool)) hints.add(EditorBindings.label(Action.ADJUST_RADIUS) + "+Wheel / [ ]: Radius");
         hints.add("WASD / Space Shift: Fly");
         return hints;
     }
 
     /** The hints while a gizmo handle is held: what letting go does, and the keys that change how the drag snaps. */
-    static List<String> held(Options.GizmoMode mode){
-        var hints=new ArrayList<String>();
-        hints.add(EditorBindings.label(Action.USE_TOOL)+" Release: Apply");
-        if(mode==Options.GizmoMode.ROTATE){hints.add("Shift: 1° steps");hints.add("Ctrl: Coarse steps");}
-        else if(mode==Options.GizmoMode.SCALE){hints.add("Shift: Fine");hints.add("Ctrl: Scale evenly");hints.add("Alt: From centre");}
-        else hints.add("Alt: From centre");
+    static List<String> held(Options.GizmoMode mode) {
+        var hints = new ArrayList<String>();
+        hints.add(EditorBindings.label(Action.USE_TOOL) + " Release: Apply");
+        if (mode == Options.GizmoMode.ROTATE) {
+            hints.add("Shift: 1° steps");
+            hints.add("Ctrl: Coarse steps");
+        } else if (mode == Options.GizmoMode.SCALE) {
+            hints.add("Shift: Fine");
+            hints.add("Ctrl: Scale evenly");
+            hints.add("Alt: From centre");
+        } else hints.add("Alt: From centre");
         hints.add("WASD / Space Shift: Fly");
         return hints;
     }
 
     /** The line to draw, as many hints as fit in {@code room} pixels. {@code held} is the mode of the gizmo handle being dragged, or null when none is. */
-    static String line(Tool tool,boolean gizmo,boolean shape,Options.GizmoMode held,java.util.function.ToIntFunction<String> width,int room){
-        var line=new StringBuilder();
-        for(String hint:held!=null?held(held):of(tool,gizmo,shape)){
-            String next=line.isEmpty()?hint:line+"     "+hint;
-            if(!line.isEmpty()&&width.applyAsInt(next)>room)break;
-            line=new StringBuilder(next);
+    static String line(
+            Tool tool,
+            boolean gizmo,
+            boolean shape,
+            Options.GizmoMode held,
+            java.util.function.ToIntFunction<String> width,
+            int room) {
+        var line = new StringBuilder();
+        for (String hint : held != null ? held(held) : of(tool, gizmo, shape)) {
+            String next = line.isEmpty() ? hint : line + "     " + hint;
+            if (!line.isEmpty() && width.applyAsInt(next) > room) break;
+            line = new StringBuilder(next);
         }
         return line.toString();
     }
 
-    private static String wheel(Tool tool,boolean gizmo,boolean shape){
-        if(tool==null)return "Wheel: Zoom";
-        if(shape)return "Wheel: Size shape";
-        if(gizmo)return "Wheel: Nudge";
+    private static String wheel(Tool tool, boolean gizmo, boolean shape) {
+        if (tool == null) return "Wheel: Zoom";
+        if (shape) return "Wheel: Size shape";
+        if (gizmo) return "Wheel: Nudge";
         return "Wheel: Zoom";
     }
     /** Tools that act through a brush, so the radius shortcut applies. */
-    static boolean brush(Tool tool){return tool.spec().radiusShortcut();}
-    private static boolean confirms(Tool tool){return tool.spec().confirms();}
-    private static String use(Tool tool){return tool.spec().useHint();}
+    static boolean brush(Tool tool) {
+        return tool.spec().radiusShortcut();
+    }
+
+    private static boolean confirms(Tool tool) {
+        return tool.spec().confirms();
+    }
+
+    private static String use(Tool tool) {
+        return tool.spec().useHint();
+    }
 }

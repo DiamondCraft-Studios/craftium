@@ -1,9 +1,8 @@
 package dev.craftium.client.showcase;
 
-import dev.craftium.core.ShotSpec;
-
 import com.mojang.authlib.GameProfile;
 import dev.craftium.client.compat.ClientCompat;
+import dev.craftium.core.ShotSpec;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.RemotePlayer;
@@ -39,7 +38,8 @@ final class CameraRig implements AutoCloseable {
         stand.setYHeadRot(spec.yaw());
         stand.yBodyRot = spec.yaw();
         stand.setOldPosAndRot();
-        // The camera looks along the head's rotation and blends it from the previous frame's, which setOldPosAndRot does not cover:
+        // The camera looks along the head's rotation and blends it from the previous frame's, which setOldPosAndRot
+        // does not cover:
         // left alone, the first frame would turn part of the way from yaw 0.
         stand.yHeadRotO = spec.yaw();
         stand.yBodyRotO = spec.yaw();
@@ -56,7 +56,8 @@ final class CameraRig implements AutoCloseable {
 
     static CameraRig install(Minecraft mc, ShotSpec spec) {
         if (mc.level == null || mc.player == null) throw new IllegalStateException("Not in a world");
-        if (ClientCompat.screen(mc) != null) throw new IllegalStateException("A menu is open; close it so the world can be drawn");
+        if (ClientCompat.screen(mc) != null)
+            throw new IllegalStateException("A menu is open; close it so the world can be drawn");
         return new CameraRig(mc, spec);
     }
 

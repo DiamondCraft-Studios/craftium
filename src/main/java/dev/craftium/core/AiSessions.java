@@ -13,6 +13,7 @@ public final class AiSessions {
     public static final long IDLE_MS = 60L * 60L * 1000L;
     /** How long a session is kept in mind as having built somewhere, for telling a later build that it overlaps, in milliseconds: ten minutes. */
     public static final long RECENT_MS = 10L * 60L * 1000L;
+
     public static final int MAX_ID = 40;
     public static final int MAX_LABEL = 60;
 
@@ -22,7 +23,8 @@ public final class AiSessions {
         var out = new StringBuilder();
         for (int i = 0; i < id.length() && out.length() < MAX_ID; i++) {
             char c = id.charAt(i);
-            if (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') out.append(c);
+            if (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_')
+                out.append(c);
             else return ""; // an id that is not plain is not trusted to be anyone's
         }
         return out.toString();
@@ -36,7 +38,11 @@ public final class AiSessions {
         for (int i = 0; i < label.length(); i++) {
             char c = label.charAt(i);
             if (Character.isISOControl(c) || c == '§') continue; // '§' would start a colour code in the game's text
-            if (Character.isWhitespace(c)) { if (!blank) out.append(' '); blank = true; continue; }
+            if (Character.isWhitespace(c)) {
+                if (!blank) out.append(' ');
+                blank = true;
+                continue;
+            }
             out.append(c);
             blank = false;
         }
@@ -69,37 +75,92 @@ public final class AiSessions {
         h = (h + turns * 60f) % 360;
         float c = v * s, x = c * (1 - Math.abs((h / 60f) % 2 - 1)), m = v - c, rr, gg, bb;
         switch ((int) (h / 60f)) {
-            case 0 -> { rr = c; gg = x; bb = 0; }
-            case 1 -> { rr = x; gg = c; bb = 0; }
-            case 2 -> { rr = 0; gg = c; bb = x; }
-            case 3 -> { rr = 0; gg = x; bb = c; }
-            case 4 -> { rr = x; gg = 0; bb = c; }
-            default -> { rr = c; gg = 0; bb = x; }
+            case 0 -> {
+                rr = c;
+                gg = x;
+                bb = 0;
+            }
+            case 1 -> {
+                rr = x;
+                gg = c;
+                bb = 0;
+            }
+            case 2 -> {
+                rr = 0;
+                gg = c;
+                bb = x;
+            }
+            case 3 -> {
+                rr = 0;
+                gg = x;
+                bb = c;
+            }
+            case 4 -> {
+                rr = x;
+                gg = 0;
+                bb = c;
+            }
+            default -> {
+                rr = c;
+                gg = 0;
+                bb = x;
+            }
         }
-        return a << 24 | Math.round((rr + m) * 255) << 16 | Math.round((gg + m) * 255) << 8 | Math.round((bb + m) * 255);
+        return a << 24
+                | Math.round((rr + m) * 255) << 16
+                | Math.round((gg + m) * 255) << 8
+                | Math.round((bb + m) * 255);
     }
 
     /** The box a build fills, corners included. */
     public record Region(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
         public boolean intersects(Region o) {
-            return minX <= o.maxX && o.minX <= maxX && minY <= o.maxY && o.minY <= maxY && minZ <= o.maxZ && o.minZ <= maxZ;
+            return minX <= o.maxX
+                    && o.minX <= maxX
+                    && minY <= o.maxY
+                    && o.minY <= maxY
+                    && minZ <= o.maxZ
+                    && o.minZ <= maxZ;
         }
-        public int sizeX() { return maxX - minX + 1; }
-        public int sizeY() { return maxY - minY + 1; }
-        public int sizeZ() { return maxZ - minZ + 1; }
-        public Point center() { return new Point((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2); }
+
+        public int sizeX() {
+            return maxX - minX + 1;
+        }
+
+        public int sizeY() {
+            return maxY - minY + 1;
+        }
+
+        public int sizeZ() {
+            return maxZ - minZ + 1;
+        }
+
+        public Point center() {
+            return new Point((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
+        }
         /** "x1,y1,z1 to x2,y2,z2" */
-        public String text() { return minX + "," + minY + "," + minZ + " to " + maxX + "," + maxY + "," + maxZ; }
+        public String text() {
+            return minX + "," + minY + "," + minZ + " to " + maxX + "," + maxY + "," + maxZ;
+        }
     }
 
     /** The smallest box around these points, or null when there are none. */
     public static Region around(Iterable<Point> points) {
-        int x1 = Integer.MAX_VALUE, y1 = Integer.MAX_VALUE, z1 = Integer.MAX_VALUE, x2 = Integer.MIN_VALUE, y2 = Integer.MIN_VALUE, z2 = Integer.MIN_VALUE;
+        int x1 = Integer.MAX_VALUE,
+                y1 = Integer.MAX_VALUE,
+                z1 = Integer.MAX_VALUE,
+                x2 = Integer.MIN_VALUE,
+                y2 = Integer.MIN_VALUE,
+                z2 = Integer.MIN_VALUE;
         boolean any = false;
         for (var p : points) {
             any = true;
-            x1 = Math.min(x1, p.x()); y1 = Math.min(y1, p.y()); z1 = Math.min(z1, p.z());
-            x2 = Math.max(x2, p.x()); y2 = Math.max(y2, p.y()); z2 = Math.max(z2, p.z());
+            x1 = Math.min(x1, p.x());
+            y1 = Math.min(y1, p.y());
+            z1 = Math.min(z1, p.z());
+            x2 = Math.max(x2, p.x());
+            y2 = Math.max(y2, p.y());
+            z2 = Math.max(z2, p.z());
         }
         return any ? new Region(x1, y1, z1, x2, y2, z2) : null;
     }

@@ -1,10 +1,12 @@
 package dev.craftium.core;
 
-import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
+import org.junit.jupiter.api.Test;
+
 class StructureSettingsTest {
-    @Test void aBlueprintIsAFormatOfItsOwn() {
+    @Test
+    void aBlueprintIsAFormatOfItsOwn() {
         var s = new StructureSettings();
         s.format = StructureSettings.BLUEPRINT;
         s.validate();
@@ -13,14 +15,16 @@ class StructureSettingsTest {
         assertFalse(s.schematic());
     }
 
-    @Test void anUnknownFormatFallsBackToJava() {
+    @Test
+    void anUnknownFormatFallsBackToJava() {
         var s = new StructureSettings();
         s.format = "nonsense";
         s.validate();
         assertEquals(StructureSettings.JAVA, s.format);
     }
 
-    @Test void aBuildObjectIdCannotBeNegative() {
+    @Test
+    void aBuildObjectIdCannotBeNegative() {
         var s = new StructureSettings();
         s.objectId = -4;
         s.validate();

@@ -11,14 +11,22 @@ import java.util.zip.*;
  * here, is shrunk first (each cell standing for a cube of {@code scale} blocks), so every blueprint has a picture.
  */
 public final class BlueprintVoxels {
-    public static final int EMPTY = -1, MAX_VOLUME = 262_144, MAX_PALETTE = 255, MAX_ENCODED = 8000, GRID = 48, MAX_SCALE = 64;
+    public static final int EMPTY = -1,
+            MAX_VOLUME = 262_144,
+            MAX_PALETTE = 255,
+            MAX_ENCODED = 8000,
+            GRID = 48,
+            MAX_SCALE = 64;
+
     private BlueprintVoxels() {}
 
     /** The picture data of a blueprint: its block ids, the size of the cube each cell stands for, and the cells. */
     public record Packed(List<String> palette, int scale, String cells) {}
 
     /** The cells of a box this big once each cell stands for {@code scale} blocks along every side. */
-    public static int cells(int blocks, int scale) { return (blocks + scale - 1) / scale; }
+    public static int cells(int blocks, int scale) {
+        return (blocks + scale - 1) / scale;
+    }
 
     /** Collects the blocks of a blueprint, then packs them. */
     public static final class Builder {
@@ -31,12 +39,27 @@ public final class BlueprintVoxels {
         public void add(int x, int y, int z, String block) {
             if (x < 0 || y < 0 || z < 0) return;
             Integer id = indices.get(block);
-            if (id == null) { id = names.size(); indices.put(block, id); names.add(block); }
-            if (count == xs.length) { int n = count * 2; xs = Arrays.copyOf(xs, n); ys = Arrays.copyOf(ys, n); zs = Arrays.copyOf(zs, n); ids = Arrays.copyOf(ids, n); }
-            xs[count] = x; ys[count] = y; zs[count] = z; ids[count++] = id;
+            if (id == null) {
+                id = names.size();
+                indices.put(block, id);
+                names.add(block);
+            }
+            if (count == xs.length) {
+                int n = count * 2;
+                xs = Arrays.copyOf(xs, n);
+                ys = Arrays.copyOf(ys, n);
+                zs = Arrays.copyOf(zs, n);
+                ids = Arrays.copyOf(ids, n);
+            }
+            xs[count] = x;
+            ys[count] = y;
+            zs[count] = z;
+            ids[count++] = id;
         }
 
-        public int count() { return count; }
+        public int count() {
+            return count;
+        }
 
         /** The blocks as picture data for a box of this size, or null when there are none. */
         public Packed pack(int sx, int sy, int sz) {
@@ -63,7 +86,12 @@ public final class BlueprintVoxels {
                 Arrays.fill(grid, EMPTY);
                 long[] keys = new long[count];
                 for (int i = 0; i < count; i++) {
-                    int cell = index(gx, gz, Math.min(xs[i] / scale, gx - 1), Math.min(ys[i] / scale, gy - 1), Math.min(zs[i] / scale, gz - 1));
+                    int cell = index(
+                            gx,
+                            gz,
+                            Math.min(xs[i] / scale, gx - 1),
+                            Math.min(ys[i] / scale, gy - 1),
+                            Math.min(zs[i] / scale, gz - 1));
                     keys[i] = ((long) cell << 8) | remap[ids[i]];
                 }
                 Arrays.sort(keys);
@@ -73,10 +101,18 @@ public final class BlueprintVoxels {
                     while (i < count && (int) (keys[i] >> 8) == cell) {
                         long key = keys[i];
                         int run = 0;
-                        while (i < count && keys[i] == key) { run++; i++; }
-                        if (run > bestRun) { bestRun = run; best = (int) (key & 255); }
+                        while (i < count && keys[i] == key) {
+                            run++;
+                            i++;
+                        }
+                        if (run > bestRun) {
+                            bestRun = run;
+                            best = (int) (key & 255);
+                        }
                     }
-                    grid[cell] = best; // a shrunk cell is drawn when any block of its cube is built, so a thin wall is still there
+                    grid[cell] =
+                            best; // a shrunk cell is drawn when any block of its cube is built, so a thin wall is still
+                    // there
                 }
                 String text = encode(gx, gy, gz, grid);
                 if (text != null) return new Packed(List.copyOf(palette), scale, text);
@@ -85,7 +121,9 @@ public final class BlueprintVoxels {
         }
     }
 
-    public static int index(int sx, int sz, int x, int y, int z) { return (y * sz + z) * sx + x; }
+    public static int index(int sx, int sz, int x, int y, int z) {
+        return (y * sz + z) * sx + x;
+    }
 
     /** The cells as text, or null when they do not fit the limits. */
     public static String encode(int sx, int sy, int sz, int[] cells) {
@@ -104,14 +142,22 @@ public final class BlueprintVoxels {
             }
             String text = Base64.getEncoder().encodeToString(bytes.toByteArray());
             return text.length() > MAX_ENCODED ? null : text;
-        } catch (IOException e) { throw new UncheckedIOException(e); }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     /** The cells of a box of this size, or null when the text is not a valid grid for it. */
     public static int[] decode(String text, int sx, int sy, int sz) {
-        if (text == null || sx < 1 || sy < 1 || sz < 1 || (long) sx * sy * sz > MAX_VOLUME || text.length() > MAX_ENCODED) return null;
+        if (text == null
+                || sx < 1
+                || sy < 1
+                || sz < 1
+                || (long) sx * sy * sz > MAX_VOLUME
+                || text.length() > MAX_ENCODED) return null;
         int volume = sx * sy * sz;
-        try (var in = new DataInputStream(new GZIPInputStream(new ByteArrayInputStream(Base64.getDecoder().decode(text))))) {
+        try (var in = new DataInputStream(
+                new GZIPInputStream(new ByteArrayInputStream(Base64.getDecoder().decode(text))))) {
             int[] cells = new int[volume];
             int at = 0;
             while (at < volume) {
@@ -121,17 +167,26 @@ public final class BlueprintVoxels {
                 at += run;
             }
             return cells;
-        } catch (IOException | IllegalArgumentException e) { return null; }
+        } catch (IOException | IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private static void varint(DataOutput out, int value) throws IOException {
-        while ((value & ~0x7f) != 0) { out.writeByte((value & 0x7f) | 0x80); value >>>= 7; }
+        while ((value & ~0x7f) != 0) {
+            out.writeByte((value & 0x7f) | 0x80);
+            value >>>= 7;
+        }
         out.writeByte(value);
     }
 
     private static int varint(DataInput in) throws IOException {
         int value = 0, shift = 0, b;
-        do { b = in.readUnsignedByte(); value |= (b & 0x7f) << shift; shift += 7; } while ((b & 0x80) != 0 && shift < 35);
+        do {
+            b = in.readUnsignedByte();
+            value |= (b & 0x7f) << shift;
+            shift += 7;
+        } while ((b & 0x80) != 0 && shift < 35);
         return value;
     }
 }

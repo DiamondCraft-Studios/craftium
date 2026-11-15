@@ -9,7 +9,7 @@ import java.util.*;
  * away is gone (so scaling down loses what it loses). A block that lands on a cell another object held replaces it: that object loses the cell.
  */
 public final class ObjectRemap {
-    private ObjectRemap(){}
+    private ObjectRemap() {}
 
     /**
      * @param own the object's blocks before
@@ -17,12 +17,13 @@ public final class ObjectRemap {
      * @param origin for each cell the transform covers, the cell its block came from
      * @return the object's blocks after: those outside {@code source} where they were, then the cells that came from one of its blocks
      */
-    public static List<Point> apply(Collection<Point> own,Set<Point> source,Map<Point,Point> origin){
-        var mine=own instanceof Set<?>?(Set<Point>)own:new HashSet<>(own);
-        var out=new LinkedHashSet<Point>();
-        // A cell outside the selection that the moved blocks now cover is theirs: the object that held it before does not keep (or tag) a block that came from another.
-        for(var p:own)if(!source.contains(p)&&!origin.containsKey(p))out.add(p);
-        for(var e:origin.entrySet())if(mine.contains(e.getValue()))out.add(e.getKey());
+    public static List<Point> apply(Collection<Point> own, Set<Point> source, Map<Point, Point> origin) {
+        var mine = own instanceof Set<?> ? (Set<Point>) own : new HashSet<>(own);
+        var out = new LinkedHashSet<Point>();
+        // A cell outside the selection that the moved blocks now cover is theirs: the object that held it before does
+        // not keep (or tag) a block that came from another.
+        for (var p : own) if (!source.contains(p) && !origin.containsKey(p)) out.add(p);
+        for (var e : origin.entrySet()) if (mine.contains(e.getValue())) out.add(e.getKey());
         return List.copyOf(out);
     }
 }

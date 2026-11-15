@@ -20,14 +20,22 @@ public final class JigsawEntity {
     public static final String BEDROCK_ID = "JigsawBlock";
 
     /** What a jigsaw says, with {@code finalState} as the block it turns into. */
-    public record Fields(String name, String target, String pool, String joint, String finalState, int selectionPriority, int placementPriority) {}
+    public record Fields(
+            String name,
+            String target,
+            String pool,
+            String joint,
+            String finalState,
+            int selectionPriority,
+            int placementPriority) {}
 
     /**
      * The {@code block_entity_data} of a jigsaw at the world position x, y, z. The final state keeps its block but not its
      * states (the sample's Bedrock files hold a block name only); {@code lossy}, when given, is set when something was dropped
      * or had no Bedrock block.
      */
-    public static Map<String, Object> toBedrock(Fields fields, int x, int y, int z, BedrockBlockTable table, boolean[] lossy) {
+    public static Map<String, Object> toBedrock(
+            Fields fields, int x, int y, int z, BedrockBlockTable table, boolean[] lossy) {
         var data = new LinkedHashMap<String, Object>();
         data.put("final_state", bedrockBlock(fields.finalState(), table, lossy));
         data.put("id", BEDROCK_ID);
@@ -46,8 +54,14 @@ public final class JigsawEntity {
 
     /** The fields of a Bedrock jigsaw's {@code block_entity_data}, with Java's defaults for what is missing. */
     public static Fields fromBedrock(Map<String, Object> data, BedrockBlockTable table, boolean[] lossy) {
-        return new Fields(text(data, "name", EMPTY), text(data, "target", EMPTY), text(data, "target_pool", EMPTY), text(data, "joint", ROLLABLE),
-                javaBlock(text(data, "final_state", AIR), table, lossy), number(data, "selection_priority"), number(data, "placement_priority"));
+        return new Fields(
+                text(data, "name", EMPTY),
+                text(data, "target", EMPTY),
+                text(data, "target_pool", EMPTY),
+                text(data, "joint", ROLLABLE),
+                javaBlock(text(data, "final_state", AIR), table, lossy),
+                number(data, "selection_priority"),
+                number(data, "placement_priority"));
     }
 
     /** True for the block entity of a jigsaw in a Bedrock file. */
@@ -64,12 +78,16 @@ public final class JigsawEntity {
         if (open >= 0 && state.endsWith("]") && open + 1 < state.length() - 1)
             for (String pair : state.substring(open + 1, state.length() - 1).split(",")) {
                 int equals = pair.indexOf('=');
-                if (equals > 0) properties.put(pair.substring(0, equals).trim(), pair.substring(equals + 1).trim());
+                if (equals > 0)
+                    properties.put(
+                            pair.substring(0, equals).trim(),
+                            pair.substring(equals + 1).trim());
             }
         if (!properties.isEmpty()) flag(lossy);
         var mapped = table == null ? null : table.toBedrock(name, properties);
         if (mapped != null) return mapped.name();
-        // not in the table as written (a stair needs its facing): the name is the same on both editions for nearly every block
+        // not in the table as written (a stair needs its facing): the name is the same on both editions for nearly
+        // every block
         flag(lossy);
         return name;
     }

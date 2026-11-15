@@ -2,15 +2,14 @@ package dev.craftium.client.interaction;
 
 import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.Overlay;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Shows the tags of the block under the cursor, the ones the game itself looks at (what keeps fire burning on netherrack, what a pickaxe can mine,
@@ -21,14 +20,17 @@ final class InspectInteraction implements Interaction {
     private static final float SCALE = .02f;
     private static final double LINE = .2;
 
-    @Override public boolean use(EditorContext editor) {
+    @Override
+    public boolean use(EditorContext editor) {
         var hit = editor.target();
         var mc = Minecraft.getInstance();
         if (hit == null || mc.level == null) return true;
         var state = mc.level.getBlockState(hit.getBlockPos());
         var block = tags(state);
         var fluid = fluidTags(state);
-        ClientCompat.chat(mc, Component.literal(id(state) + " - " + block.size() + " block tag" + (block.size() == 1 ? "" : "s")));
+        ClientCompat.chat(
+                mc,
+                Component.literal(id(state) + " - " + block.size() + " block tag" + (block.size() == 1 ? "" : "s")));
         for (String tag : block) ClientCompat.chat(mc, Component.literal("  #" + tag));
         if (!fluid.isEmpty()) {
             ClientCompat.chat(mc, Component.literal(fluid.size() + " fluid tag" + (fluid.size() == 1 ? "" : "s")));
@@ -37,9 +39,13 @@ final class InspectInteraction implements Interaction {
         return true;
     }
 
-    @Override public boolean repeatsWhenDragged() { return false; }
+    @Override
+    public boolean repeatsWhenDragged() {
+        return false;
+    }
 
-    @Override public void drawWorld(EditorContext editor, Minecraft mc, BlockHitResult hit) {
+    @Override
+    public void drawWorld(EditorContext editor, Minecraft mc, BlockHitResult hit) {
         if (hit == null || !editor.toolActive() || mc.level == null) return;
         var pos = hit.getBlockPos();
         var state = mc.level.getBlockState(pos);
@@ -56,17 +62,30 @@ final class InspectInteraction implements Interaction {
         }
     }
 
-    private static String id(BlockState state) { return dev.craftium.compat.Compat.keyName(BuiltInRegistries.BLOCK.getResourceKey(state.getBlock()).orElseThrow()); }
+    private static String id(BlockState state) {
+        return dev.craftium.compat.Compat.keyName(
+                BuiltInRegistries.BLOCK.getResourceKey(state.getBlock()).orElseThrow());
+    }
 
     /** The tags of the block, sorted. */
     private static List<String> tags(BlockState state) {
-        return BuiltInRegistries.BLOCK.wrapAsHolder(state.getBlock()).tags().map(dev.craftium.compat.Compat::tagName).sorted().toList();
+        return BuiltInRegistries.BLOCK
+                .wrapAsHolder(state.getBlock())
+                .tags()
+                .map(dev.craftium.compat.Compat::tagName)
+                .sorted()
+                .toList();
     }
 
     /** The tags of the fluid in the block (water, lava), sorted; none for a block with no fluid. */
     private static List<String> fluidTags(BlockState state) {
         var fluid = state.getFluidState();
         if (fluid.isEmpty()) return List.of();
-        return BuiltInRegistries.FLUID.wrapAsHolder(fluid.getType()).tags().map(dev.craftium.compat.Compat::tagName).sorted().toList();
+        return BuiltInRegistries.FLUID
+                .wrapAsHolder(fluid.getType())
+                .tags()
+                .map(dev.craftium.compat.Compat::tagName)
+                .sorted()
+                .toList();
     }
 }

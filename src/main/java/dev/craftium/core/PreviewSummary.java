@@ -20,7 +20,12 @@ public final class PreviewSummary {
     private final Map<String, Kind> kinds = new HashMap<>();
     private final Set<Long> chunks = new HashSet<>();
     private long placed, cleared;
-    private int x0 = Integer.MAX_VALUE, y0 = Integer.MAX_VALUE, z0 = Integer.MAX_VALUE, x1 = Integer.MIN_VALUE, y1 = Integer.MIN_VALUE, z1 = Integer.MIN_VALUE;
+    private int x0 = Integer.MAX_VALUE,
+            y0 = Integer.MAX_VALUE,
+            z0 = Integer.MAX_VALUE,
+            x1 = Integer.MIN_VALUE,
+            y1 = Integer.MIN_VALUE,
+            z1 = Integer.MIN_VALUE;
 
     /**
      * One changed block.
@@ -29,10 +34,17 @@ public final class PreviewSummary {
      * @param air whether the change clears the block rather than placing one
      */
     public void add(int x, int y, int z, String block, String facing, boolean air) {
-        x0 = Math.min(x0, x); y0 = Math.min(y0, y); z0 = Math.min(z0, z);
-        x1 = Math.max(x1, x); y1 = Math.max(y1, y); z1 = Math.max(z1, z);
+        x0 = Math.min(x0, x);
+        y0 = Math.min(y0, y);
+        z0 = Math.min(z0, z);
+        x1 = Math.max(x1, x);
+        y1 = Math.max(y1, y);
+        z1 = Math.max(z1, z);
         chunks.add(((long) (x >> 4) << 32) | ((z >> 4) & 0xffffffffL));
-        if (air) { cleared++; return; }
+        if (air) {
+            cleared++;
+            return;
+        }
         placed++;
         var kind = kinds.computeIfAbsent(block, k -> new Kind());
         kind.count++;
@@ -49,12 +61,17 @@ public final class PreviewSummary {
         out.add("size", ints(x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1));
         out.addProperty("chunks", chunks.size());
         var sorted = new ArrayList<>(kinds.entrySet());
-        sorted.sort((a, b) -> a.getValue().count != b.getValue().count ? Long.compare(b.getValue().count, a.getValue().count) : a.getKey().compareTo(b.getKey()));
+        sorted.sort((a, b) -> a.getValue().count != b.getValue().count
+                ? Long.compare(b.getValue().count, a.getValue().count)
+                : a.getKey().compareTo(b.getKey()));
         var list = new JsonArray();
         long rest = 0;
         for (int i = 0; i < sorted.size(); i++) {
             var entry = sorted.get(i);
-            if (i >= LISTED) { rest += entry.getValue().count; continue; }
+            if (i >= LISTED) {
+                rest += entry.getValue().count;
+                continue;
+            }
             var item = new JsonObject();
             item.addProperty("block", entry.getKey());
             item.addProperty("count", entry.getValue().count);

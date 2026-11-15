@@ -1,10 +1,11 @@
 package dev.craftium.core;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.google.gson.*;
-import org.junit.jupiter.api.Test;
 import java.util.*;
 import java.util.stream.*;
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * Pins what an older Craftium wrote to disk and sent over the network. {@link Options} travels as JSON (field names) and the tool
@@ -16,7 +17,8 @@ class WireCompatibilityTest {
     private static final Gson JSON = new Gson();
 
     /** Every {@link Tool} name 0.9.0-beta.1 could send. */
-    private static final String TOOLS = """
+    private static final String TOOLS =
+            """
         MAGIC_SELECT
         BOX_SELECT
         FREEHAND_SELECT
@@ -62,7 +64,8 @@ class WireCompatibilityTest {
         """;
 
     /** Every top-level field {@link Options} wrote in 0.9.0-beta.1, with its JSON shape (primitive, array or object). */
-    private static final String FIELDS = """
+    private static final String FIELDS =
+            """
         aboutSet primitive
         aboutX primitive
         aboutY primitive
@@ -395,36 +398,52 @@ class WireCompatibilityTest {
         yaw primitive
         """;
 
-    private static List<String> lines(String text) { return text.lines().map(String::strip).filter(s -> !s.isEmpty()).toList(); }
+    private static List<String> lines(String text) {
+        return text.lines().map(String::strip).filter(s -> !s.isEmpty()).toList();
+    }
 
     private static String shape(JsonElement element) {
-        return element.isJsonPrimitive() ? "primitive" : element.isJsonArray() ? "array" : element.isJsonObject() ? "object" : "null";
+        return element.isJsonPrimitive()
+                ? "primitive"
+                : element.isJsonArray() ? "array" : element.isJsonObject() ? "object" : "null";
     }
 
-    @Test void everyToolNameFromThePreviousReleaseStillExists() {
+    @Test
+    void everyToolNameFromThePreviousReleaseStillExists() {
         var current = Arrays.stream(Tool.values()).map(Enum::name).collect(Collectors.toSet());
-        for (String name : lines(TOOLS)) assertTrue(current.contains(name), "Tool " + name + " was removed or renamed; saved settings and servers still use that name");
+        for (String name : lines(TOOLS))
+            assertTrue(
+                    current.contains(name),
+                    "Tool " + name + " was removed or renamed; saved settings and servers still use that name");
     }
 
-    @Test void toolsStillDecodeFromTheirNames() {
+    @Test
+    void toolsStillDecodeFromTheirNames() {
         for (String name : lines(TOOLS)) {
             var options = JSON.fromJson("{\"tool\":\"" + name + "\"}", Options.class);
             assertEquals(Tool.valueOf(name), options.tool, name);
         }
     }
 
-    @Test void optionsStillWriteEveryFieldTheyUsedTo() {
+    @Test
+    void optionsStillWriteEveryFieldTheyUsedTo() {
         var written = JSON.toJsonTree(new Options()).getAsJsonObject();
         for (String entry : lines(FIELDS)) {
             String[] parts = entry.split(" ");
-            assertTrue(written.has(parts[0]), "Options field " + parts[0] + " was removed or renamed; saved settings and older servers use it");
-            assertEquals(parts[1], shape(written.get(parts[0])), "Options field " + parts[0] + " changed its JSON shape");
+            assertTrue(
+                    written.has(parts[0]),
+                    "Options field " + parts[0] + " was removed or renamed; saved settings and older servers use it");
+            assertEquals(
+                    parts[1], shape(written.get(parts[0])), "Options field " + parts[0] + " changed its JSON shape");
         }
     }
 
-    @Test void aSavedSettingsFileFromThePreviousReleaseStillLoads() {
-        // A trimmed craftium.json as 0.9.0-beta.1 saves it: only some fields, in any order, plus one this version has never heard of.
-        String saved = """
+    @Test
+    void aSavedSettingsFileFromThePreviousReleaseStillLoads() {
+        // A trimmed craftium.json as 0.9.0-beta.1 saves it: only some fields, in any order, plus one this version has
+        // never heard of.
+        String saved =
+                """
             {"tool":"NOISE_PAINTER","radius":7,"strength":2.5,"block":"minecraft:andesite","secondary":"minecraft:stone",
              "shape":"SPHERE","mode":"REPLACE","seed":1234,"hollow":true,"outlineThickness":2,"script":"return blocks.stone",
              "scriptVariables":{"Width":"3"},"maskActive":["minecraft:dirt"],"position1":{"x":1,"y":2,"z":3},"someFieldFromTheFuture":5}
@@ -443,7 +462,8 @@ class WireCompatibilityTest {
         assertEquals(new Point(1, 2, 3), options.position1);
     }
 
-    @Test void savingAndLoadingKeepsEveryField() {
+    @Test
+    void savingAndLoadingKeepsEveryField() {
         var original = new Options();
         original.tool = Tool.SCRIPT_BRUSH;
         original.radius = 9;
@@ -453,8 +473,10 @@ class WireCompatibilityTest {
         assertEquals(tree, again);
     }
 
-    @Test void everyToolHasAKeyMappingIdMinecraftCanStore() {
+    @Test
+    void everyToolHasAKeyMappingIdMinecraftCanStore() {
         // CraftiumClient registers "key.craftium.tool.<lowercase name>"; players' options.txt keeps these ids.
-        for (Tool tool : Tool.values()) assertTrue(tool.name().toLowerCase(Locale.ROOT).matches("[a-z_]+"), tool.name());
+        for (Tool tool : Tool.values())
+            assertTrue(tool.name().toLowerCase(Locale.ROOT).matches("[a-z_]+"), tool.name());
     }
 }

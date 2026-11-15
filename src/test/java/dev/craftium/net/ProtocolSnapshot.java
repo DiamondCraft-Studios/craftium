@@ -3,8 +3,13 @@ package dev.craftium.net;
 /** The recorded wire shape of each protocol number; see {@link ProtocolCompatibilityTest}. */
 final class ProtocolSnapshot {
     private ProtocolSnapshot() {}
-    static String forProtocol(int protocol){return protocol==1?V1:null;}
-    static final String V1="""
+
+    static String forProtocol(int protocol) {
+        return protocol == 1 ? V1 : null;
+    }
+
+    static final String V1 =
+            """
         dev.craftium.core.Annotation.color : int
         dev.craftium.core.Annotation.from : dev.craftium.core.Point
         dev.craftium.core.Annotation.id : java.util.UUID

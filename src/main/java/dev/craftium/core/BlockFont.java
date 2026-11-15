@@ -4,7 +4,8 @@ import java.util.*;
 
 /** Original compact 5 x 7 block alphabet, stored as rows of binary pixels. */
 public final class BlockFont {
-    private static final Map<Character,String> GLYPHS = new HashMap<>();
+    private static final Map<Character, String> GLYPHS = new HashMap<>();
+
     static {
         String[] rows = {
             "A:01110/10001/10001/11111/10001/10001/10001", "B:11110/10001/10001/11110/10001/10001/11110",
@@ -28,16 +29,21 @@ public final class BlockFont {
             "!:00100/00100/00100/00100/00100/00000/00100", "?:01110/10001/00001/00010/00100/00000/00100",
             "-:00000/00000/00000/11111/00000/00000/00000", ".:00000/00000/00000/00000/00000/00110/00110"
         };
-        for(String row: rows) GLYPHS.put(row.charAt(0),row.substring(2).replace("/",""));
+        for (String row : rows) GLYPHS.put(row.charAt(0), row.substring(2).replace("/", ""));
     }
+
     private BlockFont() {}
+
     public static List<Point> pixels(String text) {
-        var result = new ArrayList<Point>(); int offset = 0;
-        for(char ch: text.toUpperCase(Locale.ROOT).toCharArray()) {
+        var result = new ArrayList<Point>();
+        int offset = 0;
+        for (char ch : text.toUpperCase(Locale.ROOT).toCharArray()) {
             String glyph = GLYPHS.get(ch);
-            if(glyph != null) for(int y=0;y<7;y++) for(int x=0;x<5;x++)
-                if(glyph.charAt(y*5+x)=='1') result.add(new Point(offset+x,6-y,0));
-            offset+=6;
+            if (glyph != null)
+                for (int y = 0; y < 7; y++)
+                    for (int x = 0; x < 5; x++)
+                        if (glyph.charAt(y * 5 + x) == '1') result.add(new Point(offset + x, 6 - y, 0));
+            offset += 6;
         }
         return result;
     }

@@ -1,8 +1,9 @@
 package dev.craftium.core;
 
-import org.junit.jupiter.api.Test;
-import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * Pins what every tool says about itself: its name in the panel, icon letters, section, description, how it uses the brush, which kinds of
@@ -11,7 +12,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ToolMetadataTest {
     /** name @@ label @@ icon @@ group @@ description @@ brush use @@ picks a shape @@ transform @@ places blocks @@ selection @@ default key. */
-    private static final String TOOLS = """
+    private static final String TOOLS =
+            """
         MAGIC_SELECT @@ Magic Wand @@ MW @@ Select @@ Select connected blocks of the same type. @@ NONE @@ false @@ false @@ false @@ true @@ 77
         BOX_SELECT @@ Box Select @@ BX @@ Select @@ Right-click two corners to select a cuboid. @@ NONE @@ false @@ false @@ false @@ true @@ 66
         FREEHAND_SELECT @@ Freehand Select @@ FS @@ Select @@ Brush a selection; use selection mode to add or subtract. @@ SHAPE @@ true @@ false @@ false @@ true @@ 78
@@ -59,7 +61,8 @@ class ToolMetadataTest {
         """;
 
     /** The sections of the Tools panel, in order, with the tools in each in the order shown. */
-    private static final String SECTIONS = """
+    private static final String SECTIONS =
+            """
         Select: BOX_SELECT,MAGIC_SELECT,LASSO_SELECT,FREEHAND_SELECT
         Draw: SHAPE,LINE,PATH,MODELLING,FREEHAND_DRAW,TEXT,ERASE
         Paint: PAINTER,PAINT_BUCKET,GRADIENT_PAINTER,NOISE_PAINTER,SCRIPT_BRUSH,BIOME_PAINTER,CLENTAMINATOR
@@ -69,30 +72,55 @@ class ToolMetadataTest {
         """;
 
     private static String describe(Tool t) {
-        return String.join(" @@ ", t.name(), t.label, t.icon, t.group, t.description, String.valueOf(t.brushUse()), String.valueOf(t.picksShape()), String.valueOf(t.transform()),
-            String.valueOf(t.placesBlocks()), String.valueOf(t.selection()), String.valueOf(EditorControls.toolDefault(t)));
+        return String.join(
+                " @@ ",
+                t.name(),
+                t.label,
+                t.icon,
+                t.group,
+                t.description,
+                String.valueOf(t.brushUse()),
+                String.valueOf(t.picksShape()),
+                String.valueOf(t.transform()),
+                String.valueOf(t.placesBlocks()),
+                String.valueOf(t.selection()),
+                String.valueOf(EditorControls.toolDefault(t)));
     }
 
-    @Test void everyToolStillSaysWhatItDid() {
+    @Test
+    void everyToolStillSaysWhatItDid() {
         var expected = new LinkedHashMap<String, String>();
-        for (String line : TOOLS.lines().map(String::strip).filter(s -> !s.isEmpty()).toList()) expected.put(line.substring(0, line.indexOf(' ')), line);
-        for (var entry : expected.entrySet()) assertEquals(entry.getValue(), describe(Tool.valueOf(entry.getKey())), entry.getKey());
+        for (String line :
+                TOOLS.lines().map(String::strip).filter(s -> !s.isEmpty()).toList())
+            expected.put(line.substring(0, line.indexOf(' ')), line);
+        for (var entry : expected.entrySet())
+            assertEquals(entry.getValue(), describe(Tool.valueOf(entry.getKey())), entry.getKey());
     }
 
-    @Test void everyToolIsInTheTable() {
+    @Test
+    void everyToolIsInTheTable() {
         // A tool without a row here was added after 0.9.0-beta.1: give it one so later changes to it are caught.
         var named = new HashSet<String>();
-        for (String line : TOOLS.lines().map(String::strip).filter(s -> !s.isEmpty()).toList()) named.add(line.substring(0, line.indexOf(' ')));
-        for (Tool tool : Tool.values()) assertTrue(named.contains(tool.name()), tool.name() + " needs a row in ToolMetadataTest");
+        for (String line :
+                TOOLS.lines().map(String::strip).filter(s -> !s.isEmpty()).toList())
+            named.add(line.substring(0, line.indexOf(' ')));
+        for (Tool tool : Tool.values())
+            assertTrue(named.contains(tool.name()), tool.name() + " needs a row in ToolMetadataTest");
     }
 
-    @Test void theToolsPanelSectionsKeepTheirOrder() {
+    @Test
+    void theToolsPanelSectionsKeepTheirOrder() {
         var actual = new StringBuilder();
         for (var entry : Tool.SECTIONS.entrySet()) {
             var names = new ArrayList<String>();
             for (Tool tool : entry.getValue()) names.add(tool.name());
-            actual.append(entry.getKey()).append(": ").append(String.join(",", names)).append('\n');
+            actual.append(entry.getKey())
+                    .append(": ")
+                    .append(String.join(",", names))
+                    .append('\n');
         }
-        assertEquals(SECTIONS.lines().map(String::strip).filter(s -> !s.isEmpty()).toList(), actual.toString().lines().toList());
+        assertEquals(
+                SECTIONS.lines().map(String::strip).filter(s -> !s.isEmpty()).toList(),
+                actual.toString().lines().toList());
     }
 }

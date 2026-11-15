@@ -16,45 +16,72 @@ import net.minecraft.world.level.storage.ValueOutput;
 
 /** The number of the missing block this one stands for, plus whatever block entity data the real block had. */
 public final class MissingBlockEntity extends BlockEntity {
-    private int key=-1;
+    private int key = -1;
     private CompoundTag kept;
     /** What the block was, e.g. {@code othermod:marble[axis=y]}. Only a client holds this from the server, which resolves it from the table when it sends the block. */
-    private String label="";
+    private String label = "";
 
-    public MissingBlockEntity(BlockPos pos,BlockState state){super(MissingBlocks.TYPE,pos,state);}
+    public MissingBlockEntity(BlockPos pos, BlockState state) {
+        super(MissingBlocks.TYPE, pos, state);
+    }
 
-    public int key(){return key;}
-    public CompoundTag kept(){return kept;}
-    public String label(){return label;}
+    public int key() {
+        return key;
+    }
+
+    public CompoundTag kept() {
+        return kept;
+    }
+
+    public String label() {
+        return label;
+    }
+
     private MissingBlockTable.Entry entry;
     /** The block this one stands for, read once. On the server it comes from the table; on a client from the name the server sent. Null when neither knows it. */
-    public MissingBlockTable.Entry entry(){
-        if(entry!=null)return entry;
-        if(!label.isEmpty())return entry=MissingBlockTable.Entry.parse(label);
-        var table=MissingBlocks.table();
-        return table==null?null:(entry=table.get(key));
+    public MissingBlockTable.Entry entry() {
+        if (entry != null) return entry;
+        if (!label.isEmpty()) return entry = MissingBlockTable.Entry.parse(label);
+        var table = MissingBlocks.table();
+        return table == null ? null : (entry = table.get(key));
     }
-    public void set(int key,CompoundTag kept){this.key=key;this.kept=kept;entry=null;setChanged();}
 
-    @Override protected void saveAdditional(ValueOutput output){
+    public void set(int key, CompoundTag kept) {
+        this.key = key;
+        this.kept = kept;
+        entry = null;
+        setChanged();
+    }
+
+    @Override
+    protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
-        output.putInt(MissingBlockRewrite.KEY,key);
-        if(kept!=null)output.store(MissingBlockRewrite.KEPT,CompoundTag.CODEC,kept);
+        output.putInt(MissingBlockRewrite.KEY, key);
+        if (kept != null) output.store(MissingBlockRewrite.KEPT, CompoundTag.CODEC, kept);
     }
-    @Override protected void loadAdditional(ValueInput input){
+
+    @Override
+    protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        key=input.getIntOr(MissingBlockRewrite.KEY,-1);
-        kept=input.read(MissingBlockRewrite.KEPT,CompoundTag.CODEC).orElse(null);
-        label=input.getStringOr("label","");
-        entry=null;
+        key = input.getIntOr(MissingBlockRewrite.KEY, -1);
+        kept = input.read(MissingBlockRewrite.KEPT, CompoundTag.CODEC).orElse(null);
+        label = input.getStringOr("label", "");
+        entry = null;
     }
-    @Override public Packet<ClientGamePacketListener> getUpdatePacket(){return ClientboundBlockEntityDataPacket.create(this);}
-    @Override public CompoundTag getUpdateTag(HolderLookup.Provider registries){
-        var tag=saveCustomOnly(registries);
-        // The table is the server's; the client is told the name so it can show what is missing without a table of its own.
-        MissingBlockTable table=MissingBlocks.table();
-        var entry=table==null?null:table.get(key);
-        if(entry!=null)tag.putString("label",entry.text());
+
+    @Override
+    public Packet<ClientGamePacketListener> getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    @Override
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        var tag = saveCustomOnly(registries);
+        // The table is the server's; the client is told the name so it can show what is missing without a table of its
+        // own.
+        MissingBlockTable table = MissingBlocks.table();
+        var entry = table == null ? null : table.get(key);
+        if (entry != null) tag.putString("label", entry.text());
         // What the real block held is not for the client to see or keep.
         tag.remove(MissingBlockRewrite.KEPT);
         return tag;
