@@ -24,12 +24,19 @@ public final class BlockQuery {
     /** What can be asked of a block. The parts that cost something to find are only asked for when a search uses them. */
     public interface Info {
         String id();
+
         String name();
+
         String mod();
+
         String modName();
+
         String tooltip();
+
         Collection<String> tags();
+
         Collection<String> tabs();
+
         String colour();
     }
 
@@ -37,25 +44,42 @@ public final class BlockQuery {
     public static final class Query {
         private final List<Term> terms;
         private final String problem;
-        private Query(List<Term> terms, String problem) { this.terms = terms; this.problem = problem; }
+
+        private Query(List<Term> terms, String problem) {
+            this.terms = terms;
+            this.problem = problem;
+        }
         /** Whether the text was a whole search; false when a quote was left open, which is still searched as if it were closed. */
-        public boolean valid() { return problem == null; }
-        public String problem() { return problem == null ? "" : problem; }
-        public boolean isEmpty() { return terms.isEmpty(); }
+        public boolean valid() {
+            return problem == null;
+        }
+
+        public String problem() {
+            return problem == null ? "" : problem;
+        }
+
+        public boolean isEmpty() {
+            return terms.isEmpty();
+        }
+
         public boolean matches(Info block) {
             for (Term term : terms) if (!term.matches(block)) return false;
             return true;
         }
         /** Whether any word of the search looks in the given prefix's place and has something to look for. */
         public boolean uses(char prefix) {
-            for (Term term : terms) for (Alternative a : term.alternatives()) if (a.prefix() == prefix && !a.text().isEmpty()) return true;
+            for (Term term : terms)
+                for (Alternative a : term.alternatives())
+                    if (a.prefix() == prefix && !a.text().isEmpty()) return true;
             return false;
         }
     }
 
     private record Alternative(char prefix, Pattern pattern, String text) {
         boolean matches(Info b) {
-            if (text.isEmpty()) return true; // a prefix with nothing after it yet matches everything, so typing "@" does not empty the list
+            if (text.isEmpty())
+                return true; // a prefix with nothing after it yet matches everything, so typing "@" does not empty the
+            // list
             return switch (prefix) {
                 case '@' -> find(b.mod()) || find(b.modName());
                 case '#' -> find(b.tooltip());
@@ -66,14 +90,25 @@ public final class BlockQuery {
                 default -> find(b.name()) || find(b.id());
             };
         }
-        private boolean find(String value) { return value != null && pattern.matcher(value).find(); }
-        private boolean any(Collection<String> values) { if (values != null) for (String v : values) if (find(v)) return true; return false; }
+
+        private boolean find(String value) {
+            return value != null && pattern.matcher(value).find();
+        }
+
+        private boolean any(Collection<String> values) {
+            if (values != null) for (String v : values) if (find(v)) return true;
+            return false;
+        }
     }
 
     private record Term(boolean negate, List<Alternative> alternatives) {
         boolean matches(Info b) {
             boolean any = false;
-            for (Alternative a : alternatives) if (a.matches(b)) { any = true; break; }
+            for (Alternative a : alternatives)
+                if (a.matches(b)) {
+                    any = true;
+                    break;
+                }
             return any != negate;
         }
     }
@@ -114,7 +149,10 @@ public final class BlockQuery {
         for (int i = 0; i < body.length(); i++) {
             char c = body.charAt(i);
             if (c == '"') quoted = !quoted;
-            if (c == '|' && !quoted) { parts.add(current.toString()); current.setLength(0); } else current.append(c);
+            if (c == '|' && !quoted) {
+                parts.add(current.toString());
+                current.setLength(0);
+            } else current.append(c);
         }
         parts.add(current.toString());
         parts.removeIf(String::isEmpty);
@@ -123,7 +161,10 @@ public final class BlockQuery {
 
     private static Alternative alternative(String part) {
         char prefix = 0;
-        if (!part.isEmpty() && PREFIXES.indexOf(part.charAt(0)) >= 0) { prefix = part.charAt(0); part = part.substring(1); }
+        if (!part.isEmpty() && PREFIXES.indexOf(part.charAt(0)) >= 0) {
+            prefix = part.charAt(0);
+            part = part.substring(1);
+        }
         String text = part.replace("\"", "").toLowerCase(Locale.ROOT).trim();
         return new Alternative(prefix, pattern(text), text);
     }
@@ -135,7 +176,10 @@ public final class BlockQuery {
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
             if (c == '*' || c == '?') {
-                if (!literal.isEmpty()) { regex.append(Pattern.quote(literal.toString())); literal.setLength(0); }
+                if (!literal.isEmpty()) {
+                    regex.append(Pattern.quote(literal.toString()));
+                    literal.setLength(0);
+                }
                 regex.append(c == '*' ? ".*" : ".");
             } else literal.append(c);
         }

@@ -13,5 +13,7 @@ interface ToolBehaviour {
      * The edit the tool would make for the block under the cursor, shown to the player as a ghost before they click. It is a plan, nothing more: it
      * is not built and not kept in the history. Null, the default, when the tool shows none.
      */
-    default Session.Edit preview(ToolUse use) { return null; }
+    default Session.Edit preview(ToolUse use) {
+        return null;
+    }
 }

@@ -14,13 +14,16 @@ public final class PanelLog {
     public static List<String> sink;
 
     /** A new frame begins: what an earlier frame recorded is dropped. */
-    static void frame() { if (sink != null) sink.clear(); }
+    static void frame() {
+        if (sink != null) sink.clear();
+    }
 
     static void text(String text, int x, int y, String panel) {
         if (sink != null) sink.add("text " + panel + " " + x + "," + y + " '" + text + "'");
     }
 
     static void control(int x, int y, int width, int height, String tip, String panel) {
-        if (sink != null) sink.add("control " + panel + " " + x + "," + y + " " + width + "x" + height + " '" + tip + "'");
+        if (sink != null)
+            sink.add("control " + panel + " " + x + "," + y + " " + width + "x" + height + " '" + tip + "'");
     }
 }

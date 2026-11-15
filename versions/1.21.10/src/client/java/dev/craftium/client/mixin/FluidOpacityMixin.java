@@ -1,4 +1,5 @@
 package dev.craftium.client.mixin;
+
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.craftium.client.ClientState;
 import dev.craftium.client.OpacityConsumer;
@@ -17,9 +18,15 @@ import org.spongepowered.asm.mixin.injection.*;
  */
 @Mixin(LiquidBlockRenderer.class)
 abstract class FluidOpacityMixin {
-    @ModifyVariable(method="tesselate",at=@At("HEAD"),argsOnly=true)
-    private VertexConsumer craftium$opacity(VertexConsumer consumer,BlockAndTintGetter level,BlockPos pos,VertexConsumer same,BlockState block,FluidState fluid){
-        double opacity=ClientState.options.liquidOpacity;
-        return fluid.is(FluidTags.WATER)&&opacity<1?new OpacityConsumer(consumer,opacity):consumer;
+    @ModifyVariable(method = "tesselate", at = @At("HEAD"), argsOnly = true)
+    private VertexConsumer craftium$opacity(
+            VertexConsumer consumer,
+            BlockAndTintGetter level,
+            BlockPos pos,
+            VertexConsumer same,
+            BlockState block,
+            FluidState fluid) {
+        double opacity = ClientState.options.liquidOpacity;
+        return fluid.is(FluidTags.WATER) && opacity < 1 ? new OpacityConsumer(consumer, opacity) : consumer;
     }
 }

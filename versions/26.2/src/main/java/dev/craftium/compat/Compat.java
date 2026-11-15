@@ -1,6 +1,7 @@
 package dev.craftium.compat;
 
 import com.mojang.math.Transformation;
+import java.util.Set;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
@@ -11,7 +12,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
-import java.util.Set;
 
 /**
  * Minecraft-version boundary. Shared code calls these methods instead of the APIs that changed
@@ -19,30 +19,70 @@ import java.util.Set;
  * This is the 26.2 implementation.
  */
 public final class Compat {
-    private Compat(){}
+    private Compat() {}
 
-    public static Identifier id(String namespace,String path){return Identifier.fromNamespaceAndPath(namespace,path);}
-    public static Identifier parse(String id){return Identifier.parse(id);}
+    public static Identifier id(String namespace, String path) {
+        return Identifier.fromNamespaceAndPath(namespace, path);
+    }
+
+    public static Identifier parse(String id) {
+        return Identifier.parse(id);
+    }
     /** Like {@link #parse} but returns null for text that is not a valid identifier. */
-    public static Identifier tryParse(String id){return Identifier.tryParse(id);}
-    public static Identifier vanilla(String path){return Identifier.withDefaultNamespace(path);}
-    /** Namespaced name of a registry or dimension key, e.g. {@code minecraft:overworld}. */
-    public static String keyName(ResourceKey<?> key){return key.identifier().toString();}
-    /** Namespaced name of a tag, e.g. {@code minecraft:infiniburn_overworld}. */
-    public static String tagName(net.minecraft.tags.TagKey<?> tag){return tag.location().toString();}
+    public static Identifier tryParse(String id) {
+        return Identifier.tryParse(id);
+    }
 
-    public static boolean isGamemaster(ServerPlayer player){return player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);}
+    public static Identifier vanilla(String path) {
+        return Identifier.withDefaultNamespace(path);
+    }
+    /** Namespaced name of a registry or dimension key, e.g. {@code minecraft:overworld}. */
+    public static String keyName(ResourceKey<?> key) {
+        return key.identifier().toString();
+    }
+    /** Namespaced name of a tag, e.g. {@code minecraft:infiniburn_overworld}. */
+    public static String tagName(net.minecraft.tags.TagKey<?> tag) {
+        return tag.location().toString();
+    }
+
+    public static boolean isGamemaster(ServerPlayer player) {
+        return player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
+    }
     /** The player's command source raised to game-master (operator level 2) permission. */
-    public static CommandSourceStack gamemasterSource(ServerPlayer player){return player.createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.GAMEMASTER);}
-    public static boolean isGamemaster(CommandSourceStack source){return source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);}
+    public static CommandSourceStack gamemasterSource(ServerPlayer player) {
+        return player.createCommandSourceStack()
+                .withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.GAMEMASTER);
+    }
+
+    public static boolean isGamemaster(CommandSourceStack source) {
+        return source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
+    }
 
     /** Rebuilds an entity, with passengers, from its saved data. Returns null when the data is invalid. */
-    public static Entity loadEntity(CompoundTag tag,Level level){
-        return EntityType.loadEntityRecursive(tag,level,new net.minecraft.world.entity.EntitySpawnRequest(EntitySpawnReason.COMMAND,true),net.minecraft.world.entity.EntityProcessor.NOP);
+    public static Entity loadEntity(CompoundTag tag, Level level) {
+        return EntityType.loadEntityRecursive(
+                tag,
+                level,
+                new net.minecraft.world.entity.EntitySpawnRequest(EntitySpawnReason.COMMAND, true),
+                net.minecraft.world.entity.EntityProcessor.NOP);
     }
-    public static Set<String> entityTags(Entity entity){return entity.entityTags();}
-    public static long chunkKey(int x,int z){return net.minecraft.world.level.ChunkPos.pack(x,z);}
-    public static Transformation identityTransform(){return Transformation.IDENTITY;}
+
+    public static Set<String> entityTags(Entity entity) {
+        return entity.entityTags();
+    }
+
+    public static long chunkKey(int x, int z) {
+        return net.minecraft.world.level.ChunkPos.pack(x, z);
+    }
+
+    public static Transformation identityTransform() {
+        return Transformation.IDENTITY;
+    }
     /** A block entity type for one block; the constructor is public here. */
-    public static <T extends net.minecraft.world.level.block.entity.BlockEntity> net.minecraft.world.level.block.entity.BlockEntityType<T> blockEntityType(net.minecraft.world.level.block.entity.BlockEntityType.BlockEntitySupplier<T> factory,net.minecraft.world.level.block.Block block){return new net.minecraft.world.level.block.entity.BlockEntityType<>(factory,Set.of(block));}
+    public static <T extends net.minecraft.world.level.block.entity.BlockEntity>
+            net.minecraft.world.level.block.entity.BlockEntityType<T> blockEntityType(
+                    net.minecraft.world.level.block.entity.BlockEntityType.BlockEntitySupplier<T> factory,
+                    net.minecraft.world.level.block.Block block) {
+        return new net.minecraft.world.level.block.entity.BlockEntityType<>(factory, Set.of(block));
+    }
 }

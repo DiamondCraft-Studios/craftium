@@ -1,9 +1,10 @@
 package dev.craftium.server;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import org.junit.jupiter.api.Test;
 import org.luaj.vm2.LuaError;
 import org.luaj.vm2.LuaValue;
-import static org.junit.jupiter.api.Assertions.*;
 
 /** What a script cannot do. Each test is an attempt to get out of, or run past the limits of, the environment edit scripts run in. */
 class LuaSandboxTest {
@@ -12,101 +13,137 @@ class LuaSandboxTest {
         return sandbox.call(sandbox.load(source, "test"));
     }
 
-    @Test void noHostLibraryIsReachable() {
-        for (String name : new String[]{"io", "os", "luajava", "package", "debug", "string", "coroutine", "utf8", "bit32", "jit", "java"})
+    @Test
+    void noHostLibraryIsReachable() {
+        for (String name : new String[] {
+            "io", "os", "luajava", "package", "debug", "string", "coroutine", "utf8", "bit32", "jit", "java"
+        }) assertTrue(run("return " + name + " == nil").toboolean(), name + " is reachable");
+    }
+
+    @Test
+    void noWayToLoadFurtherCode() {
+        for (String name : new String[] {"load", "loadfile", "loadstring", "dofile", "require", "module"})
             assertTrue(run("return " + name + " == nil").toboolean(), name + " is reachable");
     }
 
-    @Test void noWayToLoadFurtherCode() {
-        for (String name : new String[]{"load", "loadfile", "loadstring", "dofile", "require", "module"})
-            assertTrue(run("return " + name + " == nil").toboolean(), name + " is reachable");
-    }
-
-    @Test void noWayToTouchMetatablesOrTheCollector() {
-        for (String name : new String[]{"setmetatable", "getmetatable", "collectgarbage", "pcall", "xpcall", "print", "unpack"})
+    @Test
+    void noWayToTouchMetatablesOrTheCollector() {
+        for (String name :
+                new String[] {"setmetatable", "getmetatable", "collectgarbage", "pcall", "xpcall", "print", "unpack"})
             assertTrue(run("return " + name + " == nil").toboolean(), name + " is reachable");
         assertTrue(run("return table.concat == nil").toboolean());
     }
 
-    @Test void nothingIsReachableThroughTheGlobalTable() {
+    @Test
+    void nothingIsReachableThroughTheGlobalTable() {
         // The environment itself, read back through every route a script has to it.
-        assertTrue(run("return _G.io == nil and _G.os == nil and _G.debug == nil and _G._G == _G").toboolean());
-        assertTrue(run("local n = 0 for k in pairs(_G) do if k == 'io' or k == 'os' or k == 'luajava' or k == 'debug' or k == 'package' then n = n + 1 end end return n == 0").toboolean());
+        assertTrue(run("return _G.io == nil and _G.os == nil and _G.debug == nil and _G._G == _G")
+                .toboolean());
+        assertTrue(
+                run("local n = 0 for k in pairs(_G) do if k == 'io' or k == 'os' or k == 'luajava' or k == 'debug' or k == 'package' then n = n + 1 end end return n == 0")
+                        .toboolean());
     }
 
-    @Test void whatIsLeftStillWorks() {
+    @Test
+    void whatIsLeftStillWorks() {
         assertEquals(7, run("return math.floor(math.sqrt(49))").toint());
-        assertEquals(3, run("local t = {} for i = 1, 3 do table.insert(t, i) end return #t").toint());
+        assertEquals(
+                3,
+                run("local t = {} for i = 1, 3 do table.insert(t, i) end return #t")
+                        .toint());
         assertEquals("number", run("return type(math.pi)").tojstring());
     }
 
-    @Test void changesToTheStandardLibrariesStayInsideOneSandbox() {
+    @Test
+    void changesToTheStandardLibrariesStayInsideOneSandbox() {
         var first = new LuaSandbox();
         first.call(first.load("math.floor = nil table.insert = nil", "test"));
         assertTrue(first.call(first.load("return math.floor == nil", "test")).toboolean());
         var second = new LuaSandbox();
-        assertTrue(second.call(second.load("return math.floor ~= nil and table.insert ~= nil", "test")).toboolean());
+        assertTrue(second.call(second.load("return math.floor ~= nil and table.insert ~= nil", "test"))
+                .toboolean());
     }
 
-    @Test void globalsDoNotLeakBetweenSandboxes() {
+    @Test
+    void globalsDoNotLeakBetweenSandboxes() {
         var first = new LuaSandbox();
         first.call(first.load("leaked = 1", "test"));
         var second = new LuaSandbox();
         assertTrue(second.call(second.load("return leaked == nil", "test")).toboolean());
     }
 
-    @Test void anInfiniteLoopIsCancelled() {
+    @Test
+    void anInfiniteLoopIsCancelled() {
         var error = assertThrows(IllegalArgumentException.class, () -> run("while true do end"));
         assertTrue(error.getMessage().contains("budget"), error.getMessage());
     }
 
-    @Test void theBudgetIsSharedByEveryCallSoAScriptRunPerBlockIsCancelledAsAWhole() {
+    @Test
+    void theBudgetIsSharedByEveryCallSoAScriptRunPerBlockIsCancelledAsAWhole() {
         var sandbox = new LuaSandbox();
         var function = sandbox.load("local n = 0 for i = 1, 100 do n = n + 1 end return n", "test");
         assertEquals(100, sandbox.call(function).toint());
         int calls = 1;
         while (calls < 100_000) {
-            try { sandbox.call(function); calls++; }
-            catch (IllegalArgumentException spent) { assertTrue(spent.getMessage().contains("budget"), spent.getMessage()); break; }
+            try {
+                sandbox.call(function);
+                calls++;
+            } catch (IllegalArgumentException spent) {
+                assertTrue(spent.getMessage().contains("budget"), spent.getMessage());
+                break;
+            }
         }
         assertTrue(calls > 1 && calls < 100_000, "calls before the budget ran out: " + calls);
         // Once spent it stays spent: the whole edit is cancelled, not just the block that ran it out.
         assertThrows(IllegalArgumentException.class, () -> sandbox.call(function));
     }
 
-    @Test void growingATableForeverIsCancelled() {
-        var error = assertThrows(IllegalArgumentException.class, () -> run("local t = {} local i = 0 while true do i = i + 1 t[i] = {i, i, i, i} end"));
+    @Test
+    void growingATableForeverIsCancelled() {
+        var error = assertThrows(
+                IllegalArgumentException.class,
+                () -> run("local t = {} local i = 0 while true do i = i + 1 t[i] = {i, i, i, i} end"));
         assertTrue(error.getMessage().contains("budget"), error.getMessage());
     }
 
-    @Test void runawayRecursionIsAnErrorForThePlayerNotACrash() {
-        var error = assertThrows(IllegalArgumentException.class, () -> run("local function f(n) return 1 + f(n + 1) end return f(1)"));
+    @Test
+    void runawayRecursionIsAnErrorForThePlayerNotACrash() {
+        var error = assertThrows(
+                IllegalArgumentException.class, () -> run("local function f(n) return 1 + f(n + 1) end return f(1)"));
         assertTrue(error.getMessage().startsWith("Lua"), error.getMessage());
     }
 
-    @Test void mutualRecursionThroughTheStandardLibraryIsAnErrorToo() {
-        var error = assertThrows(IllegalArgumentException.class, () -> run("local function f(n) local t = {n} table.insert(t, f(n + 1)) return t end return f(1)"));
+    @Test
+    void mutualRecursionThroughTheStandardLibraryIsAnErrorToo() {
+        var error = assertThrows(
+                IllegalArgumentException.class,
+                () -> run("local function f(n) local t = {n} table.insert(t, f(n + 1)) return t end return f(1)"));
         assertTrue(error.getMessage().startsWith("Lua"), error.getMessage());
     }
 
-    @Test void aScriptsOwnErrorReachesThePlayerWithItsMessage() {
+    @Test
+    void aScriptsOwnErrorReachesThePlayerWithItsMessage() {
         var error = assertThrows(IllegalArgumentException.class, () -> run("error('boom')"));
         assertTrue(error.getMessage().startsWith("Lua: ") && error.getMessage().contains("boom"), error.getMessage());
     }
 
-    @Test void aDeeplyNestedScriptIsRejectedWithoutCrashing() {
-        // Scripts may be up to 16384 characters, enough to nest thousands deep: the parser must refuse it, not overflow the stack.
+    @Test
+    void aDeeplyNestedScriptIsRejectedWithoutCrashing() {
+        // Scripts may be up to 16384 characters, enough to nest thousands deep: the parser must refuse it, not overflow
+        // the stack.
         String nested = "return " + "(".repeat(8000) + "1" + ")".repeat(8000);
         assertThrows(RuntimeException.class, () -> new LuaSandbox().load(nested, "test"));
         String blocks = "x = 1 " + "do ".repeat(3000) + "x = 2 " + "end ".repeat(3000);
         assertThrows(RuntimeException.class, () -> new LuaSandbox().load(blocks, "test"));
     }
 
-    @Test void aScriptThatDoesNotParseIsRejectedWhenItIsLoaded() {
+    @Test
+    void aScriptThatDoesNotParseIsRejectedWhenItIsLoaded() {
         assertThrows(LuaError.class, () -> new LuaSandbox().load("this is not lua", "test"));
     }
 
-    @Test void aSandboxCanBeGivenItsOwnBudget() {
+    @Test
+    void aSandboxCanBeGivenItsOwnBudget() {
         var small = new LuaSandbox(1_000, LuaSandbox.MEMORY_BYTES);
         assertThrows(IllegalArgumentException.class, () -> small.call(small.load("for i = 1, 10000 do end", "test")));
         var large = new LuaSandbox(LuaSandbox.INSTRUCTIONS * 4, LuaSandbox.MEMORY_BYTES);
@@ -114,45 +151,70 @@ class LuaSandboxTest {
         assertTrue(large.used() > LuaSandbox.INSTRUCTIONS, "ran past a brush's budget: " + large.used());
     }
 
-    @Test void anAiScriptAsLongAsAllowedAndNestedAsDeepAsItCanIsAnErrorNotACrash() {
+    @Test
+    void anAiScriptAsLongAsAllowedAndNestedAsDeepAsItCanIsAnErrorNotACrash() {
         String nested = "return " + "(".repeat(9990) + "1" + ")".repeat(9990);
         assertThrows(RuntimeException.class, () -> new LuaSandbox().load(nested, "test"));
     }
 
     private static final long MB = 1024 * 1024;
 
-    @Test void aMemoryBombIsStoppedWhetherOrNotTheSandboxCountsItsOwnAllocation() {
+    @Test
+    void aMemoryBombIsStoppedWhetherOrNotTheSandboxCountsItsOwnAllocation() {
         // Doubling a string 40 times asks for terabytes in a few hundred instructions.
         String bomb = "local s = 'x' for i = 1, 40 do s = s .. s end return #s";
-        for (boolean own : new boolean[]{false, true}) {
+        for (boolean own : new boolean[] {false, true}) {
             var sandbox = new LuaSandbox(1_000_000, 16 * MB, own);
-            var error = assertThrows(IllegalArgumentException.class, () -> sandbox.call(sandbox.load(bomb, "test")), "own allocation " + own);
+            var error = assertThrows(
+                    IllegalArgumentException.class,
+                    () -> sandbox.call(sandbox.load(bomb, "test")),
+                    "own allocation " + own);
             assertTrue(error.getMessage().contains("budget"), error.getMessage());
         }
     }
 
-    @Test void anotherThreadsHeapGrowthDoesNotCancelAScript() throws Exception {
+    @Test
+    void anotherThreadsHeapGrowthDoesNotCancelAScript() throws Exception {
         var sandbox = new LuaSandbox(5_000_000, 32 * MB, true);
-        org.junit.jupiter.api.Assumptions.assumeTrue(sandbox.countsOwnAllocation(), "this JVM cannot count a thread's allocation");
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                sandbox.countsOwnAllocation(), "this JVM cannot count a thread's allocation");
         var held = new java.util.ArrayList<byte[]>();
         var go = new java.util.concurrent.CountDownLatch(1);
-        var holding = new Thread(() -> { for (int i = 0; i < 12; i++) held.add(new byte[4 * (int) MB]); go.countDown(); try { Thread.sleep(2000); } catch (InterruptedException ignored) { } });
+        var holding = new Thread(() -> {
+            for (int i = 0; i < 12; i++) held.add(new byte[4 * (int) MB]);
+            go.countDown();
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException ignored) {
+            }
+        });
         holding.start();
         go.await();
-        // The heap is now 48 MB over where the sandbox started, none of it from the script, which allocates about 10 MB of its own.
+        // The heap is now 48 MB over where the sandbox started, none of it from the script, which allocates about 10 MB
+        // of its own.
         sandbox.call(sandbox.load("local n = 0 for i = 1, 300000 do n = n + i end return n", "test"));
         holding.interrupt();
         holding.join();
     }
 
-    @Test void aTerrainLoopAllocatesAFractionOfTheAiBudget() {
+    @Test
+    void aTerrainLoopAllocatesAFractionOfTheAiBudget() {
         var sandbox = new LuaSandbox(AiScript.INSTRUCTIONS, AiScript.MEMORY_BYTES, true);
-        org.junit.jupiter.api.Assumptions.assumeTrue(sandbox.countsOwnAllocation(), "this JVM cannot count a thread's allocation");
-        var counter = java.lang.management.ManagementFactory.getThreadMXBean() instanceof com.sun.management.ThreadMXBean bean ? bean : null;
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                sandbox.countsOwnAllocation(), "this JVM cannot count a thread's allocation");
+        var counter =
+                java.lang.management.ManagementFactory.getThreadMXBean() instanceof com.sun.management.ThreadMXBean bean
+                        ? bean
+                        : null;
         long id = Thread.currentThread().threadId(), before = counter.getThreadAllocatedBytes(id);
-        sandbox.call(sandbox.load("local s = 0 for x = 1, 64 do for z = 1, 64 do local h = math.floor(math.sin(x * 0.1) * math.cos(z * 0.1) * 8) for y = 1, h + 10 do s = s + y end end end return s", "test"));
+        sandbox.call(sandbox.load(
+                "local s = 0 for x = 1, 64 do for z = 1, 64 do local h = math.floor(math.sin(x * 0.1) * math.cos(z * 0.1) * 8) for y = 1, h + 10 do s = s + y end end end return s",
+                "test"));
         long bytes = counter.getThreadAllocatedBytes(id) - before;
-        System.out.println("ALLOC terrain loop of 64 x 64 columns: " + bytes / 1024 + " KB in " + sandbox.used() + " instructions");
-        assertTrue(bytes < AiScript.MEMORY_BYTES / 4, "a terrain loop allocated " + bytes / MB + " MB of a " + AiScript.MEMORY_BYTES / MB + " MB budget");
+        System.out.println("ALLOC terrain loop of 64 x 64 columns: " + bytes / 1024 + " KB in " + sandbox.used()
+                + " instructions");
+        assertTrue(
+                bytes < AiScript.MEMORY_BYTES / 4,
+                "a terrain loop allocated " + bytes / MB + " MB of a " + AiScript.MEMORY_BYTES / MB + " MB budget");
     }
 }

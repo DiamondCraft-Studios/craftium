@@ -39,8 +39,10 @@ public final class ShowcaseSheets {
         int thumbHeight = 0;
         for (int i = 0; i < n; i++) {
             images[i] = ImageIO.read(src.folder().resolve(src.files().get(i)).toFile());
-            if (images[i] == null) throw new IOException("Could not read " + src.files().get(i));
-            thumbHeight = Math.max(thumbHeight, Math.max(1, Math.round(images[i].getHeight() * (float) cell / images[i].getWidth())));
+            if (images[i] == null)
+                throw new IOException("Could not read " + src.files().get(i));
+            thumbHeight = Math.max(
+                    thumbHeight, Math.max(1, Math.round(images[i].getHeight() * (float) cell / images[i].getWidth())));
         }
         int height = GAP + rows * (thumbHeight + LABEL + GAP);
         var sheet = new BufferedImage(WIDTH, height, BufferedImage.TYPE_INT_RGB);
@@ -73,7 +75,9 @@ public final class ShowcaseSheets {
         try (var out = new MemoryCacheImageOutputStream(bytes)) {
             writer.setOutput(out);
             writer.write(null, new IIOImage(sheet, null, null), params);
-        } finally { writer.dispose(); }
+        } finally {
+            writer.dispose();
+        }
         Path file = src.folder().resolve(src.room()).resolve("contact-sheet.jpg");
         Files.createDirectories(file.getParent());
         Files.write(file, bytes.toByteArray());

@@ -36,37 +36,66 @@ public final class ShowcaseJobs {
         boolean cancelled;
         String state = "running", problem;
 
-        Run(String job, Path dir, ShowcasePlan.Plan plan, boolean resume) { this.job = job; this.dir = dir; this.plan = plan; this.resume = resume; }
+        Run(String job, Path dir, ShowcasePlan.Plan plan, boolean resume) {
+            this.job = job;
+            this.dir = dir;
+            this.plan = plan;
+            this.resume = resume;
+        }
     }
 
     private static Run current, last;
 
     /** Where every job's folder goes. */
-    public static Path root() { return FabricLoader.getInstance().getGameDir().resolve("screenshots").resolve("craftium"); }
+    public static Path root() {
+        return FabricLoader.getInstance().getGameDir().resolve("screenshots").resolve("craftium");
+    }
 
     /** Plans the request and starts taking its pictures; returns at once with where they will be. */
     public static JsonObject start(JsonObject args) throws IOException {
         var mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) throw new IllegalStateException("Not in a world");
-        if (ClientCompat.screen(mc) != null) throw new IllegalStateException("A menu is open in the game; ask the player to close it so the world can be drawn");
-        if (current != null) throw new IllegalStateException("The job \"" + current.job + "\" is still running (" + current.next + " of " + current.plan.entries().size() + " pictures); wait for it, or cancel it with capture_cancel");
-        var plan = ShowcasePlan.parse(ShowcasePlan.resolveSelections(args, new ShowcasePlan.Selections() {
-            @Override public dev.craftium.core.Point[] find(String name) {
-                var s = dev.craftium.core.SavedSelections.find(name, dev.craftium.client.ClientState.savedSelections(), e -> e.guid(), e -> e.name());
-                return s == null ? null : dev.craftium.client.ClientState.subtreeBounds(s.id()); // with everything under it: a parent that holds none of its own is still a room
-            }
-            @Override public List<String> names() {
-                var names = new ArrayList<String>();
-                for (var s : dev.craftium.client.ClientState.savedSelections()) names.add("\"" + s.name() + "\"");
-                return names;
-            }
-        }), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.ROOT)));
-        boolean resume = args.has("resume") && args.get("resume").isJsonPrimitive() && args.get("resume").getAsBoolean();
+        if (ClientCompat.screen(mc) != null)
+            throw new IllegalStateException(
+                    "A menu is open in the game; ask the player to close it so the world can be drawn");
+        if (current != null)
+            throw new IllegalStateException("The job \"" + current.job + "\" is still running (" + current.next + " of "
+                    + current.plan.entries().size() + " pictures); wait for it, or cancel it with capture_cancel");
+        var plan = ShowcasePlan.parse(
+                ShowcasePlan.resolveSelections(args, new ShowcasePlan.Selections() {
+                    @Override
+                    public dev.craftium.core.Point[] find(String name) {
+                        var s = dev.craftium.core.SavedSelections.find(
+                                name, dev.craftium.client.ClientState.savedSelections(), e -> e.guid(), e -> e.name());
+                        return s == null
+                                ? null
+                                : dev.craftium.client.ClientState.subtreeBounds(
+                                        s.id()); // with everything under it: a parent that holds none of its own
+                        // is still a room
+                    }
+
+                    @Override
+                    public List<String> names() {
+                        var names = new ArrayList<String>();
+                        for (var s : dev.craftium.client.ClientState.savedSelections())
+                            names.add("\"" + s.name() + "\"");
+                        return names;
+                    }
+                }),
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.ROOT)));
+        boolean resume = args.has("resume")
+                && args.get("resume").isJsonPrimitive()
+                && args.get("resume").getAsBoolean();
         String job = plan.job();
         Path dir = root().resolve(job);
         // Never write over an earlier job unless this one is meant to carry on from it.
-        if (!resume) for (int n = 2; Files.exists(dir); n++) { job = plan.job() + "-" + n; dir = root().resolve(job); }
-        if (!dir.normalize().startsWith(root().normalize())) throw new IllegalArgumentException("The job folder is outside the screenshots folder");
+        if (!resume)
+            for (int n = 2; Files.exists(dir); n++) {
+                job = plan.job() + "-" + n;
+                dir = root().resolve(job);
+            }
+        if (!dir.normalize().startsWith(root().normalize()))
+            throw new IllegalArgumentException("The job folder is outside the screenshots folder");
         Files.createDirectories(dir);
         var run = new Run(job, dir, plan, resume);
         current = run;
@@ -78,7 +107,9 @@ public final class ShowcaseJobs {
     /** How the running job, or else the last one, is going. */
     public static JsonObject status() {
         var run = current != null ? current : last;
-        if (run == null) throw new IllegalStateException("No showcase job has been started in this game session; start one with capture_batch");
+        if (run == null)
+            throw new IllegalStateException(
+                    "No showcase job has been started in this game session; start one with capture_batch");
         var out = new JsonObject();
         out.addProperty("ok", true);
         out.addProperty("job", run.job);
@@ -93,12 +124,20 @@ public final class ShowcaseJobs {
         }
         out.addProperty("failed", failed);
         out.addProperty("folder", run.dir.toAbsolutePath().toString());
-        out.addProperty("manifest", run.dir.resolve("manifest.json").toAbsolutePath().toString());
+        out.addProperty(
+                "manifest", run.dir.resolve("manifest.json").toAbsolutePath().toString());
         if (run.problem != null) out.addProperty("problem", run.problem);
         var warnings = new StringBuilder();
-        if (notReady > 0) warnings.append(notReady).append(" picture(s) were taken before every chunk in view was drawn; they may have gaps (chunksReady: false). ");
-        if (hidden > 0) warnings.append(hidden).append(" picture(s) have terrain, trees or another build between the camera and the room even after raising the camera (occlusion.hidden); try another angle, a closer distance or a placed camera. ");
-        if (warnings.length() > 0) out.addProperty("warning", warnings.toString().trim());
+        if (notReady > 0)
+            warnings.append(notReady)
+                    .append(
+                            " picture(s) were taken before every chunk in view was drawn; they may have gaps (chunksReady: false). ");
+        if (hidden > 0)
+            warnings.append(hidden)
+                    .append(
+                            " picture(s) have terrain, trees or another build between the camera and the room even after raising the camera (occlusion.hidden); try another angle, a closer distance or a placed camera. ");
+        if (warnings.length() > 0)
+            out.addProperty("warning", warnings.toString().trim());
         var shots = new JsonArray();
         for (var r : run.results) shots.add(r);
         out.add("shots", shots);
@@ -108,16 +147,23 @@ public final class ShowcaseJobs {
     /** What a contact sheet of one room is made from: its saved pictures so far, in order. Client thread only. */
     public static ShowcaseSheets.Sources sheetSources(String room) {
         var run = current != null ? current : last;
-        if (run == null) throw new IllegalStateException("No showcase job has been started in this game session; start one with capture_batch");
+        if (run == null)
+            throw new IllegalStateException(
+                    "No showcase job has been started in this game session; start one with capture_batch");
         String name = ShowcasePlan.safeName(room, "room");
         var files = new ArrayList<String>();
         var shots = new ArrayList<String>();
         for (var r : run.results) {
-            if (r.get("room").getAsString().equals(name) && r.get("ok").getAsBoolean()) { files.add(r.get("file").getAsString()); shots.add(r.get("shot").getAsString()); }
+            if (r.get("room").getAsString().equals(name) && r.get("ok").getAsBoolean()) {
+                files.add(r.get("file").getAsString());
+                shots.add(r.get("shot").getAsString());
+            }
         }
         boolean known = false;
         for (var e : run.plan.entries()) known |= e.room().equals(name);
-        if (!known) throw new IllegalArgumentException("The job \"" + run.job + "\" has no room called \"" + name + "\"; its rooms are " + ShowcasePlan.rooms(run.plan));
+        if (!known)
+            throw new IllegalArgumentException("The job \"" + run.job + "\" has no room called \"" + name
+                    + "\"; its rooms are " + ShowcasePlan.rooms(run.plan));
         return new ShowcaseSheets.Sources(run.job, run.state, name, run.dir, files, shots);
     }
 
@@ -134,9 +180,18 @@ public final class ShowcaseJobs {
         var mc = Minecraft.getInstance();
         var entries = run.plan.entries();
         while (true) {
-            if (run.cancelled) { finish(run, "cancelled", null); return; }
-            if (run.next >= entries.size()) { finish(run, "done", null); return; }
-            if (mc.level == null || mc.player == null) { finish(run, "failed", "The world was closed during the job"); return; }
+            if (run.cancelled) {
+                finish(run, "cancelled", null);
+                return;
+            }
+            if (run.next >= entries.size()) {
+                finish(run, "done", null);
+                return;
+            }
+            if (mc.level == null || mc.player == null) {
+                finish(run, "failed", "The world was closed during the job");
+                return;
+            }
             var entry = entries.get(run.next);
             Path file = run.dir.resolve(entry.path());
             if (run.resume && Files.exists(file)) {
@@ -162,8 +217,11 @@ public final class ShowcaseJobs {
                     for (double d : r.cameraPose()) pose.add(Math.round(d * 100) / 100.0);
                     picture.add("cameraPose", pose);
                 } else {
-                    Throwable cause = t instanceof java.util.concurrent.CompletionException && t.getCause() != null ? t.getCause() : t;
-                    picture.addProperty("error", String.valueOf(cause.getMessage() != null ? cause.getMessage() : cause));
+                    Throwable cause = t instanceof java.util.concurrent.CompletionException && t.getCause() != null
+                            ? t.getCause()
+                            : t;
+                    picture.addProperty(
+                            "error", String.valueOf(cause.getMessage() != null ? cause.getMessage() : cause));
                 }
                 run.results.add(picture);
                 run.next++;
@@ -204,12 +262,15 @@ public final class ShowcaseJobs {
             var manifest = new JsonObject();
             manifest.addProperty("job", run.job);
             manifest.addProperty("state", run.state);
-            manifest.addProperty("startedAt", java.time.Instant.ofEpochMilli(run.started).toString());
+            manifest.addProperty(
+                    "startedAt", java.time.Instant.ofEpochMilli(run.started).toString());
             manifest.addProperty("total", run.plan.entries().size());
             var shots = new JsonArray();
             for (var r : run.results) shots.add(r);
             manifest.add("shots", shots);
-            Files.writeString(run.dir.resolve("manifest.json"), new GsonBuilder().setPrettyPrinting().create().toJson(manifest));
+            Files.writeString(
+                    run.dir.resolve("manifest.json"),
+                    new GsonBuilder().setPrettyPrinting().create().toJson(manifest));
         } catch (IOException e) {
             if (run.problem == null) run.problem = "Could not write manifest.json: " + e.getMessage();
         }

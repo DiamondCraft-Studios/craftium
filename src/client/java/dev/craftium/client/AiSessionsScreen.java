@@ -15,7 +15,13 @@ import org.lwjgl.glfw.GLFW;
  * every card counts on each second.
  */
 final class AiSessionsScreen extends CraftiumScreen {
-    private static final int CARD_W = AiThumbnails.WIDTH + 16, CARD_H = 152, GAP = 8, TOP = 56, SIDE = 12, BAR = 6, FOOT = 38;
+    private static final int CARD_W = AiThumbnails.WIDTH + 16,
+            CARD_H = 152,
+            GAP = 8,
+            TOP = 56,
+            SIDE = 12,
+            BAR = 6,
+            FOOT = 38;
     private final Screen parent;
     private final AiSessionUi.StopDialog stopping = new AiSessionUi.StopDialog();
     private double scroll;
@@ -27,31 +33,58 @@ final class AiSessionsScreen extends CraftiumScreen {
         this.parent = parent;
     }
 
-    @Override protected void init() {
+    @Override
+    protected void init() {
         addRenderableWidget(new FlatButton(SIDE, height - 30, 80, 22, "Back", this::onClose));
         int x = width - SIDE - 3 * 96 - 2 * 6;
         boolean controls = AiSessionUi.controls();
         addRenderableWidget(new FlatButton(x, 10, 96, 22, "Apply all", AiSessionActions::applyAll));
         addRenderableWidget(new FlatButton(x + 102, 10, 96, 22, "Discard all", AiSessionActions::discardAll));
-        var stop = new FlatButton(x + 204, 10, 96, 22, "Stop all", () -> stopping.open("every AI session", AiSessionActions::stopAll));
+        var stop = new FlatButton(
+                x + 204, 10, 96, 22, "Stop all", () -> stopping.open("every AI session", AiSessionActions::stopAll));
         stop.active = controls;
         addRenderableWidget(stop);
     }
 
-    private int columns() { return Math.max(1, (width - 2 * SIDE - BAR - 6) / (CARD_W + GAP)); }
-    private int viewBottom() { return height - FOOT; }
-    private int gridLeft() { int cols = Math.min(columns(), Math.max(1, ClientState.aiSessions.size())); return (width - (cols * (CARD_W + GAP) - GAP)) / 2; }
+    private int columns() {
+        return Math.max(1, (width - 2 * SIDE - BAR - 6) / (CARD_W + GAP));
+    }
 
-    @Override protected void drawBackground(Gfx g, int x, int y, float delta) {}
+    private int viewBottom() {
+        return height - FOOT;
+    }
 
-    @Override protected void draw(Gfx g, int mx, int my, float delta) {
+    private int gridLeft() {
+        int cols = Math.min(columns(), Math.max(1, ClientState.aiSessions.size()));
+        return (width - (cols * (CARD_W + GAP) - GAP)) / 2;
+    }
+
+    @Override
+    protected void drawBackground(Gfx g, int x, int y, float delta) {}
+
+    @Override
+    protected void draw(Gfx g, int mx, int my, float delta) {
         AiThumbnails.newFrame();
         g.fill(0, 0, width, height, 0xf5101923);
         var sessions = ClientState.aiSessions;
         g.text(font, "AI build sessions", SIDE, 12, 0xffb5dcfc, false);
-        long busy = sessions.stream().filter(v -> AiSessionUi.working(v) || v.info().state().equals("applying")).count();
-        g.text(font, sessions.size() + (sessions.size() == 1 ? " session" : " sessions") + " · " + busy + " working", SIDE, 28, 0xff9db5cb, false);
-        g.text(font, font.plainSubstrByWidth(ClientState.status.message(), width - 2 * SIDE), SIDE, 40, 0xffffdca8, false);
+        long busy = sessions.stream()
+                .filter(v -> AiSessionUi.working(v) || v.info().state().equals("applying"))
+                .count();
+        g.text(
+                font,
+                sessions.size() + (sessions.size() == 1 ? " session" : " sessions") + " · " + busy + " working",
+                SIDE,
+                28,
+                0xff9db5cb,
+                false);
+        g.text(
+                font,
+                font.plainSubstrByWidth(ClientState.status.message(), width - 2 * SIDE),
+                SIDE,
+                40,
+                0xffffdca8,
+                false);
 
         int cols = columns(), rows = (sessions.size() + cols - 1) / cols, viewTop = TOP, viewBottom = viewBottom();
         int content = Math.max(0, rows * (CARD_H + GAP) - GAP);
@@ -59,8 +92,11 @@ final class AiSessionsScreen extends CraftiumScreen {
         scroll = Math.clamp(scroll, 0, maxScroll);
         if (sessions.isEmpty()) {
             g.centeredText(font, "No AI build sessions yet", width / 2, height / 2 - 14, 0xffdce6ef);
-            g.centeredText(font, "Ask Claude for a build, and its session shows up here.", width / 2, height / 2, 0xff9db5cb);
-            if (!AiBridge.running()) g.centeredText(font, "AI building is off: turn it on in the AI menu.", width / 2, height / 2 + 14, 0xffffc857);
+            g.centeredText(
+                    font, "Ask Claude for a build, and its session shows up here.", width / 2, height / 2, 0xff9db5cb);
+            if (!AiBridge.running())
+                g.centeredText(
+                        font, "AI building is off: turn it on in the AI menu.", width / 2, height / 2 + 14, 0xffffc857);
         }
         boolean over = !stopping.visible() && my >= viewTop && my < viewBottom;
         g.enableScissor(0, viewTop, width, viewBottom);
@@ -75,7 +111,12 @@ final class AiSessionsScreen extends CraftiumScreen {
             int track = viewBottom - viewTop, thumb = Math.max(20, track * track / Math.max(track, content));
             int thumbY = viewTop + (int) ((track - thumb) * (scroll / maxScroll));
             g.fill(width - SIDE - BAR + 2, viewTop, width - SIDE + 2, viewBottom, 0xff1b2838);
-            g.fill(width - SIDE - BAR + 2, thumbY, width - SIDE + 2, thumbY + thumb, draggingBar ? 0xff7cc4ff : 0xff4a6585);
+            g.fill(
+                    width - SIDE - BAR + 2,
+                    thumbY,
+                    width - SIDE + 2,
+                    thumbY + thumb,
+                    draggingBar ? 0xff7cc4ff : 0xff4a6585);
         }
         drawWidgets(g, mx, my, delta);
         stopping.draw(g, width, height, mx, my);
@@ -95,8 +136,12 @@ final class AiSessionsScreen extends CraftiumScreen {
         String clock = AiSessionUi.clock(view.ageMs());
         g.text(font, clock, x + CARD_W - 8 - font.width(clock), textY + 13, 0xffdce6ef, false);
         int away = AiSessionUi.distance(view);
-        String size = info.blocks() > 0 ? String.format(java.util.Locale.ROOT, "%,d blocks", info.blocks()) : info.undo() > 0 ? info.undo() + (info.undo() == 1 ? " build" : " builds") : "nothing yet";
-        String where = away >= 0 ? " · " + away + " m" : info.min() != null && !AiSessionUi.here(view) ? " · other dimension" : "";
+        String size = info.blocks() > 0
+                ? String.format(java.util.Locale.ROOT, "%,d blocks", info.blocks())
+                : info.undo() > 0 ? info.undo() + (info.undo() == 1 ? " build" : " builds") : "nothing yet";
+        String where = away >= 0
+                ? " · " + away + " m"
+                : info.min() != null && !AiSessionUi.here(view) ? " · other dimension" : "";
         g.text(font, font.plainSubstrByWidth(size + where, textWidth), x + 8, textY + 26, 0xff9db5cb, false);
     }
 
@@ -112,36 +157,63 @@ final class AiSessionsScreen extends CraftiumScreen {
     }
 
     private void dragBar(double my) {
-        int track = viewBottom() - TOP, content = Math.max(1, (ClientState.aiSessions.size() + columns() - 1) / columns() * (CARD_H + GAP) - GAP);
+        int track = viewBottom() - TOP,
+                content =
+                        Math.max(1, (ClientState.aiSessions.size() + columns() - 1) / columns() * (CARD_H + GAP) - GAP);
         int thumb = Math.max(20, track * track / Math.max(track, content)), travel = track - thumb;
         if (travel > 0) scroll = Math.clamp((my - TOP - thumb / 2.0) / travel * maxScroll, 0, maxScroll);
     }
 
-    @Override public boolean mouseClicked(MouseButtonEvent event, boolean twice) {
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean twice) {
         if (stopping.click(event.x(), event.y(), width, height)) return true;
-        if (event.button() == 0 && maxScroll > 0 && event.x() >= width - SIDE - BAR && event.x() < width - SIDE + 4 && event.y() >= TOP && event.y() < viewBottom()) { draggingBar = true; dragBar(event.y()); return true; }
+        if (event.button() == 0
+                && maxScroll > 0
+                && event.x() >= width - SIDE - BAR
+                && event.x() < width - SIDE + 4
+                && event.y() >= TOP
+                && event.y() < viewBottom()) {
+            draggingBar = true;
+            dragBar(event.y());
+            return true;
+        }
         if (super.mouseClicked(event, twice)) return true;
         int index = event.button() == 0 ? cardAt(event.x(), event.y()) : -1;
-        if (index >= 0) { ClientCompat.setScreen(minecraft, new AiSessionScreen(this, ClientState.aiSessions.get(index).id())); return true; }
+        if (index >= 0) {
+            ClientCompat.setScreen(
+                    minecraft,
+                    new AiSessionScreen(this, ClientState.aiSessions.get(index).id()));
+            return true;
+        }
         return false;
     }
 
-    @Override public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
-        if (draggingBar) { dragBar(event.y()); return true; }
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+        if (draggingBar) {
+            dragBar(event.y());
+            return true;
+        }
         return super.mouseDragged(event, dx, dy);
     }
 
-    @Override public boolean mouseReleased(MouseButtonEvent event) {
-        if (draggingBar) { draggingBar = false; return true; }
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (draggingBar) {
+            draggingBar = false;
+            return true;
+        }
         return super.mouseReleased(event);
     }
 
-    @Override public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
+    @Override
+    public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
         scroll = Math.clamp(scroll - vertical * 36, 0, maxScroll);
         return true;
     }
 
-    @Override public boolean keyPressed(KeyEvent event) {
+    @Override
+    public boolean keyPressed(KeyEvent event) {
         if (interfaceKey(event)) return true;
         int page = viewBottom() - TOP - CARD_H / 2;
         switch (event.key()) {
@@ -149,12 +221,27 @@ final class AiSessionsScreen extends CraftiumScreen {
             case GLFW.GLFW_KEY_PAGE_UP -> scroll = Math.clamp(scroll - page, 0, maxScroll);
             case GLFW.GLFW_KEY_HOME -> scroll = 0;
             case GLFW.GLFW_KEY_END -> scroll = maxScroll;
-            case GLFW.GLFW_KEY_ESCAPE -> { if (stopping.visible()) { stopping.close(); return true; } return super.keyPressed(event); }
-            default -> { return super.keyPressed(event); }
+            case GLFW.GLFW_KEY_ESCAPE -> {
+                if (stopping.visible()) {
+                    stopping.close();
+                    return true;
+                }
+                return super.keyPressed(event);
+            }
+            default -> {
+                return super.keyPressed(event);
+            }
         }
         return true;
     }
 
-    @Override public boolean isPauseScreen() { return false; }
-    @Override public void onClose() { ClientCompat.setScreen(minecraft, parent); }
+    @Override
+    public boolean isPauseScreen() {
+        return false;
+    }
+
+    @Override
+    public void onClose() {
+        ClientCompat.setScreen(minecraft, parent);
+    }
 }

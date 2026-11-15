@@ -16,7 +16,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(ServerGamePacketListenerImpl.class)
 abstract class MovementCheckMixin {
-    @Shadow public ServerPlayer player;
-    @Inject(method="shouldCheckPlayerMovement",at=@At("HEAD"),cancellable=true)
-    private void craftium$fastFlight(boolean elytra,CallbackInfoReturnable<Boolean> cir){if(EditorServer.fastMovement(player))cir.setReturnValue(false);}
+    @Shadow
+    public ServerPlayer player;
+
+    @Inject(method = "shouldCheckPlayerMovement", at = @At("HEAD"), cancellable = true)
+    private void craftium$fastFlight(boolean elytra, CallbackInfoReturnable<Boolean> cir) {
+        if (EditorServer.fastMovement(player)) cir.setReturnValue(false);
+    }
 }

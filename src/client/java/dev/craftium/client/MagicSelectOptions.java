@@ -3,7 +3,6 @@ package dev.craftium.client;
 import dev.craftium.core.IconCatalog;
 import dev.craftium.core.Options;
 import dev.craftium.core.Selection;
-
 import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Set;
@@ -20,7 +19,11 @@ final class MagicSelectOptions {
     private MagicSelectOptions() {}
 
     /** The three groups of settings the widget can show. */
-    enum Part { DIRECTIONS, MODE, TYPE }
+    enum Part {
+        DIRECTIONS,
+        MODE,
+        TYPE
+    }
 
     static final Set<Part> ALL = EnumSet.allOf(Part.class);
     /** For tools that fill what the search finds rather than select it. */
@@ -38,9 +41,19 @@ final class MagicSelectOptions {
     /** Draws the parts asked for, top down, from {@code y}; returns the room they took. */
     static int draw(Host host, Options o, int x, int y, int width, Set<Part> parts) {
         int end = y;
-        if (parts.contains(Part.DIRECTIONS)) { directions(host, o, x, y, width); end = y + 40; }
-        if (parts.contains(Part.MODE)) { mode(host, o, x, y + 45, width); end = y + 45 + 41; }
-        if (parts.contains(Part.TYPE)) { int at = y + (parts.contains(Part.MODE) ? 95 : 45); type(host, o, x, at, width); end = at + 22; }
+        if (parts.contains(Part.DIRECTIONS)) {
+            directions(host, o, x, y, width);
+            end = y + 40;
+        }
+        if (parts.contains(Part.MODE)) {
+            mode(host, o, x, y + 45, width);
+            end = y + 45 + 41;
+        }
+        if (parts.contains(Part.TYPE)) {
+            int at = y + (parts.contains(Part.MODE) ? 95 : 45);
+            type(host, o, x, at, width);
+            end = at + 22;
+        }
         return end - y;
     }
 
@@ -48,17 +61,33 @@ final class MagicSelectOptions {
     static void directions(Host host, Options o, int x, int y, int width) {
         int half = (width - 4) / 2;
         String[] labels = {"Up", "Down", "Horizontal", "Corners"};
-        String[] tips = {"Spread to the blocks above the clicked one", "Spread to the blocks below the clicked one", "Spread sideways, level with the clicked block", "Also connect blocks that only touch at an edge or corner"};
+        String[] tips = {
+            "Spread to the blocks above the clicked one",
+            "Spread to the blocks below the clicked one",
+            "Spread sideways, level with the clicked block",
+            "Also connect blocks that only touch at an edge or corner"
+        };
         boolean[] on = {o.selectUp, o.selectDown, o.selectHorizontal, o.selectCorners};
-        Runnable[] flip = {() -> o.selectUp = !o.selectUp, () -> o.selectDown = !o.selectDown, () -> o.selectHorizontal = !o.selectHorizontal, () -> o.selectCorners = !o.selectCorners};
-        for (int i = 0; i < 4; i++) host.button(x + (i % 2) * (half + 4), y + (i / 2) * 21, half, 19, labels[i], on[i], flip[i], tips[i]);
+        Runnable[] flip = {
+            () -> o.selectUp = !o.selectUp,
+            () -> o.selectDown = !o.selectDown,
+            () -> o.selectHorizontal = !o.selectHorizontal,
+            () -> o.selectCorners = !o.selectCorners
+        };
+        for (int i = 0; i < 4; i++)
+            host.button(x + (i % 2) * (half + 4), y + (i / 2) * 21, half, 19, labels[i], on[i], flip[i], tips[i]);
     }
 
     /** How a new selection combines with the current one, as four buttons in a grid with the active one lit. */
     static void mode(Host host, Options o, int x, int y, int width) {
         int half = (width - 4) / 2;
         var modes = Selection.Mode.values();
-        String[] tips = {"Replace the selection", "Add to the selection", "Subtract from the selection", "Keep only what overlaps the selection"};
+        String[] tips = {
+            "Replace the selection",
+            "Add to the selection",
+            "Subtract from the selection",
+            "Keep only what overlaps the selection"
+        };
         for (int i = 0; i < modes.length; i++) {
             final var mode = modes[i];
             int at = x + (i % 2) * (half + 4), row = y + (i / 2) * 22;
@@ -71,7 +100,13 @@ final class MagicSelectOptions {
     static void type(Host host, Options o, int x, int y, int width) {
         var kinds = Options.Compare.values();
         int each = (width - 4 * (kinds.length - 1)) / kinds.length;
-        String[] tips = {"Any: connect every non-air block", "Block: connect blocks of the same type (default)", "Block state: connect blocks of the same type and state", "Tag: connect blocks that share a block tag with the clicked one", "NBT: connect blocks of the same type with the same block entity data"};
+        String[] tips = {
+            "Any: connect every non-air block",
+            "Block: connect blocks of the same type (default)",
+            "Block state: connect blocks of the same type and state",
+            "Tag: connect blocks that share a block tag with the clicked one",
+            "NBT: connect blocks of the same type with the same block entity data"
+        };
         for (int i = 0; i < kinds.length; i++) {
             final var kind = kinds[i];
             int at = x + i * (each + 4);

@@ -1,13 +1,6 @@
 package dev.craftium.server;
 
 import dev.craftium.core.Point;
-import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.WorldGenLevel;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.material.FluidState;
-
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -15,6 +8,12 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Proxy;
 import java.util.Map;
 import java.util.function.Predicate;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.FluidState;
 
 /**
  * A level for a feature to place itself in that writes nothing: what the feature sets goes into a map, and what it reads comes from
@@ -36,7 +35,10 @@ final class RecordingLevel implements InvocationHandler {
 
     /** A level over {@code real} whose writes land in {@code blocks}. */
     static WorldGenLevel over(ServerLevel real, Map<Point, BlockSnapshot> blocks) {
-        return (WorldGenLevel) Proxy.newProxyInstance(RecordingLevel.class.getClassLoader(), new Class<?>[]{WorldGenLevel.class}, new RecordingLevel(real, blocks));
+        return (WorldGenLevel) Proxy.newProxyInstance(
+                RecordingLevel.class.getClassLoader(),
+                new Class<?>[] {WorldGenLevel.class},
+                new RecordingLevel(real, blocks));
     }
 
     private BlockState stateAt(BlockPos pos) {
@@ -52,7 +54,9 @@ final class RecordingLevel implements InvocationHandler {
 
     /** Whether the second parameter of a (position, predicate) method is a predicate of the given type, which tells the block test from the fluid test. */
     private static boolean tests(Method method, Class<?> type) {
-        return method.getGenericParameterTypes()[1] instanceof ParameterizedType p && p.getActualTypeArguments().length == 1 && p.getActualTypeArguments()[0] == type;
+        return method.getGenericParameterTypes()[1] instanceof ParameterizedType p
+                && p.getActualTypeArguments().length == 1
+                && p.getActualTypeArguments()[0] == type;
     }
 
     @Override
@@ -69,15 +73,22 @@ final class RecordingLevel implements InvocationHandler {
         var returns = method.getReturnType();
         boolean pos = types.length > 0 && types[0] == BlockPos.class;
         if (pos && types.length == 1 && returns == BlockState.class) return stateAt((BlockPos) args[0]);
-        if (pos && types.length == 1 && returns == FluidState.class) return stateAt((BlockPos) args[0]).getFluidState();
-        if (pos && types.length == 1 && returns == BlockEntity.class) return null; // features do not leave block entities behind
+        if (pos && types.length == 1 && returns == FluidState.class)
+            return stateAt((BlockPos) args[0]).getFluidState();
+        if (pos && types.length == 1 && returns == BlockEntity.class)
+            return null; // features do not leave block entities behind
         if (pos && types.length == 2 && types[1] == Predicate.class && returns == boolean.class) {
             var at = (BlockPos) args[0];
             if (tests(method, BlockState.class)) return ((Predicate<BlockState>) args[1]).test(stateAt(at));
-            if (tests(method, FluidState.class)) return ((Predicate<FluidState>) args[1]).test(stateAt(at).getFluidState());
+            if (tests(method, FluidState.class))
+                return ((Predicate<FluidState>) args[1]).test(stateAt(at).getFluidState());
         }
-        if (pos && types.length >= 3 && types[1] == BlockState.class && returns == boolean.class) return write((BlockPos) args[0], (BlockState) args[1]); // setBlock
-        if (pos && types.length >= 2 && types[1] == boolean.class && returns == boolean.class) { // removeBlock and destroyBlock: the block goes, with no drops
+        if (pos && types.length >= 3 && types[1] == BlockState.class && returns == boolean.class)
+            return write((BlockPos) args[0], (BlockState) args[1]); // setBlock
+        if (pos
+                && types.length >= 2
+                && types[1] == boolean.class
+                && returns == boolean.class) { // removeBlock and destroyBlock: the block goes, with no drops
             var at = (BlockPos) args[0];
             return write(at, stateAt(at).getFluidState().createLegacyBlock());
         }

@@ -13,18 +13,23 @@ public final class BlockRuns {
 
     public void add(String name) {
         int id = index.computeIfAbsent(name, k -> index.size());
-        if (id == last) { count++; return; }
+        if (id == last) {
+            count++;
+            return;
+        }
         flush();
         last = id;
         count = 1;
     }
 
     private void flush() {
-        if (count > 0) runs.add(new int[]{last, count});
+        if (count > 0) runs.add(new int[] {last, count});
         count = 0;
     }
 
-    public List<String> palette() { return List.copyOf(index.keySet()); }
+    public List<String> palette() {
+        return List.copyOf(index.keySet());
+    }
 
     /** The runs so far, including the one still open. */
     public List<int[]> runs() {
@@ -33,5 +38,7 @@ public final class BlockRuns {
     }
 
     /** The palette index a name was given, adding it if it is new. */
-    public int indexOf(String name) { return index.computeIfAbsent(name, k -> index.size()); }
+    public int indexOf(String name) {
+        return index.computeIfAbsent(name, k -> index.size());
+    }
 }

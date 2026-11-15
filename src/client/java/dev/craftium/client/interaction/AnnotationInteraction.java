@@ -9,9 +9,12 @@ import dev.craftium.client.CraftiumClient;
 final class AnnotationInteraction implements Interaction {
     private static final int MAX_POINTS = 256;
 
-    private static boolean drawing(EditorContext editor) { return editor.options().annotationMode.equals("DRAW"); }
+    private static boolean drawing(EditorContext editor) {
+        return editor.options().annotationMode.equals("DRAW");
+    }
 
-    @Override public boolean beforeUse(EditorContext editor) {
+    @Override
+    public boolean beforeUse(EditorContext editor) {
         var hit = editor.target();
         if (hit == null) return false;
         var options = editor.options();
@@ -23,9 +26,18 @@ final class AnnotationInteraction implements Interaction {
         return true;
     }
 
-    @Override public boolean use(EditorContext editor) { return false; }
+    @Override
+    public boolean use(EditorContext editor) {
+        return false;
+    }
 
-    @Override public void strokeBegan(EditorContext editor) { if (drawing(editor)) editor.options().annotationPoints.clear(); }
+    @Override
+    public void strokeBegan(EditorContext editor) {
+        if (drawing(editor)) editor.options().annotationPoints.clear();
+    }
 
-    @Override public void strokeEnded(EditorContext editor) { if (drawing(editor) && editor.options().annotationPoints.size() > 1) editor.request("annotation_create"); }
+    @Override
+    public void strokeEnded(EditorContext editor) {
+        if (drawing(editor) && editor.options().annotationPoints.size() > 1) editor.request("annotation_create");
+    }
 }

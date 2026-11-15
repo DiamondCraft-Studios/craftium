@@ -8,9 +8,12 @@ import dev.craftium.client.compat.Gfx;
  */
 final class Scrollbars {
     static final int WIDTH = 6;
+
     private Scrollbars() {}
 
-    static int thumb(int room, int content) { return Math.max(16, room * room / Math.max(room, content)); }
+    static int thumb(int room, int content) {
+        return Math.max(16, room * room / Math.max(room, content));
+    }
 
     /** Draws the bar at x for a view {@code room} tall that shows part of {@code content}; nothing when it all fits. */
     static void draw(Gfx g, int x, int y, int room, double scroll, int content, boolean grabbed) {
@@ -22,7 +25,9 @@ final class Scrollbars {
     }
 
     /** Whether the pointer is on the bar, a little generously so it is easy to take hold of. */
-    static boolean hit(double mx, double my, int x, int y, int room) { return mx >= x - 3 && mx < x + WIDTH + 3 && my >= y && my < y + room; }
+    static boolean hit(double mx, double my, int x, int y, int room) {
+        return mx >= x - 3 && mx < x + WIDTH + 3 && my >= y && my < y + room;
+    }
 
     /** The scroll position that puts the middle of the thumb where the pointer is. */
     static double scrollAt(double my, int y, int room, int content) {

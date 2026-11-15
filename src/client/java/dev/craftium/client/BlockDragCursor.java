@@ -12,28 +12,39 @@ import org.lwjgl.glfw.GLFW;
 final class BlockDragCursor {
     private static long crosshair;
     private static boolean shown;
-    private BlockDragCursor(){}
+
+    private BlockDragCursor() {}
     /** Draws the carried block beside the pointer ({@code mx}, {@code my} in the screen's own coordinates) and makes the pointer a crosshair. */
-    static void draw(Gfx g,Font font,String block,int mx,int my,int width,int height,int accent){
-        int cx=Math.clamp(mx+12,0,width-30),cy=Math.clamp(my-42,25,Math.max(25,height-52));
-        g.fill(cx,cy,cx+30,cy+30,0xf01b2838);g.outline(cx,cy,30,30,accent);
-        BlockPickerScreen.icon(g,font,block,cx+7,cy+7);
+    static void draw(Gfx g, Font font, String block, int mx, int my, int width, int height, int accent) {
+        int cx = Math.clamp(mx + 12, 0, width - 30), cy = Math.clamp(my - 42, 25, Math.max(25, height - 52));
+        g.fill(cx, cy, cx + 30, cy + 30, 0xf01b2838);
+        g.outline(cx, cy, 30, 30, accent);
+        BlockPickerScreen.icon(g, font, block, cx + 7, cy + 7);
         set(true);
     }
     /** Over a window, a cell is dragged to another cell, so the block is carried in a cell centred on the ordinary pointer; only over the world does it get the crosshair of {@link #draw}. */
-    static void draw(Gfx g,Font font,String block,int mx,int my,int width,int height,int accent,boolean overWorld){
-        if(overWorld){draw(g,font,block,mx,my,width,height,accent);return;}
+    static void draw(
+            Gfx g, Font font, String block, int mx, int my, int width, int height, int accent, boolean overWorld) {
+        if (overWorld) {
+            draw(g, font, block, mx, my, width, height, accent);
+            return;
+        }
         release();
-        g.fill(mx-13,my-13,mx+13,my+13,0xdd1b2838);g.outline(mx-13,my-13,26,26,accent);
-        BlockPickerScreen.icon(g,font,block,mx-8,my-8);
+        g.fill(mx - 13, my - 13, mx + 13, my + 13, 0xdd1b2838);
+        g.outline(mx - 13, my - 13, 26, 26, accent);
+        BlockPickerScreen.icon(g, font, block, mx - 8, my - 8);
     }
     /** Gives the pointer back. Safe to call whenever a drag ends or its screen closes. */
-    static void release(){set(false);}
-    private static void set(boolean want){
-        if(want==shown)return;
-        var mc=Minecraft.getInstance();if(mc==null)return;
-        shown=want;
-        if(want&&crosshair==0)crosshair=GLFW.glfwCreateStandardCursor(GLFW.GLFW_CROSSHAIR_CURSOR);
-        GLFW.glfwSetCursor(mc.getWindow().handle(),want?crosshair:0L);
+    static void release() {
+        set(false);
+    }
+
+    private static void set(boolean want) {
+        if (want == shown) return;
+        var mc = Minecraft.getInstance();
+        if (mc == null) return;
+        shown = want;
+        if (want && crosshair == 0) crosshair = GLFW.glfwCreateStandardCursor(GLFW.GLFW_CROSSHAIR_CURSOR);
+        GLFW.glfwSetCursor(mc.getWindow().handle(), want ? crosshair : 0L);
     }
 }

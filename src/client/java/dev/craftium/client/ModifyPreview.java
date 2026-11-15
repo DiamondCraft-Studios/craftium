@@ -1,12 +1,11 @@
 package dev.craftium.client;
 
-import dev.craftium.core.*;
 import dev.craftium.client.compat.Overlay;
+import dev.craftium.core.*;
+import java.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import java.util.*;
 
 /**
  * The Modify tool's live preview: the blocks where they would land, drawn from the very placement the server applies, and for the
@@ -15,117 +14,280 @@ import java.util.*;
  */
 public final class ModifyPreview {
     private ModifyPreview() {}
-    private static final int INNER=0xffff6b6b,OUTER=0xff6bff8a,AXIS=0xffffd66d;
+
+    private static final int INNER = 0xffff6b6b, OUTER = 0xff6bff8a, AXIS = 0xffffd66d;
     private static Object[] key;
-    private static List<BlockPos> models=List.of(),places=List.of();
-    private static OutlineShape shape=OutlineShape.EMPTY;
+    private static List<BlockPos> models = List.of(), places = List.of();
+    private static OutlineShape shape = OutlineShape.EMPTY;
     private static String problem;
     /** The anchor, when there is one. A list, so that the Move gizmo can carry it as it does the handle points of the other tools. */
-    private static final List<Point> anchors=new ArrayList<>();
+    private static final List<Point> anchors = new ArrayList<>();
     /** Whether the anchor is a knob the Move gizmo is on. */
     private static boolean knob;
+
     private static Point lastCursor;
     /** Whether the preview is fixed where it was put, instead of following the cursor. */
-    public static boolean anchored(){return !anchors.isEmpty();}
-    public static Point anchor(){return anchors.isEmpty()?null:anchors.getFirst();}
+    public static boolean anchored() {
+        return !anchors.isEmpty();
+    }
+
+    public static Point anchor() {
+        return anchors.isEmpty() ? null : anchors.getFirst();
+    }
     /** Fixes the preview at the cursor. Once it is anchored another click does nothing: the settings change that same preview. */
-    public static void place(Point cursor){if(anchored())return;anchors.add(cursor);}
+    public static void place(Point cursor) {
+        if (anchored()) return;
+        anchors.add(cursor);
+    }
     /** Whether the anchor is a knob the Move gizmo carries. */
-    static boolean knob(){return knob&&anchored();}
+    static boolean knob() {
+        return knob && anchored();
+    }
     /** The handle points the Move gizmo can carry for this tool: the anchor while it is a knob, else none. */
-    public static List<Point> knobNodes(){return knob()?anchors:new ArrayList<>();}
+    public static List<Point> knobNodes() {
+        return knob() ? anchors : new ArrayList<>();
+    }
     /**
      * The Edit anchor button. Without an anchor yet, the anchor is put where the cursor was and becomes a knob; with one it becomes a knob;
      * with a knob it lets go and the preview follows the cursor again. Returns whether there is a knob now.
      */
-    static boolean editAnchor(Point fallback){
-        if(knob()){edit();return false;}
-        if(!anchored()){Point at=lastCursor!=null?lastCursor:fallback;if(at==null)return false;anchors.add(at);}
-        knob=true;return true;
-    }
-    /** Lets the preview follow the cursor again. */
-    public static void edit(){anchors.clear();knob=false;}
-
-    public static void draw(Minecraft mc,Point cursor){
-        var o=ClientState.options;var selected=SelectionOverlay.points();
-        if(o.tool!=Tool.MODIFY||selected.isEmpty()||mc.level==null)return;
-        lastCursor=cursor;
-        if(anchored())cursor=anchor();
-        var live=knob()?TransformGizmo.liveNode():null; // the knob while the gizmo carries it, so the preview moves with it
-        if(live!=null){double shift=TransformGizmo.nodeOffset();cursor=new Point((int)Math.round(live.x-shift),(int)Math.round(live.y-shift),(int)Math.round(live.z-shift));}
-        if(ClientState.hasPending())return; // a waiting edit shows its own blocks
-        var c=ModifyMath.usesCursor(o)?cursor:null;
-        Object[] now={o.modifyMode,o.modifyAxis,o.modifyType,o.modifyAngle,o.modifyRelative,o.modifyTranslate,o.modifyTranslateX,o.modifyTranslateY,o.modifyTranslateZ,o.modifyTranslateScale,o.copies,o.offsetX,o.offsetY,o.offsetZ,o.pasteAir,c,selected};
-        if(key==null||!sameKey(key,now)){key=now;rebuild(mc,o,selected,c);}
-        if(problem!=null){return;}
-        if(places.isEmpty()&&ModifyMath.usesCursor(o)&&cursor==null)return; // nothing to turn around until the cursor is on a block
-        if(shape!=OutlineShape.EMPTY){
-            shape.drawPlain(Vec3.ZERO,o.previewColor,(float)o.selectionWidth,o.previewFill,true,false);
-            if(!places.isEmpty())Overlay.cachedBlocks(models,places,o.previewTint);
+    static boolean editAnchor(Point fallback) {
+        if (knob()) {
+            edit();
+            return false;
         }
-        // Depth-tested rulers through what the tool turns about, as the gizmo draws while it is dragged: the block under the cursor, or the middle of the selection.
-        if(c!=null){TransformGizmo.ruler(new Vec3(cursor.x()+.5,cursor.y()+.5,cursor.z()+.5));guides(o,selected,cursor);}
-        else{TransformGizmo.ruler(middleOf(selected));if(o.modifyMode==Options.ModifyMode.TWIST)axisLine(o,selected);}
-    }
-    private static boolean sameKey(Object[] a,Object[] b){
-        for(int i=0;i<a.length;i++)if(i==a.length-1?a[i]!=b[i]:!Objects.equals(a[i],b[i]))return false;
+        if (!anchored()) {
+            Point at = lastCursor != null ? lastCursor : fallback;
+            if (at == null) return false;
+            anchors.add(at);
+        }
+        knob = true;
         return true;
     }
-    private static void rebuild(Minecraft mc,Options o,List<Point> selected,Point cursor){
-        models=List.of();places=List.of();shape=OutlineShape.EMPTY;problem=null;
-        var sources=new ArrayList<Point>();
-        for(Point at:selected)if(o.pasteAir||!mc.level.getBlockState(new BlockPos(at.x(),at.y(),at.z())).isAir())sources.add(at);
-        if(sources.isEmpty())return;
-        try{
-            var placed=ModifyMath.plan(o,sources,lowest(selected),highest(selected),cursor);
-            if(placed.isEmpty())return;
-            // The outline covers everything that lands. A frame cannot draw the model of every block of a big result, so it draws as many as the player allows, the outer surface first.
-            var shown=Exposed.first(placed.keySet(),ClientState.options.aiGhostDrawLimit);
-            var from=new ArrayList<BlockPos>(shown.size());var to=new ArrayList<BlockPos>(shown.size());
-            for(Point dest:shown){var source=placed.get(dest);to.add(new BlockPos(dest.x(),dest.y(),dest.z()));from.add(new BlockPos(source.x(),source.y(),source.z()));}
-            models=from;places=to;shape=OutlineShape.ofLater(placed.keySet()); // a big outline is worked out off the render thread and appears when ready
-        }catch(IllegalArgumentException e){problem=e.getMessage();}
-        catch(RuntimeException e){ // the preview is drawn every frame, so a failure here must not reach the render loop; the edit itself is checked by the server
-            problem="Cannot preview this: "+e.getClass().getSimpleName();models=List.of();places=List.of();shape=OutlineShape.EMPTY;
+    /** Lets the preview follow the cursor again. */
+    public static void edit() {
+        anchors.clear();
+        knob = false;
+    }
+
+    public static void draw(Minecraft mc, Point cursor) {
+        var o = ClientState.options;
+        var selected = SelectionOverlay.points();
+        if (o.tool != Tool.MODIFY || selected.isEmpty() || mc.level == null) return;
+        lastCursor = cursor;
+        if (anchored()) cursor = anchor();
+        var live = knob()
+                ? TransformGizmo.liveNode()
+                : null; // the knob while the gizmo carries it, so the preview moves with it
+        if (live != null) {
+            double shift = TransformGizmo.nodeOffset();
+            cursor = new Point((int) Math.round(live.x - shift), (int) Math.round(live.y - shift), (int)
+                    Math.round(live.z - shift));
+        }
+        if (ClientState.hasPending()) return; // a waiting edit shows its own blocks
+        var c = ModifyMath.usesCursor(o) ? cursor : null;
+        Object[] now = {
+            o.modifyMode,
+            o.modifyAxis,
+            o.modifyType,
+            o.modifyAngle,
+            o.modifyRelative,
+            o.modifyTranslate,
+            o.modifyTranslateX,
+            o.modifyTranslateY,
+            o.modifyTranslateZ,
+            o.modifyTranslateScale,
+            o.copies,
+            o.offsetX,
+            o.offsetY,
+            o.offsetZ,
+            o.pasteAir,
+            c,
+            selected
+        };
+        if (key == null || !sameKey(key, now)) {
+            key = now;
+            rebuild(mc, o, selected, c);
+        }
+        if (problem != null) {
+            return;
+        }
+        if (places.isEmpty() && ModifyMath.usesCursor(o) && cursor == null)
+            return; // nothing to turn around until the cursor is on a block
+        if (shape != OutlineShape.EMPTY) {
+            shape.drawPlain(Vec3.ZERO, o.previewColor, (float) o.selectionWidth, o.previewFill, true, false);
+            if (!places.isEmpty()) Overlay.cachedBlocks(models, places, o.previewTint);
+        }
+        // Depth-tested rulers through what the tool turns about, as the gizmo draws while it is dragged: the block
+        // under the cursor, or the middle of the selection.
+        if (c != null) {
+            TransformGizmo.ruler(new Vec3(cursor.x() + .5, cursor.y() + .5, cursor.z() + .5));
+            guides(o, selected, cursor);
+        } else {
+            TransformGizmo.ruler(middleOf(selected));
+            if (o.modifyMode == Options.ModifyMode.TWIST) axisLine(o, selected);
+        }
+    }
+
+    private static boolean sameKey(Object[] a, Object[] b) {
+        for (int i = 0; i < a.length; i++)
+            if (i == a.length - 1 ? a[i] != b[i] : !Objects.equals(a[i], b[i])) return false;
+        return true;
+    }
+
+    private static void rebuild(Minecraft mc, Options o, List<Point> selected, Point cursor) {
+        models = List.of();
+        places = List.of();
+        shape = OutlineShape.EMPTY;
+        problem = null;
+        var sources = new ArrayList<Point>();
+        for (Point at : selected)
+            if (o.pasteAir
+                    || !mc.level
+                            .getBlockState(new BlockPos(at.x(), at.y(), at.z()))
+                            .isAir()) sources.add(at);
+        if (sources.isEmpty()) return;
+        try {
+            var placed = ModifyMath.plan(o, sources, lowest(selected), highest(selected), cursor);
+            if (placed.isEmpty()) return;
+            // The outline covers everything that lands. A frame cannot draw the model of every block of a big result,
+            // so it draws as many as the player allows, the outer surface first.
+            var shown = Exposed.first(placed.keySet(), ClientState.options.aiGhostDrawLimit);
+            var from = new ArrayList<BlockPos>(shown.size());
+            var to = new ArrayList<BlockPos>(shown.size());
+            for (Point dest : shown) {
+                var source = placed.get(dest);
+                to.add(new BlockPos(dest.x(), dest.y(), dest.z()));
+                from.add(new BlockPos(source.x(), source.y(), source.z()));
+            }
+            models = from;
+            places = to;
+            shape = OutlineShape.ofLater(
+                    placed.keySet()); // a big outline is worked out off the render thread and appears when ready
+        } catch (IllegalArgumentException e) {
+            problem = e.getMessage();
+        } catch (
+                RuntimeException
+                        e) { // the preview is drawn every frame, so a failure here must not reach the render loop; the
+            // edit itself is checked by the server
+            problem = "Cannot preview this: " + e.getClass().getSimpleName();
+            models = List.of();
+            places = List.of();
+            shape = OutlineShape.EMPTY;
         }
     }
     /** Where a point lies on the circle about {@code centre} in the plane the axis is the normal of. */
-    private static Vec3 around(Vec3 centre,Options.ModifyAxis axis,double radius,double angle){
-        double a=Math.cos(angle)*radius,b=Math.sin(angle)*radius;
-        return switch(axis){case X->centre.add(0,a,b);case Y->centre.add(a,0,b);case Z->centre.add(a,b,0);};
+    private static Vec3 around(Vec3 centre, Options.ModifyAxis axis, double radius, double angle) {
+        double a = Math.cos(angle) * radius, b = Math.sin(angle) * radius;
+        return switch (axis) {
+            case X -> centre.add(0, a, b);
+            case Y -> centre.add(a, 0, b);
+            case Z -> centre.add(a, b, 0);
+        };
     }
-    private static void circle(Vec3 centre,Options.ModifyAxis axis,double radius,int colour){
-        if(radius<=0)return;
-        for(int i=0;i<96;i++)Overlay.sceneLine(around(centre,axis,radius,i*Math.PI/48),around(centre,axis,radius,(i+1)*Math.PI/48),colour,1.5f);
+
+    private static void circle(Vec3 centre, Options.ModifyAxis axis, double radius, int colour) {
+        if (radius <= 0) return;
+        for (int i = 0; i < 96; i++)
+            Overlay.sceneLine(
+                    around(centre, axis, radius, i * Math.PI / 48),
+                    around(centre, axis, radius, (i + 1) * Math.PI / 48),
+                    colour,
+                    1.5f);
     }
     /** The circle the nearest block of the selection sweeps (red) and the one the farthest sweeps (green), with a line from the cursor to where each starts. */
-    private static void guides(Options o,List<Point> selected,Point cursor){
-        var axis=o.modifyAxis;var centre=Geometry.vector(cursor);
-        double near=Double.MAX_VALUE,far=0;Point nearest=null,farthest=null;
-        for(Point at:selected){double d=ModifyMath.away(Geometry.vector(at).subtract(centre),axis);if(d<near){near=d;nearest=at;}if(d>far){far=d;farthest=at;}}
-        if(nearest==null)return;
-        Vec3 middle=new Vec3(cursor.x()+.5,cursor.y()+.5,cursor.z()+.5);
-        double inner=Math.max(0,near-.5),outer=far+.5;
-        circle(middle,axis,inner,INNER);circle(middle,axis,outer,OUTER);
+    private static void guides(Options o, List<Point> selected, Point cursor) {
+        var axis = o.modifyAxis;
+        var centre = Geometry.vector(cursor);
+        double near = Double.MAX_VALUE, far = 0;
+        Point nearest = null, farthest = null;
+        for (Point at : selected) {
+            double d = ModifyMath.away(Geometry.vector(at).subtract(centre), axis);
+            if (d < near) {
+                near = d;
+                nearest = at;
+            }
+            if (d > far) {
+                far = d;
+                farthest = at;
+            }
+        }
+        if (nearest == null) return;
+        Vec3 middle = new Vec3(cursor.x() + .5, cursor.y() + .5, cursor.z() + .5);
+        double inner = Math.max(0, near - .5), outer = far + .5;
+        circle(middle, axis, inner, INNER);
+        circle(middle, axis, outer, OUTER);
         // The lines run on the circle's plane, from the cursor to the closest and farthest point of the selection.
-        Overlay.sceneLine(middle,onPlane(middle,axis,nearest),INNER,2);Overlay.sceneLine(middle,onPlane(middle,axis,farthest),OUTER,2);
-        Overlay.text(String.format(Locale.ROOT,"%.1f",inner),pos(around(middle,axis,inner,0)),INNER,0xbb151c26,.02f);
-        Overlay.text(String.format(Locale.ROOT,"%.1f",outer),pos(around(middle,axis,outer,0)),OUTER,0xbb151c26,.02f);
+        Overlay.sceneLine(middle, onPlane(middle, axis, nearest), INNER, 2);
+        Overlay.sceneLine(middle, onPlane(middle, axis, farthest), OUTER, 2);
+        Overlay.text(
+                String.format(Locale.ROOT, "%.1f", inner),
+                pos(around(middle, axis, inner, 0)),
+                INNER,
+                0xbb151c26,
+                .02f);
+        Overlay.text(
+                String.format(Locale.ROOT, "%.1f", outer),
+                pos(around(middle, axis, outer, 0)),
+                OUTER,
+                0xbb151c26,
+                .02f);
     }
-    private static Vec3 onPlane(Vec3 middle,Options.ModifyAxis axis,Point at){
-        double x=at.x()+.5,y=at.y()+.5,z=at.z()+.5;
-        return switch(axis){case X->new Vec3(middle.x,y,z);case Y->new Vec3(x,middle.y,z);case Z->new Vec3(x,y,middle.z);};
+
+    private static Vec3 onPlane(Vec3 middle, Options.ModifyAxis axis, Point at) {
+        double x = at.x() + .5, y = at.y() + .5, z = at.z() + .5;
+        return switch (axis) {
+            case X -> new Vec3(middle.x, y, z);
+            case Y -> new Vec3(x, middle.y, z);
+            case Z -> new Vec3(x, y, middle.z);
+        };
     }
-    private static Point lowest(List<Point> p){int x=Integer.MAX_VALUE,y=x,z=x;for(Point a:p){x=Math.min(x,a.x());y=Math.min(y,a.y());z=Math.min(z,a.z());}return new Point(x,y,z);}
-    private static Point highest(List<Point> p){int x=Integer.MIN_VALUE,y=x,z=x;for(Point a:p){x=Math.max(x,a.x());y=Math.max(y,a.y());z=Math.max(z,a.z());}return new Point(x,y,z);}
-    private static Vec3 middleOf(List<Point> selected){Point min=lowest(selected),max=highest(selected);return new Vec3((min.x()+max.x())/2d+.5,(min.y()+max.y())/2d+.5,(min.z()+max.z())/2d+.5);}
-    private static BlockPos pos(Vec3 v){return BlockPos.containing(v);}
+
+    private static Point lowest(List<Point> p) {
+        int x = Integer.MAX_VALUE, y = x, z = x;
+        for (Point a : p) {
+            x = Math.min(x, a.x());
+            y = Math.min(y, a.y());
+            z = Math.min(z, a.z());
+        }
+        return new Point(x, y, z);
+    }
+
+    private static Point highest(List<Point> p) {
+        int x = Integer.MIN_VALUE, y = x, z = x;
+        for (Point a : p) {
+            x = Math.max(x, a.x());
+            y = Math.max(y, a.y());
+            z = Math.max(z, a.z());
+        }
+        return new Point(x, y, z);
+    }
+
+    private static Vec3 middleOf(List<Point> selected) {
+        Point min = lowest(selected), max = highest(selected);
+        return new Vec3((min.x() + max.x()) / 2d + .5, (min.y() + max.y()) / 2d + .5, (min.z() + max.z()) / 2d + .5);
+    }
+
+    private static BlockPos pos(Vec3 v) {
+        return BlockPos.containing(v);
+    }
     /** Twist turns about a line through the middle of the selection. */
-    private static void axisLine(Options o,List<Point> selected){
-        Point min=lowest(selected),max=highest(selected);
-        Vec3 mid=new Vec3((min.x()+max.x())/2d+.5,(min.y()+max.y())/2d+.5,(min.z()+max.z())/2d+.5);
-        Vec3 a=switch(o.modifyAxis){case X->new Vec3(min.x()-1,mid.y,mid.z);case Y->new Vec3(mid.x,min.y()-1,mid.z);case Z->new Vec3(mid.x,mid.y,min.z()-1);};
-        Vec3 b=switch(o.modifyAxis){case X->new Vec3(max.x()+2,mid.y,mid.z);case Y->new Vec3(mid.x,max.y()+2,mid.z);case Z->new Vec3(mid.x,mid.y,max.z()+2);};
-        Overlay.sceneLine(a,b,AXIS,2);
+    private static void axisLine(Options o, List<Point> selected) {
+        Point min = lowest(selected), max = highest(selected);
+        Vec3 mid =
+                new Vec3((min.x() + max.x()) / 2d + .5, (min.y() + max.y()) / 2d + .5, (min.z() + max.z()) / 2d + .5);
+        Vec3 a =
+                switch (o.modifyAxis) {
+                    case X -> new Vec3(min.x() - 1, mid.y, mid.z);
+                    case Y -> new Vec3(mid.x, min.y() - 1, mid.z);
+                    case Z -> new Vec3(mid.x, mid.y, min.z() - 1);
+                };
+        Vec3 b =
+                switch (o.modifyAxis) {
+                    case X -> new Vec3(max.x() + 2, mid.y, mid.z);
+                    case Y -> new Vec3(mid.x, max.y() + 2, mid.z);
+                    case Z -> new Vec3(mid.x, mid.y, max.z() + 2);
+                };
+        Overlay.sceneLine(a, b, AXIS, 2);
     }
 }

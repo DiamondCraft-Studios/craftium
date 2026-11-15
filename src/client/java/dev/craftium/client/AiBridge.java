@@ -3,13 +3,7 @@ package dev.craftium.client;
 import com.google.gson.*;
 import dev.craftium.Craftium;
 import dev.craftium.core.Point;
-import dev.craftium.core.Selection;
 import dev.craftium.net.Packets;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
-import net.minecraft.commands.arguments.blocks.BlockStateParser;
-import net.minecraft.core.BlockPos;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +11,11 @@ import java.nio.file.*;
 import java.security.*;
 import java.util.*;
 import java.util.concurrent.*;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.Minecraft;
+import net.minecraft.commands.arguments.blocks.BlockStateParser;
+import net.minecraft.core.BlockPos;
 
 /**
  * Lets an AI client on this computer (through the craftium-mcp shim) drive the editor. It listens on the loopback address only,
@@ -25,7 +24,8 @@ import java.util.concurrent.*;
  * applies its usual permission, protection and size checks; a build is only ever staged as a ghost until {@code apply_preview}.
  */
 public final class AiBridge {
-    static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("craftium").resolve("bridge.json");
+    static final Path FILE =
+            FabricLoader.getInstance().getConfigDir().resolve("craftium").resolve("bridge.json");
     /**
      * What the bridge's tools understand, written to the bridge file so the MCP server can tell a player to update the mod or the plugin
      * instead of failing on a tool the other side does not have. Bump it when a tool gains something the MCP server relies on.
@@ -35,6 +35,7 @@ public final class AiBridge {
      * the other sessions.
      */
     public static final int PROTOCOL = 3;
+
     private static final int BODY_LIMIT = 1_000_000, READ_BLOCKS = 32_768, WAIT_SECONDS = 20;
     private static final Gson GSON = new Gson();
     private static final Object LOCK = new Object();
@@ -44,7 +45,9 @@ public final class AiBridge {
     /** Completed by the next status the server sends after a request, which is how a tool learns what its request did. */
     private static volatile CompletableFuture<Packets.Status> awaiting;
     /** What the AI app is doing, for the indicator: requests being answered now, and when and with what the last one came. */
-    private static final java.util.concurrent.atomic.AtomicInteger working = new java.util.concurrent.atomic.AtomicInteger();
+    private static final java.util.concurrent.atomic.AtomicInteger working =
+            new java.util.concurrent.atomic.AtomicInteger();
+
     private static volatile long lastCall;
     private static volatile String lastTool = "";
     private static final long ACTIVE_MILLIS = 120_000;
@@ -53,13 +56,26 @@ public final class AiBridge {
      * call at a time (its worker is a single thread), so these are the current call's for as long as it runs.
      */
     private static volatile String callSession = "", callLabel = "";
-    static String session() { return callSession; }
+
+    static String session() {
+        return callSession;
+    }
     /** Whether a call from this AI session is being answered right now. */
-    static boolean workingOn(String id) { return working.get() > 0 && callSession.equals(id); }
-    private static final String STOPPED = "The player stopped this AI session. Do not retry or build anything else; tell the player what you were doing and wait for their instructions.";
+    static boolean workingOn(String id) {
+        return working.get() > 0 && callSession.equals(id);
+    }
+
+    private static final String STOPPED =
+            "The player stopped this AI session. Do not retry or build anything else; tell the player what you were doing and wait for their instructions.";
+
     private AiBridge() {}
 
-    public enum State { OFF, WAITING, ACTIVE, WORKING }
+    public enum State {
+        OFF,
+        WAITING,
+        ACTIVE,
+        WORKING
+    }
 
     /** Off; on and waiting for an AI app to call; on with an AI app seen in the last two minutes; or answering a call right now. */
     public static State indicator() {
@@ -70,7 +86,12 @@ public final class AiBridge {
 
     /** The colour of the indicator for a state. */
     public static int colour(State state) {
-        return switch (state) { case OFF -> 0xff7a8794; case WAITING -> 0xffffc857; case ACTIVE -> 0xff6fe08f; case WORKING -> 0xff6cb6ff; };
+        return switch (state) {
+            case OFF -> 0xff7a8794;
+            case WAITING -> 0xffffc857;
+            case ACTIVE -> 0xff6fe08f;
+            case WORKING -> 0xff6cb6ff;
+        };
     }
 
     /** What the AI app last asked for and how long ago, or an empty text when it has not asked yet. */
@@ -85,7 +106,8 @@ public final class AiBridge {
     public static void toggle() {
         boolean on = !ClientState.options.aiBridge;
         ClientState.options.aiBridge = on;
-        if (on) start(); else stop();
+        if (on) start();
+        else stop();
         ClientState.save();
     }
 
@@ -96,9 +118,15 @@ public final class AiBridge {
         var font = Minecraft.getInstance().font;
         boolean preview = ClientState.hasAiPending();
         int previews = ClientState.aiPendingCount(), sessions = ClientState.aiSessions.size();
-        String text = state == State.WORKING ? "AI working…" : previews > 1 ? "AI previews ×" + previews : preview ? "AI preview" : sessions > 1 ? "AI ×" + sessions : "AI";
+        String text = state == State.WORKING
+                ? "AI working…"
+                : previews > 1
+                        ? "AI previews ×" + previews
+                        : preview ? "AI preview" : sessions > 1 ? "AI ×" + sessions : "AI";
         int accent = preview && state != State.WORKING ? 0xffc9a0ff : colour(state);
-        int width = font.width(text) + 22, x = g.guiWidth() - width - 6, y = g.guiHeight() - 20; // bottom right, below the key hints and clear of the tips and toasts at the top
+        int width = font.width(text) + 22,
+                x = g.guiWidth() - width - 6,
+                y = g.guiHeight() - 20; // bottom right, below the key hints and clear of the tips and toasts at the top
         g.fill(x, y, x + width, y + 14, 0xb0101923);
         g.outline(x, y, width, 14, accent);
         g.fill(x + 5, y + 4, x + 11, y + 10, accent);
@@ -108,14 +136,19 @@ public final class AiBridge {
     public static void install() {
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
             if (ClientState.options.aiBridge != running()) {
-                if (ClientState.options.aiBridge) start(); else stop();
+                if (ClientState.options.aiBridge) start();
+                else stop();
             }
             AiSessionActions.tick();
         });
         Runtime.getRuntime().addShutdownHook(new Thread(AiBridge::stop, "craftium-ai-bridge-shutdown"));
     }
 
-    public static boolean running() { synchronized (LOCK) { return socket != null; } }
+    public static boolean running() {
+        synchronized (LOCK) {
+            return socket != null;
+        }
+    }
 
     /**
      * The game folder the Claude plugin has to be pointed at when this is not the default .minecraft (a launcher profile, or a game
@@ -126,7 +159,11 @@ public final class AiBridge {
         return folder.toString();
     }
 
-    public static int port() { synchronized (LOCK) { return socket == null ? 0 : socket.getLocalPort(); } }
+    public static int port() {
+        synchronized (LOCK) {
+            return socket == null ? 0 : socket.getLocalPort();
+        }
+    }
 
     /** Called with every status the server sends, after the client has taken it in. */
     static void statusReceived(Packets.Status status) {
@@ -134,7 +171,8 @@ public final class AiBridge {
         if (waiting != null) waiting.complete(status);
         // A read the server refused answers with an error status instead of data.
         var reading = awaitingData;
-        if (reading != null && status.error()) reading.completeExceptionally(new IllegalArgumentException(status.message()));
+        if (reading != null && status.error())
+            reading.completeExceptionally(new IllegalArgumentException(status.message()));
     }
 
     /** Completed by the data the server sends for a read, which is how get_blocks and get_surface get their answer. */
@@ -154,7 +192,11 @@ public final class AiBridge {
                 new SecureRandom().nextBytes(bytes);
                 token = HexFormat.of().formatHex(bytes);
                 socket = new ServerSocket(0, 8, InetAddress.getLoopbackAddress());
-                worker = Executors.newSingleThreadExecutor(r -> { var t = new Thread(r, "craftium-ai-bridge-worker"); t.setDaemon(true); return t; });
+                worker = Executors.newSingleThreadExecutor(r -> {
+                    var t = new Thread(r, "craftium-ai-bridge-worker");
+                    t.setDaemon(true);
+                    return t;
+                });
                 var acceptor = new Thread(() -> accept(socket), "craftium-ai-bridge");
                 acceptor.setDaemon(true);
                 acceptor.start();
@@ -179,7 +221,10 @@ public final class AiBridge {
 
     public static void stop() {
         synchronized (LOCK) {
-            try { if (socket != null) socket.close(); } catch (IOException ignored) {}
+            try {
+                if (socket != null) socket.close();
+            } catch (IOException ignored) {
+            }
             socket = null;
             if (worker != null) worker.shutdownNow();
             worker = null;
@@ -188,7 +233,10 @@ public final class AiBridge {
             lastTool = "";
             toldPlayerOfOlderPlugin = false;
             working.set(0);
-            try { Files.deleteIfExists(FILE); } catch (IOException ignored) {}
+            try {
+                Files.deleteIfExists(FILE);
+            } catch (IOException ignored) {
+            }
         }
     }
 
@@ -199,8 +247,13 @@ public final class AiBridge {
             try {
                 Socket client = server.accept();
                 ExecutorService pool;
-                synchronized (LOCK) { pool = worker; }
-                if (pool == null) { client.close(); continue; }
+                synchronized (LOCK) {
+                    pool = worker;
+                }
+                if (pool == null) {
+                    client.close();
+                    continue;
+                }
                 pool.execute(() -> handle(client));
             } catch (IOException | RejectedExecutionException e) {
                 if (server.isClosed()) return;
@@ -218,37 +271,84 @@ public final class AiBridge {
             var headers = new HashMap<String, String>();
             for (String header; (header = readLine(in)) != null && !header.isEmpty(); ) {
                 int colon = header.indexOf(':');
-                if (colon > 0) headers.put(header.substring(0, colon).trim().toLowerCase(Locale.ROOT), header.substring(colon + 1).trim());
-                if (headers.size() > 50) { reply(client, 431, error("Too many headers")); return; }
+                if (colon > 0)
+                    headers.put(
+                            header.substring(0, colon).trim().toLowerCase(Locale.ROOT),
+                            header.substring(colon + 1).trim());
+                if (headers.size() > 50) {
+                    reply(client, 431, error("Too many headers"));
+                    return;
+                }
             }
             int port = port();
             String host = headers.getOrDefault("host", "");
-            // A web page can reach loopback too, so a browser's request (it names an Origin) or a rebound host name is refused outright.
-            if (headers.containsKey("origin") || !(host.equals("127.0.0.1:" + port) || host.equals("localhost:" + port))) { reply(client, 403, error("Forbidden")); return; }
+            // A web page can reach loopback too, so a browser's request (it names an Origin) or a rebound host name is
+            // refused outright.
+            if (headers.containsKey("origin")
+                    || !(host.equals("127.0.0.1:" + port) || host.equals("localhost:" + port))) {
+                reply(client, 403, error("Forbidden"));
+                return;
+            }
             String presented = headers.getOrDefault("authorization", "");
             String expected = "Bearer " + token;
-            if (token.isEmpty() || !MessageDigest.isEqual(presented.getBytes(StandardCharsets.UTF_8), expected.getBytes(StandardCharsets.UTF_8))) { reply(client, 401, error("Unauthorized")); return; }
-            if (request.length < 2 || !request[0].equals("POST")) { reply(client, 405, error("Use POST /<tool>")); return; }
+            if (token.isEmpty()
+                    || !MessageDigest.isEqual(
+                            presented.getBytes(StandardCharsets.UTF_8), expected.getBytes(StandardCharsets.UTF_8))) {
+                reply(client, 401, error("Unauthorized"));
+                return;
+            }
+            if (request.length < 2 || !request[0].equals("POST")) {
+                reply(client, 405, error("Use POST /<tool>"));
+                return;
+            }
             int length;
-            try { length = Integer.parseInt(headers.getOrDefault("content-length", "0")); } catch (NumberFormatException e) { reply(client, 400, error("Bad Content-Length")); return; }
-            if (length < 0 || length > BODY_LIMIT) { reply(client, 413, error("Body exceeds 1 MB")); return; }
+            try {
+                length = Integer.parseInt(headers.getOrDefault("content-length", "0"));
+            } catch (NumberFormatException e) {
+                reply(client, 400, error("Bad Content-Length"));
+                return;
+            }
+            if (length < 0 || length > BODY_LIMIT) {
+                reply(client, 413, error("Body exceeds 1 MB"));
+                return;
+            }
             byte[] body = in.readNBytes(length);
-            if (body.length != length) { reply(client, 400, error("Incomplete body")); return; }
+            if (body.length != length) {
+                reply(client, 400, error("Incomplete body"));
+                return;
+            }
             JsonObject args;
             try {
-                var parsed = body.length == 0 ? new JsonObject() : JsonParser.parseString(new String(body, StandardCharsets.UTF_8));
-                if (!parsed.isJsonObject()) { reply(client, 400, error("Body must be a JSON object")); return; }
+                var parsed = body.length == 0
+                        ? new JsonObject()
+                        : JsonParser.parseString(new String(body, StandardCharsets.UTF_8));
+                if (!parsed.isJsonObject()) {
+                    reply(client, 400, error("Body must be a JSON object"));
+                    return;
+                }
                 args = parsed.getAsJsonObject();
-            } catch (JsonParseException e) { reply(client, 400, error("Body is not valid JSON")); return; }
+            } catch (JsonParseException e) {
+                reply(client, 400, error("Body is not valid JSON"));
+                return;
+            }
             String tool = request[1].startsWith("/") ? request[1].substring(1) : request[1];
             JsonObject result;
             working.incrementAndGet();
             lastTool = tool.length() > 24 ? tool.substring(0, 24) : tool;
-            try { result = call(tool, args); if (!args.has("session")) warnSessionless(result); }
-            catch (IllegalArgumentException | IllegalStateException e) { result = error(e.getMessage()); }
-            catch (TimeoutException e) { result = error("Minecraft did not answer in time; is the game paused or loading?"); }
-            catch (Exception e) { Craftium.LOG.warn("AI bridge tool {} failed", tool, e); result = error("Internal error: " + e.getClass().getSimpleName()); }
-            finally { lastCall = System.currentTimeMillis(); working.decrementAndGet(); }
+            try {
+                result = call(tool, args);
+                if (!args.has("session")) warnSessionless(result);
+            } catch (IllegalArgumentException | IllegalStateException e) {
+                result = error(e.getMessage());
+            } catch (TimeoutException e) {
+                result = error("Minecraft did not answer in time; is the game paused or loading?");
+            } catch (Exception e) {
+                Craftium.LOG.warn("AI bridge tool {} failed", tool, e);
+                result = error("Internal error: " + e.getClass().getSimpleName());
+            } finally {
+                lastCall = System.currentTimeMillis();
+                working.decrementAndGet();
+            }
             reply(client, 200, result);
         } catch (IOException ignored) {
             // A dropped or slow connection is not worth reporting.
@@ -262,11 +362,17 @@ public final class AiBridge {
      * of them trample each other's previews and one can apply or undo the other's build. The AI is told in its answer, and the player once.
      */
     private static void warnSessionless(JsonObject result) {
-        if (result.has("ok") && !result.get("ok").getAsBoolean()) return; // an old plugin shows only the error text of a refusal
-        result.addProperty("pluginWarning", "This Craftium plugin is older than the game's Craftium and cannot name its session, so every Claude session using an old plugin shares ONE preview and ONE undo list: another session's build can be applied or replaced by you. Tell the player to update the Craftium plugin before building with more than one Claude session at a time.");
+        if (result.has("ok") && !result.get("ok").getAsBoolean())
+            return; // an old plugin shows only the error text of a refusal
+        result.addProperty(
+                "pluginWarning",
+                "This Craftium plugin is older than the game's Craftium and cannot name its session, so every Claude session using an old plugin shares ONE preview and ONE undo list: another session's build can be applied or replaced by you. Tell the player to update the Craftium plugin before building with more than one Claude session at a time.");
         if (!toldPlayerOfOlderPlugin) {
             toldPlayerOfOlderPlugin = true;
-            Minecraft.getInstance().execute(() -> ClientState.notify("An AI app uses an older Craftium plugin: its sessions share one preview. Update the plugin to build in parallel."));
+            Minecraft.getInstance()
+                    .execute(
+                            () -> ClientState.notify(
+                                    "An AI app uses an older Craftium plugin: its sessions share one preview. Update the plugin to build in parallel."));
         }
     }
 
@@ -284,7 +390,9 @@ public final class AiBridge {
 
     private static void reply(Socket client, int status, JsonObject body) throws IOException {
         byte[] bytes = GSON.toJson(body).getBytes(StandardCharsets.UTF_8);
-        String head = "HTTP/1.1 " + status + " " + (status == 200 ? "OK" : "Error") + "\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: " + bytes.length + "\r\nConnection: close\r\n\r\n";
+        String head = "HTTP/1.1 " + status + " " + (status == 200 ? "OK" : "Error")
+                + "\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: " + bytes.length
+                + "\r\nConnection: close\r\n\r\n";
         var out = client.getOutputStream();
         out.write(head.getBytes(StandardCharsets.ISO_8859_1));
         out.write(bytes);
@@ -301,51 +409,86 @@ public final class AiBridge {
     // ---- tools --------------------------------------------------------------------------------------------------
 
     private static JsonObject call(String tool, JsonObject args) throws Exception {
-        // Which AI session is asking, and what it calls the build, ride on every call; an app from before sessions sends neither and is the default session.
-        callSession = dev.craftium.core.AiSessions.cleanId(args.has("session") && args.get("session").isJsonPrimitive() ? args.get("session").getAsString() : "");
-        callLabel = dev.craftium.core.AiSessions.cleanLabel(args.has("label") && args.get("label").isJsonPrimitive() ? args.get("label").getAsString() : "");
+        // Which AI session is asking, and what it calls the build, ride on every call; an app from before sessions
+        // sends neither and is the default session.
+        callSession = dev.craftium.core.AiSessions.cleanId(
+                args.has("session") && args.get("session").isJsonPrimitive()
+                        ? args.get("session").getAsString()
+                        : "");
+        callLabel = dev.craftium.core.AiSessions.cleanLabel(
+                args.has("label") && args.get("label").isJsonPrimitive()
+                        ? args.get("label").getAsString()
+                        : "");
         var asking = ClientState.aiSession(callSession);
         if (asking != null && asking.info().stopped()) throw new IllegalStateException(STOPPED);
         return switch (tool) {
             case "get_state" -> {
-                // The first look at the world is when this session takes the player's selection as its own (see Session#pinned on the server).
-                if (serverSupported() && ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SESSIONS)) request("ai_selection_pin", () -> CraftiumClient.sendAi("ai_selection_pin", callSession, callLabel));
+                // The first look at the world is when this session takes the player's selection as its own (see
+                // Session#pinned on the server).
+                if (serverSupported() && ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SESSIONS))
+                    request(
+                            "ai_selection_pin",
+                            () -> CraftiumClient.sendAi("ai_selection_pin", callSession, callLabel));
                 yield onClient(() -> state(true));
             }
             case "read_selection" -> {
                 if (args.has("name") && args.get("name").isJsonPrimitive()) {
-                    if (!ClientHandshake.serverHas(dev.craftium.core.Handshake.SAVED_SELECTIONS)) throw new IllegalStateException("This server does not have BuildObjects: update Craftium on it, or read the player's selection without a name");
+                    if (!ClientHandshake.serverHas(dev.craftium.core.Handshake.SAVED_SELECTIONS))
+                        throw new IllegalStateException(
+                                "This server does not have BuildObjects: update Craftium on it, or read the player's selection without a name");
                     yield read("ai_selection_named:" + args.get("name").getAsString(), null, null);
                 }
-                yield read(args.has("refresh") && args.get("refresh").isJsonPrimitive() && args.get("refresh").getAsBoolean() ? "ai_selection_refresh" : "ai_selection", null, null);
+                yield read(
+                        args.has("refresh")
+                                        && args.get("refresh").isJsonPrimitive()
+                                        && args.get("refresh").getAsBoolean()
+                                ? "ai_selection_refresh"
+                                : "ai_selection",
+                        null,
+                        null);
             }
             case "get_preview_blocks" -> {
-                var from = point(args, "from"); var to = point(args, "to");
+                var from = point(args, "from");
+                var to = point(args, "to");
                 String view = args.has("view") ? args.get("view").getAsString() : "after";
                 String format = args.has("format") ? args.get("format").getAsString() : "auto";
                 boolean older = !ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SPEC_V2);
                 // A server from before spec v2 reads the world only through the older, smaller read.
                 if (older && view.equals("world")) yield olderWorldRead(from, to);
-                // The two settings travel in the action itself, so nothing is put in the shared options and nothing has to be put back.
+                // The two settings travel in the action itself, so nothing is put in the shared options and nothing has
+                // to be put back.
                 var answer = read("ai_preview_blocks:" + view + ":" + format, from, to);
-                // An older server answers "after" with no preview waiting by saying so, where this tool promises the world as it is.
-                if (older && view.equals("after") && answer.has("previewBlocks") && answer.get("previewBlocks").getAsInt() == 0 && answer.has("message")) yield olderWorldRead(from, to);
+                // An older server answers "after" with no preview waiting by saying so, where this tool promises the
+                // world as it is.
+                if (older
+                        && view.equals("after")
+                        && answer.has("previewBlocks")
+                        && answer.get("previewBlocks").getAsInt() == 0
+                        && answer.has("message")) yield olderWorldRead(from, to);
                 yield answer;
             }
-            case "get_blocks" -> { var from = point(args, "from"); var to = point(args, "to"); yield serverSupported() ? read("ai_blocks", from, to) : onClient(() -> blocks(from, to)); }
+            case "get_blocks" -> {
+                var from = point(args, "from");
+                var to = point(args, "to");
+                yield serverSupported() ? read("ai_blocks", from, to) : onClient(() -> blocks(from, to));
+            }
             case "get_surface" -> {
-                var from = point(args, "from"); var to = point(args, "to");
+                var from = point(args, "from");
+                var to = point(args, "to");
                 String kind = args.has("kind") ? args.get("kind").getAsString() : "top";
-                if (!kind.equals("top") && !kind.equals("floor")) throw new IllegalArgumentException("\"kind\" must be \"top\" or \"floor\"");
+                if (!kind.equals("top") && !kind.equals("floor"))
+                    throw new IllegalArgumentException("\"kind\" must be \"top\" or \"floor\"");
                 yield read(kind.equals("floor") ? "ai_surface_floor" : "ai_surface", from, to);
             }
             case "get_palette" -> onClient(AiBridge::palette);
             case "get_screenshot" -> screenshot();
             case "render_view" -> AiView.render(args);
-            // Showcase pictures are taken and saved by the game itself; these three only start, ask after and stop a job.
+            // Showcase pictures are taken and saved by the game itself; these three only start, ask after and stop a
+            // job.
             case "capture_batch" -> onClient(() -> dev.craftium.client.showcase.ShowcaseJobs.start(args));
             case "capture_status" -> {
-                // A room's contact sheet is made from its saved files here, off the game's thread, so a big sheet never stalls a frame.
+                // A room's contact sheet is made from its saved files here, off the game's thread, so a big sheet never
+                // stalls a frame.
                 if (args.has("contact_sheet") && args.get("contact_sheet").isJsonPrimitive()) {
                     String room = args.get("contact_sheet").getAsString();
                     var sources = onClient(() -> dev.craftium.client.showcase.ShowcaseJobs.sheetSources(room));
@@ -359,15 +502,19 @@ public final class AiBridge {
                 var element = args.get("spec");
                 String spec = element.isJsonPrimitive() ? element.getAsString() : GSON.toJson(element);
                 String mode = args.has("mode") ? args.get("mode").getAsString() : "replace";
-                if (!mode.equals("replace") && !mode.equals("add")) throw new IllegalArgumentException("\"mode\" must be \"replace\" or \"add\"");
+                if (!mode.equals("replace") && !mode.equals("add"))
+                    throw new IllegalArgumentException("\"mode\" must be \"replace\" or \"add\"");
                 boolean add = mode.equals("add");
                 if (add && !ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SPEC_V2))
-                    throw new IllegalArgumentException("This server's Craftium cannot add to a preview; send the whole build without \"mode\": \"add\", and tell the player the server needs an update for it");
+                    throw new IllegalArgumentException(
+                            "This server's Craftium cannot add to a preview; send the whole build without \"mode\": \"add\", and tell the player the server needs an update for it");
                 String action = add ? "ai_build_preview_add" : "ai_build_preview";
                 yield request(action, () -> previewBuild(spec, action));
             }
-            case "apply_preview" -> request("ai_apply", () -> CraftiumClient.sendAi("ai_apply", callSession, callLabel));
-            case "cancel_preview" -> request("ai_cancel", () -> CraftiumClient.sendAi("ai_cancel", callSession, callLabel));
+            case "apply_preview" ->
+                request("ai_apply", () -> CraftiumClient.sendAi("ai_apply", callSession, callLabel));
+            case "cancel_preview" ->
+                request("ai_cancel", () -> CraftiumClient.sendAi("ai_cancel", callSession, callLabel));
             case "undo" -> request("ai_undo", () -> CraftiumClient.sendAi("ai_undo", callSession, callLabel));
             default -> throw new IllegalArgumentException("Unknown tool \"" + tool + "\"");
         };
@@ -377,10 +524,18 @@ public final class AiBridge {
     static <T> T onClient(Callable<T> action) throws Exception {
         var future = new CompletableFuture<T>();
         Minecraft.getInstance().execute(() -> {
-            try { future.complete(action.call()); } catch (Throwable t) { future.completeExceptionally(t); }
+            try {
+                future.complete(action.call());
+            } catch (Throwable t) {
+                future.completeExceptionally(t);
+            }
         });
-        try { return future.get(WAIT_SECONDS, TimeUnit.SECONDS); }
-        catch (ExecutionException e) { if (e.getCause() instanceof Exception cause) throw cause; throw e; }
+        try {
+            return future.get(WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof Exception cause) throw cause;
+            throw e;
+        }
     }
 
     private static boolean serverSupported() {
@@ -396,12 +551,19 @@ public final class AiBridge {
      * requested format and answers as runs. A box over the limit is refused with what to do about it, and the reply says it is the older kind.
      */
     private static JsonObject olderWorldRead(Point from, Point to) throws Exception {
-        long total = (long) (Math.abs(from.x() - to.x()) + 1) * (Math.abs(from.y() - to.y()) + 1) * (Math.abs(from.z() - to.z()) + 1);
+        long total = (long) (Math.abs(from.x() - to.x()) + 1)
+                * (Math.abs(from.y() - to.y()) + 1)
+                * (Math.abs(from.z() - to.z()) + 1);
         if (total > OLDER_SERVER_READ)
-            throw new IllegalArgumentException("This server's Craftium is older than this plugin and reads at most " + String.format(java.util.Locale.ROOT, "%,d", OLDER_SERVER_READ) + " blocks of the world at a time (that box has "
-                + String.format(java.util.Locale.ROOT, "%,d", total) + "). Read it in smaller boxes, or ask the server owner to update Craftium");
+            throw new IllegalArgumentException("This server's Craftium is older than this plugin and reads at most "
+                    + String.format(java.util.Locale.ROOT, "%,d", OLDER_SERVER_READ)
+                    + " blocks of the world at a time (that box has "
+                    + String.format(java.util.Locale.ROOT, "%,d", total)
+                    + "). Read it in smaller boxes, or ask the server owner to update Craftium");
         var out = read("ai_blocks", from, to);
-        out.addProperty("serverOutdated", "This server's Craftium is older than this plugin, so this read answers as runs whatever \"format\" you asked for, and the world only (not your preview).");
+        out.addProperty(
+                "serverOutdated",
+                "This server's Craftium is older than this plugin, so this read answers as runs whatever \"format\" you asked for, and the world only (not your preview).");
         return out;
     }
 
@@ -412,17 +574,22 @@ public final class AiBridge {
         onClient(() -> {
             var mc = Minecraft.getInstance();
             if (mc.player == null || mc.level == null) throw new IllegalStateException("Not in a world");
-            if (!CraftiumClient.supported()) throw new IllegalStateException("This world has no Craftium on the server; install it there to read it");
+            if (!CraftiumClient.supported())
+                throw new IllegalStateException(
+                        "This world has no Craftium on the server; install it there to read it");
             awaitingData = data;
             CraftiumClient.sendAi(action, callSession, callLabel, from, to);
             return null;
         });
         lastSent = System.nanoTime();
         try {
-            var out = JsonParser.parseString(data.get(WAIT_SECONDS, TimeUnit.SECONDS)).getAsJsonObject();
+            var out = JsonParser.parseString(data.get(WAIT_SECONDS, TimeUnit.SECONDS))
+                    .getAsJsonObject();
             return out;
         } catch (ExecutionException e) {
-            throw e.getCause() instanceof RuntimeException cause ? cause : new IllegalStateException(String.valueOf(e.getCause()));
+            throw e.getCause() instanceof RuntimeException cause
+                    ? cause
+                    : new IllegalStateException(String.valueOf(e.getCause()));
         } finally {
             if (awaitingData == data) awaitingData = null;
         }
@@ -431,13 +598,15 @@ public final class AiBridge {
     /** Sends one editor request from the game thread and waits for the server's reply to it. */
     private static JsonObject request(String name, Runnable send) throws Exception {
         var reply = new CompletableFuture<Packets.Status>();
-        // A new preview is described by the server just before its status (see AiWorld.previewSummary); a server from before that sends none.
+        // A new preview is described by the server just before its status (see AiWorld.previewSummary); a server from
+        // before that sends none.
         var summary = name.startsWith("ai_build_preview") ? new CompletableFuture<String>() : null;
         pace();
         onClient(() -> {
             var mc = Minecraft.getInstance();
             if (mc.player == null || mc.level == null) throw new IllegalStateException("Not in a world");
-            if (!CraftiumClient.supported()) throw new IllegalStateException("This world has no Craftium on the server; install it there to edit");
+            if (!CraftiumClient.supported())
+                throw new IllegalStateException("This world has no Craftium on the server; install it there to edit");
             awaiting = reply;
             if (summary != null) awaitingData = summary;
             send.run();
@@ -458,9 +627,18 @@ public final class AiBridge {
                 }
                 var state = state(false);
                 out.add("state", state);
-                if (status.error() && summary != null && state.has("previewBlocks") && state.get("previewBlocks").getAsInt() > 0)
-                    out.addProperty("previewKept", "The spec was refused, so nothing changed: your earlier preview (" + state.get("previewBlocks").getAsInt() + " blocks) is still waiting. Fix the spec and call preview_build again.");
-                if (status.error() && summary != null && !ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SPEC_V2))
+                if (status.error()
+                        && summary != null
+                        && state.has("previewBlocks")
+                        && state.get("previewBlocks").getAsInt() > 0)
+                    out.addProperty(
+                            "previewKept",
+                            "The spec was refused, so nothing changed: your earlier preview ("
+                                    + state.get("previewBlocks").getAsInt()
+                                    + " blocks) is still waiting. Fix the spec and call preview_build again.");
+                if (status.error()
+                        && summary != null
+                        && !ClientHandshake.serverHas(dev.craftium.core.Handshake.AI_SPEC_V2))
                     out.addProperty("serverOutdated", olderServer());
                 return out;
             });
@@ -478,12 +656,14 @@ public final class AiBridge {
      */
     private static String olderServer() {
         var server = ClientHandshake.server();
-        return "This server runs " + (server == null ? "an older Craftium" : "Craftium " + server.version()) + ", which does not know roof, stairs, group, "
-            + "{\"mix\": ...} or material@kind names. Build with the plain shapes and full block ids, and tell the player the server's Craftium needs an update for the rest.";
+        return "This server runs " + (server == null ? "an older Craftium" : "Craftium " + server.version())
+                + ", which does not know roof, stairs, group, "
+                + "{\"mix\": ...} or material@kind names. Build with the plain shapes and full block ids, and tell the player the server's Craftium needs an update for the rest.";
     }
 
     /** When the last request went to the server. The server silently drops a request that follows another within 65 ms, so they are kept further apart than that. */
     private static long lastSent;
+
     private static final long REQUEST_GAP_NANOS = 120_000_000L;
 
     private static void pace() throws InterruptedException {
@@ -495,8 +675,11 @@ public final class AiBridge {
         var o = ClientState.options;
         o.buildSpec = spec;
         // The spec rides along on this one request and is not kept in the saved settings.
-        try { CraftiumClient.sendAi(action, callSession, callLabel); }
-        finally { o.buildSpec = ""; }
+        try {
+            CraftiumClient.sendAi(action, callSession, callLabel);
+        } finally {
+            o.buildSpec = "";
+        }
     }
 
     /**
@@ -507,8 +690,11 @@ public final class AiBridge {
         out.addProperty("previewBlocks", preview.total());
         out.addProperty("previewBlocksDrawn", preview.described());
         out.addProperty("previewTruncated", preview.truncated());
-        if (preview.truncated()) out.addProperty("previewWarning", "Only " + preview.described() + " of " + preview.total()
-            + " preview blocks are described to the game, which is all render_view and the ghost can show. The rest are still in the preview and will be built when it is applied, so do not judge the build from the picture. Build it in smaller stages to see all of it, or read it with get_preview_blocks.");
+        if (preview.truncated())
+            out.addProperty(
+                    "previewWarning",
+                    "Only " + preview.described() + " of " + preview.total()
+                            + " preview blocks are described to the game, which is all render_view and the ghost can show. The rest are still in the preview and will be built when it is applied, so do not judge the build from the picture. Build it in smaller stages to see all of it, or read it with get_preview_blocks.");
     }
 
     /**
@@ -525,15 +711,24 @@ public final class AiBridge {
         if (mc.player == null) return out;
         var player = new JsonObject();
         player.add("position", array(mc.player.getX(), mc.player.getY(), mc.player.getZ()));
-        player.add("block", array(mc.player.blockPosition().getX(), mc.player.blockPosition().getY(), mc.player.blockPosition().getZ()));
+        player.add(
+                "block",
+                array(
+                        mc.player.blockPosition().getX(),
+                        mc.player.blockPosition().getY(),
+                        mc.player.blockPosition().getZ()));
         player.addProperty("facing", mc.player.getDirection().getName());
         player.addProperty("creative", mc.player.isCreative());
         out.add("player", player);
         var status = ClientState.status;
         var selection = new JsonObject();
         var pinned = ClientState.aiSession(callSession);
-        boolean pin = pinned != null && pinned.info().pinBlocks() > 0 && pinned.info().pinMin() != null && pinned.info().pinMax() != null;
-        // The selection this session started with, not the one the player has now, until the session is told to use the new one.
+        boolean pin = pinned != null
+                && pinned.info().pinBlocks() > 0
+                && pinned.info().pinMin() != null
+                && pinned.info().pinMax() != null;
+        // The selection this session started with, not the one the player has now, until the session is told to use the
+        // new one.
         var min = pin ? pinned.info().pinMin() : status.min();
         var max = pin ? pinned.info().pinMax() : status.max();
         int size = pin ? pinned.info().pinBlocks() : status.selectionSize();
@@ -547,8 +742,20 @@ public final class AiBridge {
             selection.addProperty("pinned", true);
             if (pinned.info().pinChanged()) {
                 selection.addProperty("playerSelectionChanged", true);
-                selection.addProperty("playerSelectionNow", status.selectionSize() + " blocks" + (status.selectionSize() > 0 && status.min() != null && status.max() != null ? " from " + status.min().x() + "," + status.min().y() + "," + status.min().z() + " to " + status.max().x() + "," + status.max().y() + "," + status.max().z() : ""));
-                selection.addProperty("note", "This is the selection you started with, and you keep working with it. The player has selected something else since: use the new one only if the player says to, by calling read_selection with refresh true.");
+                selection.addProperty(
+                        "playerSelectionNow",
+                        status.selectionSize() + " blocks"
+                                + (status.selectionSize() > 0 && status.min() != null && status.max() != null
+                                        ? " from " + status.min().x() + ","
+                                                + status.min().y() + ","
+                                                + status.min().z() + " to "
+                                                + status.max().x() + ","
+                                                + status.max().y() + ","
+                                                + status.max().z()
+                                        : ""));
+                selection.addProperty(
+                        "note",
+                        "This is the selection you started with, and you keep working with it. The player has selected something else since: use the new one only if the player says to, by calling read_selection with refresh true.");
             }
         }
         out.add("selection", selection);
@@ -558,21 +765,29 @@ public final class AiBridge {
             var entry = new JsonObject();
             entry.addProperty("name", s.name());
             if (s.guid() != null) entry.addProperty("guid", s.guid());
-            if (s.parent() != 0) for (var other : ClientState.savedSelections()) if (other.id() == s.parent() && other.guid() != null) entry.addProperty("parent", other.guid()); // the GUID of the BuildObject it is under
+            if (s.parent() != 0)
+                for (var other : ClientState.savedSelections())
+                    if (other.id() == s.parent() && other.guid() != null)
+                        entry.addProperty("parent", other.guid()); // the GUID of the BuildObject it is under
             entry.addProperty("blocks", s.size()); // the ones it holds itself
-            var box = ClientState.subtreeBounds(s.id()); // the box and the count with everything under it, which is what selecting it selects
+            var box = ClientState.subtreeBounds(
+                    s.id()); // the box and the count with everything under it, which is what selecting it selects
             if (box != null) {
                 entry.addProperty("blocksIncludingChildren", ClientState.subtreeSize(s.id()));
                 entry.add("min", array(box[0].x(), box[0].y(), box[0].z()));
                 entry.add("max", array(box[1].x(), box[1].y(), box[1].z()));
-                entry.add("dimensions", array(box[1].x() - box[0].x() + 1, box[1].y() - box[0].y() + 1, box[1].z() - box[0].z() + 1));
+                entry.add(
+                        "dimensions",
+                        array(box[1].x() - box[0].x() + 1, box[1].y() - box[0].y() + 1, box[1].z() - box[0].z() + 1));
             }
             if (s.active()) entry.addProperty("shownByPlayer", s.editing() ? "editing" : "viewing");
             saved.add(entry);
         }
         if (saved.size() > 0) {
             out.add("savedSelections", saved);
-            out.addProperty("savedSelectionsNote", "The player saved these selections by name. Read one with read_selection and its name, and work on one with replace_selection's \"selection\" field; one build can use several, each by its own name. When the player says \"selection 1\" they mean the one with that name.");
+            out.addProperty(
+                    "savedSelectionsNote",
+                    "The player saved these selections by name. Read one with read_selection and its name, and work on one with replace_selection's \"selection\" field; one build can use several, each by its own name. When the player says \"selection 1\" they mean the one with that name.");
         }
         var mine = ClientState.aiSession(callSession);
         previewReport(out, mine == null ? GhostBlocks.EMPTY : mine.ghost());
@@ -585,15 +800,21 @@ public final class AiBridge {
             one.addProperty("label", info.label());
             one.addProperty("state", info.state());
             one.addProperty("blocks", info.blocks());
-            if (info.min() != null && info.max() != null) { one.add("min", array(info.min().x(), info.min().y(), info.min().z())); one.add("max", array(info.max().x(), info.max().y(), info.max().z())); }
+            if (info.min() != null && info.max() != null) {
+                one.add("min", array(info.min().x(), info.min().y(), info.min().z()));
+                one.add("max", array(info.max().x(), info.max().y(), info.max().z()));
+            }
             one.addProperty("idleSeconds", view.idleMs() / 1000);
             others.add(one);
         }
         if (!others.isEmpty()) {
             out.add("otherSessions", others);
-            out.addProperty("otherSessionsNote", "Other AI sessions are building for this player. Keep this build clear of the boxes they hold or built, and do not apply, discard or undo theirs.");
+            out.addProperty(
+                    "otherSessionsNote",
+                    "Other AI sessions are building for this player. Keep this build clear of the boxes they hold or built, and do not apply, discard or undo theirs.");
         }
-        if (mine != null && !mine.info().label().isEmpty()) out.addProperty("sessionLabel", mine.info().label());
+        if (mine != null && !mine.info().label().isEmpty())
+            out.addProperty("sessionLabel", mine.info().label());
         out.addProperty("busy", status.busy());
         out.addProperty("lastMessage", status.message());
         if (full && mc.level != null) {
@@ -603,7 +824,12 @@ public final class AiBridge {
             world.addProperty("minY", level.getMinY());
             world.addProperty("maxY", level.getMinY() + level.getHeight() - 1);
             world.addProperty("seaLevel", level.getSeaLevel());
-            world.addProperty("biome", level.getBiome(mc.player.blockPosition()).unwrapKey().map(dev.craftium.compat.Compat::keyName).orElse("unknown"));
+            world.addProperty(
+                    "biome",
+                    level.getBiome(mc.player.blockPosition())
+                            .unwrapKey()
+                            .map(dev.craftium.compat.Compat::keyName)
+                            .orElse("unknown"));
             out.add("world", world);
             var blocks = new JsonObject();
             blocks.addProperty("current", ClientState.options.block);
@@ -627,18 +853,28 @@ public final class AiBridge {
             if (mc.level == null || mc.player == null) throw new IllegalStateException("Not in a world");
             boolean screenOpen = dev.craftium.client.compat.ClientCompat.screen(mc) != null;
             double yaw = mc.player.getYRot(), pitch = mc.player.getXRot();
-            net.minecraft.client.Screenshot.takeScreenshot(dev.craftium.client.compat.ClientCompat.mainTarget(mc), image -> {
-                try { done.complete(encode(image, screenOpen, yaw, pitch)); }
-                catch (Throwable t) { done.completeExceptionally(t); }
-                finally { image.close(); }
-            });
+            net.minecraft.client.Screenshot.takeScreenshot(
+                    dev.craftium.client.compat.ClientCompat.mainTarget(mc), image -> {
+                        try {
+                            done.complete(encode(image, screenOpen, yaw, pitch));
+                        } catch (Throwable t) {
+                            done.completeExceptionally(t);
+                        } finally {
+                            image.close();
+                        }
+                    });
             return null;
         });
-        try { return done.get(WAIT_SECONDS, TimeUnit.SECONDS); }
-        catch (ExecutionException e) { throw new IllegalStateException("Could not capture the screen: " + e.getCause()); }
+        try {
+            return done.get(WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("Could not capture the screen: " + e.getCause());
+        }
     }
 
-    private static JsonObject encode(com.mojang.blaze3d.platform.NativeImage image, boolean screenOpen, double yaw, double pitch) throws IOException {
+    private static JsonObject encode(
+            com.mojang.blaze3d.platform.NativeImage image, boolean screenOpen, double yaw, double pitch)
+            throws IOException {
         int width = image.getWidth(), height = image.getHeight();
         var full = new java.awt.image.BufferedImage(width, height, java.awt.image.BufferedImage.TYPE_INT_RGB);
         full.setRGB(0, 0, width, height, image.getPixels(), 0, width);
@@ -647,7 +883,8 @@ public final class AiBridge {
             int w = 1024, h = Math.max(1, Math.round(height * 1024f / width));
             shown = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
             var g = shown.createGraphics();
-            g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.setRenderingHint(
+                    java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
             g.drawImage(full, 0, 0, w, h, null);
             g.dispose();
         }
@@ -659,7 +896,9 @@ public final class AiBridge {
         try (var out = new javax.imageio.stream.MemoryCacheImageOutputStream(bytes)) {
             writer.setOutput(out);
             writer.write(null, new javax.imageio.IIOImage(shown, null, null), params);
-        } finally { writer.dispose(); }
+        } finally {
+            writer.dispose();
+        }
         var reply = new JsonObject();
         reply.addProperty("ok", true);
         reply.addProperty("image", Base64.getEncoder().encodeToString(bytes.toByteArray()));
@@ -688,9 +927,16 @@ public final class AiBridge {
     private static JsonObject blocks(Point a, Point b) {
         var mc = Minecraft.getInstance();
         if (mc.level == null) throw new IllegalStateException("Not in a world");
-        int x0 = Math.min(a.x(), b.x()), x1 = Math.max(a.x(), b.x()), y0 = Math.min(a.y(), b.y()), y1 = Math.max(a.y(), b.y()), z0 = Math.min(a.z(), b.z()), z1 = Math.max(a.z(), b.z());
+        int x0 = Math.min(a.x(), b.x()),
+                x1 = Math.max(a.x(), b.x()),
+                y0 = Math.min(a.y(), b.y()),
+                y1 = Math.max(a.y(), b.y()),
+                z0 = Math.min(a.z(), b.z()),
+                z1 = Math.max(a.z(), b.z());
         long total = (long) (x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1);
-        if (total > READ_BLOCKS) throw new IllegalArgumentException("Region has " + total + " blocks; read at most " + READ_BLOCKS + " at a time");
+        if (total > READ_BLOCKS)
+            throw new IllegalArgumentException(
+                    "Region has " + total + " blocks; read at most " + READ_BLOCKS + " at a time");
         var index = new LinkedHashMap<String, Integer>();
         var runs = new JsonArray();
         int last = -1, count = 0;
@@ -700,7 +946,10 @@ public final class AiBridge {
                 for (int x = x0; x <= x1; x++) {
                     String state = BlockStateParser.serialize(mc.level.getBlockState(at.set(x, y, z)));
                     int id = index.computeIfAbsent(state, k -> index.size());
-                    if (id == last) { count++; continue; }
+                    if (id == last) {
+                        count++;
+                        continue;
+                    }
                     if (count > 0) runs.add(array(last, count));
                     last = id;
                     count = 1;
@@ -708,7 +957,8 @@ public final class AiBridge {
         if (count > 0) runs.add(array(last, count));
         var out = new JsonObject();
         out.addProperty("ok", true);
-        out.addProperty("source", "client: only chunks this game has loaded are read here, and anything else reads as air");
+        out.addProperty(
+                "source", "client: only chunks this game has loaded are read here, and anything else reads as air");
         out.add("min", array(x0, y0, z0));
         out.add("size", array(x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1));
         var names = new JsonArray();
@@ -720,13 +970,19 @@ public final class AiBridge {
     }
 
     static Point point(JsonObject args, String key) {
-        if (!args.has(key) || !args.get(key).isJsonArray() || args.getAsJsonArray(key).size() != 3) throw new IllegalArgumentException("\"" + key + "\" must be [x,y,z]");
+        if (!args.has(key)
+                || !args.get(key).isJsonArray()
+                || args.getAsJsonArray(key).size() != 3)
+            throw new IllegalArgumentException("\"" + key + "\" must be [x,y,z]");
         var list = args.getAsJsonArray(key);
         int[] v = new int[3];
         for (int i = 0; i < 3; i++) {
-            if (!list.get(i).isJsonPrimitive() || !list.get(i).getAsJsonPrimitive().isNumber()) throw new IllegalArgumentException("\"" + key + "\" must hold numbers");
+            if (!list.get(i).isJsonPrimitive()
+                    || !list.get(i).getAsJsonPrimitive().isNumber())
+                throw new IllegalArgumentException("\"" + key + "\" must hold numbers");
             double d = list.get(i).getAsDouble();
-            if (d != Math.rint(d) || Math.abs(d) > 30_000_000) throw new IllegalArgumentException("\"" + key + "\" must hold whole numbers");
+            if (d != Math.rint(d) || Math.abs(d) > 30_000_000)
+                throw new IllegalArgumentException("\"" + key + "\" must hold whole numbers");
             v[i] = (int) d;
         }
         return new Point(v[0], v[1], v[2]);

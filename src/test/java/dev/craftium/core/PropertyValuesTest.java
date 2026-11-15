@@ -1,21 +1,21 @@
 package dev.craftium.core;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 class PropertyValuesTest {
     private static PropertyValues values() {
         return new PropertyValues(List.of(
-            PropertySpec.number("scale", "Scale", 0.5, 4, 1),
-            PropertySpec.integer("count", "Count", 1, 8, 3),
-            PropertySpec.toggle("hollow", "Hollow", true),
-            PropertySpec.choice("axis", "Axis", List.of("X", "Y", "Z"), 2)));
+                PropertySpec.number("scale", "Scale", 0.5, 4, 1),
+                PropertySpec.integer("count", "Count", 1, 8, 3),
+                PropertySpec.toggle("hollow", "Hollow", true),
+                PropertySpec.choice("axis", "Axis", List.of("X", "Y", "Z"), 2)));
     }
 
-    @Test void everySettingStartsOnItsDeclaredValue() {
+    @Test
+    void everySettingStartsOnItsDeclaredValue() {
         var v = values();
         assertEquals(1, v.number("scale"));
         assertEquals(3, v.integer("count"));
@@ -24,7 +24,8 @@ class PropertyValuesTest {
         assertEquals("Z", v.choiceName("axis"));
     }
 
-    @Test void aNumberIsHeldToItsRangeAndAWholeNumberIsRounded() {
+    @Test
+    void aNumberIsHeldToItsRangeAndAWholeNumberIsRounded() {
         var v = values();
         v.set("scale", 99);
         assertEquals(4, v.number("scale"));
@@ -36,13 +37,15 @@ class PropertyValuesTest {
         assertEquals(8, v.integer("count"));
     }
 
-    @Test void aValueThatIsNotANumberChangesNothing() {
+    @Test
+    void aValueThatIsNotANumberChangesNothing() {
         var v = values();
         v.set("scale", Double.NaN);
         assertEquals(1, v.number("scale"));
     }
 
-    @Test void aChoiceWrapsRoundInBothDirections() {
+    @Test
+    void aChoiceWrapsRoundInBothDirections() {
         var v = values();
         v.step("axis", 1);
         assertEquals("X", v.choiceName("axis"));
@@ -52,7 +55,8 @@ class PropertyValuesTest {
         assertEquals(1, v.choice("axis"));
     }
 
-    @Test void resetPutsASettingBackAndASnapshotIsACopy() {
+    @Test
+    void resetPutsASettingBackAndASnapshotIsACopy() {
         var v = values();
         v.set("scale", 3);
         var snapshot = v.snapshot();
@@ -62,12 +66,17 @@ class PropertyValuesTest {
         assertThrows(UnsupportedOperationException.class, () -> snapshot.put("scale", 1.0));
     }
 
-    @Test void aSettingThatIsNotDeclaredIsAnError() {
+    @Test
+    void aSettingThatIsNotDeclaredIsAnError() {
         assertThrows(IllegalArgumentException.class, () -> values().number("missing"));
         assertThrows(IllegalArgumentException.class, () -> values().set("missing", 1));
     }
 
-    @Test void twoSettingsWithTheSameIdAreRefused() {
-        assertThrows(IllegalArgumentException.class, () -> new PropertyValues(List.of(PropertySpec.toggle("a", "A", false), PropertySpec.toggle("a", "B", true))));
+    @Test
+    void twoSettingsWithTheSameIdAreRefused() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PropertyValues(
+                        List.of(PropertySpec.toggle("a", "A", false), PropertySpec.toggle("a", "B", true))));
     }
 }

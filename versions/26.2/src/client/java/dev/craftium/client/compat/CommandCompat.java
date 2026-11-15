@@ -8,8 +8,14 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 
 /** Builders for client commands; Fabric API renamed the holder class between releases. 26.2 implementation. */
 public final class CommandCompat {
-    private CommandCompat(){}
+    private CommandCompat() {}
 
-    public static LiteralArgumentBuilder<FabricClientCommandSource> literal(String name){return ClientCommands.literal(name);}
-    public static <T> RequiredArgumentBuilder<FabricClientCommandSource,T> argument(String name,ArgumentType<T> type){return ClientCommands.argument(name,type);}
+    public static LiteralArgumentBuilder<FabricClientCommandSource> literal(String name) {
+        return ClientCommands.literal(name);
+    }
+
+    public static <T> RequiredArgumentBuilder<FabricClientCommandSource, T> argument(
+            String name, ArgumentType<T> type) {
+        return ClientCommands.argument(name, type);
+    }
 }

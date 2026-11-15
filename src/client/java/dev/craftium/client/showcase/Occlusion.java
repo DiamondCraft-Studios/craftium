@@ -30,10 +30,15 @@ final class Occlusion {
         info.addProperty("samples", SAMPLES);
         info.addProperty("blocked", first);
         if (first < HIDDEN_AT) return new Resolved(entry, info);
-        // Only a shot worked out from a bearing can be raised; a camera placed outright is left where the agent put it and reported.
+        // Only a shot worked out from a bearing can be raised; a camera placed outright is left where the agent put it
+        // and reported.
         double elevation = entry.orbit() == null ? 0 : Math.min(MAX_ELEVATION, entry.orbit()[4] + RAISE);
-        var higher = entry.orbit() == null || elevation <= entry.orbit()[4] ? null : ShowcasePlan.raised(entry, elevation);
-        if (higher == null) { info.addProperty("hidden", true); return new Resolved(entry, info); }
+        var higher =
+                entry.orbit() == null || elevation <= entry.orbit()[4] ? null : ShowcasePlan.raised(entry, elevation);
+        if (higher == null) {
+            info.addProperty("hidden", true);
+            return new Resolved(entry, info);
+        }
         int second = blocked(mc, higher);
         info.addProperty("retriedFromElevation", Math.round(entry.orbit()[4] * 10) / 10.0);
         info.addProperty("blockedBeforeRetry", first);
@@ -58,12 +63,22 @@ final class Occlusion {
         int count = 0;
         for (int i = -1; i < 8; i++) {
             Vec3 to = i < 0
-                ? new Vec3((min.x() + max.x() + 1) / 2.0, (min.y() + max.y() + 1) / 2.0, (min.z() + max.z() + 1) / 2.0)
-                : new Vec3((i & 1) == 0 ? min.x() + inset : max.x() + 1 - inset, (i & 2) == 0 ? min.y() + inset : max.y() + 1 - inset, (i & 4) == 0 ? min.z() + inset : max.z() + 1 - inset);
-            var hit = mc.level.clip(new ClipContext(from, to, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, mc.player));
+                    ? new Vec3(
+                            (min.x() + max.x() + 1) / 2.0, (min.y() + max.y() + 1) / 2.0, (min.z() + max.z() + 1) / 2.0)
+                    : new Vec3(
+                            (i & 1) == 0 ? min.x() + inset : max.x() + 1 - inset,
+                            (i & 2) == 0 ? min.y() + inset : max.y() + 1 - inset,
+                            (i & 4) == 0 ? min.z() + inset : max.z() + 1 - inset);
+            var hit = mc.level.clip(
+                    new ClipContext(from, to, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, mc.player));
             if (hit.getType() == HitResult.Type.MISS) continue;
             var at = hit.getBlockPos();
-            boolean inRoom = at.getX() >= min.x() - 1 && at.getX() <= max.x() + 1 && at.getY() >= min.y() - 1 && at.getY() <= max.y() + 1 && at.getZ() >= min.z() - 1 && at.getZ() <= max.z() + 1;
+            boolean inRoom = at.getX() >= min.x() - 1
+                    && at.getX() <= max.x() + 1
+                    && at.getY() >= min.y() - 1
+                    && at.getY() <= max.y() + 1
+                    && at.getZ() >= min.z() - 1
+                    && at.getZ() <= max.z() + 1;
             if (!inRoom) count++;
         }
         return count;

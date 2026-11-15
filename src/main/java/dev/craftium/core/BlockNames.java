@@ -27,7 +27,10 @@ public final class BlockNames {
             String path = path(candidate);
             String[] theirs = path.split("_");
             int missing = 0, matched = 0;
-            for (String word : words) { if (has(theirs, word)) matched++; else missing++; }
+            for (String word : words) {
+                if (has(theirs, word)) matched++;
+                else missing++;
+            }
             int extra = 0;
             for (String word : theirs) if (!has(words, word)) extra++;
             int distance = distance(target, path);
@@ -36,7 +39,10 @@ public final class BlockNames {
         }
         scored.sort(Comparator.comparingDouble(Scored::score).thenComparing(Scored::id));
         var out = new ArrayList<String>();
-        for (var s : scored) { if (out.size() >= limit) break; out.add(s.id()); }
+        for (var s : scored) {
+            if (out.size() >= limit) break;
+            out.add(s.id());
+        }
         return out;
     }
 
@@ -52,11 +58,14 @@ public final class BlockNames {
 
     private static boolean same(String a, String b) {
         if (a.equals(b) || stem(a).equals(stem(b))) return true;
-        // "cobble" is the start of "cobblestone"; short words ("oak", "red") must match whole, or they would match half the game
+        // "cobble" is the start of "cobblestone"; short words ("oak", "red") must match whole, or they would match half
+        // the game
         return a.length() >= 4 && b.startsWith(a) || b.length() >= 4 && a.startsWith(b);
     }
 
-    private static String stem(String word) { return word.length() > 3 && word.endsWith("s") ? word.substring(0, word.length() - 1) : word; }
+    private static String stem(String word) {
+        return word.length() > 3 && word.endsWith("s") ? word.substring(0, word.length() - 1) : word;
+    }
 
     /** Levenshtein distance. */
     static int distance(String a, String b) {
@@ -65,8 +74,12 @@ public final class BlockNames {
         for (int i = 1; i <= a.length(); i++) {
             current[0] = i;
             for (int j = 1; j <= b.length(); j++)
-                current[j] = Math.min(Math.min(current[j - 1] + 1, previous[j] + 1), previous[j - 1] + (a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1));
-            var swap = previous; previous = current; current = swap;
+                current[j] = Math.min(
+                        Math.min(current[j - 1] + 1, previous[j] + 1),
+                        previous[j - 1] + (a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1));
+            var swap = previous;
+            previous = current;
+            current = swap;
         }
         return previous[b.length()];
     }

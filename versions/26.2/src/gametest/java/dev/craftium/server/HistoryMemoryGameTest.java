@@ -3,13 +3,11 @@ package dev.craftium.server;
 import dev.craftium.client.ClientState;
 import dev.craftium.client.CraftiumClient;
 import dev.craftium.core.Point;
+import java.util.ArrayList;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Measures, and checks nothing: the live heap while a paste of two million blocks is planned and applied, and then undone.
@@ -31,10 +29,16 @@ public final class HistoryMemoryGameTest {
         w.getServer().runOnServer(server -> {
             var level = server.overworld();
             var pos = new BlockPos.MutableBlockPos();
-            for (int x = 0; x < W; x++) for (int y = 0; y < H; y++) for (int z = 0; z < D; z++) {
-                int k = Math.floorMod(x * 3 + y * 5 + z * 7, 3);
-                level.setBlock(pos.set(SX + x, Y + y, SZ + z), (k == 0 ? Blocks.STONE : k == 1 ? Blocks.GLASS : Blocks.COBBLESTONE).defaultBlockState(), 2 | 16);
-            }
+            for (int x = 0; x < W; x++)
+                for (int y = 0; y < H; y++)
+                    for (int z = 0; z < D; z++) {
+                        int k = Math.floorMod(x * 3 + y * 5 + z * 7, 3);
+                        level.setBlock(
+                                pos.set(SX + x, Y + y, SZ + z),
+                                (k == 0 ? Blocks.STONE : k == 1 ? Blocks.GLASS : Blocks.COBBLESTONE)
+                                        .defaultBlockState(),
+                                2 | 16);
+                    }
         });
         c.runOnClient(mc -> {
             ClientState.options.confirmEdits = false;
@@ -43,13 +47,18 @@ public final class HistoryMemoryGameTest {
             ClientState.options.position2 = new Point(SX + W - 1, Y + H - 1, SZ + D - 1);
         });
         var rt = Runtime.getRuntime();
-        System.out.println("CRAFTIUM_MEM max heap " + rt.maxMemory() / (1 << 20) + " MiB, " + (long) W * H * D + " blocks");
+        System.out.println(
+                "CRAFTIUM_MEM max heap " + rt.maxMemory() / (1 << 20) + " MiB, " + (long) W * H * D + " blocks");
         send(c, w, "select_box", null);
         send(c, w, "copy", null);
         System.out.println("CRAFTIUM_MEM after copy (selection and clipboard held): " + live() + " MiB");
         measure(c, w, "paste", "paste_at", new Point(TX, Y, TZ));
-        var edit = w.getServer().computeOnServer(server -> EditorServer.session(server.getPlayerList().getPlayers().get(0)).undo.peekFirst());
-        System.out.println("CRAFTIUM_MEM history entry: " + edit.changes().size() + " changes, " + (edit.changes() instanceof PackedChanges) + " packed, " + edit.estimatedBytes() / (1 << 20) + " MiB");
+        var edit = w.getServer().computeOnServer(server -> EditorServer.session(
+                        server.getPlayerList().getPlayers().get(0))
+                .undo
+                .peekFirst());
+        System.out.println("CRAFTIUM_MEM history entry: " + edit.changes().size() + " changes, "
+                + (edit.changes() instanceof PackedChanges) + " packed, " + edit.estimatedBytes() / (1 << 20) + " MiB");
         measure(c, w, "undo", "undo", null);
         measure(c, w, "redo", "redo", null);
         w.getServer().runCommand("forceload remove " + SX + " " + SZ + " " + (TX + W) + " " + (SZ + D));
@@ -62,15 +71,20 @@ public final class HistoryMemoryGameTest {
         return (rt.totalMemory() - rt.freeMemory()) >> 20;
     }
 
-    private static void measure(ClientGameTestContext c, TestSingleplayerContext w, String label, String action, Point target) {
+    private static void measure(
+            ClientGameTestContext c, TestSingleplayerContext w, String label, String action, Point target) {
         long base = live();
-        var peak = new long[]{base};
+        var peak = new long[] {base};
         var samples = new ArrayList<String>();
-        var running = new boolean[]{true};
+        var running = new boolean[] {true};
         long start = System.nanoTime();
         var sampler = new Thread(() -> {
             while (running[0]) {
-                try { Thread.sleep(150); } catch (InterruptedException e) { return; }
+                try {
+                    Thread.sleep(150);
+                } catch (InterruptedException e) {
+                    return;
+                }
                 long now = live();
                 peak[0] = Math.max(peak[0], now);
                 samples.add((System.nanoTime() - start) / 1_000_000 + "ms:" + now);
@@ -80,19 +94,29 @@ public final class HistoryMemoryGameTest {
         sampler.start();
         send(c, w, action, target);
         running[0] = false;
-        try { sampler.join(); } catch (InterruptedException e) { throw new AssertionError(e); }
+        try {
+            sampler.join();
+        } catch (InterruptedException e) {
+            throw new AssertionError(e);
+        }
         long settled = live();
-        System.out.println("CRAFTIUM_MEM " + label + ": before " + base + " MiB, peak " + peak[0] + " MiB, after " + settled + " MiB, " + (System.nanoTime() - start) / 1_000_000 + " ms, samples " + samples);
+        System.out.println("CRAFTIUM_MEM " + label + ": before " + base + " MiB, peak " + peak[0] + " MiB, after "
+                + settled + " MiB, " + (System.nanoTime() - start) / 1_000_000 + " ms, samples " + samples);
     }
 
     private static void send(ClientGameTestContext c, TestSingleplayerContext w, String action, Point target) {
-        try { Thread.sleep(120); } catch (InterruptedException e) { throw new AssertionError(e); }
+        try {
+            Thread.sleep(120);
+        } catch (InterruptedException e) {
+            throw new AssertionError(e);
+        }
         c.runOnClient(mc -> CraftiumClient.send(action, target, new Point(0, 1, 0)));
         w.getConnection().waitForServerboundPackets();
         c.waitTicks(5);
         w.getConnection().waitForClientboundPackets();
         c.waitFor(mc -> !ClientState.status.busy(), 6000);
         w.getConnection().waitForClientboundPackets();
-        if (c.computeOnClient(mc -> ClientState.status.error())) throw new AssertionError(action + " failed: " + c.computeOnClient(mc -> ClientState.status.message()));
+        if (c.computeOnClient(mc -> ClientState.status.error()))
+            throw new AssertionError(action + " failed: " + c.computeOnClient(mc -> ClientState.status.message()));
     }
 }

@@ -2,7 +2,7 @@ package dev.craftium.server;
 
 import dev.craftium.core.*;
 import dev.craftium.vendor.FastNoiseLite;
-import net.minecraft.commands.arguments.blocks.BlockStateParser;
+import java.util.*;
 import net.minecraft.core.registries.*;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
@@ -10,81 +10,278 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import org.luaj.vm2.*;
 import org.luaj.vm2.lib.*;
-import java.util.*;
 
 final class LuaFunctions {
-    private record Colour(BlockState state,int rgb,int flags,double[] lab){}
+    private record Colour(BlockState state, int rgb, int flags, double[] lab) {}
+
     private final EditPlanner plan;
-    private final Map<String,BlockState> states=new HashMap<>();
-    private final Map<String,Integer> rgb=new HashMap<>();
-    private final Map<Long,FastNoiseLite> noises=new HashMap<>();
-    private final Map<Long,Integer> matches=new HashMap<>();
-    private int randomSeed=java.util.concurrent.ThreadLocalRandom.current().nextInt();
+    private final Map<String, BlockState> states = new HashMap<>();
+    private final Map<String, Integer> rgb = new HashMap<>();
+    private final Map<Long, FastNoiseLite> noises = new HashMap<>();
+    private final Map<Long, Integer> matches = new HashMap<>();
+    private int randomSeed = java.util.concurrent.ThreadLocalRandom.current().nextInt();
     /** Where setBlock may place; a block outside is counted in {@link #outside} and dropped. Everywhere unless an AI script sets its box. */
-    private java.util.function.Predicate<Point> inside=p->true;
+    private java.util.function.Predicate<Point> inside = p -> true;
     /** Whether getBlock reads what this plan has placed so far before the world: an AI script sees the shapes listed before it. */
     private boolean readPlanned;
-    private int limit=Integer.MAX_VALUE;
+
+    private int limit = Integer.MAX_VALUE;
     /** Positions an AI script has set, as {@link net.minecraft.core.BlockPos#asLong}: the cap counts different blocks, so setting one twice is one. */
-    private final java.util.Set<Long> set=new java.util.HashSet<>();
+    private final java.util.Set<Long> set = new java.util.HashSet<>();
+
     int outside;
     /** The highest block an AI script may have planned in each column (key: x and z), for getHighestBlockYAt; null for a brush. */
-    private java.util.Map<Long,Integer> plannedTop;
+    private java.util.Map<Long, Integer> plannedTop;
     /** How many different blocks the script has set. */
-    int placed(){return set.size();}
+    int placed() {
+        return set.size();
+    }
+
     private List<Colour> colours;
-    private Point position=new Point(0,0,0);
-    LuaFunctions(Globals globals,EditPlanner plan){
-        this.plan=plan;var blocks=new LuaTable();var meta=new LuaTable();meta.set("__index",new TwoArgFunction(){public LuaValue call(LuaValue table,LuaValue key){String name=key.checkjstring();LuaValue value=id(parse(name.contains(":")?name:"minecraft:"+name));table.rawset(key,value);return value;}});blocks.setmetatable(meta);globals.set("blocks",blocks);
-        bind(globals,"getBlock",args->id(read(at(args)).getBlock().defaultBlockState()));
-        bind(globals,"getBlockState",args->id(read(at(args))));
-        bind(globals,"setBlock",args->{Point p=point(args);var block=state(args.arg(4));if(!inside.test(p)){outside++;return LuaValue.NIL;}plan.validate(p);if(set.add(net.minecraft.core.BlockPos.asLong(p.x(),p.y(),p.z()))&&set.size()>limit)throw new LuaError("sets more than "+limit+" different blocks");plan.put(p,block);if(plannedTop!=null&&!block.isAir())plannedTop.merge(column(p.x(),p.z()),p.y(),Math::max);return LuaValue.NIL;});
-        bind(globals,"isSolid",args->LuaValue.valueOf(!state(args.arg1()).getCollisionShape(plan.level,EditPlanner.pos(position)).isEmpty()));
-        bind(globals,"getHighestBlockYAt",args->{int x=args.arg(1).checkint(),z=args.arg(2).checkint();plan.validate(new Point(x,plan.level.getMinY(),z));int ground=plan.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE,x,z)-1;return LuaValue.valueOf(plannedTop==null?ground:highest(x,z,ground));});
-        bind(globals,"withBlockProperty",args->{BlockState current=state(args.arg1());for(String property:args.arg(2).checkjstring().split(",")){String[] pair=property.trim().split("=",2);if(pair.length!=2)throw new LuaError("Use property=value");Property<?> definition=current.getBlock().getStateDefinition().getProperty(pair[0]);if(definition==null)throw new LuaError("Unknown block property "+pair[0]);current=with(current,definition,pair[1]);}return id(current);});
-        bind(globals,"getBlockProperty",args->{var current=state(args.arg1());var property=current.getBlock().getStateDefinition().getProperty(args.arg(2).checkjstring());return property==null?LuaValue.NIL:LuaValue.valueOf(property(current,property));});
-        bind(globals,"isBlockTagged",args->{String tag=args.arg(2).checkjstring().replaceFirst("^#","");return LuaValue.valueOf(state(args.arg1()).is(TagKey.create(Registries.BLOCK,dev.craftium.compat.Compat.parse(tag))));});
-        bind(globals,"getBlockRGB",args->{var value=state(args.arg1());if(value.isAir())return LuaValue.NIL;prepareColours();Integer color=rgb.get(BuiltInRegistries.BLOCK.getKey(value.getBlock()).toString());return color==null?LuaValue.NIL:LuaValue.valueOf(color);});
-        bind(globals,"findClosestBlockToRGB",args->closest(args.arg1().checkint()&0xffffff,args.arg(2).optint(0)&127,args.arg(3).optint(1)));
-        bind(globals,"getSimplexNoise",args->noise(args,false));bind(globals,"getVoroniEdgeNoise",args->noise(args,true));bind(globals,"getVoronoiEdgeNoise",args->noise(args,true));
+    private Point position = new Point(0, 0, 0);
+
+    LuaFunctions(Globals globals, EditPlanner plan) {
+        this.plan = plan;
+        var blocks = new LuaTable();
+        var meta = new LuaTable();
+        meta.set("__index", new TwoArgFunction() {
+            public LuaValue call(LuaValue table, LuaValue key) {
+                String name = key.checkjstring();
+                LuaValue value = id(parse(name.contains(":") ? name : "minecraft:" + name));
+                table.rawset(key, value);
+                return value;
+            }
+        });
+        blocks.setmetatable(meta);
+        globals.set("blocks", blocks);
+        bind(globals, "getBlock", args -> id(read(at(args)).getBlock().defaultBlockState()));
+        bind(globals, "getBlockState", args -> id(read(at(args))));
+        bind(globals, "setBlock", args -> {
+            Point p = point(args);
+            var block = state(args.arg(4));
+            if (!inside.test(p)) {
+                outside++;
+                return LuaValue.NIL;
+            }
+            plan.validate(p);
+            if (set.add(net.minecraft.core.BlockPos.asLong(p.x(), p.y(), p.z())) && set.size() > limit)
+                throw new LuaError("sets more than " + limit + " different blocks");
+            plan.put(p, block);
+            if (plannedTop != null && !block.isAir()) plannedTop.merge(column(p.x(), p.z()), p.y(), Math::max);
+            return LuaValue.NIL;
+        });
+        bind(
+                globals,
+                "isSolid",
+                args -> LuaValue.valueOf(!state(args.arg1())
+                        .getCollisionShape(plan.level, EditPlanner.pos(position))
+                        .isEmpty()));
+        bind(globals, "getHighestBlockYAt", args -> {
+            int x = args.arg(1).checkint(), z = args.arg(2).checkint();
+            plan.validate(new Point(x, plan.level.getMinY(), z));
+            int ground =
+                    plan.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, x, z) - 1;
+            return LuaValue.valueOf(plannedTop == null ? ground : highest(x, z, ground));
+        });
+        bind(globals, "withBlockProperty", args -> {
+            BlockState current = state(args.arg1());
+            for (String property : args.arg(2).checkjstring().split(",")) {
+                String[] pair = property.trim().split("=", 2);
+                if (pair.length != 2) throw new LuaError("Use property=value");
+                Property<?> definition = current.getBlock().getStateDefinition().getProperty(pair[0]);
+                if (definition == null) throw new LuaError("Unknown block property " + pair[0]);
+                current = with(current, definition, pair[1]);
+            }
+            return id(current);
+        });
+        bind(globals, "getBlockProperty", args -> {
+            var current = state(args.arg1());
+            var property = current.getBlock()
+                    .getStateDefinition()
+                    .getProperty(args.arg(2).checkjstring());
+            return property == null ? LuaValue.NIL : LuaValue.valueOf(property(current, property));
+        });
+        bind(globals, "isBlockTagged", args -> {
+            String tag = args.arg(2).checkjstring().replaceFirst("^#", "");
+            return LuaValue.valueOf(
+                    state(args.arg1()).is(TagKey.create(Registries.BLOCK, dev.craftium.compat.Compat.parse(tag))));
+        });
+        bind(globals, "getBlockRGB", args -> {
+            var value = state(args.arg1());
+            if (value.isAir()) return LuaValue.NIL;
+            prepareColours();
+            Integer color =
+                    rgb.get(BuiltInRegistries.BLOCK.getKey(value.getBlock()).toString());
+            return color == null ? LuaValue.NIL : LuaValue.valueOf(color);
+        });
+        bind(
+                globals,
+                "findClosestBlockToRGB",
+                args -> closest(
+                        args.arg1().checkint() & 0xffffff,
+                        args.arg(2).optint(0) & 127,
+                        args.arg(3).optint(1)));
+        bind(globals, "getSimplexNoise", args -> noise(args, false));
+        bind(globals, "getVoroniEdgeNoise", args -> noise(args, true));
+        bind(globals, "getVoronoiEdgeNoise", args -> noise(args, true));
     }
-    private interface Function {LuaValue apply(Varargs args);}
-    private static void bind(Globals globals,String name,Function function){globals.set(name,new VarArgFunction(){public Varargs invoke(Varargs args){return function.apply(args);}});}
-    void position(Point at){position=at;}
+
+    private interface Function {
+        LuaValue apply(Varargs args);
+    }
+
+    private static void bind(Globals globals, String name, Function function) {
+        globals.set(name, new VarArgFunction() {
+            public Varargs invoke(Varargs args) {
+                return function.apply(args);
+            }
+        });
+    }
+
+    void position(Point at) {
+        position = at;
+    }
     /** Limits this script to a box, with a fixed noise seed and a cap on blocks set, and lets it read what the plan has placed: an AI script. */
-    void confine(java.util.function.Predicate<Point> box,int seed,int maxBlocks){
-        inside=box;randomSeed=seed;limit=maxBlocks;readPlanned=true;
-        plannedTop=new java.util.HashMap<>();
-        for(var change:plan.changes.values())if(!change.after().state().isAir())plannedTop.merge(column(change.pos().x(),change.pos().z()),change.pos().y(),Math::max);
+    void confine(java.util.function.Predicate<Point> box, int seed, int maxBlocks) {
+        inside = box;
+        randomSeed = seed;
+        limit = maxBlocks;
+        readPlanned = true;
+        plannedTop = new java.util.HashMap<>();
+        for (var change : plan.changes.values())
+            if (!change.after().state().isAir())
+                plannedTop.merge(
+                        column(change.pos().x(), change.pos().z()), change.pos().y(), Math::max);
     }
-    private static long column(int x,int z){return ((long)x<<32)|(z&0xffffffffL);}
+
+    private static long column(int x, int z) {
+        return ((long) x << 32) | (z & 0xffffffffL);
+    }
     /** The highest block in a column of an AI script's world: what the build has planned there if that stands above the ground, else the ground. Planned air (a carve) is passed over. */
-    private int highest(int x,int z,int ground){
-        Integer top=plannedTop.get(column(x,z));if(top==null)return ground;
-        for(int y=top;y>ground;y--)if(!read(new Point(x,y,z)).isAir())return y;
+    private int highest(int x, int z, int ground) {
+        Integer top = plannedTop.get(column(x, z));
+        if (top == null) return ground;
+        for (int y = top; y > ground; y--) if (!read(new Point(x, y, z)).isAir()) return y;
         return ground;
     }
-    private BlockState read(Point p){if(readPlanned){var planned=plan.changes.get(p);if(planned!=null)return planned.after().state();}return plan.state(p);}
-    private static Point point(Varargs args){return new Point(args.arg(1).checkint(),args.arg(2).checkint(),args.arg(3).checkint());}
-    private Point at(Varargs args){Point at=point(args);plan.validate(at);return at;}
-    private BlockState parse(String value){return states.computeIfAbsent(value,plan::parse);}
-    BlockState state(LuaValue value){if(value.isnumber()){int id=value.checkint();var state=Block.stateById(id);if(id<0||Block.getId(state)!=id)throw new LuaError("Invalid block state ID");return state;}return parse(value.checkjstring());}
-    private static LuaValue id(BlockState state){return LuaValue.valueOf(Block.getId(state));}
-    private static <T extends Comparable<T>> BlockState with(BlockState state,Property<T> property,String value){return state.setValue(property,property.getValue(value).orElseThrow(()->new LuaError("Invalid property value "+value)));}
-    private static <T extends Comparable<T>> String property(BlockState state,Property<T> property){return property.getName(state.getValue(property));}
-    private LuaValue noise(Varargs args,boolean voronoi){
-        double x=args.arg(1).checkdouble(),y=args.arg(2).checkdouble(),z=args.arg(3).checkdouble();if(!Double.isFinite(x)||!Double.isFinite(y)||!Double.isFinite(z)||Math.max(Math.abs(x),Math.max(Math.abs(y),Math.abs(z)))>10_000_000)throw new LuaError("Noise coordinates must be finite and within ±10,000,000");
-        int seed=args.arg(4).isnil()?randomSeed:args.arg(4).isnumber()?args.arg(4).toint():0;long key=((long)seed<<1)|(voronoi?1:0);
-        FastNoiseLite field=noises.computeIfAbsent(key,ignored->{if(noises.size()>=64)throw new LuaError("Maximum 64 noise seeds per operation");var noise=new FastNoiseLite(seed);noise.SetFrequency(1);noise.SetNoiseType(voronoi?FastNoiseLite.NoiseType.Cellular:FastNoiseLite.NoiseType.OpenSimplex2);noise.SetCellularReturnType(FastNoiseLite.CellularReturnType.Distance2Sub);return noise;});
-        return LuaValue.valueOf(Math.clamp(field.GetNoise((float)x,(float)y,(float)z)*.5+.5,0,1));
+
+    private BlockState read(Point p) {
+        if (readPlanned) {
+            var planned = plan.changes.get(p);
+            if (planned != null) return planned.after().state();
+        }
+        return plan.state(p);
     }
-    private void prepareColours(){
-        if(colours!=null)return;var result=new ArrayList<Colour>();
-        if(!plan.o.scriptColours.isEmpty())for(var entry:plan.o.scriptColours){var state=parse(entry.block());int color=entry.rgb()&0xffffff;result.add(new Colour(state,color,entry.flags()&127,ColourMath.lab(color)));rgb.put(BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString(),color);}
-        else for(var block:BuiltInRegistries.BLOCK){var state=block.defaultBlockState();if(state.isAir()||block.asItem()==net.minecraft.world.item.Items.AIR)continue;int color=state.getMapColor(plan.level,EditPlanner.pos(position)).col;String name=BuiltInRegistries.BLOCK.getKey(block).toString();int flags=(!state.getCollisionShape(plan.level,EditPlanner.pos(position)).isEmpty()?1:0)|(state.canOcclude()?2:0)|(state.isCollisionShapeFullBlock(plan.level,EditPlanner.pos(position))?4:0)|(!name.contains("_ore")&&!name.contains("ancient_debris")?16:0)|(!name.contains("glazed_terracotta")?32:0)|(!state.hasBlockEntity()?64:0);result.add(new Colour(state,color,flags,ColourMath.lab(color)));rgb.put(name,color);}
-        colours=List.copyOf(result);
+
+    private static Point point(Varargs args) {
+        return new Point(
+                args.arg(1).checkint(), args.arg(2).checkint(), args.arg(3).checkint());
     }
-    private LuaValue closest(int color,int flags,int index){
-        index=Math.clamp(index,1,256);long key=((long)color<<16)|((long)flags<<9)|index;Integer cached=matches.get(key);if(cached!=null)return LuaValue.valueOf(cached);if(matches.size()>=2048)throw new LuaError("Colour search budget exceeded");prepareColours();double[] lab=ColourMath.lab(color);var candidates=colours.stream().filter(c->(c.flags&flags)==flags).sorted(Comparator.comparingDouble(c->ColourMath.distance(lab,c.lab))).limit(index).toList();if(candidates.isEmpty())return LuaValue.NIL;int chosen=Block.getId(candidates.getLast().state);matches.put(key,chosen);return LuaValue.valueOf(chosen);
+
+    private Point at(Varargs args) {
+        Point at = point(args);
+        plan.validate(at);
+        return at;
+    }
+
+    private BlockState parse(String value) {
+        return states.computeIfAbsent(value, plan::parse);
+    }
+
+    BlockState state(LuaValue value) {
+        if (value.isnumber()) {
+            int id = value.checkint();
+            var state = Block.stateById(id);
+            if (id < 0 || Block.getId(state) != id) throw new LuaError("Invalid block state ID");
+            return state;
+        }
+        return parse(value.checkjstring());
+    }
+
+    private static LuaValue id(BlockState state) {
+        return LuaValue.valueOf(Block.getId(state));
+    }
+
+    private static <T extends Comparable<T>> BlockState with(BlockState state, Property<T> property, String value) {
+        return state.setValue(
+                property, property.getValue(value).orElseThrow(() -> new LuaError("Invalid property value " + value)));
+    }
+
+    private static <T extends Comparable<T>> String property(BlockState state, Property<T> property) {
+        return property.getName(state.getValue(property));
+    }
+
+    private LuaValue noise(Varargs args, boolean voronoi) {
+        double x = args.arg(1).checkdouble(),
+                y = args.arg(2).checkdouble(),
+                z = args.arg(3).checkdouble();
+        if (!Double.isFinite(x)
+                || !Double.isFinite(y)
+                || !Double.isFinite(z)
+                || Math.max(Math.abs(x), Math.max(Math.abs(y), Math.abs(z))) > 10_000_000)
+            throw new LuaError("Noise coordinates must be finite and within ±10,000,000");
+        int seed = args.arg(4).isnil()
+                ? randomSeed
+                : args.arg(4).isnumber() ? args.arg(4).toint() : 0;
+        long key = ((long) seed << 1) | (voronoi ? 1 : 0);
+        FastNoiseLite field = noises.computeIfAbsent(key, ignored -> {
+            if (noises.size() >= 64) throw new LuaError("Maximum 64 noise seeds per operation");
+            var noise = new FastNoiseLite(seed);
+            noise.SetFrequency(1);
+            noise.SetNoiseType(voronoi ? FastNoiseLite.NoiseType.Cellular : FastNoiseLite.NoiseType.OpenSimplex2);
+            noise.SetCellularReturnType(FastNoiseLite.CellularReturnType.Distance2Sub);
+            return noise;
+        });
+        return LuaValue.valueOf(Math.clamp(field.GetNoise((float) x, (float) y, (float) z) * .5 + .5, 0, 1));
+    }
+
+    private void prepareColours() {
+        if (colours != null) return;
+        var result = new ArrayList<Colour>();
+        if (!plan.o.scriptColours.isEmpty())
+            for (var entry : plan.o.scriptColours) {
+                var state = parse(entry.block());
+                int color = entry.rgb() & 0xffffff;
+                result.add(new Colour(state, color, entry.flags() & 127, ColourMath.lab(color)));
+                rgb.put(BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString(), color);
+            }
+        else
+            for (var block : BuiltInRegistries.BLOCK) {
+                var state = block.defaultBlockState();
+                if (state.isAir() || block.asItem() == net.minecraft.world.item.Items.AIR) continue;
+                int color = state.getMapColor(plan.level, EditPlanner.pos(position)).col;
+                String name = BuiltInRegistries.BLOCK.getKey(block).toString();
+                int flags = (!state.getCollisionShape(plan.level, EditPlanner.pos(position))
+                                        .isEmpty()
+                                ? 1
+                                : 0)
+                        | (state.canOcclude() ? 2 : 0)
+                        | (state.isCollisionShapeFullBlock(plan.level, EditPlanner.pos(position)) ? 4 : 0)
+                        | (!name.contains("_ore") && !name.contains("ancient_debris") ? 16 : 0)
+                        | (!name.contains("glazed_terracotta") ? 32 : 0)
+                        | (!state.hasBlockEntity() ? 64 : 0);
+                result.add(new Colour(state, color, flags, ColourMath.lab(color)));
+                rgb.put(name, color);
+            }
+        colours = List.copyOf(result);
+    }
+
+    private LuaValue closest(int color, int flags, int index) {
+        index = Math.clamp(index, 1, 256);
+        long key = ((long) color << 16) | ((long) flags << 9) | index;
+        Integer cached = matches.get(key);
+        if (cached != null) return LuaValue.valueOf(cached);
+        if (matches.size() >= 2048) throw new LuaError("Colour search budget exceeded");
+        prepareColours();
+        double[] lab = ColourMath.lab(color);
+        var candidates = colours.stream()
+                .filter(c -> (c.flags & flags) == flags)
+                .sorted(Comparator.comparingDouble(c -> ColourMath.distance(lab, c.lab)))
+                .limit(index)
+                .toList();
+        if (candidates.isEmpty()) return LuaValue.NIL;
+        int chosen = Block.getId(candidates.getLast().state);
+        matches.put(key, chosen);
+        return LuaValue.valueOf(chosen);
     }
 }

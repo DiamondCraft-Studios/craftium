@@ -1,12 +1,6 @@
 package dev.craftium.server;
 
 import dev.craftium.runtime.ServerPlatform;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.core.BlockPos;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.storage.LevelResource;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +8,12 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.UnaryOperator;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.storage.LevelResource;
 
 /**
  * What a player's jigsaw planning remembers and does, for the commands, the Studio panel and the file watcher alike: the last 20 runs, the pinned seeds,
@@ -24,10 +24,20 @@ final class JigsawRuns {
 
     /** What a run was made from: enough to make it again. */
     record Run(String pool, String start, int depth, int distance, long seed, BlockPos origin) {
-        Run withSeed(long seed) { return new Run(pool, start, depth, distance, seed, origin); }
-        Run withDepth(int depth) { return new Run(pool, start, depth, distance, seed, origin); }
+        Run withSeed(long seed) {
+            return new Run(pool, start, depth, distance, seed, origin);
+        }
+
+        Run withDepth(int depth) {
+            return new Run(pool, start, depth, distance, seed, origin);
+        }
     }
-    enum View { BOTH, LAYOUT, BLOCKS }
+
+    enum View {
+        BOTH,
+        LAYOUT,
+        BLOCKS
+    }
 
     static final int DEPTH = 5, DISTANCE = 80, HISTORY = 20;
     private static final int POLL_TICKS = 10;
@@ -40,12 +50,21 @@ final class JigsawRuns {
         boolean live = true;
         /** What the watched files looked like when the run on show was made, and a change seen once and waiting to be seen again before it is trusted. */
         long files, candidate;
-        Run current() { return cursor < 0 ? null : history.get(cursor); }
-    }
-    private static final Map<UUID, Memory> MEMORY = new ConcurrentHashMap<>();
-    static Memory memory(ServerPlayer player) { return MEMORY.computeIfAbsent(player.getUUID(), id -> new Memory()); }
 
-    static long newSeed() { return ThreadLocalRandom.current().nextLong(1_000_000); }
+        Run current() {
+            return cursor < 0 ? null : history.get(cursor);
+        }
+    }
+
+    private static final Map<UUID, Memory> MEMORY = new ConcurrentHashMap<>();
+
+    static Memory memory(ServerPlayer player) {
+        return MEMORY.computeIfAbsent(player.getUUID(), id -> new Memory());
+    }
+
+    static long newSeed() {
+        return ThreadLocalRandom.current().nextLong(1_000_000);
+    }
 
     /** The middle of the selection on its lowest layer, or the block the player stands in when nothing is selected. */
     static BlockPos originOf(ServerPlayer player) {
@@ -56,7 +75,8 @@ final class JigsawRuns {
         return new BlockPos((min.x() + max.x()) / 2, min.y(), (min.z() + max.z()) / 2);
     }
 
-    // ---- what a player can ask for; each returns what to tell them, and throws IllegalArgumentException with the reason when it cannot be done
+    // ---- what a player can ask for; each returns what to tell them, and throws IllegalArgumentException with the
+    // reason when it cannot be done
 
     /** A new run at the selection or at the player's feet, which starts a new line of history. */
     static String start(ServerPlayer player, String pool, String start, int depth, int distance, long seed) {
@@ -74,7 +94,8 @@ final class JigsawRuns {
         var memory = memory(player);
         if (memory.cursor < 0) throw new IllegalArgumentException("No runs yet: generate one first");
         int to = memory.cursor + step;
-        if (to < 0 || to >= memory.history.size()) throw new IllegalArgumentException(step < 0 ? "This is the first run kept" : "This is the latest run");
+        if (to < 0 || to >= memory.history.size())
+            throw new IllegalArgumentException(step < 0 ? "This is the first run kept" : "This is the latest run");
         memory.cursor = to;
         return show(player, memory, "run " + (to + 1) + " of " + memory.history.size());
     }
@@ -82,7 +103,8 @@ final class JigsawRuns {
     static String view(ServerPlayer player, View view) {
         var memory = memory(player);
         memory.view = view;
-        if (memory.current() == null) return "Showing " + view.name().toLowerCase(Locale.ROOT) + " from the next run on";
+        if (memory.current() == null)
+            return "Showing " + view.name().toLowerCase(Locale.ROOT) + " from the next run on";
         return show(player, memory, "showing " + view.name().toLowerCase(Locale.ROOT));
     }
 
@@ -96,8 +118,10 @@ final class JigsawRuns {
 
     static String pins(ServerPlayer player) {
         var pins = memory(player).pins;
-        return pins.isEmpty() ? "No pinned seeds. Pin keeps the current one."
-                : "Pinned seeds: " + String.join(", ", pins.stream().map(String::valueOf).toList());
+        return pins.isEmpty()
+                ? "No pinned seeds. Pin keeps the current one."
+                : "Pinned seeds: "
+                        + String.join(", ", pins.stream().map(String::valueOf).toList());
     }
 
     static String live(ServerPlayer player, boolean on) {
@@ -108,7 +132,10 @@ final class JigsawRuns {
     /** Every pool the planner can start from, in the player's report. */
     static String pools(ServerPlayer player) {
         var names = JigsawPlanner.poolNames(player.level().getServer());
-        EditorServer.session(player).jigsawReport(names.size() + " pools:\n" + String.join("\n", names.stream().limit(60).toList()) + (names.size() > 60 ? "\n...and " + (names.size() - 60) + " more" : ""));
+        EditorServer.session(player)
+                .jigsawReport(names.size() + " pools:\n"
+                        + String.join("\n", names.stream().limit(60).toList())
+                        + (names.size() > 60 ? "\n...and " + (names.size() - 60) + " more" : ""));
         return names.size() + " pools found (listed in the report)";
     }
 
@@ -121,8 +148,9 @@ final class JigsawRuns {
         memory.history.add(run);
         if (memory.history.size() > HISTORY) memory.history.remove(0);
         memory.cursor = memory.history.size() - 1;
-        try { return show(player, memory, null); }
-        catch (RuntimeException e) {
+        try {
+            return show(player, memory, null);
+        } catch (RuntimeException e) {
             memory.history.remove(memory.cursor);
             memory.cursor = memory.history.size() - 1;
             throw e;
@@ -130,7 +158,11 @@ final class JigsawRuns {
     }
 
     /** A refusal whose report has already been written, so it is not replaced by the reason alone. */
-    private static final class Reported extends IllegalArgumentException { Reported(String message) { super(message); } }
+    private static final class Reported extends IllegalArgumentException {
+        Reported(String message) {
+            super(message);
+        }
+    }
 
     /** Runs the run on show and holds it as the player's waiting preview, with its report. */
     static String show(ServerPlayer player, Memory memory, String note) {
@@ -139,21 +171,29 @@ final class JigsawRuns {
         var session = EditorServer.session(player);
         try {
             long began = System.nanoTime();
-            var result = JigsawPlanner.run(level, run.pool(), run.start(), run.seed(), run.depth(), run.distance(), run.origin());
+            var result = JigsawPlanner.run(
+                    level, run.pool(), run.start(), run.seed(), run.depth(), run.distance(), run.origin());
             var edit = JigsawPlanner.toEdit(level, session, result, "Jigsaw " + run.pool());
             session.jigsawReport(String.join("\n", result.report()));
             memory.files = memory.candidate = fingerprint(level.getServer());
-            if (edit.changes().isEmpty()) { // the pool check is what explains it, so it stays in the report beside the reason
+            if (edit.changes()
+                    .isEmpty()) { // the pool check is what explains it, so it stays in the report beside the reason
                 var why = "The structure would not change any block";
                 session.jigsawReport(why + "\n" + String.join("\n", result.report()));
                 throw new Reported(why);
             }
-            if (edit.estimatedBytes() > dev.craftium.core.Selection.HISTORY_BYTES) throw new IllegalArgumentException("The structure is too big to keep in the undo history; lower the depth");
+            if (edit.estimatedBytes() > dev.craftium.core.Selection.HISTORY_BYTES)
+                throw new IllegalArgumentException(
+                        "The structure is too big to keep in the undo history; lower the depth");
             EditProtection.check(player, edit);
             long ms = (System.nanoTime() - began) / 1_000_000;
-            var layout = memory.view == View.BLOCKS ? new GhostCodec.Layout(new int[0], List.of()) : JigsawPlanner.layout(result);
-            var message = "Jigsaw: " + result.pieces().size() + " pieces, " + edit.changes().size() + " blocks, seed " + run.seed() + ", depth " + run.depth()
-                    + " (" + ms + " ms)" + (note == null ? "" : ", " + note) + (result.unsupported() > 0 ? "; " + result.unsupported() + " pieces could not be shown" : "");
+            var layout = memory.view == View.BLOCKS
+                    ? new GhostCodec.Layout(new int[0], List.of())
+                    : JigsawPlanner.layout(result);
+            var message = "Jigsaw: " + result.pieces().size() + " pieces, "
+                    + edit.changes().size() + " blocks, seed " + run.seed() + ", depth " + run.depth() + " (" + ms
+                    + " ms)" + (note == null ? "" : ", " + note)
+                    + (result.unsupported() > 0 ? "; " + result.unsupported() + " pieces could not be shown" : "");
             EditorServer.preview(player, edit, message + " · Enter to build", layout, memory.view != View.LAYOUT);
             return message;
         } catch (IOException e) {
@@ -176,15 +216,23 @@ final class JigsawRuns {
     /** A number that changes when a file the planner reads is added, removed or saved: the craftium datapack and the structures the game saved. */
     static long fingerprint(MinecraftServer server) {
         long sum = 0;
-        for (var root : new Path[]{server.getWorldPath(LevelResource.DATAPACK_DIR).resolve(JigsawPlanner.PACK), server.getWorldPath(LevelResource.GENERATED_DIR), JigsawPlanner.draftFolder(server)}) {
+        for (var root : new Path[] {
+            server.getWorldPath(LevelResource.DATAPACK_DIR).resolve(JigsawPlanner.PACK),
+            server.getWorldPath(LevelResource.GENERATED_DIR),
+            JigsawPlanner.draftFolder(server)
+        }) {
             if (!Files.isDirectory(root)) continue;
             try (var files = Files.walk(root, 12)) {
                 for (var file : (Iterable<Path>) files.filter(Files::isRegularFile)::iterator) {
                     var name = file.getFileName().toString();
                     if (!(name.endsWith(".json") || name.endsWith(".nbt") || name.endsWith(".mcmeta"))) continue;
-                    sum += file.toString().hashCode() * 31L + Files.getLastModifiedTime(file).toMillis() + Files.size(file) * 7919L;
+                    sum += file.toString().hashCode() * 31L
+                            + Files.getLastModifiedTime(file).toMillis()
+                            + Files.size(file) * 7919L;
                 }
-            } catch (IOException | RuntimeException e) { /* a file that is being written is looked at again at the next poll */ }
+            } catch (IOException | RuntimeException e) {
+                /* a file that is being written is looked at again at the next poll */
+            }
         }
         return sum;
     }
@@ -200,13 +248,25 @@ final class JigsawRuns {
             var memory = MEMORY.get(player.getUUID());
             if (memory == null || !memory.live || memory.current() == null) continue;
             if (now == null) now = fingerprint(server);
-            if (now == memory.files) { memory.candidate = now; continue; }
-            if (now != memory.candidate) { memory.candidate = now; continue; }
+            if (now == memory.files) {
+                memory.candidate = now;
+                continue;
+            }
+            if (now != memory.candidate) {
+                memory.candidate = now;
+                continue;
+            }
             var session = EditorServer.session(player);
-            if (session.pendingEdit != null && session.pendingEdit != session.layoutFor) { memory.files = now; continue; }
+            if (session.pendingEdit != null && session.pendingEdit != session.layoutFor) {
+                memory.files = now;
+                continue;
+            }
             memory.files = now;
-            try { EditorServer.send(player, session, show(player, memory, "files changed"), false); }
-            catch (IllegalArgumentException e) { EditorServer.send(player, session, "Jigsaw: " + e.getMessage(), true); }
+            try {
+                EditorServer.send(player, session, show(player, memory, "files changed"), false);
+            } catch (IllegalArgumentException e) {
+                EditorServer.send(player, session, "Jigsaw: " + e.getMessage(), true);
+            }
         }
     }
 
@@ -217,20 +277,43 @@ final class JigsawRuns {
         if (registered) return;
         registered = true;
         ServerTickEvents.END_SERVER_TICK.register(JigsawRuns::tick);
-        action("generate", use -> { var o = use.options(); say(use, start(use.player(), o.jigsawPool, o.jigsawStart, o.jigsawDepth, o.jigsawDistance, o.jigsawSeed)); });
-        action("reroll", use -> say(use, change(use.player(), run -> run.withSeed(newSeed()), "Nothing to reroll yet: generate one first")));
+        action("generate", use -> {
+            var o = use.options();
+            say(use, start(use.player(), o.jigsawPool, o.jigsawStart, o.jigsawDepth, o.jigsawDistance, o.jigsawSeed));
+        });
+        action(
+                "reroll",
+                use -> say(
+                        use,
+                        change(
+                                use.player(),
+                                run -> run.withSeed(newSeed()),
+                                "Nothing to reroll yet: generate one first")));
         action("back", use -> say(use, walk(use.player(), -1)));
         action("next", use -> say(use, walk(use.player(), 1)));
         action("apply", use -> EditorServer.applyPreview(use.player()));
         action("cancel", use -> EditorServer.cancelPreview(use.player()));
         action("pin", use -> say(use, pin(use.player())));
-        action("view", use -> { var memory = memory(use.player()); say(use, view(use.player(), View.values()[(memory.view.ordinal() + 1) % View.values().length])); });
-        action("view_back", use -> { var memory = memory(use.player()); say(use, view(use.player(), View.values()[Math.floorMod(memory.view.ordinal() - 1, View.values().length)])); });
+        action("view", use -> {
+            var memory = memory(use.player());
+            say(use, view(use.player(), View.values()[(memory.view.ordinal() + 1) % View.values().length]));
+        });
+        action("view_back", use -> {
+            var memory = memory(use.player());
+            say(use, view(use.player(), View.values()[Math.floorMod(memory.view.ordinal() - 1, View.values().length)]));
+        });
         action("live", use -> say(use, live(use.player(), use.options().jigsawLive)));
         action("pools", use -> say(use, pools(use.player())));
-        action("edit", use -> say(use, JigsawEditor.act(use.player(), use.options().jigsawEdit, use.options().assetData)));
+        action(
+                "edit",
+                use -> say(use, JigsawEditor.act(use.player(), use.options().jigsawEdit, use.options().assetData)));
     }
 
-    private static void action(String name, ActionHandler handler) { ActionRegistry.register("craftium:jigsaw_" + name, handler); }
-    private static void say(ActionUse use, String message) { use.say(message); }
+    private static void action(String name, ActionHandler handler) {
+        ActionRegistry.register("craftium:jigsaw_" + name, handler);
+    }
+
+    private static void say(ActionUse use, String message) {
+        use.say(message);
+    }
 }

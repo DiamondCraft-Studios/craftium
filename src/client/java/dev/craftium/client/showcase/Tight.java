@@ -25,12 +25,17 @@ final class Tight {
                 for (int z = min.z(); z <= max.z(); z++) {
                     at.set(x, y, z);
                     if (mc.level.getBlockState(at).isAir()) continue;
-                    // Only blocks with an air neighbour can be seen, and only their outer corners matter to the framing.
-                    boolean open = mc.level.getBlockState(at.set(x + 1, y, z)).isAir() || mc.level.getBlockState(at.set(x - 1, y, z)).isAir()
-                        || mc.level.getBlockState(at.set(x, y + 1, z)).isAir() || mc.level.getBlockState(at.set(x, y - 1, z)).isAir()
-                        || mc.level.getBlockState(at.set(x, y, z + 1)).isAir() || mc.level.getBlockState(at.set(x, y, z - 1)).isAir();
+                    // Only blocks with an air neighbour can be seen, and only their outer corners matter to the
+                    // framing.
+                    boolean open = mc.level.getBlockState(at.set(x + 1, y, z)).isAir()
+                            || mc.level.getBlockState(at.set(x - 1, y, z)).isAir()
+                            || mc.level.getBlockState(at.set(x, y + 1, z)).isAir()
+                            || mc.level.getBlockState(at.set(x, y - 1, z)).isAir()
+                            || mc.level.getBlockState(at.set(x, y, z + 1)).isAir()
+                            || mc.level.getBlockState(at.set(x, y, z - 1)).isAir();
                     if (!open) continue;
-                    for (int i = 0; i < 8; i++) points.add(new double[]{x + (i & 1), y + ((i >> 1) & 1), z + ((i >> 2) & 1)});
+                    for (int i = 0; i < 8; i++)
+                        points.add(new double[] {x + (i & 1), y + ((i >> 1) & 1), z + ((i >> 2) & 1)});
                 }
         if (points.isEmpty()) return entry;
         return ShowcasePlan.refit(entry, points.toArray(new double[0][]));

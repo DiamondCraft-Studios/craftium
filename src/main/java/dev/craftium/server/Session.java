@@ -2,16 +2,16 @@ package dev.craftium.server;
 
 import dev.craftium.core.Point;
 import dev.craftium.core.Selection;
+import java.util.*;
+import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
-import net.minecraft.core.Holder;
 import net.minecraft.world.level.biome.Biome;
-import java.util.*;
 
 final class Session {
     final Selection selection = new Selection();
     final ClipboardMap clipboard = new ClipboardMap();
-    final List<net.minecraft.nbt.CompoundTag> clipboardEntities=new ArrayList<>();
+    final List<net.minecraft.nbt.CompoundTag> clipboardEntities = new ArrayList<>();
     final Deque<Edit> undo = new ArrayDeque<>(), redo = new ArrayDeque<>();
     final List<String> events = new ArrayList<>();
     ResourceKey<Level> dimension;
@@ -21,9 +21,14 @@ final class Session {
      */
     boolean ai;
     /** For an AI workspace: whose it is, which of their AI sessions it is ("" for the default one), and the label its AI app gave the build. */
-    UUID aiOwner;String aiId="",label="";
+    UUID aiOwner;
+
+    String aiId = "", label = "";
     /** For an AI workspace: when it began and when it last had a request (epoch milliseconds), the tool of that request, and whether the player stopped it. */
-    long createdAt,lastActive,stoppedAt;String lastTool="";boolean stopped;
+    long createdAt, lastActive, stoppedAt;
+
+    String lastTool = "";
+    boolean stopped;
     /** For an AI workspace: whether the player chose its label, so the AI app's own is no longer put over it. */
     boolean renamed;
     /**
@@ -31,11 +36,16 @@ final class Session {
      * however the player's own selection changes after, until it asks for the new one. Null when it has not seen a selection. The revision
      * is the player's selection revision at that time, to tell later that it changed; the time is in epoch milliseconds.
      */
-    java.util.Set<Point> pinned;long pinnedRevision,pinnedAt;
+    java.util.Set<Point> pinned;
+
+    long pinnedRevision, pinnedAt;
     /** For an AI workspace: the box its waiting preview or latest build fills, and when that was set. Null when it has none. Other sessions' previews are checked against it. */
-    dev.craftium.core.AiSessions.Region region;long regionAt;
+    dev.craftium.core.AiSessions.Region region;
+
+    long regionAt;
     /** For a player's own session: the preview each of their AI sessions had when this player was last sent it (AI session id to preview number), so only a change carries ghost data again. */
-    final Map<String,Long> sentAi=new HashMap<>();
+    final Map<String, Long> sentAi = new HashMap<>();
+
     Point corner, ruler, line;
     long lastRequest;
     /** The game mode the player had before the editor made them a spectator; null when nothing is waiting to be restored. */
@@ -45,49 +55,86 @@ final class Session {
     /** Goes up whenever the clipboard is replaced or turned, so something kept about the blocks as they were copied can tell they still are. */
     long clipboardEpoch;
     /** The BuildObjects a duplicate copied (see {@link dev.craftium.core.SavedSelections#captureCopy}) and the clipboard epoch they go with, until the copy is pasted. */
-    java.util.List<dev.craftium.core.SavedSelections.Copy> duplicateNodes;long duplicateEpoch;
+    java.util.List<dev.craftium.core.SavedSelections.Copy> duplicateNodes;
+
+    long duplicateEpoch;
     /** An edit worked out but not yet applied, waiting for the player to confirm it. Null when there is none. */
     Edit pendingEdit;
     /** Which preview this AI workspace is holding, numbered as each is made, so another player's client can tell it changed. */
     long previewId;
     /** What this player was last shown of other players' AI previews, so only a change is sent. Null makes the next status carry them again. */
     String sharedKey;
-    String pendingData="";boolean pendingDirty;
+
+    String pendingData = "";
+    boolean pendingDirty;
     /** The ghost a plugin's tool is showing for this player, as an edit and as the data the client is sent. It is not an edit waiting to be built. */
-    Edit pluginPreview;String pluginPreviewData="";boolean pluginPreviewDirty;
+    Edit pluginPreview;
+
+    String pluginPreviewData = "";
+    boolean pluginPreviewDirty;
     /** A jigsaw preview's layout and how it is drawn, which only apply while {@link #pendingEdit} is still the edit it was made for. */
-    Edit layoutFor;GhostCodec.Layout layout;boolean layoutBlocks=true;
+    Edit layoutFor;
+
+    GhostCodec.Layout layout;
+    boolean layoutBlocks = true;
     /** What the jigsaw planner last said about its run, sent once to the client when it changes (see {@link #takeJigsawReport}). */
-    private String jigsawReport="";private boolean jigsawReportDirty;
-    void jigsawReport(String report){jigsawReport=report;jigsawReportDirty=true;}
-    String takeJigsawReport(){if(!jigsawReportDirty)return null;jigsawReportDirty=false;return jigsawReport;}
+    private String jigsawReport = "";
+
+    private boolean jigsawReportDirty;
+
+    void jigsawReport(String report) {
+        jigsawReport = report;
+        jigsawReportDirty = true;
+    }
+
+    String takeJigsawReport() {
+        if (!jigsawReportDirty) return null;
+        jigsawReportDirty = false;
+        return jigsawReport;
+    }
     /** The pool editor's model, sent once to the client when it changes (see {@link #takeJigsawModel}). */
-    private String jigsawModel="";private boolean jigsawModelDirty;
-    void jigsawModel(String model){jigsawModel=model;jigsawModelDirty=true;}
-    String takeJigsawModel(){if(!jigsawModelDirty)return null;jigsawModelDirty=false;return jigsawModel;}
+    private String jigsawModel = "";
+
+    private boolean jigsawModelDirty;
+
+    void jigsawModel(String model) {
+        jigsawModel = model;
+        jigsawModelDirty = true;
+    }
+
+    String takeJigsawModel() {
+        if (!jigsawModelDirty) return null;
+        jigsawModelDirty = false;
+        return jigsawModel;
+    }
     /** The {@link PluginTools#version} of the list of plugin tools this player was last sent, or -1 when they have not been sent one. */
-    int pluginToolsSent=-1;
+    int pluginToolsSent = -1;
     /** The selections this player saved, and the {@link dev.craftium.core.SavedSelections#revision} of them that was last sent, or -1 when none has been. */
     /** This player's view of the BuildObjects of the dimension they are in (see {@link BuildObjectStore}): the tree is shared, what is looked at is theirs. Until the session is attached to a world it is a private one. */
-    dev.craftium.core.SavedSelections saved=new dev.craftium.core.SavedSelections();boolean savedAttached;long savedSent=-1;
+    dev.craftium.core.SavedSelections saved = new dev.craftium.core.SavedSelections();
+
+    boolean savedAttached;
+    long savedSent = -1;
     /** The {@link dev.craftium.core.SavedSelections.Entry#version} of each saved selection's blocks that this player was last sent, by id. */
-    final Map<Integer,Integer> savedDataSent=new HashMap<>();
+    final Map<Integer, Integer> savedDataSent = new HashMap<>();
     /** What the last AI spec planned looked wrong in (see BuildSpec.Result#warnings), for the reply that describes its preview. */
-    List<String> specWarnings=List.of();
+    List<String> specWarnings = List.of();
     /** The clipboard's blocks as a ghost for the placement preview, and whether it needs encoding again. */
-    String clipboardGhost="";boolean clipboardGhostDirty=true;
+    String clipboardGhost = "";
+
+    boolean clipboardGhostDirty = true;
     /** Copied from the player's options with each request: whether edits wait for confirmation, and whether this request is exempt. */
-    boolean confirmEdits,bypassConfirm;
+    boolean confirmEdits, bypassConfirm;
     /** Why the last planned edit changed nothing, for the "No matching blocks changed" message; null when unknown. */
     String nothingChangedBecause;
     /** A pivot for the client to take up after an undo or redo, as "none" or "x,y,z"; empty when there is nothing to say. */
-    String pivotUpdate="";
+    String pivotUpdate = "";
     /** Client-side state for the client to take up after an undo or redo, as {@link dev.craftium.core.Restore} text; empty when there is nothing to say. */
-    String restoreUpdate="";
+    String restoreUpdate = "";
     /** The corners of the Box Select tool's box as of this request, and as of the last time a selection was noted in the history: "none" or points. */
-    String cornersNow="none",cornersHistory="none";
+    String cornersNow = "none", cornersHistory = "none";
     /** The pivot the player had as of this request and as of the one before it, as "none" or "x,y,z". */
-    String pivotNow="none",pivotBeforeRequest="none";
+    String pivotNow = "none", pivotBeforeRequest = "none";
     /** The shape the Shape tool was asked to build, as "x,y,z,yaw,pitch,roll,sizeX,sizeY,sizeZ", for undo to put back as waiting to be built; null for any other request. */
     String shapeAtRequest;
     /** True while handling a request made with the builder tool, so the edit it makes is marked as the builder's. */
@@ -95,175 +142,444 @@ final class Session {
     /** The selection as it was before the last selection action, so a mistaken one can be taken back. Null when there is none. */
     List<Point> selectionBefore;
     /** The selection as of the last time it was noted in the history, the revision it had, and whether the current action is a selection action. */
-    List<Point> historySelection=List.of();long historyRevision;boolean recordSelection;String currentAction="";
+    List<Point> historySelection = List.of();
+
+    long historyRevision;
+    boolean recordSelection;
+    String currentAction = "";
     /** The selection before a transform that is waiting for confirmation moved it, so cancelling can put it back. */
     List<Point> pendingSelectionBefore;
     /** The BuildObjects' own blocks before the run of transforms that is waiting for confirmation, so cancelling can put them back with the selection. */
-    Map<Integer,List<Point>> pendingObjectsBefore;
+    Map<Integer, List<Point>> pendingObjectsBefore;
     /**
      * The transforms behind {@link #pendingEdit} when it holds a run of them, the edit that was staged before the first of them, and the
      * pending edit they produced (to tell that nothing else has been added to it since). A further transform starts again from the
      * original blocks instead of from the preview.
      */
-    ModelTransform.Chain pendingChain;Edit pendingChainBase,pendingChainEdit;
+    ModelTransform.Chain pendingChain;
+
+    Edit pendingChainBase, pendingChainEdit;
     long requestStroke, lastStroke;
     /** The stroke the game's own placements belong to while the place button is held, so they undo as one; 0 when no stroke is open. */
     long placeStroke;
     /** Whether the edit this request starts goes into the undo history. */
-    boolean requestRecord=true;
+    boolean requestRecord = true;
+
     boolean busy;
     /** Builder commits that arrived while an edit was being applied, as the requests were sent; each is planned when its turn comes, against the world as the earlier ones left it. */
-    final ArrayDeque<String> queued=new ArrayDeque<>();
+    final ArrayDeque<String> queued = new ArrayDeque<>();
     /** A pulse for the client to show with the next status, as "undo|redo:milliseconds:points"; empty when there is none. */
-    String pulse="";
+    String pulse = "";
+
     UUID selectedEntity;
-    long selectionRevision=-1;
-    String selectionData="";
-    String clipboardData="";
-    boolean clipboardDirty=true;
-    List<dev.craftium.core.BlueprintInfo> library=List.of();
+    long selectionRevision = -1;
+    String selectionData = "";
+    String clipboardData = "";
+    boolean clipboardDirty = true;
+    List<dev.craftium.core.BlueprintInfo> library = List.of();
     boolean noClip;
     /** Whether the player steps up a whole block on their own, as they step up a slab. */
     boolean blockStep;
-    dev.craftium.core.Options.ReachMode reach=dev.craftium.core.Options.ReachMode.NORMAL;
-    int farReach=32;
+
+    dev.craftium.core.Options.ReachMode reach = dev.craftium.core.Options.ReachMode.NORMAL;
+    int farReach = 32;
     /** The options of the player's latest request, which vanilla block placement reads for the capabilities it bends. */
     dev.craftium.core.Options options;
-    int currentHotbar=-1;
+
+    int currentHotbar = -1;
     java.nio.file.Path historyPath;
     boolean historyDirty;
     int historyRemaining;
     int bytes;
+
     record Change(Point pos, BlockSnapshot before, BlockSnapshot after) {}
+
     record BiomeChange(Point cell, Holder<Biome> before, Holder<Biome> after) {}
-    record EntityChange(UUID id,net.minecraft.nbt.CompoundTag before,net.minecraft.nbt.CompoundTag after,boolean moving){EntityChange(UUID id,net.minecraft.nbt.CompoundTag before,net.minecraft.nbt.CompoundTag after){this(id,before,after,false);}}
+
+    record EntityChange(
+            UUID id, net.minecraft.nbt.CompoundTag before, net.minecraft.nbt.CompoundTag after, boolean moving) {
+        EntityChange(UUID id, net.minecraft.nbt.CompoundTag before, net.minecraft.nbt.CompoundTag after) {
+            this(id, before, after, false);
+        }
+    }
     /** What a selection action changed: the selection before and after, so undo and redo can put either back. */
-    record SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter,Map<String,String> restoreBefore,Map<String,String> restoreAfter,
-                           /** The own blocks of the BuildObjects an edit moved, by id, before and after, so undo and redo move them back with the blocks. */
-                           Map<Integer,List<Point>> objectsBefore,Map<Integer,List<Point>> objectsAfter,
-                           /** The BuildObjects before and after something done in the Hierarchy (made, renamed, moved, deleted): null for any other change. */
-                           dev.craftium.core.SavedSelections.State hierarchyBefore,dev.craftium.core.SavedSelections.State hierarchyAfter){
-        SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter,Map<String,String> restoreBefore,Map<String,String> restoreAfter,Map<Integer,List<Point>> objectsBefore,Map<Integer,List<Point>> objectsAfter){this(before,after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,objectsBefore,objectsAfter,null,null);}
+    record SelectionChange(
+            List<Point> before,
+            List<Point> after,
+            String pivotBefore,
+            String pivotAfter,
+            Map<String, String> restoreBefore,
+            Map<String, String> restoreAfter,
+            /** The own blocks of the BuildObjects an edit moved, by id, before and after, so undo and redo move them back with the blocks. */
+            Map<Integer, List<Point>> objectsBefore,
+            Map<Integer, List<Point>> objectsAfter,
+            /** The BuildObjects before and after something done in the Hierarchy (made, renamed, moved, deleted): null for any other change. */
+            dev.craftium.core.SavedSelections.State hierarchyBefore,
+            dev.craftium.core.SavedSelections.State hierarchyAfter) {
+        SelectionChange(
+                List<Point> before,
+                List<Point> after,
+                String pivotBefore,
+                String pivotAfter,
+                Map<String, String> restoreBefore,
+                Map<String, String> restoreAfter,
+                Map<Integer, List<Point>> objectsBefore,
+                Map<Integer, List<Point>> objectsAfter) {
+            this(
+                    before,
+                    after,
+                    pivotBefore,
+                    pivotAfter,
+                    restoreBefore,
+                    restoreAfter,
+                    objectsBefore,
+                    objectsAfter,
+                    null,
+                    null);
+        }
         /** A change to the Hierarchy alone: the player's selection and everything else are left as they are. */
-        static SelectionChange hierarchy(dev.craftium.core.SavedSelections.State before,dev.craftium.core.SavedSelections.State after){return new SelectionChange(null,null,null,null,Map.of(),Map.of(),Map.of(),Map.of(),before,after);}
-        boolean hasHierarchy(){return hierarchyBefore!=null&&hierarchyAfter!=null;}
+        static SelectionChange hierarchy(
+                dev.craftium.core.SavedSelections.State before, dev.craftium.core.SavedSelections.State after) {
+            return new SelectionChange(null, null, null, null, Map.of(), Map.of(), Map.of(), Map.of(), before, after);
+        }
+
+        boolean hasHierarchy() {
+            return hierarchyBefore != null && hierarchyAfter != null;
+        }
         /** The same change, also giving back the BuildObjects as they were before and after (a paste that made one). */
-        SelectionChange withHierarchy(dev.craftium.core.SavedSelections.State before,dev.craftium.core.SavedSelections.State after){
-            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,objectsBefore,objectsAfter,before,after);
+        SelectionChange withHierarchy(
+                dev.craftium.core.SavedSelections.State before, dev.craftium.core.SavedSelections.State after) {
+            return new SelectionChange(
+                    this.before,
+                    this.after,
+                    pivotBefore,
+                    pivotAfter,
+                    restoreBefore,
+                    restoreAfter,
+                    objectsBefore,
+                    objectsAfter,
+                    before,
+                    after);
         }
-        SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter,Map<String,String> restoreBefore,Map<String,String> restoreAfter){this(before,after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,Map.of(),Map.of());}
-        SelectionChange(List<Point> before,List<Point> after,String pivotBefore,String pivotAfter){this(before,after,pivotBefore,pivotAfter,Map.of(),Map.of());}
+
+        SelectionChange(
+                List<Point> before,
+                List<Point> after,
+                String pivotBefore,
+                String pivotAfter,
+                Map<String, String> restoreBefore,
+                Map<String, String> restoreAfter) {
+            this(before, after, pivotBefore, pivotAfter, restoreBefore, restoreAfter, Map.of(), Map.of());
+        }
+
+        SelectionChange(List<Point> before, List<Point> after, String pivotBefore, String pivotAfter) {
+            this(before, after, pivotBefore, pivotAfter, Map.of(), Map.of());
+        }
         /** The same change, also moving these BuildObjects' blocks (only those that differ are kept). */
-        SelectionChange withObjects(Map<Integer,List<Point>> before,Map<Integer,List<Point>> after){
-            var b=new LinkedHashMap<Integer,List<Point>>();var a=new LinkedHashMap<Integer,List<Point>>();
-            for(var e:after.entrySet()){var was=before.get(e.getKey());if(was!=null&&!was.equals(e.getValue())){b.put(e.getKey(),was);a.put(e.getKey(),e.getValue());}}
-            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,b,a,hierarchyBefore,hierarchyAfter);
+        SelectionChange withObjects(Map<Integer, List<Point>> before, Map<Integer, List<Point>> after) {
+            var b = new LinkedHashMap<Integer, List<Point>>();
+            var a = new LinkedHashMap<Integer, List<Point>>();
+            for (var e : after.entrySet()) {
+                var was = before.get(e.getKey());
+                if (was != null && !was.equals(e.getValue())) {
+                    b.put(e.getKey(), was);
+                    a.put(e.getKey(), e.getValue());
+                }
+            }
+            return new SelectionChange(
+                    this.before,
+                    this.after,
+                    pivotBefore,
+                    pivotAfter,
+                    restoreBefore,
+                    restoreAfter,
+                    b,
+                    a,
+                    hierarchyBefore,
+                    hierarchyAfter);
         }
-        boolean hasObjects(){return !objectsBefore.isEmpty();}
+
+        boolean hasObjects() {
+            return !objectsBefore.isEmpty();
+        }
         /**
          * The same change, also moving these BuildObjects' blocks (only the ones named in {@code after}, which are the ones that changed), after the blocks it already moved:
          * where an object began is where this change's own earlier part left it, and where it ends is the new place.
          */
-        SelectionChange andObjects(Map<Integer,List<Point>> before,Map<Integer,List<Point>> after){
-            var ob=new LinkedHashMap<Integer,List<Point>>();for(var id:after.keySet())if(before.containsKey(id))ob.put(id,before.get(id));
+        SelectionChange andObjects(Map<Integer, List<Point>> before, Map<Integer, List<Point>> after) {
+            var ob = new LinkedHashMap<Integer, List<Point>>();
+            for (var id : after.keySet()) if (before.containsKey(id)) ob.put(id, before.get(id));
             ob.putAll(objectsBefore); // the earlier part's start is where it began
-            var oa=new LinkedHashMap<>(objectsAfter);oa.putAll(after);
-            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,restoreBefore,restoreAfter,ob,oa,hierarchyBefore,hierarchyAfter);
+            var oa = new LinkedHashMap<>(objectsAfter);
+            oa.putAll(after);
+            return new SelectionChange(
+                    this.before,
+                    this.after,
+                    pivotBefore,
+                    pivotAfter,
+                    restoreBefore,
+                    restoreAfter,
+                    ob,
+                    oa,
+                    hierarchyBefore,
+                    hierarchyAfter);
         }
-        SelectionChange(List<Point> before,List<Point> after){this(before,after,null,null);}
+
+        SelectionChange(List<Point> before, List<Point> after) {
+            this(before, after, null, null);
+        }
         /** A change to client-side state alone (see {@link dev.craftium.core.Restore}): the player's own selection is left as it is. */
-        static SelectionChange restoring(Map<String,String> before,Map<String,String> after){return new SelectionChange(null,null,null,null,before,after);}
+        static SelectionChange restoring(Map<String, String> before, Map<String, String> after) {
+            return new SelectionChange(null, null, null, null, before, after);
+        }
         /** True when undo and redo have a selection of the player's to put back, as opposed to only client-side state. */
-        boolean hasPoints(){return before!=null&&after!=null;}
+        boolean hasPoints() {
+            return before != null && after != null;
+        }
         /** The same change, also handing back these values of client-side state. */
-        SelectionChange with(Map<String,String> before,Map<String,String> after){
-            var b=new LinkedHashMap<>(restoreBefore);b.putAll(before);var a=new LinkedHashMap<>(restoreAfter);a.putAll(after);
-            return new SelectionChange(this.before,this.after,pivotBefore,pivotAfter,b,a,objectsBefore,objectsAfter,hierarchyBefore,hierarchyAfter);
+        SelectionChange with(Map<String, String> before, Map<String, String> after) {
+            var b = new LinkedHashMap<>(restoreBefore);
+            b.putAll(before);
+            var a = new LinkedHashMap<>(restoreAfter);
+            a.putAll(after);
+            return new SelectionChange(
+                    this.before,
+                    this.after,
+                    pivotBefore,
+                    pivotAfter,
+                    b,
+                    a,
+                    objectsBefore,
+                    objectsAfter,
+                    hierarchyBefore,
+                    hierarchyAfter);
         }
         /** This change followed by a later one, as one: it starts where this began and ends where the later one did. */
-        SelectionChange then(SelectionChange later){
-            var b=new LinkedHashMap<>(later.restoreBefore);b.putAll(restoreBefore);var a=new LinkedHashMap<>(restoreAfter);a.putAll(later.restoreAfter);
-            var ob=new LinkedHashMap<>(later.objectsBefore);ob.putAll(objectsBefore); // the earlier change's blocks are where it began
-            var oa=new LinkedHashMap<>(objectsAfter);oa.putAll(later.objectsAfter);
-            return new SelectionChange(before!=null?before:later.before,later.after!=null?later.after:after,pivotBefore,later.pivotAfter,b,a,ob,oa,hierarchyBefore!=null?hierarchyBefore:later.hierarchyBefore,later.hierarchyAfter!=null?later.hierarchyAfter:hierarchyAfter);
+        SelectionChange then(SelectionChange later) {
+            var b = new LinkedHashMap<>(later.restoreBefore);
+            b.putAll(restoreBefore);
+            var a = new LinkedHashMap<>(restoreAfter);
+            a.putAll(later.restoreAfter);
+            var ob = new LinkedHashMap<>(later.objectsBefore);
+            ob.putAll(objectsBefore); // the earlier change's blocks are where it began
+            var oa = new LinkedHashMap<>(objectsAfter);
+            oa.putAll(later.objectsAfter);
+            return new SelectionChange(
+                    before != null ? before : later.before,
+                    later.after != null ? later.after : after,
+                    pivotBefore,
+                    later.pivotAfter,
+                    b,
+                    a,
+                    ob,
+                    oa,
+                    hierarchyBefore != null ? hierarchyBefore : later.hierarchyBefore,
+                    later.hierarchyAfter != null ? later.hierarchyAfter : hierarchyAfter);
         }
     }
     /** {@code time} is when the edit was made, in epoch milliseconds, or 0 when unknown (history from before it was kept). */
-    record Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations,SelectionChange selection,long time,boolean builder) {
-        Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations,SelectionChange selection,long time){this(name,changes,biomes,flags,entities,annotations,selection,time,false);}
-        Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations,SelectionChange selection){this(name,changes,biomes,flags,entities,annotations,selection,System.currentTimeMillis());}
+    record Edit(
+            String name,
+            List<Change> changes,
+            List<BiomeChange> biomes,
+            int flags,
+            List<EntityChange> entities,
+            List<dev.craftium.core.Annotation.Change> annotations,
+            SelectionChange selection,
+            long time,
+            boolean builder) {
+        Edit(
+                String name,
+                List<Change> changes,
+                List<BiomeChange> biomes,
+                int flags,
+                List<EntityChange> entities,
+                List<dev.craftium.core.Annotation.Change> annotations,
+                SelectionChange selection,
+                long time) {
+            this(name, changes, biomes, flags, entities, annotations, selection, time, false);
+        }
+
+        Edit(
+                String name,
+                List<Change> changes,
+                List<BiomeChange> biomes,
+                int flags,
+                List<EntityChange> entities,
+                List<dev.craftium.core.Annotation.Change> annotations,
+                SelectionChange selection) {
+            this(name, changes, biomes, flags, entities, annotations, selection, System.currentTimeMillis());
+        }
         /** The same edit, marked as made with the builder tool (or not), which is what the builder's own undo and redo reach. */
-        Edit withBuilder(boolean made){return new Edit(name,changes,biomes,flags,entities,annotations,selection,time,made);}
-        Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags,List<EntityChange> entities,List<dev.craftium.core.Annotation.Change> annotations){this(name,changes,biomes,flags,entities,annotations,null);}
+        Edit withBuilder(boolean made) {
+            return new Edit(name, changes, biomes, flags, entities, annotations, selection, time, made);
+        }
+
+        Edit(
+                String name,
+                List<Change> changes,
+                List<BiomeChange> biomes,
+                int flags,
+                List<EntityChange> entities,
+                List<dev.craftium.core.Annotation.Change> annotations) {
+            this(name, changes, biomes, flags, entities, annotations, null);
+        }
         /** True when this entry only changes the selection, so there are no blocks to put back. */
         /** An edit that changed the Hierarchy and nothing else, so undo and redo put it back directly. */
-        boolean hierarchyOnly(){return selection!=null&&selection.hasHierarchy()&&changes.isEmpty()&&biomes.isEmpty()&&entities.isEmpty()&&annotations.isEmpty();}
-        boolean selectionOnly(){return selection!=null&&selection.hasPoints()&&changes.isEmpty()&&biomes.isEmpty()&&entities.isEmpty()&&annotations.isEmpty();}
+        boolean hierarchyOnly() {
+            return selection != null
+                    && selection.hasHierarchy()
+                    && changes.isEmpty()
+                    && biomes.isEmpty()
+                    && entities.isEmpty()
+                    && annotations.isEmpty();
+        }
+
+        boolean selectionOnly() {
+            return selection != null
+                    && selection.hasPoints()
+                    && changes.isEmpty()
+                    && biomes.isEmpty()
+                    && entities.isEmpty()
+                    && annotations.isEmpty();
+        }
         /** The same edit with its block changes packed for the history, or this edit when they are too few or do not pack. */
-        Edit packed(){var list=PackedChanges.pack(changes);return list==changes?this:new Edit(name,list,biomes,flags,entities,annotations,selection,time,builder);}
+        Edit packed() {
+            var list = PackedChanges.pack(changes);
+            return list == changes
+                    ? this
+                    : new Edit(name, list, biomes, flags, entities, annotations, selection, time, builder);
+        }
         /** The same edit, also moving the selection from {@code before} to {@code after} when it is undone or redone. */
-        Edit withSelection(SelectionChange change){return new Edit(name,changes,biomes,flags,entities,annotations,change,time,builder);}
+        Edit withSelection(SelectionChange change) {
+            return new Edit(name, changes, biomes, flags, entities, annotations, change, time, builder);
+        }
         /** An entry in the history for a change to the selection alone, which has no blocks to restore. */
-        static Edit selecting(String name,SelectionChange change){return new Edit(name,List.of(),List.of(),0,List.of(),List.of(),change);}
-        Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags){this(name,changes,biomes,flags,List.of(),List.of());}
-        Edit(String name,List<Change> changes,List<BiomeChange> biomes,int flags,List<EntityChange> entities){this(name,changes,biomes,flags,entities,List.of());}
+        static Edit selecting(String name, SelectionChange change) {
+            return new Edit(name, List.of(), List.of(), 0, List.of(), List.of(), change);
+        }
+
+        Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags) {
+            this(name, changes, biomes, flags, List.of(), List.of());
+        }
+
+        Edit(String name, List<Change> changes, List<BiomeChange> biomes, int flags, List<EntityChange> entities) {
+            this(name, changes, biomes, flags, entities, List.of());
+        }
+
         int estimatedBytes() {
             boolean packed = changes instanceof PackedChanges;
-            int size = (packed ? ((PackedChanges) changes).bytes() : changes.size()*PackedChanges.BYTES_PER_CHANGE) + biomes.size()*96;
-            if(selection!=null&&selection.hasPoints())size+=(selection.before().size()+selection.after().size())*24;
-            if(selection!=null)for(var list:selection.objectsBefore().values())size+=list.size()*48; // before and after of each BuildObject moved
-            if(selection!=null&&selection.hasHierarchy())size+=(selection.hierarchyBefore().rows().size()+selection.hierarchyAfter().rows().size())*96; // the rows of the snapshots (the blocks in them are shared with the BuildObjects)
-            if (!packed) for (var c : changes) { // a packed list has counted the data of its palette already
-                if(c.before.data()!=null) size += c.before.data().toString().length()*2;
-                if(c.after.data()!=null) size += c.after.data().toString().length()*2;
+            int size = (packed ? ((PackedChanges) changes).bytes() : changes.size() * PackedChanges.BYTES_PER_CHANGE)
+                    + biomes.size() * 96;
+            if (selection != null && selection.hasPoints())
+                size += (selection.before().size() + selection.after().size()) * 24;
+            if (selection != null)
+                for (var list : selection.objectsBefore().values())
+                    size += list.size() * 48; // before and after of each BuildObject moved
+            if (selection != null && selection.hasHierarchy())
+                size += (selection.hierarchyBefore().rows().size()
+                                + selection.hierarchyAfter().rows().size())
+                        * 96; // the rows of the snapshots (the blocks in them are shared with the BuildObjects)
+            if (!packed)
+                for (var c : changes) { // a packed list has counted the data of its palette already
+                    if (c.before.data() != null)
+                        size += c.before.data().toString().length() * 2;
+                    if (c.after.data() != null)
+                        size += c.after.data().toString().length() * 2;
+                }
+            for (var e : entities) {
+                if (e.before() != null) size += e.before().toString().length() * 2;
+                if (e.after() != null) size += e.after().toString().length() * 2;
             }
-            for(var e:entities){if(e.before()!=null)size+=e.before().toString().length()*2;if(e.after()!=null)size+=e.after().toString().length()*2;}
-            for(var change:annotations){for(var note:new dev.craftium.core.Annotation[]{change.before(),change.after()})if(note!=null)size+=256+note.text().length()*2+(note.points()==null?0:note.points().size()*24)+(note.pixels()==null?0:note.pixels().size()*4);}
+            for (var change : annotations) {
+                for (var note : new dev.craftium.core.Annotation[] {change.before(), change.after()})
+                    if (note != null)
+                        size += 256
+                                + note.text().length() * 2
+                                + (note.points() == null ? 0 : note.points().size() * 24)
+                                + (note.pixels() == null ? 0 : note.pixels().size() * 4);
+            }
             return size;
         }
     }
+
     void event(String text) {
-        events.addFirst(text); while(events.size()>12) events.removeLast();
+        events.addFirst(text);
+        while (events.size() > 12) events.removeLast();
     }
+
     void remember(Edit edit) {
-        remember(edit,0);
+        remember(edit, 0);
     }
-    void remember(Edit edit,long stroke) {
-        historyDirty=true;
-        if(stroke!=0 && stroke==lastStroke && !undo.isEmpty() && redo.isEmpty()
-                && edit.entities().isEmpty() && edit.annotations().isEmpty()
-                && undo.peekFirst().entities().isEmpty() && undo.peekFirst().annotations().isEmpty()) {
-            Edit previous=undo.removeFirst();
-            var combined=new LinkedHashMap<Point,Change>();
-            for(var c:previous.changes())combined.put(c.pos(),c);
-            for(var c:edit.changes()) {
-                var old=combined.get(c.pos());
-                combined.put(c.pos(),old==null?c:new Change(c.pos(),old.before(),c.after()));
+
+    void remember(Edit edit, long stroke) {
+        historyDirty = true;
+        if (stroke != 0
+                && stroke == lastStroke
+                && !undo.isEmpty()
+                && redo.isEmpty()
+                && edit.entities().isEmpty()
+                && edit.annotations().isEmpty()
+                && undo.peekFirst().entities().isEmpty()
+                && undo.peekFirst().annotations().isEmpty()) {
+            Edit previous = undo.removeFirst();
+            var combined = new LinkedHashMap<Point, Change>();
+            for (var c : previous.changes()) combined.put(c.pos(), c);
+            for (var c : edit.changes()) {
+                var old = combined.get(c.pos());
+                combined.put(c.pos(), old == null ? c : new Change(c.pos(), old.before(), c.after()));
             }
-            var biomeMap=new LinkedHashMap<Point,BiomeChange>();
-            for(var c:previous.biomes())biomeMap.put(c.cell(),c);
-            for(var c:edit.biomes()) {
-                var old=biomeMap.get(c.cell());
-                biomeMap.put(c.cell(),old==null?c:new BiomeChange(c.cell(),old.before(),c.after()));
+            var biomeMap = new LinkedHashMap<Point, BiomeChange>();
+            for (var c : previous.biomes()) biomeMap.put(c.cell(), c);
+            for (var c : edit.biomes()) {
+                var old = biomeMap.get(c.cell());
+                biomeMap.put(c.cell(), old == null ? c : new BiomeChange(c.cell(), old.before(), c.after()));
             }
-            var merged=new Edit(previous.name(),List.copyOf(combined.values()),List.copyOf(biomeMap.values()),edit.flags()).withBuilder(previous.builder());
-            var kept=previous.selection()!=null&&edit.selection()!=null?previous.selection().then(edit.selection()):previous.selection()!=null?previous.selection():edit.selection();
-            if(kept!=null)merged=merged.withSelection(kept); // what a stroke did to the BuildObjects goes with it
-            if(merged.estimatedBytes()<=Selection.HISTORY_BYTES && merged.changes().size()+merged.biomes().size()<=Selection.LIMIT)edit=merged;
+            var merged = new Edit(
+                            previous.name(),
+                            List.copyOf(combined.values()),
+                            List.copyOf(biomeMap.values()),
+                            edit.flags())
+                    .withBuilder(previous.builder());
+            var kept = previous.selection() != null && edit.selection() != null
+                    ? previous.selection().then(edit.selection())
+                    : previous.selection() != null ? previous.selection() : edit.selection();
+            if (kept != null) merged = merged.withSelection(kept); // what a stroke did to the BuildObjects goes with it
+            if (merged.estimatedBytes() <= Selection.HISTORY_BYTES
+                    && merged.changes().size() + merged.biomes().size() <= Selection.LIMIT) edit = merged;
             else undo.addFirst(previous);
         }
-        lastStroke=stroke;
-        redo.clear(); undo.addFirst(edit); recalculateBytes();
-        while (undo.size()>32 || (bytes>Selection.HISTORY_BYTES && undo.size()>1)) bytes-=undo.removeLast().estimatedBytes();
-        event(edit.name()+" · "+(edit.changes().size()+edit.biomes().size()+edit.entities().size()+edit.annotations().size())+" changes");
+        lastStroke = stroke;
+        redo.clear();
+        undo.addFirst(edit);
+        recalculateBytes();
+        while (undo.size() > 32 || (bytes > Selection.HISTORY_BYTES && undo.size() > 1))
+            bytes -= undo.removeLast().estimatedBytes();
+        event(edit.name() + " · "
+                + (edit.changes().size()
+                        + edit.biomes().size()
+                        + edit.entities().size()
+                        + edit.annotations().size()) + " changes");
     }
     /** Every edit in the history is kept packed (see {@link PackedChanges}), whichever way it got there: made, undone, redone, interrupted or loaded. */
     private static void pack(Deque<Edit> history) {
-        boolean any=false;
-        for(var e:history)if(e.changes().size()>=PackedChanges.MIN_SIZE&&!(e.changes() instanceof PackedChanges)){any=true;break;}
-        if(!any)return;
-        var all=new ArrayList<>(history);history.clear();
-        for(var e:all)history.addLast(e.packed());
+        boolean any = false;
+        for (var e : history)
+            if (e.changes().size() >= PackedChanges.MIN_SIZE && !(e.changes() instanceof PackedChanges)) {
+                any = true;
+                break;
+            }
+        if (!any) return;
+        var all = new ArrayList<>(history);
+        history.clear();
+        for (var e : all) history.addLast(e.packed());
     }
-    void recalculateBytes() {pack(undo);pack(redo);bytes=0;for(var e:undo)bytes+=e.estimatedBytes();for(var e:redo)bytes+=e.estimatedBytes();}
+
+    void recalculateBytes() {
+        pack(undo);
+        pack(redo);
+        bytes = 0;
+        for (var e : undo) bytes += e.estimatedBytes();
+        for (var e : redo) bytes += e.estimatedBytes();
+    }
 }

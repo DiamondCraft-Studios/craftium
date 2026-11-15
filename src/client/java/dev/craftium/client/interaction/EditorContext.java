@@ -3,9 +3,8 @@ package dev.craftium.client.interaction;
 import dev.craftium.client.LassoSelection;
 import dev.craftium.core.Options;
 import dev.craftium.core.Point;
-import net.minecraft.world.phys.BlockHitResult;
-
 import java.util.List;
+import net.minecraft.world.phys.BlockHitResult;
 
 /**
  * What an {@link Interaction} may use of the editor: the options, the block under the cursor, whether Shift is down, and which control point
@@ -15,6 +14,7 @@ public interface EditorContext {
     Options options();
     /** The block face under the cursor, or null when the cursor is over sky or over a panel. */
     BlockHitResult target();
+
     boolean shiftDown();
     /** Sends the editor's own request of that name for the block under the cursor, as a menu item or a shortcut would. */
     void request(String action);

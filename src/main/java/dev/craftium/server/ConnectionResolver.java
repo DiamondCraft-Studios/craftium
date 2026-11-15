@@ -1,6 +1,7 @@
 package dev.craftium.server;
 
 import dev.craftium.core.Point;
+import java.util.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -10,7 +11,6 @@ import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Property;
-import java.util.*;
 
 /**
  * Lets what an AI build places connect the way it would if it were placed by hand: glass panes and iron bars join their neighbours, fences
@@ -42,25 +42,43 @@ final class ConnectionResolver {
             var keep = pinned.getOrDefault(change.pos(), Set.of());
             var result = state;
             for (var side : SIDES) result = adopt(level, plan, change.pos(), state, result, side, keep);
-            if (state.getBlock() instanceof WallBlock) result = adopt(level, plan, change.pos(), state, result, Direction.UP, keep);
+            if (state.getBlock() instanceof WallBlock)
+                result = adopt(level, plan, change.pos(), state, result, Direction.UP, keep);
             if (result != state) fixes.put(change.pos(), result);
         }
         for (var fix : fixes.entrySet()) {
             var old = plan.changes.get(fix.getKey());
-            plan.changes.put(fix.getKey(), new Session.Change(fix.getKey(), old.before(), new BlockSnapshot(fix.getValue(), old.after().data())));
+            plan.changes.put(
+                    fix.getKey(),
+                    new Session.Change(
+                            fix.getKey(),
+                            old.before(),
+                            new BlockSnapshot(fix.getValue(), old.after().data())));
         }
     }
 
     /** {@code result} with what the block would take from its neighbour on {@code side}: only the connection properties, and not those written. */
-    private static BlockState adopt(ServerLevel level, EditPlanner plan, Point at, BlockState state, BlockState result, Direction side, Set<String> keep) {
+    private static BlockState adopt(
+            ServerLevel level,
+            EditPlanner plan,
+            Point at,
+            BlockState state,
+            BlockState result,
+            Direction side,
+            Set<String> keep) {
         BlockPos pos = EditPlanner.pos(at);
         BlockPos beside = pos.relative(side);
         BlockState neighbour = plan.state(EditPlanner.point(beside));
-        // Without the water, nothing is scheduled in the real world for a preview that may never be applied; the property itself is not touched.
-        var dry = state.hasProperty(BlockStateProperties.WATERLOGGED) ? state.setValue(BlockStateProperties.WATERLOGGED, false) : state;
+        // Without the water, nothing is scheduled in the real world for a preview that may never be applied; the
+        // property itself is not touched.
+        var dry = state.hasProperty(BlockStateProperties.WATERLOGGED)
+                ? state.setValue(BlockStateProperties.WATERLOGGED, false)
+                : state;
         BlockState updated = dry.updateShape(level, level, pos, side, beside, neighbour, level.getRandom());
         for (Property<?> property : updated.getProperties()) {
-            if (property == BlockStateProperties.WATERLOGGED || keep.contains(property.getName()) || !result.hasProperty(property)) continue;
+            if (property == BlockStateProperties.WATERLOGGED
+                    || keep.contains(property.getName())
+                    || !result.hasProperty(property)) continue;
             result = copy(result, updated, property);
         }
         return result;

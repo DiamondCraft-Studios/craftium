@@ -1,28 +1,48 @@
 package dev.craftium.server;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import dev.craftium.core.IconCatalog;
 import dev.craftium.core.InteractionKind;
 import dev.craftium.core.PropertySpec;
 import dev.craftium.core.Tool;
 import dev.craftium.core.ToolSpec;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 class PluginToolsTest {
     private static final ToolBehaviour NOTHING = use -> {};
 
     private static ToolSpec spec(String id, PropertySpec... properties) {
-        return new ToolSpec(id, "Wall", "WL", IconCatalog.tool(Tool.SHAPE), "Plugins", "A wall", Tool.BrushUse.NONE, InteractionKind.CLICK, -1, "Build", false, false, false, true, false, false, List.of(properties));
+        return new ToolSpec(
+                id,
+                "Wall",
+                "WL",
+                IconCatalog.tool(Tool.SHAPE),
+                "Plugins",
+                "A wall",
+                Tool.BrushUse.NONE,
+                InteractionKind.CLICK,
+                -1,
+                "Build",
+                false,
+                false,
+                false,
+                true,
+                false,
+                false,
+                List.of(properties));
     }
 
-    @AfterEach void clean() { PluginTools.clear(); }
+    @AfterEach
+    void clean() {
+        PluginTools.clear();
+    }
 
-    @Test void aToolIsFoundOnceItIsRegistered() {
+    @Test
+    void aToolIsFoundOnceItIsRegistered() {
         assertNull(PluginTools.find("wall:build"));
         PluginTools.register(spec("wall:build"), NOTHING);
         assertSame(NOTHING, PluginTools.find("wall:build").behaviour());
@@ -31,7 +51,8 @@ class PluginToolsTest {
         assertNull(PluginTools.find(null));
     }
 
-    @Test void theEditorsOwnNamespaceAndMalformedIdsAreRefused() {
+    @Test
+    void theEditorsOwnNamespaceAndMalformedIdsAreRefused() {
         assertThrows(IllegalArgumentException.class, () -> PluginTools.register(spec("craftium:painter"), NOTHING));
         assertThrows(IllegalArgumentException.class, () -> PluginTools.register(spec("painter"), NOTHING));
         assertThrows(IllegalArgumentException.class, () -> PluginTools.register(spec("Wall:Build"), NOTHING));
@@ -39,13 +60,15 @@ class PluginToolsTest {
         assertThrows(IllegalArgumentException.class, () -> PluginTools.register(null, NOTHING));
     }
 
-    @Test void aToolCannotBeRegisteredTwice() {
+    @Test
+    void aToolCannotBeRegisteredTwice() {
         PluginTools.register(spec("wall:build"), NOTHING);
         assertThrows(IllegalArgumentException.class, () -> PluginTools.register(spec("wall:build"), use -> {}));
         assertSame(NOTHING, PluginTools.find("wall:build").behaviour());
     }
 
-    @Test void unregisteringANamespaceTakesBackItsToolsAndNoOthers() {
+    @Test
+    void unregisteringANamespaceTakesBackItsToolsAndNoOthers() {
         PluginTools.register(spec("wall:build"), NOTHING);
         PluginTools.register(spec("wall:clear"), NOTHING);
         PluginTools.register(spec("wallpaper:build"), NOTHING);
@@ -56,24 +79,36 @@ class PluginToolsTest {
         assertDoesNotThrow(() -> PluginTools.register(spec("wall:build"), NOTHING));
     }
 
-    @Test void theSettingsOfARequestAreHeldToWhatTheToolDeclared() {
-        PluginTools.register(spec("wall:build", PropertySpec.integer("height", "Height", 1, 5, 2), PropertySpec.toggle("hollow", "Hollow", false), PropertySpec.number("scale", "Scale", 0.5, 4, 1)), NOTHING);
+    @Test
+    void theSettingsOfARequestAreHeldToWhatTheToolDeclared() {
+        PluginTools.register(
+                spec(
+                        "wall:build",
+                        PropertySpec.integer("height", "Height", 1, 5, 2),
+                        PropertySpec.toggle("hollow", "Hollow", false),
+                        PropertySpec.number("scale", "Scale", 0.5, 4, 1)),
+                NOTHING);
         var tool = PluginTools.find("wall:build");
         var values = tool.settings(Map.of("height", 99.0, "hollow", 1.0, "undeclared", 7.0));
         assertEquals(5, values.integer("height"), "past the range is held to it");
         assertTrue(values.toggled("hollow"));
         assertEquals(1.0, values.number("scale"), "what the request did not say is what the tool started on");
-        assertThrows(IllegalArgumentException.class, () -> values.number("undeclared"), "a setting the tool did not declare is not kept");
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> values.number("undeclared"),
+                "a setting the tool did not declare is not kept");
     }
 
-    @Test void aRequestWithNoSettingsGivesTheStartingValues() {
+    @Test
+    void aRequestWithNoSettingsGivesTheStartingValues() {
         PluginTools.register(spec("wall:build", PropertySpec.integer("height", "Height", 1, 5, 2)), NOTHING);
         var tool = PluginTools.find("wall:build");
         assertEquals(2, tool.settings(Map.of()).integer("height"));
         assertEquals(2, tool.settings(null).integer("height"));
     }
 
-    @Test void theVersionGoesUpOnlyWhenTheSetOfToolsChanges() {
+    @Test
+    void theVersionGoesUpOnlyWhenTheSetOfToolsChanges() {
         int start = PluginTools.version();
         PluginTools.register(spec("wall:build"), NOTHING);
         assertEquals(start + 1, PluginTools.version());
@@ -90,11 +125,14 @@ class PluginToolsTest {
         assertEquals(start + 4, PluginTools.version());
     }
 
-    @Test void theToolsAreListedInAStableOrderWithTheirSettings() {
+    @Test
+    void theToolsAreListedInAStableOrderWithTheirSettings() {
         PluginTools.register(spec("zeta:last"), NOTHING);
         PluginTools.register(spec("alpha:first", PropertySpec.toggle("hollow", "Hollow", false)), NOTHING);
         var infos = PluginTools.infos();
-        assertEquals(List.of("alpha:first", "zeta:last"), infos.stream().map(dev.craftium.net.Packets.PluginTool::id).toList());
+        assertEquals(
+                List.of("alpha:first", "zeta:last"),
+                infos.stream().map(dev.craftium.net.Packets.PluginTool::id).toList());
         assertEquals("hollow", infos.get(0).properties().get(0).id());
     }
 }

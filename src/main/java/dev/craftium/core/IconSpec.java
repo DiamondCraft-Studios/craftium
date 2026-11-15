@@ -11,5 +11,7 @@ package dev.craftium.core;
  */
 public record IconSpec(String id, String label, String category, int width, int height) {
     /** The part of the id after the namespace, such as {@code tool/painter}. */
-    public String path() { return id.substring(id.indexOf(':') + 1); }
+    public String path() {
+        return id.substring(id.indexOf(':') + 1);
+    }
 }

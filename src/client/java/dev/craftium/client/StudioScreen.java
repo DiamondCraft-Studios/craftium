@@ -1,236 +1,999 @@
 package dev.craftium.client;
 
 import dev.craftium.client.compat.ClientCompat;
-import dev.craftium.core.*;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
-import net.minecraft.client.gui.components.*;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.Component;
+import dev.craftium.core.*;
 import java.util.*;
+import net.minecraft.client.gui.components.*;
+import net.minecraft.network.chat.Component;
 
 /** Paged inspector for the detailed controls; keeps settings out of the world viewport. */
 public final class StudioScreen extends CraftiumScreen {
     private final EditorScreen editor;
-    private String tab="Selection",message="";
-    private int page,left,top,columns=2,rows;
-    private int canvasW,canvasH;
-    private float uiScale=1;
-    private boolean previousHud,initialized;
-    private final List<Label> labels=new ArrayList<>();
-    private record Label(String text,int x,int y){}
-    static final LinkedHashMap<String,List<String>> GROUPS=new LinkedHashMap<>();
-    static {
-        GROUPS.put("Selection",List.of("compare","selectLimit","selectRange","selectUp","selectDown","selectHorizontal","selectCorners","includeNonSolid","position1","position2","lassoDepth","mode"));
-        GROUPS.put("Brush",List.of("radius","strength","extrudeCount","shape","invert","hollow","outline","outlineThickness","pixelPerfect","strokeAlign","surfaceOnly","keepExisting","pasteAir","smoothing","smoothRatio","smoothMode","smoothFixEdges","distortDistance","distortSeparate","distortX","distortY","distortZ","distortSmoothEdges","roughenRatio","shatterWidth","shatterAxis","threshold","meldStrength","denoise","maskY","fractureMaterial","exposedFaces","property"));
-        GROUPS.put("Geometry",List.of("shapeKind","sizeX","sizeY","sizeZ","yaw","pitch","roll","exponent","innerRadius","polygonSides","pathMode","slack","looped","extendToGround","useStairsAndSlabs","modelMode","modelColumns","nodes","modifyMode","modifyAxis","modifyType","modifyAngle","modifyRelative","modifyTranslate","modifyTranslateX","modifyTranslateY","modifyTranslateZ","modifyTranslateScale","copies","offsetX","offsetY","offsetZ"));
-        GROUPS.put("Paint",List.of("block","secondary","materials","copyProperties","typeReplace","noise","noise3D","noiseScale","seed","octaves","lacunarity","gain","jitter","scaleX","scaleY","scaleZ","density","biome","fillVertically","visualizeBiome","baseChance","minSpacing","randomYaw","randomFlip"));
-        GROUPS.put("Masks",List.of("mask","maskExpression","maskScript","inSelection","minY","maxY","symmetryX","symmetryY","symmetryZ","symmetryOrigin"));
-        GROUPS.put("Script",List.of("script","maskScript"));
-        GROUPS.put("Assets",List.of("name","text","useBuiltinFont","fontName","fontFile","fontSize","textThickness","fullBlocks","heightmap"));
-        GROUPS.put("Operations",List.of());
-        GROUPS.put("Library",List.of("name","author","tags"));
-        GROUPS.put("Entities",List.of("entityType","entityUuid","entityNbt","offsetX","offsetY","offsetZ","entityX","entityY","entityZ","yaw","pitch","roll","entityScaleX","entityScaleY","entityScaleZ","entityGroup"));
-        GROUPS.put("World",List.of("worldTime","randomTickSpeed","worldToggle","name"));
-        GROUPS.put("Annotations",List.of("annotationMode","text","annotationColor","annotationWidth","position1","position2","annotationId","annotationImageScale","annotationNormal"));
-        GROUPS.put("Style",List.of("uiBackground","uiPanel","uiAccent","uiText","uiMuted","uiBorder"));
-        GROUPS.put("Fluids",List.of("floodGap","floodUp","floodDown","floodHorizontal","floodCorners","fluidType","flowLength","fluidQuality","requireSupport","infiniteSources","fillEdges","removeFluidsWithoutSources"));
-        GROUPS.put("Capabilities",List.of("cameraFlight","flightMomentumLevel","stickyFlight","blockStep","liquidOpacity","minimumBrightness","showKeyHints","showMarkerGizmos","showDisplayGizmos","showAnnotations","bulldozer","replaceMode","forcePlace","noUpdates","tinker","fastPlace","angelPlacement","reach","farReach","noClip","showCollisionMesh","showLightBlocks","showStructureVoid","expandHitboxes","solidFluids","preventInteractions","autoSwapToCreative"));
-        GROUPS.put("Ruler",List.of("rulerMode","rulerSplit"));
-        GROUPS.put("Placement",List.of("keepExisting","pasteAir","copyEntities","pasteEntities","mergeBlocks","unlockRotation","gizmoMode","gizmoTarget","gizmoLocal","yaw","pitch","roll","sizeX","sizeY","sizeZ"));
-        GROUPS.put("Hotbars",List.of("name"));
-        GROUPS.put("Rebuild",List.of("rebuildStartDelay","rebuildMaxDelay","rebuildAirDelay","rebuildSameDelay","rebuildDifferentDelay","rebuildRandomDelay","rebuildHorizontalMultiplier","rebuildVerticalMultiplier","seed"));
-        GROUPS.put("AI",List.of());
-        GROUPS.put("Lighting",List.of("shadeSun","shadeFrom","shadeAzimuth","shadeAltitude","shadeAmbientOcclusion","shadeBounces","shadeDither","shadeExposure","shadeSamples","shadeRayLength","shadeAutomatic","shadeFullBlocks","shadeOpaque","shadeNoOres","shadeNoGlazed","shadeNoBlockEntities","materials"));
-    }
-    public StudioScreen(EditorScreen editor){super(Component.literal("Craftium Studio Inspector"));this.editor=editor;}
-    public EditorScreen editor(){return editor;}
-    /** Shows the named tab; the game tests use it to open one directly. */
-    void selectTab(String name){if(GROUPS.containsKey(name)){tab=name;page=0;if(initialized)init();}}
-    @Override protected void init(){
-        if(!initialized){previousHud=ClientCompat.hudHidden(minecraft);if(!previousHud)ClientCompat.toggleHud(minecraft);initialized=true;}
-        uiScale=Math.min(1f,Math.min(width/680f,height/440f));canvasW=Math.round(width/uiScale);canvasH=Math.round(height/uiScale);
-        clearWidgets();labels.clear();left=Math.max(12,(canvasW-640)/2);top=30;rows=Math.max(2,(canvasH-(tab.equals("Entities")?250:170))/46);
-        int tx=left,ty=top;for(String name:GROUPS.keySet()){int bw=font.width(name)+13;if(tx+bw>canvasW-18){tx=left;ty+=22;}button(name,tx,ty,bw,18,()->{tab=name;page=0;init();}).lit(name.equals("AI")&&AiBridge.running());tx+=bw+3;}
-        List<String> names=tab.equals("Script")?List.of():GROUPS.get(tab);int count=rows*columns,total=Math.max(1,(names.size()+count-1)/count);page=Math.clamp(page,0,total-1);
-        for(int i=page*count;i<Math.min(names.size(),(page+1)*count);i++){
-            String name=names.get(i);int index=i-page*count,x=left+(index%columns)*316,y=top+70+(index/columns)*46;
-            createField(name,x,y,300);
-        }
-        int bottom=canvasH-57;
-        if(!tab.equals("AI")){ // this tab has one page and no tool to apply
-            button("‹",left,bottom,24,20,()->{page=Math.max(0,page-1);init();});button("›",left+29,bottom,24,20,()->{page=Math.min(total-1,page+1);init();});
-            labels.add(new Label((page+1)+" / "+total,left+62,bottom+6));
-            button("Apply tool",left+385,bottom,110,20,()->send("use"));
-        }
-        button("Save & return",left+505,bottom,122,20,this::onClose);
-        if(tab.equals("Script")){
-            labels.add(new Label("Lua brush",left,top+60));labels.add(new Label("Lua boolean mask",left+316,top+60));
-            var brush=MultiLineEditBox.builder().setX(left).setY(top+77).build(font,300,canvasH-230,Component.literal("Lua brush"));brush.setCharacterLimit(16384);brush.setValue(ClientState.options.script);brush.setValueListener(value->ClientState.options.script=value);addRenderableWidget(brush);
-            var mask=MultiLineEditBox.builder().setX(left+316).setY(top+77).build(font,300,canvasH-230,Component.literal("Lua mask"));mask.setCharacterLimit(16384);mask.setValue(ClientState.options.maskScript);mask.setValueListener(value->ClientState.options.maskScript=value);addRenderableWidget(mask);
-            actionRow(new String[]{"Brush variables…","Mask variables…"},new Runnable[]{()->ClientCompat.setScreen(minecraft,new ScriptVariablesScreen(this,false)),()->ClientCompat.setScreen(minecraft,new ScriptVariablesScreen(this,true))});
-        }else if(tab.equals("Selection")){
-            actionRow(new String[]{"Select coordinates","Move outline","Expand","Shrink","Invert"},new String[]{"select_box","selection_move","selection_expand","selection_shrink","selection_invert"});
-        }else if(tab.equals("Operations")){
-            String[] actions={"fill","fill_outline","fill_walls","fill_top","fill_bottom","fill_nearest","replace","set_biome","autoshade","drain","waterlog","smooth_snow","gravity","trigger_updates","hollow","fill_gaps","selection_convex","move","clone","stack","analyze","selection_filter","selection_bounds","selection_distort","selection_smooth","selection_scale"};
-            for(int i=0;i<actions.length;i++){String action=actions[i];button(human(action),left+(i%4)*158,top+40+(i/4)*30,150,24,()->send(action));}
-            actionRow(new String[]{"Generate CIELAB field"},new Runnable[]{ColourField::generate});
-        }else if(tab.equals("Masks")){
-            actionRow(new String[]{"Visual rules…","Block rule","Surface rule","Wrap NOT","Clear rules"},new Runnable[]{()->ClientCompat.setScreen(minecraft,new MaskScreen(this)),()->ClientState.options.maskExpression="block("+ClientState.options.block+")",()->ClientState.options.maskExpression="surface",()->ClientState.options.maskExpression="not("+ClientState.options.maskExpression+")",()->ClientState.options.maskExpression=""});
-        }else if(tab.equals("Geometry")){
-            actionRow(new String[]{"Add cursor node","Remove last","Clear nodes"},new Runnable[]{()->{var hit=editor.target();if(hit!=null&&ClientState.options.nodes.size()<64)ClientState.options.nodes.add(CraftiumClient.point(hit.getBlockPos()));},()->{if(!ClientState.options.nodes.isEmpty())ClientState.options.nodes.removeLast();},()->ClientState.options.nodes.clear()});
-        }else if(tab.equals("Library")){
-            button("Save tool preset",left,top+155,180,24,()->{ClientLibrary.savePreset(ClientState.options.name);message="Preset saved";});
-            button("Load tool preset",left+190,top+155,180,24,()->{ClientLibrary.loadPreset(ClientState.options.name);init();message="Preset loaded";});
-            button("Save palette",left,top+189,180,24,()->{ClientLibrary.savePalette(ClientState.options.name);message="Palette saved";});
-            button("Load palette",left+190,top+189,180,24,()->{ClientLibrary.loadPalette(ClientState.options.name);message="Palette loaded";});
-            button("Save clipboard blueprint",left,top+223,180,24,()->send("blueprint_save"));
-            button("Load blueprint",left+190,top+223,180,24,()->send("blueprint_load"));
-            labels.add(new Label("Presets: "+String.join(", ",ClientLibrary.list("presets")),left,top+270));
-            labels.add(new Label("Palettes: "+String.join(", ",ClientLibrary.list("palettes")),left,top+286));
-        }else if(tab.equals("Assets")){
-            actionRow(new String[]{"Import asset…","Import schematic","Export schematic","Structure NBT","Selection CSV"},new Runnable[]{()->AssetPicker.open(this::init),()->send("schematic_import"),()->send("schematic_export"),()->send("structure_export"),()->send("selection_csv")});
-        }else if(tab.equals("Paint")){
-            actionRow(new String[]{"Colour studio","Materials window"},new Runnable[]{()->ClientCompat.setScreen(minecraft,new ColourScreen(this)),()->{WorkspaceLayout.show("materials");onClose();}});
-        }else if(tab.equals("Ruler")){
-            actionRow(new String[]{"Split segments","Select center","Clear ruler"},new Runnable[]{()->{
-                var rulers=ClientState.rulers;int parts=ClientState.options.rulerSplit;var next=new ArrayList<Ruler>();
-                for(var r:rulers){
-                    if(!r.complete()){next.add(r);continue;}
-                    Point previous=r.a;
-                    for(int j=1;j<=parts;j++){var at=j==parts?r.b:new Point((int)Math.round(r.a.x()+(r.b.x()-r.a.x())*j/(double)parts),(int)Math.round(r.a.y()+(r.b.y()-r.a.y())*j/(double)parts),(int)Math.round(r.a.z()+(r.b.z()-r.a.z())*j/(double)parts));var piece=new Ruler(previous);piece.b=at;next.add(piece);previous=at;}
-                }
-                if(next.size()>256)throw new IllegalArgumentException("Ruler limit: 256 rulers");rulers.clear();rulers.addAll(next);
-            },()->{
-                var ruler=editor.currentRuler();if(ruler==null||!ruler.complete())throw new IllegalArgumentException("Set both ends of a ruler");Point a=ruler.a,b=ruler.b;Point center=new Point((a.x()+b.x())/2,(a.y()+b.y())/2,(a.z()+b.z())/2);ClientState.options.position1=center;ClientState.options.position2=center;send("select_box");
-            },()->ClientState.rulers.clear()});
-        }else if(tab.equals("Placement")){
-            actionRow(new String[]{"Transform clipboard","Snap to ground","Paste copy","Paste & select","Confirm"},new Runnable[]{()->send("clipboard_transform"),PlacementPreview::snapToGround,PlacementPreview::pasteCopy,PlacementPreview::pasteAndSelect,PlacementPreview::confirm});
-        }else if(tab.equals("Hotbars")){
-            actionRow(new String[]{"Save named hotbar","Load named hotbar","List hotbars","Inventory"},new Runnable[]{()->send("hotbar_save"),()->send("hotbar_load"),()->send("hotbar_list"),()->ClientCompat.setScreen(minecraft,new InventoryPaletteScreen(this))});
-            button("Previous saved slot",left,top+125,200,24,()->send("hotbar_previous"));button("Next saved slot",left+212,top+125,200,24,()->send("hotbar_next"));
-        }else if(tab.equals("Lighting")){
-            actionRow(new String[]{"Autoshade","Add light here","Clear lights","List lights","Palette…"},new Runnable[]{()->send("autoshade"),()->{var player=minecraft.player;if(player!=null&&ClientState.options.shadeLights.size()<16)ClientState.options.shadeLights.add(new ShadeLight(player.getX(),player.getEyeY(),player.getZ(),ClientState.options.strength));},()->ClientState.options.shadeLights.clear(),()->ClientCompat.setScreen(minecraft,new ReportScreen(this,String.join("\n",ClientState.options.shadeLights.stream().map(Object::toString).toList()))),()->{WorkspaceLayout.show("materials");onClose();}});
-        }else if(tab.equals("Rebuild")){
-            actionRow(new String[]{"Start animated rebuild","Cancel and restore"},new String[]{"animated_rebuild","rebuild_cancel"});
-        }else if(tab.equals("Entities")){
-            actionRow(new String[]{"Create display","Select nearest","Update NBT","Move","Delete"},new String[]{"entity_spawn","entity_select","entity_update","entity_move","entity_delete"});
-            String[] extra={"entity_duplicate","entity_transform","entity_reset","entity_group","entity_ungroup","entity_group_transform"};
-            for(int i=0;i<extra.length;i++){String action=extra[i];button(human(action.replace("entity_","")),left+(i%3)*209,canvasH-145+(i/3)*26,201,22,()->send(action));}
+    private String tab = "Selection", message = "";
+    private int page, left, top, columns = 2, rows;
+    private int canvasW, canvasH;
+    private float uiScale = 1;
+    private boolean previousHud, initialized;
+    private final List<Label> labels = new ArrayList<>();
 
-        }else if(tab.equals("World")){
-            String[] actions={"world_time","world_clear","world_rain","world_thunder","world_random_ticks","world_advance_time","world_advance_weather","world_spawn_mobs","world_keep_inventory","world_block_gravity","world_trample_farmland","world_block_drops","world_player_invulnerability","world_fire_tick","gamemode_creative","gamemode_spectator","gamemode_survival","gamemode_adventure","view_save","view_load"};
-            for(int i=0;i<actions.length;i++){String action=actions[i];button(human(action),left+(i%4)*158,top+170+(i/4)*28,150,22,()->send(action));}
-        }else if(tab.equals("AI")){
+    private record Label(String text, int x, int y) {}
+
+    static final LinkedHashMap<String, List<String>> GROUPS = new LinkedHashMap<>();
+
+    static {
+        GROUPS.put(
+                "Selection",
+                List.of(
+                        "compare",
+                        "selectLimit",
+                        "selectRange",
+                        "selectUp",
+                        "selectDown",
+                        "selectHorizontal",
+                        "selectCorners",
+                        "includeNonSolid",
+                        "position1",
+                        "position2",
+                        "lassoDepth",
+                        "mode"));
+        GROUPS.put(
+                "Brush",
+                List.of(
+                        "radius",
+                        "strength",
+                        "extrudeCount",
+                        "shape",
+                        "invert",
+                        "hollow",
+                        "outline",
+                        "outlineThickness",
+                        "pixelPerfect",
+                        "strokeAlign",
+                        "surfaceOnly",
+                        "keepExisting",
+                        "pasteAir",
+                        "smoothing",
+                        "smoothRatio",
+                        "smoothMode",
+                        "smoothFixEdges",
+                        "distortDistance",
+                        "distortSeparate",
+                        "distortX",
+                        "distortY",
+                        "distortZ",
+                        "distortSmoothEdges",
+                        "roughenRatio",
+                        "shatterWidth",
+                        "shatterAxis",
+                        "threshold",
+                        "meldStrength",
+                        "denoise",
+                        "maskY",
+                        "fractureMaterial",
+                        "exposedFaces",
+                        "property"));
+        GROUPS.put(
+                "Geometry",
+                List.of(
+                        "shapeKind",
+                        "sizeX",
+                        "sizeY",
+                        "sizeZ",
+                        "yaw",
+                        "pitch",
+                        "roll",
+                        "exponent",
+                        "innerRadius",
+                        "polygonSides",
+                        "pathMode",
+                        "slack",
+                        "looped",
+                        "extendToGround",
+                        "useStairsAndSlabs",
+                        "modelMode",
+                        "modelColumns",
+                        "nodes",
+                        "modifyMode",
+                        "modifyAxis",
+                        "modifyType",
+                        "modifyAngle",
+                        "modifyRelative",
+                        "modifyTranslate",
+                        "modifyTranslateX",
+                        "modifyTranslateY",
+                        "modifyTranslateZ",
+                        "modifyTranslateScale",
+                        "copies",
+                        "offsetX",
+                        "offsetY",
+                        "offsetZ"));
+        GROUPS.put(
+                "Paint",
+                List.of(
+                        "block",
+                        "secondary",
+                        "materials",
+                        "copyProperties",
+                        "typeReplace",
+                        "noise",
+                        "noise3D",
+                        "noiseScale",
+                        "seed",
+                        "octaves",
+                        "lacunarity",
+                        "gain",
+                        "jitter",
+                        "scaleX",
+                        "scaleY",
+                        "scaleZ",
+                        "density",
+                        "biome",
+                        "fillVertically",
+                        "visualizeBiome",
+                        "baseChance",
+                        "minSpacing",
+                        "randomYaw",
+                        "randomFlip"));
+        GROUPS.put(
+                "Masks",
+                List.of(
+                        "mask",
+                        "maskExpression",
+                        "maskScript",
+                        "inSelection",
+                        "minY",
+                        "maxY",
+                        "symmetryX",
+                        "symmetryY",
+                        "symmetryZ",
+                        "symmetryOrigin"));
+        GROUPS.put("Script", List.of("script", "maskScript"));
+        GROUPS.put(
+                "Assets",
+                List.of(
+                        "name",
+                        "text",
+                        "useBuiltinFont",
+                        "fontName",
+                        "fontFile",
+                        "fontSize",
+                        "textThickness",
+                        "fullBlocks",
+                        "heightmap"));
+        GROUPS.put("Operations", List.of());
+        GROUPS.put("Library", List.of("name", "author", "tags"));
+        GROUPS.put(
+                "Entities",
+                List.of(
+                        "entityType",
+                        "entityUuid",
+                        "entityNbt",
+                        "offsetX",
+                        "offsetY",
+                        "offsetZ",
+                        "entityX",
+                        "entityY",
+                        "entityZ",
+                        "yaw",
+                        "pitch",
+                        "roll",
+                        "entityScaleX",
+                        "entityScaleY",
+                        "entityScaleZ",
+                        "entityGroup"));
+        GROUPS.put("World", List.of("worldTime", "randomTickSpeed", "worldToggle", "name"));
+        GROUPS.put(
+                "Annotations",
+                List.of(
+                        "annotationMode",
+                        "text",
+                        "annotationColor",
+                        "annotationWidth",
+                        "position1",
+                        "position2",
+                        "annotationId",
+                        "annotationImageScale",
+                        "annotationNormal"));
+        GROUPS.put("Style", List.of("uiBackground", "uiPanel", "uiAccent", "uiText", "uiMuted", "uiBorder"));
+        GROUPS.put(
+                "Fluids",
+                List.of(
+                        "floodGap",
+                        "floodUp",
+                        "floodDown",
+                        "floodHorizontal",
+                        "floodCorners",
+                        "fluidType",
+                        "flowLength",
+                        "fluidQuality",
+                        "requireSupport",
+                        "infiniteSources",
+                        "fillEdges",
+                        "removeFluidsWithoutSources"));
+        GROUPS.put(
+                "Capabilities",
+                List.of(
+                        "cameraFlight",
+                        "flightMomentumLevel",
+                        "stickyFlight",
+                        "blockStep",
+                        "liquidOpacity",
+                        "minimumBrightness",
+                        "showKeyHints",
+                        "showMarkerGizmos",
+                        "showDisplayGizmos",
+                        "showAnnotations",
+                        "bulldozer",
+                        "replaceMode",
+                        "forcePlace",
+                        "noUpdates",
+                        "tinker",
+                        "fastPlace",
+                        "angelPlacement",
+                        "reach",
+                        "farReach",
+                        "noClip",
+                        "showCollisionMesh",
+                        "showLightBlocks",
+                        "showStructureVoid",
+                        "expandHitboxes",
+                        "solidFluids",
+                        "preventInteractions",
+                        "autoSwapToCreative"));
+        GROUPS.put("Ruler", List.of("rulerMode", "rulerSplit"));
+        GROUPS.put(
+                "Placement",
+                List.of(
+                        "keepExisting",
+                        "pasteAir",
+                        "copyEntities",
+                        "pasteEntities",
+                        "mergeBlocks",
+                        "unlockRotation",
+                        "gizmoMode",
+                        "gizmoTarget",
+                        "gizmoLocal",
+                        "yaw",
+                        "pitch",
+                        "roll",
+                        "sizeX",
+                        "sizeY",
+                        "sizeZ"));
+        GROUPS.put("Hotbars", List.of("name"));
+        GROUPS.put(
+                "Rebuild",
+                List.of(
+                        "rebuildStartDelay",
+                        "rebuildMaxDelay",
+                        "rebuildAirDelay",
+                        "rebuildSameDelay",
+                        "rebuildDifferentDelay",
+                        "rebuildRandomDelay",
+                        "rebuildHorizontalMultiplier",
+                        "rebuildVerticalMultiplier",
+                        "seed"));
+        GROUPS.put("AI", List.of());
+        GROUPS.put(
+                "Lighting",
+                List.of(
+                        "shadeSun",
+                        "shadeFrom",
+                        "shadeAzimuth",
+                        "shadeAltitude",
+                        "shadeAmbientOcclusion",
+                        "shadeBounces",
+                        "shadeDither",
+                        "shadeExposure",
+                        "shadeSamples",
+                        "shadeRayLength",
+                        "shadeAutomatic",
+                        "shadeFullBlocks",
+                        "shadeOpaque",
+                        "shadeNoOres",
+                        "shadeNoGlazed",
+                        "shadeNoBlockEntities",
+                        "materials"));
+    }
+
+    public StudioScreen(EditorScreen editor) {
+        super(Component.literal("Craftium Studio Inspector"));
+        this.editor = editor;
+    }
+
+    public EditorScreen editor() {
+        return editor;
+    }
+    /** Shows the named tab; the game tests use it to open one directly. */
+    void selectTab(String name) {
+        if (GROUPS.containsKey(name)) {
+            tab = name;
+            page = 0;
+            if (initialized) init();
+        }
+    }
+
+    @Override
+    protected void init() {
+        if (!initialized) {
+            previousHud = ClientCompat.hudHidden(minecraft);
+            if (!previousHud) ClientCompat.toggleHud(minecraft);
+            initialized = true;
+        }
+        uiScale = Math.min(1f, Math.min(width / 680f, height / 440f));
+        canvasW = Math.round(width / uiScale);
+        canvasH = Math.round(height / uiScale);
+        clearWidgets();
+        labels.clear();
+        left = Math.max(12, (canvasW - 640) / 2);
+        top = 30;
+        rows = Math.max(2, (canvasH - (tab.equals("Entities") ? 250 : 170)) / 46);
+        int tx = left, ty = top;
+        for (String name : GROUPS.keySet()) {
+            int bw = font.width(name) + 13;
+            if (tx + bw > canvasW - 18) {
+                tx = left;
+                ty += 22;
+            }
+            button(name, tx, ty, bw, 18, () -> {
+                        tab = name;
+                        page = 0;
+                        init();
+                    })
+                    .lit(name.equals("AI") && AiBridge.running());
+            tx += bw + 3;
+        }
+        List<String> names = tab.equals("Script") ? List.of() : GROUPS.get(tab);
+        int count = rows * columns, total = Math.max(1, (names.size() + count - 1) / count);
+        page = Math.clamp(page, 0, total - 1);
+        for (int i = page * count; i < Math.min(names.size(), (page + 1) * count); i++) {
+            String name = names.get(i);
+            int index = i - page * count, x = left + (index % columns) * 316, y = top + 70 + (index / columns) * 46;
+            createField(name, x, y, 300);
+        }
+        int bottom = canvasH - 57;
+        if (!tab.equals("AI")) { // this tab has one page and no tool to apply
+            button("‹", left, bottom, 24, 20, () -> {
+                page = Math.max(0, page - 1);
+                init();
+            });
+            button("›", left + 29, bottom, 24, 20, () -> {
+                page = Math.min(total - 1, page + 1);
+                init();
+            });
+            labels.add(new Label((page + 1) + " / " + total, left + 62, bottom + 6));
+            button("Apply tool", left + 385, bottom, 110, 20, () -> send("use"));
+        }
+        button("Save & return", left + 505, bottom, 122, 20, this::onClose);
+        if (tab.equals("Script")) {
+            labels.add(new Label("Lua brush", left, top + 60));
+            labels.add(new Label("Lua boolean mask", left + 316, top + 60));
+            var brush = MultiLineEditBox.builder()
+                    .setX(left)
+                    .setY(top + 77)
+                    .build(font, 300, canvasH - 230, Component.literal("Lua brush"));
+            brush.setCharacterLimit(16384);
+            brush.setValue(ClientState.options.script);
+            brush.setValueListener(value -> ClientState.options.script = value);
+            addRenderableWidget(brush);
+            var mask = MultiLineEditBox.builder()
+                    .setX(left + 316)
+                    .setY(top + 77)
+                    .build(font, 300, canvasH - 230, Component.literal("Lua mask"));
+            mask.setCharacterLimit(16384);
+            mask.setValue(ClientState.options.maskScript);
+            mask.setValueListener(value -> ClientState.options.maskScript = value);
+            addRenderableWidget(mask);
+            actionRow(new String[] {"Brush variables…", "Mask variables…"}, new Runnable[] {
+                () -> ClientCompat.setScreen(minecraft, new ScriptVariablesScreen(this, false)),
+                () -> ClientCompat.setScreen(minecraft, new ScriptVariablesScreen(this, true))
+            });
+        } else if (tab.equals("Selection")) {
+            actionRow(new String[] {"Select coordinates", "Move outline", "Expand", "Shrink", "Invert"}, new String[] {
+                "select_box", "selection_move", "selection_expand", "selection_shrink", "selection_invert"
+            });
+        } else if (tab.equals("Operations")) {
+            String[] actions = {
+                "fill",
+                "fill_outline",
+                "fill_walls",
+                "fill_top",
+                "fill_bottom",
+                "fill_nearest",
+                "replace",
+                "set_biome",
+                "autoshade",
+                "drain",
+                "waterlog",
+                "smooth_snow",
+                "gravity",
+                "trigger_updates",
+                "hollow",
+                "fill_gaps",
+                "selection_convex",
+                "move",
+                "clone",
+                "stack",
+                "analyze",
+                "selection_filter",
+                "selection_bounds",
+                "selection_distort",
+                "selection_smooth",
+                "selection_scale"
+            };
+            for (int i = 0; i < actions.length; i++) {
+                String action = actions[i];
+                button(human(action), left + (i % 4) * 158, top + 40 + (i / 4) * 30, 150, 24, () -> send(action));
+            }
+            actionRow(new String[] {"Generate CIELAB field"}, new Runnable[] {ColourField::generate});
+        } else if (tab.equals("Masks")) {
+            actionRow(
+                    new String[] {"Visual rules…", "Block rule", "Surface rule", "Wrap NOT", "Clear rules"},
+                    new Runnable[] {
+                        () -> ClientCompat.setScreen(minecraft, new MaskScreen(this)),
+                        () -> ClientState.options.maskExpression = "block(" + ClientState.options.block + ")",
+                        () -> ClientState.options.maskExpression = "surface",
+                        () -> ClientState.options.maskExpression = "not(" + ClientState.options.maskExpression + ")",
+                        () -> ClientState.options.maskExpression = ""
+                    });
+        } else if (tab.equals("Geometry")) {
+            actionRow(new String[] {"Add cursor node", "Remove last", "Clear nodes"}, new Runnable[] {
+                () -> {
+                    var hit = editor.target();
+                    if (hit != null && ClientState.options.nodes.size() < 64)
+                        ClientState.options.nodes.add(CraftiumClient.point(hit.getBlockPos()));
+                },
+                () -> {
+                    if (!ClientState.options.nodes.isEmpty()) ClientState.options.nodes.removeLast();
+                },
+                () -> ClientState.options.nodes.clear()
+            });
+        } else if (tab.equals("Library")) {
+            button("Save tool preset", left, top + 155, 180, 24, () -> {
+                ClientLibrary.savePreset(ClientState.options.name);
+                message = "Preset saved";
+            });
+            button("Load tool preset", left + 190, top + 155, 180, 24, () -> {
+                ClientLibrary.loadPreset(ClientState.options.name);
+                init();
+                message = "Preset loaded";
+            });
+            button("Save palette", left, top + 189, 180, 24, () -> {
+                ClientLibrary.savePalette(ClientState.options.name);
+                message = "Palette saved";
+            });
+            button("Load palette", left + 190, top + 189, 180, 24, () -> {
+                ClientLibrary.loadPalette(ClientState.options.name);
+                message = "Palette loaded";
+            });
+            button("Save clipboard blueprint", left, top + 223, 180, 24, () -> send("blueprint_save"));
+            button("Load blueprint", left + 190, top + 223, 180, 24, () -> send("blueprint_load"));
+            labels.add(new Label("Presets: " + String.join(", ", ClientLibrary.list("presets")), left, top + 270));
+            labels.add(new Label("Palettes: " + String.join(", ", ClientLibrary.list("palettes")), left, top + 286));
+        } else if (tab.equals("Assets")) {
+            actionRow(
+                    new String[] {
+                        "Import asset…", "Import schematic", "Export schematic", "Structure NBT", "Selection CSV"
+                    },
+                    new Runnable[] {
+                        () -> AssetPicker.open(this::init),
+                        () -> send("schematic_import"),
+                        () -> send("schematic_export"),
+                        () -> send("structure_export"),
+                        () -> send("selection_csv")
+                    });
+        } else if (tab.equals("Paint")) {
+            actionRow(new String[] {"Colour studio", "Materials window"}, new Runnable[] {
+                () -> ClientCompat.setScreen(minecraft, new ColourScreen(this)),
+                () -> {
+                    WorkspaceLayout.show("materials");
+                    onClose();
+                }
+            });
+        } else if (tab.equals("Ruler")) {
+            actionRow(new String[] {"Split segments", "Select center", "Clear ruler"}, new Runnable[] {
+                () -> {
+                    var rulers = ClientState.rulers;
+                    int parts = ClientState.options.rulerSplit;
+                    var next = new ArrayList<Ruler>();
+                    for (var r : rulers) {
+                        if (!r.complete()) {
+                            next.add(r);
+                            continue;
+                        }
+                        Point previous = r.a;
+                        for (int j = 1; j <= parts; j++) {
+                            var at = j == parts
+                                    ? r.b
+                                    : new Point(
+                                            (int) Math.round(r.a.x() + (r.b.x() - r.a.x()) * j / (double) parts),
+                                            (int) Math.round(r.a.y() + (r.b.y() - r.a.y()) * j / (double) parts),
+                                            (int) Math.round(r.a.z() + (r.b.z() - r.a.z()) * j / (double) parts));
+                            var piece = new Ruler(previous);
+                            piece.b = at;
+                            next.add(piece);
+                            previous = at;
+                        }
+                    }
+                    if (next.size() > 256) throw new IllegalArgumentException("Ruler limit: 256 rulers");
+                    rulers.clear();
+                    rulers.addAll(next);
+                },
+                () -> {
+                    var ruler = editor.currentRuler();
+                    if (ruler == null || !ruler.complete())
+                        throw new IllegalArgumentException("Set both ends of a ruler");
+                    Point a = ruler.a, b = ruler.b;
+                    Point center = new Point((a.x() + b.x()) / 2, (a.y() + b.y()) / 2, (a.z() + b.z()) / 2);
+                    ClientState.options.position1 = center;
+                    ClientState.options.position2 = center;
+                    send("select_box");
+                },
+                () -> ClientState.rulers.clear()
+            });
+        } else if (tab.equals("Placement")) {
+            actionRow(
+                    new String[] {"Transform clipboard", "Snap to ground", "Paste copy", "Paste & select", "Confirm"},
+                    new Runnable[] {
+                        () -> send("clipboard_transform"),
+                        PlacementPreview::snapToGround,
+                        PlacementPreview::pasteCopy,
+                        PlacementPreview::pasteAndSelect,
+                        PlacementPreview::confirm
+                    });
+        } else if (tab.equals("Hotbars")) {
+            actionRow(
+                    new String[] {"Save named hotbar", "Load named hotbar", "List hotbars", "Inventory"},
+                    new Runnable[] {
+                        () -> send("hotbar_save"),
+                        () -> send("hotbar_load"),
+                        () -> send("hotbar_list"),
+                        () -> ClientCompat.setScreen(minecraft, new InventoryPaletteScreen(this))
+                    });
+            button("Previous saved slot", left, top + 125, 200, 24, () -> send("hotbar_previous"));
+            button("Next saved slot", left + 212, top + 125, 200, 24, () -> send("hotbar_next"));
+        } else if (tab.equals("Lighting")) {
+            actionRow(
+                    new String[] {"Autoshade", "Add light here", "Clear lights", "List lights", "Palette…"},
+                    new Runnable[] {
+                        () -> send("autoshade"),
+                        () -> {
+                            var player = minecraft.player;
+                            if (player != null && ClientState.options.shadeLights.size() < 16)
+                                ClientState.options.shadeLights.add(new ShadeLight(
+                                        player.getX(), player.getEyeY(), player.getZ(), ClientState.options.strength));
+                        },
+                        () -> ClientState.options.shadeLights.clear(),
+                        () -> ClientCompat.setScreen(
+                                minecraft,
+                                new ReportScreen(
+                                        this,
+                                        String.join(
+                                                "\n",
+                                                ClientState.options.shadeLights.stream()
+                                                        .map(Object::toString)
+                                                        .toList()))),
+                        () -> {
+                            WorkspaceLayout.show("materials");
+                            onClose();
+                        }
+                    });
+        } else if (tab.equals("Rebuild")) {
+            actionRow(
+                    new String[] {"Start animated rebuild", "Cancel and restore"},
+                    new String[] {"animated_rebuild", "rebuild_cancel"});
+        } else if (tab.equals("Entities")) {
+            actionRow(
+                    new String[] {"Create display", "Select nearest", "Update NBT", "Move", "Delete"},
+                    new String[] {"entity_spawn", "entity_select", "entity_update", "entity_move", "entity_delete"});
+            String[] extra = {
+                "entity_duplicate",
+                "entity_transform",
+                "entity_reset",
+                "entity_group",
+                "entity_ungroup",
+                "entity_group_transform"
+            };
+            for (int i = 0; i < extra.length; i++) {
+                String action = extra[i];
+                button(
+                        human(action.replace("entity_", "")),
+                        left + (i % 3) * 209,
+                        canvasH - 145 + (i / 3) * 26,
+                        201,
+                        22,
+                        () -> send(action));
+            }
+
+        } else if (tab.equals("World")) {
+            String[] actions = {
+                "world_time",
+                "world_clear",
+                "world_rain",
+                "world_thunder",
+                "world_random_ticks",
+                "world_advance_time",
+                "world_advance_weather",
+                "world_spawn_mobs",
+                "world_keep_inventory",
+                "world_block_gravity",
+                "world_trample_farmland",
+                "world_block_drops",
+                "world_player_invulnerability",
+                "world_fire_tick",
+                "gamemode_creative",
+                "gamemode_spectator",
+                "gamemode_survival",
+                "gamemode_adventure",
+                "view_save",
+                "view_load"
+            };
+            for (int i = 0; i < actions.length; i++) {
+                String action = actions[i];
+                button(human(action), left + (i % 4) * 158, top + 170 + (i / 4) * 28, 150, 22, () -> send(action));
+            }
+        } else if (tab.equals("AI")) {
             aiTab();
-        }else if(tab.equals("Annotations")){
-            actionRow(new String[]{"Create","Update","Delete","Clear all","Import image…"},new Runnable[]{()->send("annotation_create"),()->send("annotation_update"),()->send("annotation_delete"),()->send("annotation_clear"),()->AnnotationImages.choose(this::init)});
-            button("Browse annotations",left+316,top+254,300,22,()->{String report=ClientState.status.annotations()==null?"No annotations":String.join("\n",ClientState.status.annotations().stream().map(note->note.id()+"  "+note.mode()+"  "+note.text()).toList());ClientCompat.setScreen(minecraft,new ReportScreen(this,report));});
+        } else if (tab.equals("Annotations")) {
+            actionRow(new String[] {"Create", "Update", "Delete", "Clear all", "Import image…"}, new Runnable[] {
+                () -> send("annotation_create"),
+                () -> send("annotation_update"),
+                () -> send("annotation_delete"),
+                () -> send("annotation_clear"),
+                () -> AnnotationImages.choose(this::init)
+            });
+            button("Browse annotations", left + 316, top + 254, 300, 22, () -> {
+                String report = ClientState.status.annotations() == null
+                        ? "No annotations"
+                        : String.join(
+                                "\n",
+                                ClientState.status.annotations().stream()
+                                        .map(note -> note.id() + "  " + note.mode() + "  " + note.text())
+                                        .toList());
+                ClientCompat.setScreen(minecraft, new ReportScreen(this, report));
+            });
         }
     }
     /**
      * The AI tab: one switch to let an AI app build here, the controls for a build it has previewed, and the steps to get going.
      * The status card and the pending-preview line are drawn live by {@link #drawAi}.
      */
-    private void aiTab(){
-        int y=top+70+62;
-        boolean on=AiBridge.running();
-        button(on?"Turn off AI building":"Turn on AI building",left,y,160,24,()->{AiBridge.toggle();message=AiBridge.running()?"AI building is on":"AI building is off";init();}).lit(on);
-        button("Apply preview",left+166,y,100,24,()->CraftiumClient.sendAiToOnly("ai_apply"));
-        button("Discard preview",left+272,y,100,24,()->CraftiumClient.sendAiToOnly("ai_cancel"));
-        button("Undo AI build",left+378,y,115,24,()->CraftiumClient.sendAiToOnly("ai_undo"));
-        button("Redo AI build",left+499,y,117,24,()->CraftiumClient.sendAiToOnly("ai_redo"));
-        // Other players' AI previews are drawn in teal with their name; this hides them, and is remembered like the other settings.
-        button("Build sessions… ("+ClientState.aiSessions.size()+")",left+390,top+70+108,226,20,()->ClientCompat.setScreen(minecraft,new AiSessionsScreen(this)));
-        addRenderableWidget(new FlatCheckbox(left,top+70+108,380,20,"Show AI previews from other players",ClientState.options.showSharedAiPreviews,()->{ClientState.options.showSharedAiPreviews=!ClientState.options.showSharedAiPreviews;init();}));
-        int steps=top+70+138;
-        labels.add(new Label("HOW IT WORKS",left,steps));
-        labels.add(new Label("1.  In Claude Code or Cowork, add it once:  /plugin marketplace add DiamondCraft-Studios/craftium  (or the repo's path)",left,steps+15));
-        labels.add(new Label("2.  Install it:  /plugin install craftium@craftium  (it needs Node.js 18 or newer on your PATH).",left,steps+28));
-        labels.add(new Label("3.  Turn on AI building above. Craftium remembers it.",left,steps+41));
-        labels.add(new Label("4.  Ask Claude for a build, such as \"Build an Egyptian pillar in front of me\".",left,steps+54));
-        labels.add(new Label("5.  Look at the ghost in your world. Ask for changes, then say \"apply it\", or press Apply preview.",left,steps+67));
-        labels.add(new Label("Nothing is built until it is applied. Undo takes a build back, and Redo brings it again.",left,steps+86));
-        labels.add(new Label("Game from CurseForge, Modrinth App or Prism? Set the plugin's \"Minecraft folder\" setting to this game's folder, below.",left,steps+99));
-        // The folder this game keeps its settings in, which is what the plugin's Minecraft folder has to be when it is not the default .minecraft.
-        String folder=AiBridge.gameFolder();
-        labels.add(new Label("This game's folder: "+(font.width(folder)>420?"…"+font.plainSubstrByWidth(folder,420,true):folder),left,steps+130));
-        button("Copy game folder",left,steps+144,150,20,()->{minecraft.keyboardHandler.setClipboard(folder);message="Game folder copied";});
+    private void aiTab() {
+        int y = top + 70 + 62;
+        boolean on = AiBridge.running();
+        button(on ? "Turn off AI building" : "Turn on AI building", left, y, 160, 24, () -> {
+                    AiBridge.toggle();
+                    message = AiBridge.running() ? "AI building is on" : "AI building is off";
+                    init();
+                })
+                .lit(on);
+        button("Apply preview", left + 166, y, 100, 24, () -> CraftiumClient.sendAiToOnly("ai_apply"));
+        button("Discard preview", left + 272, y, 100, 24, () -> CraftiumClient.sendAiToOnly("ai_cancel"));
+        button("Undo AI build", left + 378, y, 115, 24, () -> CraftiumClient.sendAiToOnly("ai_undo"));
+        button("Redo AI build", left + 499, y, 117, 24, () -> CraftiumClient.sendAiToOnly("ai_redo"));
+        // Other players' AI previews are drawn in teal with their name; this hides them, and is remembered like the
+        // other settings.
+        button(
+                "Build sessions… (" + ClientState.aiSessions.size() + ")",
+                left + 390,
+                top + 70 + 108,
+                226,
+                20,
+                () -> ClientCompat.setScreen(minecraft, new AiSessionsScreen(this)));
+        addRenderableWidget(new FlatCheckbox(
+                left,
+                top + 70 + 108,
+                380,
+                20,
+                "Show AI previews from other players",
+                ClientState.options.showSharedAiPreviews,
+                () -> {
+                    ClientState.options.showSharedAiPreviews = !ClientState.options.showSharedAiPreviews;
+                    init();
+                }));
+        int steps = top + 70 + 138;
+        labels.add(new Label("HOW IT WORKS", left, steps));
+        labels.add(new Label(
+                "1.  In Claude Code or Cowork, add it once:  /plugin marketplace add DiamondCraft-Studios/craftium  (or the repo's path)",
+                left,
+                steps + 15));
+        labels.add(new Label(
+                "2.  Install it:  /plugin install craftium@craftium  (it needs Node.js 18 or newer on your PATH).",
+                left,
+                steps + 28));
+        labels.add(new Label("3.  Turn on AI building above. Craftium remembers it.", left, steps + 41));
+        labels.add(new Label(
+                "4.  Ask Claude for a build, such as \"Build an Egyptian pillar in front of me\".", left, steps + 54));
+        labels.add(new Label(
+                "5.  Look at the ghost in your world. Ask for changes, then say \"apply it\", or press Apply preview.",
+                left,
+                steps + 67));
+        labels.add(new Label(
+                "Nothing is built until it is applied. Undo takes a build back, and Redo brings it again.",
+                left,
+                steps + 86));
+        labels.add(new Label(
+                "Game from CurseForge, Modrinth App or Prism? Set the plugin's \"Minecraft folder\" setting to this game's folder, below.",
+                left,
+                steps + 99));
+        // The folder this game keeps its settings in, which is what the plugin's Minecraft folder has to be when it is
+        // not the default .minecraft.
+        String folder = AiBridge.gameFolder();
+        labels.add(new Label(
+                "This game's folder: "
+                        + (font.width(folder) > 420 ? "…" + font.plainSubstrByWidth(folder, 420, true) : folder),
+                left,
+                steps + 130));
+        button("Copy game folder", left, steps + 144, 150, 20, () -> {
+            minecraft.keyboardHandler.setClipboard(folder);
+            message = "Game folder copied";
+        });
     }
     /** The live part of the AI tab: a status card for the bridge and a line about a preview that is waiting. */
-    private void drawAi(Gfx g){
-        var o=ClientState.options;var state=AiBridge.indicator();int x=left,y=top+70,width=616;
-        String headline,detail;
-        switch(state){
-            case OFF -> {headline="AI building is off";detail="Turn it on to let Claude, or another AI app on this computer, build in your world.";}
-            case WAITING -> {headline="On, waiting for the AI app";detail="Open Claude Code or Cowork with the Craftium plugin and ask for a build.";}
-            case ACTIVE -> {headline="AI app connected";detail="Last request: "+AiBridge.lastActivity();}
-            default -> {headline="AI is working…";detail="Request: "+AiBridge.lastActivity();}
+    private void drawAi(Gfx g) {
+        var o = ClientState.options;
+        var state = AiBridge.indicator();
+        int x = left, y = top + 70, width = 616;
+        String headline, detail;
+        switch (state) {
+            case OFF -> {
+                headline = "AI building is off";
+                detail = "Turn it on to let Claude, or another AI app on this computer, build in your world.";
+            }
+            case WAITING -> {
+                headline = "On, waiting for the AI app";
+                detail = "Open Claude Code or Cowork with the Craftium plugin and ask for a build.";
+            }
+            case ACTIVE -> {
+                headline = "AI app connected";
+                detail = "Last request: " + AiBridge.lastActivity();
+            }
+            default -> {
+                headline = "AI is working…";
+                detail = "Request: " + AiBridge.lastActivity();
+            }
         }
-        g.fill(x,y,x+width,y+52,0xff1d2b3b);g.outline(x,y,width,52,o.uiBorder);
-        g.fill(x+12,y+13,x+24,y+25,AiBridge.colour(state));
-        g.text(font,headline,x+34,y+12,o.uiText,false);
-        g.text(font,font.plainSubstrByWidth(detail,width-46),x+34,y+30,o.uiMuted,false);
-        if(ClientState.hasAiPending()){int n=ClientState.aiPendingCount();g.text(font,n==1?"Preview waiting: "+ClientState.aiPendingBlocks()+" blocks. Apply it to build it, or discard it.":n+" previews waiting ("+ClientState.aiPendingBlocks()+" blocks in all). Apply or discard them one by one in Build sessions.",x,top+70+96,0xffffdca8,false);}
+        g.fill(x, y, x + width, y + 52, 0xff1d2b3b);
+        g.outline(x, y, width, 52, o.uiBorder);
+        g.fill(x + 12, y + 13, x + 24, y + 25, AiBridge.colour(state));
+        g.text(font, headline, x + 34, y + 12, o.uiText, false);
+        g.text(font, font.plainSubstrByWidth(detail, width - 46), x + 34, y + 30, o.uiMuted, false);
+        if (ClientState.hasAiPending()) {
+            int n = ClientState.aiPendingCount();
+            g.text(
+                    font,
+                    n == 1
+                            ? "Preview waiting: " + ClientState.aiPendingBlocks()
+                                    + " blocks. Apply it to build it, or discard it."
+                            : n + " previews waiting (" + ClientState.aiPendingBlocks()
+                                    + " blocks in all). Apply or discard them one by one in Build sessions.",
+                    x,
+                    top + 70 + 96,
+                    0xffffdca8,
+                    false);
+        }
     }
-    private void createField(String name,int x,int y,int width){
-        try{
-            var kind=OptionFields.kind(name);
-            if(kind!=OptionFields.Kind.BOOLEAN)labels.add(new Label(human(name),x,y-11));
-            boolean pinned=OptionFields.pinned(name);
-            button(pinned?"Unpin":"Pin",x+width-46,y-14,46,13,()->{OptionFields.togglePin(name);init();}).lit(pinned);
-            switch(kind){
-                case BOOLEAN -> addRenderableWidget(new FlatCheckbox(x,y,width,22,human(name),OptionFields.bool(name),()->{OptionFields.toggle(name);init();}));
-                case ENUM -> button(OptionFields.choice(name),x,y,width,22,()->{OptionFields.cycle(name,1);init();}).back(()->{OptionFields.cycle(name,-1);init();});
-                case VECTOR -> vectorFields(name,x,y,width);
+
+    private void createField(String name, int x, int y, int width) {
+        try {
+            var kind = OptionFields.kind(name);
+            if (kind != OptionFields.Kind.BOOLEAN) labels.add(new Label(human(name), x, y - 11));
+            boolean pinned = OptionFields.pinned(name);
+            button(pinned ? "Unpin" : "Pin", x + width - 46, y - 14, 46, 13, () -> {
+                        OptionFields.togglePin(name);
+                        init();
+                    })
+                    .lit(pinned);
+            switch (kind) {
+                case BOOLEAN ->
+                    addRenderableWidget(new FlatCheckbox(x, y, width, 22, human(name), OptionFields.bool(name), () -> {
+                        OptionFields.toggle(name);
+                        init();
+                    }));
+                case ENUM ->
+                    button(OptionFields.choice(name), x, y, width, 22, () -> {
+                                OptionFields.cycle(name, 1);
+                                init();
+                            })
+                            .back(() -> {
+                                OptionFields.cycle(name, -1);
+                                init();
+                            });
+                case VECTOR -> vectorFields(name, x, y, width);
                 default -> {
-                    EditBox field=new EditBox(font,x,y,width,22,Component.literal(human(name)));field.setMaxLength(16384);field.setValue(OptionFields.text(name));field.setResponder(input->{
-                        try{OptionFields.parse(name,input);message="";}
-                        catch(Exception e){message="Enter a valid value for "+human(name);}
-                    });addRenderableWidget(field);
+                    EditBox field = new EditBox(font, x, y, width, 22, Component.literal(human(name)));
+                    field.setMaxLength(16384);
+                    field.setValue(OptionFields.text(name));
+                    field.setResponder(input -> {
+                        try {
+                            OptionFields.parse(name, input);
+                            message = "";
+                        } catch (Exception e) {
+                            message = "Enter a valid value for " + human(name);
+                        }
+                    });
+                    addRenderableWidget(field);
                 }
             }
-        }catch(Exception e){message=e.getMessage();}
+        } catch (Exception e) {
+            message = e.getMessage();
+        }
     }
     /** A vector as an input for each axis, or as one space-delimited input, whichever the button beside it has chosen. */
-    private void vectorFields(String name,int x,int y,int width){
-        boolean single=OptionFields.SINGLE_LINE.contains(name);int toggle=40,room=width-toggle-4;
-        button(single?"Axes":"Text",x+room+4,y,toggle,22,()->{if(!OptionFields.SINGLE_LINE.remove(name))OptionFields.SINGLE_LINE.add(name);init();});
-        if(single){
-            EditBox field=new EditBox(font,x,y,room,22,Component.literal(human(name)));field.setMaxLength(64);field.setValue(OptionFields.text(name));
-            field.setResponder(input->{try{OptionFields.parse(name,input);message="";}catch(Exception e){message="Enter three whole numbers, such as 4 64 -2, for "+human(name);}});addRenderableWidget(field);
+    private void vectorFields(String name, int x, int y, int width) {
+        boolean single = OptionFields.SINGLE_LINE.contains(name);
+        int toggle = 40, room = width - toggle - 4;
+        button(single ? "Axes" : "Text", x + room + 4, y, toggle, 22, () -> {
+            if (!OptionFields.SINGLE_LINE.remove(name)) OptionFields.SINGLE_LINE.add(name);
+            init();
+        });
+        if (single) {
+            EditBox field = new EditBox(font, x, y, room, 22, Component.literal(human(name)));
+            field.setMaxLength(64);
+            field.setValue(OptionFields.text(name));
+            field.setResponder(input -> {
+                try {
+                    OptionFields.parse(name, input);
+                    message = "";
+                } catch (Exception e) {
+                    message = "Enter three whole numbers, such as 4 64 -2, for " + human(name);
+                }
+            });
+            addRenderableWidget(field);
             return;
         }
-        String[] values=OptionFields.axes(name),letters={"X","Y","Z"};int gap=4,cell=(room-2*gap)/3,box=cell-12;
-        for(int axis=0;axis<3;axis++){
-            int at=x+axis*(cell+gap);int index=axis;
-            labels.add(new Label(letters[axis],at+2,y+7));
-            EditBox field=new EditBox(font,at+12,y,box,22,Component.literal(human(name)+" "+letters[axis]));field.setMaxLength(12);field.setValue(values[axis]);
-            field.setResponder(input->{try{OptionFields.setAxis(name,index,input);message="";}catch(Exception e){message="Enter a whole number for "+letters[index]+" of "+human(name);}});addRenderableWidget(field);
+        String[] values = OptionFields.axes(name), letters = {"X", "Y", "Z"};
+        int gap = 4, cell = (room - 2 * gap) / 3, box = cell - 12;
+        for (int axis = 0; axis < 3; axis++) {
+            int at = x + axis * (cell + gap);
+            int index = axis;
+            labels.add(new Label(letters[axis], at + 2, y + 7));
+            EditBox field =
+                    new EditBox(font, at + 12, y, box, 22, Component.literal(human(name) + " " + letters[axis]));
+            field.setMaxLength(12);
+            field.setValue(values[axis]);
+            field.setResponder(input -> {
+                try {
+                    OptionFields.setAxis(name, index, input);
+                    message = "";
+                } catch (Exception e) {
+                    message = "Enter a whole number for " + letters[index] + " of " + human(name);
+                }
+            });
+            addRenderableWidget(field);
         }
     }
-    private String human(String name){return OptionFields.human(name);}
-    private void actionRow(String[] names,String[] actions){Runnable[] run=new Runnable[actions.length];for(int i=0;i<actions.length;i++){String action=actions[i];run[i]=()->send(action);}actionRow(names,run);}
-    private void actionRow(String[] names,Runnable[] actions){for(int i=0;i<names.length;i++){Runnable action=actions[i];button(names[i],left+i*125,canvasH-89,119,21,()->{try{action.run();init();}catch(Exception e){message=e.getMessage();}});}}
-    private FlatButton button(String text,int x,int y,int width,int height,Runnable action){var button=new FlatButton(x,y,width,height,text,()->{try{action.run();}catch(Exception e){message=e.getMessage();}});addRenderableWidget(button);return button;}
-    private void send(String action){try{if(action.startsWith("entity_"))ClientState.options.gizmoTarget=Options.GizmoTarget.ENTITY;if(action.equals("use")&&(ClientState.options.tool==Tool.LASSO_SELECT||ClientState.options.tool==Tool.RULER)){message="Return to the viewport to draw a lasso or place ruler points";return;}ClientState.options.validate();var hit=editor.target();CraftiumClient.send(action,hit==null?ClientState.options.position1:CraftiumClient.point(hit.getBlockPos()),hit==null?new Point(0,1,0):CraftiumClient.normal(hit));message="Sent "+human(action);}catch(Exception e){message=e.getMessage();}}
-    @Override protected void drawBackground(Gfx g,int x,int y,float delta){}
-    @Override protected void draw(Gfx g,int x,int y,float delta){
-        g.pose().pushMatrix();g.pose().scale(uiScale,uiScale);
-        g.fill(0,0,canvasW,canvasH,0xee101923);g.fill(left-12,top-13,Math.min(canvasW-5,left+640),canvasH-25,0xff172330);g.text(font,tab,left,top-25,0xffb5dcfc,false);
-        for(Label label:labels)g.text(font,font.plainSubstrByWidth(label.text,625),label.x,label.y,0xff9db5cb,false);
-        if(tab.equals("AI"))drawAi(g);
-        drawWidgets(g,(int)(x/uiScale),(int)(y/uiScale),delta);g.text(font,font.plainSubstrByWidth(message.isBlank()?ClientState.status.message():message,canvasW-30),15,canvasH-17,0xffffdca8,false);g.pose().popMatrix();
+
+    private String human(String name) {
+        return OptionFields.human(name);
     }
-    @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event,boolean twice){
-        var scaled=new net.minecraft.client.input.MouseButtonEvent(event.x()/uiScale,event.y()/uiScale,event.buttonInfo());
-        if(event.button()==1)for(var child:children())if(child instanceof FlatButton button&&button.rightClick(scaled.x(),scaled.y()))return true; // a cycling button steps back
-        return super.mouseClicked(scaled,twice);
+
+    private void actionRow(String[] names, String[] actions) {
+        Runnable[] run = new Runnable[actions.length];
+        for (int i = 0; i < actions.length; i++) {
+            String action = actions[i];
+            run[i] = () -> send(action);
+        }
+        actionRow(names, run);
     }
-    @Override public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event){return super.mouseReleased(new net.minecraft.client.input.MouseButtonEvent(event.x()/uiScale,event.y()/uiScale,event.buttonInfo()));}
-    @Override public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event,double x,double y){return super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(event.x()/uiScale,event.y()/uiScale,event.buttonInfo()),x/uiScale,y/uiScale);}
-    @Override public boolean isPauseScreen(){return false;}
-    @Override public boolean isInGameUi(){return true;}
-    @Override public void onClose(){ClientState.save();CraftiumClient.send("capabilities",null,null);ClientCompat.setScreen(minecraft,editor);}
-    @Override public void removed(){if(initialized&&ClientCompat.hudHidden(minecraft)!=previousHud)ClientCompat.toggleHud(minecraft);initialized=false;}
+
+    private void actionRow(String[] names, Runnable[] actions) {
+        for (int i = 0; i < names.length; i++) {
+            Runnable action = actions[i];
+            button(names[i], left + i * 125, canvasH - 89, 119, 21, () -> {
+                try {
+                    action.run();
+                    init();
+                } catch (Exception e) {
+                    message = e.getMessage();
+                }
+            });
+        }
+    }
+
+    private FlatButton button(String text, int x, int y, int width, int height, Runnable action) {
+        var button = new FlatButton(x, y, width, height, text, () -> {
+            try {
+                action.run();
+            } catch (Exception e) {
+                message = e.getMessage();
+            }
+        });
+        addRenderableWidget(button);
+        return button;
+    }
+
+    private void send(String action) {
+        try {
+            if (action.startsWith("entity_")) ClientState.options.gizmoTarget = Options.GizmoTarget.ENTITY;
+            if (action.equals("use")
+                    && (ClientState.options.tool == Tool.LASSO_SELECT || ClientState.options.tool == Tool.RULER)) {
+                message = "Return to the viewport to draw a lasso or place ruler points";
+                return;
+            }
+            ClientState.options.validate();
+            var hit = editor.target();
+            CraftiumClient.send(
+                    action,
+                    hit == null ? ClientState.options.position1 : CraftiumClient.point(hit.getBlockPos()),
+                    hit == null ? new Point(0, 1, 0) : CraftiumClient.normal(hit));
+            message = "Sent " + human(action);
+        } catch (Exception e) {
+            message = e.getMessage();
+        }
+    }
+
+    @Override
+    protected void drawBackground(Gfx g, int x, int y, float delta) {}
+
+    @Override
+    protected void draw(Gfx g, int x, int y, float delta) {
+        g.pose().pushMatrix();
+        g.pose().scale(uiScale, uiScale);
+        g.fill(0, 0, canvasW, canvasH, 0xee101923);
+        g.fill(left - 12, top - 13, Math.min(canvasW - 5, left + 640), canvasH - 25, 0xff172330);
+        g.text(font, tab, left, top - 25, 0xffb5dcfc, false);
+        for (Label label : labels)
+            g.text(font, font.plainSubstrByWidth(label.text, 625), label.x, label.y, 0xff9db5cb, false);
+        if (tab.equals("AI")) drawAi(g);
+        drawWidgets(g, (int) (x / uiScale), (int) (y / uiScale), delta);
+        g.text(
+                font,
+                font.plainSubstrByWidth(message.isBlank() ? ClientState.status.message() : message, canvasW - 30),
+                15,
+                canvasH - 17,
+                0xffffdca8,
+                false);
+        g.pose().popMatrix();
+    }
+
+    @Override
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean twice) {
+        var scaled = new net.minecraft.client.input.MouseButtonEvent(
+                event.x() / uiScale, event.y() / uiScale, event.buttonInfo());
+        if (event.button() == 1)
+            for (var child : children())
+                if (child instanceof FlatButton button && button.rightClick(scaled.x(), scaled.y()))
+                    return true; // a cycling button steps back
+        return super.mouseClicked(scaled, twice);
+    }
+
+    @Override
+    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
+        return super.mouseReleased(new net.minecraft.client.input.MouseButtonEvent(
+                event.x() / uiScale, event.y() / uiScale, event.buttonInfo()));
+    }
+
+    @Override
+    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double x, double y) {
+        return super.mouseDragged(
+                new net.minecraft.client.input.MouseButtonEvent(
+                        event.x() / uiScale, event.y() / uiScale, event.buttonInfo()),
+                x / uiScale,
+                y / uiScale);
+    }
+
+    @Override
+    public boolean isPauseScreen() {
+        return false;
+    }
+
+    @Override
+    public boolean isInGameUi() {
+        return true;
+    }
+
+    @Override
+    public void onClose() {
+        ClientState.save();
+        CraftiumClient.send("capabilities", null, null);
+        ClientCompat.setScreen(minecraft, editor);
+    }
+
+    @Override
+    public void removed() {
+        if (initialized && ClientCompat.hudHidden(minecraft) != previousHud) ClientCompat.toggleHud(minecraft);
+        initialized = false;
+    }
 }

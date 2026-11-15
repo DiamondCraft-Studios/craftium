@@ -1,11 +1,10 @@
 package dev.craftium.server;
 
 import dev.craftium.core.Point;
+import java.util.*;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
-
-import java.util.*;
 
 /**
  * Keeps chunks loaded for as long as an edit needs them, so a structure can be moved from one far-away chunk to another without the
@@ -18,10 +17,12 @@ import java.util.*;
 final class ChunkLease implements AutoCloseable {
     /** Most chunks one lease may load that were not loaded already; past it the edit is refused instead of stalling the server. */
     static final int MAX_NEW_CHUNKS = 256;
+
     static final ChunkLease NONE = new ChunkLease(null, List.of());
 
     /** Loads the chunk and nothing else: it neither ticks, nor saves itself in the world's list of forced chunks, nor times out. */
     private static TicketType type;
+
     private static final Map<ServerLevel, Map<Long, Integer>> HELD = new WeakHashMap<>();
     /** Leases taken while a request is planned, closed when the request is done: by then the edit has taken its own. */
     private static final List<ChunkLease> PLANNING = new ArrayList<>();
@@ -67,13 +68,19 @@ final class ChunkLease implements AutoCloseable {
             return this;
         }
 
-        boolean isEmpty() { return keys.isEmpty(); }
+        boolean isEmpty() {
+            return keys.isEmpty();
+        }
 
         /** Loads them all or none: refused when they would need more than {@link #MAX_NEW_CHUNKS} that are not loaded. */
-        ChunkLease lease(ServerLevel level) { return ChunkLease.take(level, keys); }
+        ChunkLease lease(ServerLevel level) {
+            return ChunkLease.take(level, keys);
+        }
     }
 
-    static Area area() { return new Area(); }
+    static Area area() {
+        return new Area();
+    }
 
     /** Holds a lease until the request being handled is over, which {@link #endPlanning} announces. */
     static ChunkLease planning(ChunkLease lease) {
@@ -90,7 +97,8 @@ final class ChunkLease implements AutoCloseable {
     /** Lets go of every lease, as the server stops or the editor is cleared; the chunks are the world's again. */
     static void releaseAll() {
         for (var entry : HELD.entrySet())
-            for (long key : entry.getValue().keySet()) entry.getKey().getChunkSource().removeTicketWithRadius(type(), pos(key), 0);
+            for (long key : entry.getValue().keySet())
+                entry.getKey().getChunkSource().removeTicketWithRadius(type(), pos(key), 0);
         HELD.clear();
         PLANNING.clear();
     }
@@ -102,9 +110,13 @@ final class ChunkLease implements AutoCloseable {
         int fresh = 0;
         for (long key : wanted) {
             var at = pos(key);
-            if (!border.isWithinBounds(at)) continue; // past the border nothing can be built; the edit refuses those cells itself
-            if (!held.containsKey(key) && level.getChunkSource().getChunkNow((int) (key >> 32), (int) key) == null && ++fresh > MAX_NEW_CHUNKS)
-                throw new IllegalArgumentException("That edit reaches more than " + MAX_NEW_CHUNKS + " chunks that are not loaded; use a smaller selection, or one closer to loaded ground");
+            if (!border.isWithinBounds(at))
+                continue; // past the border nothing can be built; the edit refuses those cells itself
+            if (!held.containsKey(key)
+                    && level.getChunkSource().getChunkNow((int) (key >> 32), (int) key) == null
+                    && ++fresh > MAX_NEW_CHUNKS)
+                throw new IllegalArgumentException("That edit reaches more than " + MAX_NEW_CHUNKS
+                        + " chunks that are not loaded; use a smaller selection, or one closer to loaded ground");
             keys.add(key);
         }
         if (keys.isEmpty()) return NONE;
@@ -141,7 +153,11 @@ final class ChunkLease implements AutoCloseable {
         if (held.isEmpty()) HELD.remove(level);
     }
 
-    private static long key(int cx, int cz) { return ((long) cx << 32) | (cz & 0xFFFFFFFFL); }
+    private static long key(int cx, int cz) {
+        return ((long) cx << 32) | (cz & 0xFFFFFFFFL);
+    }
 
-    private static ChunkPos pos(long key) { return new ChunkPos((int) (key >> 32), (int) key); }
+    private static ChunkPos pos(long key) {
+        return new ChunkPos((int) (key >> 32), (int) key);
+    }
 }

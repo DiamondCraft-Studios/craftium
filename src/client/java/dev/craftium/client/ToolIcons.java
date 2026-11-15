@@ -1,191 +1,571 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.Gfx;
 import dev.craftium.core.BrushMath;
 import dev.craftium.core.Options;
 import dev.craftium.core.Tool;
-import dev.craftium.client.compat.Gfx;
 
 /** Small original line icons, drawn at UI resolution without Axiom assets. */
 final class ToolIcons {
     private ToolIcons() {}
     /** The icon for a tool, on the 24 pixel grid at {@code x},{@code y}. */
-    static void draw(Gfx g,Tool tool,int x,int y,int color){IconBake.draw(g,tool,color,x,y,24,c->paintDraw(c,tool,0,0,color));}
+    static void draw(Gfx g, Tool tool, int x, int y, int color) {
+        IconBake.draw(g, tool, color, x, y, 24, c -> paintDraw(c, tool, 0, 0, color));
+    }
     /** The Magic Wand's comparison choices, on the same grid. */
-    static void compare(Gfx g,Options.Compare compare,int x,int y,int color){IconBake.draw(g,compare,color,x,y,24,c->paintCompare(c,compare,0,0,color));}
+    static void compare(Gfx g, Options.Compare compare, int x, int y, int color) {
+        IconBake.draw(g, compare, color, x, y, 24, c -> paintCompare(c, compare, 0, 0, color));
+    }
     /** A brush shape, on the same grid. */
-    static void shape(Gfx g,BrushMath.Shape shape,int x,int y,int color){IconBake.draw(g,shape,color,x,y,24,c->paintShape(c,shape,0,0,color));}
-    static void hardHat(Gfx g,int x,int y,int c){IconBake.draw(g,"hat",c,x,y,24,k->paintHardHat(k,0,0,c));}
-    static void chain(Gfx g,int x,int y,int color,boolean linked){IconBake.draw(g,linked?"chain-linked":"chain",color,x,y,24,c->paintChain(c,0,0,color,linked));}
-    private static void paintDraw(Canvas g,Tool tool,int x,int y,int color) {
-        switch(tool) {
-            case LASSO_SELECT -> {line(g,x+3,y+7,x+11,y+3,color);line(g,x+11,y+3,x+21,y+9,color);line(g,x+21,y+9,x+17,y+18,color);line(g,x+17,y+18,x+5,y+18,color);line(g,x+5,y+18,x+3,y+7,color);line(g,x+11,y+18,x+7,y+23,color);}
-            case MODELLING -> { // a mesh: a triangle with a corner at each vertex and an edge across the middle
-                line(g,x+4,y+19,x+12,y+4,color);line(g,x+12,y+4,x+20,y+19,color);line(g,x+4,y+19,x+20,y+19,color);line(g,x+12,y+4,x+12,y+19,color);
-                for(int[] p:new int[][]{{4,19},{12,4},{20,19}})g.fill(x+p[0]-2,y+p[1]-2,x+p[0]+3,y+p[1]+3,color);
+    static void shape(Gfx g, BrushMath.Shape shape, int x, int y, int color) {
+        IconBake.draw(g, shape, color, x, y, 24, c -> paintShape(c, shape, 0, 0, color));
+    }
+
+    static void hardHat(Gfx g, int x, int y, int c) {
+        IconBake.draw(g, "hat", c, x, y, 24, k -> paintHardHat(k, 0, 0, c));
+    }
+
+    static void chain(Gfx g, int x, int y, int color, boolean linked) {
+        IconBake.draw(g, linked ? "chain-linked" : "chain", color, x, y, 24, c -> paintChain(c, 0, 0, color, linked));
+    }
+
+    private static void paintDraw(Canvas g, Tool tool, int x, int y, int color) {
+        switch (tool) {
+            case LASSO_SELECT -> {
+                line(g, x + 3, y + 7, x + 11, y + 3, color);
+                line(g, x + 11, y + 3, x + 21, y + 9, color);
+                line(g, x + 21, y + 9, x + 17, y + 18, color);
+                line(g, x + 17, y + 18, x + 5, y + 18, color);
+                line(g, x + 5, y + 18, x + 3, y + 7, color);
+                line(g, x + 11, y + 18, x + 7, y + 23, color);
             }
-            case PATH -> {line(g,x+3,y+19,x+9,y+5,color);line(g,x+9,y+5,x+20,y+17,color);for(int[] p:new int[][]{{3,19},{9,5},{20,17}})g.fill(x+p[0]-2,y+p[1]-2,x+p[0]+3,y+p[1]+3,color);}
-            case GRADIENT_PAINTER -> {for(int i=0;i<5;i++)g.fill(x+3+i*4,y+3,x+6+i*4,y+22,(color&0xffffff)|((80+i*40)<<24));}
-            case SCRIPT_BRUSH -> {line(g,x+8,y+5,x+2,y+12,color);line(g,x+2,y+12,x+8,y+19,color);line(g,x+17,y+5,x+23,y+12,color);line(g,x+23,y+12,x+17,y+19,color);line(g,x+15,y+3,x+10,y+22,color);}
-            case FLOODFILL -> { // a paint bucket tipped over to pour: a solid pail on its corner, a loop handle on its pivot, and a drop falling from the lip
-                fillQuad(g,x+1,y+14,x+12,y+3,x+20,y+11,x+9,y+22,color);
-                g.outline(x+5,y+1,4,9,color);g.fill(x+7,y+7,x+10,y+11,color); // the handle and the pivot it turns on
-                g.fill(x+20,y+13,x+21,y+15,color);g.fill(x+19,y+15,x+22,y+17,color);g.fill(x+18,y+17,x+23,y+21,color);g.fill(x+19,y+21,x+22,y+22,color); // the drop
+            case MODELLING -> { // a mesh: a triangle with a corner at each vertex and an edge across the middle
+                line(g, x + 4, y + 19, x + 12, y + 4, color);
+                line(g, x + 12, y + 4, x + 20, y + 19, color);
+                line(g, x + 4, y + 19, x + 20, y + 19, color);
+                line(g, x + 12, y + 4, x + 12, y + 19, color);
+                for (int[] p : new int[][] {{4, 19}, {12, 4}, {20, 19}})
+                    g.fill(x + p[0] - 2, y + p[1] - 2, x + p[0] + 3, y + p[1] + 3, color);
+            }
+            case PATH -> {
+                line(g, x + 3, y + 19, x + 9, y + 5, color);
+                line(g, x + 9, y + 5, x + 20, y + 17, color);
+                for (int[] p : new int[][] {{3, 19}, {9, 5}, {20, 17}})
+                    g.fill(x + p[0] - 2, y + p[1] - 2, x + p[0] + 3, y + p[1] + 3, color);
+            }
+            case GRADIENT_PAINTER -> {
+                for (int i = 0; i < 5; i++)
+                    g.fill(x + 3 + i * 4, y + 3, x + 6 + i * 4, y + 22, (color & 0xffffff) | ((80 + i * 40) << 24));
+            }
+            case SCRIPT_BRUSH -> {
+                line(g, x + 8, y + 5, x + 2, y + 12, color);
+                line(g, x + 2, y + 12, x + 8, y + 19, color);
+                line(g, x + 17, y + 5, x + 23, y + 12, color);
+                line(g, x + 23, y + 12, x + 17, y + 19, color);
+                line(g, x + 15, y + 3, x + 10, y + 22, color);
+            }
+            case FLOODFILL -> { // a paint bucket tipped over to pour: a solid pail on its corner, a loop handle on its
+                // pivot, and a drop falling from the lip
+                fillQuad(g, x + 1, y + 14, x + 12, y + 3, x + 20, y + 11, x + 9, y + 22, color);
+                g.outline(x + 5, y + 1, 4, 9, color);
+                g.fill(x + 7, y + 7, x + 10, y + 11, color); // the handle and the pivot it turns on
+                g.fill(x + 20, y + 13, x + 21, y + 15, color);
+                g.fill(x + 19, y + 15, x + 22, y + 17, color);
+                g.fill(x + 18, y + 17, x + 23, y + 21, color);
+                g.fill(x + 19, y + 21, x + 22, y + 22, color); // the drop
             }
             case PAINT_BUCKET -> { // an upright pail, filled part way with paint, with its handle over the rim
-                line(g,x+4,y+8,x+20,y+8,color);line(g,x+4,y+8,x+7,y+21,color);line(g,x+20,y+8,x+17,y+21,color);line(g,x+7,y+21,x+17,y+21,color);
-                fillQuad(g,x+5,y+13,x+19,y+13,x+17,y+21,x+7,y+21,color);
-                line(g,x+6,y+8,x+8,y+3,color);line(g,x+8,y+3,x+16,y+3,color);line(g,x+16,y+3,x+18,y+8,color);
+                line(g, x + 4, y + 8, x + 20, y + 8, color);
+                line(g, x + 4, y + 8, x + 7, y + 21, color);
+                line(g, x + 20, y + 8, x + 17, y + 21, color);
+                line(g, x + 7, y + 21, x + 17, y + 21, color);
+                fillQuad(g, x + 5, y + 13, x + 19, y + 13, x + 17, y + 21, x + 7, y + 21, color);
+                line(g, x + 6, y + 8, x + 8, y + 3, color);
+                line(g, x + 8, y + 3, x + 16, y + 3, color);
+                line(g, x + 16, y + 3, x + 18, y + 8, color);
             }
-            case FLUID_BALL -> {line(g,x+12,y+2,x+3,y+15,color);line(g,x+12,y+2,x+21,y+15,color);line(g,x+3,y+15,x+8,y+22,color);line(g,x+8,y+22,x+17,y+22,color);line(g,x+17,y+22,x+21,y+15,color);}
-            case FLUID_BLOCK -> { // a pile of blocks, a wide row under a narrower one, with a few loose ones falling above
-                g.fill(x+2,y+17,x+22,y+22,color);g.fill(x+6,y+12,x+18,y+16,color);g.fill(x+10,y+8,x+14,y+11,color);
-                g.fill(x+4,y+4,x+7,y+7,color);g.fill(x+17,y+3,x+20,y+6,color);g.fill(x+11,y+1,x+13,y+3,color);
+            case FLUID_BALL -> {
+                line(g, x + 12, y + 2, x + 3, y + 15, color);
+                line(g, x + 12, y + 2, x + 21, y + 15, color);
+                line(g, x + 3, y + 15, x + 8, y + 22, color);
+                line(g, x + 8, y + 22, x + 17, y + 22, color);
+                line(g, x + 17, y + 22, x + 21, y + 15, color);
             }
-            case MOVE -> {line(g,x+12,y+2,x+12,y+22,color);line(g,x+2,y+12,x+22,y+12,color);line(g,x+12,y+2,x+8,y+7,color);line(g,x+12,y+2,x+16,y+7,color);line(g,x+22,y+12,x+17,y+8,color);line(g,x+22,y+12,x+17,y+16,color);}
+            case FLUID_BLOCK -> { // a pile of blocks, a wide row under a narrower one, with a few loose ones falling
+                // above
+                g.fill(x + 2, y + 17, x + 22, y + 22, color);
+                g.fill(x + 6, y + 12, x + 18, y + 16, color);
+                g.fill(x + 10, y + 8, x + 14, y + 11, color);
+                g.fill(x + 4, y + 4, x + 7, y + 7, color);
+                g.fill(x + 17, y + 3, x + 20, y + 6, color);
+                g.fill(x + 11, y + 1, x + 13, y + 3, color);
+            }
+            case MOVE -> {
+                line(g, x + 12, y + 2, x + 12, y + 22, color);
+                line(g, x + 2, y + 12, x + 22, y + 12, color);
+                line(g, x + 12, y + 2, x + 8, y + 7, color);
+                line(g, x + 12, y + 2, x + 16, y + 7, color);
+                line(g, x + 22, y + 12, x + 17, y + 8, color);
+                line(g, x + 22, y + 12, x + 17, y + 16, color);
+            }
             case ROTATE -> { // most of a circle, with an arrowhead where it ends
-                for(int i=0;i<20;i++){double a=Math.toRadians(45+i*15),b=Math.toRadians(45+(i+1)*15);line(g,x+12+(int)Math.round(Math.cos(a)*8),y+12+(int)Math.round(Math.sin(a)*8),x+12+(int)Math.round(Math.cos(b)*8),y+12+(int)Math.round(Math.sin(b)*8),color);}
-                double end=Math.toRadians(345),px=x+12+Math.cos(end)*8,py=y+12+Math.sin(end)*8,tx=-Math.sin(end),ty=Math.cos(end),nx=Math.cos(end),ny=Math.sin(end);
-                int tipX=(int)Math.round(px+tx*4),tipY=(int)Math.round(py+ty*4);
-                line(g,tipX,tipY,(int)Math.round(px-tx*2+nx*4),(int)Math.round(py-ty*2+ny*4),color);line(g,tipX,tipY,(int)Math.round(px-tx*2-nx*4),(int)Math.round(py-ty*2-ny*4),color);
+                for (int i = 0; i < 20; i++) {
+                    double a = Math.toRadians(45 + i * 15), b = Math.toRadians(45 + (i + 1) * 15);
+                    line(
+                            g,
+                            x + 12 + (int) Math.round(Math.cos(a) * 8),
+                            y + 12 + (int) Math.round(Math.sin(a) * 8),
+                            x + 12 + (int) Math.round(Math.cos(b) * 8),
+                            y + 12 + (int) Math.round(Math.sin(b) * 8),
+                            color);
+                }
+                double end = Math.toRadians(345),
+                        px = x + 12 + Math.cos(end) * 8,
+                        py = y + 12 + Math.sin(end) * 8,
+                        tx = -Math.sin(end),
+                        ty = Math.cos(end),
+                        nx = Math.cos(end),
+                        ny = Math.sin(end);
+                int tipX = (int) Math.round(px + tx * 4), tipY = (int) Math.round(py + ty * 4);
+                line(
+                        g,
+                        tipX,
+                        tipY,
+                        (int) Math.round(px - tx * 2 + nx * 4),
+                        (int) Math.round(py - ty * 2 + ny * 4),
+                        color);
+                line(
+                        g,
+                        tipX,
+                        tipY,
+                        (int) Math.round(px - tx * 2 - nx * 4),
+                        (int) Math.round(py - ty * 2 - ny * 4),
+                        color);
             }
-            case SCALE -> {g.outline(x+3,y+9,11,11,color);g.outline(x+9,y+3,12,12,color);line(g,x+14,y+10,x+21,y+3,color);}
-            case PIVOT -> {g.outline(x+7,y+7,10,10,color);g.fill(x+11,y+11,x+14,y+14,color);line(g,x+12,y+2,x+12,y+7,color);line(g,x+12,y+17,x+12,y+22,color);line(g,x+2,y+12,x+7,y+12,color);line(g,x+17,y+12,x+22,y+12,color);}
+            case SCALE -> {
+                g.outline(x + 3, y + 9, 11, 11, color);
+                g.outline(x + 9, y + 3, 12, 12, color);
+                line(g, x + 14, y + 10, x + 21, y + 3, color);
+            }
+            case PIVOT -> {
+                g.outline(x + 7, y + 7, 10, 10, color);
+                g.fill(x + 11, y + 11, x + 14, y + 14, color);
+                line(g, x + 12, y + 2, x + 12, y + 7, color);
+                line(g, x + 12, y + 17, x + 12, y + 22, color);
+                line(g, x + 2, y + 12, x + 7, y + 12, color);
+                line(g, x + 17, y + 12, x + 22, y + 12, color);
+            }
             case SMEAR -> { // a block pulled along, with streaks of different lengths behind it
-                g.fill(x+3,y+7,x+11,y+17,color);
-                line(g,x+12,y+9,x+22,y+9,color);line(g,x+12,y+12,x+18,y+12,color);line(g,x+12,y+15,x+21,y+15,color);
+                g.fill(x + 3, y + 7, x + 11, y + 17, color);
+                line(g, x + 12, y + 9, x + 22, y + 9, color);
+                line(g, x + 12, y + 12, x + 18, y + 12, color);
+                line(g, x + 12, y + 15, x + 21, y + 15, color);
             }
             case ANNOTATION -> { // a note: a card with lines of writing on it
-                g.outline(x+4,y+3,16,18,color);
-                line(g,x+8,y+8,x+16,y+8,color);line(g,x+8,y+12,x+16,y+12,color);line(g,x+8,y+16,x+13,y+16,color);
+                g.outline(x + 4, y + 3, 16, 18, color);
+                line(g, x + 8, y + 8, x + 16, y + 8, color);
+                line(g, x + 8, y + 12, x + 16, y + 12, color);
+                line(g, x + 8, y + 16, x + 13, y + 16, color);
             }
-            case STAMP -> {g.outline(x+3,y+11,19,10,color);g.fill(x+9,y+3,x+16,y+13,color);}
+            case STAMP -> {
+                g.outline(x + 3, y + 11, 19, 10, color);
+                g.fill(x + 9, y + 3, x + 16, y + 13, color);
+            }
             case MODIFY -> { // a wrench: a handle running to the lower left, and an open jaw at the upper right
-                line(g,x+4,y+20,x+13,y+11,color);line(g,x+5,y+21,x+14,y+12,color);line(g,x+3,y+19,x+12,y+10,color);
-                line(g,x+11,y+9,x+13,y+4,color);line(g,x+13,y+4,x+16,y+7,color);line(g,x+16,y+7,x+18,y+5,color);line(g,x+18,y+5,x+21,y+8,color);
-                line(g,x+21,y+8,x+19,y+10,color);line(g,x+19,y+10,x+22,y+13,color);line(g,x+22,y+13,x+17,y+15,color);line(g,x+17,y+15,x+14,y+12,color);
+                line(g, x + 4, y + 20, x + 13, y + 11, color);
+                line(g, x + 5, y + 21, x + 14, y + 12, color);
+                line(g, x + 3, y + 19, x + 12, y + 10, color);
+                line(g, x + 11, y + 9, x + 13, y + 4, color);
+                line(g, x + 13, y + 4, x + 16, y + 7, color);
+                line(g, x + 16, y + 7, x + 18, y + 5, color);
+                line(g, x + 18, y + 5, x + 21, y + 8, color);
+                line(g, x + 21, y + 8, x + 19, y + 10, color);
+                line(g, x + 19, y + 10, x + 22, y + 13, color);
+                line(g, x + 22, y + 13, x + 17, y + 15, color);
+                line(g, x + 17, y + 15, x + 14, y + 12, color);
             }
-            case MAGIC_SELECT -> {line(g,x+3,y+19,x+17,y+5,color);star(g,x+6,y+5,color);star(g,x+19,y+13,color);}
-            case BOX_SELECT -> {dotted(g,x+3,y+3,18,18,color);g.fill(x+6,y+6,x+18,y+18,color&0xffffff|0x50000000);}
-            case FREEHAND_SELECT -> {line(g,x+3,y+14,x+8,y+4,color);line(g,x+8,y+4,x+20,y+7,color);line(g,x+20,y+7,x+16,y+20,color);line(g,x+16,y+20,x+3,y+14,color);}
+            case MAGIC_SELECT -> {
+                line(g, x + 3, y + 19, x + 17, y + 5, color);
+                star(g, x + 6, y + 5, color);
+                star(g, x + 19, y + 13, color);
+            }
+            case BOX_SELECT -> {
+                dotted(g, x + 3, y + 3, 18, 18, color);
+                g.fill(x + 6, y + 6, x + 18, y + 18, color & 0xffffff | 0x50000000);
+            }
+            case FREEHAND_SELECT -> {
+                line(g, x + 3, y + 14, x + 8, y + 4, color);
+                line(g, x + 8, y + 4, x + 20, y + 7, color);
+                line(g, x + 20, y + 7, x + 16, y + 20, color);
+                line(g, x + 16, y + 20, x + 3, y + 14, color);
+            }
             case LINE -> { // a line between two end points
-                line(g,x+5,y+19,x+19,y+5,color);g.fill(x+2,y+17,x+8,y+23,color);g.fill(x+16,y+1,x+22,y+7,color);
+                line(g, x + 5, y + 19, x + 19, y + 5, color);
+                g.fill(x + 2, y + 17, x + 8, y + 23, color);
+                g.fill(x + 16, y + 1, x + 22, y + 7, color);
             }
-            case RULER -> {line(g,x+3,y+19,x+19,y+3,color);for(int i=0;i<4;i++)line(g,x+5+i*4,y+17-i*4,x+8+i*4,y+20-i*4,color);}
-            case PAINTER,NOISE_PAINTER,BIOME_PAINTER,CLENTAMINATOR -> {
-                line(g,x+3,y+19,x+13,y+9,color);line(g,x+4,y+20,x+14,y+10,color);g.fill(x+11,y+3,x+20,y+10,color);
-                switch(tool){
-                    case NOISE_PAINTER -> {for(int i=0;i<3;i++)g.fill(x+15+i*2,y+13+i*2,x+16+i*2,y+15+i*2,color);} // scattered grains
+            case RULER -> {
+                line(g, x + 3, y + 19, x + 19, y + 3, color);
+                for (int i = 0; i < 4; i++)
+                    line(g, x + 5 + i * 4, y + 17 - i * 4, x + 8 + i * 4, y + 20 - i * 4, color);
+            }
+            case PAINTER, NOISE_PAINTER, BIOME_PAINTER, CLENTAMINATOR -> {
+                line(g, x + 3, y + 19, x + 13, y + 9, color);
+                line(g, x + 4, y + 20, x + 14, y + 10, color);
+                g.fill(x + 11, y + 3, x + 20, y + 10, color);
+                switch (tool) {
+                    case NOISE_PAINTER -> {
+                        for (int i = 0; i < 3; i++)
+                            g.fill(x + 15 + i * 2, y + 13 + i * 2, x + 16 + i * 2, y + 15 + i * 2, color);
+                    } // scattered grains
                     case BIOME_PAINTER -> { // a small tree: a triangle of leaves on a trunk
-                        line(g,x+19,y+12,x+15,y+19,color);line(g,x+19,y+12,x+23,y+19,color);line(g,x+15,y+19,x+23,y+19,color);g.fill(x+18,y+19,x+20,y+23,color);
+                        line(g, x + 19, y + 12, x + 15, y + 19, color);
+                        line(g, x + 19, y + 12, x + 23, y + 19, color);
+                        line(g, x + 15, y + 19, x + 23, y + 19, color);
+                        g.fill(x + 18, y + 19, x + 20, y + 23, color);
                     }
-                    case CLENTAMINATOR -> {star(g,x+17,y+14,color);star(g,x+20,y+20,color);} // sparkles: the ground cleaned and changed
+                    case CLENTAMINATOR -> {
+                        star(g, x + 17, y + 14, color);
+                        star(g, x + 20, y + 20, color);
+                    } // sparkles: the ground cleaned and changed
                     default -> {}
                 }
             }
-            case FREEHAND_DRAW,SCULPT_DRAW -> {line(g,x+4,y+19,x+17,y+6,color);line(g,x+6,y+21,x+19,y+8,color);line(g,x+17,y+6,x+19,y+8,color);line(g,x+4,y+19,x+3,y+22,color);if(tool==Tool.SCULPT_DRAW)star(g,x+5,y+5,color);}
+            case FREEHAND_DRAW, SCULPT_DRAW -> {
+                line(g, x + 4, y + 19, x + 17, y + 6, color);
+                line(g, x + 6, y + 21, x + 19, y + 8, color);
+                line(g, x + 17, y + 6, x + 19, y + 8, color);
+                line(g, x + 4, y + 19, x + 3, y + 22, color);
+                if (tool == Tool.SCULPT_DRAW) star(g, x + 5, y + 5, color);
+            }
             case SHAPE -> { // shapes laid over one another: a circle and a square
-                ring(g,x+9,y+9,7,7,color);g.outline(x+10,y+10,12,12,color);
+                ring(g, x + 9, y + 9, 7, 7, color);
+                g.outline(x + 10, y + 10, 12, 12, color);
             }
-            case ROCK -> {line(g,x+3,y+8,x+13,y+3,color);line(g,x+13,y+3,x+21,y+9,color);line(g,x+21,y+9,x+19,y+20,color);line(g,x+19,y+20,x+7,y+22,color);line(g,x+7,y+22,x+3,y+8,color);line(g,x+3,y+8,x+12,y+12,color);line(g,x+12,y+12,x+21,y+9,color);line(g,x+12,y+12,x+12,y+21,color);}
-            case TEXT -> {g.fill(x+3,y+4,x+21,y+7,color);g.fill(x+10,y+6,x+14,y+21,color);g.fill(x+6,y+20,x+18,y+22,color);}
-            case WELD,MELT -> {line(g,x+3,y+5,x+5,y+18,color);line(g,x+5,y+18,x+19,y+18,color);line(g,x+19,y+18,x+21,y+5,color);g.fill(x+10,y+5,x+14,y+14,color);line(g,x+8,y+(tool==Tool.WELD?10:8),x+12,y+(tool==Tool.WELD?6:12),color);line(g,x+12,y+(tool==Tool.WELD?6:12),x+16,y+(tool==Tool.WELD?10:8),color);}
-            case EXTRUDE -> { // a face pulled out along its normal: where it was, where it ends up, and the edges between
-                g.outline(x+3,y+11,11,11,color);g.outline(x+10,y+3,11,11,color);
-                line(g,x+3,y+11,x+10,y+3,color);line(g,x+13,y+11,x+20,y+3,color);line(g,x+13,y+21,x+20,y+13,color);
+            case ROCK -> {
+                line(g, x + 3, y + 8, x + 13, y + 3, color);
+                line(g, x + 13, y + 3, x + 21, y + 9, color);
+                line(g, x + 21, y + 9, x + 19, y + 20, color);
+                line(g, x + 19, y + 20, x + 7, y + 22, color);
+                line(g, x + 7, y + 22, x + 3, y + 8, color);
+                line(g, x + 3, y + 8, x + 12, y + 12, color);
+                line(g, x + 12, y + 12, x + 21, y + 9, color);
+                line(g, x + 12, y + 12, x + 12, y + 21, color);
             }
-            case ELEVATION -> {line(g,x+3,y+19,x+12,y+15,color);line(g,x+12,y+15,x+21,y+19,color);line(g,x+21,y+19,x+12,y+23,color);line(g,x+12,y+23,x+3,y+19,color);g.fill(x+11,y+5,x+14,y+18,color);line(g,x+7,y+10,x+12,y+4,color);line(g,x+12,y+4,x+18,y+10,color);}
-            case FLATTEN,SLOPE -> {line(g,x+2,y+20,x+22,y+(tool==Tool.SLOPE?5:20),color);line(g,x+5,y+8,x+12,y+15,color);line(g,x+12,y+15,x+19,y+8,color);g.fill(x+11,y+3,x+14,y+13,color);}
+            case TEXT -> {
+                g.fill(x + 3, y + 4, x + 21, y + 7, color);
+                g.fill(x + 10, y + 6, x + 14, y + 21, color);
+                g.fill(x + 6, y + 20, x + 18, y + 22, color);
+            }
+            case WELD, MELT -> {
+                line(g, x + 3, y + 5, x + 5, y + 18, color);
+                line(g, x + 5, y + 18, x + 19, y + 18, color);
+                line(g, x + 19, y + 18, x + 21, y + 5, color);
+                g.fill(x + 10, y + 5, x + 14, y + 14, color);
+                line(g, x + 8, y + (tool == Tool.WELD ? 10 : 8), x + 12, y + (tool == Tool.WELD ? 6 : 12), color);
+                line(g, x + 12, y + (tool == Tool.WELD ? 6 : 12), x + 16, y + (tool == Tool.WELD ? 10 : 8), color);
+            }
+            case EXTRUDE -> { // a face pulled out along its normal: where it was, where it ends up, and the edges
+                // between
+                g.outline(x + 3, y + 11, 11, 11, color);
+                g.outline(x + 10, y + 3, 11, 11, color);
+                line(g, x + 3, y + 11, x + 10, y + 3, color);
+                line(g, x + 13, y + 11, x + 20, y + 3, color);
+                line(g, x + 13, y + 21, x + 20, y + 13, color);
+            }
+            case ELEVATION -> {
+                line(g, x + 3, y + 19, x + 12, y + 15, color);
+                line(g, x + 12, y + 15, x + 21, y + 19, color);
+                line(g, x + 21, y + 19, x + 12, y + 23, color);
+                line(g, x + 12, y + 23, x + 3, y + 19, color);
+                g.fill(x + 11, y + 5, x + 14, y + 18, color);
+                line(g, x + 7, y + 10, x + 12, y + 4, color);
+                line(g, x + 12, y + 4, x + 18, y + 10, color);
+            }
+            case FLATTEN, SLOPE -> {
+                line(g, x + 2, y + 20, x + 22, y + (tool == Tool.SLOPE ? 5 : 20), color);
+                line(g, x + 5, y + 8, x + 12, y + 15, color);
+                line(g, x + 12, y + 15, x + 19, y + 8, color);
+                g.fill(x + 11, y + 3, x + 14, y + 13, color);
+            }
             case DISTORT -> { // a grid bent out of shape: two columns and two rows that wander
-                for(int[][] bent:new int[][][]{{{7,3},{9,8},{6,14},{8,21}},{{16,3},{14,8},{17,14},{15,21}},{{2,8},{8,6},{15,10},{22,7}},{{2,17},{8,19},{15,16},{22,18}}})
-                    for(int i=0;i<bent.length-1;i++)line(g,x+bent[i][0],y+bent[i][1],x+bent[i+1][0],y+bent[i+1][1],color);
+                for (int[][] bent : new int[][][] {
+                    {{7, 3}, {9, 8}, {6, 14}, {8, 21}},
+                    {{16, 3}, {14, 8}, {17, 14}, {15, 21}},
+                    {{2, 8}, {8, 6}, {15, 10}, {22, 7}},
+                    {{2, 17}, {8, 19}, {15, 16}, {22, 18}}
+                })
+                    for (int i = 0; i < bent.length - 1; i++)
+                        line(g, x + bent[i][0], y + bent[i][1], x + bent[i + 1][0], y + bent[i + 1][1], color);
             }
-            case SMOOTH -> {for(int i=0;i<3;i++){line(g,x+2,y+6+i*6,x+8,y+3+i*6,color);line(g,x+8,y+3+i*6,x+15,y+8+i*6,color);line(g,x+15,y+8+i*6,x+22,y+5+i*6,color);}}
+            case SMOOTH -> {
+                for (int i = 0; i < 3; i++) {
+                    line(g, x + 2, y + 6 + i * 6, x + 8, y + 3 + i * 6, color);
+                    line(g, x + 8, y + 3 + i * 6, x + 15, y + 8 + i * 6, color);
+                    line(g, x + 15, y + 8 + i * 6, x + 22, y + 5 + i * 6, color);
+                }
+            }
             case ROUGHEN -> { // an uneven edge with grit below it
-                int[][] edge={{2,13},{5,8},{8,14},{11,9},{14,15},{17,9},{20,14},{22,11}};
-                for(int i=0;i<edge.length-1;i++)line(g,x+edge[i][0],y+edge[i][1],x+edge[i+1][0],y+edge[i+1][1],color);
-                g.fill(x+4,y+18,x+6,y+20,color);g.fill(x+10,y+20,x+12,y+22,color);g.fill(x+15,y+18,x+17,y+20,color);g.fill(x+20,y+20,x+22,y+22,color);
+                int[][] edge = {{2, 13}, {5, 8}, {8, 14}, {11, 9}, {14, 15}, {17, 9}, {20, 14}, {22, 11}};
+                for (int i = 0; i < edge.length - 1; i++)
+                    line(g, x + edge[i][0], y + edge[i][1], x + edge[i + 1][0], y + edge[i + 1][1], color);
+                g.fill(x + 4, y + 18, x + 6, y + 20, color);
+                g.fill(x + 10, y + 20, x + 12, y + 22, color);
+                g.fill(x + 15, y + 18, x + 17, y + 20, color);
+                g.fill(x + 20, y + 20, x + 22, y + 22, color);
             }
-            case SHATTER -> {for(int i=0;i<8;i++){double a=i*Math.PI/4;line(g,x+12,y+12,x+12+(int)(Math.cos(a)*10),y+12+(int)(Math.sin(a)*10),color);}star(g,x+12,y+12,color);}
-            case ERASE -> {line(g,x+3,y+14,x+14,y+3,color);line(g,x+14,y+3,x+22,y+11,color);line(g,x+22,y+11,x+11,y+22,color);line(g,x+11,y+22,x+3,y+14,color);line(g,x+7,y+10,x+15,y+18,color);}
-            case INSPECT -> {ring(g,x+10,y+10,7,7,color);line(g,x+15,y+15,x+21,y+21,color);line(g,x+16,y+16,x+22,y+22,color);}
-            case TINKER -> {line(g,x+4,y+21,x+17,y+8,color);g.fill(x+14,y+3,x+18,y+9,color);g.fill(x+18,y+7,x+22,y+12,color);}
+            case SHATTER -> {
+                for (int i = 0; i < 8; i++) {
+                    double a = i * Math.PI / 4;
+                    line(
+                            g,
+                            x + 12,
+                            y + 12,
+                            x + 12 + (int) (Math.cos(a) * 10),
+                            y + 12 + (int) (Math.sin(a) * 10),
+                            color);
+                }
+                star(g, x + 12, y + 12, color);
+            }
+            case ERASE -> {
+                line(g, x + 3, y + 14, x + 14, y + 3, color);
+                line(g, x + 14, y + 3, x + 22, y + 11, color);
+                line(g, x + 22, y + 11, x + 11, y + 22, color);
+                line(g, x + 11, y + 22, x + 3, y + 14, color);
+                line(g, x + 7, y + 10, x + 15, y + 18, color);
+            }
+            case INSPECT -> {
+                ring(g, x + 10, y + 10, 7, 7, color);
+                line(g, x + 15, y + 15, x + 21, y + 21, color);
+                line(g, x + 16, y + 16, x + 22, y + 22, color);
+            }
+            case TINKER -> {
+                line(g, x + 4, y + 21, x + 17, y + 8, color);
+                g.fill(x + 14, y + 3, x + 18, y + 9, color);
+                g.fill(x + 18, y + 7, x + 22, y + 12, color);
+            }
         }
     }
     /** The Magic Wand's comparison choices, on the same 24 pixel grid as the tool icons. */
-    private static void paintCompare(Canvas g,Options.Compare compare,int x,int y,int color) {
-        switch(compare) {
-            case ANY -> {for(int i=0;i<4;i++)g.outline(x+3+(i%2)*10,y+3+(i/2)*10,8,8,color);g.fill(x+5,y+5,x+9,y+9,color);g.fill(x+15,y+15,x+19,y+19,color&0xffffff|0x80000000);}
-            case BLOCK -> {g.outline(x+4,y+4,16,16,color);g.fill(x+8,y+8,x+16,y+16,color);}
-            case STATE -> {g.outline(x+3,y+3,18,18,color);line(g,x+6,y+9,x+17,y+9,color);line(g,x+6,y+16,x+17,y+16,color);g.fill(x+8,y+7,x+11,y+12,color);g.fill(x+13,y+14,x+16,y+19,color);}
-            case TAG -> {line(g,x+3,y+12,x+12,y+3,color);line(g,x+12,y+3,x+21,y+3,color);line(g,x+21,y+3,x+21,y+12,color);line(g,x+21,y+12,x+12,y+21,color);line(g,x+12,y+21,x+3,y+12,color);g.fill(x+16,y+6,x+19,y+9,color);}
-            case NBT -> {line(g,x+9,y+3,x+6,y+6,color);line(g,x+6,y+6,x+6,y+10,color);line(g,x+6,y+10,x+3,y+12,color);line(g,x+3,y+12,x+6,y+14,color);line(g,x+6,y+14,x+6,y+18,color);line(g,x+6,y+18,x+9,y+21,color);
-                line(g,x+15,y+3,x+18,y+6,color);line(g,x+18,y+6,x+18,y+10,color);line(g,x+18,y+10,x+21,y+12,color);line(g,x+21,y+12,x+18,y+14,color);line(g,x+18,y+14,x+18,y+18,color);line(g,x+18,y+18,x+15,y+21,color);}
+    private static void paintCompare(Canvas g, Options.Compare compare, int x, int y, int color) {
+        switch (compare) {
+            case ANY -> {
+                for (int i = 0; i < 4; i++) g.outline(x + 3 + (i % 2) * 10, y + 3 + (i / 2) * 10, 8, 8, color);
+                g.fill(x + 5, y + 5, x + 9, y + 9, color);
+                g.fill(x + 15, y + 15, x + 19, y + 19, color & 0xffffff | 0x80000000);
+            }
+            case BLOCK -> {
+                g.outline(x + 4, y + 4, 16, 16, color);
+                g.fill(x + 8, y + 8, x + 16, y + 16, color);
+            }
+            case STATE -> {
+                g.outline(x + 3, y + 3, 18, 18, color);
+                line(g, x + 6, y + 9, x + 17, y + 9, color);
+                line(g, x + 6, y + 16, x + 17, y + 16, color);
+                g.fill(x + 8, y + 7, x + 11, y + 12, color);
+                g.fill(x + 13, y + 14, x + 16, y + 19, color);
+            }
+            case TAG -> {
+                line(g, x + 3, y + 12, x + 12, y + 3, color);
+                line(g, x + 12, y + 3, x + 21, y + 3, color);
+                line(g, x + 21, y + 3, x + 21, y + 12, color);
+                line(g, x + 21, y + 12, x + 12, y + 21, color);
+                line(g, x + 12, y + 21, x + 3, y + 12, color);
+                g.fill(x + 16, y + 6, x + 19, y + 9, color);
+            }
+            case NBT -> {
+                line(g, x + 9, y + 3, x + 6, y + 6, color);
+                line(g, x + 6, y + 6, x + 6, y + 10, color);
+                line(g, x + 6, y + 10, x + 3, y + 12, color);
+                line(g, x + 3, y + 12, x + 6, y + 14, color);
+                line(g, x + 6, y + 14, x + 6, y + 18, color);
+                line(g, x + 6, y + 18, x + 9, y + 21, color);
+                line(g, x + 15, y + 3, x + 18, y + 6, color);
+                line(g, x + 18, y + 6, x + 18, y + 10, color);
+                line(g, x + 18, y + 10, x + 21, y + 12, color);
+                line(g, x + 21, y + 12, x + 18, y + 14, color);
+                line(g, x + 18, y + 14, x + 18, y + 18, color);
+                line(g, x + 18, y + 18, x + 15, y + 21, color);
+            }
         }
     }
     /** The Shape tool's solids, on the same 24 pixel grid as the tool icons. */
-    private static void paintShape(Canvas g,BrushMath.Shape shape,int x,int y,int color) {
-        switch(shape) {
-            case SPHERE -> {ring(g,x+12,y+12,9,9,color);ring(g,x+12,y+12,9,3,color);line(g,x+12,y+3,x+12,y+21,color);}
-            case CUBE -> {line(g,x+12,y+2,x+21,y+7,color);line(g,x+21,y+7,x+21,y+17,color);line(g,x+21,y+17,x+12,y+22,color);line(g,x+12,y+22,x+3,y+17,color);line(g,x+3,y+17,x+3,y+7,color);line(g,x+3,y+7,x+12,y+2,color);line(g,x+3,y+7,x+12,y+12,color);line(g,x+21,y+7,x+12,y+12,color);line(g,x+12,y+12,x+12,y+22,color);}
-            case OCTAHEDRON -> {line(g,x+12,y+2,x+21,y+12,color);line(g,x+21,y+12,x+12,y+22,color);line(g,x+12,y+22,x+3,y+12,color);line(g,x+3,y+12,x+12,y+2,color);line(g,x+3,y+12,x+21,y+12,color);line(g,x+12,y+2,x+12,y+22,color);}
-            case CYLINDER -> {ring(g,x+12,y+6,8,3,color);line(g,x+4,y+6,x+4,y+18,color);line(g,x+20,y+6,x+20,y+18,color);arc(g,x+12,y+18,8,3,0,Math.PI,color);}
-            case PLANE -> {line(g,x+2,y+17,x+7,y+8,color);line(g,x+7,y+8,x+22,y+8,color);line(g,x+22,y+8,x+17,y+17,color);line(g,x+17,y+17,x+2,y+17,color);}
-            case DISK -> {ring(g,x+12,y+12,10,5,color);g.fill(x+11,y+11,x+14,y+14,color);}
-            case POLYGON -> {line(g,x+12,y+3,x+21,y+9,color);line(g,x+21,y+9,x+18,y+20,color);line(g,x+18,y+20,x+6,y+20,color);line(g,x+6,y+20,x+3,y+9,color);line(g,x+3,y+9,x+12,y+3,color);}
-            case IRREGULAR_POLYGON -> {line(g,x+10,y+3,x+21,y+7,color);line(g,x+21,y+7,x+19,y+17,color);line(g,x+19,y+17,x+11,y+21,color);line(g,x+11,y+21,x+4,y+15,color);line(g,x+4,y+15,x+10,y+3,color);} // a lopsided outline: sides of different lengths
-            case STAR -> {line(g,x+12,y+2,x+18,y+21,color);line(g,x+18,y+21,x+3,y+9,color);line(g,x+3,y+9,x+21,y+9,color);line(g,x+21,y+9,x+6,y+21,color);line(g,x+6,y+21,x+12,y+2,color);}
-            case PYRAMID -> {line(g,x+12,y+2,x+3,y+17,color);line(g,x+12,y+2,x+13,y+22,color);line(g,x+12,y+2,x+22,y+16,color);line(g,x+3,y+17,x+13,y+22,color);line(g,x+13,y+22,x+22,y+16,color);line(g,x+3,y+17,x+10,y+14,color);line(g,x+10,y+14,x+22,y+16,color);}
-            case CONE -> {line(g,x+12,y+2,x+3,y+18,color);line(g,x+12,y+2,x+21,y+18,color);ring(g,x+12,y+18,9,3,color);}
-            case HEMISPHERE -> {arc(g,x+12,y+16,10,12,Math.PI,Math.PI*2,color);ring(g,x+12,y+16,10,3,color);}
-            case TORUS -> {ring(g,x+12,y+12,10,6,color);ring(g,x+12,y+12,4,2,color);}
-            case TUBE -> {ring(g,x+12,y+6,9,3,color);ring(g,x+12,y+6,4,1,color);line(g,x+3,y+6,x+3,y+18,color);line(g,x+21,y+6,x+21,y+18,color);arc(g,x+12,y+18,9,3,0,Math.PI,color);}
+    private static void paintShape(Canvas g, BrushMath.Shape shape, int x, int y, int color) {
+        switch (shape) {
+            case SPHERE -> {
+                ring(g, x + 12, y + 12, 9, 9, color);
+                ring(g, x + 12, y + 12, 9, 3, color);
+                line(g, x + 12, y + 3, x + 12, y + 21, color);
+            }
+            case CUBE -> {
+                line(g, x + 12, y + 2, x + 21, y + 7, color);
+                line(g, x + 21, y + 7, x + 21, y + 17, color);
+                line(g, x + 21, y + 17, x + 12, y + 22, color);
+                line(g, x + 12, y + 22, x + 3, y + 17, color);
+                line(g, x + 3, y + 17, x + 3, y + 7, color);
+                line(g, x + 3, y + 7, x + 12, y + 2, color);
+                line(g, x + 3, y + 7, x + 12, y + 12, color);
+                line(g, x + 21, y + 7, x + 12, y + 12, color);
+                line(g, x + 12, y + 12, x + 12, y + 22, color);
+            }
+            case OCTAHEDRON -> {
+                line(g, x + 12, y + 2, x + 21, y + 12, color);
+                line(g, x + 21, y + 12, x + 12, y + 22, color);
+                line(g, x + 12, y + 22, x + 3, y + 12, color);
+                line(g, x + 3, y + 12, x + 12, y + 2, color);
+                line(g, x + 3, y + 12, x + 21, y + 12, color);
+                line(g, x + 12, y + 2, x + 12, y + 22, color);
+            }
+            case CYLINDER -> {
+                ring(g, x + 12, y + 6, 8, 3, color);
+                line(g, x + 4, y + 6, x + 4, y + 18, color);
+                line(g, x + 20, y + 6, x + 20, y + 18, color);
+                arc(g, x + 12, y + 18, 8, 3, 0, Math.PI, color);
+            }
+            case PLANE -> {
+                line(g, x + 2, y + 17, x + 7, y + 8, color);
+                line(g, x + 7, y + 8, x + 22, y + 8, color);
+                line(g, x + 22, y + 8, x + 17, y + 17, color);
+                line(g, x + 17, y + 17, x + 2, y + 17, color);
+            }
+            case DISK -> {
+                ring(g, x + 12, y + 12, 10, 5, color);
+                g.fill(x + 11, y + 11, x + 14, y + 14, color);
+            }
+            case POLYGON -> {
+                line(g, x + 12, y + 3, x + 21, y + 9, color);
+                line(g, x + 21, y + 9, x + 18, y + 20, color);
+                line(g, x + 18, y + 20, x + 6, y + 20, color);
+                line(g, x + 6, y + 20, x + 3, y + 9, color);
+                line(g, x + 3, y + 9, x + 12, y + 3, color);
+            }
+            case IRREGULAR_POLYGON -> {
+                line(g, x + 10, y + 3, x + 21, y + 7, color);
+                line(g, x + 21, y + 7, x + 19, y + 17, color);
+                line(g, x + 19, y + 17, x + 11, y + 21, color);
+                line(g, x + 11, y + 21, x + 4, y + 15, color);
+                line(g, x + 4, y + 15, x + 10, y + 3, color);
+            } // a lopsided outline: sides of different lengths
+            case STAR -> {
+                line(g, x + 12, y + 2, x + 18, y + 21, color);
+                line(g, x + 18, y + 21, x + 3, y + 9, color);
+                line(g, x + 3, y + 9, x + 21, y + 9, color);
+                line(g, x + 21, y + 9, x + 6, y + 21, color);
+                line(g, x + 6, y + 21, x + 12, y + 2, color);
+            }
+            case PYRAMID -> {
+                line(g, x + 12, y + 2, x + 3, y + 17, color);
+                line(g, x + 12, y + 2, x + 13, y + 22, color);
+                line(g, x + 12, y + 2, x + 22, y + 16, color);
+                line(g, x + 3, y + 17, x + 13, y + 22, color);
+                line(g, x + 13, y + 22, x + 22, y + 16, color);
+                line(g, x + 3, y + 17, x + 10, y + 14, color);
+                line(g, x + 10, y + 14, x + 22, y + 16, color);
+            }
+            case CONE -> {
+                line(g, x + 12, y + 2, x + 3, y + 18, color);
+                line(g, x + 12, y + 2, x + 21, y + 18, color);
+                ring(g, x + 12, y + 18, 9, 3, color);
+            }
+            case HEMISPHERE -> {
+                arc(g, x + 12, y + 16, 10, 12, Math.PI, Math.PI * 2, color);
+                ring(g, x + 12, y + 16, 10, 3, color);
+            }
+            case TORUS -> {
+                ring(g, x + 12, y + 12, 10, 6, color);
+                ring(g, x + 12, y + 12, 4, 2, color);
+            }
+            case TUBE -> {
+                ring(g, x + 12, y + 6, 9, 3, color);
+                ring(g, x + 12, y + 6, 4, 1, color);
+                line(g, x + 3, y + 6, x + 3, y + 18, color);
+                line(g, x + 21, y + 6, x + 21, y + 18, color);
+                arc(g, x + 12, y + 18, 9, 3, 0, Math.PI, color);
+            }
         }
     }
     /** A hard hat in a 19 by 19 button at {@code x}, {@code y}: a dome with a ridge, over a brim. */
-    private static void paintHardHat(Canvas g,int x,int y,int c){
-        arc(g,x+9,y+12,6,7,Math.PI,Math.PI*2,c);
-        g.fill(x+8,y+4,x+10,y+11,c);
-        g.fill(x+2,y+12,x+17,y+14,c);
+    private static void paintHardHat(Canvas g, int x, int y, int c) {
+        arc(g, x + 9, y + 12, 6, 7, Math.PI, Math.PI * 2, c);
+        g.fill(x + 8, y + 4, x + 10, y + 11, c);
+        g.fill(x + 2, y + 12, x + 17, y + 14, c);
     }
     /** The pipette, drawn inside a 30 by 30 button whose top left corner is {@code x}, {@code y}: a bulb, a collar and a tube down to the tip. */
-    static void pipette(Canvas g,int x,int y,int color){
-        g.fill(x+19,y+6,x+24,y+11,color); // the bulb
-        line(g,x+16,y+10,x+21,y+15,color); // the collar
-        line(g,x+8,y+22,x+18,y+12,color);line(g,x+9,y+23,x+19,y+13,color); // the tube
-        g.fill(x+7,y+23,x+9,y+25,color); // the tip
+    static void pipette(Canvas g, int x, int y, int color) {
+        g.fill(x + 19, y + 6, x + 24, y + 11, color); // the bulb
+        line(g, x + 16, y + 10, x + 21, y + 15, color); // the collar
+        line(g, x + 8, y + 22, x + 18, y + 12, color);
+        line(g, x + 9, y + 23, x + 19, y + 13, color); // the tube
+        g.fill(x + 7, y + 23, x + 9, y + 25, color); // the tip
     }
     /** A check mark in a 12 by 12 square at {@code x}, {@code y}. */
-    static void check(Canvas g,int x,int y,int color){line(g,x+2,y+6,x+5,y+9,color);line(g,x+5,y+9,x+10,y+3,color);}
-    private static void ring(Canvas g,int cx,int cy,int rx,int ry,int c){arc(g,cx,cy,rx,ry,0,Math.PI*2,c);}
+    static void check(Canvas g, int x, int y, int color) {
+        line(g, x + 2, y + 6, x + 5, y + 9, color);
+        line(g, x + 5, y + 9, x + 10, y + 3, color);
+    }
+
+    private static void ring(Canvas g, int cx, int cy, int rx, int ry, int c) {
+        arc(g, cx, cy, rx, ry, 0, Math.PI * 2, c);
+    }
     /** The part of an ellipse from angle {@code from} to {@code to} (radians, y grows downward), as dots two pixels wide. */
-    private static void arc(Canvas g,int cx,int cy,int rx,int ry,double from,double to,int c){
-        int steps=Math.max(16,(int)((to-from)/(Math.PI*2)*40));
-        for(int i=0;i<=steps;i++){double a=from+(to-from)*i/steps;int px=cx+(int)Math.round(Math.cos(a)*rx),py=cy+(int)Math.round(Math.sin(a)*ry);g.fill(px,py,px+2,py+2,c);}
+    private static void arc(Canvas g, int cx, int cy, int rx, int ry, double from, double to, int c) {
+        int steps = Math.max(16, (int) ((to - from) / (Math.PI * 2) * 40));
+        for (int i = 0; i <= steps; i++) {
+            double a = from + (to - from) * i / steps;
+            int px = cx + (int) Math.round(Math.cos(a) * rx), py = cy + (int) Math.round(Math.sin(a) * ry);
+            g.fill(px, py, px + 2, py + 2, c);
+        }
     }
     /** A filled four-sided shape, row by row; the corners go round the shape in order. */
-    static void fillQuad(Canvas g,int x1,int y1,int x2,int y2,int x3,int y3,int x4,int y4,int color){
-        int[] xs={x1,x2,x3,x4},ys={y1,y2,y3,y4};
-        int top=Math.min(Math.min(y1,y2),Math.min(y3,y4)),bottom=Math.max(Math.max(y1,y2),Math.max(y3,y4));
-        for(int y=top;y<bottom;y++){
-            double at=y+.5,low=Double.MAX_VALUE,high=-Double.MAX_VALUE;
-            for(int i=0;i<4;i++){
-                int j=(i+1)%4;if((ys[i]<=at)==(ys[j]<=at))continue;
-                double cross=xs[i]+(at-ys[i])*(xs[j]-xs[i])/(double)(ys[j]-ys[i]);low=Math.min(low,cross);high=Math.max(high,cross);
+    static void fillQuad(Canvas g, int x1, int y1, int x2, int y2, int x3, int y3, int x4, int y4, int color) {
+        int[] xs = {x1, x2, x3, x4}, ys = {y1, y2, y3, y4};
+        int top = Math.min(Math.min(y1, y2), Math.min(y3, y4)), bottom = Math.max(Math.max(y1, y2), Math.max(y3, y4));
+        for (int y = top; y < bottom; y++) {
+            double at = y + .5, low = Double.MAX_VALUE, high = -Double.MAX_VALUE;
+            for (int i = 0; i < 4; i++) {
+                int j = (i + 1) % 4;
+                if ((ys[i] <= at) == (ys[j] <= at)) continue;
+                double cross = xs[i] + (at - ys[i]) * (xs[j] - xs[i]) / (double) (ys[j] - ys[i]);
+                low = Math.min(low, cross);
+                high = Math.max(high, cross);
             }
-            if(high>low)g.fill((int)Math.round(low),y,(int)Math.round(high),y+1,color);
+            if (high > low) g.fill((int) Math.round(low), y, (int) Math.round(high), y + 1, color);
         }
     }
     /** Two links of a chain, 17 by 9 pixels. Joined when {@code linked}; apart, with a gap between them, when not. */
-    private static void paintChain(Canvas g,int x,int y,int color,boolean linked){
-        int gap=linked?0:3;
-        g.outline(x,y+1,9,7,color);g.outline(x+8+gap,y+1,9,7,color); // the two links
-        if(linked)g.fill(x+5,y+3,x+12,y+6,color); // the bar through both, where they overlap
-        else{line(g,x+5,y+8,x+7,y+5,color);line(g,x+10,y+4,x+12,y+1,color);} // a break between them
+    private static void paintChain(Canvas g, int x, int y, int color, boolean linked) {
+        int gap = linked ? 0 : 3;
+        g.outline(x, y + 1, 9, 7, color);
+        g.outline(x + 8 + gap, y + 1, 9, 7, color); // the two links
+        if (linked) g.fill(x + 5, y + 3, x + 12, y + 6, color); // the bar through both, where they overlap
+        else {
+            line(g, x + 5, y + 8, x + 7, y + 5, color);
+            line(g, x + 10, y + 4, x + 12, y + 1, color);
+        } // a break between them
     }
-    static void line(Canvas g,int x1,int y1,int x2,int y2,int c) {
-        int steps=Math.max(Math.abs(x2-x1),Math.abs(y2-y1));
-        for(int i=0;i<=steps;i++){float t=steps==0?0:(float)i/steps;int x=Math.round(x1+(x2-x1)*t),y=Math.round(y1+(y2-y1)*t);g.fill(x,y,x+2,y+2,c);}
+
+    static void line(Canvas g, int x1, int y1, int x2, int y2, int c) {
+        int steps = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1));
+        for (int i = 0; i <= steps; i++) {
+            float t = steps == 0 ? 0 : (float) i / steps;
+            int x = Math.round(x1 + (x2 - x1) * t), y = Math.round(y1 + (y2 - y1) * t);
+            g.fill(x, y, x + 2, y + 2, c);
+        }
     }
-    private static void star(Canvas g,int x,int y,int c){g.fill(x-3,y,x+4,y+1,c);g.fill(x,y-3,x+1,y+4,c);}
-    private static void dotted(Canvas g,int x,int y,int w,int h,int c){for(int i=0;i<w;i+=3){g.fill(x+i,y,x+i+2,y+1,c);g.fill(x+i,y+h,x+i+2,y+h+1,c);}for(int i=0;i<h;i+=3){g.fill(x,y+i,x+1,y+i+2,c);g.fill(x+w,y+i,x+w+1,y+i+2,c);}}
+
+    private static void star(Canvas g, int x, int y, int c) {
+        g.fill(x - 3, y, x + 4, y + 1, c);
+        g.fill(x, y - 3, x + 1, y + 4, c);
+    }
+
+    private static void dotted(Canvas g, int x, int y, int w, int h, int c) {
+        for (int i = 0; i < w; i += 3) {
+            g.fill(x + i, y, x + i + 2, y + 1, c);
+            g.fill(x + i, y + h, x + i + 2, y + h + 1, c);
+        }
+        for (int i = 0; i < h; i += 3) {
+            g.fill(x, y + i, x + 1, y + i + 2, c);
+            g.fill(x + w, y + i, x + w + 1, y + i + 2, c);
+        }
+    }
 }

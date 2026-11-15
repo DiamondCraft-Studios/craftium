@@ -1,19 +1,19 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.Overlay;
 import dev.craftium.core.*;
-import dev.craftium.client.compat.ClientCompat;
+import java.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import java.util.*;
 
 /**
  * The single outline of a set of blocks, ready to draw: one line along each edge of the outer surface and a fill on
  * each exterior face. Every preview that outlines blocks draws through this, so they all look like the selection.
  */
 final class OutlineShape {
-    static final OutlineShape EMPTY=new OutlineShape(SelectionOutline.Result.EMPTY,null);
+    static final OutlineShape EMPTY = new OutlineShape(SelectionOutline.Result.EMPTY, null);
     /**
      * Beyond these the outline is too detailed to draw every frame, so the shape falls back to its bounding box. Measured with the
      * selection draw-cost game test: a 100,000-block selection with about 25,000 edges and 18,000 faces still draws at 70 frames a
@@ -21,144 +21,234 @@ final class OutlineShape {
      * at both caps still runs at about 50 frames a second. Past the face cap only the fill is dropped; the box is for selections
      * that are far busier than anything a person selects on purpose.
      */
-    static final int DEFAULT_MAX_EDGES=40_000,DEFAULT_MAX_FACES=30_000;
-    static int maxEdges=DEFAULT_MAX_EDGES,maxFaces=DEFAULT_MAX_FACES; // not final only so the draw-cost game test can lift them; nothing else changes them
+    static final int DEFAULT_MAX_EDGES = 40_000, DEFAULT_MAX_FACES = 30_000;
+
+    static int maxEdges = DEFAULT_MAX_EDGES,
+            maxFaces =
+                    DEFAULT_MAX_FACES; // not final only so the draw-cost game test can lift them; nothing else changes
+    // them
 
     private volatile SelectionOutline.Result outline;
     private final AABB bounds;
     /** False only for a shape made by {@link #ofLater}, until its outline has been worked out. */
-    private volatile boolean ready=true;
-    // The outline's corners as ready-made points, made on first use. Building a few of them per edge and face every frame was a large part of the
-    // cost of a big shape, and a shape that is drawn where it is never changes. A shape drawn moved by something still works them out each time.
+    private volatile boolean ready = true;
+    // The outline's corners as ready-made points, made on first use. Building a few of them per edge and face every
+    // frame was a large part of the
+    // cost of a big shape, and a shape that is drawn where it is never changes. A shape drawn moved by something still
+    // works them out each time.
     private Vec3[] creaseEnds;
     private Vec3[][] quads;
     /** The blocks the shape was made from, kept to tell which edges the shape itself hides from the camera; null for a box, which hides none of its own. */
     private Collection<Point> cells;
+
     private Set<Point> cellSet;
 
-    private OutlineShape(SelectionOutline.Result outline,AABB bounds){this.outline=outline;this.bounds=bounds;}
+    private OutlineShape(SelectionOutline.Result outline, AABB bounds) {
+        this.outline = outline;
+        this.bounds = bounds;
+    }
 
-    static OutlineShape of(Collection<Point> points){
-        if(points.isEmpty())return EMPTY;
-        var shape=new OutlineShape(SelectionOutline.of(points),boundsOf(points));
-        shape.cells=points;
+    static OutlineShape of(Collection<Point> points) {
+        if (points.isEmpty()) return EMPTY;
+        var shape = new OutlineShape(SelectionOutline.of(points), boundsOf(points));
+        shape.cells = points;
         return shape;
     }
-    private static AABB boundsOf(Collection<Point> points){
-        AABB bounds=null;
-        for(Point p:points){var cell=new AABB(p.x(),p.y(),p.z(),p.x()+1,p.y()+1,p.z()+1);bounds=bounds==null?cell:bounds.minmax(cell);}
+
+    private static AABB boundsOf(Collection<Point> points) {
+        AABB bounds = null;
+        for (Point p : points) {
+            var cell = new AABB(p.x(), p.y(), p.z(), p.x() + 1, p.y() + 1, p.z() + 1);
+            bounds = bounds == null ? cell : bounds.minmax(cell);
+        }
         return bounds;
     }
     /** One thread works out every {@link #ofLater} outline, one after another. */
-    private static final java.util.concurrent.ExecutorService LATER=java.util.concurrent.Executors.newSingleThreadExecutor(task->{
-        var thread=new Thread(task,"Craftium outline");thread.setDaemon(true);thread.setPriority(Thread.NORM_PRIORITY-1);return thread;});
+    private static final java.util.concurrent.ExecutorService LATER =
+            java.util.concurrent.Executors.newSingleThreadExecutor(task -> {
+                var thread = new Thread(task, "Craftium outline");
+                thread.setDaemon(true);
+                thread.setPriority(Thread.NORM_PRIORITY - 1);
+                return thread;
+            });
     /**
      * As {@link #of}, for a big set of blocks that is shown once, such as the blocks of an edit waiting to be confirmed: the outline takes a
      * couple of hundred milliseconds for a hundred thousand blocks, which would freeze the game if it were worked out here. The shape draws
      * nothing until it is ready. {@code points} must not change afterwards. Small sets are worked out at once, since that is quicker than the hand-over.
      */
-    static OutlineShape ofLater(Collection<Point> points){
-        if(points.size()<=LATER_FROM)return of(points);
-        var shape=new OutlineShape(SelectionOutline.Result.EMPTY,boundsOf(points));
-        shape.ready=false;shape.cells=points;
-        LATER.execute(()->{shape.outline=SelectionOutline.of(points);shape.ready=true;});
+    static OutlineShape ofLater(Collection<Point> points) {
+        if (points.size() <= LATER_FROM) return of(points);
+        var shape = new OutlineShape(SelectionOutline.Result.EMPTY, boundsOf(points));
+        shape.ready = false;
+        shape.cells = points;
+        LATER.execute(() -> {
+            shape.outline = SelectionOutline.of(points);
+            shape.ready = true;
+        });
         return shape;
     }
-    private static final int LATER_FROM=2000;
+
+    private static final int LATER_FROM = 2000;
     /** Whether the outline has been worked out; always true unless the shape came from {@link #ofLater}. */
-    boolean ready(){return ready;}
+    boolean ready() {
+        return ready;
+    }
     /** How many edges the outline has, for the draw-cost game test. */
-    int edgeCount(){return outline.edges().size();}
+    int edgeCount() {
+        return outline.edges().size();
+    }
 
     /** A solid box from the block corner {@code lo} up to, not including, {@code hi}, drawn in the selection's style like any other shape. */
-    static OutlineShape box(Point lo,Point hi){return new OutlineShape(SelectionOutline.box(lo,hi),new AABB(lo.x(),lo.y(),lo.z(),hi.x(),hi.y(),hi.z()));}
+    static OutlineShape box(Point lo, Point hi) {
+        return new OutlineShape(SelectionOutline.box(lo, hi), new AABB(lo.x(), lo.y(), lo.z(), hi.x(), hi.y(), hi.z()));
+    }
     /** The box around every block, or null when empty. */
-    AABB bounds(){return bounds;}
-    boolean isEmpty(){return bounds==null;}
+    AABB bounds() {
+        return bounds;
+    }
+
+    boolean isEmpty() {
+        return bounds == null;
+    }
     /** Whether the shape has the contour of the screen to draw, and not just its creases. For the draw-cost game test. */
-    boolean hasContour(){return contourEnds!=null&&contourEnds.length>0;}
+    boolean hasContour() {
+        return contourEnds != null && contourEnds.length > 0;
+    }
 
     /** Receives a line, after any transform the caller wants applied. */
-    interface Lines{void line(Vec3 from,Vec3 to);}
+    interface Lines {
+        void line(Vec3 from, Vec3 to);
+    }
 
     /**
      * Draws the shape moved by {@code at}. Each outline edge goes to {@code lines}, so the caller picks the colour and
      * any transform. With {@code withFill} the exterior faces are filled with {@code fill} too, unless there are too
      * many to draw every frame. When the outline is too detailed, one box around everything is drawn instead.
      */
-    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill){draw(at,lines,stroke,fill,withFill,ClientState.options.selectionStyle);}
+    void draw(Vec3 at, Lines lines, int stroke, int fill, boolean withFill) {
+        draw(at, lines, stroke, fill, withFill, ClientState.options.selectionStyle);
+    }
     /**
      * The selection's style as it is: the silhouette (or the outline) at the plain line width, with no extra edges. In every style a line is whole
      * where nothing is in front of it and a quarter as opaque behind blocks (see {@link #edge}). With {@code scene} the fill is hidden by blocks in front of it too.
      */
-    void drawPlain(Vec3 at,int colour,float width,int fill,boolean withFill,boolean scene){drawPlain(at,colour,width,fill,fill,withFill,scene);}
+    void drawPlain(Vec3 at, int colour, float width, int fill, boolean withFill, boolean scene) {
+        drawPlain(at, colour, width, fill, fill, withFill, scene);
+    }
     /** As above, with the faces that point away from the camera filled in {@code backFill}: with the camera inside the shape, those are the walls around it. */
-    void drawPlain(Vec3 at,int colour,float width,int fill,int backFill,boolean withFill,boolean scene){
-        var style=ClientState.options.selectionStyle;
-        Lines lines=(a,b)->edge(a,b,colour,width);
-        draw(at,lines,colour,fill,backFill,withFill,style,null,scene);
+    void drawPlain(Vec3 at, int colour, float width, int fill, int backFill, boolean withFill, boolean scene) {
+        var style = ClientState.options.selectionStyle;
+        Lines lines = (a, b) -> edge(a, b, colour, width);
+        draw(at, lines, colour, fill, backFill, withFill, style, null, scene);
     }
     /**
      * As the first drawPlain, for a shape that is being changed as it is looked at, such as the blocks a drag will leave, which are worked out
      * again at every step. Its silhouette is always found from this frame's camera, never from an earlier one.
      */
-    void drawLive(Vec3 at,int colour,float width,int fill,boolean withFill){
-        var style=ClientState.options.selectionStyle;
-        Lines lines=(a,b)->edge(a,b,colour,width);
-        draw(at,lines,colour,fill,fill,withFill,style,java.util.function.UnaryOperator.identity(),false);
+    void drawLive(Vec3 at, int colour, float width, int fill, boolean withFill) {
+        var style = ClientState.options.selectionStyle;
+        Lines lines = (a, b) -> edge(a, b, colour, width);
+        draw(at, lines, colour, fill, fill, withFill, style, java.util.function.UnaryOperator.identity(), false);
     }
     /** Only the fill of the exterior faces, with no outline: how blocks about to be removed are shown. */
-    void drawFill(Vec3 at,int fill){draw(at,(a,b)->{},0,fill,true,ClientState.options.selectionStyle);}
+    void drawFill(Vec3 at, int fill) {
+        draw(at, (a, b) -> {}, 0, fill, true, ClientState.options.selectionStyle);
+    }
     /** The share of its colour that a line keeps where blocks hide it. */
-    private static final int HIDDEN_ALPHA_DIVISOR=4;
+    private static final int HIDDEN_ALPHA_DIVISOR = 4;
     /**
      * A line of the selection in every style: whole where nothing is in front of it, and a quarter as opaque where blocks hide it. The depth-tested line
      * is the whole one; the other, drawn over everything, is the faint one that shows through.
      */
-    static void edge(Vec3 a,Vec3 b,int colour,float width){
-        Overlay.line(a,b,colour&0xffffff|((colour>>>24)/HIDDEN_ALPHA_DIVISOR)<<24,width);
-        sceneLine(a,b,colour,width);
+    static void edge(Vec3 a, Vec3 b, int colour, float width) {
+        Overlay.line(a, b, colour & 0xffffff | ((colour >>> 24) / HIDDEN_ALPHA_DIVISOR) << 24, width);
+        sceneLine(a, b, colour, width);
     }
     /** A depth-tested line, drawn a little toward the camera: the outline lies in the surface of the blocks, so exactly there it would be cut away by them. */
-    static void sceneLine(Vec3 a,Vec3 b,int colour,float width){
-        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position(),mid=a.add(b).scale(.5),toEye=eye.subtract(mid);
-        double distance=toEye.length();
-        Vec3 nudge=distance<1e-6?Vec3.ZERO:toEye.scale((.004+.0006*distance)/distance);
-        Overlay.sceneLine(a.add(nudge),b.add(nudge),colour,width);
+    static void sceneLine(Vec3 a, Vec3 b, int colour, float width) {
+        Vec3 eye = ClientCompat.camera(Minecraft.getInstance()).position(),
+                mid = a.add(b).scale(.5),
+                toEye = eye.subtract(mid);
+        double distance = toEye.length();
+        Vec3 nudge = distance < 1e-6 ? Vec3.ZERO : toEye.scale((.004 + .0006 * distance) / distance);
+        Overlay.sceneLine(a.add(nudge), b.add(nudge), colour, width);
     }
     /** As {@link #draw(Vec3,Lines,int,int,boolean)}, with the outline style chosen by the caller instead of the selection's. */
-    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style){draw(at,lines,stroke,fill,fill,withFill,style,null,false);}
+    void draw(Vec3 at, Lines lines, int stroke, int fill, boolean withFill, Options.SelectionStyle style) {
+        draw(at, lines, stroke, fill, fill, withFill, style, null, false);
+    }
     /**
      * As above, for a shape whose lines {@code lines} moves somewhere else, as a drag does. What the camera sees of the moved shape is not what it
      * sees of the shape where it is, so the silhouette is worked out from where the camera is relative to the shape as it was before the move:
      * {@code eyeInShape} turns the camera's position into that. The shape changes with every step of the drag, so only a silhouette that can be
      * found within the frame is used, never a late one from another thread.
      */
-    void draw(Vec3 at,Lines lines,int stroke,int fill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape){draw(at,lines,stroke,fill,fill,withFill,style,eyeInShape,false);}
-    private void draw(Vec3 at,Lines lines,int stroke,int fill,int backFill,boolean withFill,Options.SelectionStyle style,java.util.function.UnaryOperator<Vec3> eyeInShape,boolean scene){
-        if(bounds==null||!ready)return;
-        boxed=outline.edges().size()>maxEdges;
-        if(boxed){
-            AABB box=bounds.move(at);
-            if(withFill)sceneBox(box,stroke,fill,scene);else boxLines(box,lines);
+    void draw(
+            Vec3 at,
+            Lines lines,
+            int stroke,
+            int fill,
+            boolean withFill,
+            Options.SelectionStyle style,
+            java.util.function.UnaryOperator<Vec3> eyeInShape) {
+        draw(at, lines, stroke, fill, fill, withFill, style, eyeInShape, false);
+    }
+
+    private void draw(
+            Vec3 at,
+            Lines lines,
+            int stroke,
+            int fill,
+            int backFill,
+            boolean withFill,
+            Options.SelectionStyle style,
+            java.util.function.UnaryOperator<Vec3> eyeInShape,
+            boolean scene) {
+        if (bounds == null || !ready) return;
+        boxed = outline.edges().size() > maxEdges;
+        if (boxed) {
+            AABB box = bounds.move(at);
+            if (withFill) sceneBox(box, stroke, fill, scene);
+            else boxLines(box, lines);
             return;
         }
         // Only the outline as the camera sees it, unless every edge was asked for or the camera is inside the shape.
-        boolean contoured=style==Options.SelectionStyle.SILHOUETTE&&contour(lines,at,eyeInShape);
-        if(style==Options.SelectionStyle.ALL_EDGES||!contoured&&!silhouette(lines,at,eyeInShape))
-            allEdges(lines,at,eyeInShape);
-        if(style!=Options.SelectionStyle.SILHOUETTE||contoured)outlineSince=0;
-        else if(outlineSince==0)outlineSince=System.nanoTime();
-        if(withFill&&outline.faces().size()<=maxFaces){
+        boolean contoured = style == Options.SelectionStyle.SILHOUETTE && contour(lines, at, eyeInShape);
+        if (style == Options.SelectionStyle.ALL_EDGES || !contoured && !silhouette(lines, at, eyeInShape))
+            allEdges(lines, at, eyeInShape);
+        if (style != Options.SelectionStyle.SILHOUETTE || contoured) outlineSince = 0;
+        else if (outlineSince == 0) outlineSince = System.nanoTime();
+        if (withFill && outline.faces().size() <= maxFaces) {
             // Only a camera inside the shape sees its walls from behind; from outside, every face keeps the one fill.
-            Vec3 eye=backFill==fill?null:ClientCompat.camera(Minecraft.getInstance()).position().subtract(at);
-            boolean inside=eye!=null&&inside(eye);
-            Vec3[][] ready=at.equals(Vec3.ZERO)?quads():null;int next=0;
-            for(var f:outline.faces()){
-                int colour=fill;
-                if(inside){double plane=switch(f.axis()){case 0->f.x0();case 1->f.y0();default->f.z0();},from=switch(f.axis()){case 0->eye.x;case 1->eye.y;default->eye.z;};
-                    if(f.sign()*(from-plane)<=0)colour=backFill;}
-                if(ready!=null){Vec3[] q=ready[next++];if(scene)Overlay.sceneFace(q[0],q[1],q[2],q[3],colour);else Overlay.face(q[0],q[1],q[2],q[3],colour);}else face(f,at,colour,scene);
+            Vec3 eye = backFill == fill
+                    ? null
+                    : ClientCompat.camera(Minecraft.getInstance()).position().subtract(at);
+            boolean inside = eye != null && inside(eye);
+            Vec3[][] ready = at.equals(Vec3.ZERO) ? quads() : null;
+            int next = 0;
+            for (var f : outline.faces()) {
+                int colour = fill;
+                if (inside) {
+                    double
+                            plane =
+                                    switch (f.axis()) {
+                                        case 0 -> f.x0();
+                                        case 1 -> f.y0();
+                                        default -> f.z0();
+                                    },
+                            from =
+                                    switch (f.axis()) {
+                                        case 0 -> eye.x;
+                                        case 1 -> eye.y;
+                                        default -> eye.z;
+                                    };
+                    if (f.sign() * (from - plane) <= 0) colour = backFill;
+                }
+                if (ready != null) {
+                    Vec3[] q = ready[next++];
+                    if (scene) Overlay.sceneFace(q[0], q[1], q[2], q[3], colour);
+                    else Overlay.face(q[0], q[1], q[2], q[3], colour);
+                } else face(f, at, colour, scene);
             }
         }
     }
@@ -166,132 +256,201 @@ final class OutlineShape {
      * Every edge of the outline, except those behind the shape itself: seen from outside, an edge whose two faces both point away from the camera lies
      * on the far side of the shape and is not drawn at all, not even faintly. From inside the shape every edge is drawn.
      */
-    private void allEdges(Lines lines,Vec3 at,java.util.function.UnaryOperator<Vec3> eyeInShape){
-        Vec3 eye=eyeIn(eyeInShape);
-        boolean skipFar=!eyeInside(eye.subtract(at));
-        boolean here=at.equals(Vec3.ZERO);
-        Vec3[] ready=creaseEnds();
-        boolean[] hidden=skipFar?hiddenByShape(eye.subtract(at)):null;
-        int index=0;
-        for(var crease:outline.creases()){
-            var s=crease.segment();int k=index++;
-            if(skipFar){
-                double mx=(s.x0()+s.x1())/2d+at.x,my=(s.y0()+s.y1())/2d+at.y,mz=(s.z0()+s.z1())/2d+at.z;
-                if(!towards(crease.normalA(),eye,mx,my,mz)&&!towards(crease.normalB(),eye,mx,my,mz))continue;
-                if(hidden!=null&&hidden[k])continue;
+    private void allEdges(Lines lines, Vec3 at, java.util.function.UnaryOperator<Vec3> eyeInShape) {
+        Vec3 eye = eyeIn(eyeInShape);
+        boolean skipFar = !eyeInside(eye.subtract(at));
+        boolean here = at.equals(Vec3.ZERO);
+        Vec3[] ready = creaseEnds();
+        boolean[] hidden = skipFar ? hiddenByShape(eye.subtract(at)) : null;
+        int index = 0;
+        for (var crease : outline.creases()) {
+            var s = crease.segment();
+            int k = index++;
+            if (skipFar) {
+                double mx = (s.x0() + s.x1()) / 2d + at.x,
+                        my = (s.y0() + s.y1()) / 2d + at.y,
+                        mz = (s.z0() + s.z1()) / 2d + at.z;
+                if (!towards(crease.normalA(), eye, mx, my, mz) && !towards(crease.normalB(), eye, mx, my, mz))
+                    continue;
+                if (hidden != null && hidden[k]) continue;
             }
-            if(here)lines.line(ready[k*2],ready[k*2+1]);
-            else lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
+            if (here) lines.line(ready[k * 2], ready[k * 2 + 1]);
+            else lines.line(new Vec3(s.x0(), s.y0(), s.z0()).add(at), new Vec3(s.x1(), s.y1(), s.z1()).add(at));
         }
     }
     /** The most work, in blocks looked through, spent on finding which edges the shape hides from itself; a bigger shape keeps to the faces-away test alone. */
-    private static final int OCCLUSION_BUDGET=150_000;
-    private boolean[] hiddenArray;private Vec3 hiddenEye;private SelectionOutline.Result hiddenFor;
+    private static final int OCCLUSION_BUDGET = 150_000;
+
+    private boolean[] hiddenArray;
+    private Vec3 hiddenEye;
+    private SelectionOutline.Result hiddenFor;
     /**
      * For each crease, whether the shape's own blocks lie between it and the camera, so that it is behind the shape. The faces-away test misses these on a
      * curved shape, where an edge on the far side can still border a face that points up toward the camera. Null when the shape is too big to look through
      * every frame. Worked out again only when the camera moves.
      */
-    private boolean[] hiddenByShape(Vec3 eye){
-        var creases=outline.creases();
-        if(cells==null||bounds==null||creases.isEmpty())return null;
-        double reach=bounds.getXsize()+bounds.getYsize()+bounds.getZsize();
-        if((double)creases.size()*reach>OCCLUSION_BUDGET)return null;
-        if(hiddenArray!=null&&hiddenFor==outline&&hiddenEye.distanceToSqr(eye)<1e-8)return hiddenArray;
-        if(cellSet==null)cellSet=cells instanceof Set<Point> set?set:new HashSet<>(cells);
-        var result=new boolean[creases.size()];int i=0;
-        for(var crease:creases){
-            var s=crease.segment();
-            result[i++]=blocked(eye,(s.x0()+s.x1())/2d,(s.y0()+s.y1())/2d,(s.z0()+s.z1())/2d);
+    private boolean[] hiddenByShape(Vec3 eye) {
+        var creases = outline.creases();
+        if (cells == null || bounds == null || creases.isEmpty()) return null;
+        double reach = bounds.getXsize() + bounds.getYsize() + bounds.getZsize();
+        if ((double) creases.size() * reach > OCCLUSION_BUDGET) return null;
+        if (hiddenArray != null && hiddenFor == outline && hiddenEye.distanceToSqr(eye) < 1e-8) return hiddenArray;
+        if (cellSet == null) cellSet = cells instanceof Set<Point> set ? set : new HashSet<>(cells);
+        var result = new boolean[creases.size()];
+        int i = 0;
+        for (var crease : creases) {
+            var s = crease.segment();
+            result[i++] = blocked(eye, (s.x0() + s.x1()) / 2d, (s.y0() + s.y1()) / 2d, (s.z0() + s.z1()) / 2d);
         }
-        hiddenArray=result;hiddenEye=eye;hiddenFor=outline;
+        hiddenArray = result;
+        hiddenEye = eye;
+        hiddenFor = outline;
         return result;
     }
     /** Whether a block of the shape lies on the line from just in front of the point to the eye (all in the shape's own coordinates). */
-    private boolean blocked(Vec3 eye,double px,double py,double pz){
-        double dx=eye.x-px,dy=eye.y-py,dz=eye.z-pz,length=Math.sqrt(dx*dx+dy*dy+dz*dz);
-        if(length<1e-6)return false;
-        double nudge=.02/length;double x=px+dx*nudge,y=py+dy*nudge,z=pz+dz*nudge;
-        int cx=(int)Math.floor(x),cy=(int)Math.floor(y),cz=(int)Math.floor(z);
-        int sx=dx>0?1:-1,sy=dy>0?1:-1,sz=dz>0?1:-1;
-        double ax=Math.abs(dx),ay=Math.abs(dy),az=Math.abs(dz);
-        double tx=ax==0?Double.POSITIVE_INFINITY:(dx>0?cx+1-x:x-cx)/ax,ty=ay==0?Double.POSITIVE_INFINITY:(dy>0?cy+1-y:y-cy)/ay,tz=az==0?Double.POSITIVE_INFINITY:(dz>0?cz+1-z:z-cz)/az;
-        double ux=ax==0?Double.POSITIVE_INFINITY:1/ax,uy=ay==0?Double.POSITIVE_INFINITY:1/ay,uz=az==0?Double.POSITIVE_INFINITY:1/az;
-        // The cell the line starts in is not looked at: the point lies on the shape's surface, so its own cell is where the line starts, not what is in its way.
-        while(true){
-            double t=Math.min(tx,Math.min(ty,tz));
-            if(t>=1)return false; // reached the eye
-            if(tx==t){cx+=sx;tx+=ux;}else if(ty==t){cy+=sy;ty+=uy;}else{cz+=sz;tz+=uz;}
-            if(cx<bounds.minX-1||cx>bounds.maxX||cy<bounds.minY-1||cy>bounds.maxY||cz<bounds.minZ-1||cz>bounds.maxZ)return false; // left the shape's box, never to come back
-            if(cellSet.contains(new Point(cx,cy,cz)))return true;
+    private boolean blocked(Vec3 eye, double px, double py, double pz) {
+        double dx = eye.x - px, dy = eye.y - py, dz = eye.z - pz, length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (length < 1e-6) return false;
+        double nudge = .02 / length;
+        double x = px + dx * nudge, y = py + dy * nudge, z = pz + dz * nudge;
+        int cx = (int) Math.floor(x), cy = (int) Math.floor(y), cz = (int) Math.floor(z);
+        int sx = dx > 0 ? 1 : -1, sy = dy > 0 ? 1 : -1, sz = dz > 0 ? 1 : -1;
+        double ax = Math.abs(dx), ay = Math.abs(dy), az = Math.abs(dz);
+        double tx = ax == 0 ? Double.POSITIVE_INFINITY : (dx > 0 ? cx + 1 - x : x - cx) / ax,
+                ty = ay == 0 ? Double.POSITIVE_INFINITY : (dy > 0 ? cy + 1 - y : y - cy) / ay,
+                tz = az == 0 ? Double.POSITIVE_INFINITY : (dz > 0 ? cz + 1 - z : z - cz) / az;
+        double ux = ax == 0 ? Double.POSITIVE_INFINITY : 1 / ax,
+                uy = ay == 0 ? Double.POSITIVE_INFINITY : 1 / ay,
+                uz = az == 0 ? Double.POSITIVE_INFINITY : 1 / az;
+        // The cell the line starts in is not looked at: the point lies on the shape's surface, so its own cell is where
+        // the line starts, not what is in its way.
+        while (true) {
+            double t = Math.min(tx, Math.min(ty, tz));
+            if (t >= 1) return false; // reached the eye
+            if (tx == t) {
+                cx += sx;
+                tx += ux;
+            } else if (ty == t) {
+                cy += sy;
+                ty += uy;
+            } else {
+                cz += sz;
+                tz += uz;
+            }
+            if (cx < bounds.minX - 1
+                    || cx > bounds.maxX
+                    || cy < bounds.minY - 1
+                    || cy > bounds.maxY
+                    || cz < bounds.minZ - 1
+                    || cz > bounds.maxZ) return false; // left the shape's box, never to come back
+            if (cellSet.contains(new Point(cx, cy, cz))) return true;
         }
     }
-    private Vec3[] creaseEnds(){var ends=creaseEnds;if(ends==null)creaseEnds=ends=ends(outline.creases().stream().map(SelectionOutline.Crease::segment).toList());return ends;}
-    private Vec3 insideEye;private boolean insideResult;
+
+    private Vec3[] creaseEnds() {
+        var ends = creaseEnds;
+        if (ends == null)
+            creaseEnds = ends = ends(outline.creases().stream()
+                    .map(SelectionOutline.Crease::segment)
+                    .toList());
+        return ends;
+    }
+
+    private Vec3 insideEye;
+    private boolean insideResult;
     /** {@link #inside} for an eye relative to the shape, worked out again only when the eye has moved. */
-    private boolean eyeInside(Vec3 eye){
-        if(insideEye==null||insideEye.distanceToSqr(eye)>1e-8){insideResult=inside(eye);insideEye=eye;}
+    private boolean eyeInside(Vec3 eye) {
+        if (insideEye == null || insideEye.distanceToSqr(eye) > 1e-8) {
+            insideResult = inside(eye);
+            insideEye = eye;
+        }
         return insideResult;
     }
-    private static Vec3[] ends(List<SelectionOutline.Segment> segments){
-        var ends=new Vec3[segments.size()*2];int i=0;
-        for(var s:segments){ends[i++]=new Vec3(s.x0(),s.y0(),s.z0());ends[i++]=new Vec3(s.x1(),s.y1(),s.z1());}
+
+    private static Vec3[] ends(List<SelectionOutline.Segment> segments) {
+        var ends = new Vec3[segments.size() * 2];
+        int i = 0;
+        for (var s : segments) {
+            ends[i++] = new Vec3(s.x0(), s.y0(), s.z0());
+            ends[i++] = new Vec3(s.x1(), s.y1(), s.z1());
+        }
         return ends;
     }
     /** Every exterior rectangle as four corners, already in the order the overlay wants them. */
-    private Vec3[][] quads(){
-        var made=quads;
-        if(made==null){
-            made=new Vec3[outline.faces().size()][];int i=0;
-            for(var f:outline.faces()){
-                int[] lo={f.x0(),f.y0(),f.z0()},hi={f.x1(),f.y1(),f.z1()};
-                int axis=f.axis(),u=(axis+1)%3,v=(axis+2)%3;
-                int[][] ring={{lo[u],lo[v]},{hi[u],lo[v]},{hi[u],hi[v]},{lo[u],hi[v]}};
-                Vec3[] c=new Vec3[4];
-                for(int k=0;k<4;k++){double[] p=new double[3];p[axis]=lo[axis];p[u]=ring[k][0];p[v]=ring[k][1];c[k]=new Vec3(p[0],p[1],p[2]);}
-                made[i++]=f.sign()>0?c:new Vec3[]{c[3],c[2],c[1],c[0]};
+    private Vec3[][] quads() {
+        var made = quads;
+        if (made == null) {
+            made = new Vec3[outline.faces().size()][];
+            int i = 0;
+            for (var f : outline.faces()) {
+                int[] lo = {f.x0(), f.y0(), f.z0()}, hi = {f.x1(), f.y1(), f.z1()};
+                int axis = f.axis(), u = (axis + 1) % 3, v = (axis + 2) % 3;
+                int[][] ring = {{lo[u], lo[v]}, {hi[u], lo[v]}, {hi[u], hi[v]}, {lo[u], hi[v]}};
+                Vec3[] c = new Vec3[4];
+                for (int k = 0; k < 4; k++) {
+                    double[] p = new double[3];
+                    p[axis] = lo[axis];
+                    p[u] = ring[k][0];
+                    p[v] = ring[k][1];
+                    c[k] = new Vec3(p[0], p[1], p[2]);
+                }
+                made[i++] = f.sign() > 0 ? c : new Vec3[] {c[3], c[2], c[1], c[0]};
             }
-            quads=made;
+            quads = made;
         }
         return made;
     }
     /** Whether the camera is inside the shape. Shapes with too many faces to be filled are not worked out, which keeps the frame cheap. */
-    boolean cameraInside(){
-        if(bounds==null||!ready||outline.faces().size()>maxFaces)return false;
+    boolean cameraInside() {
+        if (bounds == null || !ready || outline.faces().size() > maxFaces) return false;
         return inside(ClientCompat.camera(Minecraft.getInstance()).position());
     }
     /** Whether {@code eye}, relative to the shape, is inside it: a ray along +x crosses an odd number of the closed surface's faces. */
-    private boolean inside(Vec3 eye){
-        if(bounds==null||!bounds.contains(eye))return false;
-        int crossed=0;
-        for(var f:outline.faces())if(f.axis()==0&&f.x0()>eye.x&&eye.y>=f.y0()&&eye.y<f.y1()&&eye.z>=f.z0()&&eye.z<f.z1())crossed++;
-        return (crossed&1)==1;
+    private boolean inside(Vec3 eye) {
+        if (bounds == null || !bounds.contains(eye)) return false;
+        int crossed = 0;
+        for (var f : outline.faces())
+            if (f.axis() == 0
+                    && f.x0() > eye.x
+                    && eye.y >= f.y0()
+                    && eye.y < f.y1()
+                    && eye.z >= f.z0()
+                    && eye.z < f.z1()) crossed++;
+        return (crossed & 1) == 1;
     }
 
-    private Vec3 contourEye,contourAt;
+    private Vec3 contourEye, contourAt;
     private Vec3[] contourEnds;
     /** Whether the camera is inside the shape, as last worked out; only worked out when the camera or the shape moves. */
     private boolean eyeBuried;
     /** When the last frames that wanted a silhouette began showing the outline instead, or 0 while they get one. */
     private long outlineSince;
+
     private boolean boxed;
     /**
      * Why the shape is not drawn the way it was asked for, in a word for the interface, or null when it is. The silhouette style shows the
      * outline instead when there is no contour on the screen to draw, as when the camera is inside the shape; that is only reported once it
      * has lasted a moment, so the first frames before a contour is ready do not flash it. A shape too detailed to draw is shown as its box.
      */
-    String fallback(){
-        if(boxed)return "box view";
-        return outlineSince!=0&&System.nanoTime()-outlineSince>400_000_000L?"outline view":null;
+    String fallback() {
+        if (boxed) return "box view";
+        return outlineSince != 0 && System.nanoTime() - outlineSince > 400_000_000L ? "outline view" : null;
     }
     /** The lines of a contour, ready to draw, and the offset of the shape they were worked out for. */
-    private record Contour(Vec3 at,Vec3[] ends){}
-    private static final Vec3[] NO_CONTOUR=new Vec3[0];
+    private record Contour(Vec3 at, Vec3[] ends) {}
+
+    private static final Vec3[] NO_CONTOUR = new Vec3[0];
     /** Past this many creases the contour takes long enough to work out that it is done off the game thread. */
-    private static final int ASYNC_CREASES=1500;
+    private static final int ASYNC_CREASES = 1500;
     /** One thread does every shape's contour, one after another; a request replaced before its turn is skipped. */
-    private static final java.util.concurrent.ExecutorService CONTOUR_THREAD=java.util.concurrent.Executors.newSingleThreadExecutor(task->{
-        var thread=new Thread(task,"Craftium selection contour");thread.setDaemon(true);thread.setPriority(Thread.NORM_PRIORITY-1);return thread;});
+    private static final java.util.concurrent.ExecutorService CONTOUR_THREAD =
+            java.util.concurrent.Executors.newSingleThreadExecutor(task -> {
+                var thread = new Thread(task, "Craftium selection contour");
+                thread.setDaemon(true);
+                thread.setPriority(Thread.NORM_PRIORITY - 1);
+                return thread;
+            });
+
     private LatestResult<Contour> contourJob;
     /**
      * Draws only the contour of the shape on the screen. Worked out again only when the camera or the shape moves.
@@ -301,41 +460,53 @@ final class OutlineShape {
      * another thread. The game goes on drawing the last one that was finished, which a moving camera barely changes, and the creases
      * until the first is ready. If the shape itself has moved the old one is dropped, because it would be drawn in the wrong place.
      */
-    private boolean contour(Lines lines,Vec3 at,java.util.function.UnaryOperator<Vec3> eyeInShape){
-        Vec3 eye=eyeIn(eyeInShape);
-        boolean live=eyeInShape!=null;
-        boolean changed=contourEye==null||contourEye.distanceToSqr(eye)>1e-8||!at.equals(contourAt);
-        if(changed)eyeBuried=inside(eye.subtract(at));
-        if(eyeBuried){ // inside the solid there is no edge of the shape against the background, and the picture of what is around the camera is not one to outline
-            contourEye=eye;contourAt=at;contourEnds=null;
-            if(contourJob!=null)contourJob.cancel();
+    private boolean contour(Lines lines, Vec3 at, java.util.function.UnaryOperator<Vec3> eyeInShape) {
+        Vec3 eye = eyeIn(eyeInShape);
+        boolean live = eyeInShape != null;
+        boolean changed = contourEye == null || contourEye.distanceToSqr(eye) > 1e-8 || !at.equals(contourAt);
+        if (changed) eyeBuried = inside(eye.subtract(at));
+        if (eyeBuried) { // inside the solid there is no edge of the shape against the background, and the picture of
+            // what is around the camera is not one to outline
+            contourEye = eye;
+            contourAt = at;
+            contourEnds = null;
+            if (contourJob != null) contourJob.cancel();
             return false;
         }
-        if(live&&outline.creases().size()>ASYNC_CREASES)return false; // too much to find within the frame, and a late answer would be for an earlier step of the drag
-        if(outline.creases().size()<=ASYNC_CREASES){
-            if(changed){
-                contourEye=eye;contourAt=at;
-                contourEnds=ends(ScreenSilhouette.of(outline,eye.x-at.x,eye.y-at.y,eye.z-at.z),at);
+        if (live && outline.creases().size() > ASYNC_CREASES)
+            return false; // too much to find within the frame, and a late answer would be for an earlier step of the
+        // drag
+        if (outline.creases().size() <= ASYNC_CREASES) {
+            if (changed) {
+                contourEye = eye;
+                contourAt = at;
+                contourEnds = ends(ScreenSilhouette.of(outline, eye.x - at.x, eye.y - at.y, eye.z - at.z), at);
             }
-        }else{
-            if(contourJob==null)contourJob=new LatestResult<>(CONTOUR_THREAD,false);
-            if(changed){
-                if(!at.equals(contourAt))contourEnds=null;
-                contourEye=eye;contourAt=at;
-                double x=eye.x-at.x,y=eye.y-at.y,z=eye.z-at.z;
-                contourJob.submit(()->new Contour(at,ends(ScreenSilhouette.of(outline,x,y,z),at)));
+        } else {
+            if (contourJob == null) contourJob = new LatestResult<>(CONTOUR_THREAD, false);
+            if (changed) {
+                if (!at.equals(contourAt)) contourEnds = null;
+                contourEye = eye;
+                contourAt = at;
+                double x = eye.x - at.x, y = eye.y - at.y, z = eye.z - at.z;
+                contourJob.submit(() -> new Contour(at, ends(ScreenSilhouette.of(outline, x, y, z), at)));
             }
-            var ready=contourJob.poll();
-            if(ready!=null&&ready.at().equals(at))contourEnds=ready.ends();
+            var ready = contourJob.poll();
+            if (ready != null && ready.at().equals(at)) contourEnds = ready.ends();
         }
-        if(contourEnds==null||contourEnds.length==0)return false;
-        for(int i=0;i<contourEnds.length;i+=2)lines.line(contourEnds[i],contourEnds[i+1]);
+        if (contourEnds == null || contourEnds.length == 0) return false;
+        for (int i = 0; i < contourEnds.length; i += 2) lines.line(contourEnds[i], contourEnds[i + 1]);
         return true;
     }
-    private static Vec3[] ends(List<ScreenSilhouette.Line> contour,Vec3 at){
-        if(contour==null||contour.isEmpty())return NO_CONTOUR;
-        var ends=new Vec3[contour.size()*2];int i=0;
-        for(var l:contour){ends[i++]=new Vec3(l.x0(),l.y0(),l.z0()).add(at);ends[i++]=new Vec3(l.x1(),l.y1(),l.z1()).add(at);}
+
+    private static Vec3[] ends(List<ScreenSilhouette.Line> contour, Vec3 at) {
+        if (contour == null || contour.isEmpty()) return NO_CONTOUR;
+        var ends = new Vec3[contour.size() * 2];
+        int i = 0;
+        for (var l : contour) {
+            ends[i++] = new Vec3(l.x0(), l.y0(), l.z0()).add(at);
+            ends[i++] = new Vec3(l.x1(), l.y1(), l.z1()).add(at);
+        }
         return ends;
     }
 
@@ -343,75 +514,110 @@ final class OutlineShape {
      * Draws the creases where one of the two faces points toward the camera and the other away, which is the outline of
      * the shape on the screen. Returns false when there are none, as when the camera is inside the shape.
      */
-    private boolean silhouette(Lines lines,Vec3 at,java.util.function.UnaryOperator<Vec3> eyeInShape){
-        Vec3 eye=eyeIn(eyeInShape);
-        int drawn=0;
-        boolean here=at.equals(Vec3.ZERO);
-        Vec3[] ready=null;
-        if(here)ready=creaseEnds();
-        int index=0;
-        for(var crease:outline.creases()){
-            var s=crease.segment();
-            double mx=(s.x0()+s.x1())/2d+at.x,my=(s.y0()+s.y1())/2d+at.y,mz=(s.z0()+s.z1())/2d+at.z;
-            if(towards(crease.normalA(),eye,mx,my,mz)!=towards(crease.normalB(),eye,mx,my,mz)){
-                if(here)lines.line(ready[index*2],ready[index*2+1]);
-                else lines.line(new Vec3(s.x0(),s.y0(),s.z0()).add(at),new Vec3(s.x1(),s.y1(),s.z1()).add(at));
+    private boolean silhouette(Lines lines, Vec3 at, java.util.function.UnaryOperator<Vec3> eyeInShape) {
+        Vec3 eye = eyeIn(eyeInShape);
+        int drawn = 0;
+        boolean here = at.equals(Vec3.ZERO);
+        Vec3[] ready = null;
+        if (here) ready = creaseEnds();
+        int index = 0;
+        for (var crease : outline.creases()) {
+            var s = crease.segment();
+            double mx = (s.x0() + s.x1()) / 2d + at.x,
+                    my = (s.y0() + s.y1()) / 2d + at.y,
+                    mz = (s.z0() + s.z1()) / 2d + at.z;
+            if (towards(crease.normalA(), eye, mx, my, mz) != towards(crease.normalB(), eye, mx, my, mz)) {
+                if (here) lines.line(ready[index * 2], ready[index * 2 + 1]);
+                else lines.line(new Vec3(s.x0(), s.y0(), s.z0()).add(at), new Vec3(s.x1(), s.y1(), s.z1()).add(at));
                 drawn++;
             }
             index++;
         }
-        return drawn>0;
+        return drawn > 0;
     }
     /** The camera's position, or where it is relative to the shape if the shape is being moved by something. */
-    private static Vec3 eyeIn(java.util.function.UnaryOperator<Vec3> eyeInShape){
-        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
-        return eyeInShape==null?eye:eyeInShape.apply(eye);
+    private static Vec3 eyeIn(java.util.function.UnaryOperator<Vec3> eyeInShape) {
+        Vec3 eye = ClientCompat.camera(Minecraft.getInstance()).position();
+        return eyeInShape == null ? eye : eyeInShape.apply(eye);
     }
     /** True when the face with this direction, on a plane through the point, faces the eye. */
-    private static boolean towards(int direction,Vec3 eye,double x,double y,double z){
-        int[] n=SelectionOutline.normal(direction);
-        return n[0]*(eye.x-x)+n[1]*(eye.y-y)+n[2]*(eye.z-z)>0;
+    private static boolean towards(int direction, Vec3 eye, double x, double y, double z) {
+        int[] n = SelectionOutline.normal(direction);
+        return n[0] * (eye.x - x) + n[1] * (eye.y - y) + n[2] * (eye.z - z) > 0;
     }
     /** The box round a shape too detailed to draw, filled; with {@code scene} depth-tested like the rest of the shape, so blocks in front of it hide it. */
-    private static void sceneBox(AABB box,int stroke,int fill,boolean scene){
-        if(!scene){Overlay.box(box,stroke,1,fill);return;}
-        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
-        for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0&&!farEdge(box,i,bit,eye))Overlay.sceneLine(corner(box,i),corner(box,i|bit),stroke,1);
-        if((fill>>>24)==0)return;
-        for(int axis=0;axis<3;axis++){int u=(axis+1)%3,v=(axis+2)%3;
-            for(int side=0;side<2;side++){Vec3[] c=new Vec3[4];int[][] ring={{0,0},{1,0},{1,1},{0,1}};
-                for(int k=0;k<4;k++){int idx=(side<<axis)|(ring[k][0]<<u)|(ring[k][1]<<v);c[k]=corner(box,idx);}
-                if(side==0)Overlay.sceneFace(c[3],c[2],c[1],c[0],fill);else Overlay.sceneFace(c[0],c[1],c[2],c[3],fill);}}
+    private static void sceneBox(AABB box, int stroke, int fill, boolean scene) {
+        if (!scene) {
+            Overlay.box(box, stroke, 1, fill);
+            return;
+        }
+        Vec3 eye = ClientCompat.camera(Minecraft.getInstance()).position();
+        for (int i = 0; i < 8; i++)
+            for (int bit : new int[] {1, 2, 4})
+                if ((i & bit) == 0 && !farEdge(box, i, bit, eye))
+                    Overlay.sceneLine(corner(box, i), corner(box, i | bit), stroke, 1);
+        if ((fill >>> 24) == 0) return;
+        for (int axis = 0; axis < 3; axis++) {
+            int u = (axis + 1) % 3, v = (axis + 2) % 3;
+            for (int side = 0; side < 2; side++) {
+                Vec3[] c = new Vec3[4];
+                int[][] ring = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+                for (int k = 0; k < 4; k++) {
+                    int idx = (side << axis) | (ring[k][0] << u) | (ring[k][1] << v);
+                    c[k] = corner(box, idx);
+                }
+                if (side == 0) Overlay.sceneFace(c[3], c[2], c[1], c[0], fill);
+                else Overlay.sceneFace(c[0], c[1], c[2], c[3], fill);
+            }
+        }
     }
-    private static void boxLines(AABB box,Lines lines){
-        Vec3 eye=ClientCompat.camera(Minecraft.getInstance()).position();
-        for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0&&!farEdge(box,i,bit,eye))lines.line(corner(box,i),corner(box,i|bit));
+
+    private static void boxLines(AABB box, Lines lines) {
+        Vec3 eye = ClientCompat.camera(Minecraft.getInstance()).position();
+        for (int i = 0; i < 8; i++)
+            for (int bit : new int[] {1, 2, 4})
+                if ((i & bit) == 0 && !farEdge(box, i, bit, eye)) lines.line(corner(box, i), corner(box, i | bit));
     }
     /** Whether the box edge from corner {@code i} along {@code bit} lies on the far side of the box: neither of its two faces points toward the eye, which is outside the box. */
-    private static boolean farEdge(AABB box,int i,int bit,Vec3 eye){
-        if(box.contains(eye))return false;
-        Vec3 c=corner(box,i);double[] e={eye.x,eye.y,eye.z},p={c.x,c.y,c.z};
-        for(int axis=0;axis<3;axis++){
-            int b=1<<axis;if(b==bit)continue;
-            double sign=(i&b)==0?-1:1;
-            if(sign*(e[axis]-p[axis])>0)return false;
+    private static boolean farEdge(AABB box, int i, int bit, Vec3 eye) {
+        if (box.contains(eye)) return false;
+        Vec3 c = corner(box, i);
+        double[] e = {eye.x, eye.y, eye.z}, p = {c.x, c.y, c.z};
+        for (int axis = 0; axis < 3; axis++) {
+            int b = 1 << axis;
+            if (b == bit) continue;
+            double sign = (i & b) == 0 ? -1 : 1;
+            if (sign * (e[axis] - p[axis]) > 0) return false;
         }
         return true;
     }
-    private static Vec3 corner(AABB box,int i){return new Vec3((i&1)==0?box.minX:box.maxX,(i&2)==0?box.minY:box.maxY,(i&4)==0?box.minZ:box.maxZ);}
 
-    private static void quad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color,boolean scene){if(scene)Overlay.sceneFace(a,b,c,d,color);else Overlay.face(a,b,c,d,color);}
+    private static Vec3 corner(AABB box, int i) {
+        return new Vec3(
+                (i & 1) == 0 ? box.minX : box.maxX,
+                (i & 2) == 0 ? box.minY : box.maxY,
+                (i & 4) == 0 ? box.minZ : box.maxZ);
+    }
+
+    private static void quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color, boolean scene) {
+        if (scene) Overlay.sceneFace(a, b, c, d, color);
+        else Overlay.face(a, b, c, d, color);
+    }
     /** Sends one exterior rectangle to the overlay, wound so it faces outward. */
-    private static void face(SelectionOutline.Face f,Vec3 at,int color,boolean scene){
-        int[] lo={f.x0(),f.y0(),f.z0()},hi={f.x1(),f.y1(),f.z1()};
-        int axis=f.axis(),u=(axis+1)%3,v=(axis+2)%3;
+    private static void face(SelectionOutline.Face f, Vec3 at, int color, boolean scene) {
+        int[] lo = {f.x0(), f.y0(), f.z0()}, hi = {f.x1(), f.y1(), f.z1()};
+        int axis = f.axis(), u = (axis + 1) % 3, v = (axis + 2) % 3;
         // (axis, u, v) is a right-handed cycle, so this ring runs counter-clockwise seen from the +axis side.
-        int[][] ring={{lo[u],lo[v]},{hi[u],lo[v]},{hi[u],hi[v]},{lo[u],hi[v]}};
-        Vec3[] c=new Vec3[4];
-        for(int i=0;i<4;i++){
-            double[] p=new double[3];p[axis]=lo[axis];p[u]=ring[i][0];p[v]=ring[i][1];
-            c[i]=new Vec3(p[0],p[1],p[2]).add(at);
+        int[][] ring = {{lo[u], lo[v]}, {hi[u], lo[v]}, {hi[u], hi[v]}, {lo[u], hi[v]}};
+        Vec3[] c = new Vec3[4];
+        for (int i = 0; i < 4; i++) {
+            double[] p = new double[3];
+            p[axis] = lo[axis];
+            p[u] = ring[i][0];
+            p[v] = ring[i][1];
+            c[i] = new Vec3(p[0], p[1], p[2]).add(at);
         }
-        if(f.sign()>0)quad(c[0],c[1],c[2],c[3],color,scene);else quad(c[3],c[2],c[1],c[0],color,scene);
+        if (f.sign() > 0) quad(c[0], c[1], c[2], c[3], color, scene);
+        else quad(c[3], c[2], c[1], c[0], color, scene);
     }
 }

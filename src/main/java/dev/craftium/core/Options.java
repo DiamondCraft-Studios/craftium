@@ -2,12 +2,69 @@ package dev.craftium.core;
 
 public final class Options {
     /** Which blocks the Magic Wand treats as connected: any block, the same block, the same block state, a shared block tag, or the same block entity data. */
-    public enum Compare { ANY, BLOCK, STATE, TAG, NBT }
-    public enum Noise { SIMPLEX, PERLIN, VALUE, WORLEY, VORONOI_EDGES, METABALLS, WHITE, SPLATTER }
-    public enum PathMode { BRESENHAM, DDA, CATMULL_ROM, BEZIER, CATENARY }
-    public enum ModelMode { CONVEX_HULL, TRIANGLE_STRIP, TRIANGLE_FAN, FLAT, CATMULL_ROM, BEZIER, SMART }
-    public enum ModifyMode { TRANSLATE_COPIES, ROTATE_COPIES, REVOLVE, TWIST }
-    public enum ShapeKind { BRUSH, SPHERE, CUBOID, OCTAHEDRON, SUPERSPHERE, CYLINDER, TUBE, CONE, PYRAMID, TORUS, DODECAHEDRON, ICOSAHEDRON, DISK, PLANE, POLYGON, SPIRAL }
+    public enum Compare {
+        ANY,
+        BLOCK,
+        STATE,
+        TAG,
+        NBT
+    }
+
+    public enum Noise {
+        SIMPLEX,
+        PERLIN,
+        VALUE,
+        WORLEY,
+        VORONOI_EDGES,
+        METABALLS,
+        WHITE,
+        SPLATTER
+    }
+
+    public enum PathMode {
+        BRESENHAM,
+        DDA,
+        CATMULL_ROM,
+        BEZIER,
+        CATENARY
+    }
+
+    public enum ModelMode {
+        CONVEX_HULL,
+        TRIANGLE_STRIP,
+        TRIANGLE_FAN,
+        FLAT,
+        CATMULL_ROM,
+        BEZIER,
+        SMART
+    }
+
+    public enum ModifyMode {
+        TRANSLATE_COPIES,
+        ROTATE_COPIES,
+        REVOLVE,
+        TWIST
+    }
+
+    public enum ShapeKind {
+        BRUSH,
+        SPHERE,
+        CUBOID,
+        OCTAHEDRON,
+        SUPERSPHERE,
+        CYLINDER,
+        TUBE,
+        CONE,
+        PYRAMID,
+        TORUS,
+        DODECAHEDRON,
+        ICOSAHEDRON,
+        DISK,
+        PLANE,
+        POLYGON,
+        SPIRAL
+    }
+
     public Tool tool = Tool.BOX_SELECT;
     /** The id of a plugin's tool in use ({@code plugin_id:tool}), or null when it is one of the editor's own, which {@link #tool} names. */
     public String pluginTool;
@@ -15,7 +72,10 @@ public final class Options {
     public java.util.Map<String, Double> toolSettings = new java.util.HashMap<>();
     /** The most settings a tool can have values for in one request. */
     public static final int MAX_TOOL_SETTINGS = 64;
-    private static final java.util.regex.Pattern PLUGIN_TOOL = java.util.regex.Pattern.compile("[a-z][a-z0-9_]*:[a-z][a-z0-9_]*"), SETTING = java.util.regex.Pattern.compile("[a-z][a-z0-9_]*");
+
+    private static final java.util.regex.Pattern
+            PLUGIN_TOOL = java.util.regex.Pattern.compile("[a-z][a-z0-9_]*:[a-z][a-z0-9_]*"),
+            SETTING = java.util.regex.Pattern.compile("[a-z][a-z0-9_]*");
     public BrushMath.Shape shape = BrushMath.Shape.SPHERE;
     public Selection.Mode mode = Selection.Mode.REPLACE;
     public int radius = 5;
@@ -30,12 +90,19 @@ public final class Options {
      * block per column with no doubled steps, and where the wall sits against the edge the radius gives the shape.
      */
     public int outlineThickness = 1;
+
     public boolean pixelPerfect;
     public StrokeAlign strokeAlign = StrokeAlign.INSIDE;
     /** INSIDE grows the wall inward from the shape's edge, OUTSIDE outward, and CENTER puts the edge in the middle of it. */
-    public enum StrokeAlign { INSIDE, CENTER, OUTSIDE }
+    public enum StrokeAlign {
+        INSIDE,
+        CENTER,
+        OUTSIDE
+    }
     /** How far past the radius a hollow shape reaches because of where its wall is aligned: nothing for inside, the wall's thickness for outside. */
-    public int outlineShift() { return outlineShift(radius); }
+    public int outlineShift() {
+        return outlineShift(radius);
+    }
     /** As {@link #outlineShift()}, for a radius other than the one set. */
     public int outlineShift(int radius) {
         if (!hollow) return 0;
@@ -43,11 +110,14 @@ public final class Options {
         return strokeAlign == StrokeAlign.OUTSIDE ? t : strokeAlign == StrokeAlign.CENTER ? t / 2 : 0;
     }
     /** The radius the shape's outer edge is at: the radius, plus {@link #outlineShift()}, within the reach shapes may have. */
-    public int outerRadius() { return Math.min(radius + outlineShift(), BrushMath.MAX_REACH); }
+    public int outerRadius() {
+        return Math.min(radius + outlineShift(), BrushMath.MAX_REACH);
+    }
     /** Hand placement and breaking only; blocks the editor's tools write never update anything (see BlockSnapshot.NO_UPDATES). */
     public boolean noUpdates, forcePlace, replaceMode, bulldozer, tinker;
     /** Whether a full Bulldozer sweep only breaks blocks that are the same, state included, as the first one it met; a different block ends it. */
-    public boolean bulldozerSameBlocks=true;
+    public boolean bulldozerSameBlocks = true;
+
     public boolean inSelection;
     /** Whether undo and redo flash the blocks they change. */
     public boolean historyPulse = true;
@@ -55,6 +125,7 @@ public final class Options {
     public int interfaceHalves = 2;
     /** How text is drawn at a half-step interface scale such as 1.5x, where a font pixel lands on whole screen pixels in some places and not in others: "vanilla" (as the game draws it), "linear" (the font texture is blended) or "supersampled" (drawn at a larger size and averaged down). */
     public String textSmoothing = "linear";
+
     public String block = "minecraft:stone";
     public String secondary = "minecraft:andesite";
     public String mask = "";
@@ -64,22 +135,24 @@ public final class Options {
     /** Whether the toggled blocks only let blocks through (include, the default) or keep them out (exclude). Neither applies while {@link #maskOff} is set. */
     public boolean maskExclude;
     /** For "select_missing": the missing block to select, as {@code namespace:name[properties]}. */
-    public String missingBlock="";
+    public String missingBlock = "";
     /** Whether holding a gizmo handle hides the others, so only the one being dragged is drawn. */
-    public boolean gizmoHideOthers=true;
+    public boolean gizmoHideOthers = true;
     /** Whether the editor draws the world axes gizmo, which turns with the camera, in the top right. */
-    public boolean showAxisGizmo=true;
+    public boolean showAxisGizmo = true;
     /** Include and Exclude both switched off, as they start: the block mask is ignored altogether, whatever blocks are toggled. */
-    public boolean maskOff=true;
+    public boolean maskOff = true;
     /** Whether the tool masks (block mask, mask block, rules, script, height range and restrict to selection) also apply to the builder tools. */
     public boolean maskInBuilder;
     /** Whether the blocks you place and break by hand, with the game's own clicks, go into the undo history. */
-    public boolean recordPlayerBuilding=true;
+    public boolean recordPlayerBuilding = true;
     /** Whether the Builder's magic select uses the editor's Magic Wand settings; when off it matches by {@link #builderMagicCompare}, up to {@link #builderMagicLimit} blocks, with the wand's plain defaults. */
-    public boolean builderFollowsMagic=true;
-    public Compare builderMagicCompare=Compare.BLOCK;
+    public boolean builderFollowsMagic = true;
+
+    public Compare builderMagicCompare = Compare.BLOCK;
     /** The most blocks the Builder's magic select looks for when it does not follow the editor. */
-    public int builderMagicLimit=1000;
+    public int builderMagicLimit = 1000;
+
     public String biome = "minecraft:plains";
     public String text = "CRAFTIUM";
     public int minY = -64, maxY = 319;
@@ -88,357 +161,772 @@ public final class Options {
     /** The Builder's Stack: how many whole copies of the selection to lay along each axis, negative for the other way. Only meaningful while a stack is being sent. */
     public int stackX, stackY, stackZ;
     /** The Builder's Move, Clone and Smear: how far the selection is taken. Kept apart from the offsets other tools share, which are limited to 128 blocks; this one is not. */
-    public Point builderOffset = new Point(0,0,0);
+    public Point builderOffset = new Point(0, 0, 0);
     /** The builder selection's own blocks, packed by {@link SelectionCodec}, when it is not the whole box between its corners (as after a magic select). Blank for the box. */
     public String builderCells = "";
-    public Compare compare=Compare.BLOCK;
-    public int selectLimit=250_000,selectRange=1,lassoDepth=64;
+
+    public Compare compare = Compare.BLOCK;
+    public int selectLimit = 250_000, selectRange = 1, lassoDepth = 64;
     /** How many blocks the Select menu's Expand and Shrink move the selection's surface. */
     /** Edits that place or remove blocks are shown as a ghost first and only applied when confirmed with Enter. */
-    public boolean confirmEdits=true;
+    public boolean confirmEdits = true;
     /** Whether an edit waits for Enter before it is built. Off, a stroke is built when the button is let go and every other action is built at once. */
-    public boolean enterToBuild=true;
+    public boolean enterToBuild = true;
     /** The point the Rotate and Scale tools work around. When not set it is the centre of the selection. */
     /** How much of a selection's outline is drawn: every edge, the creases on the camera's side, or only the contour of what it covers on the screen. */
-    public enum SelectionStyle { ALL_EDGES("All edges"),OUTLINE("Outline"),SILHOUETTE("Silhouette");public final String label;SelectionStyle(String label){this.label=label;} }
-    public SelectionStyle selectionStyle=SelectionStyle.SILHOUETTE;
+    public enum SelectionStyle {
+        ALL_EDGES("All edges"),
+        OUTLINE("Outline"),
+        SILHOUETTE("Silhouette");
+        public final String label;
+
+        SelectionStyle(String label) {
+            this.label = label;
+        }
+    }
+
+    public SelectionStyle selectionStyle = SelectionStyle.SILHOUETTE;
     /** Colours (ARGB) of the selection and of the previews that go with it. The tints multiply the block's own texture, so they are lighter than they look. */
     /** The fill of the selection's faces as seen from inside it, so standing in a selection reads differently from looking at one. */
-    public int selectionInsideFill=0x40ffa63d;
+    public int selectionInsideFill = 0x40ffa63d;
     /** A wash over the whole screen while the camera is inside the selection; alpha 0 turns it off. */
-    public int selectionInsideTint=0x18ffa63d;
-    public int selectionFill=0x225d91ff,selectionTint=0x80ffffff,
-        previewColor=0xff8be3b5,previewFill=0x2247d29b,previewTint=0x80ffffff,
-        removedFill=0x22ff5555,removedTint=0x80ffffff,
-        hoverColor=0xff7fd8ff,hoverFill=0x2240c0ff;
+    public int selectionInsideTint = 0x18ffa63d;
+
+    public int selectionFill = 0x225d91ff,
+            selectionTint = 0x80ffffff,
+            previewColor = 0xff8be3b5,
+            previewFill = 0x2247d29b,
+            previewTint = 0x80ffffff,
+            removedFill = 0x22ff5555,
+            removedTint = 0x80ffffff,
+            hoverColor = 0xff7fd8ff,
+            hoverFill = 0x2240c0ff;
     /** Colours (ARGB) of the player's own AI preview (violet outline) and of other players' AI previews (teal). The player's own blocks are untinted (white) at 50% opacity so they stay readable. */
-    public int aiColor=0xffc9a0ff,aiFill=0x22a070ff,aiTint=0x80ffffff,
-        sharedAiColor=0xff7fe3d4,sharedAiFill=0x2230d5c8,sharedAiTint=0x80ffffff;
+    public int aiColor = 0xffc9a0ff,
+            aiFill = 0x22a070ff,
+            aiTint = 0x80ffffff,
+            sharedAiColor = 0xff7fe3d4,
+            sharedAiFill = 0x2230d5c8,
+            sharedAiTint = 0x80ffffff;
     /** The colour (ARGB) and width, in pixels from 0.1 to 10, of the selection's outline. */
-    public int selectionColor=0xff2389c6;
+    public int selectionColor = 0xff2389c6;
     /** The colour (ARGB) of a selection's face that touches a solid block outside it. Fully transparent turns it off. */
-    public int selectionContact=0x33ff9f43;
+    public int selectionContact = 0x33ff9f43;
     /** Whether those faces are shown at all. */
-    public boolean showSelectionContact=true;
-    public double selectionWidth=1;
+    public boolean showSelectionContact = true;
+
+    public double selectionWidth = 1;
     /** How the builder tools draw their selection and where it would land, set apart from the editor's selection: colours (ARGB) and line widths. */
-    public int builderSelectionColor=0xff2389c6,builderSelectionFill=0x302389c6;
-    public double builderSelectionWidth=1,builderPreviewWidth=1; // no longer used: every selection shares selectionWidth. Kept so the wire format does not change.
+    public int builderSelectionColor = 0xff2389c6, builderSelectionFill = 0x302389c6;
+
+    public double builderSelectionWidth = 1,
+            builderPreviewWidth =
+                    1; // no longer used: every selection shares selectionWidth. Kept so the wire format does not
+    // change.
     /** The point one transform request works about, which can differ from the player's pivot, as when scaling from the far side. */
     public boolean aboutSet;
     /** A selection transform that also turns and mirrors the blocks' states, as the Edit menu's Rotate and Flip and the gizmo do. */
     public boolean turnBlocks;
-    public double aboutX,aboutY,aboutZ;
+
+    public double aboutX, aboutY, aboutZ;
     public boolean pivotSet;
-    public double pivotX,pivotY,pivotZ;
-    public int expandAmount=5;
+    public double pivotX, pivotY, pivotZ;
+    public int expandAmount = 5;
     /** When above zero, how many blocks one expand or shrink request moves the surface, instead of the brush strength. */
     public int selectionResize;
     /** Hovering with the Magic Wand outlines what a click would select, unless that is this many blocks or more: likely terrain, not an object. */
-    public boolean magicPreview=true;
+    public boolean magicPreview = true;
     /** Whether the Magic Wand can aim at and select liquids; off, water and lava are passed over. */
     public boolean selectLiquids;
     /** Transparency in the block palette: while on, the foreground paints as air, whichever block is shown in its slot. */
     public boolean transparency;
     /** Whether a big selection waits to be confirmed before it is kept. */
-    public boolean largeSelectionWarnings=true;
+    public boolean largeSelectionWarnings = true;
     /** Whether deleting a BuildObject together with its blocks asks first (until "Don't show this message again" is ticked). */
-    public boolean warnDeleteBlocks=true;
+    public boolean warnDeleteBlocks = true;
     /** Hover BuildObjects (Hierarchy): the BuildObject the pointer is over in a viewport shows its outline and is lit in the Hierarchy. */
-    public boolean hoverBuildObjects=true;
+    public boolean hoverBuildObjects = true;
     /** Whether the Rulers window has been shown once, the first time a ruler was used: it starts out of the way and is only brought up that once. */
     public boolean rulersIntroduced;
     /** A selection this many blocks bigger than before is confirmed with the player first, in the editor and in the Builder. */
-    public int largeSelectionThreshold=50_000;
+    public int largeSelectionThreshold = 50_000;
     /** Looks at the project's GitHub releases once per game session and says so when a newer build exists. Nothing is downloaded. */
-    public boolean checkForUpdates=true;
+    public boolean checkForUpdates = true;
     /** Extrude: how many layers one click adds or removes, from 1 to {@link #MAX_EXTRUDE_COUNT}. */
-    public static final int MAX_EXTRUDE_COUNT=64;
+    public static final int MAX_EXTRUDE_COUNT = 64;
     /** The widest gap, in blocks, a Floodfill can be told to close. */
-    public static final int MAX_FLOOD_GAP=16;
-    public int extrudeCount=1;
+    public static final int MAX_FLOOD_GAP = 16;
+
+    public int extrudeCount = 1;
     /** Extrude: whether replaceable blocks, such as grass and water, count as open space that a face grows into, and are replaced by it. */
-    public boolean extrudeReplaceable=true;
+    public boolean extrudeReplaceable = true;
     /** Builder extrude with Ctrl held: the face takes in the whole family of the clicked block (stairs, slabs, walls and the like), each block keeping its own shape. Set by the client for the one click. */
     public boolean smartExtrude;
     /** Builder tools: after the first click, the gizmo's ruler follows the block being aimed at, with a line back to the first block. */
-    public boolean builderRuler=true;
+    public boolean builderRuler = true;
     /** Builder tools: after the first click, the box between that block and the one aimed at is drawn, and follows the aim. */
-    public boolean builderLiveBox=true;
+    public boolean builderLiveBox = true;
     /** Builder tools: the select and confirm buttons trade places, so the right button selects (the first corner, then the second) and the left button places. */
     public boolean builderSwapButtons;
     /** Builder tools: blocks already where the selection lands are not overwritten. Apart from the editor's Keep existing, which the Builder does not follow. */
     public boolean builderKeepExisting;
     /** Brush flow, 1 to 100: how often a stroke applies the brush. 100 is as often as the server allows (about 30 times a second), 25 the usual rate (about 7 a second), less leaves wider gaps along the stroke. */
-    public static final int FLOW_MIN=3,FLOW_MAX=100,FLOW_DEFAULT=25;
-    public int brushFlow=FLOW_DEFAULT;
-    public int hoverPreviewLimit=10_000;
+    public static final int FLOW_MIN = 3, FLOW_MAX = 100, FLOW_DEFAULT = 25;
+
+    public int brushFlow = FLOW_DEFAULT;
+    public int hoverPreviewLimit = 10_000;
     /** How many block models an AI preview ghost draws, 1,024 to 32,768. A bigger preview is still described and outlined in full; the models are the part that costs a frame. */
-    public static final int AI_GHOST_DRAW_MIN=1024,AI_GHOST_DRAW_MAX=32_768,AI_GHOST_DRAW_DEFAULT=8192;
-    public int aiGhostDrawLimit=AI_GHOST_DRAW_DEFAULT;
+    public static final int AI_GHOST_DRAW_MIN = 1024, AI_GHOST_DRAW_MAX = 32_768, AI_GHOST_DRAW_DEFAULT = 8192;
+
+    public int aiGhostDrawLimit = AI_GHOST_DRAW_DEFAULT;
     /** The most blocks any one placing tool may change, 1 to {@link #MAX_BLOCK_LIMIT}; an edit that would change more is refused. */
-    public static final int MAX_BLOCK_LIMIT=Selection.LIMIT;
-    public int blockLimit=MAX_BLOCK_LIMIT;
-    public boolean selectUp=true,selectDown=true,selectHorizontal=true,selectCorners,includeNonSolid;
-    public Noise noise=Noise.SIMPLEX;
-    public int octaves=1;
-    public double lacunarity=2,gain=.5,jitter=1,scaleX=1,scaleY=1,scaleZ=1;
-    public boolean noise3D=true,copyProperties=true,typeReplace,fillVertically,visualizeBiome=true;
-    public String materials="minecraft:stone,minecraft:andesite";
-    public java.util.List<Double> materialWeights=new java.util.ArrayList<>();
-    public enum ShadeFrom { PLAYER_POSITION,CUSTOM_POSITIONS,SUN_ANGLE }
-    public ShadeFrom shadeFrom=ShadeFrom.SUN_ANGLE;
-    public boolean shadeSun=true,shadeAutomatic,shadeFullBlocks=true,shadeOpaque=true,shadeNoOres=true,shadeNoGlazed=true,shadeNoBlockEntities=true;
-    public double shadeAzimuth=315,shadeAltitude=45,shadeAmbientOcclusion=.65,shadeDither=.5,shadeExposure=1;
-    public int shadeBounces=1,shadeSamples=4,shadeRayLength=48;
-    public java.util.List<ShadeLight> shadeLights=new java.util.ArrayList<>();
-    public String maskExpression="",maskScript="",script="return blocks.stone";
-    public PathMode pathMode=PathMode.DDA;
-    public ModelMode modelMode=ModelMode.CONVEX_HULL;
-    public ModifyMode modifyMode=ModifyMode.TRANSLATE_COPIES;
-    public enum ModifyAxis { X,Y,Z }
-    public enum RotateType { EQUIDISTANT,CUSTOM_ANGLE }
+    public static final int MAX_BLOCK_LIMIT = Selection.LIMIT;
+
+    public int blockLimit = MAX_BLOCK_LIMIT;
+    public boolean selectUp = true, selectDown = true, selectHorizontal = true, selectCorners, includeNonSolid;
+    public Noise noise = Noise.SIMPLEX;
+    public int octaves = 1;
+    public double lacunarity = 2, gain = .5, jitter = 1, scaleX = 1, scaleY = 1, scaleZ = 1;
+    public boolean noise3D = true, copyProperties = true, typeReplace, fillVertically, visualizeBiome = true;
+    public String materials = "minecraft:stone,minecraft:andesite";
+    public java.util.List<Double> materialWeights = new java.util.ArrayList<>();
+
+    public enum ShadeFrom {
+        PLAYER_POSITION,
+        CUSTOM_POSITIONS,
+        SUN_ANGLE
+    }
+
+    public ShadeFrom shadeFrom = ShadeFrom.SUN_ANGLE;
+    public boolean shadeSun = true,
+            shadeAutomatic,
+            shadeFullBlocks = true,
+            shadeOpaque = true,
+            shadeNoOres = true,
+            shadeNoGlazed = true,
+            shadeNoBlockEntities = true;
+    public double shadeAzimuth = 315,
+            shadeAltitude = 45,
+            shadeAmbientOcclusion = .65,
+            shadeDither = .5,
+            shadeExposure = 1;
+    public int shadeBounces = 1, shadeSamples = 4, shadeRayLength = 48;
+    public java.util.List<ShadeLight> shadeLights = new java.util.ArrayList<>();
+    public String maskExpression = "", maskScript = "", script = "return blocks.stone";
+    public PathMode pathMode = PathMode.DDA;
+    public ModelMode modelMode = ModelMode.CONVEX_HULL;
+    public ModifyMode modifyMode = ModifyMode.TRANSLATE_COPIES;
+
+    public enum ModifyAxis {
+        X,
+        Y,
+        Z
+    }
+
+    public enum RotateType {
+        EQUIDISTANT,
+        CUSTOM_ANGLE
+    }
     /** Modify: the axis to revolve, rotate or twist about, the angle in degrees, and how Rotate Copies spaces its copies. */
-    public ModifyAxis modifyAxis=ModifyAxis.Y;
-    public RotateType modifyType=RotateType.EQUIDISTANT;
-    public double modifyAngle=360;
+    public ModifyAxis modifyAxis = ModifyAxis.Y;
+
+    public RotateType modifyType = RotateType.EQUIDISTANT;
+    public double modifyAngle = 360;
     /** Modify: whether Translate Copies offsets are multiplied by the selection's size (relative) or are plain block offsets (absolute). */
-    public boolean modifyRelative=true;
+    public boolean modifyRelative = true;
     /** Modify: Add Translation, which offsets where a revolve or the last rotated copy ends up. */
     public boolean modifyTranslate;
-    public double modifyTranslateX,modifyTranslateY,modifyTranslateZ;
+
+    public double modifyTranslateX, modifyTranslateY, modifyTranslateZ;
     /** Modify: with Add Translation on, how far from the anchor the sweep ends as a multiple of where it starts (1 keeps the radius). Saved as modifyTranslateScale. */
-    public double modifyTranslateScale=1;
-    public ShapeKind shapeKind=ShapeKind.BRUSH;
+    public double modifyTranslateScale = 1;
+
+    public ShapeKind shapeKind = ShapeKind.BRUSH;
     /** Whether changing one size control of a shape changes the others by the same factor, so its proportions stay (see {@link ShapeSizes}). */
-    public boolean sizeChain=true;
-    public java.util.List<Point> nodes=new java.util.ArrayList<>();
-    public java.util.List<Point> selectionPoints=new java.util.ArrayList<>();
-    public Point position1=new Point(0,0,0),position2=new Point(0,0,0),symmetryOrigin=new Point(0,0,0);
-    public boolean looped,extendToGround,useStairsAndSlabs,deferred,symmetryX,symmetryY,symmetryZ;
-    public double slack=4,yaw,pitch,roll,sizeX=1,sizeY=1,sizeZ=1,exponent=4,innerRadius=.5,baseChance=1,minSpacing=1;
-    public boolean randomYaw=true,randomFlip;
+    public boolean sizeChain = true;
+
+    public java.util.List<Point> nodes = new java.util.ArrayList<>();
+    public java.util.List<Point> selectionPoints = new java.util.ArrayList<>();
+    public Point position1 = new Point(0, 0, 0), position2 = new Point(0, 0, 0), symmetryOrigin = new Point(0, 0, 0);
+    public boolean looped, extendToGround, useStairsAndSlabs, deferred, symmetryX, symmetryY, symmetryZ;
+    public double slack = 4,
+            yaw,
+            pitch,
+            roll,
+            sizeX = 1,
+            sizeY = 1,
+            sizeZ = 1,
+            exponent = 4,
+            innerRadius = .5,
+            baseChance = 1,
+            minSpacing = 1;
+    public boolean randomYaw = true, randomFlip;
     /** Which irregular polygon the sides make, and how deep the star's notches are (a share of the radius). */
-    public int polygonSeed=1;
-    public double starInner=.4;
-    public BrushMath.Form form(){return new BrushMath.Form(polygonSeed,starInner);}
-    public int polygonSides=6,fluidHeight=100,fontSize=16,textThickness=1,modelColumns=4;
+    public int polygonSeed = 1;
+
+    public double starInner = .4;
+
+    public BrushMath.Form form() {
+        return new BrushMath.Form(polygonSeed, starInner);
+    }
+
+    public int polygonSides = 6, fluidHeight = 100, fontSize = 16, textThickness = 1, modelColumns = 4;
     /** The build an AI client described, as a {@link BuildSpec}; read only by the ai_build_preview action. */
-    public String buildSpec="";
+    public String buildSpec = "";
     /**
      * Which AI session an AI action is for, and the label its AI app gave the build ("" for the default session and for no label). Like
      * {@link #buildSpec} they ride along on one request and are not kept in the saved settings. See {@link AiSessions}.
      */
-    public String aiSession="",aiLabel="";
+    public String aiSession = "", aiLabel = "";
     /** The jigsaw planner: the pool to start from, the name of the start jigsaw (empty for any), how deep and how far it grows, the seed, and whether it runs again when the files change. */
-    public String jigsawPool="minecraft:village/plains/town_centers",jigsawStart="";
-    public int jigsawDepth=5,jigsawDistance=80;
-    public long jigsawSeed=1;
-    public boolean jigsawLive=true;
+    public String jigsawPool = "minecraft:village/plains/town_centers", jigsawStart = "";
+
+    public int jigsawDepth = 5, jigsawDistance = 80;
+    public long jigsawSeed = 1;
+    public boolean jigsawLive = true;
     /** Whether a jigsaw preview draws a box around each piece, and the name of the template above it. Only the client reads them. */
-    public boolean jigsawBoxes=true,jigsawNames=true;
+    public boolean jigsawBoxes = true, jigsawNames = true;
     /** One command of the jigsaw pool editor, as JSON (see the server's JigsawEditor); empty when none. */
-    public String jigsawEdit="";
+    public String jigsawEdit = "";
     /** Whether the client listens on this computer for an AI client (the craftium-mcp shim) to drive the editor. Off until the player turns it on. */
     public boolean aiBridge;
     /** Whether to draw the AI previews other players are holding, in a colour of their own with the owner's name. */
-    public boolean showSharedAiPreviews=true;
-    public String fontName="SansSerif",fontFile="",heightmap="",name="Untitled",entityType="block_display",entityNbt="{}",property="";
-    public boolean useBuiltinFont=true,textShadow,fullBlocks=true,denoise=true,maskY,fastPlace,angelPlacement,noClip,blockStep;
+    public boolean showSharedAiPreviews = true;
+
+    public String fontName = "SansSerif",
+            fontFile = "",
+            heightmap = "",
+            name = "Untitled",
+            entityType = "block_display",
+            entityNbt = "{}",
+            property = "";
+    public boolean useBuiltinFont = true,
+            textShadow,
+            fullBlocks = true,
+            denoise = true,
+            maskY,
+            fastPlace,
+            angelPlacement,
+            noClip,
+            blockStep;
     /** Flying slows to a stop as a wall comes close, like a camera focusing in, the first time a movement key is held toward it. */
     public boolean stickyFlight;
     /** How far blocks can be reached: the game's own range, 64 blocks, or as far as can be aimed. */
-    public enum ReachMode { NORMAL("normal"),FAR("far"),INFINITE("infinite");public final String label;ReachMode(String label){this.label=label;} }
-    public ReachMode reach=ReachMode.NORMAL;
+    public enum ReachMode {
+        NORMAL("normal"),
+        FAR("far"),
+        INFINITE("infinite");
+        public final String label;
+
+        ReachMode(String label) {
+            this.label = label;
+        }
+    }
+
+    public ReachMode reach = ReachMode.NORMAL;
     /** How many blocks the far reach extends to. */
-    public int farReach=32;
+    public int farReach = 32;
     /** Which property Tinker cycles on the block it is used on, picked by sneaking; wraps around the block's properties. */
     public int tinkerIndex;
     /** Set by sneaking: Tinker cycles the picked property instead of choosing a change from the block and the aim. */
     public boolean tinkerManual;
     /** Where on the block the player aims, as fractions of the block; sent with each Tinker click so the server makes the same choice as the preview. */
-    public double tinkerX=.5,tinkerY=.5,tinkerZ=.5;
-    public boolean showCollisionMesh,showLightBlocks,showStructureVoid,expandHitboxes,solidFluids,preventInteractions;
-    public double smoothing=2,threshold=.5,meldStrength=1;
-    public int annotationColor=0xffa5d6ff,annotationWidth=2;
-    public String annotationMode="TEXT",billboard="CENTER";
-    public String assetData="";
-    public String entityUuid="";
-    public String annotationId="";
-    public int worldTime=6000,randomTickSpeed=3;
-    public boolean worldToggle=true;
+    public double tinkerX = .5, tinkerY = .5, tinkerZ = .5;
+
+    public boolean showCollisionMesh,
+            showLightBlocks,
+            showStructureVoid,
+            expandHitboxes,
+            solidFluids,
+            preventInteractions;
+    public double smoothing = 2, threshold = .5, meldStrength = 1;
+    public int annotationColor = 0xffa5d6ff, annotationWidth = 2;
+    public String annotationMode = "TEXT", billboard = "CENTER";
+    public String assetData = "";
+    public String entityUuid = "";
+    public String annotationId = "";
+    public int worldTime = 6000, randomTickSpeed = 3;
+    public boolean worldToggle = true;
     public boolean fractureMaterial;
     /** Smooth: the share of its blocks the stroke keeps (100 keeps them all), which way ties lean, and whether the brush's outer layer is left as it was. */
-    public enum SmoothMode { STABLE("Stable"),MELT("Melt"),GROW("Grow");public final String label;SmoothMode(String label){this.label=label;} }
-    public double smoothRatio=100;
-    public SmoothMode smoothMode=SmoothMode.STABLE;
-    public boolean smoothFixEdges=true;
+    public enum SmoothMode {
+        STABLE("Stable"),
+        MELT("Melt"),
+        GROW("Grow");
+        public final String label;
+
+        SmoothMode(String label) {
+            this.label = label;
+        }
+    }
+
+    public double smoothRatio = 100;
+    public SmoothMode smoothMode = SmoothMode.STABLE;
+    public boolean smoothFixEdges = true;
     /** Distort: how far the noise moves each block, in total or per axis, and whether it fades out towards the brush's edge. */
-    public double distortDistance=2,distortX=2,distortY=2,distortZ=2;
-    public boolean distortSeparate,distortSmoothEdges=true;
+    public double distortDistance = 2, distortX = 2, distortY = 2, distortZ = 2;
+
+    public boolean distortSeparate, distortSmoothEdges = true;
     /** Roughen: the share of blocks that change. */
-    public double roughenRatio=.2;
+    public double roughenRatio = .2;
     /** Shatter: how wide the cracks are in blocks, and whether they run in all three dimensions or only across one axis. */
-    public enum ShatterAxis { ALL("3D"),X("X"),Y("Y"),Z("Z");public final String label;ShatterAxis(String label){this.label=label;} }
-    public double shatterWidth=1;
-    public ShatterAxis shatterAxis=ShatterAxis.ALL;
-    public int exposedFaces=2;
-    public int uiBackground=0xf510141a,uiPanel=0xff10151c,uiAccent=0xff5b9fdb,uiText=0xffdce6ef,uiMuted=0xff8595a8,uiBorder=0xff303b49;
-    public enum FluidType { WATER,LAVA,SNOW }
-    public FluidType fluidType=FluidType.WATER;
-    public int floodGap,flowLength=7,fluidQuality=1;
-    public boolean floodUp,floodDown=true,floodHorizontal=true,floodCorners,requireSupport,infiniteSources,fillEdges=true,removeFluidsWithoutSources;
-    public enum RulerMode { LINE,CIRCLE }
-    public RulerMode rulerMode=RulerMode.LINE;
-    public int rulerSplit=2;
+    public enum ShatterAxis {
+        ALL("3D"),
+        X("X"),
+        Y("Y"),
+        Z("Z");
+        public final String label;
+
+        ShatterAxis(String label) {
+            this.label = label;
+        }
+    }
+
+    public double shatterWidth = 1;
+    public ShatterAxis shatterAxis = ShatterAxis.ALL;
+    public int exposedFaces = 2;
+    public int uiBackground = 0xf510141a,
+            uiPanel = 0xff10151c,
+            uiAccent = 0xff5b9fdb,
+            uiText = 0xffdce6ef,
+            uiMuted = 0xff8595a8,
+            uiBorder = 0xff303b49;
+
+    public enum FluidType {
+        WATER,
+        LAVA,
+        SNOW
+    }
+
+    public FluidType fluidType = FluidType.WATER;
+    public int floodGap, flowLength = 7, fluidQuality = 1;
+    public boolean floodUp,
+            floodDown = true,
+            floodHorizontal = true,
+            floodCorners,
+            requireSupport,
+            infiniteSources,
+            fillEdges = true,
+            removeFluidsWithoutSources;
+
+    public enum RulerMode {
+        LINE,
+        CIRCLE
+    }
+
+    public RulerMode rulerMode = RulerMode.LINE;
+    public int rulerSplit = 2;
     /** How the Ruler tool is drawn: its line, the knob at each end, the knob that has the gizmo, and its length label with the box behind it. */
-    public int rulerLineColor=0xffffffff,rulerKnobColor=0xff5b9fdb,rulerKnobSelectedColor=0xffffff00,rulerTextColor=0xffffffff,rulerTextBackground=0x80000000;
+    public int rulerLineColor = 0xffffffff,
+            rulerKnobColor = 0xff5b9fdb,
+            rulerKnobSelectedColor = 0xffffff00,
+            rulerTextColor = 0xffffffff,
+            rulerTextBackground = 0x80000000;
     /** The colour of a ruler's line when it runs along the world's X, Y or Z axis (the gizmo's red, green and blue); any other line uses {@link #rulerLineColor}. */
-    public int rulerAxisXColor=0xffff7777,rulerAxisYColor=0xff8bef9a,rulerAxisZColor=0xff78b9ff;
+    public int rulerAxisXColor = 0xffff7777, rulerAxisYColor = 0xff8bef9a, rulerAxisZColor = 0xff78b9ff;
     /** How big the length label is, as a multiple of its normal size: 1 is 100%. Kept between {@link #RULER_LABEL_MIN} and {@link #RULER_LABEL_MAX}. */
-    public double rulerLabelSize=1;
-    public static final double RULER_LABEL_MIN=.25,RULER_LABEL_MAX=3;
-    public String entityGroup="";
-    public String author="",tags="";
+    public double rulerLabelSize = 1;
+
+    public static final double RULER_LABEL_MIN = .25, RULER_LABEL_MAX = 3;
+    public String entityGroup = "";
+    public String author = "", tags = "";
     /** The export pop-up's structure block fields. */
-    public StructureSettings structure=new StructureSettings();
-    public java.util.List<Point> annotationPoints=new java.util.ArrayList<>();
-    public java.util.List<Integer> annotationPixels=new java.util.ArrayList<>();
-    public int annotationImageWidth,annotationImageHeight;
-    public double annotationImageScale=4;
-    public Point annotationNormal=new Point(0,0,1);
+    public StructureSettings structure = new StructureSettings();
+
+    public java.util.List<Point> annotationPoints = new java.util.ArrayList<>();
+    public java.util.List<Integer> annotationPixels = new java.util.ArrayList<>();
+    public int annotationImageWidth, annotationImageHeight;
+    public double annotationImageScale = 4;
+    public Point annotationNormal = new Point(0, 0, 1);
     public boolean mergeBlocks;
-    public boolean copyEntities,pasteEntities=true;
+    public boolean copyEntities, pasteEntities = true;
     /** Set for one paste only: the pasted blocks also become a new BuildObject with this name, put after the BuildObject with id {@code pasteAsObjectAfter} (0 for the end of the top level). */
-    public String pasteAsObject="";public int pasteAsObjectAfter;
-    public java.util.Map<String,String> scriptVariables=new java.util.LinkedHashMap<>();
-    public java.util.Map<String,String> maskVariables=new java.util.LinkedHashMap<>();
-    public java.util.List<BlockColour> scriptColours=new java.util.ArrayList<>();
-    public java.util.List<ColourPlacement> colourField=new java.util.ArrayList<>();
-    public boolean autoSwapToCreative=true;
-    public boolean cameraFlight,showKeyHints,showBiomes,showMarkerGizmos=true,showDisplayGizmos=true,showAnnotations=true;
-    public double liquidOpacity=1,minimumBrightness;
+    public String pasteAsObject = "";
+
+    public int pasteAsObjectAfter;
+    public java.util.Map<String, String> scriptVariables = new java.util.LinkedHashMap<>();
+    public java.util.Map<String, String> maskVariables = new java.util.LinkedHashMap<>();
+    public java.util.List<BlockColour> scriptColours = new java.util.ArrayList<>();
+    public java.util.List<ColourPlacement> colourField = new java.util.ArrayList<>();
+    public boolean autoSwapToCreative = true;
+    public boolean cameraFlight,
+            showKeyHints,
+            showBiomes,
+            showMarkerGizmos = true,
+            showDisplayGizmos = true,
+            showAnnotations = true;
+    public double liquidOpacity = 1, minimumBrightness;
     /**
      * How much the player keeps of their flight speed from one moment to the next, from 0 to 1. 100% (1) is the game's own flight, which is what it
      * starts as; 0% turns momentum off, so flying starts and stops at once. It is a new setting, so a momentum saved on the old scale (where 0 was
      * the game's own flight) is not misread.
      */
-    public double flightMomentumLevel=1;
-    public enum GizmoMode { MOVE,ROTATE,SCALE }
-    public GizmoMode gizmoMode=GizmoMode.MOVE;
-    public enum GizmoTarget { AUTO,SELECTION,ENTITY }
-    public GizmoTarget gizmoTarget=GizmoTarget.AUTO;
-    public boolean gizmoLocal,unlockRotation;
-    public double gizmoYaw,gizmoPitch,gizmoRoll;
-    public boolean libraryClient,downloadExports=true;
-    public int historySteps=1;
-    public enum BuilderTool { MOVE,CLONE,STACK,SMEAR,EXTRUDE,ERASE,SYMMETRY }
-    public BuilderTool builderTool=BuilderTool.MOVE;
-    public int builderRotation,builderFlipAxis=-1;
-    public int symmetryRotations=1;
-    public boolean symmetryHalfX,symmetryHalfY,symmetryHalfZ;
-    public double rebuildStartDelay=1,rebuildMaxDelay=.25,rebuildAirDelay=.01,rebuildSameDelay=.03,rebuildDifferentDelay=.08,rebuildRandomDelay=.01,rebuildHorizontalMultiplier=1,rebuildVerticalMultiplier=1;
-    public double entityX,entityY,entityZ,entityScaleX=1,entityScaleY=1,entityScaleZ=1;
+    public double flightMomentumLevel = 1;
+
+    public enum GizmoMode {
+        MOVE,
+        ROTATE,
+        SCALE
+    }
+
+    public GizmoMode gizmoMode = GizmoMode.MOVE;
+
+    public enum GizmoTarget {
+        AUTO,
+        SELECTION,
+        ENTITY
+    }
+
+    public GizmoTarget gizmoTarget = GizmoTarget.AUTO;
+    public boolean gizmoLocal, unlockRotation;
+    public double gizmoYaw, gizmoPitch, gizmoRoll;
+    public boolean libraryClient, downloadExports = true;
+    public int historySteps = 1;
+
+    public enum BuilderTool {
+        MOVE,
+        CLONE,
+        STACK,
+        SMEAR,
+        EXTRUDE,
+        ERASE,
+        SYMMETRY
+    }
+
+    public BuilderTool builderTool = BuilderTool.MOVE;
+    public int builderRotation, builderFlipAxis = -1;
+    public int symmetryRotations = 1;
+    public boolean symmetryHalfX, symmetryHalfY, symmetryHalfZ;
+    public double rebuildStartDelay = 1,
+            rebuildMaxDelay = .25,
+            rebuildAirDelay = .01,
+            rebuildSameDelay = .03,
+            rebuildDifferentDelay = .08,
+            rebuildRandomDelay = .01,
+            rebuildHorizontalMultiplier = 1,
+            rebuildVerticalMultiplier = 1;
+    public double entityX, entityY, entityZ, entityScaleX = 1, entityScaleY = 1, entityScaleZ = 1;
     /** Names of the properties pinned from the Studio inspector to the editor's Pinned tab. Their order is the inspector's, not this list's. */
-    public java.util.List<String> pinned=new java.util.ArrayList<>();
+    public java.util.List<String> pinned = new java.util.ArrayList<>();
 
     /** Whether placing a block is to be changed or recorded by the editor, rather than left to the game alone. */
-    public boolean placementCapabilities(){return symmetryX||symmetryY||symmetryZ||symmetryRotations>1||replaceMode||forcePlace||noUpdates||fastPlace||reach==ReachMode.INFINITE||angelPlacement||preventInteractions;}
+    public boolean placementCapabilities() {
+        return symmetryX
+                || symmetryY
+                || symmetryZ
+                || symmetryRotations > 1
+                || replaceMode
+                || forcePlace
+                || noUpdates
+                || fastPlace
+                || reach == ReachMode.INFINITE
+                || angelPlacement
+                || preventInteractions;
+    }
 
     public void validate() {
         if (tool == null || shape == null || mode == null) throw new IllegalArgumentException("Invalid tool options");
-        if (pluginTool != null && !PLUGIN_TOOL.matcher(pluginTool).matches()) throw new IllegalArgumentException("Invalid plugin tool");
+        if (pluginTool != null && !PLUGIN_TOOL.matcher(pluginTool).matches())
+            throw new IllegalArgumentException("Invalid plugin tool");
         if (toolSettings == null) toolSettings = new java.util.HashMap<>();
         if (toolSettings.size() > MAX_TOOL_SETTINGS) throw new IllegalArgumentException("Too many tool settings");
         for (var setting : toolSettings.entrySet())
-            if (setting.getKey() == null || !SETTING.matcher(setting.getKey()).matches() || setting.getValue() == null || !Double.isFinite(setting.getValue())) throw new IllegalArgumentException("Invalid tool setting");
-        if(gizmoMode==null)gizmoMode=GizmoMode.MOVE;gizmoYaw=bounded(gizmoYaw,-360,360);gizmoPitch=bounded(gizmoPitch,-360,360);gizmoRoll=bounded(gizmoRoll,-360,360);
-        if(gizmoTarget==null)gizmoTarget=GizmoTarget.AUTO;
-        flightMomentumLevel=bounded(flightMomentumLevel,0,1);liquidOpacity=bounded(liquidOpacity,0,1);minimumBrightness=bounded(minimumBrightness,0,1);
-        if(builderTool==null)throw new IllegalArgumentException("Choose a builder tool");builderRotation=Math.floorMod(builderRotation,4);builderFlipAxis=Math.clamp(builderFlipAxis,-1,2);symmetryRotations=symmetryRotations>=4?4:symmetryRotations>=2?2:1;
-        if(shadeFrom==null||shadeLights==null||shadeLights.size()>16||shadeLights.contains(null)||materialWeights==null||materialWeights.size()>256||materialWeights.contains(null))throw new IllegalArgumentException("Invalid lighting or palette options");
-        for(var light:shadeLights)if(!Double.isFinite(light.x())||!Double.isFinite(light.y())||!Double.isFinite(light.z())||!Double.isFinite(light.intensity())||Math.abs(light.x())>30_000_000||Math.abs(light.z())>30_000_000||Math.abs(light.y())>4096||light.intensity()<0||light.intensity()>16)throw new IllegalArgumentException("Invalid light source");
-        for(int i=0;i<materialWeights.size();i++)materialWeights.set(i,bounded(materialWeights.get(i),.01,100));
-        shadeAzimuth=bounded(shadeAzimuth,-360,360);shadeAltitude=bounded(shadeAltitude,-90,90);shadeAmbientOcclusion=bounded(shadeAmbientOcclusion,0,1);shadeDither=bounded(shadeDither,0,1);shadeExposure=bounded(shadeExposure,.1,4);shadeBounces=Math.clamp(shadeBounces,0,4);shadeSamples=Math.clamp(shadeSamples,1,8);shadeRayLength=Math.clamp(shadeRayLength,4,96);
-        if(buildSpec==null)buildSpec="";if(buildSpec.length()>400_000)throw new IllegalArgumentException("Build spec exceeds 400 KB");
-        aiSession=AiSessions.cleanId(aiSession);aiLabel=AiSessions.cleanLabel(aiLabel);
-        if(jigsawPool==null)jigsawPool="";if(jigsawStart==null)jigsawStart="";
-        if(jigsawPool.length()>200||jigsawStart.length()>200)throw new IllegalArgumentException("A jigsaw name is at most 200 characters");
-        if(jigsawEdit==null)jigsawEdit="";if(jigsawEdit.length()>32_768)throw new IllegalArgumentException("A pool editor command is at most 32 KB");jigsawDepth=Math.clamp(jigsawDepth,1,20);jigsawDistance=Math.clamp(jigsawDistance,1,128);
-        if(pinned==null)pinned=new java.util.ArrayList<>();
-        if(pinned.size()>256||pinned.stream().anyMatch(name->name==null||name.length()>64))throw new IllegalArgumentException("Invalid pinned properties");
-        radius = Math.clamp(radius,1,BrushMath.MAX_RADIUS);
-        radius = Math.min(radius,ShapeLimits.maxRadius(this)); // a shape that would pass the block limit is held to the size that does not
-        if(shape!=null&&(shapeKind==null||shapeKind==ShapeKind.BRUSH)){var rows=ShapeSizes.rows(shape);ShapeSizes.fit(this,rows);ShapeSizes.fitBlocks(this,rows);}
-        strength = Double.isFinite(strength) ? Math.clamp(strength,0.1,5) : 1;
-        noiseScale = Double.isFinite(noiseScale) ? Math.clamp(noiseScale,1,64) : 8;
-        density = Double.isFinite(density) ? Math.clamp(density,0,1) : 0.5;
-        farReach = Math.clamp(farReach,6,64);
-        flySpeed = Float.isFinite(flySpeed) ? Math.clamp(flySpeed,0.1f,10f) : 1;
-        copies=Math.max(1,copies); // offsets and copies have no upper limit
-        if(builderMagicCompare==null)builderMagicCompare=Compare.BLOCK;
-        if(textSmoothing==null||!(textSmoothing.equals("vanilla")||textSmoothing.equals("linear")||textSmoothing.equals("supersampled")))textSmoothing="linear";
-        if(compare==null)compare=Compare.ANY; // Gson reads a constant that no longer exists, the old SOLID, as null
-        if(noise==null||pathMode==null||modelMode==null||modifyMode==null||shapeKind==null||rulerMode==null)throw new IllegalArgumentException("Missing advanced options");
-        if(modifyAxis==null||modifyType==null)throw new IllegalArgumentException("Missing advanced options");
-        modifyAngle=finite(modifyAngle);modifyTranslateX=Math.clamp(finite(modifyTranslateX),-64,64);modifyTranslateY=Math.clamp(finite(modifyTranslateY),-64,64);modifyTranslateZ=Math.clamp(finite(modifyTranslateZ),-64,64);modifyTranslateScale=Math.clamp(finite(modifyTranslateScale),ModifyMath.MIN_EXPANSION,ModifyMath.MAX_EXPANSION);
-        rulerSplit=Math.clamp(rulerSplit,2,16);
-        rulerLabelSize=bounded(rulerLabelSize,RULER_LABEL_MIN,RULER_LABEL_MAX);
-        // The colours the ruler first had, kept in saved settings, give way to the ones it has now; any colour that was changed is left alone.
-        if(rulerLineColor==0xffffd66d&&rulerKnobColor==0xffffd66d&&rulerKnobSelectedColor==0xffffffff&&rulerTextColor==0xffffe4a2&&rulerTextBackground==0xbb151c26){
-            rulerLineColor=0xffffffff;rulerKnobColor=0xff5b9fdb;rulerKnobSelectedColor=0xffffff00;rulerTextColor=0xffffffff;rulerTextBackground=0x80000000;
+            if (setting.getKey() == null
+                    || !SETTING.matcher(setting.getKey()).matches()
+                    || setting.getValue() == null
+                    || !Double.isFinite(setting.getValue())) throw new IllegalArgumentException("Invalid tool setting");
+        if (gizmoMode == null) gizmoMode = GizmoMode.MOVE;
+        gizmoYaw = bounded(gizmoYaw, -360, 360);
+        gizmoPitch = bounded(gizmoPitch, -360, 360);
+        gizmoRoll = bounded(gizmoRoll, -360, 360);
+        if (gizmoTarget == null) gizmoTarget = GizmoTarget.AUTO;
+        flightMomentumLevel = bounded(flightMomentumLevel, 0, 1);
+        liquidOpacity = bounded(liquidOpacity, 0, 1);
+        minimumBrightness = bounded(minimumBrightness, 0, 1);
+        if (builderTool == null) throw new IllegalArgumentException("Choose a builder tool");
+        builderRotation = Math.floorMod(builderRotation, 4);
+        builderFlipAxis = Math.clamp(builderFlipAxis, -1, 2);
+        symmetryRotations = symmetryRotations >= 4 ? 4 : symmetryRotations >= 2 ? 2 : 1;
+        if (shadeFrom == null
+                || shadeLights == null
+                || shadeLights.size() > 16
+                || shadeLights.contains(null)
+                || materialWeights == null
+                || materialWeights.size() > 256
+                || materialWeights.contains(null))
+            throw new IllegalArgumentException("Invalid lighting or palette options");
+        for (var light : shadeLights)
+            if (!Double.isFinite(light.x())
+                    || !Double.isFinite(light.y())
+                    || !Double.isFinite(light.z())
+                    || !Double.isFinite(light.intensity())
+                    || Math.abs(light.x()) > 30_000_000
+                    || Math.abs(light.z()) > 30_000_000
+                    || Math.abs(light.y()) > 4096
+                    || light.intensity() < 0
+                    || light.intensity() > 16) throw new IllegalArgumentException("Invalid light source");
+        for (int i = 0; i < materialWeights.size(); i++)
+            materialWeights.set(i, bounded(materialWeights.get(i), .01, 100));
+        shadeAzimuth = bounded(shadeAzimuth, -360, 360);
+        shadeAltitude = bounded(shadeAltitude, -90, 90);
+        shadeAmbientOcclusion = bounded(shadeAmbientOcclusion, 0, 1);
+        shadeDither = bounded(shadeDither, 0, 1);
+        shadeExposure = bounded(shadeExposure, .1, 4);
+        shadeBounces = Math.clamp(shadeBounces, 0, 4);
+        shadeSamples = Math.clamp(shadeSamples, 1, 8);
+        shadeRayLength = Math.clamp(shadeRayLength, 4, 96);
+        if (buildSpec == null) buildSpec = "";
+        if (buildSpec.length() > 400_000) throw new IllegalArgumentException("Build spec exceeds 400 KB");
+        aiSession = AiSessions.cleanId(aiSession);
+        aiLabel = AiSessions.cleanLabel(aiLabel);
+        if (jigsawPool == null) jigsawPool = "";
+        if (jigsawStart == null) jigsawStart = "";
+        if (jigsawPool.length() > 200 || jigsawStart.length() > 200)
+            throw new IllegalArgumentException("A jigsaw name is at most 200 characters");
+        if (jigsawEdit == null) jigsawEdit = "";
+        if (jigsawEdit.length() > 32_768) throw new IllegalArgumentException("A pool editor command is at most 32 KB");
+        jigsawDepth = Math.clamp(jigsawDepth, 1, 20);
+        jigsawDistance = Math.clamp(jigsawDistance, 1, 128);
+        if (pinned == null) pinned = new java.util.ArrayList<>();
+        if (pinned.size() > 256 || pinned.stream().anyMatch(name -> name == null || name.length() > 64))
+            throw new IllegalArgumentException("Invalid pinned properties");
+        radius = Math.clamp(radius, 1, BrushMath.MAX_RADIUS);
+        radius = Math.min(
+                radius,
+                ShapeLimits.maxRadius(
+                        this)); // a shape that would pass the block limit is held to the size that does not
+        if (shape != null && (shapeKind == null || shapeKind == ShapeKind.BRUSH)) {
+            var rows = ShapeSizes.rows(shape);
+            ShapeSizes.fit(this, rows);
+            ShapeSizes.fitBlocks(this, rows);
         }
-        historySteps=Math.clamp(historySteps,1,32);
-        if(colourField==null||colourField.size()>4096||colourField.contains(null))throw new IllegalArgumentException("Colour field limit: 4096 blocks");for(var placement:colourField)if(placement.point()==null||placement.block()==null||placement.block().length()>256)throw new IllegalArgumentException("Invalid colour field entry");
-        if(scriptVariables==null||scriptVariables.size()>64||maskVariables==null||maskVariables.size()>64||scriptColours==null||scriptColours.size()>4096||scriptColours.contains(null))throw new IllegalArgumentException("Too much script configuration");
-        for(var map:java.util.List.of(scriptVariables,maskVariables))for(var variable:map.entrySet())if(variable.getKey()==null||variable.getValue()==null||variable.getKey().length()>80||variable.getValue().length()>256)throw new IllegalArgumentException("Invalid script variable");
-        for(var colour:scriptColours)if(colour.block()==null||colour.block().length()>256)throw new IllegalArgumentException("Invalid script colour entry");
-        rebuildStartDelay=bounded(rebuildStartDelay,0,60);rebuildMaxDelay=bounded(rebuildMaxDelay,0,30);rebuildAirDelay=bounded(rebuildAirDelay,0,30);rebuildSameDelay=bounded(rebuildSameDelay,0,30);rebuildDifferentDelay=bounded(rebuildDifferentDelay,0,30);rebuildRandomDelay=bounded(rebuildRandomDelay,0,30);rebuildHorizontalMultiplier=bounded(rebuildHorizontalMultiplier,0,16);rebuildVerticalMultiplier=bounded(rebuildVerticalMultiplier,0,16);
-        if(annotationPoints==null||annotationPoints.size()>256||annotationPoints.contains(null)||annotationPixels==null||annotationPixels.size()>1024||annotationPixels.contains(null))throw new IllegalArgumentException("Invalid annotation data");
-        annotationImageScale=bounded(annotationImageScale,.1,32);annotationImageWidth=Math.clamp(annotationImageWidth,0,32);annotationImageHeight=Math.clamp(annotationImageHeight,0,32);
-        if(annotationNormal==null||Math.abs(annotationNormal.x())+Math.abs(annotationNormal.y())+Math.abs(annotationNormal.z())!=1)throw new IllegalArgumentException("Invalid annotation plane");
-        if(structure==null)structure=new StructureSettings();structure.validate();
-        if(author==null||tags==null||author.length()>80||tags.length()>256)throw new IllegalArgumentException("Blueprint metadata is too long");
-        if(entityGroup==null||!entityGroup.matches("[A-Za-z0-9_. -]{0,64}"))throw new IllegalArgumentException("Use a plain entity group name");
-        entityX=bounded(entityX,-128,128);entityY=bounded(entityY,-128,128);entityZ=bounded(entityZ,-128,128);entityScaleX=bounded(entityScaleX,.01,16);entityScaleY=bounded(entityScaleY,.01,16);entityScaleZ=bounded(entityScaleZ,.01,16);
-        if(smoothMode==null)smoothMode=SmoothMode.STABLE;if(shatterAxis==null)shatterAxis=ShatterAxis.ALL;
-        smoothRatio=Double.isFinite(smoothRatio)?Math.max(0,smoothRatio):100;distortDistance=Double.isFinite(distortDistance)?Math.max(0,distortDistance):2;
-        distortX=Double.isFinite(distortX)?Math.max(0,distortX):2;distortY=Double.isFinite(distortY)?Math.max(0,distortY):2;distortZ=Double.isFinite(distortZ)?Math.max(0,distortZ):2;
-        roughenRatio=Double.isFinite(roughenRatio)?Math.clamp(roughenRatio,0,1):.2;shatterWidth=Double.isFinite(shatterWidth)?Math.max(0,shatterWidth):1;
-        extrudeCount=Math.clamp(extrudeCount,1,MAX_EXTRUDE_COUNT);brushFlow=Math.clamp(brushFlow,FLOW_MIN,FLOW_MAX);
-        selectLimit=Math.clamp(selectLimit,1,Selection.LIMIT);blockLimit=Math.clamp(blockLimit,1,MAX_BLOCK_LIMIT);hoverPreviewLimit=Math.clamp(hoverPreviewLimit,1,32_768);largeSelectionThreshold=Math.clamp(largeSelectionThreshold,1,Selection.LIMIT);builderMagicLimit=Math.clamp(builderMagicLimit,1,Selection.LIMIT);aiGhostDrawLimit=Math.clamp(aiGhostDrawLimit,AI_GHOST_DRAW_MIN,AI_GHOST_DRAW_MAX);if(selectionStyle==null)selectionStyle=SelectionStyle.SILHOUETTE;selectionWidth=Double.isFinite(selectionWidth)?Math.clamp(selectionWidth,.1,10):1;builderSelectionWidth=Double.isFinite(builderSelectionWidth)?Math.clamp(builderSelectionWidth,.1,10):1;builderPreviewWidth=Double.isFinite(builderPreviewWidth)?Math.clamp(builderPreviewWidth,.1,10):1;if((selectionColor>>>24)==0)selectionColor|=0xff000000;expandAmount=Math.clamp(expandAmount,1,64);selectionResize=Math.clamp(selectionResize,0,64);selectRange=Math.clamp(selectRange,1,8);lassoDepth=Math.clamp(lassoDepth,1,256);
-        octaves=Math.clamp(octaves,1,8);lacunarity=bounded(lacunarity,1,4);gain=bounded(gain,.01,1);jitter=bounded(jitter,0,1);
-        scaleX=bounded(scaleX,.1,16);scaleY=bounded(scaleY,.1,16);scaleZ=bounded(scaleZ,.1,16);
-        sizeX=Math.copySign(bounded(Math.abs(sizeX),.1,8),sizeX);sizeY=Math.copySign(bounded(Math.abs(sizeY),.1,8),sizeY);sizeZ=Math.copySign(bounded(Math.abs(sizeZ),.1,8),sizeZ); // negative flips
-        yaw=bounded(yaw,-360,360);pitch=bounded(pitch,-360,360);roll=bounded(roll,-360,360);
-        exponent=bounded(exponent,.25,16);innerRadius=bounded(innerRadius,.05,.95);outlineThickness=Math.clamp(outlineThickness,1,radius);if(strokeAlign==null)strokeAlign=StrokeAlign.INSIDE;slack=bounded(slack,-64,64);
-        baseChance=bounded(baseChance,0,1);minSpacing=bounded(minSpacing,.1,8);smoothing=bounded(smoothing,.1,5);threshold=bounded(threshold,0,1);meldStrength=bounded(meldStrength,0,3);
-        polygonSides=Math.clamp(polygonSides,BrushMath.MIN_SIDES,BrushMath.MAX_SIDES);polygonSeed=Math.clamp(polygonSeed,0,99_999);starInner=Math.clamp(starInner,.1,.9);fluidHeight=Math.clamp(fluidHeight,0,100);fontSize=Math.clamp(fontSize,6,96);textThickness=Math.clamp(textThickness,1,8);modelColumns=Math.clamp(modelColumns,2,32);
-        if(nodes==null||nodes.size()>64||nodes.contains(null))throw new IllegalArgumentException("Maximum 64 control points");
-        if(selectionPoints==null||selectionPoints.size()>32768||selectionPoints.contains(null))throw new IllegalArgumentException("Lasso selection limit: 32,768 blocks");
-        for(String value:new String[]{materials,maskExpression,maskScript,script,fontName,fontFile,heightmap,name,entityType,entityNbt,property,annotationMode,billboard})
-            if(value==null||value.length()>1_000_000)throw new IllegalArgumentException("Invalid advanced text setting");
-        if(script.length()>16384||maskScript.length()>16384||maskExpression.length()>4096||name.length()>80)throw new IllegalArgumentException("Advanced setting is too long");
-        if(builderCells==null||builderCells.length()>2_000_000)throw new IllegalArgumentException("Builder selection is too large");
-        if(position1==null||position2==null||symmetryOrigin==null||builderOffset==null)throw new IllegalArgumentException("Missing position");
-        builderOffset=new Point(Math.clamp(builderOffset.x(),-WORLD_SPAN,WORLD_SPAN),Math.clamp(builderOffset.y(),-WORLD_SPAN,WORLD_SPAN),Math.clamp(builderOffset.z(),-WORLD_SPAN,WORLD_SPAN));
-        stackX=Math.clamp(stackX,-WORLD_SPAN,WORLD_SPAN);stackY=Math.clamp(stackY,-WORLD_SPAN,WORLD_SPAN);stackZ=Math.clamp(stackZ,-WORLD_SPAN,WORLD_SPAN);
-        if(assetData==null||assetData.length()>1_500_000)throw new IllegalArgumentException("Imported asset is too large");
-        if(entityUuid==null||entityUuid.length()>64)throw new IllegalArgumentException("Invalid entity identifier");
-        if(annotationId==null||annotationId.length()>64)throw new IllegalArgumentException("Invalid annotation identifier");
-        worldTime=Math.clamp(worldTime,0,2_000_000_000);randomTickSpeed=Math.clamp(randomTickSpeed,0,4096);
-        exposedFaces=Math.clamp(exposedFaces,1,6);
-        if(fluidType==null)throw new IllegalArgumentException("Choose a fluid");floodGap=Math.clamp(floodGap,0,MAX_FLOOD_GAP);flowLength=Math.clamp(flowLength,1,32);fluidQuality=Math.clamp(fluidQuality,1,4);
-        if (missingBlock==null || missingBlock.length()>256) throw new IllegalArgumentException("Invalid missing block");
-        if (maskBlocks==null || maskActive==null || maskBlocks.size()>64 || maskActive.size()>64) throw new IllegalArgumentException("Block mask limit: 64 blocks");
-        for (var list : java.util.List.of(maskBlocks, maskActive)) for (String entry : list) if (entry==null || entry.length()>256) throw new IllegalArgumentException("Invalid block mask entry");
+        strength = Double.isFinite(strength) ? Math.clamp(strength, 0.1, 5) : 1;
+        noiseScale = Double.isFinite(noiseScale) ? Math.clamp(noiseScale, 1, 64) : 8;
+        density = Double.isFinite(density) ? Math.clamp(density, 0, 1) : 0.5;
+        farReach = Math.clamp(farReach, 6, 64);
+        flySpeed = Float.isFinite(flySpeed) ? Math.clamp(flySpeed, 0.1f, 10f) : 1;
+        copies = Math.max(1, copies); // offsets and copies have no upper limit
+        if (builderMagicCompare == null) builderMagicCompare = Compare.BLOCK;
+        if (textSmoothing == null
+                || !(textSmoothing.equals("vanilla")
+                        || textSmoothing.equals("linear")
+                        || textSmoothing.equals("supersampled"))) textSmoothing = "linear";
+        if (compare == null)
+            compare = Compare.ANY; // Gson reads a constant that no longer exists, the old SOLID, as null
+        if (noise == null
+                || pathMode == null
+                || modelMode == null
+                || modifyMode == null
+                || shapeKind == null
+                || rulerMode == null) throw new IllegalArgumentException("Missing advanced options");
+        if (modifyAxis == null || modifyType == null) throw new IllegalArgumentException("Missing advanced options");
+        modifyAngle = finite(modifyAngle);
+        modifyTranslateX = Math.clamp(finite(modifyTranslateX), -64, 64);
+        modifyTranslateY = Math.clamp(finite(modifyTranslateY), -64, 64);
+        modifyTranslateZ = Math.clamp(finite(modifyTranslateZ), -64, 64);
+        modifyTranslateScale =
+                Math.clamp(finite(modifyTranslateScale), ModifyMath.MIN_EXPANSION, ModifyMath.MAX_EXPANSION);
+        rulerSplit = Math.clamp(rulerSplit, 2, 16);
+        rulerLabelSize = bounded(rulerLabelSize, RULER_LABEL_MIN, RULER_LABEL_MAX);
+        // The colours the ruler first had, kept in saved settings, give way to the ones it has now; any colour that was
+        // changed is left alone.
+        if (rulerLineColor == 0xffffd66d
+                && rulerKnobColor == 0xffffd66d
+                && rulerKnobSelectedColor == 0xffffffff
+                && rulerTextColor == 0xffffe4a2
+                && rulerTextBackground == 0xbb151c26) {
+            rulerLineColor = 0xffffffff;
+            rulerKnobColor = 0xff5b9fdb;
+            rulerKnobSelectedColor = 0xffffff00;
+            rulerTextColor = 0xffffffff;
+            rulerTextBackground = 0x80000000;
+        }
+        historySteps = Math.clamp(historySteps, 1, 32);
+        if (colourField == null || colourField.size() > 4096 || colourField.contains(null))
+            throw new IllegalArgumentException("Colour field limit: 4096 blocks");
+        for (var placement : colourField)
+            if (placement.point() == null
+                    || placement.block() == null
+                    || placement.block().length() > 256)
+                throw new IllegalArgumentException("Invalid colour field entry");
+        if (scriptVariables == null
+                || scriptVariables.size() > 64
+                || maskVariables == null
+                || maskVariables.size() > 64
+                || scriptColours == null
+                || scriptColours.size() > 4096
+                || scriptColours.contains(null)) throw new IllegalArgumentException("Too much script configuration");
+        for (var map : java.util.List.of(scriptVariables, maskVariables))
+            for (var variable : map.entrySet())
+                if (variable.getKey() == null
+                        || variable.getValue() == null
+                        || variable.getKey().length() > 80
+                        || variable.getValue().length() > 256)
+                    throw new IllegalArgumentException("Invalid script variable");
+        for (var colour : scriptColours)
+            if (colour.block() == null || colour.block().length() > 256)
+                throw new IllegalArgumentException("Invalid script colour entry");
+        rebuildStartDelay = bounded(rebuildStartDelay, 0, 60);
+        rebuildMaxDelay = bounded(rebuildMaxDelay, 0, 30);
+        rebuildAirDelay = bounded(rebuildAirDelay, 0, 30);
+        rebuildSameDelay = bounded(rebuildSameDelay, 0, 30);
+        rebuildDifferentDelay = bounded(rebuildDifferentDelay, 0, 30);
+        rebuildRandomDelay = bounded(rebuildRandomDelay, 0, 30);
+        rebuildHorizontalMultiplier = bounded(rebuildHorizontalMultiplier, 0, 16);
+        rebuildVerticalMultiplier = bounded(rebuildVerticalMultiplier, 0, 16);
+        if (annotationPoints == null
+                || annotationPoints.size() > 256
+                || annotationPoints.contains(null)
+                || annotationPixels == null
+                || annotationPixels.size() > 1024
+                || annotationPixels.contains(null)) throw new IllegalArgumentException("Invalid annotation data");
+        annotationImageScale = bounded(annotationImageScale, .1, 32);
+        annotationImageWidth = Math.clamp(annotationImageWidth, 0, 32);
+        annotationImageHeight = Math.clamp(annotationImageHeight, 0, 32);
+        if (annotationNormal == null
+                || Math.abs(annotationNormal.x()) + Math.abs(annotationNormal.y()) + Math.abs(annotationNormal.z())
+                        != 1) throw new IllegalArgumentException("Invalid annotation plane");
+        if (structure == null) structure = new StructureSettings();
+        structure.validate();
+        if (author == null || tags == null || author.length() > 80 || tags.length() > 256)
+            throw new IllegalArgumentException("Blueprint metadata is too long");
+        if (entityGroup == null || !entityGroup.matches("[A-Za-z0-9_. -]{0,64}"))
+            throw new IllegalArgumentException("Use a plain entity group name");
+        entityX = bounded(entityX, -128, 128);
+        entityY = bounded(entityY, -128, 128);
+        entityZ = bounded(entityZ, -128, 128);
+        entityScaleX = bounded(entityScaleX, .01, 16);
+        entityScaleY = bounded(entityScaleY, .01, 16);
+        entityScaleZ = bounded(entityScaleZ, .01, 16);
+        if (smoothMode == null) smoothMode = SmoothMode.STABLE;
+        if (shatterAxis == null) shatterAxis = ShatterAxis.ALL;
+        smoothRatio = Double.isFinite(smoothRatio) ? Math.max(0, smoothRatio) : 100;
+        distortDistance = Double.isFinite(distortDistance) ? Math.max(0, distortDistance) : 2;
+        distortX = Double.isFinite(distortX) ? Math.max(0, distortX) : 2;
+        distortY = Double.isFinite(distortY) ? Math.max(0, distortY) : 2;
+        distortZ = Double.isFinite(distortZ) ? Math.max(0, distortZ) : 2;
+        roughenRatio = Double.isFinite(roughenRatio) ? Math.clamp(roughenRatio, 0, 1) : .2;
+        shatterWidth = Double.isFinite(shatterWidth) ? Math.max(0, shatterWidth) : 1;
+        extrudeCount = Math.clamp(extrudeCount, 1, MAX_EXTRUDE_COUNT);
+        brushFlow = Math.clamp(brushFlow, FLOW_MIN, FLOW_MAX);
+        selectLimit = Math.clamp(selectLimit, 1, Selection.LIMIT);
+        blockLimit = Math.clamp(blockLimit, 1, MAX_BLOCK_LIMIT);
+        hoverPreviewLimit = Math.clamp(hoverPreviewLimit, 1, 32_768);
+        largeSelectionThreshold = Math.clamp(largeSelectionThreshold, 1, Selection.LIMIT);
+        builderMagicLimit = Math.clamp(builderMagicLimit, 1, Selection.LIMIT);
+        aiGhostDrawLimit = Math.clamp(aiGhostDrawLimit, AI_GHOST_DRAW_MIN, AI_GHOST_DRAW_MAX);
+        if (selectionStyle == null) selectionStyle = SelectionStyle.SILHOUETTE;
+        selectionWidth = Double.isFinite(selectionWidth) ? Math.clamp(selectionWidth, .1, 10) : 1;
+        builderSelectionWidth = Double.isFinite(builderSelectionWidth) ? Math.clamp(builderSelectionWidth, .1, 10) : 1;
+        builderPreviewWidth = Double.isFinite(builderPreviewWidth) ? Math.clamp(builderPreviewWidth, .1, 10) : 1;
+        if ((selectionColor >>> 24) == 0) selectionColor |= 0xff000000;
+        expandAmount = Math.clamp(expandAmount, 1, 64);
+        selectionResize = Math.clamp(selectionResize, 0, 64);
+        selectRange = Math.clamp(selectRange, 1, 8);
+        lassoDepth = Math.clamp(lassoDepth, 1, 256);
+        octaves = Math.clamp(octaves, 1, 8);
+        lacunarity = bounded(lacunarity, 1, 4);
+        gain = bounded(gain, .01, 1);
+        jitter = bounded(jitter, 0, 1);
+        scaleX = bounded(scaleX, .1, 16);
+        scaleY = bounded(scaleY, .1, 16);
+        scaleZ = bounded(scaleZ, .1, 16);
+        sizeX = Math.copySign(bounded(Math.abs(sizeX), .1, 8), sizeX);
+        sizeY = Math.copySign(bounded(Math.abs(sizeY), .1, 8), sizeY);
+        sizeZ = Math.copySign(bounded(Math.abs(sizeZ), .1, 8), sizeZ); // negative flips
+        yaw = bounded(yaw, -360, 360);
+        pitch = bounded(pitch, -360, 360);
+        roll = bounded(roll, -360, 360);
+        exponent = bounded(exponent, .25, 16);
+        innerRadius = bounded(innerRadius, .05, .95);
+        outlineThickness = Math.clamp(outlineThickness, 1, radius);
+        if (strokeAlign == null) strokeAlign = StrokeAlign.INSIDE;
+        slack = bounded(slack, -64, 64);
+        baseChance = bounded(baseChance, 0, 1);
+        minSpacing = bounded(minSpacing, .1, 8);
+        smoothing = bounded(smoothing, .1, 5);
+        threshold = bounded(threshold, 0, 1);
+        meldStrength = bounded(meldStrength, 0, 3);
+        polygonSides = Math.clamp(polygonSides, BrushMath.MIN_SIDES, BrushMath.MAX_SIDES);
+        polygonSeed = Math.clamp(polygonSeed, 0, 99_999);
+        starInner = Math.clamp(starInner, .1, .9);
+        fluidHeight = Math.clamp(fluidHeight, 0, 100);
+        fontSize = Math.clamp(fontSize, 6, 96);
+        textThickness = Math.clamp(textThickness, 1, 8);
+        modelColumns = Math.clamp(modelColumns, 2, 32);
+        if (nodes == null || nodes.size() > 64 || nodes.contains(null))
+            throw new IllegalArgumentException("Maximum 64 control points");
+        if (selectionPoints == null || selectionPoints.size() > 32768 || selectionPoints.contains(null))
+            throw new IllegalArgumentException("Lasso selection limit: 32,768 blocks");
+        for (String value : new String[] {
+            materials,
+            maskExpression,
+            maskScript,
+            script,
+            fontName,
+            fontFile,
+            heightmap,
+            name,
+            entityType,
+            entityNbt,
+            property,
+            annotationMode,
+            billboard
+        })
+            if (value == null || value.length() > 1_000_000)
+                throw new IllegalArgumentException("Invalid advanced text setting");
+        if (script.length() > 16384
+                || maskScript.length() > 16384
+                || maskExpression.length() > 4096
+                || name.length() > 80) throw new IllegalArgumentException("Advanced setting is too long");
+        if (builderCells == null || builderCells.length() > 2_000_000)
+            throw new IllegalArgumentException("Builder selection is too large");
+        if (position1 == null || position2 == null || symmetryOrigin == null || builderOffset == null)
+            throw new IllegalArgumentException("Missing position");
+        builderOffset = new Point(
+                Math.clamp(builderOffset.x(), -WORLD_SPAN, WORLD_SPAN),
+                Math.clamp(builderOffset.y(), -WORLD_SPAN, WORLD_SPAN),
+                Math.clamp(builderOffset.z(), -WORLD_SPAN, WORLD_SPAN));
+        stackX = Math.clamp(stackX, -WORLD_SPAN, WORLD_SPAN);
+        stackY = Math.clamp(stackY, -WORLD_SPAN, WORLD_SPAN);
+        stackZ = Math.clamp(stackZ, -WORLD_SPAN, WORLD_SPAN);
+        if (assetData == null || assetData.length() > 1_500_000)
+            throw new IllegalArgumentException("Imported asset is too large");
+        if (entityUuid == null || entityUuid.length() > 64)
+            throw new IllegalArgumentException("Invalid entity identifier");
+        if (annotationId == null || annotationId.length() > 64)
+            throw new IllegalArgumentException("Invalid annotation identifier");
+        worldTime = Math.clamp(worldTime, 0, 2_000_000_000);
+        randomTickSpeed = Math.clamp(randomTickSpeed, 0, 4096);
+        exposedFaces = Math.clamp(exposedFaces, 1, 6);
+        if (fluidType == null) throw new IllegalArgumentException("Choose a fluid");
+        floodGap = Math.clamp(floodGap, 0, MAX_FLOOD_GAP);
+        flowLength = Math.clamp(flowLength, 1, 32);
+        fluidQuality = Math.clamp(fluidQuality, 1, 4);
+        if (missingBlock == null || missingBlock.length() > 256)
+            throw new IllegalArgumentException("Invalid missing block");
+        if (maskBlocks == null || maskActive == null || maskBlocks.size() > 64 || maskActive.size() > 64)
+            throw new IllegalArgumentException("Block mask limit: 64 blocks");
+        for (var list : java.util.List.of(maskBlocks, maskActive))
+            for (String entry : list)
+                if (entry == null || entry.length() > 256)
+                    throw new IllegalArgumentException("Invalid block mask entry");
         if (block == null || secondary == null || mask == null || biome == null || text == null)
             throw new IllegalArgumentException("Missing tool settings");
-        if (block.length()>256 || secondary.length()>256 || mask.length()>256 || biome.length()>128 || text.length()>48)
-            throw new IllegalArgumentException("Tool setting is too long");
+        if (block.length() > 256
+                || secondary.length() > 256
+                || mask.length() > 256
+                || biome.length() > 128
+                || text.length() > 48) throw new IllegalArgumentException("Tool setting is too long");
     }
-    private static double finite(double value){return Double.isFinite(value)?value:0;}
+
+    private static double finite(double value) {
+        return Double.isFinite(value) ? value : 0;
+    }
     /** Across the whole world, border to border: as far as anything can be moved, and small enough that sums of it cannot overflow. */
-    private static final int WORLD_SPAN=60_000_000;
-    private static double bounded(double value,double min,double max){return Double.isFinite(value)?Math.clamp(value,min,max):min;}
+    private static final int WORLD_SPAN = 60_000_000;
+
+    private static double bounded(double value, double min, double max) {
+        return Double.isFinite(value) ? Math.clamp(value, min, max) : min;
+    }
 }
