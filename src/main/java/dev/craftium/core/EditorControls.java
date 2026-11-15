@@ -74,7 +74,7 @@ public final class EditorControls {
         UNDO_ALT("Undo (second shortcut)", 'Z', CONTROL | SHIFT),
         DESELECT("Deselect", 'D', ALT),
         FOCUS_OBJECT("Focus the selected BuildObject", 'F', 0),
-        GROUP_OBJECTS("Group the shown BuildObjects", 'G', CONTROL),
+        GROUP_OBJECTS("Create a BuildObject from the selection / group the shown ones", 'G', CONTROL),
         RENAME_OBJECT("Rename the selected BuildObject", 291, 0),
         DUPLICATE_OBJECT("Duplicate the shown BuildObjects", 'D', CONTROL),
         TOGGLE_MOVE("Toggle Move tool (second key)", '1', 0),

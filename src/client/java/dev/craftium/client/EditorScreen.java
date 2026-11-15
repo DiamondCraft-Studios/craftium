@@ -5441,8 +5441,9 @@ public final class EditorScreen extends CraftiumScreen {
                     && ClientState.savedAt(CraftiumClient.point(objectPickHit.getBlockPos())) != 0;
             objectPickX = event.x();
             objectPickY = event.y(); // resolved on release, if it was a click and not a drag
-            if (objectPickPending)
-                return true; // a click on a BuildObject picks it, and the tool does not also act on it
+            if (objectPickPending && !EditorBindings.matches(Action.ROTATE_CAMERA, event))
+                return true; // a click on a BuildObject picks it, and the tool does not also act on it; when this
+            // button turns the camera, the press goes on to start that drag and the pick waits for the release
         }
         if (PlacementPreview.active()) {
             if (event.button() == 1) {
@@ -6054,13 +6055,14 @@ public final class EditorScreen extends CraftiumScreen {
                 startRename(new RenameArea(null, id));
             }
             case DUPLICATE_OBJECT -> duplicateObjects();
-            case GROUP_OBJECTS -> {
+            case GROUP_OBJECTS -> { // several shown: an empty parent around them; otherwise what the Hierarchy's + does
                 var shown = new ArrayList<String>();
                 for (var e : ClientState.savedSelections()) if (e.active()) shown.add(String.valueOf(e.id()));
-                if (shown.isEmpty()) ClientState.notify("Show a BuildObject first: click one in the Hierarchy");
-                else
-                    action("saved_selection:group:"
-                            + String.join(",", shown)); // an empty parent around the BuildObjects shown
+                if (shown.size() > 1) action("saved_selection:group:" + String.join(",", shown));
+                else {
+                    expectNewBuildObject();
+                    action("saved_selection:save");
+                }
             }
             case TOGGLE_MOVE -> toggleTool(Tool.MOVE);
             case TOGGLE_ROTATE -> toggleTool(Tool.ROTATE);
@@ -7105,9 +7107,10 @@ public final class EditorScreen extends CraftiumScreen {
                     expectNewBuildObject();
                     action("saved_selection:save");
                 },
-                looking
-                        ? "Create a BuildObject from what is selected now · While one is shown, the new one goes inside it"
-                        : "Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole");
+                (looking
+                                ? "Create a BuildObject from what is selected now · While one is shown, the new one goes inside it"
+                                : "Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole")
+                        + " · " + EditorBindings.label(Action.GROUP_OBJECTS));
         glyph(g, x + 10, y + ph - 25, 24, 20, PLUS, TEXT);
         boolean hoverOn = o().hoverBuildObjects;
         button(
@@ -7396,10 +7399,7 @@ public final class EditorScreen extends CraftiumScreen {
         items.add(
                 n > 1
                         ? item("Group selected (" + n + ")", "Ctrl+G", () -> action("saved_selection:group:" + csv))
-                        : item(
-                                "Create empty parent",
-                                row.active() ? "Ctrl+G" : "",
-                                () -> action("saved_selection:group:" + id)));
+                        : item("Create empty parent", "", () -> action("saved_selection:group:" + id)));
         items.add(item("Create empty BuildObject", "", () -> {
             expectNewBuildObject();
             action("saved_selection:createchild:" + id);
