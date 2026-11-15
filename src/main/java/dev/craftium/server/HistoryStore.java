@@ -194,6 +194,8 @@ final class HistoryStore {
             }
             tag.put("entities", entities);
             tag.putString("annotations", Packets.JSON.toJson(edit.annotations()));
+            if (edit.selection() != null && edit.selection().hasHeld())
+                tag.put("held", heldTag(edit.selection())); // the dormant blocks that went with them
             if (edit.selection() != null && edit.selection().hasObjects())
                 tag.put(
                         "objects",
@@ -234,6 +236,46 @@ final class HistoryStore {
             after.put(id, unflatten(item.getIntArray("after").orElse(new int[0])));
         }
         return Session.SelectionChange.restoring(Map.of(), Map.of()).withObjects(before, after);
+    }
+    /** What an edit did to the blocks BuildObjects keep outside the world (dormant blocks, and world blocks they replaced), by BuildObject id: before and after. */
+    static ListTag heldTag(Session.SelectionChange change) {
+        var list = new ListTag();
+        for (var e : change.heldBefore().entrySet()) {
+            var after = change.heldAfter().get(e.getKey());
+            if (after == null) continue;
+            var item = new CompoundTag();
+            item.putInt("id", e.getKey());
+            BuildObjectStore.putCells(item, "dormantBefore", e.getValue().dormant());
+            BuildObjectStore.putCells(item, "replacedBefore", e.getValue().replaced());
+            BuildObjectStore.putCells(item, "dormantAfter", after.dormant());
+            BuildObjectStore.putCells(item, "replacedAfter", after.replaced());
+            list.add(item);
+        }
+        return list;
+    }
+    /** The change that {@link #heldTag} wrote, put on {@code base}; just {@code base} (which may be null) when there was none. */
+    static Session.SelectionChange readHeld(ListTag list, Session.SelectionChange base) {
+        if (list.isEmpty()) return base;
+        if (list.size() > SavedSelections.MAX) throw new IllegalArgumentException("Invalid stored BuildObject change");
+        var before = new LinkedHashMap<Integer, SavedSelections.Held>();
+        var after = new LinkedHashMap<Integer, SavedSelections.Held>();
+        for (int i = 0; i < list.size(); i++) {
+            var item = list.getCompoundOrEmpty(i);
+            int id = item.getIntOr("id", 0);
+            if (id <= 0) throw new IllegalArgumentException("Invalid stored BuildObject id");
+            before.put(
+                    id,
+                    new SavedSelections.Held(
+                            BuildObjectStore.readCells(item, "dormantBefore"),
+                            BuildObjectStore.readCells(item, "replacedBefore")));
+            after.put(
+                    id,
+                    new SavedSelections.Held(
+                            BuildObjectStore.readCells(item, "dormantAfter"),
+                            BuildObjectStore.readCells(item, "replacedAfter")));
+        }
+        var change = base != null ? base : Session.SelectionChange.restoring(Map.of(), Map.of());
+        return change.withHeld(before, after);
     }
 
     private static int[] flatten(List<Point> points) {
@@ -307,7 +349,7 @@ final class HistoryStore {
                     tag.getIntOr("flags", 2),
                     List.copyOf(entities),
                     List.of(notes),
-                    readObjects(tag.getListOrEmpty("objects")),
+                    readHeld(tag.getListOrEmpty("held"), readObjects(tag.getListOrEmpty("objects"))),
                     tag.getLongOr("time", 0L)));
         }
         return List.copyOf(result);

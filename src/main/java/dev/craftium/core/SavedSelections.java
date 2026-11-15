@@ -13,7 +13,7 @@ import java.util.*;
  */
 public final class SavedSelections {
     /** The most selections one player may save. */
-    public static final int MAX = 64;
+    public static final int MAX = 1024;
     /**
      * A group of the Hierarchy: a named, ordered heading that the BuildObjects at the top level sit under. Groups are not nested, and a BuildObject inside another is in the
      * group of the one at the top. There is always at least one, "New Group", and everything starts in it.
@@ -57,6 +57,10 @@ public final class SavedSelections {
         private int color;
         private Group group;
         private boolean folded;
+        private PackedCells dormant = PackedCells.EMPTY, replaced = PackedCells.EMPTY;
+        private int heldVersion;
+        private int[] hiddenBox;
+        private int hiddenBoxFor = -1;
 
         Entry(int id, String name, Collection<Point> points) {
             this(id, java.util.UUID.randomUUID().toString(), name, points);
@@ -126,6 +130,41 @@ public final class SavedSelections {
         public int size() {
             return points.size();
         }
+        /** Its own blocks that are not in the world because a solid world block or another BuildObject won the cell. It keeps them, and writes them where the cell is free. */
+        public PackedCells dormant() {
+            return dormant;
+        }
+        /** The world blocks it wrote over (air is not kept), which it gives back when it moves away. */
+        public PackedCells replaced() {
+            return replaced;
+        }
+        /** Goes up whenever what it keeps outside the world changes, so what was sent of it can be told from what is there now. */
+        public int heldVersion() {
+            return heldVersion;
+        }
+        /** The box around its dormant blocks as {x0,y0,z0,x1,y1,z1}, or null when it keeps none. Worked out once for each change. */
+        public int[] hiddenBounds() {
+            if (dormant.isEmpty()) return null;
+            if (hiddenBox != null && hiddenBoxFor == heldVersion) return hiddenBox;
+            int[] b = {
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                Integer.MIN_VALUE,
+                Integer.MIN_VALUE,
+                Integer.MIN_VALUE
+            };
+            for (var p : dormant.points()) {
+                b[0] = Math.min(b[0], p.x());
+                b[1] = Math.min(b[1], p.y());
+                b[2] = Math.min(b[2], p.z());
+                b[3] = Math.max(b[3], p.x());
+                b[4] = Math.max(b[4], p.y());
+                b[5] = Math.max(b[5], p.z());
+            }
+            hiddenBoxFor = heldVersion;
+            return hiddenBox = b;
+        }
         /** Goes up whenever the blocks change, so what was sent of them can be told from what is there now. */
         public int version() {
             return version;
@@ -165,10 +204,38 @@ public final class SavedSelections {
         }
         /** Everything to write to disk, in tree order. */
         public List<Saved> saved() {
+            return saved(Map.of(), Map.of());
+        }
+        /**
+         * As {@link #saved()}, with the blocks (and what is kept hidden) of some BuildObjects as they were, by id. What is written to disk while an edit that moved them is still
+         * waiting for confirmation or being applied: the world has not changed yet, so what is saved has to agree with the world, or a crash leaves a BuildObject that does not
+         * match its blocks, with the blocks it kept hidden gone (they are in no other place).
+         */
+        public List<Saved> saved(Map<Integer, List<Point>> own, Map<Integer, Held> held) {
             var out = new ArrayList<Saved>();
-            for (var e : entries)
-                out.add(new Saved(e.id, e.guid, e.name, e.parentId(), e.color, e.points, e.ownGroupId(), e.folded));
+            for (var e : entries) {
+                var then = held.get(e.id);
+                out.add(new Saved(
+                        e.id,
+                        e.guid,
+                        e.name,
+                        e.parentId(),
+                        e.color,
+                        own.getOrDefault(e.id, e.points),
+                        e.ownGroupId(),
+                        e.folded,
+                        then != null ? then.dormant() : e.dormant,
+                        then != null ? then.replaced() : e.replaced));
+            }
             return out;
+        }
+        /** How many cells all the BuildObjects of a tree may hold between them, dormant and replaced: the memory guard (about 10 bytes a cell). */
+        public static final int HELD_LIMIT = 8_388_608;
+        /** The cells every BuildObject holds, dormant and replaced. */
+        public long held() {
+            long n = 0;
+            for (var e : entries) n += e.dormant.size() + e.replaced.size();
+            return n;
         }
         /**
          * A tree as it was saved. A BuildObject whose parent is not before it in the list (a file that was edited by hand, or damaged) goes to the top level, so the list is
@@ -204,6 +271,10 @@ public final class SavedSelections {
                     continue;
                 var e = new Entry(r.id(), r.guid(), r.name().isBlank() ? "BuildObject" : r.name(), r.points());
                 e.color = r.color();
+                if (tree.held() + r.dormant().size() + r.replaced().size() <= HELD_LIMIT) {
+                    e.dormant = r.dormant();
+                    e.replaced = r.replaced();
+                }
                 e.parent = byId.get(r.parentId());
                 byId.put(e.id, e);
                 tree.entries.add(e);
@@ -225,7 +296,21 @@ public final class SavedSelections {
             int color,
             List<Point> points,
             int groupId,
-            boolean folded) {
+            boolean folded,
+            PackedCells dormant,
+            PackedCells replaced) {
+        /** A BuildObject of a file from before dormant blocks. */
+        public Saved(
+                int id,
+                String guid,
+                String name,
+                int parentId,
+                int color,
+                List<Point> points,
+                int groupId,
+                boolean folded) {
+            this(id, guid, name, parentId, color, points, groupId, folded, PackedCells.EMPTY, PackedCells.EMPTY);
+        }
         /** A BuildObject of a file from before groups. */
         public Saved(int id, String guid, String name, int parentId, int color, List<Point> points) {
             this(id, guid, name, parentId, color, points, 0, false);
@@ -479,7 +564,79 @@ public final class SavedSelections {
         if (changed) changed();
         return changed;
     }
+    /**
+     * Sets what a BuildObject holds that is not in the world: its dormant blocks and the world blocks it replaced. The stores are copied, so the caller keeps its own.
+     * Refused when either goes past {@link Selection#LIMIT} cells or the tree's total would pass {@link Tree#HELD_LIMIT}; nothing is changed then.
+     * Returns whether anything changed.
+     */
+    public boolean setHeld(int id, PackedCells dormant, PackedCells replaced) {
+        Entry e = byId(id);
+        if (e == null) throw new IllegalArgumentException("No such BuildObject");
+        if (dormant.size() > Selection.LIMIT || replaced.size() > Selection.LIMIT)
+            throw new IllegalArgumentException("A BuildObject holds up to " + String.format("%,d", Selection.LIMIT)
+                    + " dormant and as many replaced blocks");
+        long others = tree.held() - e.dormant.size() - e.replaced.size();
+        if (others + dormant.size() + replaced.size() > Tree.HELD_LIMIT)
+            throw new IllegalArgumentException("The BuildObjects of this world hold up to "
+                    + String.format("%,d", Tree.HELD_LIMIT) + " dormant and replaced blocks between them");
+        if (e.dormant.sameContent(dormant) && e.replaced.sameContent(replaced)) return false;
+        e.dormant = dormant.isEmpty() ? PackedCells.EMPTY : dormant.copy();
+        e.replaced = replaced.isEmpty() ? PackedCells.EMPTY : replaced.copy();
+        e.heldVersion++;
+        tree.mutations++;
+        tree.revision++; // saved to disk, and each client is told which blocks are hidden, to draw them
+        return true;
+    }
+    /** What a BuildObject keeps outside the world, for undo and redo. Never changed once made, so it is shared, not copied. */
+    public record Held(PackedCells dormant, PackedCells replaced) {
+        public static final Held NONE = new Held(PackedCells.EMPTY, PackedCells.EMPTY);
+
+        public boolean isEmpty() {
+            return dormant.isEmpty() && replaced.isEmpty();
+        }
+
+        public boolean same(Held o) {
+            return dormant.sameContent(o.dormant) && replaced.sameContent(o.replaced);
+        }
+    }
+    /** What every BuildObject keeps outside the world, by id, as it is now: what a move changes, and what undo puts back. */
+    public Map<Integer, Held> heldSnapshot() {
+        var out = new LinkedHashMap<Integer, Held>();
+        for (var e : entries) out.put(e.id, new Held(e.dormant, e.replaced));
+        return out;
+    }
+    /**
+     * Puts back what BuildObjects kept outside the world (an id that is gone is skipped, and one that is not named is left alone). Unlike {@link #setHeld} it does not check the
+     * caps: it restores what was there before, and must not fail halfway through an undo. Returns whether anything changed.
+     */
+    public boolean restoreHeld(Map<Integer, Held> held) {
+        boolean changed = false;
+        for (var e : entries) {
+            var h = held.get(e.id);
+            if (h == null) continue;
+            if (e.dormant.sameContent(h.dormant) && e.replaced.sameContent(h.replaced)) continue;
+            e.dormant = h.dormant.isEmpty() ? PackedCells.EMPTY : h.dormant;
+            e.replaced = h.replaced.isEmpty() ? PackedCells.EMPTY : h.replaced;
+            e.heldVersion++;
+            changed = true;
+        }
+        if (changed) {
+            tree.mutations++;
+            tree.revision++;
+        }
+        return changed;
+    }
     /** The blocks of the BuildObject and of everything under it: what looking at it shows. */
+    /** The ids of these BuildObjects and of everything under them (an id that is gone is skipped). */
+    public Set<Integer> withDescendants(Collection<Integer> ids) {
+        var out = new LinkedHashSet<Integer>();
+        for (var id : ids) {
+            var e = byId(id);
+            if (e != null) for (var x : subtree(e)) out.add(x.id);
+        }
+        return out;
+    }
+
     public Set<Point> effective(Entry entry) {
         var out = new LinkedHashSet<Point>();
         for (var e : subtree(entry)) out.addAll(e.points);
@@ -620,6 +777,10 @@ public final class SavedSelections {
      * {@code origin} (the corner the clipboard was copied from), so they can be made again wherever the copy is put down.
      */
     public List<Copy> captureCopy(Point origin) {
+        return captureCopy(origin, false);
+    }
+    /** As above; with {@code withHidden} each one's hidden blocks are remembered as part of its blocks, to be placed (or kept hidden again) wherever the copy is put down. */
+    public List<Copy> captureCopy(Point origin, boolean withHidden) {
         var roots = entries.stream()
                 .filter(e -> viewed.contains(e) && viewed.stream().noneMatch(o -> o != e && isUnder(e, o)))
                 .toList();
@@ -629,6 +790,8 @@ public final class SavedSelections {
             for (var e : subtree(r)) {
                 var relative = new ArrayList<Point>(e.points.size());
                 for (var p : e.points) relative.add(p.subtract(origin));
+                if (withHidden)
+                    for (var p : e.dormant.points()) if (!e.points.contains(p)) relative.add(p.subtract(origin));
                 index.put(e, out.size());
                 out.add(new Copy(e.name, e == r ? -1 : index.get(e.parent), e.color, List.copyOf(relative)));
             }

@@ -21,6 +21,18 @@ final class SavedSelectionActions {
                 saved.view(entry.id(), s.selection);
                 return "Created " + entry.name();
             }
+            case "hiddenghost" -> { // hiddenghost: the hidden blocks of what is shown, with their states, sent with the
+                // next list, to preview a drag with the blocks themselves
+                var shown = new java.util.ArrayList<Integer>();
+                for (var e : saved.viewed()) shown.add(e.id());
+                s.hiddenGhostWanted.clear();
+                for (int id : saved.withDescendants(shown)) {
+                    var e = saved.byId(id);
+                    if (e != null && !e.dormant().isEmpty()) s.hiddenGhostWanted.add(id);
+                }
+                s.savedSent = -1;
+                return "";
+            }
             case "view" -> {
                 saved.view(id(part), s.selection);
                 return "Showing " + saved.active().name();
@@ -173,6 +185,14 @@ final class SavedSelectionActions {
         };
     }
     /** What the action asks permission for (see {@link HierarchyPermissions}), or null for one everybody may do: looking, which changes nothing of the BuildObjects. */
+    /** Whether the action can change which BuildObject outranks which: where one is put, grouped or taken out, or a group moved. */
+    static boolean changesPriority(String action) {
+        return switch (verb(action)) {
+            case "place", "placeset", "group", "ungroup", "groupmove" -> true;
+            default -> false;
+        };
+    }
+
     static String permission(String action) {
         return switch (verb(action)) {
             case "save", "group", "createchild", "groupnew", "empty" -> "create";
@@ -260,6 +280,7 @@ final class SavedSelectionActions {
                             e.points().stream().mapToInt(Point::x).max().getAsInt(),
                             e.points().stream().mapToInt(Point::y).max().getAsInt(),
                             e.points().stream().mapToInt(Point::z).max().getAsInt());
+            var hidden = e.hiddenBounds();
             out.add(new Packets.SavedSelection(
                     e.id(),
                     e.name(),
@@ -273,7 +294,14 @@ final class SavedSelectionActions {
                     e.parentId(),
                     e.color(),
                     e.groupId(),
-                    e.folded()));
+                    e.folded(),
+                    e.dormant().size(),
+                    withData ? hiddenData(s, e) : null,
+                    hidden == null ? null : new Point(hidden[0], hidden[1], hidden[2]),
+                    hidden == null ? null : new Point(hidden[3], hidden[4], hidden[5]),
+                    withData && s.hiddenGhostWanted.contains(e.id())
+                            ? GhostCodec.encodeHidden(e.dormant(), HIDDEN_GHOST_LIMIT)
+                            : null));
         }
         return out;
     }
@@ -287,12 +315,23 @@ final class SavedSelectionActions {
     static List<Packets.SavedSelection> forStatus(Session s, boolean supported) {
         if (!supported || s.savedSent == s.saved.revision()) return null;
         s.savedSent = s.saved.revision();
-        s.savedDataSent
-                .keySet()
-                .retainAll(s.saved.entries().stream()
-                        .map(e -> e.id())
-                        .collect(java.util.stream.Collectors.toSet())); // forget what was sent of deleted ones
-        return list(s, true);
+        var ids = s.saved.entries().stream().map(e -> e.id()).collect(java.util.stream.Collectors.toSet());
+        s.savedDataSent.keySet().retainAll(ids);
+        s.savedHiddenSent.keySet().retainAll(ids); // forget what was sent of deleted ones
+        var out = list(s, true);
+        s.hiddenGhostWanted.clear(); // sent once, for the drag that asked
+        return out;
+    }
+    /** The most hidden blocks sent to be drawn for one BuildObject: more are counted, boxed and kept, but not drawn. */
+    static final int HIDDEN_DRAW_LIMIT = 262_144;
+    /** The most hidden blocks sent with their states, to be drawn as blocks while a BuildObject is dragged. */
+    static final int HIDDEN_GHOST_LIMIT = 16_384;
+    /** The blocks an entry keeps hidden, once for each time they change; null when the client has them, and empty when there are none or too many to draw. */
+    private static String hiddenData(Session s, dev.craftium.core.SavedSelections.Entry e) {
+        if (Integer.valueOf(e.heldVersion()).equals(s.savedHiddenSent.get(e.id()))) return null;
+        s.savedHiddenSent.put(e.id(), e.heldVersion());
+        if (e.dormant().isEmpty() || e.dormant().size() > HIDDEN_DRAW_LIMIT) return "";
+        return dev.craftium.core.SelectionCodec.encode(e.dormant().points());
     }
     /** The blocks of an entry, once for each time they change; null when the client has them. */
     private static String data(Session s, dev.craftium.core.SavedSelections.Entry e) {

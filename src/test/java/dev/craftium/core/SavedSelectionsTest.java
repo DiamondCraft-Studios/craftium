@@ -541,6 +541,33 @@ class SavedSelectionsTest {
     }
 
     @Test
+    void heldBlocksAreCopiedCountedAndClearedPerObject() {
+        var saved = new SavedSelections();
+        var one = saved.save(live(A));
+        var two = saved.save(live(B));
+        var some = new PackedCells();
+        some.put(C, "minecraft:stone");
+        assertTrue(saved.setHeld(one.id(), some, PackedCells.EMPTY));
+        assertEquals(1, saved.tree().held());
+        assertThrows(IllegalArgumentException.class, () -> saved.setHeld(999, some, PackedCells.EMPTY));
+        assertEquals("minecraft:stone", saved.byId(one.id()).dormant().get(C), "the object holds its own copy");
+        some.put(D, "minecraft:dirt");
+        assertEquals(
+                1, saved.byId(one.id()).dormant().size(), "a later change to the caller's store does not reach it");
+        assertTrue(saved.setHeld(one.id(), PackedCells.EMPTY, PackedCells.EMPTY));
+        assertEquals(0, saved.tree().held());
+        assertSame(PackedCells.EMPTY, saved.byId(one.id()).dormant());
+        // What a saved tree holds counts toward the world's total when it is loaded. (The cap itself is 8,388,608
+        // cells, too many to fill in a test.)
+        var rows = new ArrayList<SavedSelections.Saved>();
+        var big = new PackedCells();
+        for (int i = 0; i < 1000; i++) big.put(new Point(i, 0, 0), "minecraft:stone");
+        rows.add(new SavedSelections.Saved(1, "g1", "A", 0, 0, List.of(A), 0, false, big, PackedCells.EMPTY));
+        var tree = SavedSelections.Tree.load(2, rows);
+        assertEquals(1000, tree.held());
+    }
+
+    @Test
     void severalEntriesCanBeShownTogetherAsOneSelection() {
         var saved = new SavedSelections();
         var s = live(A);
@@ -1024,5 +1051,108 @@ class SavedSelectionsTest {
     @Test
     void aGreyBaseStaysGrey() {
         assertEquals(0xff808080, SavedSelectionColors.forIndex(0xff808080, 5));
+    }
+
+    @Test
+    void whatBuildObjectsKeepOutsideTheWorldCanBeSnapshotAndPutBackWithoutTheCaps() {
+        var saved = new SavedSelections();
+        var one = saved.save(live(A));
+        var two = saved.save(live(B));
+        var dormant = new PackedCells();
+        dormant.put(C, "minecraft:stone");
+        var before = saved.heldSnapshot();
+        assertTrue(before.get(one.id()).isEmpty());
+        saved.setHeld(one.id(), dormant, PackedCells.EMPTY);
+        var after = saved.heldSnapshot();
+        assertFalse(after.get(one.id()).isEmpty());
+        assertTrue(after.get(two.id()).isEmpty());
+        assertTrue(saved.restoreHeld(before));
+        assertTrue(saved.byId(one.id()).dormant().isEmpty(), "undo");
+        assertFalse(saved.restoreHeld(before), "already there");
+        assertTrue(saved.restoreHeld(after));
+        assertEquals("minecraft:stone", saved.byId(one.id()).dormant().get(C), "redo");
+        assertFalse(saved.restoreHeld(Map.of(999, after.get(one.id()))), "an id that is gone is skipped");
+        dormant.put(D, "minecraft:dirt");
+        assertEquals(1, saved.byId(one.id()).dormant().size(), "the snapshot is not changed by the caller's store");
+    }
+
+    @Test
+    void aBuildObjectAndEverythingUnderItAreFoundByIdAndAGoneIdIsSkipped() {
+        var saved = new SavedSelections();
+        var parent = saved.create(live(A));
+        var child = saved.create(live(B));
+        var other = saved.create(live(C));
+        saved.place(child.id(), parent.id(), 0);
+        assertEquals(List.of(parent.id(), child.id()), List.copyOf(saved.withDescendants(List.of(parent.id()))));
+        assertEquals(List.of(child.id()), List.copyOf(saved.withDescendants(List.of(child.id(), 999))));
+        assertEquals(
+                java.util.Set.of(parent.id(), child.id(), other.id()),
+                saved.withDescendants(List.of(other.id(), parent.id())));
+    }
+
+    @Test
+    void whatABuildObjectKeepsHiddenHasAVersionABoxAndMakesTheClientsHearOfIt() {
+        var saved = new SavedSelections();
+        var one = saved.save(live(A));
+        assertNull(saved.byId(one.id()).hiddenBounds());
+        var version = saved.byId(one.id()).heldVersion();
+        var revision = saved.tree().mutations();
+        var dormant = new PackedCells();
+        dormant.put(new Point(5, -3, 7), "minecraft:stone");
+        dormant.put(new Point(-2, 10, 0), "minecraft:dirt");
+        long before = saved.revision();
+        assertTrue(saved.setHeld(one.id(), dormant, PackedCells.EMPTY));
+        assertTrue(saved.byId(one.id()).heldVersion() > version);
+        assertTrue(saved.revision() > before, "the clients are sent the new list");
+        assertTrue(saved.tree().mutations() > revision);
+        assertArrayEquals(new int[] {-2, -3, 0, 5, 10, 7}, saved.byId(one.id()).hiddenBounds());
+        int again = saved.byId(one.id()).heldVersion();
+        saved.setHeld(one.id(), dormant, PackedCells.EMPTY);
+        assertEquals(again, saved.byId(one.id()).heldVersion(), "the same again is no change");
+        saved.restoreHeld(Map.of(one.id(), SavedSelections.Held.NONE));
+        assertNull(saved.byId(one.id()).hiddenBounds());
+        assertTrue(saved.byId(one.id()).heldVersion() > again);
+    }
+
+    @Test
+    void theTreeCanBeSavedAsSomeOfItsBuildObjectsWere() {
+        var saved = new SavedSelections();
+        var one = saved.save(live(A));
+        var two = saved.save(live(B));
+        var dormant = new PackedCells();
+        dormant.put(C, "minecraft:stone");
+        saved.setHeld(one.id(), dormant, PackedCells.EMPTY);
+        var ownThen = Map.of(one.id(), List.of(D));
+        var heldThen = Map.of(one.id(), SavedSelections.Held.NONE);
+        var rows = saved.tree().saved(ownThen, heldThen);
+        var first = rows.stream().filter(r -> r.id() == one.id()).findFirst().orElseThrow();
+        var second = rows.stream().filter(r -> r.id() == two.id()).findFirst().orElseThrow();
+        assertEquals(List.of(D), first.points());
+        assertTrue(first.dormant().isEmpty());
+        assertEquals(List.of(B), second.points(), "the others are as they are");
+        assertEquals(List.of(A), saved.byId(one.id()).points(), "and the tree itself is not changed");
+        assertEquals(1, saved.byId(one.id()).dormant().size());
+        assertEquals(
+                saved.tree().saved().get(0).points(),
+                saved.tree().saved(Map.of(), Map.of()).get(0).points());
+    }
+
+    @Test
+    void aCopyCanRememberWhatABuildObjectKeepsHiddenAsPartOfIt() {
+        var saved = new SavedSelections();
+        var one = saved.save(live(A));
+        var dormant = new PackedCells();
+        dormant.put(C, "minecraft:stone");
+        saved.setHeld(one.id(), dormant, PackedCells.EMPTY);
+        saved.view(one.id(), live(A));
+        var plain = saved.captureCopy(ORIGIN);
+        var whole = saved.captureCopy(ORIGIN, true);
+        assertEquals(1, plain.get(0).relative().size(), "only what is in the world, as before");
+        assertEquals(
+                new HashSet<>(List.of(A.subtract(ORIGIN), C.subtract(ORIGIN))),
+                new HashSet<>(whole.get(0).relative()),
+                "and with what it keeps hidden");
+        var made = saved.createCopies(whole, ORIGIN, new HashSet<>(List.of(A, C)), 0);
+        assertEquals(2, made.get(0).size(), "the copy holds both, to be placed or kept hidden where it is put down");
     }
 }

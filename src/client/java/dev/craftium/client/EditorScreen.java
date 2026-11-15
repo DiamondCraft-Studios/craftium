@@ -453,7 +453,7 @@ public final class EditorScreen extends CraftiumScreen {
     /** Chooses a tool as a click in the tool list does. Not private, so the game tests can choose one the way a player does. */
     void select(Tool tool) {
         cancelSelectionJobs();
-        if (tool.transform() && tool != Tool.PIVOT && ClientState.status.selectionSize() == 0 && !ShapeObject.active())
+        if (tool.transform() && tool != Tool.PIVOT && ClientState.gizmoSize() == 0 && !ShapeObject.active())
             ClientState.notify("Select blocks first, then use " + tool.label);
         toolActive = true;
         previousTool = o().tool;
@@ -4528,7 +4528,27 @@ public final class EditorScreen extends CraftiumScreen {
         exportStructure(source, null, null);
     }
     /** Opens the export window on these BuildObjects, a page for each. */
+    /** How many blocks the BuildObjects among {@code ids}, and everything under them, keep out of the world: what an action that works on the blocks in the world leaves out. */
+    private int hiddenIn(List<Integer> ids) {
+        int n = 0;
+        for (var row : ClientState.savedSelections())
+            for (int id : ids)
+                if (ClientState.savedUnder(row, id)) {
+                    n += row.hidden();
+                    break;
+                }
+        return n;
+    }
+    /** Says so when an action works on the blocks in the world and the BuildObjects have more than that: nothing is lost, they are only not part of it. */
+    private void warnHidden(List<Integer> ids, String what) {
+        int n = hiddenIn(ids);
+        if (n > 0)
+            ClientState.notify(String.format(
+                    "%,d hidden blocks are not part of the %s: Place here puts them in the world first", n, what));
+    }
+
     private void exportObjects(List<Integer> ids) {
+        warnHidden(ids, "export");
         var objects = new ArrayList<StructureExportScreen.Target>();
         for (int id : ids) {
             var row = savedById(id);
@@ -4539,6 +4559,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** Opens the export window on the Blueprint tab for these BuildObjects, a page for each. */
     private void blueprintObjects(List<Integer> ids) {
+        warnHidden(ids, "blueprint");
         var objects = new ArrayList<StructureExportScreen.Target>();
         for (int id : ids) {
             var row = savedById(id);
@@ -6956,7 +6977,19 @@ public final class EditorScreen extends CraftiumScreen {
                 box.setX(nameX);
                 box.setY(ry + 4);
                 box.setWidth(eye - 4 - nameX);
-            } else text(g, shorten(entry.name(), eye - 4 - nameX), nameX, ry + 6, entry.active() ? TEXT : MUTED);
+            } else {
+                int markerRoom = entry.hidden() > 0
+                        ? 10
+                        : 0; // a small amber square: some of its blocks are kept out of the world
+                text(
+                        g,
+                        shorten(entry.name(), eye - 4 - nameX - markerRoom),
+                        nameX,
+                        ry + 6,
+                        entry.active() ? TEXT : MUTED);
+                if (entry.hidden() > 0)
+                    g.fill(eye - 9, ry + rowHeight / 2 - 2, eye - 5, ry + rowHeight / 2 + 2, 0xffe0a040);
+            }
             if (rowDragMoved && rowDragIds.contains(id))
                 g.fill(
                         x + 9,
@@ -6971,8 +7004,12 @@ public final class EditorScreen extends CraftiumScreen {
                     rowRight - (x + 9),
                     rowHeight,
                     () -> rowClick(entry),
-                    HIDDEN_TIP + savedSpan(entry) + " blocks · "
-                            + (entry.active() && !entry.editing() ? "Let go" : "Select this BuildObject"));
+                    HIDDEN_TIP + savedSpan(entry) + " blocks"
+                            + (entry.hidden() > 0
+                                    ? " · " + String.format("%,d", entry.hidden())
+                                            + " kept out of the world by what is in the way, shown as an x-ray · Right-click > Place here puts them where it is free"
+                                    : "")
+                            + " · " + (entry.active() && !entry.editing() ? "Let go" : "Select this BuildObject"));
             controls.add(rowControl);
             renameAreas.add(new RenameArea(rowControl, id));
             if (parents.contains(id)) { // something is under it: an arrow folds it
@@ -7185,6 +7222,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** Cuts the blocks of the BuildObjects shown, and then the BuildObjects themselves, so a paste is where they live now. */
     private void cutObjects(List<Integer> ids) {
+        warnHidden(ids, "cut");
         action("cut");
         afterNextStatus(() -> {
             if (!ClientState.status.error())
@@ -7348,6 +7386,12 @@ public final class EditorScreen extends CraftiumScreen {
                 row.active() && row.editing()
                         ? item("Stop editing", "", () -> action("saved_selection:release"))
                         : item("Edit blocks", "", () -> action("saved_selection:edit:" + id)));
+        items.add(item(
+                n > 1 ? "Place here (" + n + ")" : "Place here",
+                "",
+                () -> action("saved_selection:placehere:"
+                        + csv))); // blocks it keeps out of the world, because something solid was there, are placed
+        // where it is free now
         items.add(divider());
         items.add(
                 n > 1
@@ -7363,7 +7407,10 @@ public final class EditorScreen extends CraftiumScreen {
         items.add(divider());
         items.add(item("Rename", n == 1 && row.active() ? "F2" : "", () -> startRename(new RenameArea(null, id))));
         items.add(item("Duplicate", "Ctrl+D", this::duplicateObjects));
-        items.add(item("Copy", "Ctrl+C", () -> action("copy")));
+        items.add(item("Copy", "Ctrl+C", () -> {
+            warnHidden(targets, "copy");
+            action("copy");
+        }));
         items.add(item("Cut", "Ctrl+X", () -> cutObjects(targets)));
         if (ClientState.status.clipboardSize() > 0 && ClientState.status.clipboardOrigin() != null)
             items.add(item("Paste", "", () -> pasteAsObject(id)));

@@ -19,10 +19,11 @@ final class BuildObjectStore {
     /** How often, in ticks, a tree that changed is written: 5 seconds. A tree is also written when the server stops. */
     private static final int WRITE_EVERY = 100;
 
-    private static final class Slot {
+    static final class Slot {
         final Path file;
         final SavedSelections.Tree tree;
         long written;
+        boolean overlaid;
 
         Slot(Path file, SavedSelections.Tree tree, long written) {
             this.file = file;
@@ -32,6 +33,28 @@ final class BuildObjectStore {
     }
 
     private static final Map<Path, Slot> SLOTS = new HashMap<>();
+    /**
+     * What an edit that has not finished (one waiting for Enter, or being applied over several ticks) has already done to the BuildObjects, as it was before it. The world is
+     * unchanged until the edit is applied, so this is what gets written meanwhile: the BuildObjects then agree with the world however the game ends. Fills {@code own} (the
+     * blocks of each BuildObject) and {@code held} (what it keeps hidden) for the BuildObjects of {@code tree}.
+     */
+    interface InFlight {
+        void collect(SavedSelections.Tree tree, Map<Integer, List<Point>> own, Map<Integer, SavedSelections.Held> held);
+    }
+
+    static InFlight inFlight = EditorServer::collectInFlight;
+    private static volatile boolean flushNow;
+    /** Writes what changed at the next tick instead of at the next turn of the five seconds: an edit has just been applied or cancelled, and what is on disk is the older state. */
+    static void flushSoon() {
+        flushNow = true;
+    }
+    /** Starts keeping a tree for a file (what {@link #attach} does for a player's dimension). */
+    static Slot track(Path file, SavedSelections.Tree tree) {
+        var slot = new Slot(file, tree, -1);
+        SLOTS.put(file, slot);
+        return slot;
+    }
+
     private static final ExecutorService IO = Executors.newSingleThreadExecutor(r -> {
         var thread = new Thread(r, "Craftium BuildObject writer");
         thread.setDaemon(true);
@@ -49,6 +72,7 @@ final class BuildObjectStore {
         session.savedAttached = true;
         session.savedSent = -1;
         session.savedDataSent.clear();
+        session.savedHiddenSent.clear();
     }
 
     private static Slot slot(ServerPlayer player) {
@@ -66,15 +90,26 @@ final class BuildObjectStore {
 
     /** Writes what changed, now and then. */
     static void tick(MinecraftServer server) {
+        if (flushNow) {
+            flushNow = false;
+            saveChanged();
+            return;
+        }
         if (++ticks % WRITE_EVERY != 0) return;
         saveChanged();
     }
 
-    private static void saveChanged() {
+    static void saveChanged() {
         for (var slot : SLOTS.values()) {
-            if (slot.tree.mutations() == slot.written) continue;
+            var own = new HashMap<Integer, List<Point>>();
+            var held = new HashMap<Integer, SavedSelections.Held>();
+            if (inFlight != null) inFlight.collect(slot.tree, own, held);
+            boolean overlaid = !own.isEmpty() || !held.isEmpty();
+            if (slot.tree.mutations() == slot.written && overlaid == slot.overlaid)
+                continue; // nothing changed, and it is not the end of an edit that was being kept out of it
             slot.written = slot.tree.mutations();
-            var rows = slot.tree.saved();
+            slot.overlaid = overlaid;
+            var rows = slot.tree.saved(own, held);
             var groups = slot.tree.savedGroups();
             int nextId = slot.tree.nextId(), nextGroupId = slot.tree.nextGroupId();
             Path file = slot.file;
@@ -110,8 +145,15 @@ final class BuildObjectStore {
             int nextGroupId,
             List<SavedSelections.SavedGroup> groups) {
         try {
+            boolean held = rows.stream()
+                    .anyMatch(r -> !r.dormant().isEmpty() || !r.replaced().isEmpty());
             var root = new CompoundTag();
-            root.putInt("format", 1);
+            root.putInt(
+                    "format",
+                    held
+                            ? 2
+                            : 1); // 2 only when something holds dormant blocks, so a world that does not use them still
+            // opens in an older build
             root.putInt("nextId", nextId);
             root.putInt("nextGroupId", nextGroupId);
             var groupList = new ListTag();
@@ -142,6 +184,8 @@ final class BuildObjectStore {
                     flat[i++] = p.z();
                 }
                 tag.putIntArray("points", flat);
+                putCells(tag, "dormant", r.dormant());
+                putCells(tag, "replaced", r.replaced());
                 list.add(tag);
             }
             root.put("entries", list);
@@ -157,12 +201,46 @@ final class BuildObjectStore {
             ServerPlatform.LOG.error("Cannot write BuildObjects {}", file, e);
         }
     }
+    /** Writes packed cells as {@code name}: sorted cell keys, the states in use as one text of lines (a block state never has a line break), and each cell's index. Nothing is written for none. */
+    static void putCells(CompoundTag tag, String name, PackedCells cells) {
+        if (cells.isEmpty()) return;
+        var c = new CompoundTag();
+        c.putLongArray("cells", cells.keysArray());
+        c.putString("states", String.join("\n", cells.paletteList()));
+        c.putIntArray("index", cells.indexesArray());
+        if (cells.dataKeysArray().length > 0) { // block entities (a chest's items), as text, one entry each
+            c.putLongArray("dataCells", cells.dataKeysArray());
+            var texts = new ListTag();
+            for (var d : cells.dataList()) {
+                var t = new CompoundTag();
+                t.putString("v", d);
+                texts.add(t);
+            }
+            c.put("data", texts);
+        }
+        tag.put(name, c);
+    }
+    /** The cells {@link #putCells} wrote, or none when absent. A store that does not add up throws, so the file is kept as .bad like any damaged one. */
+    static PackedCells readCells(CompoundTag tag, String name) {
+        var c = tag.getCompoundOrEmpty(name);
+        long[] keys = c.getLongArray("cells").orElse(new long[0]);
+        if (keys.length == 0) return PackedCells.EMPTY;
+        if (keys.length > Selection.LIMIT) throw new IllegalArgumentException("Invalid BuildObject dormant blocks");
+        var states = List.of(c.getStringOr("states", "").split("\n", -1));
+        long[] dataKeys = c.getLongArray("dataCells").orElse(new long[0]);
+        var list = c.getListOrEmpty("data");
+        var texts = new ArrayList<String>();
+        for (int i = 0; i < list.size(); i++)
+            texts.add(list.getCompoundOrEmpty(i).getStringOr("v", ""));
+        return PackedCells.of(keys, states, c.getIntArray("index").orElse(new int[0]), dataKeys, texts);
+    }
 
     static SavedSelections.Tree load(Path file) {
         if (!Files.exists(file)) return new SavedSelections.Tree();
         try {
             var root = NbtIo.readCompressed(file, NbtAccounter.create(256L * 1024 * 1024));
-            if (root.getIntOr("format", 0) != 1) throw new IllegalArgumentException("Unknown BuildObject file format");
+            int format = root.getIntOr("format", 0);
+            if (format != 1 && format != 2) throw new IllegalArgumentException("Unknown BuildObject file format");
             var list = root.getListOrEmpty("entries");
             if (list.size() > SavedSelections.MAX) throw new IllegalArgumentException("Too many BuildObjects");
             var rows = new ArrayList<SavedSelections.Saved>();
@@ -181,7 +259,9 @@ final class BuildObjectStore {
                         tag.getIntOr("color", 0),
                         points,
                         tag.getIntOr("group", 0),
-                        tag.getBooleanOr("folded", false)));
+                        tag.getBooleanOr("folded", false),
+                        format >= 2 ? readCells(tag, "dormant") : PackedCells.EMPTY,
+                        format >= 2 ? readCells(tag, "replaced") : PackedCells.EMPTY));
             }
             var groups = new ArrayList<SavedSelections.SavedGroup>();
             var groupList = root.getListOrEmpty("groups");

@@ -187,7 +187,8 @@ public final class EditorServer {
         job = null;
         jobLease.close();
         jobLease = ChunkLease.NONE;
-    }
+        BuildObjectStore.flushSoon();
+    } // what is saved of the BuildObjects can now be what they are
 
     public static void clear() {
         SESSIONS.clear();
@@ -219,7 +220,10 @@ public final class EditorServer {
 
     public static void disconnect(UUID id) {
         var session = SESSIONS.get(id);
-        if (session != null) HistoryStore.save(session);
+        if (session != null) {
+            abandonPending(session, false);
+            HistoryStore.save(session);
+        }
         if (AnimatedRebuild.owned(id)) {
             AnimatedRebuild.cancel(id);
             return;
@@ -227,6 +231,33 @@ public final class EditorServer {
         if (job == null || !job.owner.equals(id)) {
             SESSIONS.remove(id);
             AI_SESSIONS.keySet().removeIf(key -> key.owner().equals(id));
+        }
+    }
+    /**
+     * What edits that have not finished have done to the BuildObjects, as it was before them (see {@link BuildObjectStore.InFlight}): an edit waiting for Enter has already
+     * moved the BuildObjects with its preview, and one being applied has not yet finished moving the blocks, while the world is as it was. Server thread only.
+     */
+    static void collectInFlight(
+            SavedSelections.Tree tree, Map<Integer, List<Point>> own, Map<Integer, SavedSelections.Held> held) {
+        for (var s : SESSIONS.values()) {
+            if (s.saved.tree() != tree || s.pendingEdit == null)
+                continue; // waiting for Enter or Esc: the world has not changed
+            var changedOwn = ownChangedBy(s.pendingEdit);
+            if (changedOwn != null) for (var e : changedOwn.entrySet()) own.putIfAbsent(e.getKey(), e.getValue());
+            var changedHeld = heldChangedBy(s.pendingEdit);
+            if (changedHeld != null) for (var e : changedHeld.entrySet()) held.putIfAbsent(e.getKey(), e.getValue());
+        }
+        var j = job;
+        if (j != null
+                && j.session.saved.tree() == tree
+                && j.edit.selection()
+                        != null) { // being applied: undoing it goes back to where it ended, applying or redoing it to
+            // where it began
+            var change = j.edit.selection();
+            var ownThen = j.backwards ? change.objectsAfter() : change.objectsBefore();
+            var heldThen = j.backwards ? change.heldAfter() : change.heldBefore();
+            for (var e : ownThen.entrySet()) own.putIfAbsent(e.getKey(), e.getValue());
+            for (var e : heldThen.entrySet()) held.putIfAbsent(e.getKey(), e.getValue());
         }
     }
 
@@ -238,6 +269,9 @@ public final class EditorServer {
             var player = server.getPlayerList().getPlayer(entry.getKey());
             if (player != null) restoreMode(player, entry.getValue());
         }
+        BuildObjectStore
+                .shutdown(); // first: while an edit is still waiting or being applied, they are written as they were
+        // before it, which is what the world is
         if (job != null) {
             var j = job;
             rememberInterrupted(j);
@@ -250,7 +284,6 @@ public final class EditorServer {
         } catch (java.util.concurrent.CompletionException e) {
             ServerPlatform.LOG.error("Could not finish writing editor history during shutdown", e);
         }
-        BuildObjectStore.shutdown();
     }
 
     private static void rememberInterrupted(Job j) {
@@ -477,11 +510,21 @@ public final class EditorServer {
                     send(player, s, "Nothing to confirm", false);
                     return;
                 }
+                var ownBefore = ownChangedBy(edit);
+                var heldBefore = heldChangedBy(edit);
+                var selectionBefore = s.pendingSelectionBefore;
                 s.pendingEdit = null;
                 s.pendingSelectionBefore = null;
                 s.pendingObjectsBefore = null;
+                s.pendingHeldBefore = null;
                 s.pendingDirty = true;
-                start(player, s, edit);
+                try {
+                    start(player, s, edit);
+                } catch (RuntimeException ex) {
+                    giveBack(s, selectionBefore, ownBefore, heldBefore);
+                    throw ex;
+                } // refused (a permission, another edit applying): the world is as it was, so the BuildObjects and the
+                // selection are too
                 return;
             }
             if (r.action()
@@ -489,27 +532,39 @@ public final class EditorServer {
                 // when it staged nothing
                 var edit = s.pendingEdit;
                 if (edit == null) return;
+                var ownBefore = s.pendingObjectsBefore;
+                var heldBefore = s.pendingHeldBefore;
+                var selectionBefore = s.pendingSelectionBefore;
                 s.pendingEdit = null;
                 s.pendingSelectionBefore = null;
                 s.pendingObjectsBefore = null;
+                s.pendingHeldBefore = null;
                 s.pendingDirty = true;
-                start(player, s, edit);
+                try {
+                    start(player, s, edit);
+                } catch (RuntimeException ex) {
+                    giveBack(s, selectionBefore, ownBefore, heldBefore);
+                    throw ex;
+                } // refused (a permission, another edit applying): the world is as it was, so the BuildObjects are too
                 return;
             }
             if (r.action().equals("pending_cancel")) {
                 if (s.pendingEdit != null && s.pendingEdit == s.layoutFor)
                     return; // a jigsaw preview stays until it is built or cancelled in the planner
                 if (s.pendingEdit != null) {
+                    var changedOwn = ownChangedBy(s.pendingEdit);
+                    var changedHeld = heldChangedBy(
+                            s.pendingEdit); // only what the waiting edit changed: the rest may have been changed by
+                    // someone else since
                     s.pendingEdit = null;
                     s.pendingDirty = true;
                     if (s.pendingSelectionBefore != null) {
                         s.selection.restore(s.pendingSelectionBefore);
                         s.pendingSelectionBefore = null;
                     }
-                    if (s.pendingObjectsBefore != null) {
-                        s.saved.setPoints(s.pendingObjectsBefore);
-                        s.pendingObjectsBefore = null;
-                    }
+                    s.pendingObjectsBefore = null;
+                    s.pendingHeldBefore = null;
+                    giveBack(s, null, changedOwn, changedHeld);
                     send(player, s, "Edit cancelled", false);
                 }
                 return;
@@ -517,9 +572,11 @@ public final class EditorServer {
             if (r.action()
                     .equals("editor_reset")) { // the way out of a stuck editor: forgets whatever is half done, but
                 // never an edit being applied
+                abandonPending(s, false); // what a waiting edit did to the BuildObjects goes back with it
                 s.pendingEdit = null;
                 s.pendingSelectionBefore = null;
                 s.pendingObjectsBefore = null;
+                s.pendingHeldBefore = null;
                 s.pendingChain = null;
                 s.pendingChainBase = s.pendingChainEdit = null;
                 s.pendingDirty = true;
@@ -600,15 +657,65 @@ public final class EditorServer {
                     return;
                 }
                 if (r.action()
+                        .startsWith(SavedSelectionActions.PREFIX
+                                + "placehere:")) { // placehere:<ids separated by commas>: what these
+                    // BuildObjects keep out of the world is placed where it is
+                    // free now
+                    HierarchyPermissions.require(player, "edit");
+                    var named = new LinkedHashSet<Integer>();
+                    for (var text : r.action()
+                            .substring((SavedSelectionActions.PREFIX + "placehere:").length())
+                            .split(",")) if (!text.isBlank()) named.add(Integer.parseInt(text.trim()));
+                    var everything = s.saved.withDescendants(named);
+                    var hidden = new ArrayList<Point>();
+                    for (var id : everything) {
+                        var kept = s.saved.byId(id);
+                        if (kept != null) hidden.addAll(kept.dormant().points());
+                    }
+                    if (hidden.isEmpty())
+                        throw new IllegalArgumentException("Nothing is hidden: every block of "
+                                + (everything.size() == 1 ? "that BuildObject" : "those BuildObjects")
+                                + " is already in the world");
+                    ChunkLease.planning(ChunkLease.area()
+                            .points(hidden, 0, 0)
+                            .lease(player.level())); // the blocks may be far from every player
+                    var plan = EditPlanner.forSelection(player.level(), s, o);
+                    var placed = ObjectMoves.placeHere(player.level(), s, plan, everything);
+                    var placeEdit = plan.finish("Place BuildObject");
+                    if (placed == null || placeEdit.changes().isEmpty()) {
+                        if (placed != null) placed.applied().undo(s);
+                        throw new IllegalArgumentException(
+                                "Nothing could be placed: the world still holds every cell that the hidden blocks need");
+                    }
+                    try {
+                        start(
+                                player,
+                                s,
+                                placeEdit.withSelection(placed.applied().change()));
+                    } catch (RuntimeException ex) {
+                        placed.applied().undo(s);
+                        throw ex;
+                    }
+                    if (!s.saved.viewed().isEmpty())
+                        s.saved.viewSet(
+                                s.saved.viewed().stream()
+                                        .map(SavedSelections.Entry::id)
+                                        .toList(),
+                                s.selection); // what is shown now includes the blocks that came back
+                    return;
+                }
+                if (r.action()
                         .equals(SavedSelectionActions.PREFIX
                                 + "duplicate")) { // copies the blocks shown and remembers the BuildObjects they
                     // belong to, for the paste that follows
                     HierarchyPermissions.require(player, "create");
-                    requireSelection(s);
                     if (s.saved.viewed().isEmpty())
                         throw new IllegalArgumentException("Show a BuildObject to duplicate it");
-                    var nodes = s.saved.captureCopy(s.selection.min());
-                    copy(player, s, o, false);
+                    var nodes = s.saved.captureCopy(
+                            copyOrigin(s, true),
+                            true); // with what it keeps hidden: a copy of a BuildObject is all of it, not only what can
+                    // be seen
+                    copy(player, s, o, false, true);
                     s.duplicateNodes = nodes;
                     s.duplicateEpoch = s.clipboardEpoch;
                     return;
@@ -619,13 +726,26 @@ public final class EditorServer {
                         ? s.saved.state()
                         : null; // what is done in the Hierarchy is in the history, so Undo and Redo reach it
                 String said = SavedSelectionActions.run(s, r.action());
+                Session.Edit hierarchyStep = null;
                 if (before != null) {
                     var after = s.saved.state();
                     if (!after.equals(before))
-                        s.remember(Session.Edit.selecting(
+                        hierarchyStep = Session.Edit.selecting(
                                 SavedSelectionActions.historyName(r.action()),
-                                Session.SelectionChange.hierarchy(before, after)));
+                                Session.SelectionChange.hierarchy(before, after));
                 }
+                if (SavedSelectionActions.changesPriority(r.action())) {
+                    // The order of the Hierarchy is the priority between BuildObjects: where a hidden block now
+                    // outranks the one standing in its cell, they change places. That is part of the
+                    // same step in the history as the move itself, so one Ctrl+Z puts back both the order and the
+                    // blocks.
+                    try {
+                        if (reorderObjects(player, s, o, hierarchyStep)) return;
+                    } catch (RuntimeException ex) {
+                        said = said + " · Not re-resolved: " + ex.getMessage();
+                    }
+                }
+                if (hierarchyStep != null) s.remember(hierarchyStep);
                 send(player, s, said, false);
                 return;
             }
@@ -932,8 +1052,15 @@ public final class EditorServer {
                             ? s.pendingChainBase
                             : confirming ? staged : null; // what was staged before the run of transforms began
                     if (base != null) for (var c : base.changes()) plan.changes.put(c.pos(), c);
-                    var result = ModelTransform.apply(plan, s, o, chain);
-                    var moved = result.moved();
+                    var hiddenBox = ObjectMoves.hiddenBox(
+                            s); // with nothing selected, a BuildObject that is all hidden is what moves
+                    var computed = ModelTransform.compute(
+                            plan,
+                            s,
+                            o,
+                            chain,
+                            hiddenBox == null ? null : hiddenBox[0],
+                            hiddenBox == null ? null : hiddenBox[1]);
                     // The selection follows its blocks; if the edit is cancelled it goes back.
                     var priorBefore = s.pendingSelectionBefore;
                     var original = confirming && priorBefore != null
@@ -942,26 +1069,49 @@ public final class EditorServer {
                     if (confirming && priorBefore == null) s.pendingSelectionBefore = before;
                     // The BuildObjects' blocks follow their blocks: each is worked out again from where it began, so a
                     // run of transforms is never remapped twice over.
+                    // What they keep outside the world (dormant blocks, replaced blocks) begins where it did too.
                     var objectsNow = s.saved.snapshot();
+                    var heldNow = s.saved.heldSnapshot();
                     var priorObjects = s.pendingObjectsBefore;
+                    var priorHeld = s.pendingHeldBefore;
                     var objectsStart = confirming && priorObjects != null ? priorObjects : objectsNow;
+                    var heldStart = confirming && priorHeld != null ? priorHeld : heldNow;
                     if (confirming && priorObjects == null) s.pendingObjectsBefore = objectsNow;
-                    var objectsAfter = new LinkedHashMap<Integer, List<Point>>();
-                    for (var e : objectsStart.entrySet())
-                        objectsAfter.put(
-                                e.getKey(),
-                                ObjectRemap.apply(
-                                        e.getValue(), result.chain().source().keySet(), result.origin()));
-                    s.selection.combine(moved, Selection.Mode.REPLACE);
-                    s.saved.setPoints(objectsAfter);
+                    if (confirming && priorHeld == null) s.pendingHeldBefore = heldNow;
                     try {
+                        ModelTransform.Result result;
+                        Map<Integer, List<Point>> objectsAfter;
+                        if (ObjectMoves.touches(objectsStart, computed.source().keySet())
+                                || !ObjectMoves.carried(s, objectsStart, heldStart)
+                                        .isEmpty()) {
+                            // The selection holds BuildObject blocks: they move with the world winning, so what they
+                            // could not place is kept, not lost (see ObjectMove).
+                            var done =
+                                    ObjectMoves.transform(player.level(), s, plan, computed, objectsStart, heldStart);
+                            result = ModelTransform.finish(computed, done.moved());
+                            objectsAfter = done.applied().ownAfter();
+                        } else {
+                            result = ModelTransform.write(plan, computed);
+                            objectsAfter = new LinkedHashMap<>();
+                            for (var e : objectsStart.entrySet())
+                                objectsAfter.put(
+                                        e.getKey(),
+                                        ObjectRemap.apply(
+                                                e.getValue(),
+                                                result.chain().source().keySet(),
+                                                result.origin()));
+                            s.saved.setPoints(objectsAfter);
+                        }
+                        var moved = result.moved();
+                        s.selection.combine(moved, Selection.Mode.REPLACE);
                         var edit = plan.finish("Transform selection")
                                 .withSelection(new Session.SelectionChange(
                                                 original,
                                                 new ArrayList<>(moved),
                                                 pivotText(o, 0, 0, 0),
                                                 pivotText(o, o.offsetX, o.offsetY, o.offsetZ))
-                                        .withObjects(objectsStart, objectsAfter));
+                                        .withObjects(objectsStart, objectsAfter)
+                                        .withHeld(heldStart, s.saved.heldSnapshot()));
                         if (base != null)
                             edit = new Session.Edit(
                                     edit.name(),
@@ -978,12 +1128,19 @@ public final class EditorServer {
                             s.pendingChain = result.chain();
                             s.pendingChainBase = base;
                             s.pendingChainEdit = s.pendingEdit;
-                        }
+                        } else if (confirming) {
+                            s.pendingObjectsBefore = null;
+                            s.pendingHeldBefore = null;
+                            s.pendingSelectionBefore = null;
+                        } // nothing was staged (only what the BuildObjects keep changed, and that is in the history):
+                        // there is nothing to cancel
                     } catch (RuntimeException e) {
                         s.selection.restore(before);
                         s.saved.setPoints(objectsNow);
+                        s.saved.restoreHeld(heldNow);
                         s.pendingSelectionBefore = priorBefore;
                         s.pendingObjectsBefore = priorObjects;
+                        s.pendingHeldBefore = priorHeld;
                         if (confirming) s.pendingEdit = staged;
                         throw e;
                     }
@@ -1234,8 +1391,49 @@ public final class EditorServer {
                     // edit is planned and applied.
                     var reach = ChunkLease.area().points(s.selection.points(), 0, 0);
                     for (int i = 1; i <= count; i++) reach.points(s.selection.points(), o.offsetX * i, o.offsetZ * i);
+                    if (r.action().equals("move"))
+                        reach.points(
+                                ObjectMoves.hidden(s),
+                                o.offsetX,
+                                o.offsetZ); // the dormant blocks of a BuildObject go with it, so where they land has to
+                    // be loaded too
                     ChunkLease.planning(reach.lease(player.level()));
                     var plan = EditPlanner.forSelection(player.level(), s, o);
+                    if (r.action().equals("move") && ObjectMoves.involves(s)) {
+                        // A BuildObject moves with the world winning: its blocks do not overwrite solid blocks, and
+                        // what it could not place is kept, not lost (see ObjectMove).
+                        int dx = o.offsetX, dy = o.offsetY, dz = o.offsetZ;
+                        var chosen = new LinkedHashSet<Point>(s.selection.points());
+                        for (Point p : chosen) plan.validate(p);
+                        var applied = ObjectMoves.apply(
+                                player.level(),
+                                s,
+                                plan,
+                                (ordered, world, solid) -> ObjectMove.shift(
+                                        ordered, chosen, c -> c.add(dx, dy, dz), world, solid, o.pasteAir));
+                        var objectEdit = plan.finish("Move selection");
+                        if (applied == null || objectEdit.changes().isEmpty()) {
+                            if (applied != null) applied.undo(s);
+                            start(player, s, objectEdit);
+                            return;
+                        }
+                        boolean stagingObjects = s.confirmEdits && !s.bypassConfirm;
+                        var priorOwn = s.pendingObjectsBefore;
+                        var priorHeld = s.pendingHeldBefore;
+                        if (stagingObjects && priorOwn == null) {
+                            s.pendingObjectsBefore = applied.ownBefore();
+                            s.pendingHeldBefore = applied.heldBefore();
+                        }
+                        try {
+                            start(player, s, objectEdit.withSelection(applied.change()));
+                        } catch (RuntimeException ex) {
+                            applied.undo(s);
+                            s.pendingObjectsBefore = priorOwn;
+                            s.pendingHeldBefore = priorHeld;
+                            throw ex;
+                        }
+                        return;
+                    }
                     var source = new LinkedHashMap<Point, BlockSnapshot>();
                     for (Point p : s.selection.points()) {
                         plan.validate(p);
@@ -1347,12 +1545,18 @@ public final class EditorServer {
                             ? s.clipboardOrigin
                             : r.action().equals("paste") ? target.add(normal.x(), normal.y(), normal.z()) : target;
                     var placed = new LinkedHashSet<Point>();
+                    // A duplicate or a paste from the Hierarchy makes BuildObjects, which do not overwrite solid
+                    // blocks: they are placed after they exist (see ObjectMoves#settlePaste).
+                    boolean asObject =
+                            r.action().equals("paste_select") && o.pasteAsObject != null && !o.pasteAsObject.isBlank();
+                    var placedBlocks = new LinkedHashMap<Point, BlockSnapshot>();
                     for (var entry : s.clipboard.entrySet()) {
                         var relative = entry.getKey();
                         var value = entry.getValue();
                         if (!o.pasteAir && value.state().isAir()) continue;
                         Point at = origin.add(relative.x(), relative.y(), relative.z());
-                        plan.putClipboard(at, value);
+                        if (asObject) placedBlocks.put(at, value);
+                        else plan.putClipboard(at, value);
                         placed.add(at);
                     }
                     if (r.action().equals("paste_select")
@@ -1386,6 +1590,8 @@ public final class EditorServer {
                                         .isBlank()) { // a duplicate or a paste from the Hierarchy: the pasted blocks
                             // are also a new BuildObject, in the history with them
                             var hierarchyBefore = s.saved.state();
+                            var ownBeforePaste = s.saved.snapshot();
+                            var heldBeforePaste = s.saved.heldSnapshot();
                             var nodes = s.duplicateNodes;
                             var kept = new HashSet<Point>();
                             if (nodes != null) for (var n : nodes) kept.addAll(n.relative());
@@ -1404,6 +1610,30 @@ public final class EditorServer {
                                         .createFrom(o.pasteAsObject, placed, o.pasteAsObjectAfter)
                                         .id()); // the clipboard is not what was duplicated any more (turned, or
                             // something else was copied): one BuildObject
+                            ObjectMoves.Transformed settled;
+                            try {
+                                settled = ObjectMoves.settlePaste(
+                                        player.level(), s, plan, placedBlocks, ownBeforePaste, heldBeforePaste);
+                            } catch (RuntimeException ex) {
+                                s.saved.restore(hierarchyBefore, s.selection);
+                                s.saved.setPoints(ownBeforePaste);
+                                s.saved.restoreHeld(heldBeforePaste);
+                                throw ex;
+                            } // the new BuildObjects go again
+                            // The selection is the cells where a block was placed, not those where the world won, or
+                            // the next move would carry the world's blocks.
+                            s.selection.combine(settled.moved(), Selection.Mode.REPLACE);
+                            s.historySelection = new ArrayList<>(settled.moved());
+                            selected = new Session.SelectionChange(
+                                            before,
+                                            new ArrayList<>(settled.moved()),
+                                            null,
+                                            null,
+                                            handlesBefore,
+                                            Map.of("corners", "none"))
+                                    .withObjects(
+                                            ownBeforePaste, settled.applied().ownAfter())
+                                    .withHeld(heldBeforePaste, s.saved.heldSnapshot());
                             s.duplicateNodes = null;
                             s.saved.viewSet(shown, s.selection);
                             s.historyRevision = s.selection
@@ -1555,10 +1785,29 @@ public final class EditorServer {
     private static void requireSelection(Session s) {
         if (s.selection.size() == 0) throw new IllegalArgumentException("Create a selection first");
     }
+    /**
+     * The corner a copy is taken from: that of the selection, or, when a BuildObject that holds nothing in the world is being copied with what it keeps hidden, that of its
+     * hidden blocks. Throws when there is nothing to copy.
+     */
+    private static Point copyOrigin(Session s, boolean withHidden) {
+        if (s.selection.size() > 0) return s.selection.min();
+        var hidden = withHidden ? ObjectMoves.shownHidden(s) : Map.<Point, ObjectMove.Block>of();
+        if (hidden.isEmpty()) throw new IllegalArgumentException("Create a selection first");
+        int x = Integer.MAX_VALUE, y = x, z = x;
+        for (var p : hidden.keySet()) {
+            x = Math.min(x, p.x());
+            y = Math.min(y, p.y());
+            z = Math.min(z, p.z());
+        }
+        return new Point(x, y, z);
+    }
 
     private static void copy(ServerPlayer player, Session s, Options o, boolean cut) {
-        requireSelection(s);
-        Point min = s.selection.min();
+        copy(player, s, o, cut, false);
+    }
+    /** With {@code withHidden}, the blocks that the BuildObjects shown keep out of the world are copied with the selection, as the blocks they are. */
+    private static void copy(ServerPlayer player, Session s, Options o, boolean cut, boolean withHidden) {
+        Point min = copyOrigin(s, withHidden);
         var next = new LinkedHashMap<Point, BlockSnapshot>();
         int bytes = 0;
         for (Point p : s.selection.points()) {
@@ -1572,6 +1821,23 @@ public final class EditorServer {
                 throw new IllegalArgumentException(
                         "Clipboard exceeds " + Selection.CLIPBOARD_BYTES / 1024 / 1024 + " MiB; select a smaller area");
             next.put(p.subtract(min), snapshot);
+        }
+        if (withHidden) {
+            var plan = EditPlanner.forSelection(player.level(), s, o);
+            for (var e : ObjectMoves.shownHidden(s).entrySet()) {
+                var key = e.getKey().subtract(min);
+                if (next.containsKey(key))
+                    continue; // a block of the selection is in that cell: the one in the world is kept
+                var snapshot = ObjectMoves.snapshot(plan, e.getValue());
+                bytes += 128
+                        + (snapshot.data() == null
+                                ? 0
+                                : snapshot.data().toString().length() * 2);
+                if (bytes > Selection.CLIPBOARD_BYTES)
+                    throw new IllegalArgumentException("Clipboard exceeds " + Selection.CLIPBOARD_BYTES / 1024 / 1024
+                            + " MiB; select a smaller area");
+                next.put(key, snapshot);
+            }
         }
         var entities = o.copyEntities
                 ? ClipboardEntities.capture(player, s)
@@ -2250,6 +2516,41 @@ public final class EditorServer {
         return new Session.Edit(merged.name(), out, List.of(), merged.flags());
     }
     /** Every edit comes in here: it is checked by the {@link EditGate}, then built, or held as a ghost until the player confirms it. */
+    /** Applies what a new order of the Hierarchy means for the BuildObjects that overlap, in one undo step, without waiting for confirmation. Returns whether it applied anything. */
+    private static boolean reorderObjects(ServerPlayer player, Session s, Options o, Session.Edit hierarchyStep) {
+        var cells = ObjectMoves.outranked(s);
+        if (cells.isEmpty()) return false;
+        ChunkLease.planning(
+                ChunkLease.area().points(cells, 0, 0).lease(player.level())); // the cells may be far from every player
+        var plan = EditPlanner.forSelection(player.level(), s, o);
+        var done = ObjectMoves.reorder(player.level(), s, plan);
+        var edit = plan.finish(hierarchyStep != null ? hierarchyStep.name() : "Reorder BuildObjects");
+        if (done == null || edit.changes().isEmpty()) {
+            if (done != null) done.applied().undo(s);
+            return false;
+        }
+        var change = done.applied().change();
+        if (hierarchyStep != null)
+            change = change.withHierarchy(
+                    hierarchyStep.selection().hierarchyBefore(),
+                    hierarchyStep.selection().hierarchyAfter()); // the move and what it did to the blocks are one step
+        var wasBypassing = s.bypassConfirm;
+        s.bypassConfirm = true; // a change of order is not an edit to confirm
+        try {
+            start(player, s, edit.withSelection(change));
+        } catch (RuntimeException ex) {
+            done.applied().undo(s);
+            throw ex;
+        } finally {
+            s.bypassConfirm = wasBypassing;
+        }
+        if (!s.saved.viewed().isEmpty())
+            s.saved.viewSet(
+                    s.saved.viewed().stream().map(SavedSelections.Entry::id).toList(),
+                    s.selection); // what is shown now holds the cells that changed hands
+        return true;
+    }
+
     static void start(ServerPlayer player, Session s, Session.Edit edit) {
         if (s.fromBuilder) edit = edit.withBuilder(true);
         if (s.shapeAtRequest != null
@@ -2264,11 +2565,13 @@ public final class EditorServer {
                 && edit.entities().isEmpty()
                 && edit.annotations().isEmpty()
                 && edit.selection() != null
-                && edit.selection().hasHierarchy()) {
+                && (edit.selection().hasHierarchy()
+                        || edit.selection().hasObjects()
+                        || edit.selection().hasHeld())) {
             s.remember(edit);
             send(player, s, edit.name(), false);
-            return; // nothing to build (a copy put back in place, or blocks that were air already), but what it did to
-            // the BuildObjects is in the history
+            return; // nothing to build (a copy put back in place, blocks that were air already, or hidden blocks that
+            // moved but are still hidden), but what it did to the BuildObjects is in the history
         }
         if (edit.changes().isEmpty()
                 && edit.biomes().isEmpty()
@@ -2318,27 +2621,74 @@ public final class EditorServer {
             send(player, s, "Nothing to confirm", false);
             return;
         }
+        var ownBefore = ownChangedBy(edit);
+        var heldBefore = heldChangedBy(edit);
+        var selectionBefore = s.pendingSelectionBefore;
         s.pendingEdit = null;
         s.pendingSelectionBefore = null;
-        s.pendingDirty = true;
+        s.pendingObjectsBefore = null;
+        s.pendingHeldBefore = null;
+        s.pendingDirty = true; // nothing is left of it for the next edit to start from
         s.bypassConfirm = true; // confirming is the confirmation, so the edit is built and not held again
         try {
             start(player, s, edit);
+        } catch (RuntimeException ex) {
+            giveBack(s, selectionBefore, ownBefore, heldBefore);
+            throw ex;
         } finally {
             s.bypassConfirm = false;
         }
     }
-    /** Drops the waiting preview, as the Escape key does. */
+    /** Drops the waiting preview, as the Escape key does: the selection and the BuildObjects go back to what they were, as the world is. */
     static void cancelPreview(ServerPlayer player) {
         var s = playerSession(player);
         if (s.pendingEdit == null) {
             send(player, s, "Nothing to cancel", false);
             return;
         }
+        abandonPending(s, true);
+        send(player, s, "Edit cancelled", false);
+    }
+    /**
+     * Gives back what a waiting edit had already done: its preview moves the BuildObjects (and the selection) at once, but the world only when it is applied, so an edit that is
+     * dropped without being applied must not leave them moved. For every way a waiting edit can end without being built: Escape, the editor's reset, the player leaving.
+     * With {@code selection} the selection goes back too.
+     */
+    private static void abandonPending(Session s, boolean selection) {
+        if (s.pendingEdit != null)
+            giveBack(
+                    s,
+                    selection ? s.pendingSelectionBefore : null,
+                    ownChangedBy(s.pendingEdit),
+                    heldChangedBy(s.pendingEdit));
         s.pendingEdit = null;
         s.pendingSelectionBefore = null;
+        s.pendingObjectsBefore = null;
+        s.pendingHeldBefore = null;
+        s.pendingChain = null;
+        s.pendingChainBase = s.pendingChainEdit = null;
         s.pendingDirty = true;
-        send(player, s, "Edit cancelled", false);
+    }
+    /**
+     * The BuildObjects an edit changed, as they were before it, and only those. A waiting edit gives back no more than that: the BuildObjects are shared by everyone in the
+     * world, and a snapshot of all of them would undo what someone else did to the others in the meantime. Null for none.
+     */
+    private static Map<Integer, List<Point>> ownChangedBy(Session.Edit edit) {
+        var change = edit == null ? null : edit.selection();
+        return change == null || !change.hasObjects() ? null : change.objectsBefore();
+    }
+    /** What the BuildObjects an edit changed kept hidden before it; see {@link #ownChangedBy}. */
+    private static Map<Integer, SavedSelections.Held> heldChangedBy(Session.Edit edit) {
+        var change = edit == null ? null : edit.selection();
+        return change == null || !change.hasHeld() ? null : change.heldBefore();
+    }
+    /** Puts back the selection and the BuildObjects as they were; any of them may be null for none. */
+    private static void giveBack(
+            Session s, List<Point> selection, Map<Integer, List<Point>> own, Map<Integer, SavedSelections.Held> held) {
+        if (selection != null) s.selection.restore(selection);
+        if (own != null) s.saved.setPoints(own);
+        if (held != null) s.saved.restoreHeld(held);
+        BuildObjectStore.flushSoon();
     }
 
     private static void stage(ServerPlayer player, Session s, Session.Edit edit) {
@@ -2442,6 +2792,11 @@ public final class EditorServer {
                     backwards
                             ? change.objectsBefore()
                             : change.objectsAfter()); // the BuildObjects go back with their blocks
+        if (change.hasHeld())
+            s.saved.restoreHeld(
+                    backwards
+                            ? change.heldBefore()
+                            : change.heldAfter()); // and so do the blocks they keep outside the world
         String pivot = backwards ? change.pivotBefore() : change.pivotAfter();
         if (pivot != null) s.pivotUpdate = pivot;
         var values = backwards ? change.restoreBefore() : change.restoreAfter();

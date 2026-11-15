@@ -1,0 +1,108 @@
+# BuildObjects: world wins, blocks preserved
+
+Drafted 2026-11-13, replacing the earlier "lifted objects" plan. Nothing here is built except the core classes listed under Status. Builds on [BUILD-OBJECTS-PLAN.md](BUILD-OBJECTS-PLAN.md) (tagged blocks, option A).
+
+## What was rejected, and why
+
+**Lifted objects** (blocks held outside the world, drawn and collided with by a client mixin) were designed and dropped. They need collision and rendering mixins on both Minecraft versions, are invisible to vanilla clients and Paper, and ignore mobs and items. The same goals are reached more cheaply by placing real blocks.
+
+## Goal
+
+A BuildObject is placed into the world as real blocks, immediately when it is released or when the player confirms with Enter. Placing never destroys either side's blocks:
+
+- **The world always wins.** A solid world block (anything that is not air, a fluid or replaceable) is never overwritten by an object.
+- **The object's blocks are preserved.** A block that loses is *dormant*: the object keeps its state but does not write it to the world.
+
+## Rule: one occupant per cell
+
+For each cell of an object being placed:
+
+1. A solid world block wins. The object's block is dormant.
+2. If another object owns the cell, hierarchy order decides (the later one wins; a child beats its parent). The loser's block is dormant.
+3. Otherwise the block is written to the world.
+
+Dormant blocks are never deleted. Moving the object resolves its cells again at the new place, so cells that were blocked come back where the world is free. Overlapping objects are re-resolved together, so when B moves off A, A's cells return.
+
+Resolution happens only when an object is placed or moved. If a solid world block is removed later, the dormant block beneath it does **not** appear until the object is placed again. That is predictable and needs no live hooks.
+
+The ghost preview shows dormant cells (faint outline or x-ray) before the player confirms.
+
+## Priority is the order of the Hierarchy
+
+Between BuildObjects, the one **lower in the Hierarchy wins**:
+- a child is above its parent;
+- of the BuildObjects on one level, the one below is above;
+- of the groups, the one below is above, and a group decides before the BuildObjects in it.
+
+All of it is one list: each group in turn, each top-level BuildObject followed by everything under it (`SavedSelections.entries`), and the last one that wants a cell gets it. A consequence worth knowing: the BuildObject below a parent is above that parent's children too, because it comes later in the list. `HierarchyPriorityTest` fixes the rule. Priority is resolved when a BuildObject is placed, moved or placed here, and when the Hierarchy is reordered: after a move, group, ungroup or group move, a hidden block that now outranks the BuildObject standing in its cell takes the cell (the other keeps its block as dormant), applied without waiting for confirmation (`ObjectMove.reorder`) and recorded in the same history step as the drag, so one Ctrl+Z puts back both the order and the blocks (`BuildObjectOrderUndoGameTest`). A hidden block over a free cell is not touched by this: that is Place here.
+
+## Storage
+
+- **Where:** the same per-dimension file as the objects, `craftium/buildobjects/<dimension>.nbt`, on the server only. The file format is bumped when the dormant data is added; older files load with none.
+- **Written cells:** no copy of their state is kept. The world already holds it.
+- **Dormant cells:** a packed `long[]` of positions plus a `short[]` of indexes into a per-object palette of block-state strings, about 10 bytes per cell.
+- **Replaced blocks** (decided 2026-11-13: moving an object gives them back): the same structure, only for world blocks that were not air.
+- **Clients** get dormant positions for the x-ray, not states.
+- **Safeguards:** up to `Selection.LIMIT` dormant and as many replaced cells per object, and 8,388,608 held cells per dimension (`Tree.HELD_LIMIT`, about 80 MB at most). Held server-side only (not copied into each player's session). Undo entries that store dormant changes in the same packed form are still to do.
+
+**Crash safety.** A move or transform changes the BuildObjects when it is staged (the preview), but the world only when it is applied, and a hidden block exists nowhere but in the saved record. So while an edit is waiting for Enter or being applied, the record is written as it was *before* the edit (`BuildObjectStore.InFlight`, filled from the pending edit and the running job), which is what the world still is; it is written again at the next tick once the edit is applied or cancelled, and at a clean stop it is written before an interrupted job ends. A waiting edit that is dropped without being applied gives the BuildObjects and the selection back (`EditorServer.abandonPending`): Escape in the editor, Escape in the game, the editor reset, the player leaving, and a confirmation that is refused; confirming in the game clears the record the next edit would otherwise start from. `BuildObjectCrashGameTest` (scope `buildobjectcrash`) checks each of them in a real client, in memory and on disk. A crash between a confirmation and the next write can leave stale cells on a BuildObject whose blocks have moved (a copy of the hidden blocks at the old place), never a BuildObject with its hidden blocks gone.
+
+Estimates, not measurements. A typical partly overlapping object has thousands of dormant cells (tens of KB). The worst case, an object of `Selection.LIMIT` (2,097,152) cells buried in terrain, is about 20 MB. Today's `List<Point>` already costs roughly 36 bytes a cell, so a packed `long[]` for an object's own cells would be a separate saving.
+
+## Phases
+
+Each phase is its own PR, with one commit per logical change, and nothing is pushed until asked.
+
+1. **Raise the object limit** from 64 to 1,024 per dimension (see below). Independent of the rest.
+2. **Core.** `ObjectMove` (the rules) and the packed dormant storage (`PackedCells`): done.
+3. **Server.** Resolution on place and move, re-resolving overlapping objects, dormant data in the store and in history entries, caps.
+4. **Preview.** Dormant cells in the ghost preview; the Enter flow and release-to-place for BuildObjects.
+5. **Tool tie-ins and docs.**
+
+## Limit increase (phase 1)
+
+`SavedSelections.MAX` goes from 64 to 1,024 per dimension. It is used by the create, duplicate, paste and ungroup paths in `SavedSelections`, the load check in `BuildObjectStore`, the check in `EditorServer`, and the stored-history check in `HistoryStore`. `HierarchyView.MAX` (remembered fold and visibility choices) goes from 2,000 to 4,000 so it stays at least double the object limit.
+
+Known follow-ups: the whole tree is re-sent to each editor when it changes (about 60 KB at 1,024 rows, to be checked in a gametest); the Hierarchy window has not been checked for scrolling at hundreds of rows; and a per-dimension total-cell budget is the real memory guard and is not built yet. An older build opening a file with more than 64 objects renames it to `.bad` and starts with none.
+
+## Status
+
+Rebased on main (with the Spotless formatting) on 2026-11-15, each commit formatted. 793 unit tests pass on 26.2; both versions, their game-test sources and Paper 26.2 compile. Four client game tests pass in a real client: `buildobjectcrash` (what is saved while an edit waits, every way a waiting edit is dropped, and another player's change surviving a cancel), `buildobjectorder` (undoing a reorder), `buildobjectduplicate` (duplicating a half-buried and a buried BuildObject).
+
+Done:
+- the BuildObject limit of 1,024;
+- `PackedCells` (packed store, with block entity data), dormant and replaced cells on each BuildObject with caps, saved with the world;
+- `ObjectMove`: the move and the placement with the world winning (dormant, replaced, priority, resampling, block entity data, waterlogging, carried objects, reorder);
+- undo and redo and the saved history carry the hidden blocks (`SelectionChange`);
+- wired into the editor: Edit > Move, the transform path (the Move, Rotate and Scale tools and the gizmo) with the Enter preview and cancel, Duplicate and paste, Place here, and reordering the Hierarchy (one history step with the drag);
+- fully hidden BuildObjects: x-ray (depth-tested, on hover and when selected), an amber marker and a count on the row, the gizmo works on the box of the hidden blocks, drag previews of the hidden part as an outline and as blocks;
+- priority between BuildObjects is the order of the Hierarchy (lower wins), fixed by `HierarchyPriorityTest`;
+- crash safety and what happens to a waiting edit that is dropped (below); a waiting edit gives back only the BuildObjects it changed, so on a shared world it never undoes what someone else did to the others;
+- Duplicate copies the hidden blocks too (a buried BuildObject can be duplicated); Copy, Cut, Export and Save as blueprint say when hidden blocks are not part of them;
+- documentation: `FEATURES.md`, the changelog (with the note that an older Craftium cannot read a world file that holds hidden blocks).
+
+How a fully hidden BuildObject is moved: the status carries, for each Hierarchy row, a count of hidden blocks, the blocks themselves (up to 262,144, for the x-ray) and the box around them, all additive; with the blocks' states (up to 16,384) only when a drag asks for them. With nothing selected, the client takes the gizmo box from the rows that are shown and hold nothing in the world, and the server's transform works from that box and treats those BuildObjects as carried: their hidden blocks go through the same steps as a selection. The live selection stays empty, so no other tool can reach the terrain under the hidden blocks.
+
+Speed (the pure move logic on a cold JVM, so only a guide; the world reads, the network and drawing are not in it): with 1,024 BuildObjects of 2,000 blocks each (2,000,000 blocks), moving one takes about 0.5 s; moving one of 200,000 blocks with 10,000 hidden about 0.4 s; a reorder in which each BuildObject hides 200 blocks under the one before (about 205,000 cells change hands) about 1 s. That is a pause when a drag is let go, not a cost per frame. A cell-to-owner index kept with the tree would remove most of it; not done.
+
+Not built:
+- **live reveal** (hidden blocks appearing when the block hiding them disappears): out of scope (decided 2026-11-15). Craftium's rules are for building in the editor, not for survival play, so a hidden block stays hidden until the BuildObject is moved, reordered or placed again (Place here). A small version that reveals only after an editor edit is possible if it turns out to be missed;
+- the Edit > Move offset action for a fully hidden object (use the gizmo);
+- lock, search or linked copies (prefabs) for BuildObjects.
+
+Not checked: speed in the game itself, the Hierarchy at hundreds of rows, anything on a real Paper server (it compiles on 26.2; the plugin flushes on stop and handles a player leaving; the Paper 1.21.10 module does not build offline here), and BuildObjects on a dedicated server (the `dedicated` game-test scope passes on this branch, 2026-11-15, but it does not exercise BuildObjects; it needs the Minecraft EULA accepted for the run, and it had been failing on main until `/craftium gamerule` stopped looping in the client's command handler).
+
+Known, not ours: the existing `savedselections` client game test fails on main since "select a new BuildObject in the Hierarchy when it is created" (the new one is shown at once; the test expects it not to be), and the `gizmos`, `overlay`, `panel`, `interaction` and `golden` scopes fail on main the same way as here (checked: identical output).
+
+### What wiring it in involves (found while reading the edit path)
+- The Move, nudge and Transform actions work on selected *world* cells and the objects follow through `ObjectRemap`. A dormant block is not in the world, so those tools cannot carry it on their own.
+- **Decision (2026-11-13): dormant blocks are lifted while a move or transform runs.** `ModelTransform.apply` builds a map of cell to block from the selected cells and samples it. For an object that moves whole (all its world blocks selected), its dormant blocks are sampled the same way, per object and with the same box and steps, so a shift, a turn, a scale or a free-angle rotation treats them like any other block. While the transform is previewed they show as ghost blocks. When it is placed (release, or Enter), each landed block goes through the world-wins rule again: written where the world is free, dormant again where it is not. Nothing is refused.
+- `ObjectMove.move` takes where each landed cell came from (and the same for each moving object's dormant blocks), so it covers shifts, turns, mirrors and resampling. `ObjectMove.shift` is the convenience for one-to-one maps.
+- `Session.SelectionChange` carries only each object's own cells for undo and redo. It must also carry the dormant and replaced stores (before and after), merged correctly in `then`, `andObjects` and `withObjects`, applied in `handBack`, and saved by `HistoryStore`.
+- The staged flow (preview, then Enter) already keeps `pendingObjectsBefore`; the held stores need the same.
+- The server needs a view of the world as block state text plus block entity data, and a `solid` test (not air, not a fluid, not replaceable) built from the live `BlockState`.
+- **Place here** (Hierarchy action, decided 2026-11-13): re-resolves an object where it stands, so dormant blocks whose cell is now free are written. It is the only way to bring back an object whose blocks are all dormant (it has no world cells to select), and it picks up a changed hierarchy order or a removed blocker.
+
+## Open questions
+
+1. Non-90-degree rotate and scale resample and are lossy, as in the BuildObjects plan; dormant cells are resampled with the rest.

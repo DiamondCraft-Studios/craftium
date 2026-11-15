@@ -176,6 +176,28 @@ public final class ClientState {
                 if (saved.color() != 0) savedColors.put(saved.id(), saved.color());
                 else savedColors.remove(saved.id());
             }
+            if (saved.hidden() == 0 || saved.hiddenData() != null)
+                hiddenBlocks.remove(
+                        saved.id()); // the cells changed, so the blocks held for a drag are not the right ones any more
+            if (saved.hiddenGhost() != null) {
+                if (saved.hiddenGhost().isEmpty()) hiddenBlocks.remove(saved.id());
+                else hiddenBlocks.put(saved.id(), GhostBlocks.parse(saved.hiddenGhost()));
+                ghostFor = -1;
+            }
+            if (saved.hidden() == 0) {
+                savedXray.remove(saved.id());
+                savedXrayPoints.remove(saved.id());
+            } else if (saved.hiddenData() != null) { // null: unchanged, and the x-ray made for it is still right
+                if (saved.hiddenData().isEmpty()) {
+                    savedXray.remove(saved.id());
+                    savedXrayPoints.remove(saved.id());
+                } // too many to draw, or left out because the status was too big
+                else {
+                    var cells = SelectionCodec.decode(saved.hiddenData());
+                    savedXrayPoints.put(saved.id(), List.copyOf(cells));
+                    savedXray.put(saved.id(), OutlineShape.ofLater(cells));
+                }
+            }
             if (saved.data() == null) continue; // unchanged: the outline already made for it is still right
             if (saved.data().isEmpty())
                 savedShapes.remove(saved.id()); // left out because the status was too big: nothing is drawn for it
@@ -187,6 +209,11 @@ public final class ClientState {
         }
         savedShapes.keySet().retainAll(present);
         savedBlocks.keySet().retainAll(savedShapes.keySet());
+        savedXray.keySet().retainAll(present);
+        savedXrayPoints.keySet().retainAll(present);
+        hiddenBlocks.keySet().retainAll(present);
+        hiddenBoxFor = -1;
+        ghostFor = -1;
         // an older server sends no GUID, so there is nothing to keep an eye by: a BuildObject seen for the first time
         // starts closed
         for (var saved : savedSelections)
@@ -217,6 +244,141 @@ public final class ClientState {
     }
     /** The outline of each saved selection by id, drawn in the selection style. A selection with none is drawn as a box. */
     private static final Map<Integer, OutlineShape> savedShapes = new HashMap<>();
+    /** The blocks each BuildObject keeps out of the world, drawn as an x-ray so they can be seen inside what hides them. */
+    private static final Map<Integer, OutlineShape> savedXray = new HashMap<>();
+
+    private static final Map<Integer, List<dev.craftium.core.Point>> savedXrayPoints = new HashMap<>();
+    /** The hidden blocks of each BuildObject with their block states, held only while one is dragged, to draw them as the blocks they are. */
+    private static final Map<Integer, GhostBlocks> hiddenBlocks = new HashMap<>();
+
+    private static Map<dev.craftium.core.Point, net.minecraft.world.level.block.state.BlockState> hiddenStates;
+    /** Asks the server for the hidden blocks of what is selected, with their states: sent when a drag begins. */
+    static void requestHiddenBlocks() {
+        if (hiddenGhost() != null) CraftiumClient.send("saved_selection:hiddenghost", null, null);
+    }
+    /** Lets go of them when the drag is over. */
+    static void clearHiddenBlocks() {
+        hiddenBlocks.clear();
+        hiddenStates = null;
+    }
+    /** The hidden blocks of what is selected, each with its state, or null while they have not arrived or are too many to carry exactly. */
+    static Map<dev.craftium.core.Point, net.minecraft.world.level.block.state.BlockState> hiddenBlockStates() {
+        if (hiddenStates != null) return hiddenStates;
+        var out = new HashMap<dev.craftium.core.Point, net.minecraft.world.level.block.state.BlockState>();
+        for (var e : savedSelections) {
+            if (!savedSelected(e)) continue;
+            var held = hiddenBlocks.get(e.id());
+            if (held == null) continue;
+            var placed = held.placed();
+            if (placed == null) return null; // more than were sent: not exact
+            out.putAll(placed);
+        }
+        return out.isEmpty() ? null : (hiddenStates = out);
+    }
+    /** The hidden blocks that have arrived, to draw by an offset. */
+    static List<GhostBlocks> hiddenBlocksSelected() {
+        var out = new ArrayList<GhostBlocks>();
+        for (var e : savedSelections)
+            if (savedSelected(e)) {
+                var held = hiddenBlocks.get(e.id());
+                if (held != null) out.add(held);
+            }
+        return out;
+    }
+
+    static OutlineShape xrayShape(int id) {
+        return savedXray.get(id);
+    }
+
+    /**
+     * The hidden blocks of every BuildObject that is selected, as one client-side shape for the drag preview. It is never part of the selection, which holds only blocks
+     * that are in the world: it exists to be drawn, moved by the transform that is being dragged, so the outline of the whole BuildObject follows the drag.
+     */
+    record HiddenGhost(List<dev.craftium.core.Point> points, OutlineShape shape) {}
+
+    private static HiddenGhost ghost;
+    private static int ghostFor = -1;
+
+    static HiddenGhost hiddenGhost() {
+        if (ghostFor == hierarchyVersion) return ghost;
+        var all = new ArrayList<dev.craftium.core.Point>();
+        for (var e : savedSelections) {
+            var cells = savedXrayPoints.get(e.id());
+            if (cells != null && savedSelected(e)) all.addAll(cells);
+        }
+        ghostFor = hierarchyVersion;
+        return ghost = all.isEmpty() ? null : new HiddenGhost(List.copyOf(all), OutlineShape.ofLater(all));
+    }
+    /** Whether the pointer is on a BuildObject: on its row in the Hierarchy (with what is under it), or on one of its blocks in the world. Only its blocks that are in the world can be pointed at. */
+    static boolean savedHovered(Packets.SavedSelection saved) {
+        return hoverSaved != 0 && savedUnder(saved, hoverSaved) || hoverWorld == saved.id();
+    }
+    /** Whether a BuildObject is selected, or is under one that is: it is part of what the player is working on. */
+    static boolean savedSelected(Packets.SavedSelection saved) {
+        if (saved.active()) return true;
+        for (var other : savedSelections) if (other.active() && savedUnder(saved, other.id())) return true;
+        return false;
+    }
+    /** Whether the x-ray of a BuildObject shows: while it is selected (or something it is under is), or while its eye is open, as its outline does. */
+    static boolean xrayShown(Packets.SavedSelection saved) {
+        if (saved.active() || !savedHidden(saved.id())) return true;
+        for (var other : savedSelections) if (other.active() && savedUnder(saved, other.id())) return true;
+        return false;
+    }
+
+    /** The box around the hidden blocks of the BuildObjects shown that hold nothing in the world, and how many blocks: what the gizmo is about when nothing is selected. */
+    private record HiddenBox(Point min, Point max, int count) {}
+
+    private static HiddenBox hiddenBox;
+    private static int hiddenBoxFor = -1;
+
+    private static HiddenBox hiddenBox() {
+        if (status.selectionSize() > 0) return null;
+        if (hiddenBoxFor == hierarchyVersion) return hiddenBox;
+        Point lo = null, hi = null;
+        int count = 0;
+        for (var e : savedSelections) {
+            if (e.size() != 0 || e.hidden() <= 0 || e.hiddenMin() == null || e.hiddenMax() == null) continue;
+            boolean shown = e.active();
+            if (!shown)
+                for (var other : savedSelections)
+                    if (other.active() && savedUnder(e, other.id())) {
+                        shown = true;
+                        break;
+                    }
+            if (!shown) continue;
+            lo = lo == null
+                    ? e.hiddenMin()
+                    : new Point(
+                            Math.min(lo.x(), e.hiddenMin().x()),
+                            Math.min(lo.y(), e.hiddenMin().y()),
+                            Math.min(lo.z(), e.hiddenMin().z()));
+            hi = hi == null
+                    ? e.hiddenMax()
+                    : new Point(
+                            Math.max(hi.x(), e.hiddenMax().x()),
+                            Math.max(hi.y(), e.hiddenMax().y()),
+                            Math.max(hi.z(), e.hiddenMax().z()));
+            count += e.hidden();
+        }
+        hiddenBoxFor = hierarchyVersion;
+        return hiddenBox = lo == null ? null : new HiddenBox(lo, hi, count);
+    }
+    /** What the transform tools and the gizmo work on: the selection, or with none, the hidden blocks of a BuildObject that is not in the world at all. */
+    static int gizmoSize() {
+        var h = hiddenBox();
+        return status.selectionSize() > 0 || h == null ? status.selectionSize() : h.count();
+    }
+
+    static Point gizmoMin() {
+        var h = hiddenBox();
+        return status.selectionSize() > 0 || h == null ? status.min() : h.min();
+    }
+
+    static Point gizmoMax() {
+        var h = hiddenBox();
+        return status.selectionSize() > 0 || h == null ? status.max() : h.max();
+    }
 
     static OutlineShape savedShape(int id) {
         return savedShapes.get(id);
@@ -365,6 +527,12 @@ public final class ClientState {
         savedSelections = List.of();
         savedById = Map.of();
         hierarchyVersion++;
+        savedXray.clear();
+        savedXrayPoints.clear();
+        hiddenBlocks.clear();
+        hiddenStates = null;
+        hiddenBoxFor = -1;
+        ghostFor = -1;
         savedGroups = List.of();
         groupFolded.clear();
         savedColors.clear();

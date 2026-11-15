@@ -37,9 +37,37 @@ final class ModelTransform {
      * Blocks staged but not yet built count as the blocks that are there.
      */
     static Result apply(EditPlanner plan, Session session, Options o, Chain prior) {
+        return write(plan, compute(plan, session, o, prior));
+    }
+
+    /** A transform worked out but not yet queued: where every block of the selection lands, and which cell each came from. */
+    record Computed(
+            Map<Point, BlockSnapshot> source,
+            Point min,
+            Point max,
+            List<Step> steps,
+            LinkedHashMap<Point, BlockSnapshot> landed,
+            Map<Point, Point> origin) {
+        Chain chain() {
+            return new Chain(source, min, max, List.copyOf(steps));
+        }
+    }
+
+    /** Works the transform out without queueing anything (staged changes in {@code plan} count as the blocks that are there). */
+    static Computed compute(EditPlanner plan, Session session, Options o, Chain prior) {
+        return compute(plan, session, o, prior, null, null);
+    }
+
+    /**
+     * As above; with nothing selected, {@code hiddenMin} and {@code hiddenMax} are the box of BuildObject blocks that are not in the world, which the transform is about
+     * (the blocks that are in the world are none, so only what ObjectMoves carries along moves).
+     */
+    static Computed compute(
+            EditPlanner plan, Session session, Options o, Chain prior, Point hiddenMin, Point hiddenMax) {
         var selection = session.selection;
         plan.exact = true;
-        if (selection.size() == 0) throw new IllegalArgumentException("Create a selection first");
+        boolean hiddenOnly = selection.size() == 0 && hiddenMin != null;
+        if (selection.size() == 0 && !hiddenOnly) throw new IllegalArgumentException("Create a selection first");
         boolean identity = o.offsetX == 0
                 && o.offsetY == 0
                 && o.offsetZ == 0
@@ -56,8 +84,11 @@ final class ModelTransform {
         Map<Point, BlockSnapshot> source;
         Point min, max;
         var steps = new ArrayList<Step>();
-        Point now = selection.min(),
-                end = selection.max(); // the selection as it stands, which is where the pivot is taken from
+        Point now = hiddenOnly ? hiddenMin : selection.min(),
+                end =
+                        hiddenOnly
+                                ? hiddenMax
+                                : selection.max(); // the selection as it stands, which is where the pivot is taken from
         if (prior == null) {
             source = new LinkedHashMap<>();
             for (Point at : selection.points()) {
@@ -85,7 +116,8 @@ final class ModelTransform {
         steps.add(new Step(o, pivot, sx, sy, sz));
 
         var origin = new LinkedHashMap<Point, Point>();
-        var landed = place(source, min, max, steps, origin);
+        var landed =
+                source.isEmpty() ? new LinkedHashMap<Point, BlockSnapshot>() : place(source, min, max, steps, origin);
         // A quarter turn about a point that is not on the right half-block loses cells: their centres fall on the
         // edges between blocks. Try pivots half a block away, nearest first, and keep the first that loses none.
         if (landed.size() < source.size() && steps.stream().allMatch(ModelTransform::quarterTurn)) {
@@ -107,14 +139,42 @@ final class ModelTransform {
             }
         }
         if (landed.size() > Selection.LIMIT) throw new IllegalArgumentException("Selection exceeds limit");
+        return new Computed(source, min, max, steps, landed, origin);
+    }
 
-        for (Point at : source.keySet()) if (!landed.containsKey(at)) plan.put(at, Blocks.AIR.defaultBlockState());
-        for (var entry : landed.entrySet()) {
+    /** Queues a computed transform: the cells left behind are cleared, and every landed block is placed. */
+    static Result write(EditPlanner plan, Computed c) {
+        for (Point at : c.source().keySet())
+            if (!c.landed().containsKey(at)) plan.put(at, Blocks.AIR.defaultBlockState());
+        for (var entry : c.landed().entrySet()) {
             plan.validate(entry.getKey());
             plan.put(entry.getKey(), entry.getValue());
         }
-        return new Result(
-                new LinkedHashSet<>(landed.keySet()), new Chain(source, min, max, List.copyOf(steps)), origin);
+        return new Result(new LinkedHashSet<>(c.landed().keySet()), c.chain(), c.origin());
+    }
+
+    /** The result of a computed transform whose blocks something else queued: {@code moved} are the cells where a block actually landed. */
+    static Result finish(Computed c, Set<Point> moved) {
+        return new Result(new LinkedHashSet<>(moved), c.chain(), c.origin());
+    }
+
+    /**
+     * Where blocks that are not selected (the dormant blocks of a BuildObject that moves whole) land when they go through the same steps as the selection.
+     * Which cell a landed cell came from depends only on the steps, so these line up with the selection however far they lie from it.
+     */
+    static LinkedHashMap<Point, BlockSnapshot> landOutside(
+            Map<Point, BlockSnapshot> blocks, List<Step> steps, Map<Point, Point> origin) {
+        if (blocks.isEmpty()) return new LinkedHashMap<>();
+        int x0 = Integer.MAX_VALUE, y0 = x0, z0 = x0, x1 = Integer.MIN_VALUE, y1 = x1, z1 = x1;
+        for (var p : blocks.keySet()) {
+            x0 = Math.min(x0, p.x());
+            y0 = Math.min(y0, p.y());
+            z0 = Math.min(z0, p.z());
+            x1 = Math.max(x1, p.x());
+            y1 = Math.max(y1, p.y());
+            z1 = Math.max(z1, p.z());
+        }
+        return place(blocks, new Point(x0, y0, z0), new Point(x1, y1, z1), steps, origin);
     }
 
     /** Pivot shifts to try, smallest first. */

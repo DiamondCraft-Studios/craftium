@@ -131,7 +131,7 @@ final class TransformGizmo {
         var o = ClientState.options;
         if (o.tool.transform()) {
             if (o.tool == Tool.PIVOT) return new Target(Kind.PIVOT, pivotAnchor(screen), null);
-            return status.selectionSize() > 0 ? new Target(Kind.MODEL, pivot(), null) : null;
+            return ClientState.gizmoSize() > 0 ? new Target(Kind.MODEL, pivot(), null) : null;
         }
         if (o.gizmoTarget != Options.GizmoTarget.ENTITY
                 && (o.tool == Tool.BOX_SELECT || o.gizmoTarget == Options.GizmoTarget.SELECTION)
@@ -595,8 +595,7 @@ final class TransformGizmo {
      */
     private static Vec3 aboutPoint() {
         if (dragging.kind == Kind.MODEL && mode == Options.GizmoMode.SCALE) {
-            var s = ClientState.status;
-            Point min = s.min(), max = s.max();
+            Point min = ClientState.gizmoMin(), max = ClientState.gizmoMax();
             return altDown() || handle == 3
                     ? new Vec3((min.x() + max.x() + 1) / 2d, (min.y() + max.y() + 1) / 2d, (min.z() + max.z() + 1) / 2d)
                     : new Vec3(min.x(), min.y(), min.z());
@@ -692,30 +691,44 @@ final class TransformGizmo {
     private static final int LANDING_BLOCKS = 20_000;
 
     private static final long LANDING_CELLS = 400_000L;
-    private static List<Point> landingFrom;
-    private static Vec3 landingDelta, landingAngles, landingSize, landingAbout;
-    private static OutlineShape landing;
+    /** What a landing was worked out from, and the drag it was worked out for, so it is worked out again only when one of them changes. */
+    private static final class LandingCache {
+        List<Point> from;
+        Vec3 delta, angles, size, about;
+        OutlineShape shape;
+        Map<Point, Point> cells;
+    }
+
+    private static final LandingCache SELECTED_LANDING = new LandingCache(), HIDDEN_LANDING = new LandingCache();
     /**
      * The shape the selected blocks land in with a rotate or scale drag as it stands, with square edges like the blocks that
      * will be built, instead of the old outline turned into diagonal lines. Worked out again only when the drag changes. Null
      * when nothing is dragged, when the drag is a plain move (the moved outline is exact), or when the selection is too big.
      */
     static OutlineShape landing(List<Point> selected) {
+        return landing(selected, SELECTED_LANDING);
+    }
+    /** As {@link #landing}, for the hidden blocks of the BuildObjects that are selected, which go through the same transform. */
+    static OutlineShape landingHidden(List<Point> hidden) {
+        return landing(hidden, HIDDEN_LANDING);
+    }
+
+    private static OutlineShape landing(List<Point> selected, LandingCache cache) {
         if (dragging == null || dragging.kind != Kind.MODEL || selected.isEmpty() || selected.size() > LANDING_BLOCKS)
             return null;
         if (angles.equals(Vec3.ZERO) && size.equals(new Vec3(1, 1, 1))) return null;
         Vec3 about = aboutPoint();
-        if (landingFrom != selected
-                || !delta.equals(landingDelta)
-                || !angles.equals(landingAngles)
-                || !size.equals(landingSize)
-                || !about.equals(landingAbout)) {
-            landingFrom = selected;
-            landingDelta = delta;
-            landingAngles = angles;
-            landingSize = size;
-            landingAbout = about;
-            var cells = VoxelTransform.landed(
+        if (cache.from != selected
+                || !delta.equals(cache.delta)
+                || !angles.equals(cache.angles)
+                || !size.equals(cache.size)
+                || !about.equals(cache.about)) {
+            cache.from = selected;
+            cache.delta = delta;
+            cache.angles = angles;
+            cache.size = size;
+            cache.about = about;
+            var cells = VoxelTransform.landedFrom(
                     selected,
                     new Geometry.Vector(about.x, about.y, about.z),
                     angles.y,
@@ -728,9 +741,18 @@ final class TransformGizmo {
                     (int) Math.round(delta.y),
                     (int) Math.round(delta.z),
                     LANDING_CELLS);
-            landing = cells == null || cells.isEmpty() ? null : OutlineShape.of(cells);
+            cache.cells = cells == null || cells.isEmpty() ? null : cells;
+            cache.shape = cache.cells == null ? null : OutlineShape.of(cache.cells.keySet());
         }
-        return landing;
+        return cache.shape;
+    }
+    /** For each cell the hidden blocks land in with a rotate or scale drag as it stands, the cell its block came from; as {@link #landingHidden}, which has to be asked first. */
+    static Map<Point, Point> landingHiddenCells() {
+        return HIDDEN_LANDING.cells;
+    }
+    /** Whether the selected blocks (and what a BuildObject keeps hidden with them) are being dragged by the gizmo. */
+    static boolean draggingModel() {
+        return dragging != null && dragging.kind == Kind.MODEL;
     }
     /** True when the pointer is on one of the handles of a point gizmo at {@code at}, so a gizmo that is only shown can still be grabbed. */
     static boolean hitsPointHandles(Vec3 at, double x, double y) {
@@ -961,8 +983,7 @@ final class TransformGizmo {
     /** How far the target reaches along each axis, so scale handles can sit on its faces; null when it has no extent, like an entity. */
     private static Vec3 extent(Target t) {
         if (t.kind == Kind.SELECTION || t.kind == Kind.MODEL) {
-            var s = ClientState.status;
-            Point min = s.min(), max = s.max();
+            Point min = ClientState.gizmoMin(), max = ClientState.gizmoMax();
             return new Vec3(max.x() - min.x() + 1, max.y() - min.y() + 1, max.z() - min.z() + 1);
         }
         if (t.kind == Kind.PLACEMENT) {
@@ -976,8 +997,7 @@ final class TransformGizmo {
     /** How far a scale handle sits from what the scale is about: the extent from the corner, or from the pivot for the blocks. */
     private static Vec3 reach(Target t, Vec3 extent) {
         if (extent == null || t.kind != Kind.MODEL) return extent;
-        var s = ClientState.status;
-        Point max = s.max();
+        Point max = ClientState.gizmoMax();
         return new Vec3(max.x() + 1 - t.anchor.x, max.y() + 1 - t.anchor.y, max.z() + 1 - t.anchor.z);
     }
 
@@ -1220,7 +1240,7 @@ final class TransformGizmo {
      */
     private static Vec3 pivotAnchor(EditorScreen screen) {
         var o = ClientState.options;
-        if (o.pivotSet || ClientState.status.selectionSize() > 0) {
+        if (o.pivotSet || ClientState.gizmoSize() > 0) {
             parked = null;
             return pivot();
         }
@@ -1237,14 +1257,13 @@ final class TransformGizmo {
     static Vec3 pivot() {
         var o = ClientState.options;
         if (o.pivotSet) return new Vec3(o.pivotX, o.pivotY, o.pivotZ);
-        var s = ClientState.status;
-        Point min = s.min(), max = s.max();
+        Point min = ClientState.gizmoMin(), max = ClientState.gizmoMax();
         return new Vec3((min.x() + max.x() + 1) / 2d, (min.y() + max.y() + 1) / 2d, (min.z() + max.z() + 1) / 2d);
     }
     /** The corner the target's faces are measured from. */
     private static Vec3 faceBase(Target t) {
         if (t.kind == Kind.MODEL) {
-            Point min = ClientState.status.min();
+            Point min = ClientState.gizmoMin();
             return new Vec3(min.x(), min.y(), min.z());
         }
         if (t.kind == Kind.PLACEMENT) {
