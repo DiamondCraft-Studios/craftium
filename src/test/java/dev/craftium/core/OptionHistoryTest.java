@@ -1,10 +1,9 @@
 package dev.craftium.core;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 /** The example in the design: paste A, radius B, fill C, shape D; Ctrl+Z undoes D, C, B, A in that order and Ctrl+Y brings them back in the other. */
 class OptionHistoryTest {
@@ -12,7 +11,8 @@ class OptionHistoryTest {
         return new OptionHistory.Entry(name, Map.of("x", 1), Map.of("x", 2), time);
     }
 
-    @Test void undoesInTheOrderThingsWereDoneAcrossBothHistories() {
+    @Test
+    void undoesInTheOrderThingsWereDoneAcrossBothHistories() {
         var h = new OptionHistory();
         long now = 10_000;
         // A (server) at 1000, B at 2000, C (server) at 3000, D at 4000
@@ -33,20 +33,23 @@ class OptionHistoryTest {
         assertEquals("D", h.redo(false).name());
     }
 
-    @Test void aChangeWithNoEditOnTheServerIsUndoneHere() {
+    @Test
+    void aChangeWithNoEditOnTheServerIsUndoneHere() {
         var h = new OptionHistory();
         h.record(entry("B", 2000));
         assertEquals("B", h.undo(5000, -1).name());
         assertEquals("B", h.redo(false).name());
     }
 
-    @Test void nothingToUndoHereLeavesItToTheServer() {
+    @Test
+    void nothingToUndoHereLeavesItToTheServer() {
         var h = new OptionHistory();
         assertNull(h.undo(5000, 100));
         assertNull(h.undo(5000, -1));
     }
 
-    @Test void aNewChangeEndsWhatWasUndone() {
+    @Test
+    void aNewChangeEndsWhatWasUndone() {
         var h = new OptionHistory();
         h.record(entry("B", 2000));
         h.undo(5000, -1);
@@ -55,7 +58,8 @@ class OptionHistoryTest {
         assertNull(h.redo(false));
     }
 
-    @Test void aNewServerEditEndsWhatWasUndone() {
+    @Test
+    void aNewServerEditEndsWhatWasUndone() {
         var h = new OptionHistory();
         h.record(entry("B", 2000));
         h.undo(5000, -1);
@@ -63,7 +67,8 @@ class OptionHistoryTest {
         assertEquals(0, h.redoCount());
     }
 
-    @Test void keepsOnlyTheLimit() {
+    @Test
+    void keepsOnlyTheLimit() {
         var h = new OptionHistory();
         for (int i = 0; i < OptionHistory.LIMIT + 20; i++) h.record(entry("e" + i, i));
         assertEquals(OptionHistory.LIMIT, h.undoCount());

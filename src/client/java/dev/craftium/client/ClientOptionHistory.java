@@ -2,7 +2,6 @@ package dev.craftium.client;
 
 import dev.craftium.core.OptionDiff;
 import dev.craftium.core.OptionHistory;
-
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -24,7 +23,9 @@ final class ClientOptionHistory {
     private static int lastUndo = -1;
     private static boolean serverRedoExpected;
 
-    static void pressed(boolean down) { mouseDown = down; }
+    static void pressed(boolean down) {
+        mouseDown = down;
+    }
 
     /** The player pressed in the Tool options window: whatever changes from here is one entry. */
     static void begin() {
@@ -37,12 +38,16 @@ final class ClientOptionHistory {
     /** Once a frame: ends a finished gesture, and drops what was undone when the server has a new edit. */
     static void tick(boolean typing) {
         int undo = ClientState.status.undo();
-        if (lastUndo >= 0 && undo > lastUndo && !serverRedoExpected) history.clearRedo(); // a block edit was made, so nothing undone before it can come back
+        if (lastUndo >= 0 && undo > lastUndo && !serverRedoExpected)
+            history.clearRedo(); // a block edit was made, so nothing undone before it can come back
         if (undo != lastUndo) serverRedoExpected = false;
         lastUndo = undo;
         if (baseline == null) return;
         var now = OptionDiff.snapshot(ClientState.options);
-        if (!OptionDiff.between(observed, now).isEmpty()) { lastChange = System.currentTimeMillis(); observed = now; }
+        if (!OptionDiff.between(observed, now).isEmpty()) {
+            lastChange = System.currentTimeMillis();
+            observed = now;
+        }
         if (mouseDown || typing || System.currentTimeMillis() - lastChange < QUIET_MS) return;
         finish(now);
     }
@@ -51,11 +56,14 @@ final class ClientOptionHistory {
         var change = OptionDiff.between(baseline, now);
         baseline = null;
         observed = null;
-        if (!change.isEmpty()) history.record(new OptionHistory.Entry(name(change), change.before(), change.after(), lastChange));
+        if (!change.isEmpty())
+            history.record(new OptionHistory.Entry(name(change), change.before(), change.after(), lastChange));
     }
 
     /** Ends a gesture that is still open, so a change made a moment ago is in the history before it is undone. */
-    private static void flush() { if (baseline != null) finish(OptionDiff.snapshot(ClientState.options)); }
+    private static void flush() {
+        if (baseline != null) finish(OptionDiff.snapshot(ClientState.options));
+    }
 
     /** Undoes the newest change of settings when it is newer than the server's next edit; false when the server's is the one to undo. */
     static boolean undo() {
@@ -72,7 +80,10 @@ final class ClientOptionHistory {
     static boolean redo() {
         flush();
         var entry = history.redo(ClientState.status.redo() > 0);
-        if (entry == null) { serverRedoExpected = true; return false; }
+        if (entry == null) {
+            serverRedoExpected = true;
+            return false;
+        }
         put(entry.after());
         ClientState.notify("Redid: " + entry.name());
         return true;
@@ -88,13 +99,15 @@ final class ClientOptionHistory {
     private static String name(OptionDiff.Change change) {
         if (change.after().size() != 1) return "Tool options (" + change.after().size() + " settings)";
         String field = change.after().keySet().iterator().next();
-        return OptionFields.human(field) + " " + show(change.before().get(field)) + " → " + show(change.after().get(field));
+        return OptionFields.human(field) + " " + show(change.before().get(field)) + " → "
+                + show(change.after().get(field));
     }
 
     private static String show(Object v) {
         if (v == null) return "none";
         if (v instanceof Boolean b) return b ? "on" : "off";
-        if (v instanceof Double d) return d == Math.rint(d) ? Long.toString(Math.round(d)) : String.format(Locale.ROOT, "%.2f", d);
+        if (v instanceof Double d)
+            return d == Math.rint(d) ? Long.toString(Math.round(d)) : String.format(Locale.ROOT, "%.2f", d);
         if (v instanceof Enum<?> e) return e.name().toLowerCase(Locale.ROOT).replace('_', ' ');
         if (v instanceof List<?> l) return l.size() + (l.size() == 1 ? " item" : " items");
         String s = v.toString();

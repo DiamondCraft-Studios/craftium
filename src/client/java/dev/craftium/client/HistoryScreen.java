@@ -24,8 +24,10 @@ final class HistoryScreen extends CraftiumScreen {
     }
 
     private void send(String action, int steps) {
-        if (steps == 1 && (action.equals("undo") ? ClientOptionHistory.undo() : action.equals("redo") && ClientOptionHistory.redo()))
-            return;
+        if (steps == 1
+                && (action.equals("undo")
+                        ? ClientOptionHistory.undo()
+                        : action.equals("redo") && ClientOptionHistory.redo())) return;
         if (!ClientState.status.busy()) {
             ClientState.options.historySteps = steps;
             CraftiumClient.send(action, null, null);
