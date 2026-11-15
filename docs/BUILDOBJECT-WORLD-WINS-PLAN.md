@@ -67,7 +67,7 @@ Known follow-ups: the whole tree is re-sent to each editor when it changes (abou
 
 ## Status
 
-Rebased on main on 2026-11-14. 793 unit tests pass on 26.2; both versions, their game-test sources and Paper 26.2 compile. Four client game tests pass in a real client: `buildobjectcrash` (what is saved while an edit waits, every way a waiting edit is dropped, and another player's change surviving a cancel), `buildobjectorder` (undoing a reorder), `buildobjectduplicate` (duplicating a half-buried and a buried BuildObject).
+Rebased on main (with the Spotless formatting) on 2026-11-15, each commit formatted. 793 unit tests pass on 26.2; both versions, their game-test sources and Paper 26.2 compile. Four client game tests pass in a real client: `buildobjectcrash` (what is saved while an edit waits, every way a waiting edit is dropped, and another player's change surviving a cancel), `buildobjectorder` (undoing a reorder), `buildobjectduplicate` (duplicating a half-buried and a buried BuildObject).
 
 Done:
 - the BuildObject limit of 1,024;
@@ -86,11 +86,11 @@ How a fully hidden BuildObject is moved: the status carries, for each Hierarchy 
 Speed (the pure move logic on a cold JVM, so only a guide; the world reads, the network and drawing are not in it): with 1,024 BuildObjects of 2,000 blocks each (2,000,000 blocks), moving one takes about 0.5 s; moving one of 200,000 blocks with 10,000 hidden about 0.4 s; a reorder in which each BuildObject hides 200 blocks under the one before (about 205,000 cells change hands) about 1 s. That is a pause when a drag is let go, not a cost per frame. A cell-to-owner index kept with the tree would remove most of it; not done.
 
 Not built:
-- **live reveal** (hidden blocks appearing when the block hiding them disappears): planned, with five open questions (editor edits or every world change, undo for changes outside the editor, whether the Enter preview shows it, the reverse case, Paper);
+- **live reveal** (hidden blocks appearing when the block hiding them disappears): out of scope (decided 2026-11-15). Craftium's rules are for building in the editor, not for survival play, so a hidden block stays hidden until the BuildObject is moved, reordered or placed again (Place here). A small version that reveals only after an editor edit is possible if it turns out to be missed;
 - the Edit > Move offset action for a fully hidden object (use the gizmo);
 - lock, search or linked copies (prefabs) for BuildObjects.
 
-Not checked: speed in the game itself, the Hierarchy at hundreds of rows, anything on a real Paper server (it compiles on 26.2; the plugin flushes on stop and handles a player leaving; the Paper 1.21.10 module does not build offline here), and the dedicated-server game test (it needs the Minecraft EULA accepted for the run).
+Not checked: speed in the game itself, the Hierarchy at hundreds of rows, anything on a real Paper server (it compiles on 26.2; the plugin flushes on stop and handles a player leaving; the Paper 1.21.10 module does not build offline here), and BuildObjects on a dedicated server (the `dedicated` game-test scope passes on this branch, 2026-11-15, but it does not exercise BuildObjects; it needs the Minecraft EULA accepted for the run, and it had been failing on main until `/craftium gamerule` stopped looping in the client's command handler).
 
 Known, not ours: the existing `savedselections` client game test fails on main since "select a new BuildObject in the Hierarchy when it is created" (the new one is shown at once; the test expects it not to be), and the `gizmos`, `overlay`, `panel`, `interaction` and `golden` scopes fail on main the same way as here (checked: identical output).
 
