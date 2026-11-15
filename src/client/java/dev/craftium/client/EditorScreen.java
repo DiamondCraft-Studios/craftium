@@ -1693,7 +1693,19 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if (o().tool.selection()) {
             fixed(g, () -> fillClear(g));
-        }
+        } else if (nodeTool())
+            fixed(
+                    g,
+                    () -> button(
+                            g,
+                            10,
+                            pb - 27,
+                            pw - 20,
+                            20,
+                            "Clear points",
+                            false,
+                            this::clearNodes,
+                            "Remove every control point and line this tool has placed · Delete removes the picked point"));
     }
     /** One scrollable row of the Modify panel; {@code paint} gets the row's top. */
     private record ModifyRow(int height, java.util.function.BiConsumer<Gfx, Integer> paint) {}
@@ -4979,6 +4991,8 @@ public final class EditorScreen extends CraftiumScreen {
         if (action.equals("clear")) {
             ClientState.boxCorners.clear();
             o().pivotSet = false;
+            o().nodes.clear();
+            selectedNode = -1;
         }
         if (action.equals("duplicate") || action.equals("cut")) {
             ClientState.duplicatePending = true;
@@ -6083,6 +6097,7 @@ public final class EditorScreen extends CraftiumScreen {
             case DELETE -> {
                 if (deleteHierarchyObjects()) {
                 } else if (deleteRuler()) {
+                } else if (deleteNode()) {
                 } else if (ShapeObject.active()) ShapeObject.cancel();
                 else if (PlacementPreview.active()) PlacementPreview.cancel();
                 else action("delete");
@@ -6303,6 +6318,30 @@ public final class EditorScreen extends CraftiumScreen {
         }
         return found;
     }
+    /**
+     * Whether the active tool builds from the control points in the options (Path, Modelling, Slope), which draw as a
+     * line until they are removed.
+     */
+    private boolean nodeTool() {
+        return toolActive && Interactions.of(o().tool).points(context) == o().nodes;
+    }
+
+    private void clearNodes() {
+        o().nodes.clear();
+        selectedNode = -1;
+        TransformGizmo.cancel();
+    }
+
+    /** Takes away the picked control point, or else the last one. */
+    private boolean deleteNode() {
+        if (!nodeTool() || o().nodes.isEmpty()) return false;
+        if (selectedNode >= 0 && selectedNode < o().nodes.size()) o().nodes.remove(selectedNode);
+        else o().nodes.removeLast();
+        selectedNode = -1;
+        TransformGizmo.cancel();
+        return true;
+    }
+
     /** Takes away the ruler that is picked. */
     private boolean deleteRuler() {
         var picked = ClientState.selectedRuler();
