@@ -4,6 +4,7 @@ import static dev.craftium.client.compat.CommandCompat.*;
 
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.core.*;
 import java.util.*;
@@ -14,6 +15,7 @@ import net.minecraft.client.Minecraft;
 /** User-facing commands and a non-interfering visual mirror of WorldEdit position commands. */
 final class ClientCommands {
     private static Runnable pending;
+    private static boolean forwarding;
     private static Point pos1, pos2;
     private static final List<String> CAPABILITIES = List.of(
             "blockStep",
@@ -154,10 +156,22 @@ final class ClientCommands {
                                 return b.buildFuture();
                             })
                             .then(argument("value", BoolArgumentType.bool()).executes(c -> {
+                                // Sending the command runs it through this dispatcher again: "unknown" lets it go on to
+                                // the server instead of looping.
+                                if (forwarding)
+                                    throw CommandSyntaxException.BUILT_IN_EXCEPTIONS
+                                            .dispatcherUnknownCommand()
+                                            .create();
                                 var connection = Minecraft.getInstance().getConnection();
                                 if (connection == null) return 0;
-                                connection.sendCommand("craftium gamerule " + StringArgumentType.getString(c, "rule")
-                                        + " " + BoolArgumentType.getBool(c, "value"));
+                                forwarding = true;
+                                try {
+                                    connection.sendCommand(
+                                            "craftium gamerule " + StringArgumentType.getString(c, "rule") + " "
+                                                    + BoolArgumentType.getBool(c, "value"));
+                                } finally {
+                                    forwarding = false;
+                                }
                                 return 1;
                             }))));
             root.then(literal("handshake").executes(c -> {
