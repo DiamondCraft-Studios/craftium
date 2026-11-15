@@ -1,0 +1,4 @@
+# Formatting-only commits, ignored by git blame.
+# Enable with: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# Spotless reformat of all Java (Palantir)
+c313ea8dde27af7cacbb67a52ab076df289b7fc8
