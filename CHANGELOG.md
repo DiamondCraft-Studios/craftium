@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0
+## 2.0.0-beta.1
 
 Changes since 1.6.0-beta.1.
 
