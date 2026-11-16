@@ -69,13 +69,39 @@ public final class Compat {
         return Transformation.identity();
     }
 
+    /**
+     * A block entity type for one block. The constructor is private in 1.21.10, so this goes through Fabric API's
+     * builder, found by name: the Paper plugin compiles this file without Fabric API and never calls this.
+     */
+    @SuppressWarnings("unchecked")
     public static <T extends net.minecraft.world.level.block.entity.BlockEntity>
             net.minecraft.world.level.block.entity.BlockEntityType<T> blockEntityType(
-                    net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder.Factory<T>
+                    java.util.function.BiFunction<
+                                    net.minecraft.core.BlockPos, net.minecraft.world.level.block.state.BlockState, T>
                             factory,
                     net.minecraft.world.level.block.Block block) {
-        return net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder.<T>create(
-                        factory, block)
-                .build();
+        try {
+            String name = "net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder";
+            Class<?> builder = Class.forName(name);
+            Class<?> supplier = Class.forName(name + "$Factory");
+            Object made = java.lang.reflect.Proxy.newProxyInstance(
+                    supplier.getClassLoader(), new Class<?>[] {supplier}, (proxy, method, args) -> {
+                        if (method.getName().equals("create"))
+                            return factory.apply(
+                                    (net.minecraft.core.BlockPos) args[0],
+                                    (net.minecraft.world.level.block.state.BlockState) args[1]);
+                        return switch (method.getName()) {
+                            case "hashCode" -> System.identityHashCode(proxy);
+                            case "equals" -> proxy == args[0];
+                            default -> "Craftium block entity factory";
+                        };
+                    });
+            Object type = builder.getMethod("create", supplier, net.minecraft.world.level.block.Block[].class)
+                    .invoke(null, made, new net.minecraft.world.level.block.Block[] {block});
+            return (net.minecraft.world.level.block.entity.BlockEntityType<T>)
+                    builder.getMethod("build").invoke(type);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Cannot make a block entity type without Fabric API", e);
+        }
     }
 }
