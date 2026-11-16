@@ -495,6 +495,7 @@ public final class EditorScreen extends CraftiumScreen {
         MUTED = o().uiMuted;
         if (!suspended && layoutKey != layoutKey()) init();
         runAfterStatus();
+        ClientOptionHistory.tick(typing != null);
         pointerX = mouseX;
         pointerY = mouseY;
         // A held gizmo has the pointer: the interface under it is not lit, as the cursor is hidden and only steers the
@@ -3119,6 +3120,8 @@ public final class EditorScreen extends CraftiumScreen {
     private static final long HISTORY_CONFIRM_MS = 60_000;
     /** Undo or redo, after a confirmation when the edit it reaches is a minute old or more. */
     private void historyAction(boolean undo) {
+        if (undo ? ClientOptionHistory.undo() : ClientOptionHistory.redo())
+            return; // a change of settings was the last thing done (or undone)
         long age = HistoryPulse.age(undo);
         Runnable send = () -> CraftiumClient.send(undo ? "undo" : "redo", null, null);
         if (age < HISTORY_CONFIRM_MS) {
@@ -3179,7 +3182,7 @@ public final class EditorScreen extends CraftiumScreen {
                 y + 24,
                 cell[0],
                 19,
-                "Undo " + ClientState.status.undo(),
+                "Undo " + (ClientState.status.undo() + ClientOptionHistory.history.undoCount()),
                 false,
                 () -> action("undo"),
                 "Undo · Ctrl+Z");
@@ -3189,7 +3192,7 @@ public final class EditorScreen extends CraftiumScreen {
                 y + 24,
                 cell[1],
                 19,
-                "Redo " + ClientState.status.redo(),
+                "Redo " + (ClientState.status.redo() + ClientOptionHistory.history.redoCount()),
                 false,
                 () -> action("redo"),
                 "Redo · Ctrl+Y");
@@ -5122,6 +5125,11 @@ public final class EditorScreen extends CraftiumScreen {
         my = (int) y;
         pointerX = event.x();
         pointerY = event.y();
+        if (event.button() == 0) {
+            ClientOptionHistory.pressed(true);
+            if ("options".equals(WorkspaceLayout.hit(x, y, false)))
+                ClientOptionHistory.begin(); // a gesture in the Tool options window is one undo
+        }
         if (typing != null) {
             // A click on the slider being typed in moves the caret (Shift stretches the selection, Ctrl or a double
             // click selects all); anywhere else keeps what was typed.
@@ -5567,6 +5575,7 @@ public final class EditorScreen extends CraftiumScreen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
+        if (event.button() == 0) ClientOptionHistory.pressed(false);
         if (event.button() == 0 && objectPickPending) {
             objectPickPending = false;
             if (Math.hypot(event.x() - objectPickX, event.y() - objectPickY) <= 3) pickBuildObject(objectPickHit);

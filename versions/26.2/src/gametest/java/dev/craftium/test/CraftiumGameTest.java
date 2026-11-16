@@ -37,6 +37,10 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             require(
                     ctx.computeOnClient(mc -> CraftiumClient.supported()),
                     "Craftium network channel was not negotiated");
+            if ("optionhistory".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))) {
+                dev.craftium.client.OptionHistoryGameTest.run(ctx, world);
+                return;
+            }
             if ("gallery".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))) {
                 dev.craftium.client.GalleryCapture.run(ctx, world);
                 return;

@@ -326,7 +326,8 @@ public final class BuilderMode {
             return true;
         }
         if (control && (key == GLFW.GLFW_KEY_Z || key == GLFW.GLFW_KEY_Y)) {
-            CraftiumClient.send(key == GLFW.GLFW_KEY_Z ? "undo" : "redo", null, null);
+            if (key == GLFW.GLFW_KEY_Z ? !ClientOptionHistory.undo() : !ClientOptionHistory.redo())
+                CraftiumClient.send(key == GLFW.GLFW_KEY_Z ? "undo" : "redo", null, null);
             return true;
         }
         var o = ClientState.options;
