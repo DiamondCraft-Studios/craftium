@@ -1,12 +1,54 @@
 # Changelog
 
+## 2.0.0
+
+Changes since 1.6.0-beta.1.
+
+### Interface
+- Changes to the settings in the Tool options window are in the undo history now, in one order with block edits: Ctrl+Z undoes whichever you did last, and a note on screen says which setting it put back ("Undid: Radius 5 → 9"). A slider dragged through many values is one step. Setting changes are kept on your computer, never touch the server's history or its limit, and only the last 100 are kept.
+- Window titles are no longer in capitals: History, Report, Options, Palette, Keyboard shortcuts, Save blueprint and the others read as written.
+- The Export structure window has a third tab, Blueprint, that saves the source into the blueprint library with a name, author and tags. Ctrl + P opens the same window with only that form, replacing the old Save blueprint dialog.
+- Several BuildObjects can be exported at once: right-click them in the Hierarchy and choose Export selected. The window has a page for each, with its own name, position and size and a preview of it (the other settings are shared), and exports them all as structures to one folder, or all as blueprints.
+- Save blueprint in the Export structure window opens the Blueprint library so you choose the folder to save in; press Save here to save into the folder you are in.
+- Dragging a gizmo handle (an arrow, a plane square or the centre) is now worked out from each step of the pointer, so flying about while you drag no longer slows it, stops it or sends the selection back towards you, even when you look along the arrow. The selection stays where it is while only the camera moves.
+- The Move tool's gizmo now has the free move handle in the middle: drag it to move the selection anywhere on the screen's plane.
+- New Inspect tool, in Utility: point at a block to see its name and the first few of its block tags floating above it, and use the tool (right-click by default) to list every block and fluid tag in chat. It changes nothing in the world and sends nothing to the server.
+- The Builder's destination preview (where a move, clone, stack or smear would land) is drawn like its selection: dim faces on the ground and an outline in open air, hidden by terrain in front of it.
+
+### Editing
+- The clipboard is kept packed, at about 14 bytes a block instead of about 128, so copying two million blocks holds roughly 190 MB less memory.
+- An AI or jigsaw preview describes up to 49,152 blocks (was 32,768), and an edit may reach up to 256 chunks that are not loaded (was 128), which can make the server pause longer while they generate.
+- A world holds up to 1,024 BuildObjects per dimension, up from 64.
+- BuildObjects no longer carve the world. Moving, rotating, scaling, duplicating or pasting one leaves solid blocks where they are: a block of the BuildObject that would land on one is kept hidden inside the BuildObject, with its contents, and the BuildObject keeps the rest. Where two BuildObjects overlap, the one lower in the Hierarchy (a child over its parent) wins the cell, and the other keeps its block hidden.
+- Hidden blocks come back where the world is free: they go along when the BuildObject moves, turns or scales, and are placed again wherever the new place allows. Water, grass and snow a BuildObject covers are given back when it leaves, and a block of another BuildObject that was hidden under it returns. Undo and Redo give all of it back too.
+- Reordering the Hierarchy re-decides overlaps: when you drag, group or ungroup BuildObjects (or move a group), a hidden block that now ranks above the BuildObject standing in its cell takes the cell, and the other keeps its block hidden. It is part of the same step in the history as the drag, so one Ctrl+Z puts back both the order and the blocks. Where BuildObjects overlap, the one lower in the Hierarchy wins: a child over its parent, of those on one level the one below, and of the groups the one below.
+- Duplicate copies all of a BuildObject, including the blocks it keeps hidden: a half-buried house gives a whole house wherever the copy is put down, and so does one that is buried completely. Copy, Cut, Export and Save as blueprint work on the blocks in the world, and say so when a BuildObject keeps hidden ones.
+- Cancelling a waiting move, or leaving the world with one waiting, gives back only the BuildObjects that move changed: on a shared world, it no longer undoes what someone else did to the others.
+- A world whose BuildObjects keep hidden blocks is saved in a newer file format. An older Craftium cannot read it and sets the file aside as `.bad`, so the BuildObjects are not there until you come back; Place here for each, to put their hidden blocks in the world, before going back to an older version.
+- Place here, in the Hierarchy menu, places what a BuildObject keeps hidden where it stands, for example after you remove the block that was in the way.
+- The blocks a BuildObject keeps hidden are drawn as part of its selection, in the same outline as the rest: whole where nothing is in front of it and translucent where the ground hides it. They show while the BuildObject is selected or hovered, or its eye is open. You can only point at a BuildObject by its blocks that are in the world, never by the buried ones, but pointing at those shows the whole shape. Its row in the Hierarchy gets a small amber square, and its tooltip says how many blocks are hidden.
+- While you drag the gizmo, the hidden blocks of the BuildObjects that are selected are dragged with it: their outline follows the move, rotation or scale as the rest does, in the same destination preview and depth-tested the same way (translucent where the ground hides an edge), so you see where the whole BuildObject would land. This is a preview only; the selection still holds just the blocks that are in the world.
+- While you drag, those hidden blocks are shown as the blocks they are (up to 16,384, in the preview tint), even under the ground, and let go of when you release: a move shifts them, and a rotate or scale puts each in the cell it lands in. They are asked for from the server when the drag begins, so they appear a moment after it starts. Blocks keep the way they face in the preview, and are turned when the transform is applied.
+- A BuildObject that is entirely hidden can still be moved, rotated and scaled: select it in the Hierarchy and the gizmo appears around its hidden blocks. Its blocks land where the world is free and stay hidden where it is not.
+- A BuildObject's blocks that can hold water (slabs, stairs, fences and the like) are waterlogged where they cover water, and dry again when the BuildObject leaves.
+- Edits and selections go up to 2,097,152 blocks, twice as many as before.
+- Undo history is kept packed, at about 16 bytes a block instead of about 128, so a big edit takes far less of the history budget.
+- A Large edit window shows how far an edit of 100,000 blocks or more has got (blocks done, percent, time left) while the server applies, undoes or redoes it. It is a window like the others: move it, resize it, fold it, or close it for the rest of that edit.
+- Paste, cut, fill, stack and the other actions on a selection or the clipboard no longer stop at the Block limit setting, which only applies to the tools that place blocks. They answer to the largest edit and the history budget.
+
+### Missing blocks
+- A block that no installed mod provides (a mod you removed, a build from another modpack) is no longer turned into air when its chunk loads or when a blueprint, structure or schematic is pasted. It becomes a Missing Block that remembers the block it stood for, with its properties and any block entity data it had.
+- The editor tools work on them: the Magic Wand, Paint Bucket and dropping a block in the world treat Missing Blocks for different original blocks as different blocks, even when they touch (in every select type but Any). Pick one with the pipette or the middle button to add its original block to the block mask, then Fill, Replace or the brushes change only those blocks. A mask entry may also be typed as the original id, like othermod:marble.
+- A Missing blocks window lists the original ids of what the world is missing. It is only there while there are some, and comes up by itself when you join such a world or one is found. Right-click a row: Add to mask puts that block in the block mask, and Select all selects every one of it in the chunks loaded around you. The Missing Block has its own red and black texture.
+- Saving a blueprint, structure or schematic writes a Missing Block back out under its original name, so the file stays portable.
+- Chunks that were loaded and saved without Craftium before this version already turned their missing blocks into air, and those cannot be recovered.
+- A world saved with Missing Blocks needs Craftium to be installed when it is opened again: without it, they are air as before.
+
 ## 1.6.0-beta.1
 
 Changes since 1.5.0-beta.1.
 
 ### Interface
-- Changes to the settings in the Tool options window are in the undo history now, in one order with block edits: Ctrl+Z undoes whichever you did last, and a note on screen says which setting it put back ("Undid: Radius 5 → 9"). A slider dragged through many values is one step. Setting changes are kept on your computer, never touch the server's history or its limit, and only the last 100 are kept.
-- Window titles are no longer in capitals: History, Report, Options, Palette, Keyboard shortcuts, Save blueprint and the others read as written.
 - Ctrl+= and Ctrl+- (and the keypad + and -) change the interface size on every Craftium screen, not only in the editor.
 - New Hierarchy window at the top of the right column, where the Selections window was: it lists your saved selections. The Block palette and Tool masks sit together below it and take 3/8 of the column.
 - The Hierarchy window has a "+" button along the bottom that creates a BuildObject from what is selected, replacing the Save selection button. New ones are named BuildObject, BuildObject (1), BuildObject (2) and so on, and double-clicking a row renames it where it stands (Enter keeps the name, Esc drops it). The colour moved to the right of each row, beside the show, edit and delete buttons.
@@ -52,42 +94,6 @@ Changes since 1.5.0-beta.1.
 - Target info moved to the bottom of the left column, under Tool options.
 - The Clipboard window is off by default; open it from Window > Toggle clipboard. Copy, cut and paste work without it.
 - Your saved window layout is reset once, to the new places.
-- The Export structure window has a third tab, Blueprint, that saves the source into the blueprint library with a name, author and tags. Ctrl + P opens the same window with only that form, replacing the old Save blueprint dialog.
-- Several BuildObjects can be exported at once: right-click them in the Hierarchy and choose Export selected. The window has a page for each, with its own name, position and size and a preview of it (the other settings are shared), and exports them all as structures to one folder, or all as blueprints.
-- Save blueprint in the Export structure window opens the Blueprint library so you choose the folder to save in; press Save here to save into the folder you are in.
-- Dragging a gizmo handle (an arrow, a plane square or the centre) is now worked out from each step of the pointer, so flying about while you drag no longer slows it, stops it or sends the selection back towards you, even when you look along the arrow. The selection stays where it is while only the camera moves.
-- The Move tool's gizmo now has the free move handle in the middle: drag it to move the selection anywhere on the screen's plane.
-- New Inspect tool, in Utility: point at a block to see its name and the first few of its block tags floating above it, and use the tool (right-click by default) to list every block and fluid tag in chat. It changes nothing in the world and sends nothing to the server.
-- The Builder's destination preview (where a move, clone, stack or smear would land) is drawn like its selection: dim faces on the ground and an outline in open air, hidden by terrain in front of it.
-
-### Editing
-- The clipboard is kept packed, at about 14 bytes a block instead of about 128, so copying two million blocks holds roughly 190 MB less memory.
-- An AI or jigsaw preview describes up to 49,152 blocks (was 32,768), and an edit may reach up to 256 chunks that are not loaded (was 128), which can make the server pause longer while they generate.
-- A world holds up to 1,024 BuildObjects per dimension, up from 64.
-- BuildObjects no longer carve the world. Moving, rotating, scaling, duplicating or pasting one leaves solid blocks where they are: a block of the BuildObject that would land on one is kept hidden inside the BuildObject, with its contents, and the BuildObject keeps the rest. Where two BuildObjects overlap, the one lower in the Hierarchy (a child over its parent) wins the cell, and the other keeps its block hidden.
-- Hidden blocks come back where the world is free: they go along when the BuildObject moves, turns or scales, and are placed again wherever the new place allows. Water, grass and snow a BuildObject covers are given back when it leaves, and a block of another BuildObject that was hidden under it returns. Undo and Redo give all of it back too.
-- Reordering the Hierarchy re-decides overlaps: when you drag, group or ungroup BuildObjects (or move a group), a hidden block that now ranks above the BuildObject standing in its cell takes the cell, and the other keeps its block hidden. It is part of the same step in the history as the drag, so one Ctrl+Z puts back both the order and the blocks. Where BuildObjects overlap, the one lower in the Hierarchy wins: a child over its parent, of those on one level the one below, and of the groups the one below.
-- Duplicate copies all of a BuildObject, including the blocks it keeps hidden: a half-buried house gives a whole house wherever the copy is put down, and so does one that is buried completely. Copy, Cut, Export and Save as blueprint work on the blocks in the world, and say so when a BuildObject keeps hidden ones.
-- Cancelling a waiting move, or leaving the world with one waiting, gives back only the BuildObjects that move changed: on a shared world, it no longer undoes what someone else did to the others.
-- A world whose BuildObjects keep hidden blocks is saved in a newer file format. An older Craftium cannot read it and sets the file aside as `.bad`, so the BuildObjects are not there until you come back; Place here for each, to put their hidden blocks in the world, before going back to an older version.
-- Place here, in the Hierarchy menu, places what a BuildObject keeps hidden where it stands, for example after you remove the block that was in the way.
-- The blocks a BuildObject keeps hidden are drawn as part of its selection, in the same outline as the rest: whole where nothing is in front of it and translucent where the ground hides it. They show while the BuildObject is selected or hovered, or its eye is open. You can only point at a BuildObject by its blocks that are in the world, never by the buried ones, but pointing at those shows the whole shape. Its row in the Hierarchy gets a small amber square, and its tooltip says how many blocks are hidden.
-- While you drag the gizmo, the hidden blocks of the BuildObjects that are selected are dragged with it: their outline follows the move, rotation or scale as the rest does, in the same destination preview and depth-tested the same way (translucent where the ground hides an edge), so you see where the whole BuildObject would land. This is a preview only; the selection still holds just the blocks that are in the world.
-- While you drag, those hidden blocks are shown as the blocks they are (up to 16,384, in the preview tint), even under the ground, and let go of when you release: a move shifts them, and a rotate or scale puts each in the cell it lands in. They are asked for from the server when the drag begins, so they appear a moment after it starts. Blocks keep the way they face in the preview, and are turned when the transform is applied.
-- A BuildObject that is entirely hidden can still be moved, rotated and scaled: select it in the Hierarchy and the gizmo appears around its hidden blocks. Its blocks land where the world is free and stay hidden where it is not.
-- A BuildObject's blocks that can hold water (slabs, stairs, fences and the like) are waterlogged where they cover water, and dry again when the BuildObject leaves.
-- Edits and selections go up to 2,097,152 blocks, twice as many as before.
-- Undo history is kept packed, at about 16 bytes a block instead of about 128, so a big edit takes far less of the history budget.
-- A Large edit window shows how far an edit of 100,000 blocks or more has got (blocks done, percent, time left) while the server applies, undoes or redoes it. It is a window like the others: move it, resize it, fold it, or close it for the rest of that edit.
-- Paste, cut, fill, stack and the other actions on a selection or the clipboard no longer stop at the Block limit setting, which only applies to the tools that place blocks. They answer to the largest edit and the history budget.
-
-### Missing blocks
-- A block that no installed mod provides (a mod you removed, a build from another modpack) is no longer turned into air when its chunk loads or when a blueprint, structure or schematic is pasted. It becomes a Missing Block that remembers the block it stood for, with its properties and any block entity data it had.
-- The editor tools work on them: the Magic Wand, Paint Bucket and dropping a block in the world treat Missing Blocks for different original blocks as different blocks, even when they touch (in every select type but Any). Pick one with the pipette or the middle button to add its original block to the block mask, then Fill, Replace or the brushes change only those blocks. A mask entry may also be typed as the original id, like othermod:marble.
-- A Missing blocks window lists the original ids of what the world is missing. It is only there while there are some, and comes up by itself when you join such a world or one is found. Right-click a row: Add to mask puts that block in the block mask, and Select all selects every one of it in the chunks loaded around you. The Missing Block has its own red and black texture.
-- Saving a blueprint, structure or schematic writes a Missing Block back out under its original name, so the file stays portable.
-- Chunks that were loaded and saved without Craftium before this version already turned their missing blocks into air, and those cannot be recovered.
-- A world saved with Missing Blocks needs Craftium to be installed when it is opened again: without it, they are air as before.
 
 ## 1.5.0-beta.1
 
