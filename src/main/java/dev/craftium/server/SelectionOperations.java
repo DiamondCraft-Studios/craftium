@@ -57,6 +57,12 @@ final class SelectionOperations {
                 if (otherOld.is(old.getBlock())) p.put(other, p.preserve(otherOld, target.defaultBlockState()));
             }
         }
+        if (changed == 0)
+            throw new IllegalArgumentException(
+                    skipped.isEmpty()
+                            ? "The selection has no " + shortName(fromSlot.material()) + " blocks to change"
+                            : shortName(toSlot.material()) + " has no " + String.join(", ", skipped)
+                                    + " to change the selection to");
         String name = "Change material " + shortName(fromSlot.material()) + " to " + shortName(toSlot.material());
         return skipped.isEmpty()
                 ? name
