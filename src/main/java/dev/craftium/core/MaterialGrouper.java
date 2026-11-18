@@ -41,6 +41,10 @@ public final class MaterialGrouper {
             Map.entry("stem", "log"),
             Map.entry("log", "log"));
 
+    /** Things named {@code _stem} that are not logs: the stems of crops and of the huge mushrooms. */
+    private static final Set<String> NOT_LOGS =
+            Set.of("melon", "pumpkin", "attached_melon", "attached_pumpkin", "mushroom");
+
     /** The kinds that can come after {@code stripped_}. */
     private static final Set<String> STRIPPABLE = Set.of("log", "wood");
 
@@ -79,6 +83,8 @@ public final class MaterialGrouper {
             String ending = "_" + suffix.getKey();
             if (!rest.endsWith(ending) || rest.length() == ending.length()) continue;
             String kind = suffix.getValue();
+            if (suffix.getKey().equals("stem") && NOT_LOGS.contains(rest.substring(0, rest.length() - ending.length())))
+                return null;
             if (stripped && !STRIPPABLE.contains(kind)) return null;
             return new Slot(
                     namespace + ":" + rest.substring(0, rest.length() - ending.length()),

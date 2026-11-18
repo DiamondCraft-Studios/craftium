@@ -55,8 +55,8 @@ public final class CraftiumClient implements ClientModInitializer {
                 new KeyMapping("key.craftium.hotbar", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
         replaceKey = ClientCompat.registerKey(
                 new KeyMapping("key.craftium.replace", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, category));
-        replaceMaterialKey = ClientCompat.registerKey(
-                new KeyMapping("key.craftium.replace_material", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_Y, category));
+        replaceMaterialKey = ClientCompat.registerKey(new KeyMapping(
+                "key.craftium.replace_material", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
         for (Tool tool : Tool.values()) {
             var spec = tool.spec();
             toolKeys.put(
