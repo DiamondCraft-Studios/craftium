@@ -547,6 +547,14 @@ public final class Options {
     public int rulerLineColor = 0xffffffff,
             rulerKnobColor = 0xff5b9fdb,
             rulerKnobSelectedColor = 0xffffff00,
+    /**
+     * Elevation: with Smear on, the top {@link #smearDepth} layers of the ground (grass over dirt, sand over sandstone) move up or down
+     * together with the surface, instead of only the top block being kept and the new ground filled with the block under it.
+     */
+    public boolean smear;
+
+    public int smearDepth = 3;
+
             rulerTextColor = 0xffffffff,
             rulerTextBackground = 0x80000000;
     /** The colour of a ruler's line when it runs along the world's X, Y or Z axis (the gizmo's red, green and blue); any other line uses {@link #rulerLineColor}. */
@@ -940,6 +948,7 @@ public final class Options {
             for (String entry : list)
                 if (entry == null || entry.length() > 256)
                     throw new IllegalArgumentException("Invalid block mask entry");
+        smearDepth = Math.clamp(smearDepth, 1, 16);
         if (block == null || secondary == null || mask == null || biome == null || text == null)
             throw new IllegalArgumentException("Missing tool settings");
         if (block.length() > 256
