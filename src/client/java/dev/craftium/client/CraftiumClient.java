@@ -1151,7 +1151,11 @@ public final class CraftiumClient implements ClientModInitializer {
                 MagicPreview.draw(mc, hit);
                 ClickPreview.draw(mc, screen != null && screen.toolActive() ? hit : null);
             }
-            ClientState.pending.tintReplaced = ClientState.options.tool.spec().buildsOnRelease();
+            // The painters replace every block they touch by design, so tinting those red would only hide the paint.
+            var tool = ClientState.options.tool;
+            ClientState.pending.tintReplaced = tool.spec().buildsOnRelease()
+                    && tool != Tool.PAINTER
+                    && tool != Tool.NOISE_PAINTER;
             ClientState.pending.draw(
                     new Point(0, 0, 0),
                     true,
