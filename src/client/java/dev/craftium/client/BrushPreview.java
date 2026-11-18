@@ -151,12 +151,12 @@ public final class BrushPreview {
                                     origin,
                                     o.radius,
                                     o.shape,
-                                    o.hollow,
+                                    o.hollow && o.tool != dev.craftium.core.Tool.ROCK,
                                     o.outlineThickness,
                                     o.pixelPerfect,
                                     o.outlineShift(),
                                     o.polygonSides,
-                                    o.outline,
+                                    o.outline && o.tool != dev.craftium.core.Tool.ROCK,
                                     MAX_BLOCKS,
                                     o.form())
                             : dev.craftium.core.Geometry.shape(

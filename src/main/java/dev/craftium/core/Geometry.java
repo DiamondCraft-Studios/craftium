@@ -70,6 +70,18 @@ public final class Geometry {
     }
 
     public static List<Point> shape(Point center, Options o) {
+        // Rock has no Fill picker, so a Hollow or Outline left on by another tool must not turn the boulder into a shell.
+        if (o.tool == Tool.ROCK && (o.hollow || o.outline)) {
+            boolean hollow = o.hollow, outline = o.outline;
+            o.hollow = false;
+            o.outline = false;
+            try {
+                return shape(center, o);
+            } finally {
+                o.hollow = hollow;
+                o.outline = outline;
+            }
+        }
         if (o.shapeKind == Options.ShapeKind.BRUSH
                 && o.yaw == 0
                 && o.pitch == 0
