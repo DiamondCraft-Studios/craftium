@@ -73,4 +73,18 @@ class MaterialGrouperTest {
         assertNull(out.get("mod:stripped_oak_stairs"));
         assertEquals(slot("mod:oak", "stripped_log"), out.get("mod:stripped_oak_log"));
     }
+
+    @Test
+    void cropAndMushroomStemsAreNotLogs() {
+        var out = MaterialGrouper.group(List.of(
+                "minecraft:melon_stem",
+                "minecraft:pumpkin_stem",
+                "minecraft:mushroom_stem",
+                "minecraft:crimson_stem",
+                "minecraft:crimson_planks"));
+        assertNull(out.get("minecraft:melon_stem"));
+        assertNull(out.get("minecraft:pumpkin_stem"));
+        assertNull(out.get("minecraft:mushroom_stem"));
+        assertEquals(slot("minecraft:crimson", "log"), out.get("minecraft:crimson_stem"));
+    }
 }

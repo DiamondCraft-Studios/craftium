@@ -161,9 +161,13 @@ public final class EditorScreen extends CraftiumScreen {
     private boolean selectingText;
     private static final Options DEFAULTS = new Options();
 
-    private record MenuItem(String label, String shortcut, Runnable action, List<MenuItem> children) {
+    private record MenuItem(String label, String shortcut, Runnable action, List<MenuItem> children, boolean checked) {
         MenuItem(String label, String shortcut, Runnable action) {
-            this(label, shortcut, action, List.of());
+            this(label, shortcut, action, List.of(), false);
+        }
+
+        MenuItem(String label, String shortcut, Runnable action, List<MenuItem> children) {
+            this(label, shortcut, action, children, false);
         }
     }
     /** The label of the menu entry whose submenu is open, or empty. */
@@ -546,6 +550,7 @@ public final class EditorScreen extends CraftiumScreen {
             progressPanel(g);
             materialsPanel(g);
             selectionPanel(g);
+            shapePanel(g);
         }
         finishPanel(g);
         viewport(g);
@@ -3381,7 +3386,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** The Magic select window: directions, mode and select type of the Magic Wand, shown from Window → Toggle magic whichever tool is active. */
     private void magicPanel(Gfx g) {
-        int x = w - RIGHT - 244, y = 263; // under where the Rulers panel opens, left of the right-hand column
+        int x = LEFT + 8, y = h - 25 - 160 - 6; // the bottom left, beside the left column
         panel(g, x, y, 236, 160, "Magic select");
         MagicSelectOptions.draw(magicHost(g), o(), x + 10, y + 26, pw - 20, MagicSelectOptions.ALL);
     }
@@ -3610,13 +3615,18 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** The blocks of one kind in any material: every stair, or every slab. */
     private static java.util.function.Predicate<String> sameKind(String kind) {
-        return id -> {
+        return remembered(id -> {
             var block = blockById(id);
             var slot = block == null
                     ? null
                     : dev.craftium.server.MaterialFamilies.index().slot(block);
             return slot != null && slot.kind().equals(kind);
-        };
+        });
+    }
+    /** A chooser's limit that works each id out once: the chooser asks it of every block in the game on each key typed. Used on the client thread only. */
+    private static java.util.function.Predicate<String> remembered(java.util.function.Predicate<String> test) {
+        var known = new java.util.HashMap<String, Boolean>();
+        return id -> known.computeIfAbsent(id, test::test);
     }
     /**
      * Change material: choose a block of the material to change to, and the blocks of the cell's material in the selection (its planks, stairs, slabs, walls and so on)
@@ -3638,10 +3648,10 @@ public final class EditorScreen extends CraftiumScreen {
                     else CraftiumClient.send("change_material:" + block + ">" + id, null, null);
                 });
         // Only blocks of a material with other kinds can be changed to
-        picker.limitedTo("materials", id -> {
+        picker.limitedTo("materials", remembered(id -> {
             var chosen = blockById(id);
             return chosen != null && dev.craftium.server.MaterialFamilies.applicable(chosen);
-        });
+        }));
         ClientCompat.setScreen(minecraft, picker);
     }
     /** Edit block state: set some states of every block of this kind in the selection, such as the half of all the stairs, leaving the states that were not set as they are. */
@@ -4151,6 +4161,11 @@ public final class EditorScreen extends CraftiumScreen {
                     },
                     "");
             if (!item.shortcut.isEmpty()) text(g, item.shortcut, x + 212 - font.width(item.shortcut), y + 8, MUTED);
+            if (item.checked) { // a tick at the right: this window is showing
+                int cx = x + 204, cy = y + 12;
+                ToolIcons.line(g, cx, cy, cx + 3, cy + 3, ACCENT);
+                ToolIcons.line(g, cx + 3, cy + 3, cx + 9, cy - 4, ACCENT);
+            }
             y += 25;
         }
     }
@@ -4286,8 +4301,61 @@ public final class EditorScreen extends CraftiumScreen {
             }
             case 9 -> {
                 var items = new ArrayList<MenuItem>();
-                for (String id : WorkspaceLayout.windows.keySet())
-                    items.add(item("Toggle " + id, "", () -> WorkspaceLayout.toggle(id)));
+                // Windows in groups, each with a tick while it is showing; the layout actions come last
+                String[][] groups = {
+                    {
+                        "tools",
+                        "Tools",
+                        "options",
+                        "Tool options",
+                        "masks",
+                        "Tool masks",
+                        "magic",
+                        "Magic select",
+                        "rulers",
+                        "Rulers",
+                        "shape",
+                        "Shape"
+                    },
+                    {
+                        "palette",
+                        "Block palette",
+                        "materials",
+                        "Materials",
+                        "selection",
+                        "Selection",
+                        "clipboard",
+                        "Clipboard",
+                        "hierarchy",
+                        "Hierarchy"
+                    },
+                    {
+                        "target",
+                        "Target info",
+                        "history",
+                        "History",
+                        "missing",
+                        "Missing blocks",
+                        "progress",
+                        "Large edit"
+                    }
+                };
+                for (String[] group : groups) {
+                    boolean any = false;
+                    for (int i = 0; i < group.length; i += 2) {
+                        String id = group[i];
+                        if (!WorkspaceLayout.windows.containsKey(id)) continue;
+                        if (!any && !items.isEmpty()) items.add(divider());
+                        any = true;
+                        items.add(new MenuItem(
+                                group[i + 1],
+                                "",
+                                () -> WorkspaceLayout.toggle(id),
+                                List.of(),
+                                WorkspaceLayout.visible(id)));
+                    }
+                }
+                items.add(divider());
                 items.add(item("Save layout", "", WorkspaceLayout::save));
                 items.add(item("Reset layout", "", WorkspaceLayout::reset));
                 items.add(
@@ -7033,10 +7101,40 @@ public final class EditorScreen extends CraftiumScreen {
         text(g, time, x + 10, y + 76, MUTED);
     }
 
+    /** The tool the Shape window last opened for: it opens when the Shape tool is chosen, and is then the player's to close. */
+    private Tool shapePanelFor;
+    /** The Shape tool's small window, at the bottom right: settings of the shape that has no place in the tool options. */
+    private void shapePanel(Gfx g) {
+        if (!(toolActive && o().tool == Tool.SHAPE || ShapeObject.active())) {
+            shapePanelFor = null;
+            return; // only while the Shape tool is in hand, or a shape is waiting to be built
+        }
+        int x = w - RIGHT - 244, y = h - 25 - 52 - 6; // the bottom right, left of the right-hand column
+        panel(g, x, y, 236, 52, "Shape");
+        if (shapePanelFor != Tool.SHAPE) {
+            shapePanelFor = Tool.SHAPE;
+            var window = WorkspaceLayout.windows.get("shape");
+            if (window != null && !window.visible) {
+                window.visible = true;
+                WorkspaceLayout.save();
+            }
+        }
+        button(
+                g,
+                x + 10,
+                y + 25,
+                pw - 20,
+                19,
+                "Reset rotation",
+                false,
+                ShapeObject::resetRotation,
+                "Take the turn off the shape, and off the shapes put down after it");
+    }
+
     private void rulerPanel(Gfx g) {
         if (ClientState.rulers.isEmpty() && !(toolActive && o().tool == Tool.RULER))
             return; // there is nothing to list until a ruler is made
-        int x = w - RIGHT - 244, y = 27; // just left of the right-hand panels, clear of the viewport tools
+        int x = LEFT + 8, y = h - 25 - 230 - 6; // the bottom left, beside the left column
         panel(g, x, y, 236, 230, "Rulers");
         if (!o().rulersIntroduced) { // the first time a ruler is used the window comes up, once; after that it is the
             // player's to open and close

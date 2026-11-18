@@ -758,6 +758,17 @@ public final class EditorServer {
                 handler.run(new ActionUse(player, s, o, r.target(), r.normal()));
                 return;
             }
+            if (r.action()
+                    .equals("shape_reset")) { // the waiting shape's rotation was taken off: one step in the history
+                if (r.target() == null) throw new IllegalArgumentException("A shape is needed to reset its rotation");
+                s.remember(Session.Edit.selecting(
+                        "Reset shape rotation",
+                        Session.SelectionChange.restoring(
+                                Map.of("shape", shapeText(r.target(), o.yaw, o.pitch, o.roll, o)),
+                                Map.of("shape", shapeText(r.target(), 0, 0, 0, o)))));
+                send(player, s, "Reset shape rotation", false);
+                return;
+            }
             if (r.action().equals("selection_restore")) {
                 if (!s.undo.isEmpty() && s.undo.peekFirst().selectionOnly()) s.undo.removeFirst();
                 if (s.selectionBefore != null) {
@@ -776,18 +787,7 @@ public final class EditorServer {
                             && o.tool == Tool.SHAPE
                             && o.shapeKind == Options.ShapeKind.BRUSH
                             && r.target() != null
-                    ? String.format(
-                            java.util.Locale.ROOT,
-                            "%d,%d,%d,%s,%s,%s,%s,%s,%s",
-                            r.target().x(),
-                            r.target().y(),
-                            r.target().z(),
-                            o.yaw,
-                            o.pitch,
-                            o.roll,
-                            o.sizeX,
-                            o.sizeY,
-                            o.sizeZ)
+                    ? shapeText(r.target(), o.yaw, o.pitch, o.roll, o)
                     : null;
             s.pivotBeforeRequest = s.pivotNow;
             s.pivotNow = pivotText(o, 0, 0, 0);
@@ -2796,6 +2796,22 @@ public final class EditorServer {
         return edit.withSelection(change.andObjects(before, after));
     }
 
+    /** A shape waiting to be built as the client takes it back ("x,y,z,yaw,pitch,roll,sizeX,sizeY,sizeZ"): put at {@code at}, turned as given, sized as {@code o} says. */
+    private static String shapeText(Point at, double yaw, double pitch, double roll, Options o) {
+        return String.format(
+                java.util.Locale.ROOT,
+                "%d,%d,%d,%s,%s,%s,%s,%s,%s",
+                at.x(),
+                at.y(),
+                at.z(),
+                yaw,
+                pitch,
+                roll,
+                o.sizeX,
+                o.sizeY,
+                o.sizeZ);
+    }
+
     private static void handBack(Session s, Session.SelectionChange change, boolean backwards) {
         if (change.hasHierarchy())
             s.saved.restore(
@@ -2856,7 +2872,8 @@ public final class EditorServer {
             return;
         }
         if (edit.selectionOnly()
-                || edit.hierarchyOnly()) { // a selection or a change to the Hierarchy has no blocks: put it back
+                || edit.hierarchyOnly()
+                || edit.clientOnly()) { // a selection or a change to the Hierarchy has no blocks: put it back
             // directly
             from.removeFirst();
             handBack(s, edit.selection(), backwards);
@@ -3261,7 +3278,7 @@ public final class EditorServer {
                 s.selection.max(),
                 s.clipboard.size(),
                 s.undo.stream()
-                        .map(edit -> edit.selectionOnly() || edit.hierarchyOnly()
+                        .map(edit -> edit.selectionOnly() || edit.hierarchyOnly() || edit.clientOnly()
                                 ? edit.name()
                                 : edit.name() + " · "
                                         + (edit.changes().size()
