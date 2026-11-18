@@ -61,9 +61,11 @@ final class GhostBlocks {
         replacedOrigin = origin;
         replacedAt = tick;
         if (!out.equals(replacedPlaces))
-            replacedShape = OutlineShape.ofLater(out.stream()
-                    .map(p -> new Point(p.getX(), p.getY(), p.getZ()))
-                    .toList());
+            replacedShape = OutlineShape.ofLater(
+                    out.stream()
+                            .map(p -> new Point(p.getX(), p.getY(), p.getZ()))
+                            .toList(),
+                    replacedShape);
         return replacedPlaces = out;
     }
 
@@ -118,6 +120,22 @@ final class GhostBlocks {
 
     private GhostBlocks(Data data) {
         this.data = data;
+    }
+
+    /**
+     * The waiting edit from a status, as {@code previous} was made from {@code previousJson}: the same one when nothing changed, so its outline is not
+     * worked out again at every status, and otherwise a new one that keeps drawing the old outlines until its own are ready, so a stroke held down
+     * and changing all the time does not blink.
+     */
+    static GhostBlocks parse(String json, String previousJson, GhostBlocks previous) {
+        if (previous != null && previous != EMPTY && Objects.equals(json, previousJson)) return previous;
+        var next = parse(json);
+        if (next != EMPTY && previous != null && previous != EMPTY) {
+            next.placedShape = previous.placedShape;
+            next.removedShape = previous.removedShape;
+            next.replacedShape = previous.replacedShape;
+        }
+        return next;
     }
 
     static GhostBlocks parse(String json) {
@@ -185,11 +203,11 @@ final class GhostBlocks {
         }
         relative = points;
         states = list;
-        placedShape = OutlineShape.ofLater(points);
+        placedShape = OutlineShape.ofLater(points, placedShape);
         var gone = new ArrayList<Point>();
         int[] r = data.removed();
         for (int i = 0; i + 2 < r.length; i += 3) gone.add(new Point(r[i], r[i + 1], r[i + 2]));
-        removedShape = OutlineShape.ofLater(gone);
+        removedShape = OutlineShape.ofLater(gone, removedShape);
         removedPlaces =
                 gone.stream().map(p -> new BlockPos(p.x(), p.y(), p.z())).toList();
         return true;

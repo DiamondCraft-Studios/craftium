@@ -77,16 +77,27 @@ final class OutlineShape {
      * nothing until it is ready. {@code points} must not change afterwards. Small sets are worked out at once, since that is quicker than the hand-over.
      */
     static OutlineShape ofLater(Collection<Point> points) {
+        return ofLater(points, null);
+    }
+    /**
+     * As {@link #ofLater(Collection)}, for a shape that replaces another one, such as the waiting edit of a stroke that is held down and changes
+     * all the time: until the new outline is ready the old one keeps being drawn, where nothing at all would make the outline blink off at every step.
+     */
+    static OutlineShape ofLater(Collection<Point> points, OutlineShape previous) {
         if (points.size() <= LATER_FROM) return of(points);
         var shape = new OutlineShape(SelectionOutline.Result.EMPTY, boundsOf(points));
         shape.ready = false;
         shape.cells = points;
+        if (previous != null && !previous.isEmpty()) shape.stale = previous.ready ? previous : previous.stale;
         LATER.execute(() -> {
             shape.outline = SelectionOutline.of(points);
             shape.ready = true;
+            shape.stale = null;
         });
         return shape;
     }
+    /** What to draw in this shape's place until its own outline is ready; only set by {@link #ofLater(Collection, OutlineShape)}. */
+    private volatile OutlineShape stale;
 
     private static final int LATER_FROM = 2000;
     /** Whether the outline has been worked out; always true unless the shape came from {@link #ofLater}. */
@@ -204,7 +215,12 @@ final class OutlineShape {
             Options.SelectionStyle style,
             java.util.function.UnaryOperator<Vec3> eyeInShape,
             boolean scene) {
-        if (bounds == null || !ready) return;
+        if (bounds == null) return;
+        if (!ready) {
+            var old = stale;
+            if (old != null) old.draw(at, lines, stroke, fill, backFill, withFill, style, eyeInShape, scene);
+            return;
+        }
         boxed = outline.edges().size() > maxEdges;
         if (boxed) {
             AABB box = bounds.move(at);
