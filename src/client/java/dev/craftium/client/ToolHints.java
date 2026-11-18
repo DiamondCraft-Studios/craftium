@@ -21,6 +21,7 @@ final class ToolHints {
         if (tool != null && confirms(tool)) hints.add(EditorBindings.label(Action.CONFIRM) + ": Apply");
         hints.add(wheel(tool, gizmo, shape));
         if (tool != null && brush(tool)) hints.add(EditorBindings.label(Action.ADJUST_RADIUS) + "+Wheel / [ ]: Radius");
+        if (tool != null && BrushRing.shownFor(tool)) hints.add("Ctrl+Alt Drag: Brush size");
         hints.add("WASD / Space Shift: Fly");
         return hints;
     }

@@ -92,7 +92,7 @@ public interface Interaction {
         // Fluid Ball and Fluid Block show the blocks the flow would place, not the ball around the click.
         if (dev.craftium.client.FluidPreview.handles(editor.options().tool))
             dev.craftium.client.FluidPreview.draw(mc, hit, editor.options());
-        else BrushPreview.draw(mc, hit.getBlockPos(), editor.options());
+        else BrushPreview.draw(mc, hit.getBlockPos(), hit.getDirection(), editor.options());
     }
 
     /**
@@ -105,7 +105,10 @@ public interface Interaction {
     static boolean showsBrush(EditorContext editor, BlockHitResult hit) {
         var tool = editor.options().tool;
         boolean brush = !tool.selection() && !tool.transform() && tool.brushUse() != Tool.BrushUse.NONE;
-        return editor.toolActive() && hit != null && !PlacementPreview.active() && !ShapeObject.active() && brush;
+        return editor.toolActive()
+                && !editor.resizingBrush()
+                && hit != null
+                && !PlacementPreview.active() && !ShapeObject.active() && brush;
     }
 
     /** Whether the turn keys (rotate, tilt, flip) turn this tool's hover preview before anything is put down. A shape that is down is turned by them whatever tool is chosen. */

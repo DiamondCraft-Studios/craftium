@@ -34,4 +34,9 @@ public interface EditorContext {
     int handleIndex();
     /** Whether a tool is in hand: false while the player has put it away to work with the world. */
     boolean toolActive();
+
+    /** Whether the brush is being resized by dragging, while which its hover preview is hidden so the circle can be seen on its own. */
+    default boolean resizingBrush() {
+        return false;
+    }
 }
