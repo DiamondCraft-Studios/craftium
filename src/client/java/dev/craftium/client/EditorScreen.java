@@ -3614,13 +3614,18 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** The blocks of one kind in any material: every stair, or every slab. */
     private static java.util.function.Predicate<String> sameKind(String kind) {
-        return id -> {
+        return remembered(id -> {
             var block = blockById(id);
             var slot = block == null
                     ? null
                     : dev.craftium.server.MaterialFamilies.index().slot(block);
             return slot != null && slot.kind().equals(kind);
-        };
+        });
+    }
+    /** A chooser's limit that works each id out once: the chooser asks it of every block in the game on each key typed. Used on the client thread only. */
+    private static java.util.function.Predicate<String> remembered(java.util.function.Predicate<String> test) {
+        var known = new java.util.HashMap<String, Boolean>();
+        return id -> known.computeIfAbsent(id, test::test);
     }
     /**
      * Change material: choose a block of the material to change to, and the blocks of the cell's material in the selection (its planks, stairs, slabs, walls and so on)
@@ -3642,10 +3647,10 @@ public final class EditorScreen extends CraftiumScreen {
                     else CraftiumClient.send("change_material:" + block + ">" + id, null, null);
                 });
         // Only blocks of a material with other kinds can be changed to
-        picker.limitedTo("materials", id -> {
+        picker.limitedTo("materials", remembered(id -> {
             var chosen = blockById(id);
             return chosen != null && dev.craftium.server.MaterialFamilies.applicable(chosen);
-        });
+        }));
         ClientCompat.setScreen(minecraft, picker);
     }
     /** Edit block state: set some states of every block of this kind in the selection, such as the half of all the stairs, leaving the states that were not set as they are. */

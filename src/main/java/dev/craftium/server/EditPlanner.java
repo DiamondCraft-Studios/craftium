@@ -515,6 +515,9 @@ final class EditPlanner {
         return material;
     }
 
+    /** How far above and below its line the Slope tool looks for the ground of a column, and the most it raises it. */
+    static final int SLOPE_REACH = 64;
+
     /** The longest ramp the Slope tool builds, measured across the ground from its start to its end. */
     static final int MAX_SLOPE_LENGTH = 256;
 
@@ -586,7 +589,7 @@ final class EditPlanner {
                 double side = Math.hypot(x - (a.x() + t * vx), z - (a.z() + t * vz));
                 if (side > r + .5) continue;
                 int y = (int) Math.round(a.y() + t * (b.y() - a.y()));
-                column(x, z, y, r + 16, top -> y);
+                column(x, z, y, SLOPE_REACH, SLOPE_REACH, SLOPE_REACH, top -> y);
             }
     }
 
@@ -614,8 +617,14 @@ final class EditPlanner {
      * entity on top, or with a tree trunk or a build standing on it, is left alone.
      */
     private void column(int x, int z, int reference, int above, java.util.function.IntUnaryOperator desired) {
+        column(x, z, reference, above, o.radius + 16, 24, desired);
+    }
+
+    /** {@link #column(int, int, int, int, java.util.function.IntUnaryOperator)} with the depth the ground is looked for to and the most it is raised. */
+    private void column(
+            int x, int z, int reference, int above, int depth, int raise, java.util.function.IntUnaryOperator desired) {
         int maxY = level.getMaxY() - 1;
-        int top = Math.min(maxY, reference + above), bottom = Math.max(level.getMinY(), reference - o.radius - 16);
+        int top = Math.min(maxY, reference + above), bottom = Math.max(level.getMinY(), reference - depth);
         while (top >= bottom && !ground(new Point(x, top, z))) top--;
         if (top < bottom) return;
         Point at = new Point(x, top, z);
@@ -631,7 +640,7 @@ final class EditPlanner {
             }
             cover.add(s);
         }
-        int to = Math.clamp(desired.applyAsInt(top), bottom, Math.min(maxY, top + 24));
+        int to = Math.clamp(desired.applyAsInt(top), bottom, Math.min(maxY, top + raise));
         if (to == top) return;
         // The layers that travel with the surface: just its top block, or with Smear the top few ground blocks.
         var layers = new ArrayList<BlockState>(4);
@@ -643,6 +652,18 @@ final class EditPlanner {
                 layers.add(state(p));
             }
         int n = layers.size();
+        // A column moves as a whole or not at all: if any block it would write belongs to a BuildObject, the Terrain
+        // tools leave the column as it is,
+        // instead of tearing it around the object's blocks.
+        if (!exact && o.tool.group.equals("Terrain")) {
+            int low = Math.max(level.getMinY(), Math.min(top - n + 1, to - n + 1)),
+                    high = Math.min(maxY, Math.max(top, to) + cover.size());
+            for (int y = low; y <= high; y++)
+                if (inBuildObject(new Point(x, y, z))) {
+                    skip(Skip.OBJECT);
+                    return;
+                }
+        }
         Point below = at.add(0, -n, 0);
         BlockState under = state(below);
         BlockState fill = ground(below) && !under.hasBlockEntity() ? under : layers.get(n - 1);
