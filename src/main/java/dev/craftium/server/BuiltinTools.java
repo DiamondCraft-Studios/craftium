@@ -7,6 +7,7 @@ import dev.craftium.core.Point;
 import dev.craftium.core.Selection;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -212,10 +213,21 @@ final class BuiltinTools {
         }
         var before = new ArrayList<>(s.selection.points());
         if (s.confirmEdits && !s.bypassConfirm && s.pendingSelectionBefore == null) s.pendingSelectionBefore = before;
+        boolean asObject = o.shapeAsBuildObject;
+        if (asObject) HierarchyPermissions.require(u.player(), "create");
+        var hierarchyBefore = asObject ? s.saved.state() : null;
         s.selection.combine(placed, Selection.Mode.REPLACE);
         try {
-            u.submit(edit.withSelection(new Session.SelectionChange(before, new ArrayList<>(placed))));
+            var change = new Session.SelectionChange(before, new ArrayList<>(placed));
+            if (asObject) { // the shape is also a new BuildObject, in the history with it, so Undo takes both away
+                var entry = s.saved.createFrom(null, placed, 0);
+                s.saved.reveal(entry);
+                s.saved.viewSet(List.of(entry.id()), s.selection);
+                change = change.withHierarchy(hierarchyBefore, s.saved.state());
+            }
+            u.submit(edit.withSelection(change));
         } catch (RuntimeException e) {
+            if (asObject) s.saved.restore(hierarchyBefore, s.selection);
             s.selection.restore(before);
             s.pendingSelectionBefore = null;
             throw e;
