@@ -230,8 +230,8 @@ public final class BuilderEdits {
     }
     /** A block's state after the builder's flip (axis 0, 1 or 2, or -1 for none) and quarter turns, so stairs and the like face the way they will land. The preview shares this. */
     public static BlockState turn(BlockState state, int turns, int flipAxis) {
-        if (flipAxis == 0) state = state.mirror(Mirror.FRONT_BACK);
-        else if (flipAxis == 2) state = state.mirror(Mirror.LEFT_RIGHT);
+        if (flipAxis == 0) state = StateTransforms.mirror(state, Mirror.FRONT_BACK);
+        else if (flipAxis == 2) state = StateTransforms.mirror(state, Mirror.LEFT_RIGHT);
         else if (flipAxis == 1) state = verticalMirror(state);
         return state.rotate(Rotation.values()[Math.floorMod(turns, 4)]);
     }

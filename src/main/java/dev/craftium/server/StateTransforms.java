@@ -56,7 +56,15 @@ final class StateTransforms {
                             16));
         if (Geometry.rotate(new Geometry.Vector(0, 1, 0), remainingYaw, pitch, roll)
                         .y()
-                < -.5) state = flipHalf(state);
+                < -.5) {
+            state = flipHalf(state);
+            // Turning a stair upside down by pitch or roll reflects its footprint in the horizontal plane, so its
+            // inner and outer corners change sides. (A flip along Y keeps the footprint and so keeps the shape.)
+            if (state.hasProperty(BlockStateProperties.STAIRS_SHAPE))
+                state = state.setValue(
+                        BlockStateProperties.STAIRS_SHAPE,
+                        swapSides(state.getValue(BlockStateProperties.STAIRS_SHAPE)));
+        }
         if (Math.abs(pitch % 90) < .0001 && Math.abs(roll % 90) < .0001)
             for (var property : from.getProperties()) {
                 Direction direction = direction(property.getName());
@@ -81,6 +89,38 @@ final class StateTransforms {
     private static Direction direction(String name) {
         for (var direction : Direction.values()) if (direction.getName().equals(name)) return direction;
         return null;
+    }
+
+    /**
+     * The game's mirror, with stairs done by hand: the game's own handling leaves some stair corners on the wrong side after a
+     * reflection. A reflection turns the facing across the mirrored axis and always puts inner and outer corners on the other side.
+     */
+    static BlockState mirror(BlockState state, net.minecraft.world.level.block.Mirror mirror) {
+        if (state.hasProperty(BlockStateProperties.STAIRS_SHAPE)
+                && state.hasProperty(BlockStateProperties.HORIZONTAL_FACING)) {
+            var along = mirror == net.minecraft.world.level.block.Mirror.FRONT_BACK
+                    ? Direction.Axis.X
+                    : mirror == net.minecraft.world.level.block.Mirror.LEFT_RIGHT ? Direction.Axis.Z : null;
+            if (along == null) return state;
+            var facing = state.getValue(BlockStateProperties.HORIZONTAL_FACING);
+            return state.setValue(
+                            BlockStateProperties.HORIZONTAL_FACING,
+                            facing.getAxis() == along ? facing.getOpposite() : facing)
+                    .setValue(
+                            BlockStateProperties.STAIRS_SHAPE,
+                            swapSides(state.getValue(BlockStateProperties.STAIRS_SHAPE)));
+        }
+        return state.mirror(mirror);
+    }
+
+    private static StairsShape swapSides(StairsShape shape) {
+        return switch (shape) {
+            case INNER_LEFT -> StairsShape.INNER_RIGHT;
+            case INNER_RIGHT -> StairsShape.INNER_LEFT;
+            case OUTER_LEFT -> StairsShape.OUTER_RIGHT;
+            case OUTER_RIGHT -> StairsShape.OUTER_LEFT;
+            default -> shape;
+        };
     }
 
     static BlockState flipHalf(BlockState state) {
