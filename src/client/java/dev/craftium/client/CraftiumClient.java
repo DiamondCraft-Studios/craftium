@@ -1153,16 +1153,14 @@ public final class CraftiumClient implements ClientModInitializer {
             }
             // The painters replace every block they touch by design, so tinting those red would only hide the paint.
             var tool = ClientState.options.tool;
+            ClientState.pending.tintReplaced =
+                    tool.spec().buildsOnRelease() && tool != Tool.PAINTER && tool != Tool.NOISE_PAINTER;
             // The Terrain tools that cut the ground away (Elevation lowering, Flatten and Slope cutting, an inverted
-            // Rock carving) show what
-            // goes in the same red.
-            ClientState.pending.tintReplaced = tool.spec().buildsOnRelease()
-                            && tool != Tool.PAINTER
-                            && tool != Tool.NOISE_PAINTER
-                    || tool == Tool.ELEVATION
-                    || tool == Tool.FLATTEN
-                    || tool == Tool.SLOPE
-                    || tool == Tool.ROCK;
+            // Rock
+            // carving) show those blocks in the same red; what they only raise or swap is shown as the ghost it
+            // becomes.
+            ClientState.pending.redRemoved =
+                    tool == Tool.ELEVATION || tool == Tool.FLATTEN || tool == Tool.SLOPE || tool == Tool.ROCK;
             ClientState.pending.draw(
                     new Point(0, 0, 0),
                     true,
