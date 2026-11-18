@@ -46,6 +46,16 @@ final class SelectionOperations {
             }
             p.put(at, p.preserve(old, target.defaultBlockState()));
             changed++;
+            // a door is two blocks: its other half changes with it, even when the selection cuts through the door
+            var half = old.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                    ? old.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                    : null;
+            if (half != null) {
+                Point other = at.add(
+                        0, half == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER ? 1 : -1, 0);
+                var otherOld = p.state(other);
+                if (otherOld.is(old.getBlock())) p.put(other, p.preserve(otherOld, target.defaultBlockState()));
+            }
         }
         String name = "Change material " + shortName(fromSlot.material()) + " to " + shortName(toSlot.material());
         return skipped.isEmpty()

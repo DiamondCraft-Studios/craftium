@@ -26,10 +26,14 @@ public final class ReplaceMaterial {
     }
     /**
      * What {@code old} becomes under a held block, or null when nothing is to change: the held block or the old one is not a material with variants, they are the same
-     * material, or the held block's material has no such variant.
+     * material, or the held block's material has no such variant, or the old block is two blocks tall (a door).
      */
     public static BlockState resolve(BlockState old, Block held) {
         if (held == null || old.isAir()) return null;
+        // a door is two blocks that must change together; one placement only changes one, and the neighbour update
+        // would break the door
+        if (old.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF))
+            return null;
         var index = MaterialFamilies.index();
         var from = index.slot(old.getBlock());
         var to = index.slot(held);
