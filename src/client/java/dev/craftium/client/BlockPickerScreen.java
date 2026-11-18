@@ -50,7 +50,12 @@ public final class BlockPickerScreen extends CraftiumScreen {
     private int row, left, top, cw, ch, offsetX, offsetY;
     private boolean dragging, scrolling;
     private EditBox search;
-    private FlatButton cancel;
+    private FlatButton cancel, limitButton;
+    /** What the chooser can be limited to: what it is called ("stairs") and which blocks it keeps, and whether the limit is on. Null for a chooser that lists every block. */
+    private String limitLabel = "";
+
+    private java.util.function.Predicate<String> limit;
+    private boolean limitOn;
     private float scale = 1;
     private String query = "", hover = "";
     /** A cell pressed to be dragged out to the editor's slots: which, where, and whether the pointer has moved far enough for it to be a drag rather than a click. */
@@ -65,6 +70,16 @@ public final class BlockPickerScreen extends CraftiumScreen {
         this.heading = heading;
         this.current = current;
         this.chosen = chosen;
+    }
+    /**
+     * Limits the chooser to the blocks that pass {@code keep}, with a button beside Cancel that turns the limit off and on, so the whole list is still there to choose from.
+     * The limit starts on. {@code label} says what is kept, as in "Only stairs".
+     */
+    BlockPickerScreen limitedTo(String label, java.util.function.Predicate<String> keep) {
+        limitLabel = label;
+        limit = keep;
+        limitOn = true;
+        return this;
     }
     /** Air, then the parent blocks in item registration order. Built once; the registries do not change while the game runs. */
     static synchronized List<String> all() {
@@ -226,7 +241,8 @@ public final class BlockPickerScreen extends CraftiumScreen {
         cw = Math.round(width / scale);
         ch = Math.round(height / scale);
         clearWidgets();
-        search = new EditBox(font, 0, 0, COLS * CELL, 21, Component.literal("Search blocks"));
+        search = new EditBox(
+                font, 0, 0, COLS * CELL - (limit != null ? 178 : 0), 21, Component.literal("Search blocks"));
         search.setMaxLength(128);
         search.setValue(query);
         search.setResponder(s -> {
@@ -239,6 +255,14 @@ public final class BlockPickerScreen extends CraftiumScreen {
         filter();
         cancel = new FlatButton(0, 0, 80, 22, "Cancel", this::onClose);
         addRenderableWidget(cancel);
+        if (limit != null) {
+            limitButton = new FlatButton(0, 0, 170, 22, "Only " + limitLabel + ": " + (limitOn ? "on" : "off"), () -> {
+                limitOn = !limitOn;
+                row = 0;
+                init();
+            });
+            addRenderableWidget(limitButton);
+        }
         place();
     }
     /** Positions the window, kept on screen, and the widgets that sit in it. */
@@ -251,6 +275,10 @@ public final class BlockPickerScreen extends CraftiumScreen {
         search.setY(top + 4);
         cancel.setX(left + COLS * CELL - 80);
         cancel.setY(top + ROWS * CELL + 36);
+        if (limitButton != null) {
+            limitButton.setX(left + COLS * CELL - 170);
+            limitButton.setY(top + 3);
+        }
     }
 
     private int trackX() {
@@ -282,9 +310,10 @@ public final class BlockPickerScreen extends CraftiumScreen {
 
     private void filter() {
         var found = dev.craftium.core.BlockQuery.parse(query);
+        var pool = limit != null && limitOn ? all().stream().filter(limit).toList() : all();
         shown = found.isEmpty()
-                ? all()
-                : all().stream()
+                ? pool
+                : pool.stream()
                         .filter(id -> found.matches(BlockSearch.of(id, name(id))))
                         .toList();
         if (search != null)

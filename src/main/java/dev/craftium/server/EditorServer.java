@@ -1703,6 +1703,22 @@ public final class EditorServer {
                             s,
                             BuiltinTools.bucketFill(player, plan, o, target, Options.Compare.BLOCK, "Bucket fill"));
                 }
+                case String replace
+                when replace.startsWith(SelectionOperations.REPLACE_BLOCK) -> {
+                    // "replace_block:<from>><to>": every block of one kind in the selection becomes another, from the
+                    // Selection window
+                    var plan = EditPlanner.forSelection(player.level(), s, o);
+                    String name = SelectionOperations.replaceBlock(plan, replace);
+                    start(player, s, plan.finish(name));
+                }
+                case String change
+                when change.startsWith(SelectionOperations.CHANGE_MATERIAL) -> {
+                    // "change_material:<from>><to>": the stairs, slabs, walls and other blocks of one material in the
+                    // selection take another material's
+                    var plan = EditPlanner.forSelection(player.level(), s, o);
+                    String name = SelectionOperations.changeMaterial(plan, change);
+                    start(player, s, plan.finish(name));
+                }
                 default -> throw new IllegalArgumentException("Unknown editor action");
             }
         } catch (IllegalArgumentException e) {

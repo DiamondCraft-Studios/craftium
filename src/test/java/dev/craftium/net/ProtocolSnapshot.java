@@ -250,6 +250,7 @@ final class ProtocolSnapshot {
         dev.craftium.core.Options.removeFluidsWithoutSources : boolean
         dev.craftium.core.Options.removedFill : int
         dev.craftium.core.Options.removedTint : int
+        dev.craftium.core.Options.replaceMaterial : boolean
         dev.craftium.core.Options.replaceMode : boolean
         dev.craftium.core.Options.requireSupport : boolean
         dev.craftium.core.Options.roll : double

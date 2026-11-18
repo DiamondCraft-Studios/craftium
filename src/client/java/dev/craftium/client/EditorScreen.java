@@ -545,6 +545,7 @@ public final class EditorScreen extends CraftiumScreen {
             missingPanel(g);
             progressPanel(g);
             materialsPanel(g);
+            selectionPanel(g);
         }
         finishPanel(g);
         viewport(g);
@@ -2404,6 +2405,14 @@ public final class EditorScreen extends CraftiumScreen {
                 g,
                 10,
                 434,
+                "Replace material",
+                o().replaceMaterial,
+                () -> o().replaceMaterial = !o().replaceMaterial,
+                "Placing a block turns the stairs, slab, wall or other variant you click into that block's material, keeping its facing: oak stairs become spruce stairs with spruce planks in hand. Anything else you click is left alone, nothing is placed · Y");
+        toggle(
+                g,
+                10,
+                457,
                 "Block step",
                 o().blockStep,
                 () -> o().blockStep = !o().blockStep,
@@ -2411,7 +2420,7 @@ public final class EditorScreen extends CraftiumScreen {
         toggle(
                 g,
                 10,
-                457,
+                480,
                 "Sticky flight",
                 o().stickyFlight,
                 () -> o().stickyFlight = !o().stickyFlight,
@@ -2419,7 +2428,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(
                 g,
                 10,
-                480,
+                503,
                 pw - 20,
                 20,
                 "Reach: " + o().reach.label,
@@ -2432,7 +2441,7 @@ public final class EditorScreen extends CraftiumScreen {
         slider(
                 g,
                 10,
-                517,
+                540,
                 pw - 20,
                 "Far reach: blocks",
                 o().farReach,
@@ -2444,7 +2453,7 @@ public final class EditorScreen extends CraftiumScreen {
         slider(
                 g,
                 10,
-                553,
+                576,
                 pw - 20,
                 "Fly speed",
                 o().flySpeed,
@@ -2453,23 +2462,23 @@ public final class EditorScreen extends CraftiumScreen {
                 DEFAULTS.flySpeed,
                 v -> o().flySpeed = (float) v,
                 false);
-        button(g, 10, 577, pw - 20, 20, "Apply flight speed", false, () -> action("flight"), "");
+        button(g, 10, 600, pw - 20, 20, "Apply flight speed", false, () -> action("flight"), "");
         int[] pair = flex(pw - 20, 6, 1, 1);
         button(
                 g,
                 10,
-                603,
+                626,
                 pair[0],
                 20,
                 "Hotbar ↔",
                 false,
                 () -> action("hotbar"),
                 "Swap the hotbar with inventory row 1 · Z");
-        button(g, 16 + pair[0], 603, pair[1], 20, "Game mode", false, () -> action("gamemode"), "");
+        button(g, 16 + pair[0], 626, pair[1], 20, "Game mode", false, () -> action("gamemode"), "");
         button(
                 g,
                 10,
-                631,
+                654,
                 pw - 20,
                 20,
                 "Builder tool: " + o().builderTool.name(),
@@ -3286,6 +3295,90 @@ public final class EditorScreen extends CraftiumScreen {
             row += 15;
         }
     }
+
+    private int selectionScroll;
+    /**
+     * The Selection window: the blocks the selection is made of, one cell each in the style of the Block palette, with how many there are of it. The cells follow the selection and the
+     * world, so they change as the selection is changed and as its blocks are edited. Clicking a cell makes it the foreground block, and it can be dragged like a palette cell.
+     */
+    private void selectionPanel(Gfx g) {
+        int x = w - RIGHT - 300, y = 330;
+        panel(g, x, y, 290, 260, "Selection");
+        if (!WorkspaceLayout.visible("selection")) {
+            SelectionBlocks.reset();
+            return;
+        }
+        SelectionBlocks.update(minecraft);
+        var blocks = SelectionBlocks.entries();
+        int size = SelectionOverlay.points().size();
+        if (size == 0) {
+            text(g, "Nothing is selected", x + 10, y + 28, MUTED);
+            text(g, "Select some blocks and what they are made of shows here", x + 10, y + 42, MUTED);
+            return;
+        }
+        String head = String.format("%,d", size) + (size == 1 ? " block" : " blocks") + " · " + blocks.size()
+                + (blocks.size() == 1 ? " kind" : " kinds");
+        if (SelectionBlocks.air() > 0) head += " · " + String.format("%,d", SelectionBlocks.air()) + " air";
+        text(g, shorten(head, pw - 20), x + 10, y + 27, TEXT);
+        if (SelectionBlocks.counting())
+            text(g, "Counting " + Math.round(SelectionBlocks.progress() * 100) + "%", x + 10, y + 40, MUTED);
+        int top = y + 54, cellW = 32, cellH = 32, pitch = 34;
+        int visibleRows = Math.max(1, (pb - 6 - top + 2) / pitch);
+        int columns = Math.max(1, (pw - 17) / pitch);
+        boolean bar = (blocks.size() + columns - 1) / columns > visibleRows;
+        if (bar) columns = Math.max(1, (pw - 25) / pitch);
+        int rows = (blocks.size() + columns - 1) / columns, limit = Math.max(0, rows - visibleRows);
+        selectionScroll = Math.clamp(selectionScroll, 0, limit);
+        for (int r = 0; r < visibleRows; r++)
+            for (int c = 0; c < columns; c++) {
+                int i = (selectionScroll + r) * columns + c;
+                if (i >= blocks.size()) break;
+                var entry = blocks.get(i);
+                int bx = x + 10 + c * pitch, by = top + r * pitch;
+                boolean active = o().block.equals(entry.id());
+                g.fill(bx, by, bx + cellW, by + cellH, active ? 0xff315b84 : 0xff1b2838);
+                if (active) g.outline(bx, by, cellW, cellH, ACCENT);
+                BlockPickerScreen.icon(g, font, entry.id(), bx + 8, by + 3);
+                g.centeredText(font, SelectionBlocks.abbreviate(entry.count()), bx + cellW / 2, by + 21, TEXT);
+                String from = entry.id();
+                dropArea(bx, by, cellW, cellH, dropped -> replaceInSelection(from, dropped));
+                dragSource(
+                        new Control(
+                                bx,
+                                by,
+                                cellW,
+                                cellH,
+                                () -> ClientState.pick(entry.id()),
+                                () -> openSelectionMenu(from),
+                                BlockPickerScreen.name(entry.id()) + " · " + entry.id() + " · "
+                                        + String.format("%,d", entry.count()) + " of "
+                                        + String.format("%,d", size) + " ("
+                                        + Math.round(1000d * entry.count() / Math.max(1, size)) / 10d
+                                        + "%) · Click to set the foreground · Right-click to replace it · Drop a block on it to replace it with that block"),
+                        entry.id());
+            }
+        if (bar) {
+            int track = visibleRows * pitch - 2,
+                    thumb = Math.max(10, track * visibleRows / rows),
+                    thumbY = top + (track - thumb) * selectionScroll / Math.max(1, limit),
+                    barX = x + pw - 11;
+            g.fill(barX, top, barX + 5, top + track, 0xff1b2838);
+            g.fill(barX, thumbY, barX + 5, thumbY + thumb, 0xff4a6585);
+            controls.add(new Control(
+                    barX - 2,
+                    top,
+                    9,
+                    track,
+                    () -> {
+                        double py = WorkspaceLayout.inverse("selection", mx, my)[1];
+                        selectionScroll = Math.clamp(
+                                (int) Math.round((py - top - thumb / 2.0) / Math.max(1, track - thumb) * limit),
+                                0,
+                                limit);
+                    },
+                    ""));
+        }
+    }
     /** The Magic select window: directions, mode and select type of the Magic Wand, shown from Window → Toggle magic whichever tool is active. */
     private void magicPanel(Gfx g) {
         int x = w - RIGHT - 244, y = 263; // under where the Rulers panel opens, left of the right-hand column
@@ -3461,13 +3554,106 @@ public final class EditorScreen extends CraftiumScreen {
     /** The two lists of blocks that share the Change / Edit block state / Remove menu. */
     private enum BlockList {
         MASK,
-        PALETTE
+        PALETTE,
+        /** The cells of the Selection window, which have a menu of their own. */
+        SELECTION
     }
 
     private BlockList ctxList = BlockList.MASK;
 
     private List<String> blocksOf(BlockList list) {
-        return list == BlockList.MASK ? o().maskBlocks : ClientState.palette;
+        return switch (list) {
+            case MASK -> o().maskBlocks;
+            case PALETTE -> ClientState.palette;
+            case SELECTION ->
+                SelectionBlocks.entries().stream()
+                        .map(SelectionBlocks.Entry::id)
+                        .toList();
+        };
+    }
+
+    private String[] menuLabels(BlockList list) {
+        return list == BlockList.SELECTION ? SELECTION_MENU_LABELS : BLOCK_MENU_LABELS;
+    }
+    /** The block of the Selection window cell whose menu is open: kept by name, as the cells change under a menu that is left open. */
+    private String ctxBlock = "";
+    /** Opens the menu of a Selection window cell. */
+    private void openSelectionMenu(String block) {
+        ctxList = BlockList.SELECTION;
+        ctxCell = 0;
+        ctxBlock = block;
+        ctxX = Math.min(mx, w - MASK_MENU_WIDTH - 4);
+        ctxY = Math.min(my, h - SELECTION_MENU_LABELS.length * MASK_MENU_ROW - 4);
+    }
+    /** Replace: choose the block that takes the place of every one of these in the selection. */
+    private void chooseReplacement(String block) {
+        var picker = new BlockPickerScreen(
+                this, "Replace " + BlockPickerScreen.name(block) + " with", "", id -> replaceInSelection(block, id));
+        // A stair is mostly replaced by another stair: the chooser lists only those until it is told to list everything
+        var found = blockById(block);
+        var slot = found == null
+                ? null
+                : dev.craftium.server.MaterialFamilies.index().slot(found);
+        if (slot != null && !slot.kind().equals(dev.craftium.core.MaterialGrouper.BASE))
+            picker.limitedTo(kindLabel(slot.kind()), sameKind(slot.kind()));
+        ClientCompat.setScreen(minecraft, picker);
+    }
+    /** The block with this id, or null. */
+    private static net.minecraft.world.level.block.Block blockById(String id) {
+        var key = dev.craftium.compat.Compat.tryParse(id.split("\\[", 2)[0]);
+        return key == null ? null : BuiltInRegistries.BLOCK.getOptional(key).orElse(null);
+    }
+    /** A kind of block as the chooser's limit names it: stairs, slabs, fence gates. */
+    private static String kindLabel(String kind) {
+        String name = kind.replace('_', ' ');
+        return name.endsWith("s") || name.equals("wood") ? name : name + "s";
+    }
+    /** The blocks of one kind in any material: every stair, or every slab. */
+    private static java.util.function.Predicate<String> sameKind(String kind) {
+        return id -> {
+            var block = blockById(id);
+            var slot = block == null
+                    ? null
+                    : dev.craftium.server.MaterialFamilies.index().slot(block);
+            return slot != null && slot.kind().equals(kind);
+        };
+    }
+    /**
+     * Change material: choose a block of the material to change to, and the blocks of the cell's material in the selection (its planks, stairs, slabs, walls and so on)
+     * become the same kinds of that one. Not for a block that is not part of a material, such as glass.
+     */
+    private void chooseMaterial(String block) {
+        var found = blockById(block);
+        if (found == null || !dev.craftium.server.MaterialFamilies.applicable(found)) {
+            ClientState.notify(BlockPickerScreen.name(block) + " is not a material with stairs, slabs or other kinds");
+            return;
+        }
+        var material = dev.craftium.server.MaterialFamilies.index().slot(found).material();
+        var picker =
+                new BlockPickerScreen(this, "Change " + material.replaceFirst("^minecraft:", "") + " to", "", id -> {
+                    var chosen = blockById(id);
+                    if (chosen == null || !dev.craftium.server.MaterialFamilies.applicable(chosen))
+                        ClientState.notify(
+                                BlockPickerScreen.name(id) + " is not a material with stairs, slabs or other kinds");
+                    else CraftiumClient.send("change_material:" + block + ">" + id, null, null);
+                });
+        // Only blocks of a material with other kinds can be changed to
+        picker.limitedTo("materials", id -> {
+            var chosen = blockById(id);
+            return chosen != null && dev.craftium.server.MaterialFamilies.applicable(chosen);
+        });
+        ClientCompat.setScreen(minecraft, picker);
+    }
+    /** Edit block state: set some states of every block of this kind in the selection, such as the half of all the stairs, leaving the states that were not set as they are. */
+    private void editSelectionState(String block) {
+        ClientCompat.setScreen(
+                minecraft, BlockStateScreen.changes(this, block, edited -> replaceInSelection(block, edited)));
+    }
+    /** Turns every block of one kind in the selection into another. Also what dropping a block on a cell of the Selection window does. */
+    private void replaceInSelection(String from, String to) {
+        if (from.isEmpty() || to.isEmpty() || from.equals(to)) return;
+        String action = "replace_block:" + from + ">" + to;
+        CraftiumClient.send(action, null, null);
     }
 
     private void openBlockMenu(BlockList list, int index) {
@@ -3478,6 +3664,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
 
     private static final String[] BLOCK_MENU_LABELS = {"Change", "Edit block state", "Remove"};
+    private static final String[] SELECTION_MENU_LABELS = {"Replace...", "Edit block state", "Change material"};
 
     private void toggleMaskBlock(String block) {
         if (!o().maskActive.remove(block)) o().maskActive.add(block);
@@ -3531,7 +3718,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
 
     private void maskMenu(Gfx g) {
-        String[] labels = BLOCK_MENU_LABELS;
+        String[] labels = menuLabels(ctxList);
         int rows = labels.length;
         g.fill(ctxX, ctxY, ctxX + MASK_MENU_WIDTH, ctxY + rows * MASK_MENU_ROW, 0xf5222d3b);
         g.outline(ctxX, ctxY, MASK_MENU_WIDTH, rows * MASK_MENU_ROW, LINE);
@@ -5470,8 +5657,17 @@ public final class EditorScreen extends CraftiumScreen {
             if (x >= ctxX
                     && x < ctxX + MASK_MENU_WIDTH
                     && y >= ctxY
-                    && y < ctxY + BLOCK_MENU_LABELS.length * MASK_MENU_ROW
-                    && cell < blocksOf(ctxList).size()) {
+                    && y < ctxY + menuLabels(ctxList).length * MASK_MENU_ROW
+                    && (ctxList == BlockList.SELECTION
+                            || cell < blocksOf(ctxList).size())) {
+                if (ctxList == BlockList.SELECTION) {
+                    switch ((int) ((y - ctxY) / MASK_MENU_ROW)) {
+                        case 0 -> chooseReplacement(ctxBlock);
+                        case 1 -> editSelectionState(ctxBlock);
+                        default -> chooseMaterial(ctxBlock);
+                    }
+                    return true;
+                }
                 switch ((int) ((y - ctxY) / MASK_MENU_ROW)) {
                     case 0 -> changeBlock(ctxList, cell);
                     case 1 -> editBlockState(ctxList, cell);
@@ -6118,6 +6314,10 @@ public final class EditorScreen extends CraftiumScreen {
         } // clamped when drawn
         if (panels && WorkspaceLayout.hit(x / scale, y / scale, false).equals("materials")) {
             materialsScroll = Math.max(0, materialsScroll + (vertical < 0 ? 1 : -1));
+            return true;
+        } // clamped when drawn
+        if (panels && WorkspaceLayout.hit(x / scale, y / scale, false).equals("selection")) {
+            selectionScroll = Math.max(0, selectionScroll + (vertical < 0 ? 1 : -1));
             return true;
         } // clamped when drawn
         if (panels && WorkspaceLayout.hit(x / scale, y / scale, false).equals("masks")) {

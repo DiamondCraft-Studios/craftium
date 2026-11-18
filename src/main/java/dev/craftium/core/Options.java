@@ -117,6 +117,8 @@ public final class Options {
     }
     /** Hand placement and breaking only; blocks the editor's tools write never update anything (see BlockSnapshot.NO_UPDATES). */
     public boolean noUpdates, forcePlace, replaceMode, bulldozer, tinker;
+    /** Replace material: placing a block onto a stair, slab, wall or other variant of another material turns it into that variant of the held block's material. */
+    public boolean replaceMaterial;
     /** Whether a full Bulldozer sweep only breaks blocks that are the same, state included, as the first one it met; a different block ends it. */
     public boolean bulldozerSameBlocks = true;
 
@@ -547,6 +549,14 @@ public final class Options {
 
     public FlattenMode flattenMode = FlattenMode.BOTH;
 
+    /**
+     * Elevation: with Smear on, the top {@link #smearDepth} layers of the ground (grass over dirt, sand over sandstone) move up or down
+     * together with the surface, instead of only the top block being kept and the new ground filled with the block under it.
+     */
+    public boolean smear;
+
+    public int smearDepth = 3;
+
     public enum RulerMode {
         LINE,
         CIRCLE
@@ -558,14 +568,6 @@ public final class Options {
     public int rulerLineColor = 0xffffffff,
             rulerKnobColor = 0xff5b9fdb,
             rulerKnobSelectedColor = 0xffffff00,
-    /**
-     * Elevation: with Smear on, the top {@link #smearDepth} layers of the ground (grass over dirt, sand over sandstone) move up or down
-     * together with the surface, instead of only the top block being kept and the new ground filled with the block under it.
-     */
-    public boolean smear;
-
-    public int smearDepth = 3;
-
             rulerTextColor = 0xffffffff,
             rulerTextBackground = 0x80000000;
     /** The colour of a ruler's line when it runs along the world's X, Y or Z axis (the gizmo's red, green and blue); any other line uses {@link #rulerLineColor}. */
@@ -662,6 +664,7 @@ public final class Options {
                 || symmetryZ
                 || symmetryRotations > 1
                 || replaceMode
+                || replaceMaterial
                 || forcePlace
                 || noUpdates
                 || fastPlace
@@ -951,6 +954,8 @@ public final class Options {
         floodGap = Math.clamp(floodGap, 0, MAX_FLOOD_GAP);
         flowLength = Math.clamp(flowLength, 1, 32);
         fluidQuality = Math.clamp(fluidQuality, 1, 4);
+        fluidBlocks = Math.clamp(fluidBlocks, 1, 4096);
+        if (pourShape == null) pourShape = PourShape.CIRCLE;
         if (missingBlock == null || missingBlock.length() > 256)
             throw new IllegalArgumentException("Invalid missing block");
         if (maskBlocks == null || maskActive == null || maskBlocks.size() > 64 || maskActive.size() > 64)
@@ -961,9 +966,7 @@ public final class Options {
                     throw new IllegalArgumentException("Invalid block mask entry");
         smearDepth = Math.clamp(smearDepth, 1, 16);
         if (block == null || secondary == null || mask == null || biome == null || text == null)
-            fluidBlocks = Math.clamp(fluidBlocks, 1, 4096);
-        if (pourShape == null) pourShape = PourShape.CIRCLE;
-        throw new IllegalArgumentException("Missing tool settings");
+            throw new IllegalArgumentException("Missing tool settings");
         if (block.length() > 256
                 || secondary.length() > 256
                 || mask.length() > 256

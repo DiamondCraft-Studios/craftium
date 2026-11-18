@@ -5,6 +5,7 @@
   "key.craftium.context": "Hold for builder controls",
   "key.craftium.hotbar": "Swap hotbar with inventory row",
   "key.craftium.replace": "Toggle replace mode",
+  "key.craftium.replace_material": "Toggle replace material",
   "key.craftium.tool.magic_select": "Magic Wand",
   "key.craftium.tool.move": "Move",
   "key.craftium.tool.rotate": "Rotate",

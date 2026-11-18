@@ -30,6 +30,11 @@ public final class BuilderWidget {
                     o -> o.replaceMode = !o.replaceMode,
                     "Placing replaces the clicked block"),
             new Toggle(
+                    "Replace material",
+                    o -> o.replaceMaterial,
+                    o -> o.replaceMaterial = !o.replaceMaterial,
+                    "Clicking a stair, slab or wall with a block turns it into that block's material; nothing is placed"),
+            new Toggle(
                     "Bulldozer",
                     o -> o.bulldozer,
                     o -> o.bulldozer = !o.bulldozer,

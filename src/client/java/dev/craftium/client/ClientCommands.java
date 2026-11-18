@@ -21,6 +21,7 @@ final class ClientCommands {
             "blockStep",
             "bulldozer",
             "replaceMode",
+            "replaceMaterial",
             "forcePlace",
             "noUpdates",
             "tinker",
