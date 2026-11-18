@@ -632,12 +632,26 @@ final class EditPlanner {
         }
         int to = Math.clamp(desired.applyAsInt(top), bottom, Math.min(maxY, top + 24));
         if (to == top) return;
-        BlockState under = state(at.add(0, -1, 0));
-        BlockState fill = ground(at.add(0, -1, 0)) && !under.hasBlockEntity() ? under : surface;
+        // The layers that travel with the surface: just its top block, or with Smear the top few ground blocks.
+        var layers = new ArrayList<BlockState>(4);
+        layers.add(surface);
+        if (o.tool == Tool.ELEVATION && o.smear)
+            for (int k = 1; k < o.smearDepth && top - k >= level.getMinY(); k++) {
+                Point p = new Point(x, top - k, z);
+                if (!ground(p) || state(p).hasBlockEntity()) break;
+                layers.add(state(p));
+            }
+        int n = layers.size();
+        Point below = at.add(0, -n, 0);
+        BlockState under = state(below);
+        BlockState fill = ground(below) && !under.hasBlockEntity() ? under : layers.get(n - 1);
         for (int i = 0; i < cover.size(); i++) put(at.add(0, i + 1, 0), Blocks.AIR.defaultBlockState());
-        if (to > top) for (int y = top; y < to; y++) put(new Point(x, y, z), fill);
-        else for (int y = top; y > to; y--) put(new Point(x, y, z), Blocks.AIR.defaultBlockState());
-        put(new Point(x, to, z), surface);
+        if (to < top) for (int y = top; y > to; y--) put(new Point(x, y, z), Blocks.AIR.defaultBlockState());
+        // The layers hang from the new surface; anything under them that the move uncovers is filled.
+        for (int y = Math.max(level.getMinY(), Math.min(top - n + 1, to - n + 1)); y <= to; y++) {
+            int i = to - y;
+            put(new Point(x, y, z), i < n ? layers.get(i) : fill);
+        }
         for (int i = 0; i < cover.size() && to + i + 1 <= maxY; i++) {
             Point p = new Point(x, to + i + 1, z);
             if (to + i + 1 <= top + cover.size() || state(p).isAir()) put(p, cover.get(i));

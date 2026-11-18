@@ -349,6 +349,8 @@ class WireCompatibilityTest {
         slack primitive
         smartExtrude primitive
         smoothFixEdges primitive
+        smear primitive
+        smearDepth primitive
         smoothMode primitive
         smoothRatio primitive
         smoothing primitive

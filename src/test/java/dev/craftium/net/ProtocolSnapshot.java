@@ -326,6 +326,8 @@ final class ProtocolSnapshot {
         dev.craftium.core.Options.smartExtrude : boolean
         dev.craftium.core.Options.smoothFixEdges : boolean
         dev.craftium.core.Options.smoothMode : dev.craftium.core.Options$SmoothMode
+        dev.craftium.core.Options.smear : boolean
+        dev.craftium.core.Options.smearDepth : int
         dev.craftium.core.Options.smoothRatio : double
         dev.craftium.core.Options.smoothing : double
         dev.craftium.core.Options.solidFluids : boolean

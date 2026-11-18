@@ -4226,7 +4226,28 @@ public final class EditorScreen extends CraftiumScreen {
                         o.invert,
                         () -> o.invert = true,
                         "Each click lowers the ground");
-                return y + 26;
+                toggle(
+                        g,
+                        10,
+                        y + 26,
+                        "Smear",
+                        o.smear,
+                        () -> o.smear = !o.smear,
+                        "Carry the top layers of the ground (grass and the dirt under it, sand and sandstone) with the surface instead of filling new ground with the block under it");
+                if (!o.smear) return y + 48;
+                slider(
+                        g,
+                        10,
+                        y + 64,
+                        pw - 20,
+                        "Smear depth",
+                        o.smearDepth,
+                        1,
+                        16,
+                        DEFAULTS.smearDepth,
+                        v -> o.smearDepth = (int) Math.clamp(Math.round(v), 1, 16),
+                        true);
+                return y + 74;
             }
             case FLATTEN -> {
                 toggle(
