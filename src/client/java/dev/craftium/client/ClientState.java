@@ -220,6 +220,105 @@ public final class ClientState {
             if (saved.guid() == null && savedWithoutGuid.add(saved.id())) savedHidden.add(saved.id());
         savedWithoutGuid.retainAll(present);
     }
+    /**
+     * Shows the likely result of a Hierarchy action at once, before the server has answered: a rename, which BuildObjects are shown, and the delete of a BuildObject with nothing under it.
+     * Nothing is kept apart from the list: the server's next status replaces it whole, so it either agrees or the row goes back to what the server says.
+     * Actions whose result the server works out (moves, groups, new BuildObjects) are left to wait for it.
+     */
+    static void predictSaved(String action) {
+        if (!action.startsWith("saved_selection:")) return;
+        var part = action.split(":", 4);
+        if (part.length < 2) return;
+        try {
+            switch (part[1]) {
+                case "rename" -> {
+                    if (part.length < 4 || part[3].isBlank()) return;
+                    int id = Integer.parseInt(part[2]);
+                    String name = part[3].strip();
+                    changeSaved(e -> e.id() == id ? withState(e, name, e.active(), e.editing()) : e);
+                }
+                case "grouprename" -> {
+                    if (part.length < 4 || part[3].isBlank()) return;
+                    int id = Integer.parseInt(part[2]);
+                    var next = new ArrayList<Packets.SavedGroup>(savedGroups.size());
+                    for (var g : savedGroups)
+                        next.add(
+                                g.id() == id
+                                        ? new Packets.SavedGroup(g.id(), g.guid(), part[3].strip(), g.folded())
+                                        : g);
+                    savedGroups = List.copyOf(next);
+                    hierarchyVersion++;
+                }
+                case "view" -> shown(Set.of(Integer.parseInt(part[2])), false);
+                case "edit" -> shown(Set.of(Integer.parseInt(part[2])), true);
+                case "release" -> shown(Set.of(), false);
+                case "viewset" -> {
+                    var ids = new HashSet<Integer>();
+                    if (part.length > 2 && !part[2].isBlank())
+                        for (var s : part[2].split(",")) ids.add(Integer.parseInt(s.strip()));
+                    shown(ids, false);
+                }
+                case "delete", "deleteset" -> {
+                    var ids = new HashSet<Integer>();
+                    for (var s : part[2].split(",")) ids.add(Integer.parseInt(s.strip()));
+                    for (var e :
+                            savedSelections) // what happens to what is under a BuildObject is for the server to say
+                    if (ids.contains(e.parent())) return;
+                    var next = new ArrayList<Packets.SavedSelection>(savedSelections.size());
+                    for (var e : savedSelections) if (!ids.contains(e.id())) next.add(e);
+                    if (next.size() != savedSelections.size()) setPredicted(next);
+                }
+                default -> {}
+            }
+        } catch (NumberFormatException | ArrayIndexOutOfBoundsException ignored) {
+            // not something to predict: the server answers it as it always did
+        }
+    }
+
+    private static void shown(Set<Integer> ids, boolean editing) {
+        changeSaved(e -> withState(e, e.name(), ids.contains(e.id()), editing && ids.contains(e.id())));
+    }
+
+    private static void changeSaved(java.util.function.UnaryOperator<Packets.SavedSelection> change) {
+        var next = new ArrayList<Packets.SavedSelection>(savedSelections.size());
+        boolean differs = false;
+        for (var e : savedSelections) {
+            var made = change.apply(e);
+            differs |= made != e;
+            next.add(made);
+        }
+        if (differs) setPredicted(next);
+    }
+
+    private static void setPredicted(List<Packets.SavedSelection> next) {
+        savedSelections = List.copyOf(next);
+        indexSaved();
+        hierarchyVersion++;
+    }
+
+    private static Packets.SavedSelection withState(
+            Packets.SavedSelection e, String name, boolean active, boolean editing) {
+        if (e.name().equals(name) && e.active() == active && e.editing() == editing) return e;
+        return new Packets.SavedSelection(
+                e.id(),
+                name,
+                e.size(),
+                e.min(),
+                e.max(),
+                active,
+                editing,
+                e.data(),
+                e.guid(),
+                e.parent(),
+                e.color(),
+                e.group(),
+                e.folded(),
+                e.hidden(),
+                e.hiddenData(),
+                e.hiddenMin(),
+                e.hiddenMax(),
+                e.hiddenGhost());
+    }
     /** The groups of the Hierarchy, in order, as the server last said; empty on a server that predates them, and the Hierarchy then shows no groups. */
     private static List<Packets.SavedGroup> savedGroups = List.of();
 
