@@ -21,6 +21,20 @@ final class EditPlanner {
     final LinkedHashMap<Point, Session.BiomeChange> biomes = new LinkedHashMap<>();
     final BlockState material, secondary, mask;
     final NoiseField noise;
+    /** The world as the shared brush rules read it. */
+    final BrushRules.Cells cells = new BrushRules.Cells() {
+        public boolean solid(Point p) {
+            return EditPlanner.this.solid(p);
+        }
+
+        public boolean air(Point p) {
+            return state(p).isAir();
+        }
+
+        public int adjacent(Point p) {
+            return EditPlanner.this.adjacent(p);
+        }
+    };
     final java.util.function.Predicate<Point> expression;
     final LuaBrush maskLua;
     final List<BlockState> materials;
@@ -418,45 +432,18 @@ final class EditPlanner {
                 case FREEHAND_DRAW, SHAPE -> put(p, o.invert ? Blocks.AIR.defaultBlockState() : material);
                 case ERASE -> put(p, Blocks.AIR.defaultBlockState());
                 case ROCK -> {
-                    double distance = Math.sqrt(p.distanceSquared(c)) / o.radius;
-                    double rockNoise = n;
-                    if (o.denoise) {
-                        for (Point direction : NEIGHBOURS)
-                            rockNoise += noise.sample(p.add(direction.x(), direction.y(), direction.z()));
-                        rockNoise /= 7;
-                    }
-                    if (distance < .72 + (rockNoise - .5) * o.strength * .35 + adjacent(p) / 6d * .1 * o.meldStrength)
+                    if (RockShape.keeps(p, c, o, noise, this::adjacent))
                         put(p, o.invert ? Blocks.AIR.defaultBlockState() : material);
                 }
                 case SCULPT_DRAW, EXTRUDE -> {
-                    if (filled
-                            && state(p.add(normal.x(), normal.y(), normal.z())).isAir()) {
-                        int length = o.tool == Tool.EXTRUDE
-                                ? Math.max(1, (int) o.strength)
-                                : Math.max(1, (int)
-                                        Math.ceil(o.strength * (1 - Math.sqrt(p.distanceSquared(c)) / (o.radius + 1))));
-                        Geometry.Vector direction = new Geometry.Vector(normal.x(), normal.y(), normal.z());
-                        if (o.tool == Tool.SCULPT_DRAW) {
-                            Geometry.Vector estimated = new Geometry.Vector(0, 0, 0);
-                            for (Point neighbour : NEIGHBOURS)
-                                if (!solid(p.add(neighbour.x(), neighbour.y(), neighbour.z())))
-                                    estimated = estimated.add(Geometry.vector(neighbour));
-                            if (estimated.length() > .01) direction = estimated.scale(1 / estimated.length());
-                            if (o.maskY) direction = new Geometry.Vector(0, 1, 0);
-                        }
-                        for (int i = 1; i <= length; i++) {
-                            Point delta = direction.scale(o.invert ? 1 - i : i).voxel();
-                            put(
-                                    p.add(delta.x(), delta.y(), delta.z()),
-                                    o.invert ? Blocks.AIR.defaultBlockState() : old);
-                        }
-                    }
+                    for (Point at : BrushRules.sculpt(p, c, normal, o, cells))
+                        put(at, o.invert ? Blocks.AIR.defaultBlockState() : old);
                 }
                 case WELD -> {
-                    if (!filled && density(p) >= o.threshold) put(p, nearestMaterial(p));
+                    if (BrushRules.weld(p, o, cells)) put(p, nearestMaterial(p));
                 }
                 case MELT -> {
-                    if (filled && density(p) < o.threshold) put(p, Blocks.AIR.defaultBlockState());
+                    if (BrushRules.melt(p, o, cells)) put(p, Blocks.AIR.defaultBlockState());
                 }
                 case SMOOTH -> {
                     double d = density(p);
@@ -464,41 +451,16 @@ final class EditPlanner {
                     if (!filled && d > .58) put(p, nearestMaterial(p));
                 }
                 case DISTORT -> {
-                    // The distance is how far the noise moves a block, about half of it either way; it fades out over
-                    // the outer part of the brush with Smooth edges.
-                    double fade = 1;
-                    if (o.distortSmoothEdges) {
-                        double edge = Math.sqrt(p.distanceSquared(c)) / (o.radius + .5),
-                                t = Math.clamp((edge - .6) / .4, 0, 1);
-                        fade = 1 - t * t * (3 - 2 * t);
-                    }
-                    double reachX = (o.distortSeparate ? o.distortX : o.distortDistance) * fade,
-                            reachY = (o.distortSeparate ? o.distortY : o.distortDistance) * fade,
-                            reachZ = (o.distortSeparate ? o.distortZ : o.distortDistance) * fade;
-                    int dx = (int) Math.round((n - .5) * reachX * 2);
-                    int dy = (int) Math.round((noise.sample(p.add(37, 71, 19)) - .5) * reachY * 2),
-                            dz = (int) Math.round((noise.sample(p.add(101, 13, 53)) - .5) * reachZ * 2);
-                    Point source = p.add(dx, dy, dz);
+                    Point source = BrushRules.distortSource(p, c, o, noise);
                     validate(source);
                     put(p, BlockSnapshot.capture(level, pos(source)));
                 }
                 case ROUGHEN -> {
-                    if (filled
-                            && 6 - adjacent(p) >= o.exposedFaces
-                            && BrushMath.hash(p.x(), p.y(), p.z(), o.seed) < o.roughenRatio) {
-                        if (n < .5) put(p, Blocks.AIR.defaultBlockState());
-                        else
-                            for (Point direction : NEIGHBOURS) {
-                                Point at = p.add(direction.x(), direction.y(), direction.z());
-                                if (state(at).isAir()) {
-                                    put(at, old);
-                                    break;
-                                }
-                            }
-                    }
+                    Point target = BrushRules.roughen(p, o, cells, n);
+                    if (target != null) put(target, target.equals(p) ? Blocks.AIR.defaultBlockState() : old);
                 }
                 case SHATTER -> {
-                    if (filled && fracture(p) < o.shatterWidth / o.noiseScale)
+                    if (BrushRules.shatter(p, o, cells))
                         put(p, o.fractureMaterial ? material : Blocks.AIR.defaultBlockState());
                 }
                 case CLENTAMINATOR -> {
@@ -526,16 +488,7 @@ final class EditPlanner {
     }
 
     double density(Point p) {
-        double total = 0, weight = 0;
-        int radius = Math.clamp((int) Math.ceil(o.smoothing), 1, 3);
-        for (int x = -radius; x <= radius; x++)
-            for (int y = -radius; y <= radius; y++)
-                for (int z = -radius; z <= radius; z++) {
-                    double w = Math.exp(-(x * x + y * y + z * z) / (2 * o.smoothing * o.smoothing));
-                    weight += w;
-                    if (solid(p.add(x, y, z))) total += w;
-                }
-        return total / weight;
+        return BrushRules.density(p, o, cells);
     }
 
     BlockState nearestMaterial(Point p) {
@@ -544,31 +497,6 @@ final class EditPlanner {
             if (!s.isAir() && !s.hasBlockEntity() && s.getFluidState().isEmpty()) return s;
         }
         return material;
-    }
-
-    private double fracture(Point p) {
-        // With one axis chosen only that coordinate counts, so the seams are flat sheets across the axis.
-        var axis = o.shatterAxis;
-        boolean ax = axis == Options.ShatterAxis.ALL || axis == Options.ShatterAxis.X,
-                ay = axis == Options.ShatterAxis.ALL || axis == Options.ShatterAxis.Y,
-                az = axis == Options.ShatterAxis.ALL || axis == Options.ShatterAxis.Z;
-        double scale = o.noiseScale, x = ax ? p.x() / scale : 0, y = ay ? p.y() / scale : 0, z = az ? p.z() / scale : 0;
-        int ix = (int) Math.floor(x), iy = (int) Math.floor(y), iz = (int) Math.floor(z);
-        double first = Double.MAX_VALUE, second = Double.MAX_VALUE;
-        for (int dx = ax ? -1 : 0; dx <= (ax ? 1 : 0); dx++)
-            for (int dy = ay ? -1 : 0; dy <= (ay ? 1 : 0); dy++)
-                for (int dz = az ? -1 : 0; dz <= (az ? 1 : 0); dz++) {
-                    int a = ix + dx, b = iy + dy, c = iz + dz;
-                    double px = ax ? a + BrushMath.hash(a, b, c, o.seed) : 0,
-                            py = ay ? b + BrushMath.hash(a, b, c, o.seed + 1) : 0,
-                            pz = az ? c + BrushMath.hash(a, b, c, o.seed + 2) : 0;
-                    double d = (px - x) * (px - x) + (py - y) * (py - y) + (pz - z) * (pz - z);
-                    if (d < first) {
-                        second = first;
-                        first = d;
-                    } else if (d < second) second = d;
-                }
-        return Math.sqrt(second) - Math.sqrt(first);
     }
 
     private void heightmap(Point c, Point normal) {
