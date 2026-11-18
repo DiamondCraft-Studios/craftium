@@ -1361,6 +1361,32 @@ public final class EditorScreen extends CraftiumScreen {
                         DEFAULTS.extrudeCount,
                         v -> o().extrudeCount = (int) Math.clamp(Math.round(v), 1, Options.MAX_EXTRUDE_COUNT),
                         true);
+            else if (o().tool == Tool.ELEVATION) // how many blocks the middle of the mound moves with each click
+            slider(
+                        g,
+                        10,
+                        375 + sidesRow() - lift(),
+                        pw - 20,
+                        "Height per click",
+                        Math.max(1, Math.round(o().strength)),
+                        1,
+                        5,
+                        DEFAULTS.strength,
+                        v -> o().strength = Math.clamp(Math.round(v), 1, 5),
+                        true);
+            else if (o().tool == Tool.FLATTEN) // how much of the way to the level each click goes; 1 is all of it
+            slider(
+                        g,
+                        10,
+                        375 + sidesRow() - lift(),
+                        pw - 20,
+                        "Strength",
+                        Math.min(1, o().strength),
+                        .1,
+                        1,
+                        DEFAULTS.strength,
+                        v -> o().strength = Math.clamp(Math.round(v * 100) / 100d, .1, 1),
+                        false);
             else if (hasStrength())
                 slider(
                         g,
@@ -1637,14 +1663,21 @@ public final class EditorScreen extends CraftiumScreen {
                 }
                 int fillRow = o().tool.picksShape() ? 23 : 0;
                 if (o().tool.picksShape()) fillButtons(g, 403 + row);
-                toggle(
-                        g,
-                        10,
-                        403 + fillRow + row,
-                        "Surface only",
-                        o().surfaceOnly,
-                        () -> o().surfaceOnly = !o().surfaceOnly);
-                int next = 428 + fillRow + row;
+                int next;
+                if (TERRAIN_CONTROLS.contains(o().tool))
+                    next = terrainRows(
+                            g, 403 + row); // these tools work on the ground's height, so Surface only means nothing to
+                // them
+                else {
+                    toggle(
+                            g,
+                            10,
+                            403 + fillRow + row,
+                            "Surface only",
+                            o().surfaceOnly,
+                            () -> o().surfaceOnly = !o().surfaceOnly);
+                    next = 428 + fillRow + row;
+                }
                 if (o().tool == Tool.SHAPE) {
                     toggle(
                             g,
@@ -4172,6 +4205,124 @@ public final class EditorScreen extends CraftiumScreen {
             () -> o.floodCorners = !o.floodCorners
         });
     }
+    /** The Terrain tools, whose own controls {@link #terrainRows} draws in place of Surface only. */
+    private static final EnumSet<Tool> TERRAIN_CONTROLS =
+            EnumSet.of(Tool.ELEVATION, Tool.FLATTEN, Tool.SLOPE, Tool.FLOODFILL, Tool.FLUID_BALL, Tool.FLUID_BLOCK);
+
+    /** The Terrain tools' own controls from {@code y} down; returns the row after them. */
+    private int terrainRows(Gfx g, int y) {
+        var o = o();
+        int half = (pw - 24) / 2, third = (pw - 28) / 3;
+        switch (o.tool) {
+            case ELEVATION -> {
+                button(g, 10, y, half, 19, "Raise", !o.invert, () -> o.invert = false, "Each click raises the ground");
+                button(
+                        g,
+                        14 + half,
+                        y,
+                        half,
+                        19,
+                        "Lower",
+                        o.invert,
+                        () -> o.invert = true,
+                        "Each click lowers the ground");
+                return y + 26;
+            }
+            case FLATTEN -> {
+                toggle(
+                        g,
+                        10,
+                        y,
+                        "Level from click",
+                        o.flattenPick,
+                        () -> o.flattenPick = !o.flattenPick,
+                        "Each stroke takes its level from the block it starts on and keeps it while held · off: use Target Y");
+                int low = minecraft.level == null ? -64 : minecraft.level.getMinY(),
+                        high = minecraft.level == null ? 319 : minecraft.level.getMaxY() - 1;
+                slider(
+                        g,
+                        10,
+                        y + 32,
+                        pw - 20,
+                        "Target Y",
+                        o.flattenY,
+                        low,
+                        high,
+                        DEFAULTS.flattenY,
+                        v -> {
+                            o.flattenY = (int) Math.clamp(Math.round(v), low, high);
+                            o.flattenPick = false; // a level set by hand is the one to use
+                        },
+                        true);
+                var modes = Options.FlattenMode.values();
+                for (int i = 0; i < modes.length; i++) {
+                    var mode = modes[i];
+                    button(
+                            g,
+                            10 + i * (third + 4),
+                            y + 56,
+                            third,
+                            19,
+                            mode.label,
+                            o.flattenMode == mode,
+                            () -> o.flattenMode = mode,
+                            mode.tip);
+                }
+                return y + 82;
+            }
+            case SLOPE -> {
+                wrap(
+                        g,
+                        "Right-click where the ramp starts, then where it ends. The ramp is as wide as the brush and runs straight between the two heights.",
+                        10,
+                        y,
+                        pw - 20,
+                        MUTED,
+                        4);
+                return y + 46;
+            }
+            case FLUID_BALL -> {
+                text(g, "Fluid", 10, y, MUTED);
+                var types = Options.FluidType.values();
+                for (int i = 0; i < types.length; i++) {
+                    var type = types[i];
+                    String name =
+                            type.name().charAt(0) + type.name().substring(1).toLowerCase(Locale.ROOT);
+                    button(
+                            g,
+                            10 + i * (third + 4),
+                            y + 12,
+                            third,
+                            19,
+                            name,
+                            o.fluidType == type,
+                            () -> o.fluidType = type,
+                            type == Options.FluidType.SNOW
+                                    ? "Settle snow layers over the ground"
+                                    : "Pour " + name.toLowerCase(Locale.ROOT));
+                }
+                y += 40;
+            }
+            case FLUID_BLOCK -> {}
+            default -> {
+                return y;
+            }
+        }
+        slider( // Fluid Ball and Fluid Block: how far the flow runs past the brush
+                g,
+                10,
+                y + 10,
+                pw - 20,
+                "Flow length",
+                o.flowLength,
+                1,
+                32,
+                DEFAULTS.flowLength,
+                v -> o.flowLength = (int) Math.clamp(Math.round(v), 1, 32),
+                true);
+        return y + 32;
+    }
+
     /** Up, Down, Horizontal and Corners as two rows of switches: which way a search or fill may spread from the clicked block. */
     private void sideButtons(Gfx g, int y, boolean[] on, Runnable[] flip) {
         int half = (pw - 24) / 2;
@@ -4411,7 +4562,7 @@ public final class EditorScreen extends CraftiumScreen {
      */
     /** The tools with a Strength slider under the radius. */
     private boolean hasStrength() {
-        return EnumSet.of(Tool.SCULPT_DRAW, Tool.ROCK, Tool.ELEVATION, Tool.FLATTEN, Tool.SLOPE, Tool.EXTRUDE)
+        return EnumSet.of(Tool.SCULPT_DRAW, Tool.ROCK, Tool.ELEVATION, Tool.FLATTEN, Tool.EXTRUDE)
                 .contains(o().tool);
     }
 
