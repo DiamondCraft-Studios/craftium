@@ -70,11 +70,20 @@ public final class ToolOptionMemory {
 
     /** Puts away the options of the tool now in {@code o}, and brings back those of {@code to}. The caller sets the tool. */
     public static void switchTo(Options o, Tool to) {
-        if (groupOf(o.tool).equals(groupOf(to))) return;
-        KEPT.put(groupOf(o.tool), read(o));
-        var back = KEPT.get(groupOf(to));
+        String from = held != null ? held : groupOf(o.tool);
+        // A shape waiting to be built is made from the Shape tool's options, so Move, Rotate and Scale keep them
+        // instead of bringing their own (which would turn the shape into whatever they last had, a sphere).
+        String next = ShapeObject.active() && from.equals(groupOf(Tool.SHAPE)) && to.transform() && to != Tool.PIVOT
+                ? from
+                : groupOf(to);
+        held = next;
+        if (from.equals(next)) return;
+        KEPT.put(from, read(o));
+        var back = KEPT.get(next);
         write(o, back != null ? back : read(new Options()));
     }
+    /** The tool whose options are in the {@link Options} now, when that is not the tool in use: a transform tool working on a waiting shape. */
+    private static String held;
 
     private static Map<String, Object> read(Options o) {
         var values = new HashMap<String, Object>();

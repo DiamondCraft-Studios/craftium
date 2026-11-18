@@ -76,10 +76,10 @@ final class HistoryStore {
         Snapshot snapshot = new Snapshot(
                 session.historyPath,
                 session.undo.stream()
-                        .filter(e -> !e.selectionOnly() && !e.hierarchyOnly())
+                        .filter(e -> !e.selectionOnly() && !e.hierarchyOnly() && !e.clientOnly())
                         .toList(),
                 session.redo.stream()
-                        .filter(e -> !e.selectionOnly() && !e.hierarchyOnly())
+                        .filter(e -> !e.selectionOnly() && !e.hierarchyOnly() && !e.clientOnly())
                         .toList());
         QUEUED.put(snapshot.file, snapshot);
         synchronized (HistoryStore.class) {

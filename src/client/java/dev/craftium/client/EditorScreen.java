@@ -550,6 +550,7 @@ public final class EditorScreen extends CraftiumScreen {
             progressPanel(g);
             materialsPanel(g);
             selectionPanel(g);
+            shapePanel(g);
         }
         finishPanel(g);
         viewport(g);
@@ -4312,7 +4313,9 @@ public final class EditorScreen extends CraftiumScreen {
                         "magic",
                         "Magic select",
                         "rulers",
-                        "Rulers"
+                        "Rulers",
+                        "shape",
+                        "Shape"
                     },
                     {
                         "palette",
@@ -7096,6 +7099,36 @@ public final class EditorScreen extends CraftiumScreen {
             time += " · about " + left + " s left";
         }
         text(g, time, x + 10, y + 76, MUTED);
+    }
+
+    /** The tool the Shape window last opened for: it opens when the Shape tool is chosen, and is then the player's to close. */
+    private Tool shapePanelFor;
+    /** The Shape tool's small window, at the bottom right: settings of the shape that has no place in the tool options. */
+    private void shapePanel(Gfx g) {
+        if (!(toolActive && o().tool == Tool.SHAPE || ShapeObject.active())) {
+            shapePanelFor = null;
+            return; // only while the Shape tool is in hand, or a shape is waiting to be built
+        }
+        int x = w - RIGHT - 244, y = h - 25 - 52 - 6; // the bottom right, left of the right-hand column
+        panel(g, x, y, 236, 52, "Shape");
+        if (shapePanelFor != Tool.SHAPE) {
+            shapePanelFor = Tool.SHAPE;
+            var window = WorkspaceLayout.windows.get("shape");
+            if (window != null && !window.visible) {
+                window.visible = true;
+                WorkspaceLayout.save();
+            }
+        }
+        button(
+                g,
+                x + 10,
+                y + 25,
+                pw - 20,
+                19,
+                "Reset rotation",
+                false,
+                ShapeObject::resetRotation,
+                "Take the turn off the shape, and off the shapes put down after it");
     }
 
     private void rulerPanel(Gfx g) {
