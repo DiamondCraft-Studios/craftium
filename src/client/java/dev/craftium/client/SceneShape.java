@@ -33,6 +33,12 @@ final class SceneShape {
         this.tooLarge = tooLarge;
     }
 
+    /** Takes over the previous shape's contour, for a shape that replaces it in the same place; see {@link OutlineShape#carryOver}. */
+    SceneShape carryOver(SceneShape previous) {
+        if (previous != null) air.carryOver(previous.air);
+        return this;
+    }
+
     boolean tooLarge() {
         return tooLarge;
     }

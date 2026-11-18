@@ -213,7 +213,11 @@ public final class BrushPreview {
         return count;
     }
 
+    /** Where the shape was last built, and what it was, so a rebuild in the same place can keep its contour. */
+    private static BlockPos builtAt;
+
     private static void rebuild(Minecraft mc, BlockPos at, Point normal, Options o) {
+        var previous = shape;
         shape = SceneShape.EMPTY;
         tooLarge = false;
         List<Point> relative;
@@ -302,7 +306,11 @@ public final class BrushPreview {
             absolute = paintable(mc.level, absolute, o); // only what the Surface (Noise) Painter would paint
         if (o.tool == dev.craftium.core.Tool.ROCK) absolute = rock(mc.level, absolute, at, o);
         else if (sculpts(o.tool)) absolute = sculpted(mc.level, absolute, at, normal, o);
-        shape = SceneShape.of(mc.level, absolute, true); // outlined all round like a selection, solid blocks too
+        var rebuilt = SceneShape.of(mc.level, absolute, true); // outlined all round like a selection, solid blocks too
+        // Worked out again in the same place (the world changed under a held brush): keep the old contour until the new
+        // one is ready.
+        shape = at.equals(builtAt) ? rebuilt.carryOver(previous) : rebuilt;
+        builtAt = at;
         tooLarge = shape.tooLarge();
     }
 }

@@ -77,16 +77,29 @@ final class OutlineShape {
      * nothing until it is ready. {@code points} must not change afterwards. Small sets are worked out at once, since that is quicker than the hand-over.
      */
     static OutlineShape ofLater(Collection<Point> points) {
+        return ofLater(points, null);
+    }
+    /**
+     * As {@link #ofLater(Collection)}, for a shape that replaces another one, such as the waiting edit of a stroke that is held down and changes
+     * all the time: until the new outline is ready the old one keeps being drawn, where nothing at all would make the outline blink off at every step.
+     */
+    static OutlineShape ofLater(Collection<Point> points, OutlineShape previous) {
         if (points.size() <= LATER_FROM) return of(points);
         var shape = new OutlineShape(SelectionOutline.Result.EMPTY, boundsOf(points));
         shape.ready = false;
         shape.cells = points;
+        if (previous != null && !previous.isEmpty()) shape.stale = previous.ready ? previous : previous.stale;
+        final OutlineShape old = shape.stale;
         LATER.execute(() -> {
             shape.outline = SelectionOutline.of(points);
+            shape.carryOver(old); // its own silhouette takes a while more: show the last one meanwhile, not the creases
             shape.ready = true;
+            shape.stale = null;
         });
         return shape;
     }
+    /** What to draw in this shape's place until its own outline is ready; only set by {@link #ofLater(Collection, OutlineShape)}. */
+    private volatile OutlineShape stale;
 
     private static final int LATER_FROM = 2000;
     /** Whether the outline has been worked out; always true unless the shape came from {@link #ofLater}. */
@@ -204,7 +217,12 @@ final class OutlineShape {
             Options.SelectionStyle style,
             java.util.function.UnaryOperator<Vec3> eyeInShape,
             boolean scene) {
-        if (bounds == null || !ready) return;
+        if (bounds == null) return;
+        if (!ready) {
+            var old = stale;
+            if (old != null) old.draw(at, lines, stroke, fill, backFill, withFill, style, eyeInShape, scene);
+            return;
+        }
         boxed = outline.edges().size() > maxEdges;
         if (boxed) {
             AABB box = bounds.move(at);
@@ -419,8 +437,9 @@ final class OutlineShape {
         return (crossed & 1) == 1;
     }
 
-    private Vec3 contourEye, contourAt;
-    private Vec3[] contourEnds;
+    private Vec3 contourEye;
+    private volatile Vec3 contourAt;
+    private volatile Vec3[] contourEnds;
     /** Whether the camera is inside the shape, as last worked out; only worked out when the camera or the shape moves. */
     private boolean eyeBuried;
     /** When the last frames that wanted a silhouette began showing the outline instead, or 0 while they get one. */
@@ -452,6 +471,19 @@ final class OutlineShape {
             });
 
     private LatestResult<Contour> contourJob;
+    /**
+     * For a shape that replaces another one in the same place, such as a brush preview worked out again because the world changed: takes over the
+     * other's finished contour for a big shape, so that until its own contour is ready it does not drop to the creases, which flickers.
+     */
+    void carryOver(OutlineShape previous) {
+        if (previous == null || previous == this || outline.creases().size() <= ASYNC_CREASES || contourEnds != null)
+            return;
+        var ends = previous.contourEnds;
+        var at = previous.contourAt;
+        if (ends == null || ends.length == 0 || at == null) return;
+        contourEnds = ends;
+        contourAt = at;
+    }
     /**
      * Draws only the contour of the shape on the screen. Worked out again only when the camera or the shape moves.
      * Returns false when there is none to draw, so the caller falls back to the creases.

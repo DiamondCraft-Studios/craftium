@@ -206,6 +206,9 @@ public final class CraftiumClient implements ClientModInitializer {
         SelectionOverlay.update("");
     }
     /** How far away another player's AI preview is still drawn, in blocks: past this it is out of sight, and drawing it costs a frame. */
+    /** The pending data the waiting edit was last made from. */
+    private static String pendingJson;
+
     private static final double SHARED_RANGE = 192;
 
     static void receiveStatus(String json) {
@@ -253,7 +256,8 @@ public final class CraftiumClient implements ClientModInitializer {
             else SelectionOverlay.update(next.selectionData());
             PlacementPreview.update(next.clipboardData());
             PlacementPreview.updateGhost(next.clipboardGhost());
-            ClientState.pending = GhostBlocks.parse(next.pendingData());
+            ClientState.pending = GhostBlocks.parse(next.pendingData(), pendingJson, ClientState.pending);
+            pendingJson = next.pendingData();
             ClientState.updateAiSessions(next);
             if (next.entityUuid() != null && !next.entityUuid().isBlank()) {
                 ClientState.options.entityUuid = next.entityUuid();
