@@ -1134,6 +1134,13 @@ public final class CraftiumClient implements ClientModInitializer {
                         screen.handleAxis() == axis ? 4 : 2);
         }
     }
+    /** Whether the waiting edit is drawn with an outline round the blocks it places: always for the Shape tool, and for the Paint, Sculpt and Terrain tools unless the player turned block preview outlines off. */
+    static boolean outlinesBlocks(dev.craftium.core.Options o) {
+        if (o.tool == Tool.SHAPE) return true;
+        return o.blockPreviewOutline
+                && (o.tool.group.equals("Paint") || o.tool.group.equals("Sculpt") || o.tool.group.equals("Terrain"));
+    }
+
     /** What the world shows for the editor this tick; package-private so the overlay test can record it. */
     static void preview(Minecraft mc) {
         var screen = ClientCompat.screen(mc) instanceof EditorScreen editor
@@ -1164,10 +1171,8 @@ public final class CraftiumClient implements ClientModInitializer {
             ClientState.pending.draw(
                     new Point(0, 0, 0),
                     true,
-                    ClientState.options.tool
-                            == dev.craftium.core.Tool
-                                    .SHAPE); // the waiting edit: its blocks only, but with the outline for the Shape
-            // tool
+                    outlinesBlocks(ClientState.options)); // the waiting edit: its blocks only, but with the outline for
+            // the Shape tool and the Paint, Sculpt and Terrain tools
             ClientState.pluginPending.draw(new Point(0, 0, 0), true);
             drawAiSessions(mc);
             // The AI previews other players are holding, in their own colour and with the owner's name, as far away as
