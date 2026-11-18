@@ -504,6 +504,17 @@ public final class Options {
 
     public FluidType fluidType = FluidType.WATER;
     public int floodGap, flowLength = 7, fluidQuality = 1;
+    /** Fluid Block: how many blocks one pour places. */
+    public int fluidBlocks = 64;
+
+    /** Fluid Block: the outline the pour spreads in. */
+    public enum PourShape {
+        CIRCLE,
+        DIAMOND,
+        SQUARE
+    }
+
+    public PourShape pourShape = PourShape.CIRCLE;
     public boolean floodUp,
             floodDown = true,
             floodHorizontal = true,
@@ -950,7 +961,9 @@ public final class Options {
                     throw new IllegalArgumentException("Invalid block mask entry");
         smearDepth = Math.clamp(smearDepth, 1, 16);
         if (block == null || secondary == null || mask == null || biome == null || text == null)
-            throw new IllegalArgumentException("Missing tool settings");
+            fluidBlocks = Math.clamp(fluidBlocks, 1, 4096);
+        if (pourShape == null) pourShape = PourShape.CIRCLE;
+        throw new IllegalArgumentException("Missing tool settings");
         if (block.length() > 256
                 || secondary.length() > 256
                 || mask.length() > 256

@@ -154,6 +154,7 @@ class WireCompatibilityTest {
         floodHorizontal primitive
         floodUp primitive
         flowLength primitive
+        fluidBlocks primitive
         fluidHeight primitive
         fluidQuality primitive
         fluidType primitive
