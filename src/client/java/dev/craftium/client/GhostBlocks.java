@@ -38,6 +38,37 @@ final class GhostBlocks {
     private List<BlockState> drawnStates;
     /** The tint of blocks an edit is about to remove, over the original blocks that are still in the world. */
 
+    /** Set by the caller for the Paint and Sculpt tools: the blocks of the world that a placed block replaces are tinted like the ones that go. */
+    boolean tintReplaced;
+
+    private List<BlockPos> replacedPlaces;
+    private Point replacedOrigin;
+    private int replacedAt = -1;
+
+    /** The blocks in the world that the edit's placed blocks would replace, worked out again once a second as the world can change under a stroke. */
+    private List<BlockPos> replaced(Point origin) {
+        var level = Minecraft.getInstance().level;
+        if (level == null) return List.of();
+        int tick = (int) (level.getGameTime() / 20);
+        if (replacedPlaces != null && origin.equals(replacedOrigin) && tick == replacedAt) return replacedPlaces;
+        var out = new ArrayList<BlockPos>();
+        for (int i = 0; i < cachedPlaces.size(); i++) {
+            var now = level.getBlockState(cachedPlaces.get(i));
+            if (!now.isAir() && now != states.get(i)) out.add(cachedPlaces.get(i));
+        }
+        replacedOrigin = origin;
+        replacedAt = tick;
+        if (!out.equals(replacedPlaces))
+            replacedShape = OutlineShape.ofLater(out.stream()
+                    .map(p -> new Point(p.getX(), p.getY(), p.getZ()))
+                    .toList());
+        return replacedPlaces = out;
+    }
+
+    private OutlineShape replacedShape = OutlineShape.EMPTY;
+    /** The red the Paint and Sculpt tools show what they take away in, whatever the preferences' tint for removed blocks is. */
+    private static final int GONE_RED = 0x80ff3030;
+
     /** Set on a preview an AI app made, which is drawn in violet so it is never taken for one of the player's own edits. */
     boolean ai;
     /** Which of the player's AI sessions made it (see AiSessions#shade): each is drawn in a colour of its own. */
@@ -254,7 +285,8 @@ final class GhostBlocks {
                 placedShape.drawPlain(at, line, (float) ClientState.options.selectionWidth, fill, true, false);
             if (!removedShape.isEmpty()) removedShape.drawFill(at, ClientState.options.removedFill);
         }
-        if (!removedPlaces.isEmpty() && outline) Overlay.blocks(removedPlaces, ClientState.options.removedTint);
+        if (!removedPlaces.isEmpty() && outline)
+            Overlay.blocks(removedPlaces, tintReplaced ? GONE_RED : ClientState.options.removedTint);
         if (states.isEmpty()) return;
         if (cachedPlaces == null || !origin.equals(cachedOrigin)) {
             var places = new ArrayList<BlockPos>(relative.size());
@@ -262,6 +294,12 @@ final class GhostBlocks {
                 places.add(new BlockPos(p.x() + origin.x(), p.y() + origin.y(), p.z() + origin.z()));
             cachedPlaces = places;
             cachedOrigin = origin;
+        }
+        if (tintReplaced && outline) {
+            var gone = replaced(origin);
+            if (!gone.isEmpty()) Overlay.blocks(gone, GONE_RED);
+            if (!replacedShape.isEmpty()) replacedShape.drawFill(Vec3.ZERO, ClientState.options.removedFill | 0x44000000);
+            if (!removedShape.isEmpty()) removedShape.drawFill(at, ClientState.options.removedFill | 0x44000000);
         }
         // A preview can hold far more blocks than a frame can draw as models; the server sends the visible ones first,
         // so the first few are the ones that show.

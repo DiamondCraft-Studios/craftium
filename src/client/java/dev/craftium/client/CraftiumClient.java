@@ -1151,6 +1151,7 @@ public final class CraftiumClient implements ClientModInitializer {
                 MagicPreview.draw(mc, hit);
                 ClickPreview.draw(mc, screen != null && screen.toolActive() ? hit : null);
             }
+            ClientState.pending.tintReplaced = ClientState.options.tool.spec().buildsOnRelease();
             ClientState.pending.draw(
                     new Point(0, 0, 0),
                     true,
