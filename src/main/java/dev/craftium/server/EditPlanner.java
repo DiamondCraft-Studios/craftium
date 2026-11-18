@@ -35,6 +35,7 @@ final class EditPlanner {
             return EditPlanner.this.adjacent(p);
         }
     };
+
     final java.util.function.Predicate<Point> expression;
     final LuaBrush maskLua;
     final List<BlockState> materials;
@@ -253,9 +254,9 @@ final class EditPlanner {
                     (bits & 2) != 0 ? 2 * origin.y() + (o.symmetryHalfY ? 1 : 0) - p.y() : p.y(),
                     (bits & 4) != 0 ? 2 * origin.z() + (o.symmetryHalfZ ? 1 : 0) - p.z() : p.z());
             var s = value.state();
-            if ((bits & 1) != 0) s = s.mirror(net.minecraft.world.level.block.Mirror.FRONT_BACK);
+            if ((bits & 1) != 0) s = StateTransforms.mirror(s, net.minecraft.world.level.block.Mirror.FRONT_BACK);
             if ((bits & 2) != 0) s = BuilderEdits.verticalMirror(s);
-            if ((bits & 4) != 0) s = s.mirror(net.minecraft.world.level.block.Mirror.LEFT_RIGHT);
+            if ((bits & 4) != 0) s = StateTransforms.mirror(s, net.minecraft.world.level.block.Mirror.LEFT_RIGHT);
             for (int rotation = 0; rotation < o.symmetryRotations; rotation++) {
                 if (bits == 0 && rotation == 0) continue;
                 double angle = 360d * rotation / o.symmetryRotations,

@@ -1885,7 +1885,7 @@ public final class EditorServer {
                     ? v.state().rotate(Rotation.CLOCKWISE_90)
                     : axis == 1
                             ? BuilderEdits.verticalMirror(v.state())
-                            : v.state().mirror(axis == 2 ? Mirror.LEFT_RIGHT : Mirror.FRONT_BACK);
+                            : StateTransforms.mirror(v.state(), axis == 2 ? Mirror.LEFT_RIGHT : Mirror.FRONT_BACK);
             next.put(at, new BlockSnapshot(state, v.data()));
         }
         int minX = next.keySet().stream().mapToInt(Point::x).min().orElse(0),
