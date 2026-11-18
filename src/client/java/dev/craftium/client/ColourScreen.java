@@ -82,6 +82,7 @@ public final class ColourScreen extends CraftiumScreen {
         button("Use gradient in Painter", left + 8, top + 369, 209, 24, () -> {
             ClientState.options.materials = String.join(",", gradient);
             ClientState.options.materialWeights.clear();
+            ToolOptionMemory.switchTo(ClientState.options, Tool.GRADIENT_PAINTER);
             ClientState.options.tool = Tool.GRADIENT_PAINTER;
             ClientState.notify("Gradient exported to Gradient Painter");
             onClose();
