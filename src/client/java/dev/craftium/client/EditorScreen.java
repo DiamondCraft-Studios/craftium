@@ -4415,6 +4415,12 @@ public final class EditorScreen extends CraftiumScreen {
                 .contains(o().tool);
     }
 
+    /** Hover and click-to-pick on BuildObjects in a viewport: on when the toggle is, except while a Paint or Sculpt tool is chosen, so a brush stroke is never taken as a pick. */
+    private boolean buildObjectsHoverable() {
+        var t = o().tool;
+        return o().hoverBuildObjects && !(t != null && ("Paint".equals(t.group) || "Sculpt".equals(t.group)));
+    }
+
     private int lift() {
         if (o().tool == Tool.TEXT) return 0;
         return switch (o().tool.brushUse()) {
@@ -5542,7 +5548,7 @@ public final class EditorScreen extends CraftiumScreen {
                 }
             } // no tool chosen: a click on a ruler picks it, without choosing the Ruler tool
         }
-        if (event.button() == 0 && o().hoverBuildObjects && !PlacementPreview.active()) { // whatever tool is chosen
+        if (event.button() == 0 && buildObjectsHoverable() && !PlacementPreview.active()) { // whatever tool is chosen
             objectPickHit = target();
             objectPickPending = objectPickHit != null
                     && ClientState.savedAt(CraftiumClient.point(objectPickHit.getBlockPos())) != 0;
@@ -7001,7 +7007,7 @@ public final class EditorScreen extends CraftiumScreen {
             }
         }
         ClientState.hoverWorld = 0; // Hover BuildObjects: the one under the pointer in a viewport
-        if (o().hoverBuildObjects
+        if (buildObjectsHoverable()
                 && menu < 0
                 && pointerFree()
                 && rowDragId < 0
