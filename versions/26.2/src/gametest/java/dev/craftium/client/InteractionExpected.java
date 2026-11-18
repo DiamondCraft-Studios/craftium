@@ -74,8 +74,8 @@ final class InteractionExpected {
             Map.entry("shape_tilt_before_placing", "259 28f1a79caf5be0cb client:bea6c904c9962496"),
             Map.entry("shape_tilt_then_enter", "259 28f1a79caf5be0cb client:d33a2ff0bcaf68a3"),
             Map.entry("shape_turn_with_move_tool", "259 28f1a79caf5be0cb client:ab00ec30a4fb359d"),
-            Map.entry("slope_three_clicks", "303 023db8a0e72b5ef7 client:395cc6398d47eca6"),
-            Map.entry("slope_two_clicks", "303 023db8a0e72b5ef7 client:cedadbb9e6910632"),
+            Map.entry("slope_three_clicks", "361 04114e82a13e799c client:8167314cf9cb755b"),
+            Map.entry("slope_two_clicks", "361 04114e82a13e799c client:56e21e9a54541679"),
             Map.entry("smear_clipboard", "55 48e735b6da62e9c3 client:c750976c4c62bdb3"),
             Map.entry(
                     "stroke_draw_builds_on_release_without_enter_to_build",
