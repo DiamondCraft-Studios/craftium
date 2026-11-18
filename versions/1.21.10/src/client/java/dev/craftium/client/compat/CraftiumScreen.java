@@ -92,7 +92,8 @@ public abstract class CraftiumScreen extends Screen {
     }
     /** Renders another screen as this one's backdrop, for a pop-up that must not hide it. */
     protected final void drawUnder(Screen s, Gfx g, int mouseX, int mouseY, float delta) {
-        // The screen below zooms itself; undo this screen's zoom first so it is not applied twice (at 1.5x the backdrop shrank to 0.75 of itself).
+        // The screen below zooms itself; undo this screen's zoom first so it is not applied twice (at 1.5x the backdrop
+        // shrank to 0.75 of itself).
         double zoom = dev.craftium.client.InterfaceScale.zoom();
         if (zoom == 1) {
             s.render(g.raw, mouseX, mouseY, delta);

@@ -46,6 +46,7 @@ public final class BrushRing {
     }
 
     private static void plot(Gfx g, java.util.Set<Long> drawn, int x0, int y0, int dx, int dy) {
-        if (drawn.add((long) dx << 32 | (dy & 0xffffffffL))) g.invertFill(x0 + dx, y0 + dy, x0 + dx + 1, y0 + dy + 1, 0xffffffff);
+        if (drawn.add((long) dx << 32 | (dy & 0xffffffffL)))
+            g.invertFill(x0 + dx, y0 + dy, x0 + dx + 1, y0 + dy + 1, 0xffffffff);
     }
 }

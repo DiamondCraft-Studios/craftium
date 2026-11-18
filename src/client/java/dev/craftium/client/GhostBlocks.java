@@ -300,7 +300,8 @@ final class GhostBlocks {
         if (tintReplaced && outline) {
             var gone = replaced(origin);
             if (!gone.isEmpty()) Overlay.blocks(gone, GONE_RED);
-            if (!replacedShape.isEmpty()) replacedShape.drawFill(Vec3.ZERO, ClientState.options.removedFill | 0x44000000);
+            if (!replacedShape.isEmpty())
+                replacedShape.drawFill(Vec3.ZERO, ClientState.options.removedFill | 0x44000000);
             if (!removedShape.isEmpty()) removedShape.drawFill(at, ClientState.options.removedFill | 0x44000000);
         }
         // A preview can hold far more blocks than a frame can draw as models; the server sends the visible ones first,
