@@ -133,6 +133,8 @@ final class TransformGizmo {
             if (o.tool == Tool.PIVOT) return new Target(Kind.PIVOT, pivotAnchor(screen), null);
             return ClientState.gizmoSize() > 0 ? new Target(Kind.MODEL, pivot(), null) : null;
         }
+        // The selection and entity gizmos stay out of a brush stroke: no handle is lit or grabbed while a Paint or Sculpt tool is chosen
+        if ("Paint".equals(o.tool.group) || "Sculpt".equals(o.tool.group)) return null;
         if (o.gizmoTarget != Options.GizmoTarget.ENTITY
                 && (o.tool == Tool.BOX_SELECT || o.gizmoTarget == Options.GizmoTarget.SELECTION)
                 && status.selectionSize() > 0) {
