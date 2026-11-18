@@ -652,6 +652,18 @@ final class EditPlanner {
                 layers.add(state(p));
             }
         int n = layers.size();
+        // A column moves as a whole or not at all: if any block it would write belongs to a BuildObject, the Terrain
+        // tools leave the column as it is,
+        // instead of tearing it around the object's blocks.
+        if (!exact && o.tool.group.equals("Terrain")) {
+            int low = Math.max(level.getMinY(), Math.min(top - n + 1, to - n + 1)),
+                    high = Math.min(maxY, Math.max(top, to) + cover.size());
+            for (int y = low; y <= high; y++)
+                if (inBuildObject(new Point(x, y, z))) {
+                    skip(Skip.OBJECT);
+                    return;
+                }
+        }
         Point below = at.add(0, -n, 0);
         BlockState under = state(below);
         BlockState fill = ground(below) && !under.hasBlockEntity() ? under : layers.get(n - 1);
