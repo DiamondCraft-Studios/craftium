@@ -280,7 +280,8 @@ final class EditPlanner {
         MASK("the mask turned the blocks away (block mask, mask block, rules or script)"),
         KEEP("Keep existing is on and those spots were already filled"),
         SURVIVE("the blocks could not stand there (turn on Force place in the Builder tab)"),
-        SAME("those spots already hold the block");
+        SAME("those spots already hold the block"),
+        OBJECT("the blocks belong to a BuildObject, which the Terrain tools leave alone");
         final String why;
 
         Skip(String why) {
@@ -305,9 +306,23 @@ final class EditPlanner {
         return Skip.MASK;
     }
 
+    private java.util.Set<Point> objectBlocks;
+    /** Whether the block at {@code p} belongs to one of the player's BuildObjects; read once per edit. */
+    private boolean inBuildObject(Point p) {
+        if (objectBlocks == null) {
+            objectBlocks = new java.util.HashSet<>();
+            for (var e : session.saved.entries()) objectBlocks.addAll(e.points());
+        }
+        return objectBlocks.contains(p);
+    }
+
     private void putOne(Point p, BlockSnapshot value) {
         validate(p);
         var planned = changes.get(p);
+        if (!exact && o.tool.group.equals("Terrain") && inBuildObject(p)) {
+            skip(Skip.OBJECT);
+            return;
+        }
         if (!exact && !accepted(p)) {
             skip(rejection(p));
             return;
