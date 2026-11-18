@@ -70,6 +70,7 @@ final class WorkspaceLayout {
             case "Missing blocks" -> "missing";
             case "Large edit" -> "progress";
             case "Materials" -> "materials";
+            case "Selection" -> "selection";
             default -> "";
         };
     }
@@ -153,7 +154,8 @@ final class WorkspaceLayout {
                 && !id.equals("magic")
                 && !id.equals("clipboard")
                 && !id.equals("rulers")
-                && !id.equals("materials");
+                && !id.equals("materials")
+                && !id.equals("selection");
         return r;
     }
 
@@ -309,7 +311,8 @@ final class WorkspaceLayout {
                             "rulers",
                             "hierarchy",
                             "progress",
-                            "materials")
+                            "materials",
+                            "selection")
                     .contains(e.getKey())) continue;
             var r = Packets.JSON.fromJson(e.getValue(), Rect.class);
             r.x = Math.clamp(r.x, 0, 4000);

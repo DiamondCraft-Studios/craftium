@@ -22,9 +22,22 @@ public final class BlockStateScreen extends CraftiumScreen {
     private BlockState state;
     private List<Property<?>> properties = List.of();
     private int scroll;
+    /** Whether the editor names only the properties that were changed, as {@code id[a=b]}, so applying the result to many blocks leaves their other properties alone. */
+    private final boolean partial;
+    /** In a partial editor, the properties the player has set; each of the others reads "keep". */
+    private final Set<Property<?>> touched = new HashSet<>();
+    /** An editor for a change to the state of many blocks: every property starts as "keep", and the result names only the ones that were set. */
+    public static BlockStateScreen changes(Screen parent, String block, Consumer<String> done) {
+        return new BlockStateScreen(parent, block, done, true);
+    }
 
     public BlockStateScreen(Screen parent, String block, Consumer<String> done) {
+        this(parent, block, done, false);
+    }
+
+    private BlockStateScreen(Screen parent, String block, Consumer<String> done, boolean partial) {
         super(Component.literal("Craftium Block State"));
+        this.partial = partial;
         this.parent = parent;
         this.done = done;
         id = block.split("\\[", 2)[0];
@@ -63,7 +76,8 @@ public final class BlockStateScreen extends CraftiumScreen {
     }
     /** "id[a=b,c=d]" naming every property, so the result matches exactly this state. */
     private String result() {
-        return describe(id, properties, state);
+        if (!partial) return describe(id, properties, state);
+        return describe(id, properties.stream().filter(touched::contains).toList(), state);
     }
     /** The exact state of a block in the world, as {@code id[property=value,…]}. */
     static String describe(BlockState state) {
@@ -102,15 +116,22 @@ public final class BlockStateScreen extends CraftiumScreen {
         scroll = Math.clamp(scroll, 0, Math.max(0, properties.size() - MAX_ROWS));
         for (int r = 0; r < rows(); r++) {
             var property = properties.get(scroll + r);
-            addRenderableWidget(
-                    new FlatButton(left() + 130, top() + 34 + r * ROW, WIDTH - 130, 21, value(state, property), () -> {
-                        state = step(state, property);
+            addRenderableWidget(new FlatButton(
+                    left() + 130,
+                    top() + 34 + r * ROW,
+                    WIDTH - 130,
+                    21,
+                    partial && !touched.contains(property) ? "keep" : value(state, property),
+                    () -> {
+                        if (!partial || touched.contains(property)) state = step(state, property);
+                        touched.add(property);
                         init();
                     }));
         }
         int y = top() + 40 + rows() * ROW + (properties.isEmpty() ? 24 : 0);
         addRenderableWidget(new FlatButton(left(), y, 95, 22, "Reset", () -> {
             state = block.defaultBlockState();
+            touched.clear();
             init();
         }));
         addRenderableWidget(new FlatButton(left() + 105, y, 95, 22, "Cancel", this::onClose));
@@ -144,8 +165,17 @@ public final class BlockStateScreen extends CraftiumScreen {
                 false);
         if (block == null) g.text(font, "Unknown block", left, top + 22, 0xffffdca8, false);
         else if (properties.isEmpty()) g.text(font, "This block has no states.", left, top + 36, 0xff9db5cb, false);
-        for (int r = 0; r < rows(); r++)
-            g.text(font, properties.get(scroll + r).getName(), left, top + 40 + r * ROW, 0xffdce6ef, false);
+        else if (partial) g.text(font, "Only the states you set are applied", left, top + 19, 0xff9db5cb, false);
+        for (int r = 0; r < rows(); r++) {
+            var property = properties.get(scroll + r);
+            g.text(
+                    font,
+                    property.getName(),
+                    left,
+                    top + 40 + r * ROW,
+                    partial && !touched.contains(property) ? 0xff8296aa : 0xffdce6ef,
+                    false);
+        }
         drawWidgets(g, mouseX, mouseY, delta);
     }
 
