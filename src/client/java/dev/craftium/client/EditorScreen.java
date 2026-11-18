@@ -1682,6 +1682,21 @@ public final class EditorScreen extends CraftiumScreen {
                             true);
                     row += 38;
                 }
+                if (terrainFlowShown()) { // under the tool's own Strength slider
+                    slider(
+                            g,
+                            10,
+                            403 + row,
+                            pw - 20,
+                            "Flow",
+                            o().brushFlow,
+                            Options.FLOW_MIN,
+                            Options.FLOW_MAX,
+                            Options.FLOW_DEFAULT,
+                            v -> o().brushFlow = (int) Math.clamp(Math.round(v), Options.FLOW_MIN, Options.FLOW_MAX),
+                            true);
+                    row += 28;
+                }
                 int fillRow = o().tool.picksShape() ? 23 : 0;
                 if (o().tool.picksShape()) fillButtons(g, 403 + row);
                 int next;
@@ -4792,6 +4807,11 @@ public final class EditorScreen extends CraftiumScreen {
         return sizes() && !o().tool.selection() && o().tool != Tool.SHAPE;
     }
 
+    /** Elevation and Flatten repeat while the button is held, each step adding to the last, so they have a flow too. Slope, Rock, Floodfill and the fluids are one click. */
+    private boolean terrainFlowShown() {
+        return o().tool == Tool.ELEVATION || o().tool == Tool.FLATTEN;
+    }
+
     private int sizeHeight() {
         int n = dev.craftium.core.ShapeSizes.rows(o().shape).size();
         return n * 28 + (n > 1 ? 24 : 0) + (flowShown() ? 28 : 0);
@@ -5604,7 +5624,7 @@ public final class EditorScreen extends CraftiumScreen {
     private long lastUseSent;
     /** How long a stroke waits between one application of the brush and the next: 140 ms at the default flow of 25, longer for less, 35 ms at 100. */
     private long useInterval() {
-        return flowShown()
+        return flowShown() || terrainFlowShown()
                 ? Math.round(
                         140.0 * Options.FLOW_DEFAULT / Math.clamp(o().brushFlow, Options.FLOW_MIN, Options.FLOW_MAX))
                 : 140;

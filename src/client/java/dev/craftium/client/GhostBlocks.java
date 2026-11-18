@@ -72,6 +72,8 @@ final class GhostBlocks {
     private OutlineShape replacedShape = OutlineShape.EMPTY;
     /** The red the Paint and Sculpt tools show what they take away in, whatever the preferences' tint for removed blocks is. */
     private static final int GONE_RED = 0x80ff3030;
+    /** The Terrain tools' removed blocks: a quarter red, lighter than the blocks they build, with no outline. */
+    private static final int GONE_RED_LIGHT = 0x40ff3030;
 
     /** Set on a preview an AI app made, which is drawn in violet so it is never taken for one of the player's own edits. */
     boolean ai;
@@ -303,10 +305,12 @@ final class GhostBlocks {
                                     : ai ? dev.craftium.core.AiSessions.shade(o.aiFill, slot) : o.hoverFill;
             if (!placedShape.isEmpty())
                 placedShape.drawPlain(at, line, (float) ClientState.options.selectionWidth, fill, true, false);
-            if (!removedShape.isEmpty()) removedShape.drawFill(at, ClientState.options.removedFill);
+            if (!removedShape.isEmpty() && !redRemoved) removedShape.drawFill(at, ClientState.options.removedFill);
         }
         if (!removedPlaces.isEmpty() && outline)
-            Overlay.blocks(removedPlaces, tintReplaced || redRemoved ? GONE_RED : ClientState.options.removedTint);
+            Overlay.blocks(
+                    removedPlaces,
+                    redRemoved ? GONE_RED_LIGHT : tintReplaced ? GONE_RED : ClientState.options.removedTint);
         if (states.isEmpty()) return;
         if (cachedPlaces == null || !origin.equals(cachedOrigin)) {
             var places = new ArrayList<BlockPos>(relative.size());
