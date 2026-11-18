@@ -910,6 +910,11 @@ public final class CraftiumGameTest implements FabricClientGameTest {
                 o.biome = "minecraft:desert";
                 o.inSelection = false;
                 o.keepExisting = false;
+                o.nodes.clear();
+                if (tool == Tool.SLOPE) { // a ramp from one side of the floor to the other
+                    o.nodes.add(new Point(-4, 0, 0));
+                    o.nodes.add(new Point(4, 3, 0));
+                }
             });
             request("use", new Point(0, 0, 0));
             System.out.println("CRAFTIUM_TOOL_PASS " + tool);

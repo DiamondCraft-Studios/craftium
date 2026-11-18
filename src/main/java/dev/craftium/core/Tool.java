@@ -27,8 +27,16 @@ public enum Tool {
     MELT("Melt", "ML", "Sculpt", "Erode exposed corners using local voxel density."),
     TEXT("Text", "TX", "Draw", "Place block lettering using a compact 5 by 7 alphabet."),
     ELEVATION("Elevation", "EL", "Terrain", "Raise or lower columns with soft radial falloff."),
-    FLATTEN("Flatten", "FL", "Terrain", "Bring terrain toward the target Y level."),
-    SLOPE("Slope", "SL", "Terrain", "Shape a ramp toward your chosen direction and rise."),
+    FLATTEN(
+            "Flatten",
+            "FL",
+            "Terrain",
+            "Bring the ground to a level: the block a stroke starts on, or a Target Y you set."),
+    SLOPE(
+            "Slope",
+            "SL",
+            "Terrain",
+            "Right-click where a ramp starts, then where it ends, to build it between the two."),
     SMOOTH("Smooth", "SM", "Sculpt", "Smooth voxel surfaces with a weighted neighbour filter."),
     DISTORT("Distort", "DS", "Sculpt", "Warp existing material through a coherent noise field."),
     ROUGHEN("Roughen", "RF", "Sculpt", "Add small, seeded irregularities to exposed surfaces."),

@@ -166,6 +166,10 @@ final class Session {
 
     Edit pendingChainBase, pendingChainEdit;
     long requestStroke, lastStroke;
+    /** Flatten with Level from click: the stroke whose first click set the level, and that level, so a held stroke keeps it. */
+    long flattenStroke;
+
+    int flattenLevel;
     /** The stroke the game's own placements belong to while the place button is held, so they undo as one; 0 when no stroke is open. */
     long placeStroke;
     /** Whether the edit this request starts goes into the undo history. */
