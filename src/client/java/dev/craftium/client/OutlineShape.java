@@ -89,8 +89,10 @@ final class OutlineShape {
         shape.ready = false;
         shape.cells = points;
         if (previous != null && !previous.isEmpty()) shape.stale = previous.ready ? previous : previous.stale;
+        final OutlineShape old = shape.stale;
         LATER.execute(() -> {
             shape.outline = SelectionOutline.of(points);
+            shape.carryOver(old); // its own silhouette takes a while more: show the last one meanwhile, not the creases
             shape.ready = true;
             shape.stale = null;
         });
@@ -435,8 +437,9 @@ final class OutlineShape {
         return (crossed & 1) == 1;
     }
 
-    private Vec3 contourEye, contourAt;
-    private Vec3[] contourEnds;
+    private Vec3 contourEye;
+    private volatile Vec3 contourAt;
+    private volatile Vec3[] contourEnds;
     /** Whether the camera is inside the shape, as last worked out; only worked out when the camera or the shape moves. */
     private boolean eyeBuried;
     /** When the last frames that wanted a silhouette began showing the outline instead, or 0 while they get one. */
@@ -473,15 +476,13 @@ final class OutlineShape {
      * other's finished contour for a big shape, so that until its own contour is ready it does not drop to the creases, which flickers.
      */
     void carryOver(OutlineShape previous) {
-        if (previous == null
-                || previous == this
-                || outline.creases().size() <= ASYNC_CREASES
-                || contourEnds != null
-                || previous.contourEnds == null
-                || previous.contourEnds.length == 0
-                || previous.contourAt == null) return;
-        contourEnds = previous.contourEnds;
-        contourAt = previous.contourAt;
+        if (previous == null || previous == this || outline.creases().size() <= ASYNC_CREASES || contourEnds != null)
+            return;
+        var ends = previous.contourEnds;
+        var at = previous.contourAt;
+        if (ends == null || ends.length == 0 || at == null) return;
+        contourEnds = ends;
+        contourAt = at;
     }
     /**
      * Draws only the contour of the shape on the screen. Worked out again only when the camera or the shape moves.
