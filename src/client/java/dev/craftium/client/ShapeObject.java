@@ -248,6 +248,7 @@ public final class ShapeObject {
         } finally {
             ClientState.options = original;
         }
+        hover = pose.rotation(); // the next shape starts with the turn this one was built with
         pose = null;
     }
 
