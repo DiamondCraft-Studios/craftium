@@ -1632,6 +1632,17 @@ public final class EditorScreen extends CraftiumScreen {
                         o().surfaceOnly,
                         () -> o().surfaceOnly = !o().surfaceOnly);
                 int next = 428 + fillRow + row;
+                if (o().tool == Tool.SHAPE) {
+                    toggle(
+                            g,
+                            10,
+                            next,
+                            "Create as BuildObject",
+                            o().shapeAsBuildObject,
+                            () -> o().shapeAsBuildObject = !o().shapeAsBuildObject,
+                            "The shape is also made a new BuildObject in the Hierarchy when it is built · Undo takes both away");
+                    next += 22;
+                }
                 if (MATERIAL_TOOLS.contains(o().tool)) {
                     materialsRow(g, 10, next + 4, pw - 20);
                     next += 48;

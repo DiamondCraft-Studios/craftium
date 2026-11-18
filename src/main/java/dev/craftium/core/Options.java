@@ -85,6 +85,8 @@ public final class Options {
     public long seed = 42;
     /** {@code outline} keeps only the shape's edges, in 2D and 3D; it takes the place of {@code hollow}, never alongside it. */
     public boolean invert, hollow, outline, surfaceOnly = true, keepExisting, pasteAir;
+    /** The Shape tool also makes the shape it builds a new BuildObject. */
+    public boolean shapeAsBuildObject;
     /**
      * For a hollow shape: how many blocks thick the wall is (at most the radius), whether it is drawn the way a pixel artist would, one
      * block per column with no doubled steps, and where the wall sits against the edge the radius gives the shape.
