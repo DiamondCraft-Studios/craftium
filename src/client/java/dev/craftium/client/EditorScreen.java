@@ -161,9 +161,13 @@ public final class EditorScreen extends CraftiumScreen {
     private boolean selectingText;
     private static final Options DEFAULTS = new Options();
 
-    private record MenuItem(String label, String shortcut, Runnable action, List<MenuItem> children) {
+    private record MenuItem(String label, String shortcut, Runnable action, List<MenuItem> children, boolean checked) {
         MenuItem(String label, String shortcut, Runnable action) {
-            this(label, shortcut, action, List.of());
+            this(label, shortcut, action, List.of(), false);
+        }
+
+        MenuItem(String label, String shortcut, Runnable action, List<MenuItem> children) {
+            this(label, shortcut, action, children, false);
         }
     }
     /** The label of the menu entry whose submenu is open, or empty. */
@@ -3381,7 +3385,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** The Magic select window: directions, mode and select type of the Magic Wand, shown from Window → Toggle magic whichever tool is active. */
     private void magicPanel(Gfx g) {
-        int x = w - RIGHT - 244, y = 263; // under where the Rulers panel opens, left of the right-hand column
+        int x = LEFT + 8, y = h - 25 - 160 - 6; // the bottom left, beside the left column
         panel(g, x, y, 236, 160, "Magic select");
         MagicSelectOptions.draw(magicHost(g), o(), x + 10, y + 26, pw - 20, MagicSelectOptions.ALL);
     }
@@ -4156,6 +4160,11 @@ public final class EditorScreen extends CraftiumScreen {
                     },
                     "");
             if (!item.shortcut.isEmpty()) text(g, item.shortcut, x + 212 - font.width(item.shortcut), y + 8, MUTED);
+            if (item.checked) { // a tick at the right: this window is showing
+                int cx = x + 204, cy = y + 12;
+                ToolIcons.line(g, cx, cy, cx + 3, cy + 3, ACCENT);
+                ToolIcons.line(g, cx + 3, cy + 3, cx + 9, cy - 4, ACCENT);
+            }
             y += 25;
         }
     }
@@ -4291,8 +4300,59 @@ public final class EditorScreen extends CraftiumScreen {
             }
             case 9 -> {
                 var items = new ArrayList<MenuItem>();
-                for (String id : WorkspaceLayout.windows.keySet())
-                    items.add(item("Toggle " + id, "", () -> WorkspaceLayout.toggle(id)));
+                // Windows in groups, each with a tick while it is showing; the layout actions come last
+                String[][] groups = {
+                    {
+                        "tools",
+                        "Tools",
+                        "options",
+                        "Tool options",
+                        "masks",
+                        "Tool masks",
+                        "magic",
+                        "Magic select",
+                        "rulers",
+                        "Rulers"
+                    },
+                    {
+                        "palette",
+                        "Block palette",
+                        "materials",
+                        "Materials",
+                        "selection",
+                        "Selection",
+                        "clipboard",
+                        "Clipboard",
+                        "hierarchy",
+                        "Hierarchy"
+                    },
+                    {
+                        "target",
+                        "Target info",
+                        "history",
+                        "History",
+                        "missing",
+                        "Missing blocks",
+                        "progress",
+                        "Large edit"
+                    }
+                };
+                for (String[] group : groups) {
+                    boolean any = false;
+                    for (int i = 0; i < group.length; i += 2) {
+                        String id = group[i];
+                        if (!WorkspaceLayout.windows.containsKey(id)) continue;
+                        if (!any && !items.isEmpty()) items.add(divider());
+                        any = true;
+                        items.add(new MenuItem(
+                                group[i + 1],
+                                "",
+                                () -> WorkspaceLayout.toggle(id),
+                                List.of(),
+                                WorkspaceLayout.visible(id)));
+                    }
+                }
+                items.add(divider());
                 items.add(item("Save layout", "", WorkspaceLayout::save));
                 items.add(item("Reset layout", "", WorkspaceLayout::reset));
                 items.add(
@@ -7041,7 +7101,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void rulerPanel(Gfx g) {
         if (ClientState.rulers.isEmpty() && !(toolActive && o().tool == Tool.RULER))
             return; // there is nothing to list until a ruler is made
-        int x = w - RIGHT - 244, y = 27; // just left of the right-hand panels, clear of the viewport tools
+        int x = LEFT + 8, y = h - 25 - 230 - 6; // the bottom left, beside the left column
         panel(g, x, y, 236, 230, "Rulers");
         if (!o().rulersIntroduced) { // the first time a ruler is used the window comes up, once; after that it is the
             // player's to open and close
