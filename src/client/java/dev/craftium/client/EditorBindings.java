@@ -42,7 +42,8 @@ final class EditorBindings {
                 var saved = Packets.JSON.fromJson(Files.readString(FILE), Saved.class);
                 if (saved != null && saved.bindings != null) {
                     for (var e : saved.bindings.entrySet())
-                        if (e.getValue() != null
+                        if (!(saved.version < 2 && isFormerFillDefault(e.getKey(), e.getValue()))
+                                && e.getValue() != null
                                 && e.getValue().key() >= -1
                                 && (!e.getKey().keyboardOnly() || !e.getValue().mouse())
                                 && (!e.getKey().mouseOnly()
@@ -57,11 +58,19 @@ final class EditorBindings {
         }
     }
 
+    /** Quick fill and replace used to share Ctrl+F and Ctrl+R with flip and rotate; a saved copy of that old default moves to the new one. */
+    private static boolean isFormerFillDefault(Action action, Binding binding) {
+        return (action == Action.QUICK_FILL
+                        && Binding.key('F', EditorControls.CONTROL).equals(binding))
+                || (action == Action.QUICK_REPLACE
+                        && Binding.key('R', EditorControls.CONTROL).equals(binding));
+    }
+
     static void save() {
         try {
             Files.createDirectories(FILE.getParent());
             Path temp = FILE.resolveSibling(FILE.getFileName() + ".tmp");
-            Files.writeString(temp, Packets.JSON.toJson(new Saved(1, migrated, bindings)));
+            Files.writeString(temp, Packets.JSON.toJson(new Saved(2, migrated, bindings)));
             Files.move(temp, FILE, StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception e) {
             dev.craftium.Craftium.LOG.warn("Cannot save Craftium editor bindings", e);
