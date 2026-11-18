@@ -177,6 +177,10 @@ public final class CraftiumGameTest implements FabricClientGameTest {
                 dev.craftium.client.PendingTransformGameTest.run(ctx, world);
                 return;
             }
+            if ("shaperotate".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))) {
+                dev.craftium.client.ShapeRotateGameTest.run(ctx, world);
+                return;
+            }
             if ("gizmodrag".equals(System.getenv("CRAFTIUM_TEST_SCOPE"))) {
                 dev.craftium.client.GizmoDragGameTest.run(ctx, world);
                 return;
