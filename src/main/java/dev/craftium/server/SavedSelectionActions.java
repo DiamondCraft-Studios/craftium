@@ -16,7 +16,7 @@ final class SavedSelectionActions {
         var saved = s.saved;
         switch (part[0]) {
             case "save" -> {
-                var entry = saved.create(s.selection);
+                var entry = saved.create(s.selection, part.length > 1 && !part[1].isBlank() ? id(part) : 0);
                 saved.reveal(entry);
                 saved.view(entry.id(), s.selection);
                 return "Created " + entry.name();

@@ -6957,6 +6957,11 @@ public final class EditorScreen extends CraftiumScreen {
         return m;
     }
 
+    /** The group last selected in the Hierarchy (0 for none): the + button creates at its root. A BuildObject chosen after it takes the choice back. */
+    private int selectedGroup;
+
+    private boolean lookingBefore;
+
     private void hierarchyPanel(Gfx g) {
         var model = hierarchyModel();
         var groups = ClientState.savedGroups();
@@ -6966,6 +6971,9 @@ public final class EditorScreen extends CraftiumScreen {
         int x = w - RIGHT, y = 27;
         panel(g, x, y, RIGHT, Math.max(90, groupTop() - 6 - y), "Hierarchy");
         boolean looking = ClientState.activeSaved() != null;
+        if (looking && !lookingBefore) selectedGroup = 0; // a BuildObject was chosen after the group
+        lookingBefore = looking;
+        if (selectedGroup != 0 && groupById(selectedGroup) == null) selectedGroup = 0; // deleted
         int top = y + 28,
                 bottom = y + ph - 36,
                 rowHeight = 20,
@@ -7047,14 +7055,18 @@ public final class EditorScreen extends CraftiumScreen {
                     box.setWidth(eye - 4 - nameX);
                 } else text(g, shorten(group.name(), eye - 4 - nameX), nameX, ry + 6, GROUP_TEXT);
                 if (rowDragMoved && rowDragId == gid) g.fill(x + 9, ry, x + pw - 9, ry + rowHeight, 0xaa141c26);
+                if (selectedGroup == group.id()) g.outline(x + 9, ry, rowRight - (x + 9), rowHeight, ACCENT);
                 var headControl = new Control(
                         x + 9,
                         ry,
                         rowRight - (x + 9),
                         rowHeight,
-                        () -> {},
+                        () -> {
+                            selectedGroup = group.id(); // the last thing chosen: the + button makes a BuildObject at its root
+                            if (ClientState.activeSaved() != null) action("saved_selection:release");
+                        },
                         HIDDEN_TIP
-                                + "Group · The arrow folds it · Double-click to rename · Drag to move it · Right-click for more");
+                                + "Group · Click to select it: the + button then creates a BuildObject at its root · The arrow folds it · Double-click to rename · Drag to move it · Right-click for more");
                 controls.add(headControl);
                 renameAreas.add(new RenameArea(headControl, gid));
                 foldArrow(g, x + 15, folded ? ry + 6 : ry + 7, folded, GROUP_TEXT);
@@ -7250,9 +7262,11 @@ public final class EditorScreen extends CraftiumScreen {
                 false,
                 () -> {
                     expectNewBuildObject();
-                    action("saved_selection:save");
+                    action("saved_selection:save" + (selectedGroup != 0 ? ":" + selectedGroup : ""));
                 },
-                (looking
+                (selectedGroup != 0
+                                ? "Create a BuildObject from what is selected now, at the root of the selected group"
+                                : looking
                                 ? "Create a BuildObject from what is selected now · While one is shown, the new one goes inside it"
                                 : "Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole")
                         + " · " + EditorBindings.label(Action.GROUP_OBJECTS));
@@ -7421,6 +7435,7 @@ public final class EditorScreen extends CraftiumScreen {
      */
     private void rowClick(dev.craftium.net.Packets.SavedSelection entry) {
         boolean ctrl = minecraft.hasControlDown(), shift = minecraft.hasShiftDown();
+        selectedGroup = 0; // a BuildObject chosen after a group takes the choice back
         var chosen = new ArrayList<Integer>();
         for (var e : hierarchyAll) if (e.active()) chosen.add(e.id());
         if (ctrl && shift) {

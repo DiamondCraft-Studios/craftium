@@ -728,6 +728,26 @@ public final class SavedSelections {
      * nothing touched it is a new BuildObject at the top level, last. While a BuildObject is shown, the new one is its last child instead and takes in nothing.
      */
     public Entry create(Selection live) {
+        return create(live, 0);
+    }
+    /** As {@link #create(Selection)}; with a {@code groupId} the new BuildObject is made at the root of that group, last, whatever is shown. */
+    public Entry create(Selection live, int groupId) {
+        if (groupId != 0) {
+            needGroup(groupId);
+            var before = active;
+            active = null; // a group was the last thing chosen: nothing is shown to put it inside
+            Entry entry;
+            try {
+                entry = create(live, 0);
+            } finally {
+                if (active == null) active = before;
+            }
+            if (entry.parent == null) {
+                placeIn(List.of(entry.id), 0, groupId, Integer.MAX_VALUE);
+                changed();
+            }
+            return entry;
+        }
         if (live.size() == 0) throw new IllegalArgumentException("Nothing is selected to make a BuildObject from");
         if (entries.size() >= MAX) throw new IllegalArgumentException("BuildObject limit: " + MAX);
         var cells = live.points();
