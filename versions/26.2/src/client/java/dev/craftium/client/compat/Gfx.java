@@ -155,6 +155,14 @@ public final class Gfx implements dev.craftium.client.Canvas {
                 color);
     }
 
+    /**
+     * Fills a rectangle by inverting what is under it, the way the vanilla crosshair is drawn, so it shows on light and dark alike. The colour's
+     * brightness is how much is inverted: white inverts fully, black leaves the pixel as it is.
+     */
+    public void invertFill(int x1, int y1, int x2, int y2, int color) {
+        raw.fill(RenderPipelines.GUI_INVERT, x1, y1, x2, y2, color);
+    }
+
     /** The vanilla crosshair sprite, plain white, with its 15x15 box centred on the given point. */
     public void crosshair(int centerX, int centerY) {
         raw.blitSprite(

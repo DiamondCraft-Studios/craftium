@@ -105,7 +105,10 @@ public interface Interaction {
     static boolean showsBrush(EditorContext editor, BlockHitResult hit) {
         var tool = editor.options().tool;
         boolean brush = !tool.selection() && !tool.transform() && tool.brushUse() != Tool.BrushUse.NONE;
-        return editor.toolActive() && hit != null && !PlacementPreview.active() && !ShapeObject.active() && brush;
+        return editor.toolActive()
+                && !editor.resizingBrush()
+                && hit != null
+                && !PlacementPreview.active() && !ShapeObject.active() && brush;
     }
 
     /** Whether the turn keys (rotate, tilt, flip) turn this tool's hover preview before anything is put down. A shape that is down is turned by them whatever tool is chosen. */

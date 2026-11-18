@@ -176,7 +176,9 @@ public final class EditorScreen extends CraftiumScreen {
         ROTATE,
         ORBIT,
         PAN,
-        RADIUS
+        RADIUS,
+        /** Ctrl+Alt and a drag: the point clicked stays on the edge of the brush circle, which is drawn out from it with the pointer at the far side. */
+        BRUSH_SIZE
     }
 
     private CameraGesture cameraGesture = CameraGesture.NONE;
@@ -186,6 +188,10 @@ public final class EditorScreen extends CraftiumScreen {
     private long orbitRefAt;
     private int cameraButton = -1, initialRadius;
     private double gestureX, gestureY, orbitDistance;
+    /** How many screen pixels a block is wide at the point a brush-size drag began on, which turns the pointer's distance into a radius. */
+    private double sizeDragScale, sizeDirX, sizeDirY;
+    /** Whether the pointer has moved since a brush-size drag began, before which the circle is still centred on the click. */
+    private boolean sizeDragMoved;
     private Vec3 orbitPivot;
     private Tool previousTool = Tool.BOX_SELECT;
     private boolean toolActive = true;
@@ -264,6 +270,11 @@ public final class EditorScreen extends CraftiumScreen {
         @Override
         public boolean toolActive() {
             return EditorScreen.this.toolActive;
+        }
+
+        @Override
+        public boolean resizingBrush() {
+            return cameraGesture == CameraGesture.BRUSH_SIZE || cameraGesture == CameraGesture.RADIUS;
         }
 
         @Override
@@ -621,6 +632,7 @@ public final class EditorScreen extends CraftiumScreen {
             } // the cell the block would land in
             BlockDragCursor.draw(g, font, dragBlock, mx, my, w, h, ACCENT, inViewport(mx, my));
         } else BlockDragCursor.release();
+        brushRing(g, steering);
         g.pose().popMatrix();
         ReferenceImages.draw(g, true, steering ? -100000 : mouseX, steering ? -100000 : mouseY);
     }
@@ -5052,6 +5064,46 @@ public final class EditorScreen extends CraftiumScreen {
         return false;
     }
 
+    /** The white circle around the cursor for the Paint and Sculpt brushes, as wide on the screen as the brush is at the block it points at. */
+    private void brushRing(Gfx g, boolean steering) {
+        if (steering || !toolActive || !BrushRing.shownFor(o().tool) || PlacementPreview.active() || ShapeObject.active())
+            return;
+        double cx = pointerX, cy = pointerY, perBlock;
+        if ((cameraGesture == CameraGesture.BRUSH_SIZE || cameraGesture == CameraGesture.RADIUS) && sizeDragScale > 0) {
+            // held where the drag began, as it is resized
+            perBlock = sizeDragScale;
+            cx = gestureX;
+            cy = gestureY;
+            if (cameraGesture == CameraGesture.BRUSH_SIZE && sizeDragMoved) {
+                // the click stays on the edge: the middle is a radius away from it, towards the pointer
+                double reach = (o().radius + .5) * perBlock;
+                cx += sizeDirX * reach;
+                cy += sizeDirY * reach;
+            }
+        } else {
+            if (!inViewport(mx, my)) return;
+            perBlock = pixelsPerBlock(target());
+        }
+        if (perBlock <= 0) return;
+        // The brush reaches radius blocks from the middle of the block, so the circle passes through the outer edge of those blocks.
+        // Drawn in screen pixels, not interface units, so a pixel of the line is a pixel of the screen when the interface is scaled up.
+        g.pose().pushMatrix();
+        g.pose().scale(1 / (float) scale, 1 / (float) scale);
+        BrushRing.draw(g, cx, cy, (o().radius + .5) * perBlock);
+        g.pose().popMatrix();
+    }
+
+    /** How many screen pixels wide a block is at the point {@code hit} aims at, or 0 when there is no such point or it is behind the camera. */
+    private double pixelsPerBlock(BlockHitResult hit) {
+        if (hit == null) return 0;
+        var camera = ClientCompat.camera(minecraft);
+        double depth = hit.getLocation()
+                .subtract(camera.position())
+                .dot(ClientCompat.nearPlane(camera).getPointOnPlane(0, 0).normalize());
+        if (depth <= .05) return 0;
+        return height / (2 * Math.tan(Math.toRadians(ClientCompat.fov(minecraft, camera)) / 2)) / depth;
+    }
+
     private boolean inViewport(double x, double y) {
         int[] pin = pinnedBounds();
         if (x >= pin[0] && x < pin[0] + pin[2] && y >= pin[1] && y < pin[1] + pin[3])
@@ -5404,6 +5456,26 @@ public final class EditorScreen extends CraftiumScreen {
             return true;
         }
         if (EditorBindings.matches(Action.EXTRUDE_POINT, event) && perform(Action.EXTRUDE_POINT)) return true;
+        if (event.button() == 0
+                && minecraft.hasControlDown()
+                && minecraft.hasAltDown()
+                && toolActive
+                && BrushRing.shownFor(o().tool)
+                && !PlacementPreview.active()
+                && !ShapeObject.active()
+                && inViewport(event.x() / scale, event.y() / scale)) {
+            double perBlock = pixelsPerBlock(target());
+            if (perBlock > 0) {
+                cameraGesture = CameraGesture.BRUSH_SIZE;
+                cameraButton = 0;
+                gestureX = event.x();
+                gestureY = event.y();
+                sizeDragScale = perBlock;
+                initialRadius = o().radius;
+                sizeDragMoved = false;
+                return true;
+            }
+        }
         for (Action binding : Action.values())
             if (EditorBindings.get(binding).mouse() && EditorBindings.matches(binding, event) && perform(binding))
                 return true;
@@ -5421,6 +5493,7 @@ public final class EditorScreen extends CraftiumScreen {
             gestureY = event.y();
             initialRadius = o().radius;
             var hit = target();
+            sizeDragScale = pixelsPerBlock(hit);
             orbitPivot = hit == null
                     ? minecraft
                             .player
@@ -5666,7 +5739,20 @@ public final class EditorScreen extends CraftiumScreen {
                 if (Math.hypot(event.x() - gestureX, event.y() - gestureY) <= 3) return true;
                 middleDragged = true;
             }
-            if (cameraGesture == CameraGesture.RADIUS)
+            if (cameraGesture == CameraGesture.BRUSH_SIZE) {
+                // The click is a point on the circle's edge and the pointer the point opposite it, so the radius is half the distance
+                // between them and the middle lies half way along.
+                double distance = Math.hypot(event.x() - gestureX, event.y() - gestureY);
+                if (distance >= 1) {
+                    sizeDirX = (event.x() - gestureX) / distance;
+                    sizeDirY = (event.y() - gestureY) / distance;
+                    sizeDragMoved = true;
+                    o().radius = Math.clamp(
+                            (int) Math.round(distance / 2 / sizeDragScale - .5),
+                            1,
+                            dev.craftium.core.ShapeLimits.maxRadius(o()));
+                }
+            } else if (cameraGesture == CameraGesture.RADIUS)
                 o().radius = Math.clamp(
                         initialRadius + (int) Math.round(((event.x() - gestureX) - (event.y() - gestureY)) / 8),
                         1,
