@@ -112,6 +112,21 @@ public final class ShapeObject {
         else hover = multiply(turn, hover);
     }
 
+    /** Takes the turn off: the shape waiting to be built, if there is one, and the turn the next shape will start with. */
+    static void resetRotation() {
+        hover = IDENTITY;
+        if (pose == null || pose.yaw() == 0 && pose.pitch() == 0 && pose.roll() == 0) return;
+        // A shape that was turned is a step in the history: the server keeps the pose it had, so Undo turns it back.
+        Options original = ClientState.options;
+        try {
+            ClientState.options = request(pose);
+            CraftiumClient.send("shape_reset", pose.origin(), new Point(0, 1, 0));
+        } finally {
+            ClientState.options = original;
+        }
+        pose = new Pose(pose.origin(), IDENTITY, pose.sizeX(), pose.sizeY(), pose.sizeZ());
+    }
+
     static void cancel() {
         pose = null;
     }

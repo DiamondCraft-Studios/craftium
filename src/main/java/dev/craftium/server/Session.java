@@ -524,6 +524,20 @@ final class Session {
                     && annotations.isEmpty();
         }
 
+        /** An entry that only changes client-side state (see {@link dev.craftium.core.Restore}), such as a waiting shape's rotation: no blocks, selection or Hierarchy. */
+        boolean clientOnly() {
+            return selection != null
+                    && !selection.hasPoints()
+                    && !selection.hasHierarchy()
+                    && !selection.hasObjects()
+                    && !selection.hasHeld()
+                    && !selection.restoreBefore().isEmpty()
+                    && changes.isEmpty()
+                    && biomes.isEmpty()
+                    && entities.isEmpty()
+                    && annotations.isEmpty();
+        }
+
         boolean selectionOnly() {
             return selection != null
                     && selection.hasPoints()

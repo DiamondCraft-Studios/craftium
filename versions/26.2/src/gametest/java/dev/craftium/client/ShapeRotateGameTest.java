@@ -57,8 +57,43 @@ public final class ShapeRotateGameTest {
                                 java.util.Arrays.deepToString(ShapeObject.pose().rotation()))
                         .equals(turned),
                 "The next shape did not start with the last turn");
+        // The Shape window's Reset rotation takes the turn off the waiting shape and off the next one.
+        double turnedYaw = c.computeOnClient(mc -> ShapeObject.pose().yaw());
+        require(Math.abs(turnedYaw) > 1, "The shape put down was not turned to begin with");
+        c.runOnClient(mc -> ShapeObject.resetRotation());
+        require(
+                c.computeOnClient(mc -> ShapeObject.pose().yaw() == 0
+                        && ShapeObject.pose().pitch() == 0
+                        && ShapeObject.pose().roll() == 0),
+                "Reset rotation left the waiting shape turned");
+        // ...and it is a step in the history: Undo turns the shape back, Redo takes the turn off again.
+        sync(c, w);
+        c.runOnClient(mc -> CraftiumClient.send("undo", null, null));
+        sync(c, w);
+        require(
+                c.computeOnClient(mc ->
+                        ShapeObject.active() && Math.abs(ShapeObject.pose().yaw() - turnedYaw) < 1e-6),
+                "Undo did not give the waiting shape its turn back");
+        c.runOnClient(mc -> CraftiumClient.send("redo", null, null));
+        sync(c, w);
+        require(
+                c.computeOnClient(
+                        mc -> ShapeObject.active() && ShapeObject.pose().yaw() == 0),
+                "Redo did not take the turn off the waiting shape again");
+        c.runOnClient(mc -> ShapeObject.cancel());
+        c.runOnClient(mc -> ShapeObject.place(new Point(55, 30, 60)));
+        require(
+                c.computeOnClient(mc ->
+                        ShapeObject.pose().yaw() == 0 && ShapeObject.pose().pitch() == 0),
+                "Reset rotation left the next shape turned");
         c.runOnClient(mc -> ShapeObject.cancel());
         System.out.println("SHAPE_ROTATE_TEST done");
+    }
+
+    private static void sync(ClientGameTestContext c, TestSingleplayerContext w) {
+        w.getConnection().waitForServerboundPackets();
+        w.getConnection().waitForClientboundPackets();
+        c.waitTicks(5);
     }
 
     private static boolean gold(TestSingleplayerContext w, int x, int y, int z) {
