@@ -453,6 +453,21 @@ final class OutlineShape {
 
     private LatestResult<Contour> contourJob;
     /**
+     * For a shape that replaces another one in the same place, such as a brush preview worked out again because the world changed: takes over the
+     * other's finished contour for a big shape, so that until its own contour is ready it does not drop to the creases, which flickers.
+     */
+    void carryOver(OutlineShape previous) {
+        if (previous == null
+                || previous == this
+                || outline.creases().size() <= ASYNC_CREASES
+                || contourEnds != null
+                || previous.contourEnds == null
+                || previous.contourEnds.length == 0
+                || previous.contourAt == null) return;
+        contourEnds = previous.contourEnds;
+        contourAt = previous.contourAt;
+    }
+    /**
      * Draws only the contour of the shape on the screen. Worked out again only when the camera or the shape moves.
      * Returns false when there is none to draw, so the caller falls back to the creases.
      * <p>
