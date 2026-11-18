@@ -92,7 +92,7 @@ public interface Interaction {
         // Fluid Ball and Fluid Block show the blocks the flow would place, not the ball around the click.
         if (dev.craftium.client.FluidPreview.handles(editor.options().tool))
             dev.craftium.client.FluidPreview.draw(mc, hit, editor.options());
-        else BrushPreview.draw(mc, hit.getBlockPos(), editor.options());
+        else BrushPreview.draw(mc, hit.getBlockPos(), hit.getDirection(), editor.options());
     }
 
     /**
