@@ -133,7 +133,8 @@ final class TransformGizmo {
             if (o.tool == Tool.PIVOT) return new Target(Kind.PIVOT, pivotAnchor(screen), null);
             return ClientState.gizmoSize() > 0 ? new Target(Kind.MODEL, pivot(), null) : null;
         }
-        // The selection and entity gizmos stay out of a brush stroke: no handle is lit or grabbed while a Paint or Sculpt tool is chosen
+        // The selection and entity gizmos stay out of a brush stroke: no handle is lit or grabbed while a Paint or
+        // Sculpt tool is chosen
         if ("Paint".equals(o.tool.group) || "Sculpt".equals(o.tool.group)) return null;
         if (o.gizmoTarget != Options.GizmoTarget.ENTITY
                 && (o.tool == Tool.BOX_SELECT || o.gizmoTarget == Options.GizmoTarget.SELECTION)
@@ -247,7 +248,7 @@ final class TransformGizmo {
         double[] center = project(t.anchor);
         boolean plain = t.kind == Kind.MODEL
                 || t.kind == Kind.PIVOT
-                || t.kind == Kind.SHAPE
+                || (t.kind == Kind.SHAPE || t.kind == Kind.PLACEMENT)
                         && ClientState.options.tool.transform(); // the transform tools show only their own handles
         // The centre: free move, even scaling for the Scale tool's circle; Rotate has the trackball instead, below.
         if (mask == ALL_AXES
@@ -833,7 +834,7 @@ final class TransformGizmo {
         faceBase = faceBase(t).add(delta);
         plainHandles = t.kind == Kind.MODEL
                 || t.kind == Kind.PIVOT
-                || t.kind == Kind.SHAPE && ClientState.options.tool.transform();
+                || (t.kind == Kind.SHAPE || t.kind == Kind.PLACEMENT) && ClientState.options.tool.transform();
         axisMask = lockMask();
         try {
             render(
@@ -974,7 +975,8 @@ final class TransformGizmo {
                 || t.kind == Kind.PIVOT
                 || t.kind == Kind.SELECTION && ClientState.options.tool == Tool.BOX_SELECT)
             return Options.GizmoMode.MOVE;
-        if (t.kind == Kind.MODEL || t.kind == Kind.SHAPE && ClientState.options.tool.transform())
+        if (t.kind == Kind.MODEL
+                || (t.kind == Kind.SHAPE || t.kind == Kind.PLACEMENT) && ClientState.options.tool.transform())
             return switch (ClientState.options.tool) {
                 case ROTATE -> Options.GizmoMode.ROTATE;
                 case SCALE -> Options.GizmoMode.SCALE;
