@@ -40,6 +40,8 @@ final class GhostBlocks {
 
     /** Set by the caller for the Paint and Sculpt tools: the blocks of the world that a placed block replaces are tinted like the ones that go. */
     boolean tintReplaced;
+    /** Set by the caller for the Terrain tools: only the blocks the edit removes are red; a block that is swapped for another, like the grass a raised ground turns to dirt, is shown as the ghost it becomes. */
+    boolean redRemoved;
 
     private List<BlockPos> replacedPlaces;
     private Point replacedOrigin;
@@ -286,7 +288,7 @@ final class GhostBlocks {
             if (!removedShape.isEmpty()) removedShape.drawFill(at, ClientState.options.removedFill);
         }
         if (!removedPlaces.isEmpty() && outline)
-            Overlay.blocks(removedPlaces, tintReplaced ? GONE_RED : ClientState.options.removedTint);
+            Overlay.blocks(removedPlaces, tintReplaced || redRemoved ? GONE_RED : ClientState.options.removedTint);
         if (states.isEmpty()) return;
         if (cachedPlaces == null || !origin.equals(cachedOrigin)) {
             var places = new ArrayList<BlockPos>(relative.size());

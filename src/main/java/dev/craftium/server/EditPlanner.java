@@ -280,7 +280,8 @@ final class EditPlanner {
         MASK("the mask turned the blocks away (block mask, mask block, rules or script)"),
         KEEP("Keep existing is on and those spots were already filled"),
         SURVIVE("the blocks could not stand there (turn on Force place in the Builder tab)"),
-        SAME("those spots already hold the block");
+        SAME("those spots already hold the block"),
+        OBJECT("the blocks belong to a BuildObject, which the Terrain tools leave alone");
         final String why;
 
         Skip(String why) {
@@ -305,9 +306,23 @@ final class EditPlanner {
         return Skip.MASK;
     }
 
+    private java.util.Set<Point> objectBlocks;
+    /** Whether the block at {@code p} belongs to one of the player's BuildObjects; read once per edit. */
+    private boolean inBuildObject(Point p) {
+        if (objectBlocks == null) {
+            objectBlocks = new java.util.HashSet<>();
+            for (var e : session.saved.entries()) objectBlocks.addAll(e.points());
+        }
+        return objectBlocks.contains(p);
+    }
+
     private void putOne(Point p, BlockSnapshot value) {
         validate(p);
         var planned = changes.get(p);
+        if (!exact && o.tool.group.equals("Terrain") && inBuildObject(p)) {
+            skip(Skip.OBJECT);
+            return;
+        }
         if (!exact && !accepted(p)) {
             skip(rejection(p));
             return;
@@ -499,52 +514,134 @@ final class EditPlanner {
         return material;
     }
 
+    /** The longest ramp the Slope tool builds, measured across the ground from its start to its end. */
+    static final int MAX_SLOPE_LENGTH = 256;
+
+    /**
+     * Elevation, Flatten and Slope. Each works column by column on the ground: Elevation raises or lowers a mound with a smooth falloff,
+     * Flatten brings the ground to {@link Options#flattenY}, and Slope builds a ramp from its first point to its second.
+     */
     private void heightmap(Point c, Point normal) {
+        if (o.tool == Tool.SLOPE) {
+            slope();
+            return;
+        }
+        // Level from click: the block the stroke's first click lands on, kept for the rest of the stroke; a click on
+        // its own (stroke 0) is
+        // a stroke of one.
+        if (o.tool == Tool.FLATTEN
+                && o.flattenPick
+                && (session.requestStroke == 0 || session.requestStroke != session.flattenStroke)) {
+            session.flattenStroke = session.requestStroke;
+            session.flattenLevel = c.y();
+        }
+        int target =
+                Math.clamp(o.flattenPick ? session.flattenLevel : o.flattenY, level.getMinY(), level.getMaxY() - 1);
+        // Elevation's strength is the height, in blocks, the middle of the mound moves with each click.
+        int height = Math.max(1, (int) Math.round(o.strength));
         for (int dx = -o.radius; dx <= o.radius; dx++)
             for (int dz = -o.radius; dz <= o.radius; dz++) {
                 double distance = Math.sqrt(dx * dx + dz * dz) / o.radius;
                 if (distance > 1) continue;
-                int x = c.x() + dx, z = c.z() + dz;
-                int top = Math.min(level.getMaxY() - 1, c.y() + o.radius + 8),
-                        bottom = Math.max(level.getMinY(), c.y() - o.radius - 16);
-                while (top >= bottom && !solid(new Point(x, top, z))) top--;
-                if (top < bottom) continue;
-                BlockState surface = state(new Point(x, top, z));
-                if (surface.hasBlockEntity()) continue;
-                int desired =
-                        switch (o.tool) {
-                            case ELEVATION ->
-                                top
-                                        + (o.invert ? -1 : 1)
-                                                * Math.max(heightmap == null ? 1 : 0, (int) Math.round(o.strength
-                                                        * (1 - distance)
-                                                        * (heightmap == null
-                                                                ? 1
-                                                                : heightmap.sample(
-                                                                        (dx / (double) o.radius + 1) / 2,
-                                                                        (dz / (double) o.radius + 1) / 2))));
-                            case FLATTEN -> top + (int) Math.round((c.y() - top) * Math.min(1, o.strength / 2));
-                            default -> {
-                                if (o.nodes.size() >= 2) {
-                                    Point a = o.nodes.getFirst(), b = o.nodes.getLast();
-                                    double vx = b.x() - a.x(),
-                                            vz = b.z() - a.z(),
-                                            length = vx * vx + vz * vz,
-                                            t = length == 0 ? 0 : ((x - a.x()) * vx + (z - a.z()) * vz) / length;
-                                    yield (int) Math.round(a.y() + t * (b.y() - a.y()));
-                                }
-                                yield c.y()
-                                        + (int) Math.round((Math.abs(normal.x()) > 0 ? dx : dz) * o.strength * .25)
-                                                * (o.invert ? -1 : 1);
-                            }
-                        };
-                desired = Math.clamp(desired, bottom, Math.min(level.getMaxY() - 1, top + 24));
-                if (desired > top) for (int y = top + 1; y <= desired; y++) put(new Point(x, y, z), surface);
-                else if (desired < top) {
-                    for (int y = top; y > desired; y--) put(new Point(x, y, z), Blocks.AIR.defaultBlockState());
-                    put(new Point(x, desired, z), surface);
-                }
+                double u = (dx / (double) o.radius + 1) / 2, v = (dz / (double) o.radius + 1) / 2;
+                column(c.x() + dx, c.z() + dz, c.y(), o.radius + 8, top -> switch (o.tool) {
+                    case ELEVATION -> {
+                        double falloff =
+                                heightmap == null ? smoothstep(1 - distance) : (1 - distance) * heightmap.sample(u, v);
+                        yield top + (o.invert ? -1 : 1) * (int) Math.round(height * falloff);
+                    }
+                    case FLATTEN -> {
+                        int gap = target - top;
+                        if (gap == 0
+                                || o.flattenMode == Options.FlattenMode.LOWER && gap > 0
+                                || o.flattenMode == Options.FlattenMode.RAISE && gap < 0) yield top;
+                        // A part of the way with each click, but always at least one block, so a low strength still
+                        // gets there.
+                        yield top
+                                + Integer.signum(gap)
+                                        * Math.max(1, (int) Math.round(Math.abs(gap) * Math.min(1, o.strength)));
+                    }
+                    default -> top;
+                });
             }
+    }
+
+    /** A ramp from the first of the tool's points to the last, as wide as the brush's diameter, with its height running straight between theirs. */
+    private void slope() {
+        if (o.nodes.size() < 2)
+            throw new IllegalArgumentException("Right-click where the ramp starts, then where it ends");
+        Point a = o.nodes.getFirst(), b = o.nodes.getLast();
+        double vx = b.x() - a.x(), vz = b.z() - a.z(), length2 = vx * vx + vz * vz;
+        if (Math.sqrt(length2) > MAX_SLOPE_LENGTH)
+            throw new IllegalArgumentException(
+                    "A slope is at most " + MAX_SLOPE_LENGTH + " blocks long; put its end closer to its start");
+        int r = o.radius;
+        for (int x = Math.min(a.x(), b.x()) - r; x <= Math.max(a.x(), b.x()) + r; x++)
+            for (int z = Math.min(a.z(), b.z()) - r; z <= Math.max(a.z(), b.z()) + r; z++) {
+                // Where the column falls along the ramp (0 at its start, 1 at its end) and how far it is from the
+                // ramp's middle line.
+                double t = length2 == 0 ? 0 : ((x - a.x()) * vx + (z - a.z()) * vz) / length2;
+                if (t < 0 || t > 1) continue;
+                double side = Math.hypot(x - (a.x() + t * vx), z - (a.z() + t * vz));
+                if (side > r + .5) continue;
+                int y = (int) Math.round(a.y() + t * (b.y() - a.y()));
+                column(x, z, y, r + 16, top -> y);
+            }
+    }
+
+    private static double smoothstep(double t) {
+        t = Math.clamp(t, 0, 1);
+        return t * t * (3 - 2 * t);
+    }
+
+    /**
+     * Whether the height tools take a block as the ground: it blocks movement and holds no fluid. Plants, snow layers and the like stand
+     * on the ground, and leaves and logs belong to trees, so none of them is where a column's height is measured.
+     */
+    private boolean ground(Point p) {
+        BlockState s = state(p);
+        return s.blocksMotion()
+                && s.getFluidState().isEmpty()
+                && !s.is(net.minecraft.tags.BlockTags.LEAVES)
+                && !s.is(net.minecraft.tags.BlockTags.LOGS);
+    }
+
+    /**
+     * Moves the ground of column {@code x}, {@code z} to the height {@code desired} gives for its current top. The top is looked for
+     * from {@code above} blocks over {@code reference} down to a little under it. Raised ground is filled with the block under the
+     * surface (dirt under grass), lowered ground keeps its surface block, and what grows on top moves with it. A column with a block
+     * entity on top, or with a tree trunk or a build standing on it, is left alone.
+     */
+    private void column(int x, int z, int reference, int above, java.util.function.IntUnaryOperator desired) {
+        int maxY = level.getMaxY() - 1;
+        int top = Math.min(maxY, reference + above), bottom = Math.max(level.getMinY(), reference - o.radius - 16);
+        while (top >= bottom && !ground(new Point(x, top, z))) top--;
+        if (top < bottom) return;
+        Point at = new Point(x, top, z);
+        BlockState surface = state(at);
+        if (surface.hasBlockEntity()) return;
+        var cover = new ArrayList<BlockState>(2);
+        for (int y = top + 1; y <= Math.min(maxY, top + 2); y++) {
+            BlockState s = state(new Point(x, y, z));
+            if (s.isAir() || !s.getFluidState().isEmpty()) break;
+            if (s.blocksMotion() || s.hasBlockEntity()) {
+                if (cover.isEmpty()) return; // a trunk, a wall or a chest stands on this column
+                break;
+            }
+            cover.add(s);
+        }
+        int to = Math.clamp(desired.applyAsInt(top), bottom, Math.min(maxY, top + 24));
+        if (to == top) return;
+        BlockState under = state(at.add(0, -1, 0));
+        BlockState fill = ground(at.add(0, -1, 0)) && !under.hasBlockEntity() ? under : surface;
+        for (int i = 0; i < cover.size(); i++) put(at.add(0, i + 1, 0), Blocks.AIR.defaultBlockState());
+        if (to > top) for (int y = top; y < to; y++) put(new Point(x, y, z), fill);
+        else for (int y = top; y > to; y--) put(new Point(x, y, z), Blocks.AIR.defaultBlockState());
+        put(new Point(x, to, z), surface);
+        for (int i = 0; i < cover.size() && to + i + 1 <= maxY; i++) {
+            Point p = new Point(x, to + i + 1, z);
+            if (to + i + 1 <= top + cover.size() || state(p).isAir()) put(p, cover.get(i));
+        }
     }
 
     void paintBiomes(List<Point> points) {

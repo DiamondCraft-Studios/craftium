@@ -511,6 +511,29 @@ public final class Options {
             fillEdges = true,
             removeFluidsWithoutSources;
 
+    /**
+     * Flatten: the Y level the ground is brought to, and whether the first click of each stroke takes it from the clicked block (it then
+     * stays fixed while the stroke is held, so a drag does not follow the terrain it is levelling). The mode keeps it to cutting the ground
+     * above the level, filling below it, or both.
+     */
+    public int flattenY = 64;
+
+    public boolean flattenPick = true;
+
+    public enum FlattenMode {
+        BOTH("Both", "Cut the ground above the level and fill the ground below it"),
+        LOWER("Cut only", "Only lower the ground that is above the level"),
+        RAISE("Fill only", "Only raise the ground that is below the level");
+        public final String label, tip;
+
+        FlattenMode(String label, String tip) {
+            this.label = label;
+            this.tip = tip;
+        }
+    }
+
+    public FlattenMode flattenMode = FlattenMode.BOTH;
+
     public enum RulerMode {
         LINE,
         CIRCLE
@@ -902,6 +925,8 @@ public final class Options {
         randomTickSpeed = Math.clamp(randomTickSpeed, 0, 4096);
         exposedFaces = Math.clamp(exposedFaces, 1, 6);
         if (fluidType == null) throw new IllegalArgumentException("Choose a fluid");
+        flattenY = Math.clamp(flattenY, -2048, 2048); // the server also keeps it inside the world's height
+        if (flattenMode == null) flattenMode = FlattenMode.BOTH;
         floodGap = Math.clamp(floodGap, 0, MAX_FLOOD_GAP);
         flowLength = Math.clamp(flowLength, 1, 32);
         fluidQuality = Math.clamp(fluidQuality, 1, 4);

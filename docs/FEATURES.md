@@ -29,9 +29,9 @@ This is a functional development preview. Implemented equivalents do not establi
 | Floodfill | Count-limited connected fill with direction/corner controls | 128-block search radius |
 | Fluid Ball | Bounded water/lava/snow flow; support, edges, sources and connectivity controls | Approximate flow solver, not an identical simulator |
 | Fluid Block | Pours the material palette like powder: falls, settles on terrain, spreads and thins towards the edges; uses Fluid Ball's radius and flow length | Craftium's own; works with gravity and non-gravity blocks |
-| Elevation | Soft column raising/lowering and imported PNG heightmaps | Local height scan and limited vertical displacement |
-| Flatten | Terrain height interpolation toward target level | Local scan |
-| Slope | Two anchors defining a height plane | Linear plane with local scan |
+| Elevation | Raise or Lower a smooth mound, Height per click 1–5 blocks at the middle; imported PNG heightmaps | Local height scan; raised ground is filled with the subsoil and plants move with the surface |
+| Flatten | Brings the ground to a level: from the block a stroke starts on (held for the whole stroke) or a Target Y; Both, Cut only or Fill only; Strength is how much of the way each click goes | Local scan; a typed level is drawn over the brush |
+| Slope | Right-click a start and an end: a ramp as wide as the brush runs straight between the two heights | Up to 256 blocks long; the next click starts a new ramp |
 | Smooth | Gaussian-density ranking preserving eligible solid-cell count | Bounded local kernel; skips block entities |
 | Distort | 3D noise resampling including block entity snapshots | Nearest sampling may repeat a container's contents; intended for creative builds |
 | Roughen | Seeded exposed-face changes with exposed-face threshold | Craftium-specific surface noise |

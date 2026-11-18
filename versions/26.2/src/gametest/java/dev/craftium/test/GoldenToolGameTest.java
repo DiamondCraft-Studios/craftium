@@ -176,7 +176,18 @@ public final class GoldenToolGameTest {
             Tool.CLENTAMINATOR
         })
             all.add(new Case(
-                    tool.name().toLowerCase(java.util.Locale.ROOT), tool, base(o -> o.tool = tool), null, false, a));
+                    tool.name().toLowerCase(java.util.Locale.ROOT),
+                    tool,
+                    base(o -> {
+                        o.tool = tool;
+                        if (tool == Tool.SLOPE) { // Slope builds a ramp between its two points
+                            o.nodes.add(surface(-5, 0));
+                            o.nodes.add(new Point(5, surface(5, 0).y() + 3, 0));
+                        }
+                    }),
+                    null,
+                    false,
+                    a));
         // The same tools where an option changes which code runs.
         all.add(new Case(
                 "painter_type_replace",

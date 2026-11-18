@@ -5,7 +5,10 @@ import dev.craftium.client.CraftiumClient;
 import dev.craftium.core.Point;
 import java.util.List;
 
-/** The first click sets an anchor; each later click moves the second point and sends the request (Slope). */
+/**
+ * Slope: the first click sets where the ramp starts, the second sets where it ends and builds the ramp between them. The click after that
+ * starts a new ramp, so each ramp is two clicks and none is built over the last one by accident.
+ */
 final class AnchorPairInteraction implements Interaction {
     @Override
     public boolean use(EditorContext editor) {
@@ -13,13 +16,23 @@ final class AnchorPairInteraction implements Interaction {
         if (hit == null) return false;
         var point = CraftiumClient.point(hit.getBlockPos());
         var points = editor.options().nodes;
-        if (points.isEmpty()) {
+        if (points.size() != 1) {
+            points.clear();
             points.add(point);
-            ClientState.notify("Slope anchor set · drag from the second point");
+            ClientState.notify("Ramp start set · right-click where the ramp ends");
             return true;
         }
-        if (points.size() == 1) points.add(point);
-        else points.set(1, point);
+        if (point.x() == points.getFirst().x() && point.z() == points.getFirst().z()) {
+            ClientState.notify("Pick an end away from the start: a ramp needs some length");
+            return true;
+        }
+        points.add(point);
+        return false;
+    }
+
+    /** A drag would move the end with every block it crosses and build a ramp each time; one click is one end. */
+    @Override
+    public boolean repeatsWhenDragged() {
         return false;
     }
 
