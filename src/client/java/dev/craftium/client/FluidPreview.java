@@ -34,6 +34,8 @@ public final class FluidPreview {
                 normal,
                 o.radius,
                 o.flowLength,
+                o.fluidBlocks,
+                o.pourShape,
                 o.fluidType,
                 o.fluidQuality,
                 o.requireSupport,

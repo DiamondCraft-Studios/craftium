@@ -78,35 +78,51 @@ public final class FluidFlow {
         }
     }
 
-    /** Fluid Block: Fluid Ball's flow, but pouring blocks. They fall until something holds them, then spread sideways, piled up to three high where they land and a single layer at the edge. */
+    /**
+     * Fluid Block: Fluid Ball's flow, but pouring blocks. They fall until something holds them, then spread sideways, piled up to three high
+     * where they land and a single layer further out. The pour runs until exactly {@link Options#fluidBlocks} blocks are placed, so the amount
+     * is the same wherever it lands; it places fewer only where the flow has nowhere left to go.
+     */
     public static void powder(Cells c, Options o, Point origin) {
         var queue = queue();
         var visited = new HashMap<Point, Integer>();
         queue.add(new Flow(origin, 0, 0));
-        int maxDistance = o.radius + o.flowLength, maxCost = Math.max(1, Math.min(7, o.flowLength));
-        while (!queue.isEmpty()) {
+        int total = Math.max(1, o.fluidBlocks), poured = 0, maxCost = 7;
+        while (!queue.isEmpty() && poured < total) {
             var f = queue.remove();
             Point at = f.point;
-            if (f.distance > maxDistance
-                    || at.y() > origin.y() + o.radius
-                    || at.y() < Math.max(c.minY(), origin.y() - maxDistance * 2)) continue;
+            if (f.distance > total + 64 || at.y() < c.minY()) continue;
             if (visited.getOrDefault(at, Integer.MAX_VALUE) <= f.cost) continue;
             visited.put(at, f.cost);
             if (visited.size() > Selection.LIMIT) throw new IllegalArgumentException("Fluid block pour exceeds limit");
             if (c.solid(at)) continue;
             if (!c.solid(at.add(0, -1, 0))) {
-                queue.add(new Flow(at.add(0, -1, 0), 0, f.distance + 1));
+                queue.add(new Flow(at.add(0, -1, 0), f.cost, f.distance + 1));
                 continue;
             } // nothing under it yet: keep falling
-            int height = 1 + (maxCost - Math.min(maxCost, f.cost)) * 2 / maxCost;
-            for (int i = 0; i < height; i++) {
+            int reach = (int) Math.round(o.pourShape == Options.PourShape.CIRCLE ? Math.sqrt(f.cost) : f.cost);
+            int height = 1 + (maxCost - Math.min(maxCost, reach)) * 2 / maxCost;
+            for (int i = 0; i < height && poured < total; i++) {
                 Point cell = at.add(0, i, 0);
                 if (c.solid(cell)) break;
                 c.pour(cell);
+                poured++;
             }
-            if (f.cost < Math.min(7, o.flowLength))
-                for (Point n : NEIGHBOURS)
-                    if (n.y() == 0) queue.add(new Flow(at.add(n.x(), 0, n.z()), f.cost + 1, f.distance + 1));
+            for (Point n : NEIGHBOURS)
+                if (n.y() == 0) {
+                    Point next = at.add(n.x(), 0, n.z());
+                    queue.add(new Flow(
+                            next, spread(o.pourShape, next.x() - origin.x(), next.z() - origin.z()), f.distance + 1));
+                }
         }
+    }
+
+    /** How far a column is from where the pour started, in the pour's shape: cells with the same value fill together, so it sets the outline. */
+    private static int spread(Options.PourShape shape, int dx, int dz) {
+        return switch (shape) {
+            case CIRCLE -> dx * dx + dz * dz;
+            case DIAMOND -> Math.abs(dx) + Math.abs(dz);
+            case SQUARE -> Math.max(Math.abs(dx), Math.abs(dz));
+        };
     }
 }

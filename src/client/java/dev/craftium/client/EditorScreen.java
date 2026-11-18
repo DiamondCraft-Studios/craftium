@@ -192,6 +192,7 @@ public final class EditorScreen extends CraftiumScreen {
     private double sizeDragScale, sizeDirX, sizeDirY;
     /** Whether the pointer has moved since a brush-size drag began, before which the circle is still centred on the click. */
     private boolean sizeDragMoved;
+
     private Vec3 orbitPivot;
     private Tool previousTool = Tool.BOX_SELECT;
     private boolean toolActive = true;
@@ -1281,7 +1282,21 @@ public final class EditorScreen extends CraftiumScreen {
             if (o().tool.picksShape()) shapeSelector(g, 305);
             // The track stops at 64 to stay usable; a bigger radius is typed in. Shapes are limited by their block
             // count and reach, not by this.
-            if (use != Tool.BrushUse.NONE)
+            if (o().tool == Tool.FLUID_BLOCK)
+                slider(
+                        g,
+                        10,
+                        347 - lift(),
+                        pw - 20,
+                        "Block count",
+                        o().fluidBlocks,
+                        1,
+                        512,
+                        4096,
+                        DEFAULTS.fluidBlocks,
+                        v -> o().fluidBlocks = (int) Math.clamp(Math.round(v), 1, 4096),
+                        true);
+            else if (use != Tool.BrushUse.NONE)
                 slider(
                         g,
                         10,
@@ -4303,7 +4318,26 @@ public final class EditorScreen extends CraftiumScreen {
                 }
                 y += 40;
             }
-            case FLUID_BLOCK -> {}
+            case FLUID_BLOCK -> {
+                text(g, "Shape", 10, y, MUTED);
+                var shapes = Options.PourShape.values();
+                for (int i = 0; i < shapes.length; i++) {
+                    var shape = shapes[i];
+                    String name =
+                            shape.name().charAt(0) + shape.name().substring(1).toLowerCase(Locale.ROOT);
+                    button(
+                            g,
+                            10 + i * (third + 4),
+                            y + 12,
+                            third,
+                            19,
+                            name,
+                            o.pourShape == shape,
+                            () -> o.pourShape = shape,
+                            "Spread the pour in a " + name.toLowerCase(Locale.ROOT));
+                }
+                return y + 40; // sized by its block count, not by a flow length
+            }
             default -> {
                 return y;
             }
@@ -5224,8 +5258,11 @@ public final class EditorScreen extends CraftiumScreen {
 
     /** The white circle around the cursor for the Paint and Sculpt brushes, as wide on the screen as the brush is at the block it points at. */
     private void brushRing(Gfx g, boolean steering) {
-        if (steering || !toolActive || !BrushRing.shownFor(o().tool) || PlacementPreview.active() || ShapeObject.active())
-            return;
+        if (steering
+                || !toolActive
+                || !BrushRing.shownFor(o().tool)
+                || PlacementPreview.active()
+                || ShapeObject.active()) return;
         double cx = pointerX, cy = pointerY, perBlock;
         if ((cameraGesture == CameraGesture.BRUSH_SIZE || cameraGesture == CameraGesture.RADIUS) && sizeDragScale > 0) {
             // held where the drag began, as it is resized
@@ -5243,8 +5280,10 @@ public final class EditorScreen extends CraftiumScreen {
             perBlock = pixelsPerBlock(target());
         }
         if (perBlock <= 0) return;
-        // The brush reaches radius blocks from the middle of the block, so the circle passes through the outer edge of those blocks.
-        // Drawn in screen pixels, not interface units, so a pixel of the line is a pixel of the screen when the interface is scaled up.
+        // The brush reaches radius blocks from the middle of the block, so the circle passes through the outer edge of
+        // those blocks.
+        // Drawn in screen pixels, not interface units, so a pixel of the line is a pixel of the screen when the
+        // interface is scaled up.
         g.pose().pushMatrix();
         g.pose().scale(1 / (float) scale, 1 / (float) scale);
         BrushRing.draw(g, cx, cy, (o().radius + .5) * perBlock);
@@ -5727,7 +5766,8 @@ public final class EditorScreen extends CraftiumScreen {
             }
         }
         if (toolActive && o().tool.placesBlocks() && minecraft.hasAltDown()) {
-            // Alt + the tool's button is an eyedropper: the clicked block becomes the foreground block, and joins the palette.
+            // Alt + the tool's button is an eyedropper: the clicked block becomes the foreground block, and joins the
+            // palette.
             var use = EditorBindings.get(Action.USE_TOOL);
             if (use.mouse() && use.key() == event.button()) {
                 pickBlock(target());
@@ -5906,7 +5946,8 @@ public final class EditorScreen extends CraftiumScreen {
                 middleDragged = true;
             }
             if (cameraGesture == CameraGesture.BRUSH_SIZE) {
-                // The click is a point on the circle's edge and the pointer the point opposite it, so the radius is half the distance
+                // The click is a point on the circle's edge and the pointer the point opposite it, so the radius is
+                // half the distance
                 // between them and the middle lies half way along.
                 double distance = Math.hypot(event.x() - gestureX, event.y() - gestureY);
                 if (distance >= 1) {
@@ -7228,7 +7269,8 @@ public final class EditorScreen extends CraftiumScreen {
                         rowRight - (x + 9),
                         rowHeight,
                         () -> {
-                            selectedGroup = group.id(); // the last thing chosen: the + button makes a BuildObject at its root
+                            selectedGroup =
+                                    group.id(); // the last thing chosen: the + button makes a BuildObject at its root
                             if (ClientState.activeSaved() != null) action("saved_selection:release");
                         },
                         HIDDEN_TIP
@@ -7433,8 +7475,8 @@ public final class EditorScreen extends CraftiumScreen {
                 (selectedGroup != 0
                                 ? "Create a BuildObject from what is selected now, at the root of the selected group"
                                 : looking
-                                ? "Create a BuildObject from what is selected now · While one is shown, the new one goes inside it"
-                                : "Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole")
+                                        ? "Create a BuildObject from what is selected now · While one is shown, the new one goes inside it"
+                                        : "Create a BuildObject from what is selected now · Any BuildObject the selection touches goes inside it, whole")
                         + " · " + EditorBindings.label(Action.GROUP_OBJECTS));
         glyph(g, x + 10, y + ph - 25, 24, 20, PLUS, TEXT);
         boolean hoverOn = o().hoverBuildObjects;
