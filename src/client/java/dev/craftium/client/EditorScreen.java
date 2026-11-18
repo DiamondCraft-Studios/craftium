@@ -5575,6 +5575,14 @@ public final class EditorScreen extends CraftiumScreen {
                 return true;
             }
         }
+        if (toolActive && o().tool.placesBlocks() && minecraft.hasAltDown()) {
+            // Alt + the tool's button is an eyedropper: the clicked block becomes the foreground block, and joins the palette.
+            var use = EditorBindings.get(Action.USE_TOOL);
+            if (use.mouse() && use.key() == event.button()) {
+                pickBlock(target());
+                return true;
+            }
+        }
         if (!toolActive && EditorBindings.matches(Action.CROSSHAIR, event)) {
             cameraGesture = CameraGesture.ROTATE;
             cameraButton = event.button();
