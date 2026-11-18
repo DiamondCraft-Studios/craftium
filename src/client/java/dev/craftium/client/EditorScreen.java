@@ -470,6 +470,7 @@ public final class EditorScreen extends CraftiumScreen {
         previousTool = o().tool;
         selectedNode = -1;
         Interactions.of(tool).chosen(context);
+        ToolOptionMemory.switchTo(o(), tool); // each tool keeps its own brush options
         o().tool = tool;
         o().gizmoTarget = Options.GizmoTarget.AUTO;
         builder = false;
