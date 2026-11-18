@@ -92,6 +92,7 @@ final class KeyboardShortcutsScreen extends CraftiumScreen {
                 list.add(new KeyRow("Builder: context menu", CraftiumClient.contextKey));
                 list.add(new KeyRow("Swap", CraftiumClient.swapKey));
                 list.add(new KeyRow("Replace mode", CraftiumClient.replaceKey));
+                list.add(new KeyRow("Replace material", CraftiumClient.replaceMaterialKey));
                 list.add(new Header("TOOLS"));
                 for (Tool tool : Tool.values()) {
                     var mapping = CraftiumClient.toolKeys.get(tool);

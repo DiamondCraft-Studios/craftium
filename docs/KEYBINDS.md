@@ -13,6 +13,7 @@ This matches published defaults. A running copy of Axiom was not used for compar
 | Game | 0 | Select tenth slot |
 | Tenth slot | Hold Alt + wheel | Choose builder tool |
 | Game | R | Replace Mode |
+| Game | Y | Replace Material: placing a block turns the stairs, slab, wall or other variant you click into that block's material |
 | Editor | M / B / N / L | Magic / Box / Freehand / Lasso Select |
 | Editor | P / O | Painter / Noise Painter |
 | Editor | G / H / J / K | Freehand Draw / Rock / Weld / Melt |

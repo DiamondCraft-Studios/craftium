@@ -117,6 +117,8 @@ public final class Options {
     }
     /** Hand placement and breaking only; blocks the editor's tools write never update anything (see BlockSnapshot.NO_UPDATES). */
     public boolean noUpdates, forcePlace, replaceMode, bulldozer, tinker;
+    /** Replace material: placing a block onto a stair, slab, wall or other variant of another material turns it into that variant of the held block's material. */
+    public boolean replaceMaterial;
     /** Whether a full Bulldozer sweep only breaks blocks that are the same, state included, as the first one it met; a different block ends it. */
     public boolean bulldozerSameBlocks = true;
 
@@ -662,6 +664,7 @@ public final class Options {
                 || symmetryZ
                 || symmetryRotations > 1
                 || replaceMode
+                || replaceMaterial
                 || forcePlace
                 || noUpdates
                 || fastPlace

@@ -49,6 +49,7 @@ The editor scales to Minecraft GUI settings. A 1280 × 720 or larger window is r
 | Enter | Confirm placement or geometry, otherwise clear selection |
 | Delete / Backspace | Cancel placement, otherwise delete selected blocks |
 | R outside editor | Toggle Replace Mode |
+| Y outside editor | Toggle Replace Material |
 
 Defaults follow Axiom's published documentation. Other tools and Craftium-only shortcuts start unbound. **View → Keybinds** edits editor chords and mouse gestures; **Tools & Minecraft controls** edits native mappings. The inspector and panel controls remain accessible through View. See the [controls audit](docs/KEYBINDS.md) for upgrade behavior, sources and remaining differences. **View → Colour picker / gradient** opens texture-colour matching and the nine-slot gradient helper.
 

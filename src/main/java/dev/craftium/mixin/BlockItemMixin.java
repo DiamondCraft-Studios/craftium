@@ -40,6 +40,16 @@ abstract class BlockItemMixin {
         return options != null && options.noUpdates ? 2 | 16 : flags;
     }
 
+    /** Replace material: where the clicked variant is being replaced, what is placed is the same variant of the held block's material, with the old one's states. */
+    @Inject(method = "getPlacementState", at = @At("RETURN"), cancellable = true)
+    private void craftium$material(BlockPlaceContext context, CallbackInfoReturnable<BlockState> cir) {
+        var options = PlayerCapabilities.of(context.getPlayer());
+        if (options == null || !options.replaceMaterial || !context.replacingClickedOnBlock()) return;
+        var next = dev.craftium.server.ReplaceMaterial.resolve(
+                context.getLevel().getBlockState(context.getClickedPos()), ((BlockItem) (Object) this).getBlock());
+        if (next != null) cir.setReturnValue(next);
+    }
+
     @Inject(method = "placeBlock", at = @At("HEAD"))
     private void craftium$before(BlockPlaceContext context, BlockState state, CallbackInfoReturnable<Boolean> cir) {
         craftium$placing.remove();
@@ -47,6 +57,16 @@ abstract class BlockItemMixin {
             var before = EditorServer.before(player, context.getClickedPos());
             if (before != null) craftium$placing.set(new Object[] {player, context.getClickedPos(), before});
         }
+    }
+
+    /** Replace material only changes materials: a click that has no variant to turn places nothing, where Replace mode would place the block. With both on, Replace mode places as it does. */
+    @Inject(method = "place", at = @At("HEAD"), cancellable = true)
+    private void craftium$onlyMaterial(BlockPlaceContext context, CallbackInfoReturnable<InteractionResult> cir) {
+        var options = PlayerCapabilities.of(context.getPlayer());
+        if (options == null || !options.replaceMaterial || options.replaceMode) return;
+        if (dev.craftium.server.ReplaceMaterial.forContext(context) != null) return;
+        dev.craftium.runtime.ForcePlacement.set(false);
+        cir.setReturnValue(InteractionResult.FAIL);
     }
 
     @Inject(method = "place", at = @At("HEAD"))

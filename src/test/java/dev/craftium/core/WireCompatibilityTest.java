@@ -273,6 +273,7 @@ class WireCompatibilityTest {
         removeFluidsWithoutSources primitive
         removedFill primitive
         removedTint primitive
+        replaceMaterial primitive
         replaceMode primitive
         requireSupport primitive
         roll primitive

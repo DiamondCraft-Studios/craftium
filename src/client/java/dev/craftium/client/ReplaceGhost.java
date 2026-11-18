@@ -11,6 +11,7 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
+ * Replace material: the variant the clicked block will become, as the same ghost.
  * Replace mode: the held block as a translucent ghost on the block it will replace. Unlike the other ghosts it is not tinted.
  * When the held block is smaller than the block it replaces, such as a slab on a full block, the ghost is hidden inside the
  * real block, so the part of the target that stays, which is the held block, is tinted white to show the change.
@@ -30,7 +31,7 @@ final class ReplaceGhost {
     }
 
     static void draw(Minecraft mc) {
-        if (!ClientState.options.replaceMode
+        if (!(ClientState.options.replaceMode || ClientState.options.replaceMaterial)
                 || mc.player == null
                 || mc.level == null
                 || !mc.player.isCreative()
@@ -38,6 +39,15 @@ final class ReplaceGhost {
                 || ClientCompat.screen(mc) != null) return;
         if (!(mc.player.getMainHandItem().getItem() instanceof BlockItem item)) return;
         if (!(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) return;
+        if (ClientState.options.replaceMaterial) {
+            var next = dev.craftium.server.ReplaceMaterial.resolve(
+                    mc.level.getBlockState(hit.getBlockPos()), item.getBlock());
+            if (next != null) {
+                Overlay.blockStates(java.util.List.of(next), java.util.List.of(hit.getBlockPos()), UNTINTED);
+                return;
+            }
+            if (!ClientState.options.replaceMode) return;
+        }
         var placement = HeldGhost.placement(mc, item, hit);
         Overlay.blockStates(placement.states(), placement.places(), UNTINTED);
         SlabSplit.suppress(true); // the shapes are taken whole, not as the half of a double slab that is aimed at

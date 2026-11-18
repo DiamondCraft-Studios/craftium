@@ -25,8 +25,13 @@ abstract class ReplaceParticlesMixin {
         craftium$replaced = null;
         if (!context.getLevel().isClientSide()) return;
         var options = PlayerCapabilities.of(context.getPlayer());
-        if (options != null && options.replaceMode)
-            craftium$replaced = context.getLevel().getBlockState(context.getClickedPos());
+        if (options == null) return;
+        var old = context.getLevel().getBlockState(context.getClickedPos());
+        if (options.replaceMode
+                || options.replaceMaterial
+                        && dev.craftium.server.ReplaceMaterial.resolve(
+                                        old, dev.craftium.server.ReplaceMaterial.held(context))
+                                != null) craftium$replaced = old;
     }
 
     @Inject(

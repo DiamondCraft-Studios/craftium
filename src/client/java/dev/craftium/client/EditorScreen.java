@@ -2405,6 +2405,14 @@ public final class EditorScreen extends CraftiumScreen {
                 g,
                 10,
                 434,
+                "Replace material",
+                o().replaceMaterial,
+                () -> o().replaceMaterial = !o().replaceMaterial,
+                "Placing a block turns the stairs, slab, wall or other variant you click into that block's material, keeping its facing: oak stairs become spruce stairs with spruce planks in hand. Anything else you click is left alone, nothing is placed · Y");
+        toggle(
+                g,
+                10,
+                457,
                 "Block step",
                 o().blockStep,
                 () -> o().blockStep = !o().blockStep,
@@ -2412,7 +2420,7 @@ public final class EditorScreen extends CraftiumScreen {
         toggle(
                 g,
                 10,
-                457,
+                480,
                 "Sticky flight",
                 o().stickyFlight,
                 () -> o().stickyFlight = !o().stickyFlight,
@@ -2420,7 +2428,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(
                 g,
                 10,
-                480,
+                503,
                 pw - 20,
                 20,
                 "Reach: " + o().reach.label,
@@ -2433,7 +2441,7 @@ public final class EditorScreen extends CraftiumScreen {
         slider(
                 g,
                 10,
-                517,
+                540,
                 pw - 20,
                 "Far reach: blocks",
                 o().farReach,
@@ -2445,7 +2453,7 @@ public final class EditorScreen extends CraftiumScreen {
         slider(
                 g,
                 10,
-                553,
+                576,
                 pw - 20,
                 "Fly speed",
                 o().flySpeed,
@@ -2454,23 +2462,23 @@ public final class EditorScreen extends CraftiumScreen {
                 DEFAULTS.flySpeed,
                 v -> o().flySpeed = (float) v,
                 false);
-        button(g, 10, 577, pw - 20, 20, "Apply flight speed", false, () -> action("flight"), "");
+        button(g, 10, 600, pw - 20, 20, "Apply flight speed", false, () -> action("flight"), "");
         int[] pair = flex(pw - 20, 6, 1, 1);
         button(
                 g,
                 10,
-                603,
+                626,
                 pair[0],
                 20,
                 "Hotbar ↔",
                 false,
                 () -> action("hotbar"),
                 "Swap the hotbar with inventory row 1 · Z");
-        button(g, 16 + pair[0], 603, pair[1], 20, "Game mode", false, () -> action("gamemode"), "");
+        button(g, 16 + pair[0], 626, pair[1], 20, "Game mode", false, () -> action("gamemode"), "");
         button(
                 g,
                 10,
-                631,
+                654,
                 pw - 20,
                 20,
                 "Builder tool: " + o().builderTool.name(),

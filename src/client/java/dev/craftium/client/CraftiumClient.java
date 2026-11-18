@@ -25,7 +25,7 @@ import net.minecraft.world.phys.*;
 import org.lwjgl.glfw.GLFW;
 
 public final class CraftiumClient implements ClientModInitializer {
-    public static KeyMapping editorKey, contextKey, swapKey, replaceKey;
+    public static KeyMapping editorKey, contextKey, swapKey, replaceKey, replaceMaterialKey;
     public static final java.util.Map<Tool, KeyMapping> toolKeys = new java.util.EnumMap<>(Tool.class);
     private long lastBuilder;
     private long breakingSince, tinkerAt;
@@ -55,6 +55,8 @@ public final class CraftiumClient implements ClientModInitializer {
                 new KeyMapping("key.craftium.hotbar", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
         replaceKey = ClientCompat.registerKey(
                 new KeyMapping("key.craftium.replace", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, category));
+        replaceMaterialKey = ClientCompat.registerKey(
+                new KeyMapping("key.craftium.replace_material", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_Y, category));
         for (Tool tool : Tool.values()) {
             var spec = tool.spec();
             toolKeys.put(
@@ -394,6 +396,15 @@ public final class CraftiumClient implements ClientModInitializer {
                             net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
             ClientState.save();
         }
+        while (replaceMaterialKey.consumeClick()) {
+            ClientState.options.replaceMaterial = !ClientState.options.replaceMaterial;
+            ClientCompat.overlayMessage(
+                    mc, "Replace material " + (ClientState.options.replaceMaterial ? "enabled" : "disabled"));
+            mc.getSoundManager()
+                    .play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                            net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
+            ClientState.save();
+        }
         // Letting go of the place button closes the stroke the game's own placements belonged to.
         if (placeStrokeOpen
                 && GLFW.glfwGetMouseButton(mc.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_RIGHT) != GLFW.GLFW_PRESS) {
@@ -617,7 +628,7 @@ public final class CraftiumClient implements ClientModInitializer {
         var o = ClientState.options;
         String key = o.symmetryX + "," + o.symmetryY + "," + o.symmetryZ + "," + o.symmetryRotations + ","
                 + o.symmetryOrigin + "," + o.symmetryHalfX + o.symmetryHalfY + o.symmetryHalfZ + "," + o.replaceMode
-                + o.forcePlace + o.noUpdates + o.fastPlace + o.reach + o.farReach + o.angelPlacement
+                + o.replaceMaterial + o.forcePlace + o.noUpdates + o.fastPlace + o.reach + o.farReach + o.angelPlacement
                 + o.preventInteractions + o.noClip + o.blockStep;
         if (key.equals(placementSynced)) return;
         placementSynced = key;
