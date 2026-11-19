@@ -20,7 +20,13 @@ final class HistoryStore {
         thread.setDaemon(true);
         return thread;
     });
-    private static final Map<Path, Snapshot> QUEUED = new ConcurrentHashMap<>();
+    /** Guards {@link #QUEUED} and {@link #WRITING}, which the server thread and the writer both use; nothing slow is done while holding it. */
+    private static final Object LOCK = new Object();
+    /** The newest snapshot of each file that is waiting to be written. */
+    private static final Map<Path, Snapshot> QUEUED = new HashMap<>();
+    /** The snapshot of each file the writer is writing now. */
+    private static final Map<Path, Snapshot> WRITING = new HashMap<>();
+
     private static CompletableFuture<Void> pending = CompletableFuture.completedFuture(null);
 
     private HistoryStore() {}
@@ -34,12 +40,24 @@ final class HistoryStore {
                 .resolve(player.getUUID() + "-"
                         + dev.craftium.compat.Compat.keyName(player.level().dimension())
                                 .replace(':', '_') + ".nbt");
-        try {
-            flush();
-        } catch (CompletionException e) {
-            dev.craftium.runtime.ServerPlatform.LOG.warn("A prior history write did not finish successfully", e);
+        // A write of this file that has not finished holds the newest history, so it is taken from memory: waiting for
+        // the writer here would stall the server for as long as any player's history takes to write.
+        Snapshot latest;
+        synchronized (LOCK) {
+            latest = QUEUED.get(session.historyPath);
+            if (latest == null) latest = WRITING.get(session.historyPath);
         }
-        load(player, session);
+        if (latest != null) {
+            session.undo.clear();
+            session.undo.addAll(latest.undo);
+            session.redo.clear();
+            session.redo.addAll(latest.redo);
+            session.recalculateBytes();
+            session.historyDirty = false;
+            session.lastStroke = 0;
+            return;
+        }
+        load(player, session); // no write of it is waiting or running, so the file is the newest
     }
 
     static void load(ServerPlayer player, Session session) {
@@ -81,13 +99,26 @@ final class HistoryStore {
                 session.redo.stream()
                         .filter(e -> !e.selectionOnly() && !e.hierarchyOnly() && !e.clientOnly())
                         .toList());
-        QUEUED.put(snapshot.file, snapshot);
+        synchronized (LOCK) {
+            QUEUED.put(snapshot.file, snapshot);
+        }
         synchronized (HistoryStore.class) {
             pending = pending.handle((v, e) -> null)
                     .thenRunAsync(
                             () -> {
-                                Snapshot next = QUEUED.remove(snapshot.file);
-                                if (next != null) write(next);
+                                Snapshot next;
+                                synchronized (LOCK) {
+                                    next = QUEUED.remove(snapshot.file);
+                                    if (next != null) WRITING.put(next.file, next);
+                                }
+                                if (next == null) return;
+                                try {
+                                    write(next);
+                                } finally {
+                                    synchronized (LOCK) {
+                                        WRITING.remove(next.file, next);
+                                    }
+                                }
                             },
                             IO);
         }
