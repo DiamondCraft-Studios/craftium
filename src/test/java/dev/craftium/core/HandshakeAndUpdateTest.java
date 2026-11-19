@@ -73,7 +73,7 @@ class HandshakeAndUpdateTest {
     @Test
     void unknownCapabilitiesFromANewerPeerAreIgnored() {
         var newer = Handshake.read(
-                "{\"protocol\":1,\"version\":\"2.0.0\",\"capabilities\":[\"modify-expansion\",\"ai-spec-v2\",\"ai-sessions\",\"plugin-tools\",\"saved-selections\",\"from-the-future\"]}");
+                "{\"protocol\":1,\"version\":\"2.0.0\",\"capabilities\":[\"modify-expansion\",\"ai-spec-v2\",\"ai-sessions\",\"plugin-tools\",\"saved-selections\",\"screen-brush\",\"from-the-future\"]}");
         assertTrue(newer.has(Handshake.MODIFY_EXPANSION));
         assertTrue(newer.missingFrom(Handshake.CAPABILITIES).isEmpty());
         assertNull(Handshake.problem(newer, true));

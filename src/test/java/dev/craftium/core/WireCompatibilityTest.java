@@ -292,6 +292,8 @@ class WireCompatibilityTest {
         scaleX primitive
         scaleY primitive
         scaleZ primitive
+        screenBlocks primitive
+        screenSpace primitive
         script primitive
         scriptColours array
         scriptVariables object

@@ -68,7 +68,7 @@ public final class BrushPreview {
                 o.sizeZ,
                 sculpts(o.tool) ? rockKey(o) : 0,
                 normal,
-                at,
+                screenView(o) == null ? at : screenView(o).key(),
                 shownBlocks > Selection.LIMIT
                         ? 0
                         : mc.level.getGameTime() / 20); // a huge brush is not worked out again every second
@@ -92,6 +92,11 @@ public final class BrushPreview {
                 (float) o.selectionWidth,
                 0); // dim faces on the ground, the selection's silhouette in the air
         removedShape.draw(REMOVED_COLOR | REMOVED_ALPHA, REMOVED_COLOR | 0xff000000, (float) o.selectionWidth, 0);
+    }
+
+    /** The ring on the screen when the Surface (Noise) Painter is in use, whose blocks are those the ring shows rather than a shape around the block under it. */
+    private static ScreenFootprint.View screenView(Options o) {
+        return ScreenFootprint.active(o);
     }
 
     /** The blocks of {@code cells} that the Surface Painter would paint, as the server picks them: solid blocks, only those touching a non-solid block when Surface only is on, only inside the selection when the tool is restricted to it, and those the masks let through. */
@@ -311,6 +316,16 @@ public final class BrushPreview {
         shape = SceneShape.EMPTY;
         removedShape = SceneShape.EMPTY;
         tooLarge = false;
+        var view = screenView(o);
+        if (view != null) { // the blocks the ring covers on the screen, whatever shape is picked
+            var seen = ScreenFootprint.covered(mc.level, o, at, view);
+            shownBlocks = seen.size();
+            removedShape = SceneShape.EMPTY;
+            shape = SceneShape.of(mc.level, paintable(mc.level, seen, o), true);
+            builtAt = null; // the footprint moves with the pointer: no old contour to keep
+            tooLarge = shape.tooLarge();
+            return;
+        }
         List<Point> relative;
         // A brush over the block limit is refused by the server too, so there is no set of blocks to show.
         // Each tool is shown the way it builds: the picked shape, a line or path's small shape, or just a disc or a
