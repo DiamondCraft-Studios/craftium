@@ -20,7 +20,15 @@ final class HistoryStore {
         thread.setDaemon(true);
         return thread;
     });
-    private static final Map<Path, Snapshot> QUEUED = new ConcurrentHashMap<>();
+    /** The history files' format: 1 kept each block change as its own compounds, 2 keeps an edit's blocks as arrays and a palette. */
+    private static final int FORMAT = 2;
+    /** Guards {@link #QUEUED} and {@link #WRITING}, which the server thread and the writer both use; nothing slow is done while holding it. */
+    private static final Object LOCK = new Object();
+    /** The newest snapshot of each file that is waiting to be written. */
+    private static final Map<Path, Snapshot> QUEUED = new HashMap<>();
+    /** The snapshot of each file the writer is writing now. */
+    private static final Map<Path, Snapshot> WRITING = new HashMap<>();
+
     private static CompletableFuture<Void> pending = CompletableFuture.completedFuture(null);
 
     private HistoryStore() {}
@@ -34,30 +42,44 @@ final class HistoryStore {
                 .resolve(player.getUUID() + "-"
                         + dev.craftium.compat.Compat.keyName(player.level().dimension())
                                 .replace(':', '_') + ".nbt");
-        try {
-            flush();
-        } catch (CompletionException e) {
-            dev.craftium.runtime.ServerPlatform.LOG.warn("A prior history write did not finish successfully", e);
+        // A write of this file that has not finished holds the newest history, so it is taken from memory: waiting for
+        // the writer here would stall the server for as long as any player's history takes to write.
+        Snapshot latest;
+        synchronized (LOCK) {
+            latest = QUEUED.get(session.historyPath);
+            if (latest == null) latest = WRITING.get(session.historyPath);
         }
-        load(player, session);
+        if (latest != null) {
+            session.undo.clear();
+            session.undo.addAll(latest.undo);
+            session.redo.clear();
+            session.redo.addAll(latest.redo);
+            session.recalculateBytes();
+            session.historyDirty = false;
+            session.lastStroke = 0;
+            return;
+        }
+        load(player, session); // no write of it is waiting or running, so the file is the newest
     }
 
     static void load(ServerPlayer player, Session session) {
         if (!Files.exists(session.historyPath)) return;
         try {
-            var root = NbtIo.readCompressed(session.historyPath, NbtAccounter.create(96 * 1024 * 1024));
-            if (root.getIntOr("format", 0) != 1
+            var root = NbtIo.readCompressed(session.historyPath, NbtAccounter.create(3L * Selection.HISTORY_BYTES));
+            int format = root.getIntOr("format", 0);
+            if (format != 1 && format != FORMAT
                     || root.getIntOr("DataVersion", 0)
                             != net.minecraft.SharedConstants.getCurrentVersion()
                                     .dataVersion()
                                     .version())
                 throw new IllegalArgumentException("History version differs from this Minecraft build");
-            var undo = readEdits(root.getListOrEmpty("undo"), player);
-            var redo = readEdits(root.getListOrEmpty("redo"), player);
+            var undo = readEdits(root.getListOrEmpty("undo"), player, format);
+            var redo = readEdits(root.getListOrEmpty("redo"), player, format);
             int bytes = 0;
             for (var e : undo) bytes += e.estimatedBytes();
             for (var e : redo) bytes += e.estimatedBytes();
-            if (bytes > 34 * 1024 * 1024) throw new IllegalArgumentException("Stored history exceeds memory budget");
+            if (bytes > Selection.HISTORY_BYTES)
+                throw new IllegalArgumentException("Stored history exceeds memory budget");
             session.undo.clear();
             session.undo.addAll(undo);
             session.redo.clear();
@@ -81,13 +103,26 @@ final class HistoryStore {
                 session.redo.stream()
                         .filter(e -> !e.selectionOnly() && !e.hierarchyOnly() && !e.clientOnly())
                         .toList());
-        QUEUED.put(snapshot.file, snapshot);
+        synchronized (LOCK) {
+            QUEUED.put(snapshot.file, snapshot);
+        }
         synchronized (HistoryStore.class) {
             pending = pending.handle((v, e) -> null)
                     .thenRunAsync(
                             () -> {
-                                Snapshot next = QUEUED.remove(snapshot.file);
-                                if (next != null) write(next);
+                                Snapshot next;
+                                synchronized (LOCK) {
+                                    next = QUEUED.remove(snapshot.file);
+                                    if (next != null) WRITING.put(next.file, next);
+                                }
+                                if (next == null) return;
+                                try {
+                                    write(next);
+                                } finally {
+                                    synchronized (LOCK) {
+                                        WRITING.remove(next.file, next);
+                                    }
+                                }
                             },
                             IO);
         }
@@ -104,7 +139,7 @@ final class HistoryStore {
     private static void write(Snapshot snapshot) {
         try {
             var root = new CompoundTag();
-            root.putInt("format", 1);
+            root.putInt("format", FORMAT);
             root.putInt(
                     "DataVersion",
                     net.minecraft.SharedConstants.getCurrentVersion()
@@ -134,13 +169,17 @@ final class HistoryStore {
     }
 
     private static BlockSnapshot snapshot(CompoundTag tag, ServerPlayer player) {
+        return snapshot(tag, player.registryAccess().lookupOrThrow(Registries.BLOCK));
+    }
+
+    private static BlockSnapshot snapshot(
+            CompoundTag tag, net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> blocks) {
         var state = tag.getCompoundOrEmpty("state");
         var id = dev.craftium.compat.Compat.parse(state.getStringOr("Name", "minecraft:air"));
         if (!net.minecraft.core.registries.BuiltInRegistries.BLOCK.containsKey(id))
             throw new IllegalArgumentException("History uses missing block " + id);
         return new BlockSnapshot(
-                NbtUtils.readBlockState(player.registryAccess().lookupOrThrow(Registries.BLOCK), state),
-                tag.getCompound("data").orElse(null));
+                NbtUtils.readBlockState(blocks, state), tag.getCompound("data").orElse(null));
     }
 
     private static Point point(CompoundTag tag, String name) {
@@ -160,15 +199,7 @@ final class HistoryStore {
             tag.putString("name", edit.name());
             tag.putInt("flags", edit.flags());
             tag.putLong("time", edit.time());
-            var blocks = new ListTag();
-            for (var c : edit.changes()) {
-                var item = new CompoundTag();
-                point(item, "pos", c.pos());
-                item.put("before", snapshot(c.before()));
-                item.put("after", snapshot(c.after()));
-                blocks.add(item);
-            }
-            tag.put("blocks", blocks);
+            tag.put("blocks", blocks(edit.changes()));
             var biomes = new ListTag();
             for (var c : edit.biomes()) {
                 var item = new CompoundTag();
@@ -297,21 +328,117 @@ final class HistoryStore {
         return out;
     }
 
-    private static List<Session.Edit> readEdits(ListTag list, ServerPlayer player) {
+    /**
+     * An edit's block changes as format 2 keeps them: the coordinates and the before and after palette indexes as five int arrays,
+     * and each distinct snapshot once in the palette. A packed edit hands over its own coordinate arrays, so writing it makes
+     * little more than the two index arrays, where format 1 made several compounds for every block.
+     */
+    static CompoundTag blocks(List<Session.Change> changes) {
+        int[] x, y, z, before, after;
+        BlockSnapshot[] palette;
+        if (changes instanceof PackedChanges packed) {
+            x = packed.xs();
+            y = packed.ys();
+            z = packed.zs();
+            before = packed.indexes(false);
+            after = packed.indexes(true);
+            palette = packed.palette();
+        } else {
+            int n = changes.size();
+            x = new int[n];
+            y = new int[n];
+            z = new int[n];
+            before = new int[n];
+            after = new int[n];
+            var index = new HashMap<BlockSnapshot, Integer>();
+            var entries = new ArrayList<BlockSnapshot>();
+            for (int i = 0; i < n; i++) {
+                var c = changes.get(i);
+                x[i] = c.pos().x();
+                y[i] = c.pos().y();
+                z[i] = c.pos().z();
+                before[i] = index.computeIfAbsent(c.before(), b -> {
+                    entries.add(b);
+                    return entries.size() - 1;
+                });
+                after[i] = index.computeIfAbsent(c.after(), a -> {
+                    entries.add(a);
+                    return entries.size() - 1;
+                });
+            }
+            palette = entries.toArray(new BlockSnapshot[0]);
+        }
+        var tag = new CompoundTag();
+        tag.putIntArray("x", x);
+        tag.putIntArray("y", y);
+        tag.putIntArray("z", z);
+        tag.putIntArray("before", before);
+        tag.putIntArray("after", after);
+        var list = new ListTag();
+        for (var snapshot : palette) list.add(snapshot(snapshot));
+        tag.put("palette", list);
+        return tag;
+    }
+
+    /** The block changes {@link #blocks} wrote, packed again when the palette fits, without making a change object for each block. */
+    static List<Session.Change> readBlocks(
+            CompoundTag tag, net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> blocks) {
+        int[] x = tag.getIntArray("x").orElse(new int[0]),
+                y = tag.getIntArray("y").orElse(new int[0]),
+                z = tag.getIntArray("z").orElse(new int[0]),
+                before = tag.getIntArray("before").orElse(new int[0]),
+                after = tag.getIntArray("after").orElse(new int[0]);
+        int n = x.length;
+        if (n > Selection.LIMIT) throw new IllegalArgumentException("Stored edit exceeds cell limit");
+        if (y.length != n || z.length != n || before.length != n || after.length != n)
+            throw new IllegalArgumentException("Invalid stored blocks");
+        var list = tag.getListOrEmpty("palette");
+        if (list.size() > 2L * n) throw new IllegalArgumentException("Invalid stored block palette");
+        var palette = new BlockSnapshot[list.size()];
+        for (int i = 0; i < palette.length; i++) palette[i] = snapshot(list.getCompoundOrEmpty(i), blocks);
+        for (int i = 0; i < n; i++)
+            if (before[i] < 0 || before[i] >= palette.length || after[i] < 0 || after[i] >= palette.length)
+                throw new IllegalArgumentException("Invalid stored block palette index");
+        if (n == 0) return List.of();
+        if (palette.length <= 0xFFFF) {
+            var b = new char[n];
+            var a = new char[n];
+            for (int i = 0; i < n; i++) {
+                b[i] = (char) before[i];
+                a[i] = (char) after[i];
+            }
+            return PackedChanges.of(x, y, z, b, a, palette);
+        }
+        var changes = new ArrayList<Session.Change>(n);
+        for (int i = 0; i < n; i++)
+            changes.add(new Session.Change(new Point(x[i], y[i], z[i]), palette[before[i]], palette[after[i]]));
+        return List.copyOf(changes);
+    }
+
+    private static List<Session.Edit> readEdits(ListTag list, ServerPlayer player, int format) {
         if (list.size() > 32) throw new IllegalArgumentException("Invalid history length");
         var result = new ArrayList<Session.Edit>();
         for (int i = 0; i < list.size(); i++) {
             var tag = list.getCompoundOrEmpty(i);
-            var blocks = new ArrayList<Session.Change>();
-            var entries = tag.getListOrEmpty("blocks");
-            if (entries.size() > Selection.LIMIT) throw new IllegalArgumentException("Stored edit exceeds cell limit");
-            for (int j = 0; j < entries.size(); j++) {
-                var item = entries.getCompoundOrEmpty(j);
-                blocks.add(new Session.Change(
-                        point(item, "pos"),
-                        snapshot(item.getCompoundOrEmpty("before"), player),
-                        snapshot(item.getCompoundOrEmpty("after"), player)));
-            }
+            List<Session.Change> blocks;
+            ListTag entries;
+            if (format == 1) {
+                var legacy = new ArrayList<Session.Change>();
+                entries = tag.getListOrEmpty("blocks");
+                if (entries.size() > Selection.LIMIT)
+                    throw new IllegalArgumentException("Stored edit exceeds cell limit");
+                for (int j = 0; j < entries.size(); j++) {
+                    var item = entries.getCompoundOrEmpty(j);
+                    legacy.add(new Session.Change(
+                            point(item, "pos"),
+                            snapshot(item.getCompoundOrEmpty("before"), player),
+                            snapshot(item.getCompoundOrEmpty("after"), player)));
+                }
+                blocks = List.copyOf(legacy);
+            } else
+                blocks = readBlocks(
+                        tag.getCompoundOrEmpty("blocks"),
+                        player.registryAccess().lookupOrThrow(Registries.BLOCK));
             var biomes = new ArrayList<Session.BiomeChange>();
             entries = tag.getListOrEmpty("biomes");
             if (entries.size() > Selection.LIMIT) throw new IllegalArgumentException("Stored biome edit exceeds limit");
@@ -344,7 +471,7 @@ final class HistoryStore {
             if (notes == null || notes.length > 128) throw new IllegalArgumentException("Invalid stored annotations");
             result.add(new Session.Edit(
                     tag.getStringOr("name", "Edit"),
-                    List.copyOf(blocks),
+                    blocks,
                     List.copyOf(biomes),
                     tag.getIntOr("flags", 2),
                     List.copyOf(entities),

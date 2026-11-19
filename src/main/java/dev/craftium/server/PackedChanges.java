@@ -89,6 +89,37 @@ final class PackedChanges extends AbstractList<Session.Change> implements Random
         return new PackedChanges(x, y, z, before, after, entries.toArray(new BlockSnapshot[0]));
     }
 
+    /** Packed changes from arrays read back from the history file, which the caller has checked: equal lengths and every index in the palette. The arrays are kept, not copied. */
+    static PackedChanges of(int[] x, int[] y, int[] z, char[] before, char[] after, BlockSnapshot[] palette) {
+        return new PackedChanges(x, y, z, before, after, palette);
+    }
+
+    /** The positions' coordinates. The arrays themselves, which nothing may change: the history writer saves them as they are. */
+    int[] xs() {
+        return x;
+    }
+
+    int[] ys() {
+        return y;
+    }
+
+    int[] zs() {
+        return z;
+    }
+
+    /** The palette index of each block before (or, with {@code after}, after) the edit, as a new array. */
+    int[] indexes(boolean afterEdit) {
+        var source = afterEdit ? after : before;
+        var out = new int[source.length];
+        for (int i = 0; i < source.length; i++) out[i] = source[i];
+        return out;
+    }
+
+    /** The distinct snapshots the indexes name. The array itself, which nothing may change. */
+    BlockSnapshot[] palette() {
+        return palette;
+    }
+
     private static int indexOf(
             HashMap<BlockSnapshot, Integer> index, java.util.ArrayList<BlockSnapshot> entries, BlockSnapshot snapshot) {
         var known = index.get(snapshot);
