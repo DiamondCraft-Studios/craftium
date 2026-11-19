@@ -5591,17 +5591,20 @@ public final class EditorScreen extends CraftiumScreen {
         publishFootprintView(cx, cy, (o().radius + .5) * perBlock, perBlock);
         // The brush reaches radius blocks from the middle of the block, so the circle passes through the outer edge of
         // those blocks.
-        // Drawn in screen pixels, not interface units, so a pixel of the line is a pixel of the screen when the
-        // interface is scaled up.
+        // Drawn in pixels of the screen, not interface units, so a pixel of the line is one pixel of the screen at
+        // every interface scale (the GUI scale and the half steps of the interface size): the pose is scaled back
+        // down by the pixels in a unit and the ring is worked out in those pixels.
+        var window = minecraft.getWindow();
+        double pixels = InterfaceScale.pixels(minecraft) * window.getWidth() / window.getScreenWidth();
         g.pose().pushMatrix();
-        g.pose().scale(1 / (float) scale, 1 / (float) scale);
+        g.pose().scale((float) (1 / pixels), (float) (1 / pixels));
         BrushRing.draw(
                 g,
-                cx,
-                cy,
-                (o().radius + .5) * perBlock,
-                minecraft.getWindow().getWidth(),
-                minecraft.getWindow().getHeight());
+                cx * pixels,
+                cy * pixels,
+                (o().radius + .5) * perBlock * pixels,
+                window.getWidth(),
+                window.getHeight());
         g.pose().popMatrix();
     }
 
@@ -5624,8 +5627,8 @@ public final class EditorScreen extends CraftiumScreen {
                 cy,
                 radius,
                 focal / perBlock,
-                minecraft.getWindow().getWidth(),
-                minecraft.getWindow().getHeight());
+                width,
+                height);
     }
 
     /** How many screen pixels wide a block is at the point {@code hit} aims at, or 0 when there is no such point or it is behind the camera. */
