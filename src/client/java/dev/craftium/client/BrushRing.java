@@ -10,11 +10,14 @@ import dev.craftium.client.compat.Gfx;
 public final class BrushRing {
     private BrushRing() {}
 
-    /** Whether the tool is one of the Paint or Sculpt brushes, which the ring is for. */
+    /** Whether the tool is one of the Paint or Sculpt brushes, or a Terrain tool that works in a radius, which the ring is for. */
     public static boolean shownFor(dev.craftium.core.Tool tool) {
-        return tool.brushUse() != dev.craftium.core.Tool.BrushUse.NONE
-                && !dev.craftium.client.FluidPreview.handles(tool)
-                && ("Paint".equals(tool.group) || "Sculpt".equals(tool.group));
+        return switch (tool) {
+            case FLATTEN, ELEVATION, SLOPE, ROCK, FLUID_BALL, FLUID_BLOCK -> true;
+            default ->
+                tool.brushUse() != dev.craftium.core.Tool.BrushUse.NONE
+                        && ("Paint".equals(tool.group) || "Sculpt".equals(tool.group));
+        };
     }
 
     /**
