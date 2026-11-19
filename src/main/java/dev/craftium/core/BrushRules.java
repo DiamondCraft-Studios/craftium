@@ -1,7 +1,12 @@
 package dev.craftium.core;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Which blocks the sculpting brushes (Weld, Melt, Roughen, Shatter, Distort, Sculpt Draw) change. The server builds with these rules
@@ -33,10 +38,118 @@ public final class BrushRules {
         }
     }
 
+    /** The tools that keep to the side of the surface the brush was put on, see {@link #front}. */
+    public static boolean keepsToFront(Tool tool) {
+        return switch (tool) {
+            case WELD, MELT, SMOOTH, ROUGHEN, SHATTER, SCULPT_DRAW -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * The side of the surface a sculpting brush was put on. {@code cells} are the brush blocks on that side; {@code region} is the brush
+     * and a margin around it, and {@code open} the empty blocks of the region on that side. An empty block of the region that is not open
+     * lies behind a thin wall or floor.
+     */
+    public record Front(Set<Point> cells, Set<Point> region, Set<Point> open) {
+        public boolean contains(Point p) {
+            return cells.contains(p);
+        }
+
+        /**
+         * {@code world} with the empty blocks behind a thin wall or floor counted as solid, for measuring how much solid surrounds a
+         * block: a wall one block thick then weighs as a thick one, so the air beyond it does not keep Weld out of the corners in front.
+         */
+        public Cells filled(Cells world) {
+            return new Cells() {
+                public boolean solid(Point p) {
+                    return world.solid(p) || region.contains(p) && !open.contains(p);
+                }
+
+                public boolean air(Point p) {
+                    return !solid(p) && world.air(p);
+                }
+            };
+        }
+    }
+
+    /** How far around a block {@link #density} looks. */
+    public static int reach(Options o) {
+        return Math.clamp((int) Math.ceil(o.smoothing), 1, 3);
+    }
+
+    /**
+     * The brush blocks on the side of the surface the brush was put on, so a sculpting brush does not reach through a thin wall or floor to
+     * the far side. The open part is the empty blocks joined, through empty blocks of the brush and {@code margin} blocks around it, to the
+     * one in front of the aimed face. The solid part is the solid blocks joined, through solid brush blocks, to the aimed block, less those
+     * that touch only empty blocks of the far side. Null, for no limit, when the aimed block and the one in front of it are not one solid
+     * and one empty.
+     */
+    public static Front front(Collection<Point> cells, Point c, Point normal, Cells world, int margin) {
+        if (normal == null || normal.x() == 0 && normal.y() == 0 && normal.z() == 0) return null;
+        Point solidSeed, openSeed;
+        if (world.solid(c)) {
+            solidSeed = c;
+            openSeed = c.add(normal.x(), normal.y(), normal.z());
+        } else {
+            openSeed = c;
+            solidSeed = c.add(-normal.x(), -normal.y(), -normal.z());
+        }
+        if (world.solid(openSeed) || !world.solid(solidSeed)) return null;
+        var inside = cells instanceof Set<Point> set ? set : new HashSet<>(cells);
+        // The margin is grown from the brush's outer blocks only, so a big brush does not pay for it block by block.
+        var region = new HashSet<>(inside);
+        for (Point p : inside) {
+            boolean edge = false;
+            for (Point n : NEIGHBOURS)
+                if (!inside.contains(p.add(n.x(), n.y(), n.z()))) {
+                    edge = true;
+                    break;
+                }
+            if (!edge) continue;
+            for (int x = -margin; x <= margin; x++)
+                for (int y = -margin; y <= margin; y++)
+                    for (int z = -margin; z <= margin; z++) region.add(p.add(x, y, z));
+        }
+        var open = flood(region, openSeed, p -> !world.solid(p));
+        var solid = flood(inside, solidSeed, world::solid);
+        var front = new HashSet<Point>();
+        for (Point p : open) if (inside.contains(p)) front.add(p);
+        for (Point p : solid) {
+            boolean near = false, far = false;
+            for (Point n : NEIGHBOURS) {
+                Point at = p.add(n.x(), n.y(), n.z());
+                if (!inside.contains(at) || world.solid(at)) continue;
+                if (open.contains(at)) near = true;
+                else far = true;
+            }
+            if (near || !far) front.add(p);
+        }
+        return new Front(front, region, open);
+    }
+
+    private static Set<Point> flood(Set<Point> inside, Point seed, Predicate<Point> passes) {
+        var found = new HashSet<Point>();
+        var queue = new ArrayDeque<Point>();
+        found.add(seed);
+        queue.add(seed);
+        while (!queue.isEmpty()) {
+            Point p = queue.poll();
+            for (Point n : NEIGHBOURS) {
+                Point at = p.add(n.x(), n.y(), n.z());
+                if (inside.contains(at) && !found.contains(at) && passes.test(at)) {
+                    found.add(at);
+                    queue.add(at);
+                }
+            }
+        }
+        return found;
+    }
+
     /** How much of the blocks around {@code p} is solid, blurred by the tool's smoothing. */
     public static double density(Point p, Options o, Cells world) {
         double total = 0, weight = 0;
-        int radius = Math.clamp((int) Math.ceil(o.smoothing), 1, 3);
+        int radius = reach(o);
         for (int x = -radius; x <= radius; x++)
             for (int y = -radius; y <= radius; y++)
                 for (int z = -radius; z <= radius; z++) {

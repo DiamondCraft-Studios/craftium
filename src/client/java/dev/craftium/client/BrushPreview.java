@@ -42,10 +42,10 @@ public final class BrushPreview {
     /** {@code face} is the side of the block under the cursor that is aimed at, which the sculpting tools build out from. */
     public static void draw(Minecraft mc, BlockPos at, net.minecraft.core.Direction face, Options o) {
         if (mc.level == null) return;
-        // Only Sculpt Draw builds out from the aimed face. For the rest it must not be in the key: with the camera
-        // inside a block the
-        // hit face follows the look direction, and every turn would otherwise work the whole preview out again.
-        var normal = o.tool == dev.craftium.core.Tool.SCULPT_DRAW
+        // Only the sculpting tools, which build out from the aimed face or keep to its side, need it. For the rest it
+        // must not be in the key: with the camera inside a block the hit face follows the look direction, and every
+        // turn would otherwise work the whole preview out again.
+        var normal = dev.craftium.core.BrushRules.keepsToFront(o.tool)
                 ? new Point(face.getStepX(), face.getStepY(), face.getStepZ())
                 : new Point(0, 1, 0);
         var now = List.<Object>of(
@@ -145,15 +145,22 @@ public final class BrushPreview {
         var centre = new Point(at.getX(), at.getY(), at.getZ());
         var changed = new LinkedHashSet<Point>();
         var gone = new LinkedHashSet<Point>();
-        if (o.tool == dev.craftium.core.Tool.SMOOTH) smoothed(level, cells, o, mask, world, changed, gone);
+        var inside = new HashSet<>(cells);
+        var front = dev.craftium.core.BrushRules.keepsToFront(o.tool)
+                ? dev.craftium.core.BrushRules.front(
+                        inside, centre, normal, world, dev.craftium.core.BrushRules.reach(o))
+                : null;
+        var measured = front == null ? world : front.filled(world);
+        if (o.tool == dev.craftium.core.Tool.SMOOTH) smoothed(level, cells, front, o, mask, world, changed, gone);
         else
             for (Point p : cells) {
+                if (front != null && !front.contains(p)) continue;
                 switch (o.tool) {
                     case WELD -> {
-                        if (dev.craftium.core.BrushRules.weld(p, o, world)) changed.add(p);
+                        if (dev.craftium.core.BrushRules.weld(p, o, measured)) changed.add(p);
                     }
                     case MELT -> {
-                        if (dev.craftium.core.BrushRules.melt(p, o, world)) gone.add(p);
+                        if (dev.craftium.core.BrushRules.melt(p, o, measured)) gone.add(p);
                     }
                     case SHATTER -> {
                         if (dev.craftium.core.BrushRules.shatter(p, o, world))
@@ -161,7 +168,8 @@ public final class BrushPreview {
                     }
                     case ROUGHEN -> {
                         var target = dev.craftium.core.BrushRules.roughen(p, o, world, noise.sample(p));
-                        if (target != null) (target.equals(p) ? gone : changed).add(target);
+                        if (target != null && (front == null || front.contains(target) || !inside.contains(target)))
+                            (target.equals(p) ? gone : changed).add(target);
                     }
                     case SCULPT_DRAW ->
                         (o.invert ? gone : changed)
@@ -191,6 +199,7 @@ public final class BrushPreview {
     private static void smoothed(
             net.minecraft.world.level.Level level,
             List<Point> cells,
+            dev.craftium.core.BrushRules.Front front,
             Options o,
             PaintMask mask,
             dev.craftium.core.BrushRules.Cells world,
@@ -200,6 +209,7 @@ public final class BrushPreview {
         var candidates = new ArrayList<Point>();
         int filled = 0;
         for (Point at : cells) {
+            if (front != null && !front.contains(at)) continue;
             if (!mask.allows(at)
                     || level.getBlockState(new BlockPos(at.x(), at.y(), at.z())).hasBlockEntity()) continue;
             if (o.inSelection && !SelectionOverlay.contains(new BlockPos(at.x(), at.y(), at.z()))) continue;
@@ -217,10 +227,12 @@ public final class BrushPreview {
         }
         double solidBias = o.smoothMode == Options.SmoothMode.MELT ? -.05 : .01,
                 airBias = o.smoothMode == Options.SmoothMode.GROW ? .05 : 0;
+        var measured = front == null ? world : front.filled(world);
         var density = new HashMap<Point, Double>();
         for (Point at : candidates)
             density.put(
-                    at, dev.craftium.core.BrushRules.density(at, o, world) + (world.solid(at) ? solidBias : airBias));
+                    at,
+                    dev.craftium.core.BrushRules.density(at, o, measured) + (world.solid(at) ? solidBias : airBias));
         candidates.sort(Comparator.<Point>comparingDouble(density::get).reversed());
         int count = (int) Math.clamp(Math.round(filled * o.smoothRatio / 100d), 0, candidates.size());
         for (int i = 0; i < candidates.size(); i++) {
