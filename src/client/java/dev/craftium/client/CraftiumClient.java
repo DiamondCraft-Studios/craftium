@@ -758,6 +758,13 @@ public final class CraftiumClient implements ClientModInitializer {
                 || options.maskScript.contains("findClosestBlockToRGB");
         options.scriptColours =
                 colours ? new java.util.ArrayList<>(BlockColours.snapshot()) : new java.util.ArrayList<>();
+        // A screen-space stroke names the blocks the ring covers, as the preview shows them.
+        var ring = action.equals("use") && target != null ? ScreenFootprint.active(options) : null;
+        var mc = Minecraft.getInstance();
+        options.screenBlocks = ring == null || mc.level == null
+                ? ""
+                : dev.craftium.core.BlockList.encode(ScreenFootprint.covered(
+                        mc.level, options, new net.minecraft.core.BlockPos(target.x(), target.y(), target.z()), ring));
         ClientAssets.expect(action);
         if (action.equals("select_box")
                 || action.equals("lasso_select")
@@ -788,6 +795,7 @@ public final class CraftiumClient implements ClientModInitializer {
                     ClientPlayNetworking.send(new Packets.Bridge(frame));
         } finally {
             options.scriptColours = new java.util.ArrayList<>();
+            options.screenBlocks = "";
             options.modifyTranslateScale = scale;
         }
     }

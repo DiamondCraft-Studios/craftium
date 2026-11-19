@@ -395,6 +395,23 @@ final class EditPlanner {
         return Geometry.shape(center, o);
     }
 
+    /**
+     * The blocks of a use: for the tools that can ({@link Tool#screenBrush}) in screen-space mode, the blocks the client says the ring covers on its screen, kept to those
+     * within reach of the block clicked so a request cannot name blocks anywhere in the world; otherwise the brush around {@code c}. What is
+     * painted of them is still decided by the usual rules (solid, Surface only, masks, the selection and the block limit).
+     */
+    List<Point> screenBlocks(Point c) {
+        if (!o.tool.screenBrush() || !o.screenSpace || o.screenBlocks.isEmpty()) return brush(c);
+        int reach = Options.screenReach(o.radius);
+        var named = BlockList.decode(o.screenBlocks, Options.MAX_SCREEN_BLOCKS);
+        var kept = new ArrayList<Point>(named.size());
+        for (Point p : named)
+            if (Math.abs(p.x() - c.x()) <= reach
+                    && Math.abs(p.y() - c.y()) <= reach
+                    && Math.abs(p.z() - c.z()) <= reach) kept.add(p);
+        return kept;
+    }
+
     BlockState palette(double value, Point at) {
         return materials.get(MaterialList.index(
                 value, o.materialWeights, materials.size(), BrushMath.hash(at.x(), at.y(), at.z(), o.seed), 1));
@@ -417,7 +434,7 @@ final class EditPlanner {
         }
         // Text, the height tools and Tinker have no use for a brush shape, so none is built, or refused for being too
         // big, for them.
-        var points = o.tool == Tool.TINKER ? List.of(c) : brush(c);
+        var points = o.tool == Tool.TINKER ? List.of(c) : screenBlocks(c);
         for (Point p : points) validate(p);
         if (o.tool == Tool.BIOME_PAINTER || o.tool == Tool.CLENTAMINATOR) paintBiomes(points);
         var inside = BrushRules.keepsToFront(o.tool) ? new HashSet<>(points) : null;

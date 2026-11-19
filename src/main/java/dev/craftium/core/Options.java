@@ -595,7 +595,21 @@ public final class Options {
     public java.util.Map<String, String> scriptVariables = new java.util.LinkedHashMap<>();
     public java.util.Map<String, String> maskVariables = new java.util.LinkedHashMap<>();
     public java.util.List<BlockColour> scriptColours = new java.util.ArrayList<>();
+    /** Whether the Surface Painters paint the blocks the ring shows on the screen (sent in {@link #screenBlocks}) instead of a shape around the block under the pointer. */
+    public boolean screenSpace = true;
+    /** The blocks the ring covers on the screen for this one use, as a {@link BlockList}; empty for any use that is not a screen-space stroke. Set by the client as it sends, not kept. */
+    public String screenBlocks = "";
+
     public java.util.List<ColourPlacement> colourField = new java.util.ArrayList<>();
+    /** The longest {@link #screenBlocks} text a request may carry. */
+    public static final int MAX_SCREEN_BLOCKS_TEXT = 600_000;
+    /** How far, on each axis, a screen-space footprint may reach from the block clicked: what the client keeps and the server accepts. */
+    public static int screenReach(double radius) {
+        return (int) Math.min(BrushMath.MAX_REACH, 4 * Math.max(1, radius) + 16);
+    }
+    /** The most blocks a screen-space footprint may name. */
+    public static final int MAX_SCREEN_BLOCKS = 150_000;
+
     public boolean autoSwapToCreative = true;
     public boolean cameraFlight,
             showKeyHints,
@@ -903,6 +917,8 @@ public final class Options {
         fontSize = Math.clamp(fontSize, 6, 96);
         textThickness = Math.clamp(textThickness, 1, 8);
         modelColumns = Math.clamp(modelColumns, 2, 32);
+        if (screenBlocks == null || screenBlocks.length() > MAX_SCREEN_BLOCKS_TEXT)
+            throw new IllegalArgumentException("Screen brush footprint too large");
         if (nodes == null || nodes.size() > 64 || nodes.contains(null))
             throw new IllegalArgumentException("Maximum 64 control points");
         if (selectionPoints == null || selectionPoints.size() > 32768 || selectionPoints.contains(null))

@@ -119,6 +119,13 @@ public enum Tool {
     public BrushUse brushUse() {
         return spec().brushUse();
     }
+    /** Whether the tool can work on the blocks the brush ring covers on the screen ({@link Options#screenBlocks}) instead of a shape around the block under the pointer. */
+    public boolean screenBrush() {
+        return switch (this) {
+            case PAINTER, NOISE_PAINTER -> true;
+            default -> false;
+        };
+    }
     /** Whether the shape picker means anything for this tool. */
     public boolean picksShape() {
         return spec().picksShape();

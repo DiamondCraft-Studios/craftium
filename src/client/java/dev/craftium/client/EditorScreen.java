@@ -1714,6 +1714,17 @@ public final class EditorScreen extends CraftiumScreen {
                             () -> o().surfaceOnly = !o().surfaceOnly);
                     next = 428 + fillRow + row;
                 }
+                if (o().tool.screenBrush()) {
+                    toggle(
+                            g,
+                            10,
+                            next,
+                            "Match the ring",
+                            o().screenSpace,
+                            () -> o().screenSpace = !o().screenSpace,
+                            "Paint the blocks the ring covers on the screen, as you see them, instead of a shape around the block under the pointer · Needs a server that has this feature");
+                    next += 22;
+                }
                 if (o().tool == Tool.SHAPE) {
                     toggle(
                             g,
@@ -5554,6 +5565,7 @@ public final class EditorScreen extends CraftiumScreen {
 
     /** The white circle around the cursor for the Paint and Sculpt brushes, as wide on the screen as the brush is at the block it points at. */
     private void brushRing(Gfx g, boolean steering) {
+        ScreenFootprint.view = null;
         if (steering
                 || !toolActive
                 || !BrushRing.shownFor(o().tool)
@@ -5576,6 +5588,7 @@ public final class EditorScreen extends CraftiumScreen {
             perBlock = pixelsPerBlock(target());
         }
         if (perBlock <= 0) return;
+        publishFootprintView(cx, cy, (o().radius + .5) * perBlock, perBlock);
         // The brush reaches radius blocks from the middle of the block, so the circle passes through the outer edge of
         // those blocks.
         // Drawn in screen pixels, not interface units, so a pixel of the line is a pixel of the screen when the
@@ -5590,6 +5603,29 @@ public final class EditorScreen extends CraftiumScreen {
                 minecraft.getWindow().getWidth(),
                 minecraft.getWindow().getHeight());
         g.pose().popMatrix();
+    }
+
+    /** Tells the preview where the ring is and how the camera sees it, so the Surface Painters can show the blocks inside it. */
+    private void publishFootprintView(double cx, double cy, double radius, double perBlock) {
+        if (!o().tool.screenBrush()) return;
+        var camera = ClientCompat.camera(minecraft);
+        var plane = ClientCompat.nearPlane(camera);
+        Vec3 centre = plane.getPointOnPlane(0, 0);
+        double focal = height / (2 * Math.tan(Math.toRadians(ClientCompat.fov(minecraft, camera)) / 2));
+        ScreenFootprint.view = new ScreenFootprint.View(
+                camera.position(),
+                centre.normalize(),
+                plane.getPointOnPlane(1, 0).subtract(centre).normalize(),
+                plane.getPointOnPlane(0, 1).subtract(centre).normalize(),
+                focal,
+                width / 2d,
+                height / 2d,
+                cx,
+                cy,
+                radius,
+                focal / perBlock,
+                minecraft.getWindow().getWidth(),
+                minecraft.getWindow().getHeight());
     }
 
     /** How many screen pixels wide a block is at the point {@code hit} aims at, or 0 when there is no such point or it is behind the camera. */
@@ -5636,13 +5672,23 @@ public final class EditorScreen extends CraftiumScreen {
                 : 140;
     }
 
+    /** Where the pointer was when the last step of a screen-space stroke was sent. */
+    private double lastDragX, lastDragY;
+
     private void dragUse() {
         if (!o().tool.selection()) {
             use();
             return;
         }
         var hit = target();
-        if (hit == null || hit.getBlockPos().equals(lastDragged)) return;
+        if (hit == null) return;
+        // A screen-space brush covers what the ring shows, which changes as the pointer moves over one block as much as
+        // across several: a step is a quarter of the ring, not a new block.
+        var ring = ScreenFootprint.active(o());
+        boolean moved = ring == null
+                ? !hit.getBlockPos().equals(lastDragged)
+                : Math.hypot(pointerX - lastDragX, pointerY - lastDragY) >= Math.max(4, ring.radius() / 4);
+        if (!moved) return;
         long now = System.currentTimeMillis();
         // A reply that never comes must not stall the drag for good, so a request is given up on after a quarter of a
         // second.
@@ -5652,6 +5698,8 @@ public final class EditorScreen extends CraftiumScreen {
         }
         useQueued = false;
         lastDragged = hit.getBlockPos();
+        lastDragX = pointerX;
+        lastDragY = pointerY;
         lastUseSent = now;
         use();
     }
@@ -6100,6 +6148,8 @@ public final class EditorScreen extends CraftiumScreen {
             painting = true;
             ClientState.strokeId = System.nanoTime();
             lastDragged = null;
+            lastDragX = event.x();
+            lastDragY = event.y();
             useQueued = false;
             if (!Interactions.of(o().tool).pressed(context, event.x(), event.y())) use();
         }

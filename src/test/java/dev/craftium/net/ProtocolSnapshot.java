@@ -269,6 +269,8 @@ final class ProtocolSnapshot {
         dev.craftium.core.Options.scaleX : double
         dev.craftium.core.Options.scaleY : double
         dev.craftium.core.Options.scaleZ : double
+        dev.craftium.core.Options.screenBlocks : java.lang.String
+        dev.craftium.core.Options.screenSpace : boolean
         dev.craftium.core.Options.script : java.lang.String
         dev.craftium.core.Options.scriptColours : java.util.List<dev.craftium.core.BlockColour>
         dev.craftium.core.Options.scriptVariables : java.util.Map<java.lang.String, java.lang.String>
