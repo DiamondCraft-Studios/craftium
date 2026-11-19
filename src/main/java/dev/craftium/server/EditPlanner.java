@@ -420,7 +420,11 @@ final class EditPlanner {
         var points = o.tool == Tool.TINKER ? List.of(c) : brush(c);
         for (Point p : points) validate(p);
         if (o.tool == Tool.BIOME_PAINTER || o.tool == Tool.CLENTAMINATOR) paintBiomes(points);
+        var inside = BrushRules.keepsToFront(o.tool) ? new HashSet<>(points) : null;
+        var front = inside != null ? BrushRules.front(inside, c, normal, cells, BrushRules.reach(o)) : null;
+        var measured = front == null ? cells : front.filled(cells);
         for (Point p : points) {
+            if (front != null && !front.contains(p)) continue;
             BlockState old = state(p);
             boolean filled = solid(p);
             double n = noise.sample(p);
@@ -456,10 +460,10 @@ final class EditPlanner {
                         put(at, o.invert ? Blocks.AIR.defaultBlockState() : old);
                 }
                 case WELD -> {
-                    if (BrushRules.weld(p, o, cells)) put(p, nearestMaterial(p));
+                    if (BrushRules.weld(p, o, measured)) put(p, nearestMaterial(p));
                 }
                 case MELT -> {
-                    if (BrushRules.melt(p, o, cells)) put(p, Blocks.AIR.defaultBlockState());
+                    if (BrushRules.melt(p, o, measured)) put(p, Blocks.AIR.defaultBlockState());
                 }
                 case SMOOTH -> {
                     double d = density(p);
@@ -473,7 +477,10 @@ final class EditPlanner {
                 }
                 case ROUGHEN -> {
                     Point target = BrushRules.roughen(p, o, cells, n);
-                    if (target != null) put(target, target.equals(p) ? Blocks.AIR.defaultBlockState() : old);
+                    // A block grown into the far side of a thin wall is left out, as the brush's other blocks there
+                    // are.
+                    if (target != null && (front == null || front.contains(target) || !inside.contains(target)))
+                        put(target, target.equals(p) ? Blocks.AIR.defaultBlockState() : old);
                 }
                 case SHATTER -> {
                     if (BrushRules.shatter(p, o, cells))

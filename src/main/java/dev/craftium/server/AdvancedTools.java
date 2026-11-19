@@ -26,10 +26,14 @@ final class AdvancedTools {
                 // it meets the terrain as it was.
                 var brush = p.brush(center);
                 var inside = new HashSet<>(brush);
+                var front = BrushRules.front(inside, center, normal, p.cells, BrushRules.reach(o));
+                var measured = front == null ? p.cells : front.filled(p.cells);
                 var candidates = new ArrayList<Point>();
                 int filled = 0;
                 for (Point at : brush)
-                    if (p.accepted(at) && !p.state(at).hasBlockEntity()) {
+                    if ((front == null || front.contains(at))
+                            && p.accepted(at)
+                            && !p.state(at).hasBlockEntity()) {
                         if (o.smoothFixEdges) {
                             boolean edge = false;
                             for (Point n : EditPlanner.NEIGHBOURS)
@@ -50,9 +54,9 @@ final class AdvancedTools {
                                     default -> .01;
                                 },
                         airBias = o.smoothMode == Options.SmoothMode.GROW ? .05 : 0;
-                candidates.sort(
-                        Comparator.<Point>comparingDouble(at -> p.density(at) + (p.solid(at) ? solidBias : airBias))
-                                .reversed());
+                candidates.sort(Comparator.<Point>comparingDouble(
+                                at -> BrushRules.density(at, o, measured) + (p.solid(at) ? solidBias : airBias))
+                        .reversed());
                 int keep = (int) Math.clamp(Math.round(filled * o.smoothRatio / 100d), 0, candidates.size());
                 for (int i = 0; i < candidates.size(); i++) {
                     Point at = candidates.get(i);
