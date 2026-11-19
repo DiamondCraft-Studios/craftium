@@ -235,8 +235,8 @@ final class StructureBuilder {
                             rz = mz;
                         }
                     }
-                    out[(y * nz + rz) * nx + rx] =
-                            new BlockSnapshot(snapshot.state().mirror(mirror).rotate(rotation), snapshot.data());
+                    out[(y * nz + rz) * nx + rx] = new BlockSnapshot(
+                            StateTransforms.mirror(snapshot.state(), mirror).rotate(rotation), snapshot.data());
                 }
         var moved = new ArrayList<CompoundTag>();
         for (var tag : entities) {

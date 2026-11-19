@@ -42,7 +42,8 @@ final class EditorBindings {
                 var saved = Packets.JSON.fromJson(Files.readString(FILE), Saved.class);
                 if (saved != null && saved.bindings != null) {
                     for (var e : saved.bindings.entrySet())
-                        if (e.getValue() != null
+                        if (!(saved.version < 2 && isFormerFillDefault(saved.bindings, e.getKey(), e.getValue()))
+                                && e.getValue() != null
                                 && e.getValue().key() >= -1
                                 && (!e.getKey().keyboardOnly() || !e.getValue().mouse())
                                 && (!e.getKey().mouseOnly()
@@ -57,11 +58,22 @@ final class EditorBindings {
         }
     }
 
+    /**
+     * Quick fill and replace used to share Ctrl+F and Ctrl+R with flip and rotate; a saved copy of that old default moves to the new one. Only while flip or rotate
+     * still holds the same key: when it was moved off, Quick fill on Ctrl+F is a choice, not the old default, and stays.
+     */
+    private static boolean isFormerFillDefault(Map<Action, Binding> saved, Action action, Binding binding) {
+        var sharer = action == Action.QUICK_FILL ? Action.FLIP_PLACEMENT : Action.ROTATE_PLACEMENT;
+        if (action != Action.QUICK_FILL && action != Action.QUICK_REPLACE) return false;
+        var key = Binding.key(action == Action.QUICK_FILL ? 'F' : 'R', EditorControls.CONTROL);
+        return key.equals(binding) && key.equals(saved.getOrDefault(sharer, sharer.defaults));
+    }
+
     static void save() {
         try {
             Files.createDirectories(FILE.getParent());
             Path temp = FILE.resolveSibling(FILE.getFileName() + ".tmp");
-            Files.writeString(temp, Packets.JSON.toJson(new Saved(1, migrated, bindings)));
+            Files.writeString(temp, Packets.JSON.toJson(new Saved(2, migrated, bindings)));
             Files.move(temp, FILE, StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception e) {
             dev.craftium.Craftium.LOG.warn("Cannot save Craftium editor bindings", e);

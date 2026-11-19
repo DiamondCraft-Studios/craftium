@@ -130,6 +130,8 @@ final class ProtocolSnapshot {
         dev.craftium.core.Options.floodHorizontal : boolean
         dev.craftium.core.Options.floodUp : boolean
         dev.craftium.core.Options.flowLength : int
+        dev.craftium.core.Options.fluidBlocks : int
+        dev.craftium.core.Options.pourShape : dev.craftium.core.Options$PourShape
         dev.craftium.core.Options.fluidHeight : int
         dev.craftium.core.Options.fluidQuality : int
         dev.craftium.core.Options.fluidType : dev.craftium.core.Options$FluidType
@@ -248,6 +250,7 @@ final class ProtocolSnapshot {
         dev.craftium.core.Options.removeFluidsWithoutSources : boolean
         dev.craftium.core.Options.removedFill : int
         dev.craftium.core.Options.removedTint : int
+        dev.craftium.core.Options.replaceMaterial : boolean
         dev.craftium.core.Options.replaceMode : boolean
         dev.craftium.core.Options.requireSupport : boolean
         dev.craftium.core.Options.roll : double
@@ -266,6 +269,8 @@ final class ProtocolSnapshot {
         dev.craftium.core.Options.scaleX : double
         dev.craftium.core.Options.scaleY : double
         dev.craftium.core.Options.scaleZ : double
+        dev.craftium.core.Options.screenBlocks : java.lang.String
+        dev.craftium.core.Options.screenSpace : boolean
         dev.craftium.core.Options.script : java.lang.String
         dev.craftium.core.Options.scriptColours : java.util.List<dev.craftium.core.BlockColour>
         dev.craftium.core.Options.scriptVariables : java.util.Map<java.lang.String, java.lang.String>
@@ -326,6 +331,8 @@ final class ProtocolSnapshot {
         dev.craftium.core.Options.smartExtrude : boolean
         dev.craftium.core.Options.smoothFixEdges : boolean
         dev.craftium.core.Options.smoothMode : dev.craftium.core.Options$SmoothMode
+        dev.craftium.core.Options.smear : boolean
+        dev.craftium.core.Options.smearDepth : int
         dev.craftium.core.Options.smoothRatio : double
         dev.craftium.core.Options.smoothing : double
         dev.craftium.core.Options.solidFluids : boolean

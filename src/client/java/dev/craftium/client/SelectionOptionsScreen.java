@@ -232,10 +232,20 @@ public final class SelectionOptionsScreen extends CraftiumScreen {
             addRenderableWidget(widthSlider);
             sy += 22;
         }
+        if (styled)
+            addRenderableWidget(
+                    new FlatCheckbox(ex0, sy, 270, 20, "Outline block previews", o.blockPreviewOutline, () -> {
+                        o.blockPreviewOutline = !o.blockPreviewOutline;
+                        ClientState.save();
+                        init();
+                    }));
         addRenderableWidget(new FlatButton(ex0, top + panelH() - 30, 132, 22, "Reset all", () -> {
             for (var e : entries) e.set().accept(e.fallback().getAsInt());
             for (var w : widths) w.set().accept(o, w.get().applyAsDouble(DEFAULTS));
-            if (styled) o.selectionStyle = DEFAULTS.selectionStyle;
+            if (styled) {
+                o.selectionStyle = DEFAULTS.selectionStyle;
+                o.blockPreviewOutline = DEFAULTS.blockPreviewOutline;
+            }
             init();
         }));
         addRenderableWidget(new FlatButton(ex0 + 138, top + panelH() - 30, 132, 22, "Done", this::onClose));

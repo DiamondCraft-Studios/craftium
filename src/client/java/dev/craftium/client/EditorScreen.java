@@ -161,9 +161,13 @@ public final class EditorScreen extends CraftiumScreen {
     private boolean selectingText;
     private static final Options DEFAULTS = new Options();
 
-    private record MenuItem(String label, String shortcut, Runnable action, List<MenuItem> children) {
+    private record MenuItem(String label, String shortcut, Runnable action, List<MenuItem> children, boolean checked) {
         MenuItem(String label, String shortcut, Runnable action) {
-            this(label, shortcut, action, List.of());
+            this(label, shortcut, action, List.of(), false);
+        }
+
+        MenuItem(String label, String shortcut, Runnable action, List<MenuItem> children) {
+            this(label, shortcut, action, children, false);
         }
     }
     /** The label of the menu entry whose submenu is open, or empty. */
@@ -530,6 +534,7 @@ public final class EditorScreen extends CraftiumScreen {
         } // the first-person look aims with the vanilla crosshair
         g.pose().pushMatrix();
         g.pose().scale(scale, scale);
+        brushRing(g, steering); // under the interface: it is of the world, so the panels cover it
         topbar(g);
         if (panels) {
             tools(g);
@@ -545,6 +550,8 @@ public final class EditorScreen extends CraftiumScreen {
             missingPanel(g);
             progressPanel(g);
             materialsPanel(g);
+            selectionPanel(g);
+            shapePanel(g);
         }
         finishPanel(g);
         viewport(g);
@@ -634,7 +641,6 @@ public final class EditorScreen extends CraftiumScreen {
             } // the cell the block would land in
             BlockDragCursor.draw(g, font, dragBlock, mx, my, w, h, ACCENT, inViewport(mx, my));
         } else BlockDragCursor.release();
-        brushRing(g, steering);
         g.pose().popMatrix();
         ReferenceImages.draw(g, true, steering ? -100000 : mouseX, steering ? -100000 : mouseY);
     }
@@ -1282,7 +1288,21 @@ public final class EditorScreen extends CraftiumScreen {
             if (o().tool.picksShape()) shapeSelector(g, 305);
             // The track stops at 64 to stay usable; a bigger radius is typed in. Shapes are limited by their block
             // count and reach, not by this.
-            if (use != Tool.BrushUse.NONE)
+            if (o().tool == Tool.FLUID_BLOCK)
+                slider(
+                        g,
+                        10,
+                        347 - lift(),
+                        pw - 20,
+                        "Block count",
+                        o().fluidBlocks,
+                        1,
+                        512,
+                        4096,
+                        DEFAULTS.fluidBlocks,
+                        v -> o().fluidBlocks = (int) Math.clamp(Math.round(v), 1, 4096),
+                        true);
+            else if (use != Tool.BrushUse.NONE)
                 slider(
                         g,
                         10,
@@ -1662,6 +1682,21 @@ public final class EditorScreen extends CraftiumScreen {
                             true);
                     row += 38;
                 }
+                if (terrainFlowShown()) { // under the tool's own Strength slider
+                    slider(
+                            g,
+                            10,
+                            403 + row,
+                            pw - 20,
+                            "Flow",
+                            o().brushFlow,
+                            Options.FLOW_MIN,
+                            Options.FLOW_MAX,
+                            Options.FLOW_DEFAULT,
+                            v -> o().brushFlow = (int) Math.clamp(Math.round(v), Options.FLOW_MIN, Options.FLOW_MAX),
+                            true);
+                    row += 28;
+                }
                 int fillRow = o().tool.picksShape() ? 23 : 0;
                 if (o().tool.picksShape()) fillButtons(g, 403 + row);
                 int next;
@@ -1678,6 +1713,17 @@ public final class EditorScreen extends CraftiumScreen {
                             o().surfaceOnly,
                             () -> o().surfaceOnly = !o().surfaceOnly);
                     next = 428 + fillRow + row;
+                }
+                if (o().tool.screenBrush()) {
+                    toggle(
+                            g,
+                            10,
+                            next,
+                            "Match the ring",
+                            o().screenSpace,
+                            () -> o().screenSpace = !o().screenSpace,
+                            "Paint the blocks the ring covers on the screen, as you see them, instead of a shape around the block under the pointer · Needs a server that has this feature");
+                    next += 22;
                 }
                 if (o().tool == Tool.SHAPE) {
                     toggle(
@@ -2390,6 +2436,14 @@ public final class EditorScreen extends CraftiumScreen {
                 g,
                 10,
                 434,
+                "Replace material",
+                o().replaceMaterial,
+                () -> o().replaceMaterial = !o().replaceMaterial,
+                "Placing a block turns the stairs, slab, wall or other variant you click into that block's material, keeping its facing: oak stairs become spruce stairs with spruce planks in hand. Anything else you click is left alone, nothing is placed · Y");
+        toggle(
+                g,
+                10,
+                457,
                 "Block step",
                 o().blockStep,
                 () -> o().blockStep = !o().blockStep,
@@ -2397,7 +2451,7 @@ public final class EditorScreen extends CraftiumScreen {
         toggle(
                 g,
                 10,
-                457,
+                480,
                 "Sticky flight",
                 o().stickyFlight,
                 () -> o().stickyFlight = !o().stickyFlight,
@@ -2405,7 +2459,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(
                 g,
                 10,
-                480,
+                503,
                 pw - 20,
                 20,
                 "Reach: " + o().reach.label,
@@ -2418,7 +2472,7 @@ public final class EditorScreen extends CraftiumScreen {
         slider(
                 g,
                 10,
-                517,
+                540,
                 pw - 20,
                 "Far reach: blocks",
                 o().farReach,
@@ -2430,7 +2484,7 @@ public final class EditorScreen extends CraftiumScreen {
         slider(
                 g,
                 10,
-                553,
+                576,
                 pw - 20,
                 "Fly speed",
                 o().flySpeed,
@@ -2439,23 +2493,23 @@ public final class EditorScreen extends CraftiumScreen {
                 DEFAULTS.flySpeed,
                 v -> o().flySpeed = (float) v,
                 false);
-        button(g, 10, 577, pw - 20, 20, "Apply flight speed", false, () -> action("flight"), "");
+        button(g, 10, 600, pw - 20, 20, "Apply flight speed", false, () -> action("flight"), "");
         int[] pair = flex(pw - 20, 6, 1, 1);
         button(
                 g,
                 10,
-                603,
+                626,
                 pair[0],
                 20,
                 "Hotbar ↔",
                 false,
                 () -> action("hotbar"),
                 "Swap the hotbar with inventory row 1 · Z");
-        button(g, 16 + pair[0], 603, pair[1], 20, "Game mode", false, () -> action("gamemode"), "");
+        button(g, 16 + pair[0], 626, pair[1], 20, "Game mode", false, () -> action("gamemode"), "");
         button(
                 g,
                 10,
-                631,
+                654,
                 pw - 20,
                 20,
                 "Builder tool: " + o().builderTool.name(),
@@ -3272,9 +3326,93 @@ public final class EditorScreen extends CraftiumScreen {
             row += 15;
         }
     }
+
+    private int selectionScroll;
+    /**
+     * The Selection window: the blocks the selection is made of, one cell each in the style of the Block palette, with how many there are of it. The cells follow the selection and the
+     * world, so they change as the selection is changed and as its blocks are edited. Clicking a cell makes it the foreground block, and it can be dragged like a palette cell.
+     */
+    private void selectionPanel(Gfx g) {
+        int x = w - RIGHT - 300, y = 330;
+        panel(g, x, y, 290, 260, "Selection");
+        if (!WorkspaceLayout.visible("selection")) {
+            SelectionBlocks.reset();
+            return;
+        }
+        SelectionBlocks.update(minecraft);
+        var blocks = SelectionBlocks.entries();
+        int size = SelectionOverlay.points().size();
+        if (size == 0) {
+            text(g, "Nothing is selected", x + 10, y + 28, MUTED);
+            text(g, "Select some blocks and what they are made of shows here", x + 10, y + 42, MUTED);
+            return;
+        }
+        String head = String.format("%,d", size) + (size == 1 ? " block" : " blocks") + " · " + blocks.size()
+                + (blocks.size() == 1 ? " kind" : " kinds");
+        if (SelectionBlocks.air() > 0) head += " · " + String.format("%,d", SelectionBlocks.air()) + " air";
+        text(g, shorten(head, pw - 20), x + 10, y + 27, TEXT);
+        if (SelectionBlocks.counting())
+            text(g, "Counting " + Math.round(SelectionBlocks.progress() * 100) + "%", x + 10, y + 40, MUTED);
+        int top = y + 54, cellW = 32, cellH = 32, pitch = 34;
+        int visibleRows = Math.max(1, (pb - 6 - top + 2) / pitch);
+        int columns = Math.max(1, (pw - 17) / pitch);
+        boolean bar = (blocks.size() + columns - 1) / columns > visibleRows;
+        if (bar) columns = Math.max(1, (pw - 25) / pitch);
+        int rows = (blocks.size() + columns - 1) / columns, limit = Math.max(0, rows - visibleRows);
+        selectionScroll = Math.clamp(selectionScroll, 0, limit);
+        for (int r = 0; r < visibleRows; r++)
+            for (int c = 0; c < columns; c++) {
+                int i = (selectionScroll + r) * columns + c;
+                if (i >= blocks.size()) break;
+                var entry = blocks.get(i);
+                int bx = x + 10 + c * pitch, by = top + r * pitch;
+                boolean active = o().block.equals(entry.id());
+                g.fill(bx, by, bx + cellW, by + cellH, active ? 0xff315b84 : 0xff1b2838);
+                if (active) g.outline(bx, by, cellW, cellH, ACCENT);
+                BlockPickerScreen.icon(g, font, entry.id(), bx + 8, by + 3);
+                g.centeredText(font, SelectionBlocks.abbreviate(entry.count()), bx + cellW / 2, by + 21, TEXT);
+                String from = entry.id();
+                dropArea(bx, by, cellW, cellH, dropped -> replaceInSelection(from, dropped));
+                dragSource(
+                        new Control(
+                                bx,
+                                by,
+                                cellW,
+                                cellH,
+                                () -> ClientState.pick(entry.id()),
+                                () -> openSelectionMenu(from),
+                                BlockPickerScreen.name(entry.id()) + " · " + entry.id() + " · "
+                                        + String.format("%,d", entry.count()) + " of "
+                                        + String.format("%,d", size) + " ("
+                                        + Math.round(1000d * entry.count() / Math.max(1, size)) / 10d
+                                        + "%) · Click to set the foreground · Right-click to replace it · Drop a block on it to replace it with that block"),
+                        entry.id());
+            }
+        if (bar) {
+            int track = visibleRows * pitch - 2,
+                    thumb = Math.max(10, track * visibleRows / rows),
+                    thumbY = top + (track - thumb) * selectionScroll / Math.max(1, limit),
+                    barX = x + pw - 11;
+            g.fill(barX, top, barX + 5, top + track, 0xff1b2838);
+            g.fill(barX, thumbY, barX + 5, thumbY + thumb, 0xff4a6585);
+            controls.add(new Control(
+                    barX - 2,
+                    top,
+                    9,
+                    track,
+                    () -> {
+                        double py = WorkspaceLayout.inverse("selection", mx, my)[1];
+                        selectionScroll = Math.clamp(
+                                (int) Math.round((py - top - thumb / 2.0) / Math.max(1, track - thumb) * limit),
+                                0,
+                                limit);
+                    },
+                    ""));
+        }
+    }
     /** The Magic select window: directions, mode and select type of the Magic Wand, shown from Window → Toggle magic whichever tool is active. */
     private void magicPanel(Gfx g) {
-        int x = w - RIGHT - 244, y = 263; // under where the Rulers panel opens, left of the right-hand column
+        int x = LEFT + 8, y = h - 25 - 160 - 6; // the bottom left, beside the left column
         panel(g, x, y, 236, 160, "Magic select");
         MagicSelectOptions.draw(magicHost(g), o(), x + 10, y + 26, pw - 20, MagicSelectOptions.ALL);
     }
@@ -3447,13 +3585,111 @@ public final class EditorScreen extends CraftiumScreen {
     /** The two lists of blocks that share the Change / Edit block state / Remove menu. */
     private enum BlockList {
         MASK,
-        PALETTE
+        PALETTE,
+        /** The cells of the Selection window, which have a menu of their own. */
+        SELECTION
     }
 
     private BlockList ctxList = BlockList.MASK;
 
     private List<String> blocksOf(BlockList list) {
-        return list == BlockList.MASK ? o().maskBlocks : ClientState.palette;
+        return switch (list) {
+            case MASK -> o().maskBlocks;
+            case PALETTE -> ClientState.palette;
+            case SELECTION ->
+                SelectionBlocks.entries().stream()
+                        .map(SelectionBlocks.Entry::id)
+                        .toList();
+        };
+    }
+
+    private String[] menuLabels(BlockList list) {
+        return list == BlockList.SELECTION ? SELECTION_MENU_LABELS : BLOCK_MENU_LABELS;
+    }
+    /** The block of the Selection window cell whose menu is open: kept by name, as the cells change under a menu that is left open. */
+    private String ctxBlock = "";
+    /** Opens the menu of a Selection window cell. */
+    private void openSelectionMenu(String block) {
+        ctxList = BlockList.SELECTION;
+        ctxCell = 0;
+        ctxBlock = block;
+        ctxX = Math.min(mx, w - MASK_MENU_WIDTH - 4);
+        ctxY = Math.min(my, h - SELECTION_MENU_LABELS.length * MASK_MENU_ROW - 4);
+    }
+    /** Replace: choose the block that takes the place of every one of these in the selection. */
+    private void chooseReplacement(String block) {
+        var picker = new BlockPickerScreen(
+                this, "Replace " + BlockPickerScreen.name(block) + " with", "", id -> replaceInSelection(block, id));
+        // A stair is mostly replaced by another stair: the chooser lists only those until it is told to list everything
+        var found = blockById(block);
+        var slot = found == null
+                ? null
+                : dev.craftium.server.MaterialFamilies.index().slot(found);
+        if (slot != null && !slot.kind().equals(dev.craftium.core.MaterialGrouper.BASE))
+            picker.limitedTo(kindLabel(slot.kind()), sameKind(slot.kind()));
+        ClientCompat.setScreen(minecraft, picker);
+    }
+    /** The block with this id, or null. */
+    private static net.minecraft.world.level.block.Block blockById(String id) {
+        var key = dev.craftium.compat.Compat.tryParse(id.split("\\[", 2)[0]);
+        return key == null ? null : BuiltInRegistries.BLOCK.getOptional(key).orElse(null);
+    }
+    /** A kind of block as the chooser's limit names it: stairs, slabs, fence gates. */
+    private static String kindLabel(String kind) {
+        String name = kind.replace('_', ' ');
+        return name.endsWith("s") || name.equals("wood") ? name : name + "s";
+    }
+    /** The blocks of one kind in any material: every stair, or every slab. */
+    private static java.util.function.Predicate<String> sameKind(String kind) {
+        return remembered(id -> {
+            var block = blockById(id);
+            var slot = block == null
+                    ? null
+                    : dev.craftium.server.MaterialFamilies.index().slot(block);
+            return slot != null && slot.kind().equals(kind);
+        });
+    }
+    /** A chooser's limit that works each id out once: the chooser asks it of every block in the game on each key typed. Used on the client thread only. */
+    private static java.util.function.Predicate<String> remembered(java.util.function.Predicate<String> test) {
+        var known = new java.util.HashMap<String, Boolean>();
+        return id -> known.computeIfAbsent(id, test::test);
+    }
+    /**
+     * Change material: choose a block of the material to change to, and the blocks of the cell's material in the selection (its planks, stairs, slabs, walls and so on)
+     * become the same kinds of that one. Not for a block that is not part of a material, such as glass.
+     */
+    private void chooseMaterial(String block) {
+        var found = blockById(block);
+        if (found == null || !dev.craftium.server.MaterialFamilies.applicable(found)) {
+            ClientState.notify(BlockPickerScreen.name(block) + " is not a material with stairs, slabs or other kinds");
+            return;
+        }
+        var material = dev.craftium.server.MaterialFamilies.index().slot(found).material();
+        var picker =
+                new BlockPickerScreen(this, "Change " + material.replaceFirst("^minecraft:", "") + " to", "", id -> {
+                    var chosen = blockById(id);
+                    if (chosen == null || !dev.craftium.server.MaterialFamilies.applicable(chosen))
+                        ClientState.notify(
+                                BlockPickerScreen.name(id) + " is not a material with stairs, slabs or other kinds");
+                    else CraftiumClient.send("change_material:" + block + ">" + id, null, null);
+                });
+        // Only blocks of a material with other kinds can be changed to
+        picker.limitedTo("materials", remembered(id -> {
+            var chosen = blockById(id);
+            return chosen != null && dev.craftium.server.MaterialFamilies.applicable(chosen);
+        }));
+        ClientCompat.setScreen(minecraft, picker);
+    }
+    /** Edit block state: set some states of every block of this kind in the selection, such as the half of all the stairs, leaving the states that were not set as they are. */
+    private void editSelectionState(String block) {
+        ClientCompat.setScreen(
+                minecraft, BlockStateScreen.changes(this, block, edited -> replaceInSelection(block, edited)));
+    }
+    /** Turns every block of one kind in the selection into another. Also what dropping a block on a cell of the Selection window does. */
+    private void replaceInSelection(String from, String to) {
+        if (from.isEmpty() || to.isEmpty() || from.equals(to)) return;
+        String action = "replace_block:" + from + ">" + to;
+        CraftiumClient.send(action, null, null);
     }
 
     private void openBlockMenu(BlockList list, int index) {
@@ -3464,6 +3700,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
 
     private static final String[] BLOCK_MENU_LABELS = {"Change", "Edit block state", "Remove"};
+    private static final String[] SELECTION_MENU_LABELS = {"Replace...", "Edit block state", "Change material"};
 
     private void toggleMaskBlock(String block) {
         if (!o().maskActive.remove(block)) o().maskActive.add(block);
@@ -3517,7 +3754,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
 
     private void maskMenu(Gfx g) {
-        String[] labels = BLOCK_MENU_LABELS;
+        String[] labels = menuLabels(ctxList);
         int rows = labels.length;
         g.fill(ctxX, ctxY, ctxX + MASK_MENU_WIDTH, ctxY + rows * MASK_MENU_ROW, 0xf5222d3b);
         g.outline(ctxX, ctxY, MASK_MENU_WIDTH, rows * MASK_MENU_ROW, LINE);
@@ -3950,6 +4187,11 @@ public final class EditorScreen extends CraftiumScreen {
                     },
                     "");
             if (!item.shortcut.isEmpty()) text(g, item.shortcut, x + 212 - font.width(item.shortcut), y + 8, MUTED);
+            if (item.checked) { // a tick at the right: this window is showing
+                int cx = x + 204, cy = y + 12;
+                ToolIcons.line(g, cx, cy, cx + 3, cy + 3, ACCENT);
+                ToolIcons.line(g, cx + 3, cy + 3, cx + 9, cy - 4, ACCENT);
+            }
             y += 25;
         }
     }
@@ -4085,8 +4327,61 @@ public final class EditorScreen extends CraftiumScreen {
             }
             case 9 -> {
                 var items = new ArrayList<MenuItem>();
-                for (String id : WorkspaceLayout.windows.keySet())
-                    items.add(item("Toggle " + id, "", () -> WorkspaceLayout.toggle(id)));
+                // Windows in groups, each with a tick while it is showing; the layout actions come last
+                String[][] groups = {
+                    {
+                        "tools",
+                        "Tools",
+                        "options",
+                        "Tool options",
+                        "masks",
+                        "Tool masks",
+                        "magic",
+                        "Magic select",
+                        "rulers",
+                        "Rulers",
+                        "shape",
+                        "Shape"
+                    },
+                    {
+                        "palette",
+                        "Block palette",
+                        "materials",
+                        "Materials",
+                        "selection",
+                        "Selection",
+                        "clipboard",
+                        "Clipboard",
+                        "hierarchy",
+                        "Hierarchy"
+                    },
+                    {
+                        "target",
+                        "Target info",
+                        "history",
+                        "History",
+                        "missing",
+                        "Missing blocks",
+                        "progress",
+                        "Large edit"
+                    }
+                };
+                for (String[] group : groups) {
+                    boolean any = false;
+                    for (int i = 0; i < group.length; i += 2) {
+                        String id = group[i];
+                        if (!WorkspaceLayout.windows.containsKey(id)) continue;
+                        if (!any && !items.isEmpty()) items.add(divider());
+                        any = true;
+                        items.add(new MenuItem(
+                                group[i + 1],
+                                "",
+                                () -> WorkspaceLayout.toggle(id),
+                                List.of(),
+                                WorkspaceLayout.visible(id)));
+                    }
+                }
+                items.add(divider());
                 items.add(item("Save layout", "", WorkspaceLayout::save));
                 items.add(item("Reset layout", "", WorkspaceLayout::reset));
                 items.add(
@@ -4227,7 +4522,28 @@ public final class EditorScreen extends CraftiumScreen {
                         o.invert,
                         () -> o.invert = true,
                         "Each click lowers the ground");
-                return y + 26;
+                toggle(
+                        g,
+                        10,
+                        y + 26,
+                        "Smear",
+                        o.smear,
+                        () -> o.smear = !o.smear,
+                        "Carry the top layers of the ground (grass and the dirt under it, sand and sandstone) with the surface instead of filling new ground with the block under it");
+                if (!o.smear) return y + 48;
+                slider(
+                        g,
+                        10,
+                        y + 64,
+                        pw - 20,
+                        "Smear depth",
+                        o.smearDepth,
+                        1,
+                        16,
+                        DEFAULTS.smearDepth,
+                        v -> o.smearDepth = (int) Math.clamp(Math.round(v), 1, 16),
+                        true);
+                return y + 74;
             }
             case FLATTEN -> {
                 toggle(
@@ -4304,7 +4620,26 @@ public final class EditorScreen extends CraftiumScreen {
                 }
                 y += 40;
             }
-            case FLUID_BLOCK -> {}
+            case FLUID_BLOCK -> {
+                text(g, "Shape", 10, y, MUTED);
+                var shapes = Options.PourShape.values();
+                for (int i = 0; i < shapes.length; i++) {
+                    var shape = shapes[i];
+                    String name =
+                            shape.name().charAt(0) + shape.name().substring(1).toLowerCase(Locale.ROOT);
+                    button(
+                            g,
+                            10 + i * (third + 4),
+                            y + 12,
+                            third,
+                            19,
+                            name,
+                            o.pourShape == shape,
+                            () -> o.pourShape = shape,
+                            "Spread the pour in a " + name.toLowerCase(Locale.ROOT));
+                }
+                return y + 40; // sized by its block count, not by a flow length
+            }
             default -> {
                 return y;
             }
@@ -4481,6 +4816,11 @@ public final class EditorScreen extends CraftiumScreen {
     /** The brush tools that paint along a stroke have a flow; a selection, or a shape that is put down and then built, does not. */
     private boolean flowShown() {
         return sizes() && !o().tool.selection() && o().tool != Tool.SHAPE;
+    }
+
+    /** Elevation and Flatten repeat while the button is held, each step adding to the last, so they have a flow too. Slope, Rock, Floodfill and the fluids are one click. */
+    private boolean terrainFlowShown() {
+        return o().tool == Tool.ELEVATION || o().tool == Tool.FLATTEN;
     }
 
     private int sizeHeight() {
@@ -5226,6 +5566,7 @@ public final class EditorScreen extends CraftiumScreen {
 
     /** The white circle around the cursor for the Paint and Sculpt brushes, as wide on the screen as the brush is at the block it points at. */
     private void brushRing(Gfx g, boolean steering) {
+        ScreenFootprint.view = null;
         if (steering
                 || !toolActive
                 || !BrushRing.shownFor(o().tool)
@@ -5248,14 +5589,47 @@ public final class EditorScreen extends CraftiumScreen {
             perBlock = pixelsPerBlock(target());
         }
         if (perBlock <= 0) return;
+        publishFootprintView(cx, cy, (o().radius + .5) * perBlock, perBlock);
         // The brush reaches radius blocks from the middle of the block, so the circle passes through the outer edge of
         // those blocks.
-        // Drawn in screen pixels, not interface units, so a pixel of the line is a pixel of the screen when the
-        // interface is scaled up.
+        // Drawn in pixels of the screen, not interface units, so a pixel of the line is one pixel of the screen at
+        // every interface scale (the GUI scale and the half steps of the interface size): the pose is scaled back
+        // down by the pixels in a unit and the ring is worked out in those pixels.
+        var window = minecraft.getWindow();
+        double pixels = InterfaceScale.pixels(minecraft) * window.getWidth() / window.getScreenWidth();
         g.pose().pushMatrix();
-        g.pose().scale(1 / (float) scale, 1 / (float) scale);
-        BrushRing.draw(g, cx, cy, (o().radius + .5) * perBlock);
+        g.pose().scale((float) (1 / pixels), (float) (1 / pixels));
+        BrushRing.draw(
+                g,
+                cx * pixels,
+                cy * pixels,
+                (o().radius + .5) * perBlock * pixels,
+                window.getWidth(),
+                window.getHeight());
         g.pose().popMatrix();
+    }
+
+    /** Tells the preview where the ring is and how the camera sees it, so the Surface Painters can show the blocks inside it. */
+    private void publishFootprintView(double cx, double cy, double radius, double perBlock) {
+        if (!o().tool.screenBrush()) return;
+        var camera = ClientCompat.camera(minecraft);
+        var plane = ClientCompat.nearPlane(camera);
+        Vec3 centre = plane.getPointOnPlane(0, 0);
+        double focal = height / (2 * Math.tan(Math.toRadians(ClientCompat.fov(minecraft, camera)) / 2));
+        ScreenFootprint.view = new ScreenFootprint.View(
+                camera.position(),
+                centre.normalize(),
+                plane.getPointOnPlane(1, 0).subtract(centre).normalize(),
+                plane.getPointOnPlane(0, 1).subtract(centre).normalize(),
+                focal,
+                width / 2d,
+                height / 2d,
+                cx,
+                cy,
+                radius,
+                focal / perBlock,
+                width,
+                height);
     }
 
     /** How many screen pixels wide a block is at the point {@code hit} aims at, or 0 when there is no such point or it is behind the camera. */
@@ -5296,11 +5670,14 @@ public final class EditorScreen extends CraftiumScreen {
     private long lastUseSent;
     /** How long a stroke waits between one application of the brush and the next: 140 ms at the default flow of 25, longer for less, 35 ms at 100. */
     private long useInterval() {
-        return flowShown()
+        return flowShown() || terrainFlowShown()
                 ? Math.round(
                         140.0 * Options.FLOW_DEFAULT / Math.clamp(o().brushFlow, Options.FLOW_MIN, Options.FLOW_MAX))
                 : 140;
     }
+
+    /** Where the pointer was when the last step of a screen-space stroke was sent. */
+    private double lastDragX, lastDragY;
 
     private void dragUse() {
         if (!o().tool.selection()) {
@@ -5308,7 +5685,14 @@ public final class EditorScreen extends CraftiumScreen {
             return;
         }
         var hit = target();
-        if (hit == null || hit.getBlockPos().equals(lastDragged)) return;
+        if (hit == null) return;
+        // A screen-space brush covers what the ring shows, which changes as the pointer moves over one block as much as
+        // across several: a step is a quarter of the ring, not a new block.
+        var ring = ScreenFootprint.active(o());
+        boolean moved = ring == null
+                ? !hit.getBlockPos().equals(lastDragged)
+                : Math.hypot(pointerX - lastDragX, pointerY - lastDragY) >= Math.max(4, ring.radius() / 4);
+        if (!moved) return;
         long now = System.currentTimeMillis();
         // A reply that never comes must not stall the drag for good, so a request is given up on after a quarter of a
         // second.
@@ -5318,6 +5702,8 @@ public final class EditorScreen extends CraftiumScreen {
         }
         useQueued = false;
         lastDragged = hit.getBlockPos();
+        lastDragX = pointerX;
+        lastDragY = pointerY;
         lastUseSent = now;
         use();
     }
@@ -5417,8 +5803,17 @@ public final class EditorScreen extends CraftiumScreen {
             if (x >= ctxX
                     && x < ctxX + MASK_MENU_WIDTH
                     && y >= ctxY
-                    && y < ctxY + BLOCK_MENU_LABELS.length * MASK_MENU_ROW
-                    && cell < blocksOf(ctxList).size()) {
+                    && y < ctxY + menuLabels(ctxList).length * MASK_MENU_ROW
+                    && (ctxList == BlockList.SELECTION
+                            || cell < blocksOf(ctxList).size())) {
+                if (ctxList == BlockList.SELECTION) {
+                    switch ((int) ((y - ctxY) / MASK_MENU_ROW)) {
+                        case 0 -> chooseReplacement(ctxBlock);
+                        case 1 -> editSelectionState(ctxBlock);
+                        default -> chooseMaterial(ctxBlock);
+                    }
+                    return true;
+                }
                 switch ((int) ((y - ctxY) / MASK_MENU_ROW)) {
                     case 0 -> changeBlock(ctxList, cell);
                     case 1 -> editBlockState(ctxList, cell);
@@ -5757,6 +6152,8 @@ public final class EditorScreen extends CraftiumScreen {
             painting = true;
             ClientState.strokeId = System.nanoTime();
             lastDragged = null;
+            lastDragX = event.x();
+            lastDragY = event.y();
             useQueued = false;
             if (!Interactions.of(o().tool).pressed(context, event.x(), event.y())) use();
         }
@@ -6065,6 +6462,10 @@ public final class EditorScreen extends CraftiumScreen {
         } // clamped when drawn
         if (panels && WorkspaceLayout.hit(x / scale, y / scale, false).equals("materials")) {
             materialsScroll = Math.max(0, materialsScroll + (vertical < 0 ? 1 : -1));
+            return true;
+        } // clamped when drawn
+        if (panels && WorkspaceLayout.hit(x / scale, y / scale, false).equals("selection")) {
+            selectionScroll = Math.max(0, selectionScroll + (vertical < 0 ? 1 : -1));
             return true;
         } // clamped when drawn
         if (panels && WorkspaceLayout.hit(x / scale, y / scale, false).equals("masks")) {
@@ -6780,10 +7181,40 @@ public final class EditorScreen extends CraftiumScreen {
         text(g, time, x + 10, y + 76, MUTED);
     }
 
+    /** The tool the Shape window last opened for: it opens when the Shape tool is chosen, and is then the player's to close. */
+    private Tool shapePanelFor;
+    /** The Shape tool's small window, at the bottom right: settings of the shape that has no place in the tool options. */
+    private void shapePanel(Gfx g) {
+        if (!(toolActive && o().tool == Tool.SHAPE || ShapeObject.active())) {
+            shapePanelFor = null;
+            return; // only while the Shape tool is in hand, or a shape is waiting to be built
+        }
+        int x = w - RIGHT - 244, y = h - 25 - 52 - 6; // the bottom right, left of the right-hand column
+        panel(g, x, y, 236, 52, "Shape");
+        if (shapePanelFor != Tool.SHAPE) {
+            shapePanelFor = Tool.SHAPE;
+            var window = WorkspaceLayout.windows.get("shape");
+            if (window != null && !window.visible) {
+                window.visible = true;
+                WorkspaceLayout.save();
+            }
+        }
+        button(
+                g,
+                x + 10,
+                y + 25,
+                pw - 20,
+                19,
+                "Reset rotation",
+                false,
+                ShapeObject::resetRotation,
+                "Take the turn off the shape, and off the shapes put down after it");
+    }
+
     private void rulerPanel(Gfx g) {
         if (ClientState.rulers.isEmpty() && !(toolActive && o().tool == Tool.RULER))
             return; // there is nothing to list until a ruler is made
-        int x = w - RIGHT - 244, y = 27; // just left of the right-hand panels, clear of the viewport tools
+        int x = LEFT + 8, y = h - 25 - 230 - 6; // the bottom left, beside the left column
         panel(g, x, y, 236, 230, "Rulers");
         if (!o().rulersIntroduced) { // the first time a ruler is used the window comes up, once; after that it is the
             // player's to open and close

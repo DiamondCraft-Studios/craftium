@@ -25,7 +25,7 @@ import net.minecraft.world.phys.*;
 import org.lwjgl.glfw.GLFW;
 
 public final class CraftiumClient implements ClientModInitializer {
-    public static KeyMapping editorKey, contextKey, swapKey, replaceKey;
+    public static KeyMapping editorKey, contextKey, swapKey, replaceKey, replaceMaterialKey;
     public static final java.util.Map<Tool, KeyMapping> toolKeys = new java.util.EnumMap<>(Tool.class);
     private long lastBuilder;
     private long breakingSince, tinkerAt;
@@ -55,6 +55,8 @@ public final class CraftiumClient implements ClientModInitializer {
                 new KeyMapping("key.craftium.hotbar", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
         replaceKey = ClientCompat.registerKey(
                 new KeyMapping("key.craftium.replace", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, category));
+        replaceMaterialKey = ClientCompat.registerKey(new KeyMapping(
+                "key.craftium.replace_material", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
         for (Tool tool : Tool.values()) {
             var spec = tool.spec();
             toolKeys.put(
@@ -204,6 +206,9 @@ public final class CraftiumClient implements ClientModInitializer {
         SelectionOverlay.update("");
     }
     /** How far away another player's AI preview is still drawn, in blocks: past this it is out of sight, and drawing it costs a frame. */
+    /** The pending data the waiting edit was last made from. */
+    private static String pendingJson;
+
     private static final double SHARED_RANGE = 192;
 
     static void receiveStatus(String json) {
@@ -251,7 +256,8 @@ public final class CraftiumClient implements ClientModInitializer {
             else SelectionOverlay.update(next.selectionData());
             PlacementPreview.update(next.clipboardData());
             PlacementPreview.updateGhost(next.clipboardGhost());
-            ClientState.pending = GhostBlocks.parse(next.pendingData());
+            ClientState.pending = GhostBlocks.parse(next.pendingData(), pendingJson, ClientState.pending);
+            pendingJson = next.pendingData();
             ClientState.updateAiSessions(next);
             if (next.entityUuid() != null && !next.entityUuid().isBlank()) {
                 ClientState.options.entityUuid = next.entityUuid();
@@ -389,6 +395,15 @@ public final class CraftiumClient implements ClientModInitializer {
             ClientState.options.replaceMode = !ClientState.options.replaceMode;
             ClientCompat.overlayMessage(
                     mc, "Replace mode " + (ClientState.options.replaceMode ? "enabled" : "disabled"));
+            mc.getSoundManager()
+                    .play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                            net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
+            ClientState.save();
+        }
+        while (replaceMaterialKey.consumeClick()) {
+            ClientState.options.replaceMaterial = !ClientState.options.replaceMaterial;
+            ClientCompat.overlayMessage(
+                    mc, "Replace material " + (ClientState.options.replaceMaterial ? "enabled" : "disabled"));
             mc.getSoundManager()
                     .play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
                             net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
@@ -617,7 +632,7 @@ public final class CraftiumClient implements ClientModInitializer {
         var o = ClientState.options;
         String key = o.symmetryX + "," + o.symmetryY + "," + o.symmetryZ + "," + o.symmetryRotations + ","
                 + o.symmetryOrigin + "," + o.symmetryHalfX + o.symmetryHalfY + o.symmetryHalfZ + "," + o.replaceMode
-                + o.forcePlace + o.noUpdates + o.fastPlace + o.reach + o.farReach + o.angelPlacement
+                + o.replaceMaterial + o.forcePlace + o.noUpdates + o.fastPlace + o.reach + o.farReach + o.angelPlacement
                 + o.preventInteractions + o.noClip + o.blockStep;
         if (key.equals(placementSynced)) return;
         placementSynced = key;
@@ -743,6 +758,13 @@ public final class CraftiumClient implements ClientModInitializer {
                 || options.maskScript.contains("findClosestBlockToRGB");
         options.scriptColours =
                 colours ? new java.util.ArrayList<>(BlockColours.snapshot()) : new java.util.ArrayList<>();
+        // A screen-space stroke names the blocks the ring covers, as the preview shows them.
+        var ring = action.equals("use") && target != null ? ScreenFootprint.active(options) : null;
+        var mc = Minecraft.getInstance();
+        options.screenBlocks = ring == null || mc.level == null
+                ? ""
+                : dev.craftium.core.BlockList.encode(ScreenFootprint.covered(
+                        mc.level, options, new net.minecraft.core.BlockPos(target.x(), target.y(), target.z()), ring));
         ClientAssets.expect(action);
         if (action.equals("select_box")
                 || action.equals("lasso_select")
@@ -773,6 +795,7 @@ public final class CraftiumClient implements ClientModInitializer {
                     ClientPlayNetworking.send(new Packets.Bridge(frame));
         } finally {
             options.scriptColours = new java.util.ArrayList<>();
+            options.screenBlocks = "";
             options.modifyTranslateScale = scale;
         }
     }
@@ -1134,6 +1157,13 @@ public final class CraftiumClient implements ClientModInitializer {
                         screen.handleAxis() == axis ? 4 : 2);
         }
     }
+    /** Whether the waiting edit is drawn with an outline round the blocks it places: always for the Shape tool, and for the Paint, Sculpt and Terrain tools unless the player turned block preview outlines off. */
+    static boolean outlinesBlocks(dev.craftium.core.Options o) {
+        if (o.tool == Tool.SHAPE) return true;
+        return o.blockPreviewOutline
+                && (o.tool.group.equals("Paint") || o.tool.group.equals("Sculpt") || o.tool.group.equals("Terrain"));
+    }
+
     /** What the world shows for the editor this tick; package-private so the overlay test can record it. */
     static void preview(Minecraft mc) {
         var screen = ClientCompat.screen(mc) instanceof EditorScreen editor
@@ -1164,10 +1194,8 @@ public final class CraftiumClient implements ClientModInitializer {
             ClientState.pending.draw(
                     new Point(0, 0, 0),
                     true,
-                    ClientState.options.tool
-                            == dev.craftium.core.Tool
-                                    .SHAPE); // the waiting edit: its blocks only, but with the outline for the Shape
-            // tool
+                    outlinesBlocks(ClientState.options)); // the waiting edit: its blocks only, but with the outline for
+            // the Shape tool and the Paint, Sculpt and Terrain tools
             ClientState.pluginPending.draw(new Point(0, 0, 0), true);
             drawAiSessions(mc);
             // The AI previews other players are holding, in their own colour and with the owner's name, as far away as

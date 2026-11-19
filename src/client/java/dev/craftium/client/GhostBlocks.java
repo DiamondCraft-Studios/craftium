@@ -61,15 +61,19 @@ final class GhostBlocks {
         replacedOrigin = origin;
         replacedAt = tick;
         if (!out.equals(replacedPlaces))
-            replacedShape = OutlineShape.ofLater(out.stream()
-                    .map(p -> new Point(p.getX(), p.getY(), p.getZ()))
-                    .toList());
+            replacedShape = OutlineShape.ofLater(
+                    out.stream()
+                            .map(p -> new Point(p.getX(), p.getY(), p.getZ()))
+                            .toList(),
+                    replacedShape);
         return replacedPlaces = out;
     }
 
     private OutlineShape replacedShape = OutlineShape.EMPTY;
     /** The red the Paint and Sculpt tools show what they take away in, whatever the preferences' tint for removed blocks is. */
     private static final int GONE_RED = 0x80ff3030;
+    /** The Terrain tools' removed blocks: a quarter red, lighter than the blocks they build, with no outline. */
+    private static final int GONE_RED_LIGHT = 0x40ff3030;
 
     /** Set on a preview an AI app made, which is drawn in violet so it is never taken for one of the player's own edits. */
     boolean ai;
@@ -118,6 +122,22 @@ final class GhostBlocks {
 
     private GhostBlocks(Data data) {
         this.data = data;
+    }
+
+    /**
+     * The waiting edit from a status, as {@code previous} was made from {@code previousJson}: the same one when nothing changed, so its outline is not
+     * worked out again at every status, and otherwise a new one that keeps drawing the old outlines until its own are ready, so a stroke held down
+     * and changing all the time does not blink.
+     */
+    static GhostBlocks parse(String json, String previousJson, GhostBlocks previous) {
+        if (previous != null && previous != EMPTY && Objects.equals(json, previousJson)) return previous;
+        var next = parse(json);
+        if (next != EMPTY && previous != null && previous != EMPTY) {
+            next.placedShape = previous.placedShape;
+            next.removedShape = previous.removedShape;
+            next.replacedShape = previous.replacedShape;
+        }
+        return next;
     }
 
     static GhostBlocks parse(String json) {
@@ -185,11 +205,11 @@ final class GhostBlocks {
         }
         relative = points;
         states = list;
-        placedShape = OutlineShape.ofLater(points);
+        placedShape = OutlineShape.ofLater(points, placedShape);
         var gone = new ArrayList<Point>();
         int[] r = data.removed();
         for (int i = 0; i + 2 < r.length; i += 3) gone.add(new Point(r[i], r[i + 1], r[i + 2]));
-        removedShape = OutlineShape.ofLater(gone);
+        removedShape = OutlineShape.ofLater(gone, removedShape);
         removedPlaces =
                 gone.stream().map(p -> new BlockPos(p.x(), p.y(), p.z())).toList();
         return true;
@@ -285,10 +305,12 @@ final class GhostBlocks {
                                     : ai ? dev.craftium.core.AiSessions.shade(o.aiFill, slot) : o.hoverFill;
             if (!placedShape.isEmpty())
                 placedShape.drawPlain(at, line, (float) ClientState.options.selectionWidth, fill, true, false);
-            if (!removedShape.isEmpty()) removedShape.drawFill(at, ClientState.options.removedFill);
+            if (!removedShape.isEmpty() && !redRemoved) removedShape.drawFill(at, ClientState.options.removedFill);
         }
         if (!removedPlaces.isEmpty() && outline)
-            Overlay.blocks(removedPlaces, tintReplaced || redRemoved ? GONE_RED : ClientState.options.removedTint);
+            Overlay.blocks(
+                    removedPlaces,
+                    redRemoved ? GONE_RED_LIGHT : tintReplaced ? GONE_RED : ClientState.options.removedTint);
         if (states.isEmpty()) return;
         if (cachedPlaces == null || !origin.equals(cachedOrigin)) {
             var places = new ArrayList<BlockPos>(relative.size());
@@ -300,7 +322,8 @@ final class GhostBlocks {
         if (tintReplaced && outline) {
             var gone = replaced(origin);
             if (!gone.isEmpty()) Overlay.blocks(gone, GONE_RED);
-            if (!replacedShape.isEmpty()) replacedShape.drawFill(Vec3.ZERO, ClientState.options.removedFill | 0x44000000);
+            if (!replacedShape.isEmpty())
+                replacedShape.drawFill(Vec3.ZERO, ClientState.options.removedFill | 0x44000000);
             if (!removedShape.isEmpty()) removedShape.drawFill(at, ClientState.options.removedFill | 0x44000000);
         }
         // A preview can hold far more blocks than a frame can draw as models; the server sends the visible ones first,

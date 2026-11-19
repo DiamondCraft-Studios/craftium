@@ -154,6 +154,7 @@ class WireCompatibilityTest {
         floodHorizontal primitive
         floodUp primitive
         flowLength primitive
+        fluidBlocks primitive
         fluidHeight primitive
         fluidQuality primitive
         fluidType primitive
@@ -272,6 +273,7 @@ class WireCompatibilityTest {
         removeFluidsWithoutSources primitive
         removedFill primitive
         removedTint primitive
+        replaceMaterial primitive
         replaceMode primitive
         requireSupport primitive
         roll primitive
@@ -290,6 +292,8 @@ class WireCompatibilityTest {
         scaleX primitive
         scaleY primitive
         scaleZ primitive
+        screenBlocks primitive
+        screenSpace primitive
         script primitive
         scriptColours array
         scriptVariables object
@@ -349,6 +353,8 @@ class WireCompatibilityTest {
         slack primitive
         smartExtrude primitive
         smoothFixEdges primitive
+        smear primitive
+        smearDepth primitive
         smoothMode primitive
         smoothRatio primitive
         smoothing primitive

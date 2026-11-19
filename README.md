@@ -42,18 +42,20 @@ The editor scales to Minecraft GUI settings. A 1280 × 720 or larger window is r
 | Ctrl + Z / Y | Undo / redo |
 | Ctrl + C / X / V / J | Copy / cut / paste / duplicate |
 | Ctrl + P / B | Save blueprint dialog / show biome borders |
-| Ctrl + F / R | Fill / replace selection; flip / rotate placement |
+| Ctrl + Shift + F / R | Fill / replace selection |
+| Ctrl + R / F | Rotate / flip placement |
 | E with a Path or Modelling point | Extrude previous point |
 | Arrows / Page Up / Page Down | Camera-relative horizontal gizmo nudges / +Y / −Y |
 | Enter | Confirm placement or geometry, otherwise clear selection |
 | Delete / Backspace | Cancel placement, otherwise delete selected blocks |
 | R outside editor | Toggle Replace Mode |
+| Y outside editor | Toggle Replace Material |
 
 Defaults follow Axiom's published documentation. Other tools and Craftium-only shortcuts start unbound. **View → Keybinds** edits editor chords and mouse gestures; **Tools & Minecraft controls** edits native mappings. The inspector and panel controls remain accessible through View. See the [controls audit](docs/KEYBINDS.md) for upgrade behavior, sources and remaining differences. **View → Colour picker / gradient** opens texture-colour matching and the nine-slot gradient helper.
 
 ## Getting started
 
-Choose Box Select and right-click two opposite corners. Pick a block in the palette or type a block identifier, then press **Ctrl+F** to fill. Ctrl+Z reverses the change. The inspector's Selection tab supports coordinate entry, comparison modes and selection modification.
+Choose Box Select and right-click two opposite corners. Pick a block in the palette or type a block identifier, then press **Ctrl+Shift+F** to fill. Ctrl+Z reverses the change. The inspector's Selection tab supports coordinate entry, comparison modes and selection modification.
 
 Copy with Ctrl+C, point at the destination and press Ctrl+V. A translucent voxel outline appears without placing blocks. Drag its axis lines or use the camera-relative arrow keys, or right-click another surface to reposition it. Enter confirms; Delete or Escape cancels. The inspector's Placement tab provides snap-to-ground, paste-copy, paste-and-select, shape merging and nearest-neighbour rotation/scaling. Representable facing, axis, half and connection properties turn with the geometry. Vanilla blocks still have only their legal discrete orientations; unsupported variants use a legal approximation.
 

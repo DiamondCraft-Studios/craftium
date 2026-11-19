@@ -227,6 +227,7 @@ public final class StudioScreen extends CraftiumScreen {
                         "showAnnotations",
                         "bulldozer",
                         "replaceMode",
+                        "replaceMaterial",
                         "forcePlace",
                         "noUpdates",
                         "tinker",

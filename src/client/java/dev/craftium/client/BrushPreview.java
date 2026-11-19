@@ -25,6 +25,12 @@ public final class BrushPreview {
     private static int shownBlocks;
     private static List<Object> key = List.of();
     private static SceneShape shape = SceneShape.EMPTY;
+    /** The blocks the brush would take away, drawn apart from the rest in a lighter red. */
+    private static SceneShape removedShape = SceneShape.EMPTY;
+    /** The alpha of the removed blocks' faces: a quarter, lighter than the destination's. */
+    private static final int REMOVED_ALPHA = 0x40000000;
+
+    private static final int REMOVED_COLOR = 0xff3030;
     private static boolean tooLarge;
 
     private BrushPreview() {}
@@ -36,7 +42,12 @@ public final class BrushPreview {
     /** {@code face} is the side of the block under the cursor that is aimed at, which the sculpting tools build out from. */
     public static void draw(Minecraft mc, BlockPos at, net.minecraft.core.Direction face, Options o) {
         if (mc.level == null) return;
-        var normal = new Point(face.getStepX(), face.getStepY(), face.getStepZ());
+        // Only the sculpting tools, which build out from the aimed face or keep to its side, need it. For the rest it
+        // must not be in the key: with the camera inside a block the hit face follows the look direction, and every
+        // turn would otherwise work the whole preview out again.
+        var normal = dev.craftium.core.BrushRules.keepsToFront(o.tool)
+                ? new Point(face.getStepX(), face.getStepY(), face.getStepZ())
+                : new Point(0, 1, 0);
         var now = List.<Object>of(
                 o.tool.brushUse(),
                 o.shape,
@@ -57,7 +68,7 @@ public final class BrushPreview {
                 o.sizeZ,
                 sculpts(o.tool) ? rockKey(o) : 0,
                 normal,
-                at,
+                screenView(o) == null ? at : screenView(o).key(),
                 shownBlocks > Selection.LIMIT
                         ? 0
                         : mc.level.getGameTime() / 20); // a huge brush is not worked out again every second
@@ -75,11 +86,17 @@ public final class BrushPreview {
             return;
         }
         int fill = o.hoverColor & 0xffffff | SceneShape.FACE_ALPHA;
-        shape.draw(
+        shape.drawLean(
                 fill,
                 o.hoverColor,
                 (float) o.selectionWidth,
                 0); // dim faces on the ground, the selection's silhouette in the air
+        removedShape.draw(REMOVED_COLOR | REMOVED_ALPHA, REMOVED_COLOR | 0xff000000, (float) o.selectionWidth, 0);
+    }
+
+    /** The ring on the screen when the Surface (Noise) Painter is in use, whose blocks are those the ring shows rather than a shape around the block under it. */
+    private static ScreenFootprint.View screenView(Options o) {
+        return ScreenFootprint.active(o);
     }
 
     /** The blocks of {@code cells} that the Surface Painter would paint, as the server picks them: solid blocks, only those touching a non-solid block when Surface only is on, only inside the selection when the tool is restricted to it, and those the masks let through. */
@@ -99,13 +116,24 @@ public final class BrushPreview {
     /** The tools whose blocks are picked by a rule, so the preview draws only what changes. */
     private static boolean sculpts(dev.craftium.core.Tool tool) {
         return switch (tool) {
-            case ROCK, WELD, MELT, ROUGHEN, SHATTER, DISTORT, SCULPT_DRAW -> true;
+            case ROCK, WELD, MELT, ROUGHEN, SHATTER, DISTORT, SCULPT_DRAW, SMOOTH -> true;
             default -> false;
         };
     }
 
     /** The blocks Weld, Melt, Roughen, Shatter, Distort or Sculpt Draw would change in the brush, by the rules the server builds with. */
-    private static List<Point> sculpted(
+    private static final Point[] SIDES = {
+        new Point(1, 0, 0),
+        new Point(-1, 0, 0),
+        new Point(0, 1, 0),
+        new Point(0, -1, 0),
+        new Point(0, 0, 1),
+        new Point(0, 0, -1)
+    };
+
+    private record Changes(List<Point> added, List<Point> removed) {}
+
+    private static Changes sculpted(
             net.minecraft.world.level.Level level, List<Point> cells, BlockPos at, Point normal, Options o) {
         var mask = new PaintMask(level, o);
         var memo = new HashMap<Point, Boolean>();
@@ -121,36 +149,103 @@ public final class BrushPreview {
         var noise = new dev.craftium.core.NoiseField(o);
         var centre = new Point(at.getX(), at.getY(), at.getZ());
         var changed = new LinkedHashSet<Point>();
-        for (Point p : cells) {
-            switch (o.tool) {
-                case WELD -> {
-                    if (dev.craftium.core.BrushRules.weld(p, o, world)) changed.add(p);
+        var gone = new LinkedHashSet<Point>();
+        var inside = new HashSet<>(cells);
+        var front = dev.craftium.core.BrushRules.keepsToFront(o.tool)
+                ? dev.craftium.core.BrushRules.front(
+                        inside, centre, normal, world, dev.craftium.core.BrushRules.reach(o))
+                : null;
+        var measured = front == null ? world : front.filled(world);
+        if (o.tool == dev.craftium.core.Tool.SMOOTH) smoothed(level, cells, front, o, mask, world, changed, gone);
+        else
+            for (Point p : cells) {
+                if (front != null && !front.contains(p)) continue;
+                switch (o.tool) {
+                    case WELD -> {
+                        if (dev.craftium.core.BrushRules.weld(p, o, measured)) changed.add(p);
+                    }
+                    case MELT -> {
+                        if (dev.craftium.core.BrushRules.melt(p, o, measured)) gone.add(p);
+                    }
+                    case SHATTER -> {
+                        if (dev.craftium.core.BrushRules.shatter(p, o, world))
+                            (o.fractureMaterial ? changed : gone).add(p);
+                    }
+                    case ROUGHEN -> {
+                        var target = dev.craftium.core.BrushRules.roughen(p, o, world, noise.sample(p));
+                        if (target != null && (front == null || front.contains(target) || !inside.contains(target)))
+                            (target.equals(p) ? gone : changed).add(target);
+                    }
+                    case SCULPT_DRAW ->
+                        (o.invert ? gone : changed)
+                                .addAll(dev.craftium.core.BrushRules.sculpt(p, centre, normal, o, world));
+                    case DISTORT -> {
+                        var source = dev.craftium.core.BrushRules.distortSource(p, centre, o, noise);
+                        if (level.getBlockState(new BlockPos(p.x(), p.y(), p.z()))
+                                != level.getBlockState(new BlockPos(source.x(), source.y(), source.z())))
+                            changed.add(p);
+                    }
+                    default -> {}
                 }
-                case MELT -> {
-                    if (dev.craftium.core.BrushRules.melt(p, o, world)) changed.add(p);
-                }
-                case SHATTER -> {
-                    if (dev.craftium.core.BrushRules.shatter(p, o, world)) changed.add(p);
-                }
-                case ROUGHEN -> {
-                    var target = dev.craftium.core.BrushRules.roughen(p, o, world, noise.sample(p));
-                    if (target != null) changed.add(target);
-                }
-                case SCULPT_DRAW -> changed.addAll(dev.craftium.core.BrushRules.sculpt(p, centre, normal, o, world));
-                case DISTORT -> {
-                    var source = dev.craftium.core.BrushRules.distortSource(p, centre, o, noise);
-                    if (level.getBlockState(new BlockPos(p.x(), p.y(), p.z()))
-                            != level.getBlockState(new BlockPos(source.x(), source.y(), source.z()))) changed.add(p);
-                }
-                default -> {}
             }
-        }
-        var kept = new ArrayList<Point>(changed.size());
-        for (Point p : changed) {
+        return new Changes(keep(changed, o, mask), keep(gone, o, mask));
+    }
+
+    private static List<Point> keep(Collection<Point> points, Options o, PaintMask mask) {
+        var kept = new ArrayList<Point>(points.size());
+        for (Point p : points) {
             if (o.inSelection && !SelectionOverlay.contains(new BlockPos(p.x(), p.y(), p.z()))) continue;
             if (mask.allows(p)) kept.add(p);
         }
         return kept;
+    }
+
+    /** Smooth as the server runs it: the brush's blocks are ranked by how much solid surrounds them, and as many as the solid ones times the ratio stay (or become) solid. */
+    private static void smoothed(
+            net.minecraft.world.level.Level level,
+            List<Point> cells,
+            dev.craftium.core.BrushRules.Front front,
+            Options o,
+            PaintMask mask,
+            dev.craftium.core.BrushRules.Cells world,
+            Set<Point> added,
+            Set<Point> removed) {
+        var inside = new HashSet<>(cells);
+        var candidates = new ArrayList<Point>();
+        int filled = 0;
+        for (Point at : cells) {
+            if (front != null && !front.contains(at)) continue;
+            if (!mask.allows(at)
+                    || level.getBlockState(new BlockPos(at.x(), at.y(), at.z())).hasBlockEntity()) continue;
+            if (o.inSelection && !SelectionOverlay.contains(new BlockPos(at.x(), at.y(), at.z()))) continue;
+            if (o.smoothFixEdges) {
+                boolean edge = false;
+                for (Point n : SIDES)
+                    if (!inside.contains(at.add(n.x(), n.y(), n.z()))) {
+                        edge = true;
+                        break;
+                    }
+                if (edge) continue;
+            }
+            candidates.add(at);
+            if (world.solid(at)) filled++;
+        }
+        double solidBias = o.smoothMode == Options.SmoothMode.MELT ? -.05 : .01,
+                airBias = o.smoothMode == Options.SmoothMode.GROW ? .05 : 0;
+        var measured = front == null ? world : front.filled(world);
+        var density = new HashMap<Point, Double>();
+        for (Point at : candidates)
+            density.put(
+                    at,
+                    dev.craftium.core.BrushRules.density(at, o, measured) + (world.solid(at) ? solidBias : airBias));
+        candidates.sort(Comparator.<Point>comparingDouble(density::get).reversed());
+        int count = (int) Math.clamp(Math.round(filled * o.smoothRatio / 100d), 0, candidates.size());
+        for (int i = 0; i < candidates.size(); i++) {
+            Point at = candidates.get(i);
+            if (i < count) {
+                if (!world.solid(at)) added.add(at);
+            } else if (world.solid(at)) removed.add(at);
+        }
     }
 
     /** Everything the boulder's shape depends on besides the brush, so changing any of it redraws the preview. */
@@ -213,9 +308,24 @@ public final class BrushPreview {
         return count;
     }
 
+    /** Where the shape was last built, and what it was, so a rebuild in the same place can keep its contour. */
+    private static BlockPos builtAt;
+
     private static void rebuild(Minecraft mc, BlockPos at, Point normal, Options o) {
+        var previous = shape;
         shape = SceneShape.EMPTY;
+        removedShape = SceneShape.EMPTY;
         tooLarge = false;
+        var view = screenView(o);
+        if (view != null) { // the blocks the ring covers on the screen, whatever shape is picked
+            var seen = ScreenFootprint.covered(mc.level, o, at, view);
+            shownBlocks = seen.size();
+            removedShape = SceneShape.EMPTY;
+            shape = SceneShape.of(mc.level, paintable(mc.level, seen, o), true);
+            builtAt = null; // the footprint moves with the pointer: no old contour to keep
+            tooLarge = shape.tooLarge();
+            return;
+        }
         List<Point> relative;
         // A brush over the block limit is refused by the server too, so there is no set of blocks to show.
         // Each tool is shown the way it builds: the picked shape, a line or path's small shape, or just a disc or a
@@ -300,9 +410,24 @@ public final class BrushPreview {
         for (Point r : relative) absolute.add(new Point(at.getX() + r.x(), at.getY() + r.y(), at.getZ() + r.z()));
         if (o.tool == dev.craftium.core.Tool.PAINTER || o.tool == dev.craftium.core.Tool.NOISE_PAINTER)
             absolute = paintable(mc.level, absolute, o); // only what the Surface (Noise) Painter would paint
-        if (o.tool == dev.craftium.core.Tool.ROCK) absolute = rock(mc.level, absolute, at, o);
-        else if (sculpts(o.tool)) absolute = sculpted(mc.level, absolute, at, normal, o);
-        shape = SceneShape.of(mc.level, absolute, true); // outlined all round like a selection, solid blocks too
+        List<Point> removed = List.of();
+        if (o.tool == dev.craftium.core.Tool.ROCK) {
+            absolute = rock(mc.level, absolute, at, o);
+            if (o.invert) { // an inverted rock only carves
+                removed = absolute;
+                absolute = List.of();
+            }
+        } else if (sculpts(o.tool)) {
+            var changes = sculpted(mc.level, absolute, at, normal, o);
+            absolute = changes.added();
+            removed = changes.removed();
+        }
+        removedShape = SceneShape.of(mc.level, removed); // faces only, no outline
+        var rebuilt = SceneShape.of(mc.level, absolute, true); // outlined all round like a selection, solid blocks too
+        // Worked out again in the same place (the world changed under a held brush): keep the old contour until the new
+        // one is ready.
+        shape = at.equals(builtAt) ? rebuilt.carryOver(previous) : rebuilt;
+        builtAt = at;
         tooLarge = shape.tooLarge();
     }
 }

@@ -12,15 +12,6 @@ final class ClickInteraction implements Interaction {
         return false;
     }
 
-    /** Flatten with "From click" on takes its level from the block the stroke starts on, and keeps that level while the button is held. */
-    @Override
-    public void strokeBegan(EditorContext editor) {
-        var o = editor.options();
-        var hit = editor.target();
-        if (o.tool == Tool.FLATTEN && o.flattenPick && hit != null)
-            o.flattenY = hit.getBlockPos().getY();
-    }
-
     /** The biome under the cursor, named over the block, for the two tools that paint biomes when the option is on; then the brush outline. */
     @Override
     public void drawWorld(EditorContext editor, Minecraft mc, BlockHitResult hit) {

@@ -76,17 +76,15 @@ public final class BuilderEdits {
             }
             ChunkLease.planning(area.lease(player.level()));
         }
-        var source = new LinkedHashMap<Point, BlockSnapshot>();
         Point shift = o.builderOffset;
-        for (Point at : points) {
-            p.validate(at);
-            source.put(at, BlockSnapshot.capture(player.level(), EditPlanner.pos(at)));
-        }
+        for (Point at : points) p.validate(at);
         if (o.builderTool == Options.BuilderTool.ERASE) {
             for (Point at : points) p.put(at, Blocks.AIR.defaultBlockState());
             return p.finish("Erase builder selection");
         }
         if (o.builderTool == Options.BuilderTool.SMEAR) {
+            var source = new LinkedHashMap<Point, BlockSnapshot>();
+            for (Point at : points) source.put(at, BlockSnapshot.capture(player.level(), EditPlanner.pos(at)));
             var line = BrushMath.line(new Point(0, 0, 0), shift);
             for (var e : source.entrySet())
                 if (!e.getValue().state().isAir())
@@ -103,8 +101,8 @@ public final class BuilderEdits {
             throw new IllegalArgumentException("Choose a selection builder tool");
         var entities = new ArrayList<Session.EntityChange>();
         var captureSession = new Session();
-        captureSession.selection.combine(points, Selection.Mode.REPLACE);
         if (o.copyEntities) {
+            captureSession.selection.combine(points, Selection.Mode.REPLACE); // only the entity capture reads it
             var capture = ClipboardEntities.capture(player, captureSession);
             captureSession.clipboardEntities.addAll(capture.relative());
             if (o.builderTool == Options.BuilderTool.MOVE) entities.addAll(capture.removals());
@@ -115,12 +113,14 @@ public final class BuilderEdits {
             for (Point at : points) p.put(at, Blocks.AIR.defaultBlockState());
             o.keepExisting = keep;
         }
-        for (var entry : source.entrySet()) {
-            Point q = entry.getKey().add(-min.x(), -min.y(), -min.z());
+        // Each block goes straight into the copy, turned the way it will land: no second map of the whole selection is
+        // kept
+        // while the edit is planned.
+        for (Point at : points) {
+            Point q = at.add(-min.x(), -min.y(), -min.z());
             Point transformed = BuilderTransform.apply(q, size, o.builderRotation, o.builderFlipAxis);
-            var value = entry.getValue();
-            BlockState state = value.state();
-            state = turn(state, o.builderRotation, o.builderFlipAxis);
+            var value = BlockSnapshot.capture(player.level(), EditPlanner.pos(at));
+            BlockState state = turn(value.state(), o.builderRotation, o.builderFlipAxis);
             captureSession.clipboard.put(transformed, new BlockSnapshot(state, value.data()));
         }
         ClipboardEntities.transform(
@@ -146,7 +146,7 @@ public final class BuilderEdits {
                     sy = o.stackY,
                     sz = o.stackZ; // no limit on how far, only on how many blocks: counted before any copy is laid out
             if (((long) Math.abs(sx) + 1) * ((long) Math.abs(sy) + 1) * ((long) Math.abs(sz) + 1) - 1
-                    > Selection.LIMIT / Math.max(1, source.size()))
+                    > Selection.LIMIT / Math.max(1, captureSession.clipboard.size()))
                 throw new IllegalArgumentException("Builder stack exceeds the cell limit");
             for (int i = Math.min(0, sx); i <= Math.max(0, sx); i++)
                 for (int j = Math.min(0, sy); j <= Math.max(0, sy); j++)
@@ -154,7 +154,7 @@ public final class BuilderEdits {
                         if (i != 0 || j != 0 || k != 0) steps.add(new Point(i * size.x(), j * size.y(), k * size.z()));
             if (steps.isEmpty()) throw new IllegalArgumentException("Scroll to choose how many copies to stack");
         } else steps.add(shift);
-        if ((long) source.size() * steps.size() > Selection.LIMIT)
+        if ((long) captureSession.clipboard.size() * steps.size() > Selection.LIMIT)
             throw new IllegalArgumentException("Builder stack exceeds the cell limit");
         for (Point step : steps) {
             Point origin = min.add(step.x(), step.y(), step.z());
@@ -230,8 +230,8 @@ public final class BuilderEdits {
     }
     /** A block's state after the builder's flip (axis 0, 1 or 2, or -1 for none) and quarter turns, so stairs and the like face the way they will land. The preview shares this. */
     public static BlockState turn(BlockState state, int turns, int flipAxis) {
-        if (flipAxis == 0) state = state.mirror(Mirror.FRONT_BACK);
-        else if (flipAxis == 2) state = state.mirror(Mirror.LEFT_RIGHT);
+        if (flipAxis == 0) state = StateTransforms.mirror(state, Mirror.FRONT_BACK);
+        else if (flipAxis == 2) state = StateTransforms.mirror(state, Mirror.LEFT_RIGHT);
         else if (flipAxis == 1) state = verticalMirror(state);
         return state.rotate(Rotation.values()[Math.floorMod(turns, 4)]);
     }

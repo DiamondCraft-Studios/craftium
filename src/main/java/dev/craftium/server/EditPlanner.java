@@ -35,6 +35,7 @@ final class EditPlanner {
             return EditPlanner.this.adjacent(p);
         }
     };
+
     final java.util.function.Predicate<Point> expression;
     final LuaBrush maskLua;
     final List<BlockState> materials;
@@ -253,9 +254,9 @@ final class EditPlanner {
                     (bits & 2) != 0 ? 2 * origin.y() + (o.symmetryHalfY ? 1 : 0) - p.y() : p.y(),
                     (bits & 4) != 0 ? 2 * origin.z() + (o.symmetryHalfZ ? 1 : 0) - p.z() : p.z());
             var s = value.state();
-            if ((bits & 1) != 0) s = s.mirror(net.minecraft.world.level.block.Mirror.FRONT_BACK);
+            if ((bits & 1) != 0) s = StateTransforms.mirror(s, net.minecraft.world.level.block.Mirror.FRONT_BACK);
             if ((bits & 2) != 0) s = BuilderEdits.verticalMirror(s);
-            if ((bits & 4) != 0) s = s.mirror(net.minecraft.world.level.block.Mirror.LEFT_RIGHT);
+            if ((bits & 4) != 0) s = StateTransforms.mirror(s, net.minecraft.world.level.block.Mirror.LEFT_RIGHT);
             for (int rotation = 0; rotation < o.symmetryRotations; rotation++) {
                 if (bits == 0 && rotation == 0) continue;
                 double angle = 360d * rotation / o.symmetryRotations,
@@ -394,6 +395,23 @@ final class EditPlanner {
         return Geometry.shape(center, o);
     }
 
+    /**
+     * The blocks of a use: for the tools that can ({@link Tool#screenBrush}) in screen-space mode, the blocks the client says the ring covers on its screen, kept to those
+     * within reach of the block clicked so a request cannot name blocks anywhere in the world; otherwise the brush around {@code c}. What is
+     * painted of them is still decided by the usual rules (solid, Surface only, masks, the selection and the block limit).
+     */
+    List<Point> screenBlocks(Point c) {
+        if (!o.tool.screenBrush() || !o.screenSpace || o.screenBlocks.isEmpty()) return brush(c);
+        int reach = Options.screenReach(o.radius);
+        var named = BlockList.decode(o.screenBlocks, Options.MAX_SCREEN_BLOCKS);
+        var kept = new ArrayList<Point>(named.size());
+        for (Point p : named)
+            if (Math.abs(p.x() - c.x()) <= reach
+                    && Math.abs(p.y() - c.y()) <= reach
+                    && Math.abs(p.z() - c.z()) <= reach) kept.add(p);
+        return kept;
+    }
+
     BlockState palette(double value, Point at) {
         return materials.get(MaterialList.index(
                 value, o.materialWeights, materials.size(), BrushMath.hash(at.x(), at.y(), at.z(), o.seed), 1));
@@ -416,10 +434,14 @@ final class EditPlanner {
         }
         // Text, the height tools and Tinker have no use for a brush shape, so none is built, or refused for being too
         // big, for them.
-        var points = o.tool == Tool.TINKER ? List.of(c) : brush(c);
+        var points = o.tool == Tool.TINKER ? List.of(c) : screenBlocks(c);
         for (Point p : points) validate(p);
         if (o.tool == Tool.BIOME_PAINTER || o.tool == Tool.CLENTAMINATOR) paintBiomes(points);
+        var inside = BrushRules.keepsToFront(o.tool) ? new HashSet<>(points) : null;
+        var front = inside != null ? BrushRules.front(inside, c, normal, cells, BrushRules.reach(o)) : null;
+        var measured = front == null ? cells : front.filled(cells);
         for (Point p : points) {
+            if (front != null && !front.contains(p)) continue;
             BlockState old = state(p);
             boolean filled = solid(p);
             double n = noise.sample(p);
@@ -455,10 +477,10 @@ final class EditPlanner {
                         put(at, o.invert ? Blocks.AIR.defaultBlockState() : old);
                 }
                 case WELD -> {
-                    if (BrushRules.weld(p, o, cells)) put(p, nearestMaterial(p));
+                    if (BrushRules.weld(p, o, measured)) put(p, nearestMaterial(p));
                 }
                 case MELT -> {
-                    if (BrushRules.melt(p, o, cells)) put(p, Blocks.AIR.defaultBlockState());
+                    if (BrushRules.melt(p, o, measured)) put(p, Blocks.AIR.defaultBlockState());
                 }
                 case SMOOTH -> {
                     double d = density(p);
@@ -472,7 +494,10 @@ final class EditPlanner {
                 }
                 case ROUGHEN -> {
                     Point target = BrushRules.roughen(p, o, cells, n);
-                    if (target != null) put(target, target.equals(p) ? Blocks.AIR.defaultBlockState() : old);
+                    // A block grown into the far side of a thin wall is left out, as the brush's other blocks there
+                    // are.
+                    if (target != null && (front == null || front.contains(target) || !inside.contains(target)))
+                        put(target, target.equals(p) ? Blocks.AIR.defaultBlockState() : old);
                 }
                 case SHATTER -> {
                     if (BrushRules.shatter(p, o, cells))
@@ -513,6 +538,9 @@ final class EditPlanner {
         }
         return material;
     }
+
+    /** How far above and below its line the Slope tool looks for the ground of a column, and the most it raises it. */
+    static final int SLOPE_REACH = 64;
 
     /** The longest ramp the Slope tool builds, measured across the ground from its start to its end. */
     static final int MAX_SLOPE_LENGTH = 256;
@@ -585,7 +613,7 @@ final class EditPlanner {
                 double side = Math.hypot(x - (a.x() + t * vx), z - (a.z() + t * vz));
                 if (side > r + .5) continue;
                 int y = (int) Math.round(a.y() + t * (b.y() - a.y()));
-                column(x, z, y, r + 16, top -> y);
+                column(x, z, y, SLOPE_REACH, SLOPE_REACH, SLOPE_REACH, top -> y);
             }
     }
 
@@ -613,8 +641,14 @@ final class EditPlanner {
      * entity on top, or with a tree trunk or a build standing on it, is left alone.
      */
     private void column(int x, int z, int reference, int above, java.util.function.IntUnaryOperator desired) {
+        column(x, z, reference, above, o.radius + 16, 24, desired);
+    }
+
+    /** {@link #column(int, int, int, int, java.util.function.IntUnaryOperator)} with the depth the ground is looked for to and the most it is raised. */
+    private void column(
+            int x, int z, int reference, int above, int depth, int raise, java.util.function.IntUnaryOperator desired) {
         int maxY = level.getMaxY() - 1;
-        int top = Math.min(maxY, reference + above), bottom = Math.max(level.getMinY(), reference - o.radius - 16);
+        int top = Math.min(maxY, reference + above), bottom = Math.max(level.getMinY(), reference - depth);
         while (top >= bottom && !ground(new Point(x, top, z))) top--;
         if (top < bottom) return;
         Point at = new Point(x, top, z);
@@ -630,14 +664,40 @@ final class EditPlanner {
             }
             cover.add(s);
         }
-        int to = Math.clamp(desired.applyAsInt(top), bottom, Math.min(maxY, top + 24));
+        int to = Math.clamp(desired.applyAsInt(top), bottom, Math.min(maxY, top + raise));
         if (to == top) return;
-        BlockState under = state(at.add(0, -1, 0));
-        BlockState fill = ground(at.add(0, -1, 0)) && !under.hasBlockEntity() ? under : surface;
+        // The layers that travel with the surface: just its top block, or with Smear the top few ground blocks.
+        var layers = new ArrayList<BlockState>(4);
+        layers.add(surface);
+        if (o.tool == Tool.ELEVATION && o.smear)
+            for (int k = 1; k < o.smearDepth && top - k >= level.getMinY(); k++) {
+                Point p = new Point(x, top - k, z);
+                if (!ground(p) || state(p).hasBlockEntity()) break;
+                layers.add(state(p));
+            }
+        int n = layers.size();
+        // A column moves as a whole or not at all: if any block it would write belongs to a BuildObject, the Terrain
+        // tools leave the column as it is,
+        // instead of tearing it around the object's blocks.
+        if (!exact && o.tool.group.equals("Terrain")) {
+            int low = Math.max(level.getMinY(), Math.min(top - n + 1, to - n + 1)),
+                    high = Math.min(maxY, Math.max(top, to) + cover.size());
+            for (int y = low; y <= high; y++)
+                if (inBuildObject(new Point(x, y, z))) {
+                    skip(Skip.OBJECT);
+                    return;
+                }
+        }
+        Point below = at.add(0, -n, 0);
+        BlockState under = state(below);
+        BlockState fill = ground(below) && !under.hasBlockEntity() ? under : layers.get(n - 1);
         for (int i = 0; i < cover.size(); i++) put(at.add(0, i + 1, 0), Blocks.AIR.defaultBlockState());
-        if (to > top) for (int y = top; y < to; y++) put(new Point(x, y, z), fill);
-        else for (int y = top; y > to; y--) put(new Point(x, y, z), Blocks.AIR.defaultBlockState());
-        put(new Point(x, to, z), surface);
+        if (to < top) for (int y = top; y > to; y--) put(new Point(x, y, z), Blocks.AIR.defaultBlockState());
+        // The layers hang from the new surface; anything under them that the move uncovers is filled.
+        for (int y = Math.max(level.getMinY(), Math.min(top - n + 1, to - n + 1)); y <= to; y++) {
+            int i = to - y;
+            put(new Point(x, y, z), i < n ? layers.get(i) : fill);
+        }
         for (int i = 0; i < cover.size() && to + i + 1 <= maxY; i++) {
             Point p = new Point(x, to + i + 1, z);
             if (to + i + 1 <= top + cover.size() || state(p).isAir()) put(p, cover.get(i));

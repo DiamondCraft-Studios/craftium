@@ -183,7 +183,7 @@ final class BuildPlanner {
 
     /** A block state turned the way a group turned its cell: mirrored first, then rotated, as {@link Turn} reads. */
     static BlockState turn(BlockState state, Turn turn) {
-        if (turn.mirrored()) state = state.mirror(net.minecraft.world.level.block.Mirror.FRONT_BACK);
+        if (turn.mirrored()) state = StateTransforms.mirror(state, net.minecraft.world.level.block.Mirror.FRONT_BACK);
         return state.rotate(net.minecraft.world.level.block.Rotation.values()[turn.quarterTurns()]);
     }
 

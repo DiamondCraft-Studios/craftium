@@ -30,6 +30,8 @@ public final class EditorServer {
     private static final long APPLY_BUDGET_NANOS = 20_000_000L;
 
     private static int historyTicks;
+    /** How often, in ticks, the histories that changed are written: every 30 seconds. Each write is the whole history, so writing it every few seconds kept the writer busy for as long as someone was building. Leaving, changing dimension and stopping still write at once. */
+    private static final int HISTORY_SAVE_TICKS = 600;
 
     private record Job(
             UUID owner,
@@ -758,6 +760,17 @@ public final class EditorServer {
                 handler.run(new ActionUse(player, s, o, r.target(), r.normal()));
                 return;
             }
+            if (r.action()
+                    .equals("shape_reset")) { // the waiting shape's rotation was taken off: one step in the history
+                if (r.target() == null) throw new IllegalArgumentException("A shape is needed to reset its rotation");
+                s.remember(Session.Edit.selecting(
+                        "Reset shape rotation",
+                        Session.SelectionChange.restoring(
+                                Map.of("shape", shapeText(r.target(), o.yaw, o.pitch, o.roll, o)),
+                                Map.of("shape", shapeText(r.target(), 0, 0, 0, o)))));
+                send(player, s, "Reset shape rotation", false);
+                return;
+            }
             if (r.action().equals("selection_restore")) {
                 if (!s.undo.isEmpty() && s.undo.peekFirst().selectionOnly()) s.undo.removeFirst();
                 if (s.selectionBefore != null) {
@@ -776,18 +789,7 @@ public final class EditorServer {
                             && o.tool == Tool.SHAPE
                             && o.shapeKind == Options.ShapeKind.BRUSH
                             && r.target() != null
-                    ? String.format(
-                            java.util.Locale.ROOT,
-                            "%d,%d,%d,%s,%s,%s,%s,%s,%s",
-                            r.target().x(),
-                            r.target().y(),
-                            r.target().z(),
-                            o.yaw,
-                            o.pitch,
-                            o.roll,
-                            o.sizeX,
-                            o.sizeY,
-                            o.sizeZ)
+                    ? shapeText(r.target(), o.yaw, o.pitch, o.roll, o)
                     : null;
             s.pivotBeforeRequest = s.pivotNow;
             s.pivotNow = pivotText(o, 0, 0, 0);
@@ -1703,6 +1705,22 @@ public final class EditorServer {
                             s,
                             BuiltinTools.bucketFill(player, plan, o, target, Options.Compare.BLOCK, "Bucket fill"));
                 }
+                case String replace
+                when replace.startsWith(SelectionOperations.REPLACE_BLOCK) -> {
+                    // "replace_block:<from>><to>": every block of one kind in the selection becomes another, from the
+                    // Selection window
+                    var plan = EditPlanner.forSelection(player.level(), s, o);
+                    String name = SelectionOperations.replaceBlock(plan, replace);
+                    start(player, s, plan.finish(name));
+                }
+                case String change
+                when change.startsWith(SelectionOperations.CHANGE_MATERIAL) -> {
+                    // "change_material:<from>><to>": the stairs, slabs, walls and other blocks of one material in the
+                    // selection take another material's
+                    var plan = EditPlanner.forSelection(player.level(), s, o);
+                    String name = SelectionOperations.changeMaterial(plan, change);
+                    start(player, s, plan.finish(name));
+                }
                 default -> throw new IllegalArgumentException("Unknown editor action");
             }
         } catch (IllegalArgumentException e) {
@@ -1885,7 +1903,7 @@ public final class EditorServer {
                     ? v.state().rotate(Rotation.CLOCKWISE_90)
                     : axis == 1
                             ? BuilderEdits.verticalMirror(v.state())
-                            : v.state().mirror(axis == 2 ? Mirror.LEFT_RIGHT : Mirror.FRONT_BACK);
+                            : StateTransforms.mirror(v.state(), axis == 2 ? Mirror.LEFT_RIGHT : Mirror.FRONT_BACK);
             next.put(at, new BlockSnapshot(state, v.data()));
         }
         int minX = next.keySet().stream().mapToInt(Point::x).min().orElse(0),
@@ -2780,6 +2798,22 @@ public final class EditorServer {
         return edit.withSelection(change.andObjects(before, after));
     }
 
+    /** A shape waiting to be built as the client takes it back ("x,y,z,yaw,pitch,roll,sizeX,sizeY,sizeZ"): put at {@code at}, turned as given, sized as {@code o} says. */
+    private static String shapeText(Point at, double yaw, double pitch, double roll, Options o) {
+        return String.format(
+                java.util.Locale.ROOT,
+                "%d,%d,%d,%s,%s,%s,%s,%s,%s",
+                at.x(),
+                at.y(),
+                at.z(),
+                yaw,
+                pitch,
+                roll,
+                o.sizeX,
+                o.sizeY,
+                o.sizeZ);
+    }
+
     private static void handBack(Session s, Session.SelectionChange change, boolean backwards) {
         if (change.hasHierarchy())
             s.saved.restore(
@@ -2840,7 +2874,8 @@ public final class EditorServer {
             return;
         }
         if (edit.selectionOnly()
-                || edit.hierarchyOnly()) { // a selection or a change to the Hierarchy has no blocks: put it back
+                || edit.hierarchyOnly()
+                || edit.clientOnly()) { // a selection or a change to the Hierarchy has no blocks: put it back
             // directly
             from.removeFirst();
             handBack(s, edit.selection(), backwards);
@@ -2869,7 +2904,7 @@ public final class EditorServer {
             refreshShared(server);
         } // an owner who changed dimension, or whose build has applied, without doing anything else
         AnimatedRebuild.tick(server);
-        if (++historyTicks % 100 == 0) for (var session : SESSIONS.values()) HistoryStore.save(session);
+        if (++historyTicks % HISTORY_SAVE_TICKS == 0) for (var session : SESSIONS.values()) HistoryStore.save(session);
         var reachId = dev.craftium.compat.Compat.id("craftium", "builder_reach");
         var stepId = dev.craftium.compat.Compat.id("craftium", "block_step");
         for (var player : server.getPlayerList().getPlayers()) {
@@ -3245,7 +3280,7 @@ public final class EditorServer {
                 s.selection.max(),
                 s.clipboard.size(),
                 s.undo.stream()
-                        .map(edit -> edit.selectionOnly() || edit.hierarchyOnly()
+                        .map(edit -> edit.selectionOnly() || edit.hierarchyOnly() || edit.clientOnly()
                                 ? edit.name()
                                 : edit.name() + " · "
                                         + (edit.changes().size()

@@ -108,7 +108,9 @@ public interface Interaction {
         return editor.toolActive()
                 && !editor.resizingBrush()
                 && hit != null
-                && !PlacementPreview.active() && !ShapeObject.active() && brush;
+                && !PlacementPreview.active()
+                && !ShapeObject.active()
+                && brush;
     }
 
     /** Whether the turn keys (rotate, tilt, flip) turn this tool's hover preview before anything is put down. A shape that is down is turned by them whatever tool is chosen. */

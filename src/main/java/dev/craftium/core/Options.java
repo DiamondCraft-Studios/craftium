@@ -117,6 +117,8 @@ public final class Options {
     }
     /** Hand placement and breaking only; blocks the editor's tools write never update anything (see BlockSnapshot.NO_UPDATES). */
     public boolean noUpdates, forcePlace, replaceMode, bulldozer, tinker;
+    /** Replace material: placing a block onto a stair, slab, wall or other variant of another material turns it into that variant of the held block's material. */
+    public boolean replaceMaterial;
     /** Whether a full Bulldozer sweep only breaks blocks that are the same, state included, as the first one it met; a different block ends it. */
     public boolean bulldozerSameBlocks = true;
 
@@ -388,6 +390,8 @@ public final class Options {
     public boolean jigsawLive = true;
     /** Whether a jigsaw preview draws a box around each piece, and the name of the template above it. Only the client reads them. */
     public boolean jigsawBoxes = true, jigsawNames = true;
+    /** Whether the blocks a Paint, Sculpt or Terrain tool is about to place are outlined. */
+    public boolean blockPreviewOutline = true;
     /** One command of the jigsaw pool editor, as JSON (see the server's JigsawEditor); empty when none. */
     public String jigsawEdit = "";
     /** Whether the client listens on this computer for an AI client (the craftium-mcp shim) to drive the editor. Off until the player turns it on. */
@@ -502,6 +506,17 @@ public final class Options {
 
     public FluidType fluidType = FluidType.WATER;
     public int floodGap, flowLength = 7, fluidQuality = 1;
+    /** Fluid Block: how many blocks one pour places. */
+    public int fluidBlocks = 64;
+
+    /** Fluid Block: the outline the pour spreads in. */
+    public enum PourShape {
+        CIRCLE,
+        DIAMOND,
+        SQUARE
+    }
+
+    public PourShape pourShape = PourShape.CIRCLE;
     public boolean floodUp,
             floodDown = true,
             floodHorizontal = true,
@@ -533,6 +548,14 @@ public final class Options {
     }
 
     public FlattenMode flattenMode = FlattenMode.BOTH;
+
+    /**
+     * Elevation: with Smear on, the top {@link #smearDepth} layers of the ground (grass over dirt, sand over sandstone) move up or down
+     * together with the surface, instead of only the top block being kept and the new ground filled with the block under it.
+     */
+    public boolean smear;
+
+    public int smearDepth = 3;
 
     public enum RulerMode {
         LINE,
@@ -572,7 +595,21 @@ public final class Options {
     public java.util.Map<String, String> scriptVariables = new java.util.LinkedHashMap<>();
     public java.util.Map<String, String> maskVariables = new java.util.LinkedHashMap<>();
     public java.util.List<BlockColour> scriptColours = new java.util.ArrayList<>();
+    /** Whether the Surface Painters paint the blocks the ring shows on the screen (sent in {@link #screenBlocks}) instead of a shape around the block under the pointer. */
+    public boolean screenSpace = true;
+    /** The blocks the ring covers on the screen for this one use, as a {@link BlockList}; empty for any use that is not a screen-space stroke. Set by the client as it sends, not kept. */
+    public String screenBlocks = "";
+
     public java.util.List<ColourPlacement> colourField = new java.util.ArrayList<>();
+    /** The longest {@link #screenBlocks} text a request may carry. */
+    public static final int MAX_SCREEN_BLOCKS_TEXT = 600_000;
+    /** How far, on each axis, a screen-space footprint may reach from the block clicked: what the client keeps and the server accepts. */
+    public static int screenReach(double radius) {
+        return (int) Math.min(BrushMath.MAX_REACH, 4 * Math.max(1, radius) + 16);
+    }
+    /** The most blocks a screen-space footprint may name. */
+    public static final int MAX_SCREEN_BLOCKS = 150_000;
+
     public boolean autoSwapToCreative = true;
     public boolean cameraFlight,
             showKeyHints,
@@ -641,6 +678,7 @@ public final class Options {
                 || symmetryZ
                 || symmetryRotations > 1
                 || replaceMode
+                || replaceMaterial
                 || forcePlace
                 || noUpdates
                 || fastPlace
@@ -879,6 +917,8 @@ public final class Options {
         fontSize = Math.clamp(fontSize, 6, 96);
         textThickness = Math.clamp(textThickness, 1, 8);
         modelColumns = Math.clamp(modelColumns, 2, 32);
+        if (screenBlocks == null || screenBlocks.length() > MAX_SCREEN_BLOCKS_TEXT)
+            throw new IllegalArgumentException("Screen brush footprint too large");
         if (nodes == null || nodes.size() > 64 || nodes.contains(null))
             throw new IllegalArgumentException("Maximum 64 control points");
         if (selectionPoints == null || selectionPoints.size() > 32768 || selectionPoints.contains(null))
@@ -930,6 +970,8 @@ public final class Options {
         floodGap = Math.clamp(floodGap, 0, MAX_FLOOD_GAP);
         flowLength = Math.clamp(flowLength, 1, 32);
         fluidQuality = Math.clamp(fluidQuality, 1, 4);
+        fluidBlocks = Math.clamp(fluidBlocks, 1, 4096);
+        if (pourShape == null) pourShape = PourShape.CIRCLE;
         if (missingBlock == null || missingBlock.length() > 256)
             throw new IllegalArgumentException("Invalid missing block");
         if (maskBlocks == null || maskActive == null || maskBlocks.size() > 64 || maskActive.size() > 64)
@@ -938,6 +980,7 @@ public final class Options {
             for (String entry : list)
                 if (entry == null || entry.length() > 256)
                     throw new IllegalArgumentException("Invalid block mask entry");
+        smearDepth = Math.clamp(smearDepth, 1, 16);
         if (block == null || secondary == null || mask == null || biome == null || text == null)
             throw new IllegalArgumentException("Missing tool settings");
         if (block.length() > 256

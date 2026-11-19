@@ -66,10 +66,12 @@ final class WorkspaceLayout {
             case "Tool masks" -> "masks";
             case "Rulers" -> "rulers";
             case "Magic select" -> "magic";
+            case "Shape" -> "shape";
             case "Hierarchy" -> "hierarchy";
             case "Missing blocks" -> "missing";
             case "Large edit" -> "progress";
             case "Materials" -> "materials";
+            case "Selection" -> "selection";
             default -> "";
         };
     }
@@ -151,9 +153,11 @@ final class WorkspaceLayout {
         var r = new Rect(x, y, w, h);
         r.visible = !id.equals("history")
                 && !id.equals("magic")
+                && !id.equals("shape") // opened by the editor when the Shape tool is chosen
                 && !id.equals("clipboard")
                 && !id.equals("rulers")
-                && !id.equals("materials");
+                && !id.equals("materials")
+                && !id.equals("selection");
         return r;
     }
 
@@ -309,7 +313,9 @@ final class WorkspaceLayout {
                             "rulers",
                             "hierarchy",
                             "progress",
-                            "materials")
+                            "materials",
+                            "selection",
+                            "shape")
                     .contains(e.getKey())) continue;
             var r = Packets.JSON.fromJson(e.getValue(), Rect.class);
             r.x = Math.clamp(r.x, 0, 4000);

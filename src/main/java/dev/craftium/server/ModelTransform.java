@@ -197,9 +197,9 @@ final class ModelTransform {
     /** The block as it stands after a turn and flips of whole quarters, for the Edit menu: stairs and the like face the new way. */
     private static BlockSnapshot turned(BlockSnapshot block, Options o) {
         var state = block.state();
-        if (o.sizeX < 0) state = state.mirror(Mirror.FRONT_BACK);
+        if (o.sizeX < 0) state = StateTransforms.mirror(state, Mirror.FRONT_BACK);
         if (o.sizeY < 0) state = BuilderEdits.verticalMirror(state);
-        if (o.sizeZ < 0) state = state.mirror(Mirror.LEFT_RIGHT);
+        if (o.sizeZ < 0) state = StateTransforms.mirror(state, Mirror.LEFT_RIGHT);
         // Yaw, pitch and roll all turn facing, axis, half and rotation properties, so stairs and the like follow the
         // selection.
         state = StateTransforms.rotate(state, o.yaw, o.pitch, o.roll);
