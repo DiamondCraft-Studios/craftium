@@ -534,6 +534,7 @@ public final class EditorScreen extends CraftiumScreen {
         } // the first-person look aims with the vanilla crosshair
         g.pose().pushMatrix();
         g.pose().scale(scale, scale);
+        brushRing(g, steering); // under the interface: it is of the world, so the panels cover it
         topbar(g);
         if (panels) {
             tools(g);
@@ -640,7 +641,6 @@ public final class EditorScreen extends CraftiumScreen {
             } // the cell the block would land in
             BlockDragCursor.draw(g, font, dragBlock, mx, my, w, h, ACCENT, inViewport(mx, my));
         } else BlockDragCursor.release();
-        brushRing(g, steering);
         g.pose().popMatrix();
         ReferenceImages.draw(g, true, steering ? -100000 : mouseX, steering ? -100000 : mouseY);
     }
