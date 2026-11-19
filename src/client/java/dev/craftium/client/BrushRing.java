@@ -22,20 +22,29 @@ public final class BrushRing {
      * circle, so every step of the line is one pixel sideways or diagonal and none is doubled or missing: pixel-perfect. Each pixel is inverted
      * whole, and once, since inverting a pixel twice would put it back.
      */
-    public static void draw(Gfx g, double cx, double cy, double radius) {
+    public static void draw(Gfx g, double cx, double cy, double radius, int screenWidth, int screenHeight) {
         int r = (int) Math.round(radius), x0 = (int) Math.round(cx - .5), y0 = (int) Math.round(cy - .5);
         if (r < 2) return;
+        // A brush right at the camera is thousands of pixels wide, and a pixel is a draw call: only a ring that crosses
+        // the screen is drawn,
+        // and only the pixels of it on the screen.
+        double nearX = Math.clamp(cx, 0, screenWidth) - cx,
+                nearY = Math.clamp(cy, 0, screenHeight) - cy,
+                farX = Math.max(cx, screenWidth - cx),
+                farY = Math.max(cy, screenHeight - cy);
+        if (r < Math.hypot(nearX, nearY) - 1 || r > Math.hypot(farX, farY) + 1) return;
         var drawn = new java.util.HashSet<Long>();
+        var view = new int[] {screenWidth, screenHeight};
         int x = r, y = 0, error = 1 - r;
         while (x >= y) {
-            plot(g, drawn, x0, y0, x, y);
-            plot(g, drawn, x0, y0, y, x);
-            plot(g, drawn, x0, y0, -y, x);
-            plot(g, drawn, x0, y0, -x, y);
-            plot(g, drawn, x0, y0, -x, -y);
-            plot(g, drawn, x0, y0, -y, -x);
-            plot(g, drawn, x0, y0, y, -x);
-            plot(g, drawn, x0, y0, x, -y);
+            plot(g, drawn, view, x0, y0, x, y);
+            plot(g, drawn, view, x0, y0, y, x);
+            plot(g, drawn, view, x0, y0, -y, x);
+            plot(g, drawn, view, x0, y0, -x, y);
+            plot(g, drawn, view, x0, y0, -x, -y);
+            plot(g, drawn, view, x0, y0, -y, -x);
+            plot(g, drawn, view, x0, y0, y, -x);
+            plot(g, drawn, view, x0, y0, x, -y);
             y++;
             if (error < 0) error += 2 * y + 1;
             else {
@@ -45,7 +54,8 @@ public final class BrushRing {
         }
     }
 
-    private static void plot(Gfx g, java.util.Set<Long> drawn, int x0, int y0, int dx, int dy) {
+    private static void plot(Gfx g, java.util.Set<Long> drawn, int[] view, int x0, int y0, int dx, int dy) {
+        if (x0 + dx < 0 || y0 + dy < 0 || x0 + dx >= view[0] || y0 + dy >= view[1]) return;
         if (drawn.add((long) dx << 32 | (dy & 0xffffffffL)))
             g.invertFill(x0 + dx, y0 + dy, x0 + dx + 1, y0 + dy + 1, 0xffffffff);
     }

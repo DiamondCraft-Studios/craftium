@@ -5582,7 +5582,13 @@ public final class EditorScreen extends CraftiumScreen {
         // interface is scaled up.
         g.pose().pushMatrix();
         g.pose().scale(1 / (float) scale, 1 / (float) scale);
-        BrushRing.draw(g, cx, cy, (o().radius + .5) * perBlock);
+        BrushRing.draw(
+                g,
+                cx,
+                cy,
+                (o().radius + .5) * perBlock,
+                minecraft.getWindow().getWidth(),
+                minecraft.getWindow().getHeight());
         g.pose().popMatrix();
     }
 
