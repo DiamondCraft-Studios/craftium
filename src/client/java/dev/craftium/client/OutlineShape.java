@@ -418,6 +418,16 @@ final class OutlineShape {
         }
         return made;
     }
+    /**
+     * Whether the shape is detailed enough that drawing every edge of it costs a frame, with the camera inside its box. From in there no
+     * contour or far side can be told apart, so all its edges would be drawn each frame; a cheap box test, not the face-by-face one.
+     */
+    boolean tooBusyAround() {
+        return bounds != null
+                && ready
+                && outline.creases().size() > ASYNC_CREASES
+                && bounds.contains(ClientCompat.camera(Minecraft.getInstance()).position());
+    }
     /** Whether the camera is inside the shape. Shapes with too many faces to be filled are not worked out, which keeps the frame cheap. */
     boolean cameraInside() {
         if (bounds == null || !ready || outline.faces().size() > maxFaces) return false;

@@ -42,7 +42,12 @@ public final class BrushPreview {
     /** {@code face} is the side of the block under the cursor that is aimed at, which the sculpting tools build out from. */
     public static void draw(Minecraft mc, BlockPos at, net.minecraft.core.Direction face, Options o) {
         if (mc.level == null) return;
-        var normal = new Point(face.getStepX(), face.getStepY(), face.getStepZ());
+        // Only Sculpt Draw builds out from the aimed face. For the rest it must not be in the key: with the camera
+        // inside a block the
+        // hit face follows the look direction, and every turn would otherwise work the whole preview out again.
+        var normal = o.tool == dev.craftium.core.Tool.SCULPT_DRAW
+                ? new Point(face.getStepX(), face.getStepY(), face.getStepZ())
+                : new Point(0, 1, 0);
         var now = List.<Object>of(
                 o.tool.brushUse(),
                 o.shape,
@@ -81,7 +86,7 @@ public final class BrushPreview {
             return;
         }
         int fill = o.hoverColor & 0xffffff | SceneShape.FACE_ALPHA;
-        shape.draw(
+        shape.drawLean(
                 fill,
                 o.hoverColor,
                 (float) o.selectionWidth,

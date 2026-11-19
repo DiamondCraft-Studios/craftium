@@ -95,6 +95,15 @@ final class SceneShape {
                 true); // scene: lines and fill alike are hidden by blocks in front
     }
 
+    /**
+     * As {@link #draw}, for a preview that follows the cursor: with the camera inside a shape too detailed to outline every frame (a brush
+     * around the block your head is in), only the dim faces are drawn, since the outline there is every edge of it at once.
+     */
+    void drawLean(int faceFill, int stroke, float width, int airFill) {
+        if (air.tooBusyAround()) for (var f : faces) Overlay.sceneFace(f[0], f[1], f[2], f[3], faceFill);
+        else draw(faceFill, stroke, width, airFill);
+    }
+
     /** The face of the block at {@code p} on the side {@code d} points to, lifted off the block so it does not fight it for depth, counter-clockwise from outside. */
     private static Vec3[] face(Point p, Direction d) {
         int axis = d.getAxis().ordinal();
