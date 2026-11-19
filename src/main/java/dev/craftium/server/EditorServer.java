@@ -30,6 +30,8 @@ public final class EditorServer {
     private static final long APPLY_BUDGET_NANOS = 20_000_000L;
 
     private static int historyTicks;
+    /** How often, in ticks, the histories that changed are written: every 30 seconds. Each write is the whole history, so writing it every few seconds kept the writer busy for as long as someone was building. Leaving, changing dimension and stopping still write at once. */
+    private static final int HISTORY_SAVE_TICKS = 600;
 
     private record Job(
             UUID owner,
@@ -2902,7 +2904,7 @@ public final class EditorServer {
             refreshShared(server);
         } // an owner who changed dimension, or whose build has applied, without doing anything else
         AnimatedRebuild.tick(server);
-        if (++historyTicks % 100 == 0) for (var session : SESSIONS.values()) HistoryStore.save(session);
+        if (++historyTicks % HISTORY_SAVE_TICKS == 0) for (var session : SESSIONS.values()) HistoryStore.save(session);
         var reachId = dev.craftium.compat.Compat.id("craftium", "builder_reach");
         var stepId = dev.craftium.compat.Compat.id("craftium", "block_step");
         for (var player : server.getPlayerList().getPlayers()) {
