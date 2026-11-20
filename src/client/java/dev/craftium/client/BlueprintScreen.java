@@ -76,6 +76,30 @@ public final class BlueprintScreen extends CraftiumScreen {
     private java.util.function.Consumer<String> folderChoice;
 
     private boolean priorClient;
+
+    /** The most blueprints added to a pool at once, as for the browser's other file actions. */
+    public static final int BATCH_LIMIT = 64;
+
+    /**
+     * Several blueprints chosen at once: whether they are from the client's library, the folder they were chosen in ("" for the top
+     * level or a search, so names can be made from the path below it) and the files, each once.
+     */
+    public record Batch(boolean client, String base, List<BlueprintInfo> files) {}
+
+    /** Set when the asker also takes several blueprints at once: the browser then has Add selected and Add folder buttons. */
+    private java.util.function.Consumer<Batch> batchPicker;
+
+    private FlatButton addFolder, addSelected;
+
+    /** The browser for choosing one blueprint ({@code one}, on a double-click or Enter) or several ({@code many}, with its Add buttons). */
+    public static BlueprintScreen pickMany(
+            Screen parent,
+            java.util.function.BiConsumer<Boolean, BlueprintInfo> one,
+            java.util.function.Consumer<Batch> many) {
+        var screen = new BlueprintScreen(parent, one);
+        screen.batchPicker = many;
+        return screen;
+    }
     /** The browser on the server's library with a Save here button; {@code choose} gets the folder the player is in when they press it. */
     public static BlueprintScreen chooseFolder(Screen parent, java.util.function.Consumer<String> choose) {
         var screen = new BlueprintScreen(parent, null);
@@ -145,6 +169,11 @@ public final class BlueprintScreen extends CraftiumScreen {
         button("Import…", left + 545, top + 5, 105, 22, this::importFile);
         button("Return", left + 530, top + 375, 120, 23, this::onClose);
         if (!folder.isEmpty()) button("Up", left + 400, top + 375, 120, 23, this::up);
+        if (batchPicker != null) {
+            addFolder = button("", left + 8, top + 375, 150, 23, () -> addBatch(filesUnder(folder)));
+            addSelected = button("", left + 164, top + 375, 150, 23, () -> addBatch(selectedFiles()));
+            updateBatchButtons();
+        }
         if (folderChoice != null) {
             var choose = folderChoice;
             button("Save here", left + 270, top + 375, 124, 23, () -> {
@@ -301,6 +330,7 @@ public final class BlueprintScreen extends CraftiumScreen {
 
     @Override
     public void tick() {
+        updateBatchButtons();
         if (listing
                 && !ClientState.options.libraryClient
                 && (ClientState.libraryVersion != waitVersion || ++waitTicks > 200))
@@ -468,6 +498,72 @@ public final class BlueprintScreen extends CraftiumScreen {
         return item.folder() ? leaf : leaf.replaceFirst("\\.[^.]+$", "");
     }
 
+    // ----- adding several blueprints at once -----
+    private List<BlueprintInfo> library() {
+        return ClientState.options.libraryClient ? local : ClientState.blueprints;
+    }
+
+    /** The blueprints in a folder and every folder below it ("" for the whole library), by path. */
+    private List<BlueprintInfo> filesUnder(String path) {
+        String prefix = path.isEmpty() ? "" : path + "/";
+        return library().stream()
+                .filter(e -> !e.file().endsWith("/") && e.file().startsWith(prefix))
+                .sorted(Comparator.comparing(BlueprintInfo::file))
+                .toList();
+    }
+
+    /** The blueprints the selection stands for: each chosen blueprint and everything below each chosen folder, once each. */
+    private List<BlueprintInfo> selectedFiles() {
+        var out = new LinkedHashMap<String, BlueprintInfo>();
+        for (var item : chosen()) {
+            if (item.folder()) for (var e : filesUnder(item.path())) out.putIfAbsent(e.file(), e);
+            else out.putIfAbsent(item.info().file(), item.info());
+        }
+        return List.copyOf(out.values());
+    }
+
+    /** The Add buttons say how many blueprints they would add, and are greyed out when that is none. */
+    private void updateBatchButtons() {
+        if (addFolder == null || addSelected == null) return;
+        int inFolder = query.isBlank() ? filesUnder(folder).size() : 0,
+                inSelection = selectedFiles().size();
+        addFolder.setMessage(Component.literal((folder.isEmpty() ? "Add all (" : "Add folder (") + inFolder + ")"));
+        addFolder.active = inFolder > 0 && dialog == null;
+        addFolder.visible = query.isBlank();
+        addSelected.setMessage(Component.literal("Add selected (" + inSelection + ")"));
+        addSelected.active = inSelection > 0 && dialog == null;
+        addSelected.lit(inSelection > 0);
+    }
+
+    /** Hands blueprints to the asker and closes the browser; more than ten are confirmed first, and more than the limit refused. */
+    private void addBatch(List<BlueprintInfo> files) {
+        if (batchPicker == null || files.isEmpty()) return;
+        if (files.size() > BATCH_LIMIT) {
+            open(new Dialog(
+                    "Too many blueprints",
+                    "That is " + files.size() + " blueprints; at most " + BATCH_LIMIT
+                            + " go in at once. Choose fewer, or add a folder at a time.",
+                    List.of(),
+                    "OK",
+                    v -> {}));
+            return;
+        }
+        var batch = new Batch(ClientState.options.libraryClient, query.isBlank() ? folder : "", files);
+        Runnable go = () -> {
+            var take = batchPicker;
+            onClose(); // back to the screen that asked first, so what it does with the choice lands on it
+            take.accept(batch);
+        };
+        if (files.size() <= 10) go.run();
+        else
+            open(new Dialog(
+                    "Add to pool",
+                    "Add " + files.size() + " blueprints to the pool?",
+                    List.of(),
+                    "Add " + files.size(),
+                    v -> go.run()));
+    }
+
     // ----- the menu -----
     private Entry row(String label, Runnable action) {
         return new Entry(label, true, action);
@@ -482,6 +578,15 @@ public final class BlueprintScreen extends CraftiumScreen {
     private List<Entry> buildMenu() {
         var out = new ArrayList<Entry>();
         var picked = chosen();
+        if (batchPicker != null && !picked.isEmpty()) {
+            int count = selectedFiles().size();
+            boolean oneFolder = picked.size() == 1 && picked.get(0).folder();
+            out.add(row(
+                    (oneFolder ? "Add folder to pool (" : "Add to pool (") + count + ")",
+                    count > 0,
+                    () -> addBatch(selectedFiles())));
+            out.add(DIVIDER);
+        }
         if (picked.size() == 1) {
             var item = picked.get(0);
             if (item.folder()) {
@@ -964,14 +1069,15 @@ public final class BlueprintScreen extends CraftiumScreen {
                     0xff9db5cb,
                     false);
         String picked = selected.isEmpty() ? "" : " · " + selected.size() + " selected";
-        g.text(
-                font,
-                total + (total == 1 ? " item" : " items") + picked + " · Sorted by "
-                        + SORTS[sort].toLowerCase(Locale.ROOT),
-                left + 8,
-                top + 383,
-                0xff9db5cb,
-                false);
+        if (batchPicker == null)
+            g.text(
+                    font,
+                    total + (total == 1 ? " item" : " items") + picked + " · Sorted by "
+                            + SORTS[sort].toLowerCase(Locale.ROOT),
+                    left + 8,
+                    top + 383,
+                    0xff9db5cb,
+                    false);
         if (dialog != null) drawDialog(g);
         drawWidgets(g, (int) mx, (int) my, delta);
         if (menu != null) drawMenu(g, mx, my);
@@ -1116,6 +1222,10 @@ public final class BlueprintScreen extends CraftiumScreen {
                 var c = chosen();
                 if (c.size() == 1) {
                     activate(c.get(0));
+                    return true;
+                }
+                if (batchPicker != null && !c.isEmpty()) {
+                    addBatch(selectedFiles());
                     return true;
                 }
             }

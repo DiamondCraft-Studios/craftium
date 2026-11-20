@@ -1957,30 +1957,115 @@ final class JigsawEditorScreen extends CraftiumScreen {
     }
 
     private void pickBlueprint() {
-        ClientCompat.setScreen(minecraft, new BlueprintScreen(this, (client, info) -> {
+        ClientCompat.setScreen(
+                minecraft,
+                BlueprintScreen.pickMany(
+                        this,
+                        (client, info) -> {
+                            String file = info.file();
+                            var o = ClientState.options;
+                            String prior = o.assetData;
+                            try {
+                                if (client)
+                                    o.assetData = java.util.Base64.getEncoder()
+                                            .encodeToString(ClientAssets.bytes(
+                                                    file)); // the player's own file travels with the request
+                                edit(
+                                        "element_from_blueprint",
+                                        "pool",
+                                        poolId(),
+                                        "name",
+                                        dev.craftium.core.TemplateNames.fromPath(
+                                                file.substring(file.lastIndexOf('/') + 1)),
+                                        "file",
+                                        file);
+                            } catch (IllegalArgumentException e) {
+                                localMessage = e.getMessage();
+                            } finally {
+                                o.assetData = prior;
+                            }
+                            adding = false;
+                            init();
+                        },
+                        this::addBlueprints));
+    }
+
+    /** The most characters of file data one request carries; the player's own files go in as many requests as they need. */
+    private static final int BATCH_DATA = 1_400_000;
+
+    /**
+     * Adds several blueprints to the open pool. Each template is named by its path below the folder they were chosen in,
+     * so files of the same name in different folders stay apart.
+     */
+    private void addBlueprints(BlueprintScreen.Batch batch) {
+        String prefix = batch.base().isEmpty() ? "" : batch.base() + "/";
+        var files = new ArrayList<String>();
+        var names = new ArrayList<String>();
+        var used = new HashSet<String>();
+        for (var info : batch.files()) {
             String file = info.file();
-            String base = file.substring(file.lastIndexOf('/') + 1);
-            int dot = base.lastIndexOf('.');
-            String name = (dot > 0 ? base.substring(0, dot) : base)
-                    .toLowerCase(Locale.ROOT)
-                    .replaceAll("[^a-z0-9_.-]+", "_")
-                    .replaceAll("^_+|_+$", "");
-            if (name.isEmpty()) name = "blueprint";
-            var o = ClientState.options;
-            String prior = o.assetData;
-            try {
-                if (client)
-                    o.assetData = java.util.Base64.getEncoder()
-                            .encodeToString(ClientAssets.bytes(file)); // the player's own file travels with the request
-                edit("element_from_blueprint", "pool", poolId(), "name", name, "file", file);
-            } catch (IllegalArgumentException e) {
-                localMessage = e.getMessage();
-            } finally {
-                o.assetData = prior;
+            String
+                    name =
+                            dev.craftium.core.TemplateNames.fromPath(
+                                    file.startsWith(prefix) ? file.substring(prefix.length()) : file),
+                    unique = name;
+            for (int n = 2; !used.add(unique); n++) unique = name + "_" + n;
+            files.add(file);
+            names.add(unique);
+        }
+        if (!batch.client()) sendBlueprints(files, names, null);
+        else {
+            var skipped = new ArrayList<String>();
+            var chunkFiles = new ArrayList<String>();
+            var chunkNames = new ArrayList<String>();
+            var chunkData = new JsonArray();
+            int size = 0;
+            for (int i = 0; i < files.size(); i++) {
+                String encoded;
+                try {
+                    encoded = java.util.Base64.getEncoder().encodeToString(ClientAssets.bytes(files.get(i)));
+                } catch (IllegalArgumentException e) {
+                    skipped.add(files.get(i).substring(files.get(i).lastIndexOf('/') + 1));
+                    continue;
+                }
+                if (!chunkFiles.isEmpty() && size + encoded.length() + 3 > BATCH_DATA) {
+                    sendBlueprints(chunkFiles, chunkNames, chunkData);
+                    chunkFiles = new ArrayList<>();
+                    chunkNames = new ArrayList<>();
+                    chunkData = new JsonArray();
+                    size = 0;
+                }
+                chunkFiles.add(files.get(i));
+                chunkNames.add(names.get(i));
+                chunkData.add(encoded);
+                size += encoded.length() + 3;
             }
-            adding = false;
-            init();
-        }));
+            if (!chunkFiles.isEmpty()) sendBlueprints(chunkFiles, chunkNames, chunkData);
+            if (!skipped.isEmpty())
+                ClientState.notify(
+                        "Could not read " + skipped.size() + " of your blueprints: " + String.join(", ", skipped));
+        }
+        adding = false;
+        init();
+    }
+
+    /** One request adding blueprints to the open pool: from the server's library, or with the player's own files in {@code data}. */
+    private void sendBlueprints(List<String> files, List<String> names, JsonArray data) {
+        var command = cmd("elements_from_blueprints", "pool", poolId());
+        var fileList = new JsonArray();
+        files.forEach(fileList::add);
+        var nameList = new JsonArray();
+        names.forEach(nameList::add);
+        command.add("files", fileList);
+        command.add("names", nameList);
+        var o = ClientState.options;
+        String prior = o.assetData;
+        o.assetData = data == null ? "" : data.toString();
+        try {
+            change(command);
+        } finally {
+            o.assetData = prior;
+        }
     }
 
     private void importStructure() {
