@@ -214,10 +214,12 @@ final class ToolIcons {
                 line(g, x + 4, y + 20, x + 14, y + 10, color);
                 g.fill(x + 11, y + 3, x + 20, y + 10, color);
                 switch (tool) {
-                    case NOISE_PAINTER -> {
-                        for (int i = 0; i < 3; i++)
-                            g.fill(x + 15 + i * 2, y + 13 + i * 2, x + 16 + i * 2, y + 15 + i * 2, color);
-                    } // scattered grains
+                    case PAINTER, NOISE_PAINTER -> {
+                        if (tool == Tool.NOISE_PAINTER
+                                || ClientState.options.paintSource == dev.craftium.core.Options.PaintSource.MATERIAL)
+                            for (int i = 0; i < 3; i++)
+                                g.fill(x + 15 + i * 2, y + 13 + i * 2, x + 16 + i * 2, y + 15 + i * 2, color);
+                    } // scattered grains while the painter is set to Material
                     case BIOME_PAINTER -> { // a small tree: a triangle of leaves on a trunk
                         line(g, x + 19, y + 12, x + 15, y + 19, color);
                         line(g, x + 19, y + 12, x + 23, y + 19, color);

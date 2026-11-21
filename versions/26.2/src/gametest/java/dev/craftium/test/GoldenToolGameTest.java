@@ -155,7 +155,6 @@ public final class GoldenToolGameTest {
         // Every tool that changes the world from a single click on the ground, with the brush at its defaults.
         for (Tool tool : new Tool[] {
             Tool.PAINTER,
-            Tool.NOISE_PAINTER,
             Tool.FREEHAND_DRAW,
             Tool.ERASE,
             Tool.SHAPE,
@@ -188,6 +187,17 @@ public final class GoldenToolGameTest {
                     null,
                     false,
                     a));
+        // The Surface Painter set to Material, which the Surface Noise Painter used to be.
+        all.add(new Case(
+                "noise_painter",
+                Tool.PAINTER,
+                base(o -> {
+                    o.tool = Tool.PAINTER;
+                    o.paintSource = Options.PaintSource.MATERIAL;
+                }),
+                null,
+                false,
+                a));
         // The same tools where an option changes which code runs.
         all.add(new Case(
                 "painter_type_replace",
@@ -215,9 +225,10 @@ public final class GoldenToolGameTest {
                 b));
         all.add(new Case(
                 "noise_painter_palette",
-                Tool.NOISE_PAINTER,
+                Tool.PAINTER,
                 base(o -> {
-                    o.tool = Tool.NOISE_PAINTER;
+                    o.tool = Tool.PAINTER;
+                    o.paintSource = Options.PaintSource.MATERIAL;
                     o.materials = "minecraft:andesite,minecraft:stone,minecraft:gravel";
                 }),
                 null,

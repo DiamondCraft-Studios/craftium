@@ -58,6 +58,8 @@ public final class CraftiumClient implements ClientModInitializer {
         replaceMaterialKey = ClientCompat.registerKey(new KeyMapping(
                 "key.craftium.replace_material", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
         for (Tool tool : Tool.values()) {
+            if (tool.retired())
+                continue; // the Surface Noise Painter is now the Surface Painter's Material mode, so it has no key
             var spec = tool.spec();
             toolKeys.put(
                     tool,
@@ -1205,8 +1207,7 @@ public final class CraftiumClient implements ClientModInitializer {
             }
             // The painters replace every block they touch by design, so tinting those red would only hide the paint.
             var tool = ClientState.options.tool;
-            ClientState.pending.tintReplaced =
-                    tool.spec().buildsOnRelease() && tool != Tool.PAINTER && tool != Tool.NOISE_PAINTER;
+            ClientState.pending.tintReplaced = tool.spec().buildsOnRelease() && tool != Tool.PAINTER;
             // The Terrain tools that cut the ground away (Elevation lowering, Flatten and Slope cutting, an inverted
             // Rock
             // carving) show those blocks in the same red; what they only raise or swap is shown as the ghost it
