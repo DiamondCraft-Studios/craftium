@@ -275,12 +275,17 @@ public final class SavedSelections {
             }
             return out;
         }
-        /** How many cells all the BuildObjects of a tree may hold between them, dormant and replaced: the memory guard (about 10 bytes a cell). */
+        /**
+         * How many cells all the BuildObjects of a tree may hold between them, dormant and replaced: the memory guard (about 10 bytes a cell). A BuildObject hidden by an
+         * eye does not count: its blocks were in the world before, as its own blocks, which cost more than they do packed, so hiding one never adds memory.
+         */
         public static final int HELD_LIMIT = 8_388_608;
-        /** The cells every BuildObject holds, dormant and replaced. */
+        /** The most dormant cells one BuildObject hidden by an eye keeps: all it held in the world, and what it kept hidden before, each up to {@link Selection#LIMIT}. */
+        public static final int STOWED_LIMIT = 2 * Selection.LIMIT;
+        /** The cells the BuildObjects hold, dormant and replaced, that count towards {@link #HELD_LIMIT}: those of the ones hidden by an eye do not. */
         public long held() {
             long n = 0;
-            for (var e : entries) n += e.dormant.size() + e.replaced.size();
+            for (var e : entries) if (!e.stowedInHierarchy()) n += e.dormant.size() + e.replaced.size();
             return n;
         }
         /**
@@ -317,16 +322,19 @@ public final class SavedSelections {
                     continue;
                 var e = new Entry(r.id(), r.guid(), r.name().isBlank() ? "BuildObject" : r.name(), r.points());
                 e.color = r.color();
-                if (tree.held() + r.dormant().size() + r.replaced().size() <= HELD_LIMIT) {
+                e.parent = byId.get(r.parentId());
+                e.stowed = r.stowed();
+                // one hidden by an eye keeps all its blocks here: they are not counted, and dropping them would lose
+                // them
+                if (e.stowedInHierarchy()
+                        || tree.held() + r.dormant().size() + r.replaced().size() <= HELD_LIMIT) {
                     e.dormant = r.dormant();
                     e.replaced = r.replaced();
                 }
-                e.parent = byId.get(r.parentId());
                 byId.put(e.id, e);
                 tree.entries.add(e);
                 e.group = byGroup.get(r.groupId());
                 e.folded = r.folded();
-                e.stowed = r.stowed();
             }
             tree.nextId = Math.max(
                     nextId, tree.entries.stream().mapToInt(e -> e.id).max().orElse(0) + 1);
@@ -628,17 +636,19 @@ public final class SavedSelections {
     }
     /**
      * Sets what a BuildObject holds that is not in the world: its dormant blocks and the world blocks it replaced. The stores are copied, so the caller keeps its own.
-     * Refused when either goes past {@link Selection#LIMIT} cells or the tree's total would pass {@link Tree#HELD_LIMIT}; nothing is changed then.
+     * Refused when either goes past {@link Selection#LIMIT} cells or the tree's total would pass {@link Tree#HELD_LIMIT}; nothing is changed then. One hidden by an
+     * eye is not counted in the total, and may keep up to {@link Tree#STOWED_LIMIT} dormant cells.
      * Returns whether anything changed.
      */
     public boolean setHeld(int id, PackedCells dormant, PackedCells replaced) {
         Entry e = byId(id);
         if (e == null) throw new IllegalArgumentException("No such BuildObject");
-        if (dormant.size() > Selection.LIMIT || replaced.size() > Selection.LIMIT)
+        boolean stowed = e.stowedInHierarchy();
+        if (dormant.size() > (stowed ? Tree.STOWED_LIMIT : Selection.LIMIT) || replaced.size() > Selection.LIMIT)
             throw new IllegalArgumentException("A BuildObject holds up to " + String.format("%,d", Selection.LIMIT)
                     + " dormant and as many replaced blocks");
-        long others = tree.held() - e.dormant.size() - e.replaced.size();
-        if (others + dormant.size() + replaced.size() > Tree.HELD_LIMIT)
+        long others = tree.held() - (stowed ? 0 : e.dormant.size() + e.replaced.size());
+        if (!stowed && others + dormant.size() + replaced.size() > Tree.HELD_LIMIT)
             throw new IllegalArgumentException("The BuildObjects of this world hold up to "
                     + String.format("%,d", Tree.HELD_LIMIT) + " dormant and replaced blocks between them");
         if (e.dormant.sameContent(dormant) && e.replaced.sameContent(replaced)) return false;

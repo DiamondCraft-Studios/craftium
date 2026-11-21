@@ -242,7 +242,8 @@ final class BuildObjectStore {
         var c = tag.getCompoundOrEmpty(name);
         long[] keys = c.getLongArray("cells").orElse(new long[0]);
         if (keys.length == 0) return PackedCells.EMPTY;
-        if (keys.length > Selection.LIMIT) throw new IllegalArgumentException("Invalid BuildObject dormant blocks");
+        if (keys.length > SavedSelections.Tree.STOWED_LIMIT) // one hidden by an eye keeps up to twice as many
+        throw new IllegalArgumentException("Invalid BuildObject dormant blocks");
         var states = List.of(c.getStringOr("states", "").split("\n", -1));
         long[] dataKeys = c.getLongArray("dataCells").orElse(new long[0]);
         var list = c.getListOrEmpty("data");

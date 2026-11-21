@@ -1224,4 +1224,23 @@ class SavedSelectionsTest {
         saved.place(door.id(), 0, 0); // out from under the closed eye
         assertEquals(Set.of(house.id(), knob.id()), saved.stowedIds());
     }
+
+    @Test
+    void whatAnEyeHidesIsNotCountedTowardsTheHeldLimitAndSurvivesALoad() {
+        var saved = new SavedSelections();
+        var house = saved.save(live(A));
+        var door = saved.save(live(B));
+        saved.place(door.id(), house.id(), 0);
+        var kept = new PackedCells();
+        kept.put(C, "minecraft:stone");
+        saved.setHeld(door.id(), kept, new PackedCells());
+        assertEquals(1, saved.tree().held());
+        saved.setStowed(List.of(house.id()), true);
+        assertEquals(0, saved.tree().held(), "the parent's closed eye takes the child out of the count too");
+
+        var back = new SavedSelections(
+                SavedSelections.Tree.load(saved.tree().nextId(), saved.tree().saved(), 1, List.of()));
+        assertEquals("minecraft:stone", back.byId(door.id()).dormant().get(C));
+        assertTrue(back.byId(door.id()).stowedInHierarchy());
+    }
 }
