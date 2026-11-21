@@ -165,6 +165,35 @@ public final class SavedSelections {
             hiddenBoxFor = heldVersion;
             return hiddenBox = b;
         }
+
+        private int[] box;
+        private int boxFor = -1;
+        /**
+         * The box around its own blocks as {x0,y0,z0,x1,y1,z1}, or null when it holds none. Worked out once for each change of the blocks: the list every
+         * player is sent carries it, and going through every block of every BuildObject for each list made a click in the Hierarchy cost a scan of the world's BuildObjects.
+         */
+        public int[] bounds() {
+            if (points.isEmpty()) return null;
+            if (box != null && boxFor == version) return box;
+            int[] b = {
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                Integer.MIN_VALUE,
+                Integer.MIN_VALUE,
+                Integer.MIN_VALUE
+            };
+            for (var p : points) {
+                b[0] = Math.min(b[0], p.x());
+                b[1] = Math.min(b[1], p.y());
+                b[2] = Math.min(b[2], p.z());
+                b[3] = Math.max(b[3], p.x());
+                b[4] = Math.max(b[4], p.y());
+                b[5] = Math.max(b[5], p.z());
+            }
+            boxFor = version;
+            return box = b;
+        }
         /** Goes up whenever the blocks change, so what was sent of them can be told from what is there now. */
         public int version() {
             return version;
@@ -810,8 +839,11 @@ public final class SavedSelections {
             for (var e : subtree(r)) {
                 var relative = new ArrayList<Point>(e.points.size());
                 for (var p : e.points) relative.add(p.subtract(origin));
-                if (withHidden)
-                    for (var p : e.dormant.points()) if (!e.points.contains(p)) relative.add(p.subtract(origin));
+                if (withHidden && !e.dormant.isEmpty()) {
+                    var own = new HashSet<>(
+                            e.points); // a set: looking each hidden block up in the list was blocks x hidden
+                    for (var p : e.dormant.points()) if (!own.contains(p)) relative.add(p.subtract(origin));
+                }
                 index.put(e, out.size());
                 out.add(new Copy(e.name, e == r ? -1 : index.get(e.parent), e.color, List.copyOf(relative)));
             }
@@ -1074,12 +1106,30 @@ public final class SavedSelections {
         if (!editing() || live.size() == 0)
             return false; // an emptied selection (Clear, Delete) never empties the saved one; delete it from the window
         // instead
-        if (active.points.size() == live.size() && new HashSet<>(active.points).equals(live.points())) return false;
-        active.points = List.copyOf(live.points());
-        active.version++;
-        changed();
-        return true;
+        // Called for every status: with nothing changed on either side since the last call they still agree, so the
+        // blocks are not compared again (a copy of up to two million of them).
+        if (live == syncedLive
+                && live.revision() == syncedRevision
+                && active == syncedEntry
+                && active.version == syncedVersion) return false;
+        boolean same = active.points.size() == live.size() && new HashSet<>(active.points).equals(live.points());
+        if (!same) {
+            active.points = List.copyOf(live.points());
+            active.version++;
+            changed();
+        }
+        syncedLive = live;
+        syncedRevision = live.revision();
+        syncedEntry = active;
+        syncedVersion = active.version;
+        return !same;
     }
+    /** What {@link #sync} last found in agreement: the live selection at a revision and the entry at a version. */
+    private Selection syncedLive;
+
+    private long syncedRevision;
+    private Entry syncedEntry;
+    private int syncedVersion;
     /** Removes the entry and everything under it; if one of them was being looked at, the live selection comes back first. Returns the removed entry so a delete can be undone. */
     public Entry delete(int id, Selection live) {
         var entry = need(id);

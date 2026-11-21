@@ -194,4 +194,39 @@ class SavedSelectionActionsTest {
         assertFalse(SavedSelectionActions.changesHierarchy("saved_selection:fold:1:1"), "and it is not an undo step");
         assertFalse(SavedSelectionActions.changesHierarchy("saved_selection:groupfold:1:1"));
     }
+
+    @Test
+    void blocksThatDoNotFitOneListGoWithTheNextInsteadOfBeingLost() {
+        var s = new Session();
+        var random = new java.util.Random(7);
+        for (int k = 0; k < 6; k++) {
+            var cells = new java.util.ArrayList<Point>();
+            for (int i = 0; i < 40_000; i++)
+                cells.add(new Point(random.nextInt(4000), random.nextInt(300), random.nextInt(4000)));
+            s.selection.combine(cells, Selection.Mode.REPLACE);
+            s.saved.save(s.selection);
+        }
+        var got = new java.util.HashMap<Integer, String>();
+        int lists = 0;
+        for (List<dev.craftium.net.Packets.SavedSelection> list;
+                (list = SavedSelectionActions.forStatus(s, true)) != null; ) {
+            lists++;
+            int carried = 0;
+            for (var e : list)
+                if (e.data() != null) {
+                    assertNull(got.put(e.id(), e.data()), "each one's blocks are sent once");
+                    carried += e.data().length();
+                }
+            assertTrue(
+                    carried <= SavedSelectionActions.LIST_DATA_BUDGET || list.size() == 1,
+                    "a list carries no more than its share");
+            assertTrue(lists < 20);
+        }
+        assertTrue(lists > 1, "too much for one list: " + lists);
+        for (var e : s.saved.entries())
+            assertEquals(
+                    new java.util.HashSet<>(e.points()),
+                    dev.craftium.core.SelectionCodec.decode(got.get(e.id())),
+                    "every one arrived whole");
+    }
 }

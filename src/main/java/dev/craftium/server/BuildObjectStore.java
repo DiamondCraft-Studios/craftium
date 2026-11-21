@@ -24,6 +24,13 @@ final class BuildObjectStore {
         final SavedSelections.Tree tree;
         long written;
         boolean overlaid;
+        /**
+         * What is waiting to be written, newest only. Writing a tree takes every block of every BuildObject, so writes that each kept a snapshot of their own
+         * piled up (and held their snapshots in memory) whenever the tree changed faster than it could be written; a write that is still waiting now takes
+         * the newest state instead, and older ones are never written.
+         */
+        final java.util.concurrent.atomic.AtomicReference<Snapshot> next =
+                new java.util.concurrent.atomic.AtomicReference<>();
 
         Slot(Path file, SavedSelections.Tree tree, long written) {
             this.file = file;
@@ -31,6 +38,10 @@ final class BuildObjectStore {
             this.written = written;
         }
     }
+
+    /** One tree as it is to be written. */
+    record Snapshot(
+            int nextId, List<SavedSelections.Saved> rows, int nextGroupId, List<SavedSelections.SavedGroup> groups) {}
 
     private static final Map<Path, Slot> SLOTS = new HashMap<>();
     /**
@@ -109,13 +120,18 @@ final class BuildObjectStore {
                 continue; // nothing changed, and it is not the end of an edit that was being kept out of it
             slot.written = slot.tree.mutations();
             slot.overlaid = overlaid;
-            var rows = slot.tree.saved(own, held);
-            var groups = slot.tree.savedGroups();
-            int nextId = slot.tree.nextId(), nextGroupId = slot.tree.nextGroupId();
+            var snapshot = new Snapshot(
+                    slot.tree.nextId(), slot.tree.saved(own, held), slot.tree.nextGroupId(), slot.tree.savedGroups());
+            if (slot.next.getAndSet(snapshot) != null) continue; // a write is already waiting: it takes this one
             Path file = slot.file;
             synchronized (BuildObjectStore.class) {
                 pending = pending.handle((v, e) -> null)
-                        .thenRunAsync(() -> write(file, nextId, rows, nextGroupId, groups), IO);
+                        .thenRunAsync(
+                                () -> {
+                                    var s = slot.next.getAndSet(null);
+                                    if (s != null) write(file, s.nextId(), s.rows(), s.nextGroupId(), s.groups());
+                                },
+                                IO);
             }
         }
     }

@@ -86,7 +86,21 @@ public final class Selection {
         return bounds(false);
     }
 
+    /** The corners last worked out, and the revision they are for: every status asks for both, and the selection rarely changes between two. */
+    private Point minKept, maxKept;
+
+    private long boundsFor = -1;
+
     private Point bounds(boolean min) {
+        if (boundsFor != revision) {
+            minKept = scan(true);
+            maxKept = scan(false);
+            boundsFor = revision;
+        }
+        return min ? minKept : maxKept;
+    }
+
+    private Point scan(boolean min) {
         if (points.isEmpty()) return new Point(0, 0, 0);
         int x = min ? Integer.MAX_VALUE : Integer.MIN_VALUE, y = x, z = x;
         for (Point p : points) {

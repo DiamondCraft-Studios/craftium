@@ -1155,4 +1155,33 @@ class SavedSelectionsTest {
         var made = saved.createCopies(whole, ORIGIN, new HashSet<>(List.of(A, C)), 0);
         assertEquals(2, made.get(0).size(), "the copy holds both, to be placed or kept hidden where it is put down");
     }
+
+    @Test
+    void theBoxFollowsTheBlocksAndIsKeptUntilTheyChange() {
+        var saved = new SavedSelections();
+        var e = saved.save(live(A, new Point(3, -2, 5)));
+        var box = e.bounds();
+        assertArrayEquals(new int[] {0, -2, 0, 3, 0, 5}, box);
+        assertSame(box, e.bounds(), "worked out once, not for every list");
+        saved.setPoints(Map.of(e.id(), List.of(C)));
+        assertArrayEquals(new int[] {2, 0, 0, 2, 0, 0}, e.bounds(), "a change of blocks makes it again");
+        saved.setPoints(Map.of(e.id(), List.of()));
+        assertNull(e.bounds(), "none for no blocks");
+    }
+
+    @Test
+    void syncNoticesEveryChangeOnEitherSideAfterSkippingAnUnchangedOne() {
+        var saved = new SavedSelections();
+        var s = live(A, B);
+        var e = saved.save(s);
+        saved.edit(e.id(), s);
+        assertFalse(saved.sync(s));
+        assertFalse(saved.sync(s), "nothing changed: skipped");
+        s.combine(List.of(C), Selection.Mode.ADD);
+        assertTrue(saved.sync(s), "the live selection changed");
+        assertEquals(Set.of(A, B, C), new HashSet<>(e.points()));
+        saved.setPoints(Map.of(e.id(), List.of(A)));
+        assertTrue(saved.sync(s), "the entry changed: the live selection is still what is being edited");
+        assertEquals(Set.of(A, B, C), new HashSet<>(e.points()));
+    }
 }
