@@ -69,7 +69,8 @@ final class ObjectMoves {
      */
     static Applied apply(ServerLevel level, Session s, EditPlanner plan, Mover mover) {
         var ordered = new ArrayList<ObjectMove.Obj>();
-        for (var e : s.saved.entries()) ordered.add(new ObjectMove.Obj(e.id(), e.points(), e.dormant(), e.replaced()));
+        for (var e : s.saved.entries())
+            ordered.add(new ObjectMove.Obj(e.id(), e.points(), e.dormant(), e.replaced(), false, e.stowed()));
         var ownBefore = s.saved.snapshot();
         var heldBefore = s.saved.heldSnapshot();
         var solidCache = new HashMap<String, Boolean>();
@@ -178,8 +179,8 @@ final class ObjectMoves {
             var carried = carried(s, ownStart, heldStart);
             var ordered = new ArrayList<ObjectMove.Obj>();
             for (var e : s.saved.entries())
-                ordered.add(
-                        new ObjectMove.Obj(e.id(), e.points(), e.dormant(), e.replaced(), carried.contains(e.id())));
+                ordered.add(new ObjectMove.Obj(
+                        e.id(), e.points(), e.dormant(), e.replaced(), carried.contains(e.id()), e.stowed()));
             var source = c.source().keySet();
             var solidCache = new HashMap<String, Boolean>();
             Predicate<String> solid = text -> solidCache.computeIfAbsent(text, t -> beats(plan.parse(t)));
@@ -235,7 +236,12 @@ final class ObjectMoves {
         var ordered = new ArrayList<ObjectMove.Obj>();
         for (var e : s.saved.entries())
             ordered.add(new ObjectMove.Obj(
-                    e.id(), fresh.containsKey(e.id()) ? List.<Point>of() : e.points(), e.dormant(), e.replaced()));
+                    e.id(),
+                    fresh.containsKey(e.id()) ? List.<Point>of() : e.points(),
+                    e.dormant(),
+                    e.replaced(),
+                    false,
+                    e.stowed()));
         var placements = new ArrayList<ObjectMove.Placement>();
         for (var e : fresh.entrySet())
             for (var p : e.getValue()) {
@@ -263,7 +269,8 @@ final class ObjectMoves {
         var placements = new ArrayList<ObjectMove.Placement>();
         for (var e : s.saved.entries()) {
             boolean here = ids.contains(e.id());
-            ordered.add(new ObjectMove.Obj(e.id(), e.points(), here ? new PackedCells() : e.dormant(), e.replaced()));
+            ordered.add(new ObjectMove.Obj(
+                    e.id(), e.points(), here ? new PackedCells() : e.dormant(), e.replaced(), false, e.stowed()));
             if (here)
                 e.dormant()
                         .forEach((p, state) -> placements.add(new ObjectMove.Placement(
@@ -277,6 +284,30 @@ final class ObjectMoves {
         Function<Point, ObjectMove.Block> world = p -> block(BlockSnapshot.capture(level, EditPlanner.pos(p)));
         var result = ObjectMove.place(ordered, placements, world, solid);
         return new Transformed(commit(s, plan, result, ownBefore, heldBefore), result.landed());
+    }
+
+    /**
+     * Closes the eye of these BuildObjects: the blocks each holds in the world are kept as dormant, their cells written as {@link ObjectMove#stow} says, and the
+     * flag is set. Returns null when none of them holds anything in the world (the flag is still set). Nothing is left changed if it throws.
+     */
+    static Applied stow(ServerLevel level, Session s, EditPlanner plan, Set<Integer> ids) {
+        var ownBefore = s.saved.snapshot();
+        var heldBefore = s.saved.heldSnapshot();
+        boolean any = false;
+        for (int id : ids) {
+            var e = s.saved.byId(id);
+            if (e != null && !e.points().isEmpty()) any = true;
+        }
+        Function<Point, ObjectMove.Block> world = p -> block(BlockSnapshot.capture(level, EditPlanner.pos(p)));
+        var result = any ? ObjectMove.stow(ordered(s), ids, world) : null;
+        s.saved.setStowed(ids, true);
+        if (result == null) return null;
+        try {
+            return commit(s, plan, result, ownBefore, heldBefore);
+        } catch (RuntimeException ex) {
+            s.saved.setStowed(ids, false);
+            throw ex;
+        }
     }
 
     /** The blocks kept hidden by the BuildObjects that are shown, and by everything under them, by cell (where two keep one in the same cell, the first). */
@@ -297,7 +328,8 @@ final class ObjectMoves {
     /** The BuildObjects as the move sees them, in the order of the Hierarchy. */
     private static List<ObjectMove.Obj> ordered(Session s) {
         var out = new ArrayList<ObjectMove.Obj>();
-        for (var e : s.saved.entries()) out.add(new ObjectMove.Obj(e.id(), e.points(), e.dormant(), e.replaced()));
+        for (var e : s.saved.entries())
+            out.add(new ObjectMove.Obj(e.id(), e.points(), e.dormant(), e.replaced(), false, e.stowed()));
         return out;
     }
 

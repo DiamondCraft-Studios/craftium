@@ -37,11 +37,17 @@ public final class ObjectMove {
 
     /**
      * A BuildObject as the move sees it: the cells it holds in the world, and what it keeps outside it. {@code carried} is set for one that holds nothing in the
-     * world (everything it has is dormant) but is shown with the selection: it moves with it, so its hidden blocks go through the same steps.
+     * world (everything it has is dormant) but is shown with the selection: it moves with it, so its hidden blocks go through the same steps. {@code stowed} is set for one
+     * whose eye is closed: everything it has stays dormant, wherever it goes, and it never takes a cell back.
      */
-    public record Obj(int id, Collection<Point> own, PackedCells dormant, PackedCells replaced, boolean carried) {
+    public record Obj(
+            int id, Collection<Point> own, PackedCells dormant, PackedCells replaced, boolean carried, boolean stowed) {
+        public Obj(int id, Collection<Point> own, PackedCells dormant, PackedCells replaced, boolean carried) {
+            this(id, own, dormant, replaced, carried, false);
+        }
+
         public Obj(int id, Collection<Point> own, PackedCells dormant, PackedCells replaced) {
-            this(id, own, dormant, replaced, false);
+            this(id, own, dormant, replaced, false, false);
         }
     }
 
@@ -175,7 +181,7 @@ public final class ObjectMove {
             Work back = null;
             for (int i = ordered.size() - 1; i >= 0 && back == null; i--) {
                 var p = work.get(ordered.get(i).id());
-                if (!whole.contains(p) && p != mover && p.dormant.has(c)) back = p;
+                if (!whole.contains(p) && p != mover && !p.stowed && p.dormant.has(c)) back = p;
             }
             if (back != null) {
                 current.put(c, new Block(back.dormant.get(c), back.dormant.data(c)));
@@ -214,7 +220,7 @@ public final class ObjectMove {
             if (!e.getValue().equals(orAir(worldState.apply(e.getKey())))) writes.put(e.getKey(), e.getValue());
         var changed = new LinkedHashMap<Integer, Obj>();
         for (var w : work.values())
-            if (w.touched) changed.put(w.id, new Obj(w.id, w.own, w.dormant, w.replaced, false));
+            if (w.touched) changed.put(w.id, new Obj(w.id, w.own, w.dormant, w.replaced, false, w.stowed));
         return new Result(writes, changed, landedCells);
     }
 
@@ -246,6 +252,11 @@ public final class ObjectMove {
             }
             var me = a.who();
             me.touched = true;
+            if (me.stowed) { // its eye is closed: whatever lands is kept, never written
+                if (!a.block().isAir())
+                    me.dormant.put(d, a.block().state(), a.block().data());
+                continue;
+            }
             if (solid.test(here.state())) {
                 if (holder != null && holder != me && priority.get(me.id) > priority.get(holder.id)) {
                     holder.own.remove(d);
@@ -315,7 +326,7 @@ public final class ObjectMove {
             if (!e.getValue().equals(orAir(worldState.apply(e.getKey())))) writes.put(e.getKey(), e.getValue());
         var changed = new LinkedHashMap<Integer, Obj>();
         for (var w : work.values())
-            if (w.touched) changed.put(w.id, new Obj(w.id, w.own, w.dormant, w.replaced, false));
+            if (w.touched) changed.put(w.id, new Obj(w.id, w.own, w.dormant, w.replaced, false, w.stowed));
         return new Result(writes, changed, landedCells);
     }
 
@@ -339,7 +350,7 @@ public final class ObjectMove {
             }
             var rest = o.dormant().copy();
             for (var c : cut) rest.remove(c); // these are placed below, not kept twice
-            adjusted.add(new Obj(o.id(), o.own(), rest, o.replaced(), o.carried()));
+            adjusted.add(new Obj(o.id(), o.own(), rest, o.replaced(), o.carried(), o.stowed()));
         }
         return place(adjusted, placements, worldState, solid);
     }
@@ -354,14 +365,61 @@ public final class ObjectMove {
         var holder = new HashMap<Point, Obj>();
         for (var o : ordered) for (var p : o.own()) if (hiddenAt.contains(p)) holder.put(p, o);
         var placements = new ArrayList<Placement>();
-        for (var o : ordered)
+        for (var o : ordered) {
+            if (o.stowed()) continue; // its eye is closed: it takes no cell
             for (var c : o.dormant().points()) {
                 var held = holder.get(c);
                 if (held != null && held != o && priority.get(o.id()) > priority.get(held.id()))
                     placements.add(new Placement(
                             o.id(), c, new Block(o.dormant().get(c), o.dormant().data(c))));
             }
+        }
         return placements;
+    }
+
+    /**
+     * Closes the eye of these BuildObjects: every block one holds in the world is kept as dormant, as it is now (with its block entity), and its cell is given to the
+     * BuildObject latest in the list that keeps a block hidden there (and is not being stowed itself), else gets back the world block the object replaced, else air.
+     * A block the object replaced goes with the cell to the one that takes it, so that one gives it back when it leaves. The objects come back marked as stowed.
+     * @param ordered every BuildObject, lowest priority first
+     * @param worldState the block at a cell now, or null for air
+     */
+    public static Result stow(List<Obj> ordered, Set<Integer> ids, Function<Point, Block> worldState) {
+        var work = new LinkedHashMap<Integer, Work>();
+        for (var o : ordered) work.put(o.id(), new Work(o));
+        var current = new LinkedHashMap<Point, Block>();
+        for (var o : ordered) {
+            if (!ids.contains(o.id())) continue;
+            var me = work.get(o.id());
+            me.stowed = true;
+            me.touched = true;
+            for (var c : o.own()) {
+                var here = orAir(worldState.apply(c));
+                if (!here.isAir()) me.dormant.put(c, here.state(), here.data());
+                me.own.remove(c);
+                Work back = null;
+                for (int i = ordered.size() - 1; i >= 0 && back == null; i--) {
+                    var p = work.get(ordered.get(i).id());
+                    if (!ids.contains(p.id) && !p.stowed && p.dormant.has(c)) back = p;
+                }
+                if (back != null) {
+                    current.put(c, new Block(back.dormant.get(c), back.dormant.data(c)));
+                    back.dormant.remove(c);
+                    back.own.add(c);
+                    if (me.replaced.has(c)) back.replaced.put(c, me.replaced.get(c), me.replaced.data(c));
+                    back.touched = true;
+                } else if (me.replaced.has(c)) current.put(c, new Block(me.replaced.get(c), me.replaced.data(c)));
+                else current.put(c, new Block(AIR, null));
+                me.replaced.remove(c);
+            }
+        }
+        var writes = new LinkedHashMap<Point, Block>();
+        for (var e : current.entrySet())
+            if (!e.getValue().equals(orAir(worldState.apply(e.getKey())))) writes.put(e.getKey(), e.getValue());
+        var changed = new LinkedHashMap<Integer, Obj>();
+        for (var w : work.values())
+            if (w.touched) changed.put(w.id, new Obj(w.id, w.own, w.dormant, w.replaced, false, w.stowed));
+        return new Result(writes, changed, Set.of());
     }
 
     /** Water, as a block state text (not a block that only starts with the word, such as a water cauldron). */
@@ -386,10 +444,11 @@ public final class ObjectMove {
         final int id;
         final Set<Point> own;
         PackedCells dormant, replaced;
-        boolean touched;
+        boolean touched, stowed;
 
         Work(Obj o) {
             id = o.id();
+            stowed = o.stowed();
             own = new HashSet<>(o.own());
             dormant = o.dormant().copy();
             replaced = o.replaced().copy();

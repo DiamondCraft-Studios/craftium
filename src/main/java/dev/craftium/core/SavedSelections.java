@@ -57,6 +57,7 @@ public final class SavedSelections {
         private int color;
         private Group group;
         private boolean folded;
+        private boolean stowed;
         private PackedCells dormant = PackedCells.EMPTY, replaced = PackedCells.EMPTY;
         private int heldVersion;
         private int[] hiddenBox;
@@ -95,6 +96,13 @@ public final class SavedSelections {
         /** Whether what is under it is folded away in the Hierarchy. It is kept with the BuildObjects, so it is as it was after a reload or a rejoin. */
         public boolean folded() {
             return folded;
+        }
+        /**
+         * Whether its eye is closed: its blocks are taken out of the world and kept as dormant, for everyone, and nothing puts them back (a move, a reorder, a cell
+         * coming free) until it is shown again. Kept with the BuildObjects and in the history.
+         */
+        public boolean stowed() {
+            return stowed;
         }
         /** The group it is in: the group of the BuildObject at the top that it is under, or its own when it is at the top. */
         public Group group() {
@@ -254,7 +262,8 @@ public final class SavedSelections {
                         e.ownGroupId(),
                         e.folded,
                         then != null ? then.dormant() : e.dormant,
-                        then != null ? then.replaced() : e.replaced));
+                        then != null ? then.replaced() : e.replaced,
+                        e.stowed));
             }
             return out;
         }
@@ -309,6 +318,7 @@ public final class SavedSelections {
                 tree.entries.add(e);
                 e.group = byGroup.get(r.groupId());
                 e.folded = r.folded();
+                e.stowed = r.stowed();
             }
             tree.nextId = Math.max(
                     nextId, tree.entries.stream().mapToInt(e -> e.id).max().orElse(0) + 1);
@@ -327,7 +337,22 @@ public final class SavedSelections {
             int groupId,
             boolean folded,
             PackedCells dormant,
-            PackedCells replaced) {
+            PackedCells replaced,
+            boolean stowed) {
+        /** A BuildObject of a file from before the eye took its blocks out of the world. */
+        public Saved(
+                int id,
+                String guid,
+                String name,
+                int parentId,
+                int color,
+                List<Point> points,
+                int groupId,
+                boolean folded,
+                PackedCells dormant,
+                PackedCells replaced) {
+            this(id, guid, name, parentId, color, points, groupId, folded, dormant, replaced, false);
+        }
         /** A BuildObject of a file from before dormant blocks. */
         public Saved(
                 int id,
@@ -1144,11 +1169,12 @@ public final class SavedSelections {
     /** One group as it was: the group itself (it keeps its id and GUID) and its name. */
     public record GroupRow(Group group, String name) {}
     /** One BuildObject as it was: the entry itself (it keeps its id and GUID) with the parts of it that change. */
-    public record Row(Entry entry, String name, int parentId, List<Point> points, int color, int groupId) {}
+    public record Row(
+            Entry entry, String name, int parentId, List<Point> points, int color, int groupId, boolean stowed) {}
 
     public State state() {
         var rows = new ArrayList<Row>();
-        for (var e : entries) rows.add(new Row(e, e.name, e.parentId(), e.points, e.color, e.ownGroupId()));
+        for (var e : entries) rows.add(new Row(e, e.name, e.parentId(), e.points, e.color, e.ownGroupId(), e.stowed));
         var groups = new ArrayList<GroupRow>();
         for (var g : tree.groups) groups.add(new GroupRow(g, g.name));
         return new State(List.copyOf(rows), List.copyOf(groups));
@@ -1165,9 +1191,22 @@ public final class SavedSelections {
                     || !a.name().equals(b.name())
                     || a.parentId() != b.parentId()
                     || a.color() != b.color()
+                    || a.stowed() != b.stowed()
                     || a.groupId() != b.groupId()) return false;
         }
         return true;
+    }
+    /** Closes or opens the eye of these BuildObjects (see {@link Entry#stowed}). Only the flag: the blocks are moved by the caller. Returns whether any changed. */
+    public boolean setStowed(Collection<Integer> ids, boolean stowed) {
+        boolean any = false;
+        for (int id : ids) {
+            var e = need(id);
+            if (e.stowed == stowed) continue;
+            e.stowed = stowed;
+            any = true;
+        }
+        if (any) changed();
+        return any;
     }
     /** Sets the colour of a BuildObject (ARGB; 0 puts it back to the next one from the wheel). */
     public void setColor(int id, int color) {
@@ -1201,6 +1240,7 @@ public final class SavedSelections {
             var e = r.entry();
             e.name = r.name();
             e.color = r.color();
+            e.stowed = r.stowed();
             // The blocks of one that is still here are what they are now: they follow the blocks in the world (and have
             // their own history), and this step is not about them.
             // Only one that comes back after being deleted takes the blocks it had.

@@ -192,6 +192,7 @@ final class BuildObjectStore {
                 tag.putInt("color", r.color());
                 tag.putInt("group", r.groupId());
                 tag.putBoolean("folded", r.folded());
+                if (r.stowed()) tag.putBoolean("stowed", true); // read as false by builds from before it
                 var flat = new int[r.points().size() * 3];
                 int i = 0;
                 for (var p : r.points()) {
@@ -277,7 +278,8 @@ final class BuildObjectStore {
                         tag.getIntOr("group", 0),
                         tag.getBooleanOr("folded", false),
                         format >= 2 ? readCells(tag, "dormant") : PackedCells.EMPTY,
-                        format >= 2 ? readCells(tag, "replaced") : PackedCells.EMPTY));
+                        format >= 2 ? readCells(tag, "replaced") : PackedCells.EMPTY,
+                        tag.getBooleanOr("stowed", false)));
             }
             var groups = new ArrayList<SavedSelections.SavedGroup>();
             var groupList = root.getListOrEmpty("groups");

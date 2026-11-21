@@ -25,7 +25,7 @@ This matches published defaults. A running copy of Axiom was not used for compar
 | Editor | F2 | Rename the BuildObject shown, in its row |
 | Editor | Ctrl + G | Group the BuildObjects shown into a new empty parent |
 | Editor | F | With exactly one BuildObject shown, face the middle of it from far enough back to see all of it |
-| Hierarchy | Ctrl + click on the eye | Open or close the eye of a BuildObject and everything under it |
+| Hierarchy | Ctrl + click on the eye | Hide or show the blocks of a BuildObject and everything under it |
 | Hierarchy | Ctrl + click / Shift + Ctrl + click | Add or remove a BuildObject from those shown / add every row from the last one clicked |
 | Editor | Ctrl + C / X / V / J | Copy / cut / paste / duplicate |
 | Editor | Ctrl + Shift + V | Paste in place: start a placement where the blocks were copied from |

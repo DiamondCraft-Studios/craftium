@@ -471,6 +471,8 @@ public final class EditorServer {
                     || r.action().equals("paste_at")
                     || r.action().equals("paste_select")
                     || r.action().startsWith("saved_selection:deleteblocks:")
+                    || r.action().startsWith("saved_selection:stow:")
+                    || r.action().startsWith("saved_selection:unstow:")
                     || r.action().equals("pending_confirm")
                     || r.action().equals("stroke_end")
                     || r.action().equals("use")
@@ -700,6 +702,16 @@ public final class EditorServer {
                     send(player, s, "Trimmed " + removed + " air blocks", false);
                     return;
                 }
+                if (r.action().startsWith(SavedSelectionActions.PREFIX + "stow:")
+                        || r.action().startsWith(SavedSelectionActions.PREFIX + "unstow:")) {
+                    // stow:<ids separated by commas> closes their eyes, unstow:<ids> opens them: the blocks go out of
+                    // the
+                    // world and back, for everyone, as one step in the history
+                    HierarchyPermissions.require(player, "edit");
+                    stowObjects(
+                            player, s, o, r.action().startsWith(SavedSelectionActions.PREFIX + "stow:"), r.action());
+                    return;
+                }
                 if (r.action()
                         .startsWith(SavedSelectionActions.PREFIX
                                 + "placehere:")) { // placehere:<ids separated by commas>: what these
@@ -710,7 +722,14 @@ public final class EditorServer {
                     for (var text : r.action()
                             .substring((SavedSelectionActions.PREFIX + "placehere:").length())
                             .split(",")) if (!text.isBlank()) named.add(Integer.parseInt(text.trim()));
-                    var everything = s.saved.withDescendants(named);
+                    var everything = new LinkedHashSet<Integer>();
+                    for (int id : s.saved.withDescendants(
+                            named)) { // one whose eye is closed keeps its blocks out of the world
+                        var kept = s.saved.byId(id);
+                        if (kept == null || !kept.stowed()) everything.add(id);
+                    }
+                    if (everything.isEmpty())
+                        throw new IllegalArgumentException("Its eye is closed: open it to put its blocks back");
                     var hidden = new ArrayList<Point>();
                     for (var id : everything) {
                         var kept = s.saved.byId(id);
@@ -2865,6 +2884,87 @@ public final class EditorServer {
                 o.sizeY,
                 o.sizeZ);
     }
+
+    /**
+     * Closes ({@code stow}) or opens the eye of the BuildObjects named in the action. Closing keeps every block one holds in the world as dormant and gives its
+     * cells back (see {@link dev.craftium.core.ObjectMove#stow}); opening places them again where the world is free, as Place here does, and keeps the rest
+     * dormant. The flag, the blocks and the BuildObjects are one step in the history.
+     */
+    private static void stowObjects(ServerPlayer player, Session s, Options o, boolean stow, String action) {
+        var ids = new LinkedHashSet<Integer>();
+        for (int id : SavedSelectionActions.idsOf(action.substring(action.indexOf(':', PREFIX_LENGTH) + 1))) {
+            var e = s.saved.byId(id);
+            if (e != null && e.stowed() != stow) ids.add(id);
+        }
+        if (ids.isEmpty())
+            throw new IllegalArgumentException(stow ? "Its blocks are already hidden" : "Its blocks are already shown");
+        if (stow
+                && s.saved.editing()
+                && s.saved.active() != null
+                && ids.contains(s.saved.active().id()))
+            throw new IllegalArgumentException("Finish editing that BuildObject before hiding it");
+        var cells = new ArrayList<Point>();
+        for (int id : ids) {
+            var e = s.saved.byId(id);
+            cells.addAll(stow ? e.points() : e.dormant().points());
+        }
+        String what = ids.size() == 1 ? s.saved.byId(ids.iterator().next()).name() : ids.size() + " BuildObjects";
+        String step = (stow ? "Hide " : "Show ") + (ids.size() == 1 ? "BuildObject" : "BuildObjects");
+        var hierarchyBefore = s.saved.state();
+        if (!cells.isEmpty())
+            ChunkLease.planning(ChunkLease.area()
+                    .points(cells, 0, 0)
+                    .lease(player.level())); // the blocks may be far from every player
+        var plan = EditPlanner.forSelection(player.level(), s, o);
+        ObjectMoves.Applied applied;
+        if (stow) applied = cells.isEmpty() ? null : ObjectMoves.stow(player.level(), s, plan, ids);
+        else {
+            s.saved.setStowed(ids, false);
+            ObjectMoves.Transformed placed;
+            try {
+                placed = cells.isEmpty() ? null : ObjectMoves.placeHere(player.level(), s, plan, ids);
+            } catch (RuntimeException ex) {
+                s.saved.setStowed(ids, true);
+                throw ex;
+            }
+            applied = placed == null ? null : placed.applied();
+        }
+        if (stow && applied == null) s.saved.setStowed(ids, true); // nothing of it is in the world: only the flag
+        var hierarchyAfter = s.saved.state();
+        var edit = plan.finish(step);
+        if (applied == null
+                || edit.changes()
+                        .isEmpty()) { // nothing to write in the world: the flag, and what the BuildObjects keep
+            var change = applied == null
+                    ? Session.SelectionChange.hierarchy(hierarchyBefore, hierarchyAfter)
+                    : applied.change().withHierarchy(hierarchyBefore, hierarchyAfter);
+            s.remember(Session.Edit.selecting(step, change));
+            send(
+                    player,
+                    s,
+                    stow
+                            ? "Hid " + what
+                            : "Showed " + what
+                                    + (cells.isEmpty()
+                                            ? ""
+                                            : " · The world holds every cell it needs, so its blocks stay hidden"),
+                    false);
+            return;
+        }
+        try {
+            start(player, s, edit.withSelection(applied.change().withHierarchy(hierarchyBefore, hierarchyAfter)));
+        } catch (RuntimeException ex) {
+            applied.undo(s);
+            s.saved.setStowed(ids, !stow);
+            throw ex;
+        }
+        if (!s.saved.viewed().isEmpty() && !s.saved.editing())
+            s.saved.viewSet(
+                    s.saved.viewed().stream().map(SavedSelections.Entry::id).toList(),
+                    s.selection); // what is shown now follows the blocks that left or came back
+    }
+
+    private static final int PREFIX_LENGTH = SavedSelectionActions.PREFIX.length();
 
     private static void handBack(Session s, Session.SelectionChange change, boolean backwards) {
         if (change.hasHierarchy())

@@ -1184,4 +1184,20 @@ class SavedSelectionsTest {
         assertTrue(saved.sync(s), "the entry changed: the live selection is still what is being edited");
         assertEquals(Set.of(A, B, C), new HashSet<>(e.points()));
     }
+
+    @Test
+    void aClosedEyeIsPartOfTheHistoryAndOfWhatSomeoneElseCanChange() {
+        var saved = new SavedSelections();
+        var s = live(A);
+        var one = saved.save(s);
+        var open = saved.state();
+        assertTrue(saved.setStowed(List.of(one.id()), true));
+        assertFalse(saved.setStowed(List.of(one.id()), true), "closed again is no change");
+        var closed = saved.state();
+        assertFalse(saved.structureMatches(open), "an undo made before it was closed is not run over it");
+        saved.restore(open, s);
+        assertFalse(one.stowed());
+        saved.restore(closed, s);
+        assertTrue(one.stowed());
+    }
 }
