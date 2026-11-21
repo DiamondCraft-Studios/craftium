@@ -414,15 +414,33 @@ public final class ClientState {
     }
     /** Whether a BuildObject is selected, or is under one that is: it is part of what the player is working on. */
     static boolean savedSelected(Packets.SavedSelection saved) {
-        if (saved.active()) return true;
-        for (var other : savedSelections) if (other.active() && savedUnder(saved, other.id())) return true;
-        return false;
+        return selectedIds().contains(saved.id());
+    }
+    /** The list {@link #selectedIds} was worked out for; each list the server sends (or the client guesses) is a new one. */
+    private static List<Packets.SavedSelection> selectedFor;
+
+    private static Set<Integer> selectedIds = Set.of();
+    /**
+     * The BuildObjects that are selected or under one that is, worked out once for each list: asking each one in turn went through the whole list for each, every
+     * frame, for every x-ray drawn.
+     */
+    private static Set<Integer> selectedIds() {
+        if (selectedFor == savedSelections) return selectedIds;
+        var out = new HashSet<Integer>();
+        for (var e : savedSelections) {
+            int steps = 0;
+            for (var at = e; at != null && steps++ < 64; at = savedById.get(at.parent()))
+                if (at.active()) {
+                    out.add(e.id());
+                    break;
+                }
+        }
+        selectedFor = savedSelections;
+        return selectedIds = out;
     }
     /** Whether the x-ray of a BuildObject shows: while it is selected (or something it is under is), or while its eye is open, as its outline does. */
     static boolean xrayShown(Packets.SavedSelection saved) {
-        if (saved.active() || !savedHidden(saved.id())) return true;
-        for (var other : savedSelections) if (other.active() && savedUnder(saved, other.id())) return true;
-        return false;
+        return !savedHidden(saved.id()) || savedSelected(saved);
     }
 
     /** The box around the hidden blocks of the BuildObjects shown that hold nothing in the world, and how many blocks: what the gizmo is about when nothing is selected. */
