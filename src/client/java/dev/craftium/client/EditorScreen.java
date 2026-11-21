@@ -658,6 +658,44 @@ public final class EditorScreen extends CraftiumScreen {
         } else BlockDragCursor.release();
         g.pose().popMatrix();
         ReferenceImages.draw(g, true, steering ? -100000 : mouseX, steering ? -100000 : mouseY);
+        pointerOnInterface = !steering && pointerOnInterface(mx, my);
+    }
+
+    /**
+     * Whether the pointer was on the editor's interface at the end of the last frame: worked out once everything is drawn and
+     * every control made, and read by the next frame's brush ring, which is drawn first, under the panels.
+     */
+    private boolean pointerOnInterface;
+
+    /**
+     * Whether the point, in interface units, is on something of the editor rather than on the world: a panel, bar or pop-up,
+     * any control made this frame (the axis gizmo, the pinned tools, the items of a menu), an open menu, or the Help or
+     * Move window, which cover the whole view.
+     */
+    private boolean pointerOnInterface(int x, int y) {
+        if (help || transform || !inViewport(x, y)) return true;
+        for (var c : controls) if (c.contains(x, y)) return true;
+        if (menu >= 0 && menu != ROW_MENU) { // the box of a top menu, its separators included
+            int left = 108, height = 4;
+            for (int i = 0; i < menu; i++) left += menuWidth(i);
+            for (MenuItem item : menuItems(menu)) height += item.action == null ? 9 : 25;
+            if (x >= left && x < left + 226 && y >= 24 && y < 24 + height) return true;
+        }
+        if (ctxCell >= 0
+                && x >= ctxX
+                && x < ctxX + MASK_MENU_WIDTH
+                && y >= ctxY
+                && y < ctxY + menuLabels(ctxList).length * MASK_MENU_ROW) return true;
+        if (missingMenu >= 0
+                && x >= missingMenuX
+                && x < missingMenuX + MISSING_MENU_WIDTH
+                && y >= missingMenuY
+                && y < missingMenuY + MISSING_MENU_LABELS.length * MASK_MENU_ROW) return true;
+        return shapeMenu
+                && x >= shapeX
+                && x < shapeX + SHAPE_MENU_WIDTH
+                && y >= shapeY
+                && y < shapeY + shapeMenuHeight();
     }
     /** A tooltip laid out: its wrapped rows, how many belong to the first paragraph, and the widest row. */
     private record TooltipPane(
@@ -2773,7 +2811,8 @@ public final class EditorScreen extends CraftiumScreen {
                 || help
                 || transform
                 || TransformGizmo.dragging()
-                || !inViewport(pointerX / scale, pointerY / scale)) return;
+                || !inViewport(pointerX / scale, pointerY / scale)
+                || pointerOnInterface) return;
         // As big as the pointer, which is about 16 screen pixels across and centred on the point it aims at: the
         // badge's top-left corner sits on the pointer's bottom-right.
         double cursor = 16.0
@@ -2789,7 +2828,7 @@ public final class EditorScreen extends CraftiumScreen {
     /** While the pipette is in hand: finds the block under the pointer and shows its item in a cell above and to the right of the cursor. */
     private void pipettePreview(Gfx g) {
         pipetteBlock = "";
-        if (!pipetting || menu >= 0 || help || transform) return;
+        if (!pipetting || menu >= 0 || help || transform || pointerOnInterface) return;
         var hit = pipetteTarget(pointerX, pointerY);
         if (hit == null || minecraft.level == null) return;
         pipetteBlock = BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos()));
@@ -2819,7 +2858,8 @@ public final class EditorScreen extends CraftiumScreen {
                 && menu < 0
                 && !help
                 && !transform
-                && inViewport(pointerX / scale, pointerY / scale);
+                && inViewport(pointerX / scale, pointerY / scale)
+                && !pointerOnInterface;
         boolean grab = over && gizmoHover(), want = over && (pipetting || hoverPreviewTool());
         if ((want || grab) && ClientState.selecting())
             return; // the spinner has the cursor while a big selection is worked out
@@ -5496,7 +5536,8 @@ public final class EditorScreen extends CraftiumScreen {
     }
 
     public BlockHitResult target() {
-        if (inViewport(pointerX / scale, pointerY / scale)) {
+        // On the interface (a panel, button, menu or window) the pointer is on no block, so nothing previews under it.
+        if (inViewport(pointerX / scale, pointerY / scale) && !pointerOnInterface) {
             // Called several times a frame (panels, previews, gizmos), each time for the same ray: cast it once per
             // pointer, camera and game tick.
             var level = minecraft.level;
@@ -5600,7 +5641,8 @@ public final class EditorScreen extends CraftiumScreen {
                 cy += sizeDirY * reach;
             }
         } else {
-            if (!inViewport(mx, my)) return;
+            // On a panel, button, menu or window the pointer is not on the world, so there is no brush to show.
+            if (!inViewport(mx, my) || pointerOnInterface) return;
             perBlock = pixelsPerBlock(target());
         }
         if (perBlock <= 0) return;
@@ -5845,7 +5887,8 @@ public final class EditorScreen extends CraftiumScreen {
                     return true;
                 }
             } // back to the default, at once
-        if (event.button() == 0 && pipetting && menu < 0 && !help && !transform) {
+        // On a button or the axis gizmo the click is theirs, not the pipette's.
+        if (event.button() == 0 && pipetting && menu < 0 && !help && !transform && !pointerOnInterface) {
             var hit = pipetteTarget(event.x(), event.y());
             if (hit != null && minecraft.level != null) {
                 if (pickMissing(hit.getBlockPos())) {
