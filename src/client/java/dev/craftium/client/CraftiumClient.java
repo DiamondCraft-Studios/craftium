@@ -842,6 +842,7 @@ public final class CraftiumClient implements ClientModInitializer {
     /** The transform handles: the builder's, or the editor's with the box corners and the point being dragged. Drawn each frame. */
     /** The saved selections that are not swapped in, each drawn like the selection (its style, width and fills) in its own colour, unless it is hidden with the eye. They only show while the editor is open. The one being looked at is the live selection and is drawn by the selection overlay, in its colour. */
     private static void drawSavedSelections() {
+        var cone = viewCone();
         for (var saved : ClientState.savedSelections()) {
             boolean hovered = ClientState.hoverSaved != 0 && ClientState.savedUnder(saved, ClientState.hoverSaved)
                     || ClientState.hoverWorld
@@ -851,6 +852,7 @@ public final class CraftiumClient implements ClientModInitializer {
             var o = ClientState.options;
             var shape = ClientState.savedShape(saved.id());
             if (shape == null) continue; // its blocks have not arrived: nothing is drawn, never a box in their place
+            if (!onScreen(cone, shape)) continue; // off the screen: drawing it costs as much as one in view
             // the same style, width and fills as the selection, in the entry's colour
             shape.drawPlain(
                     Vec3.ZERO,
@@ -884,6 +886,7 @@ public final class CraftiumClient implements ClientModInitializer {
             boolean selected = ClientState.savedSelected(saved);
             if (dragged && selected) continue;
             if (!selected && !ClientState.xrayShown(saved) && !ClientState.savedHovered(saved)) continue;
+            if (!onScreen(cone, xray)) continue;
             int colour = ClientState.savedColor(saved.id());
             if (selected)
                 xray.drawPlain(
@@ -933,6 +936,25 @@ public final class CraftiumClient implements ClientModInitializer {
     }
 
     private static boolean hiddenWereDragged;
+    /**
+     * What the camera can see this frame, to leave out the BuildObjects that are off the screen: every one with its eye open used to be drawn each frame wherever
+     * it was, so the frame cost grew with all of them. Widened by a margin, so one at the edge is never dropped.
+     */
+    private static dev.craftium.core.ViewCone viewCone() {
+        var mc = Minecraft.getInstance();
+        var camera = ClientCompat.camera(mc);
+        var eye = camera.position();
+        var forward = camera.rotation().transform(new org.joml.Vector3f(0, 0, -1)); // as the game makes its own
+        var window = mc.getWindow();
+        double aspect = window.getHeight() == 0 ? 1 : (double) window.getWidth() / window.getHeight();
+        return new dev.craftium.core.ViewCone(
+                eye.x, eye.y, eye.z, forward.x, forward.y, forward.z, ClientCompat.fov(mc, camera), aspect, 10);
+    }
+
+    private static boolean onScreen(dev.craftium.core.ViewCone cone, OutlineShape shape) {
+        var b = shape.bounds();
+        return b == null || cone.sees(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ);
+    }
     /**
      * The hidden blocks of what is selected as the blocks they are, where the drag would put them (the preview tint, like the blocks of the selection): a move shifts them by whole blocks,
      * a rotate or a scale puts each in the cell the transform lands it in. Only once the server has sent them, and only when it sent all of them for a rotate or a scale.
