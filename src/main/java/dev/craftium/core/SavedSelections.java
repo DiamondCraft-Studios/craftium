@@ -57,6 +57,7 @@ public final class SavedSelections {
         private int color;
         private Group group;
         private boolean folded;
+        private boolean stowed;
         private PackedCells dormant = PackedCells.EMPTY, replaced = PackedCells.EMPTY;
         private int heldVersion;
         private int[] hiddenBox;
@@ -95,6 +96,21 @@ public final class SavedSelections {
         /** Whether what is under it is folded away in the Hierarchy. It is kept with the BuildObjects, so it is as it was after a reload or a rejoin. */
         public boolean folded() {
             return folded;
+        }
+        /**
+         * Whether its eye is closed: its blocks are taken out of the world and kept as dormant, for everyone, and nothing puts them back (a move, a reorder, a cell
+         * coming free) until it is shown again. Kept with the BuildObjects and in the history.
+         */
+        public boolean stowed() {
+            return stowed;
+        }
+        /**
+         * Whether its blocks are out of the world because of an eye: its own, or that of any BuildObject it is under. A closed eye above wins over an open one below,
+         * which keeps its own state for when the one above opens again (as an inactive parent does in Unity).
+         */
+        public boolean stowedInHierarchy() {
+            for (var e = this; e != null; e = e.parent) if (e.stowed) return true;
+            return false;
         }
         /** The group it is in: the group of the BuildObject at the top that it is under, or its own when it is at the top. */
         public Group group() {
@@ -254,16 +270,22 @@ public final class SavedSelections {
                         e.ownGroupId(),
                         e.folded,
                         then != null ? then.dormant() : e.dormant,
-                        then != null ? then.replaced() : e.replaced));
+                        then != null ? then.replaced() : e.replaced,
+                        e.stowed));
             }
             return out;
         }
-        /** How many cells all the BuildObjects of a tree may hold between them, dormant and replaced: the memory guard (about 10 bytes a cell). */
+        /**
+         * How many cells all the BuildObjects of a tree may hold between them, dormant and replaced: the memory guard (about 10 bytes a cell). A BuildObject hidden by an
+         * eye does not count: its blocks were in the world before, as its own blocks, which cost more than they do packed, so hiding one never adds memory.
+         */
         public static final int HELD_LIMIT = 8_388_608;
-        /** The cells every BuildObject holds, dormant and replaced. */
+        /** The most dormant cells one BuildObject hidden by an eye keeps: all it held in the world, and what it kept hidden before, each up to {@link Selection#LIMIT}. */
+        public static final int STOWED_LIMIT = 2 * Selection.LIMIT;
+        /** The cells the BuildObjects hold, dormant and replaced, that count towards {@link #HELD_LIMIT}: those of the ones hidden by an eye do not. */
         public long held() {
             long n = 0;
-            for (var e : entries) n += e.dormant.size() + e.replaced.size();
+            for (var e : entries) if (!e.stowedInHierarchy()) n += e.dormant.size() + e.replaced.size();
             return n;
         }
         /**
@@ -300,11 +322,15 @@ public final class SavedSelections {
                     continue;
                 var e = new Entry(r.id(), r.guid(), r.name().isBlank() ? "BuildObject" : r.name(), r.points());
                 e.color = r.color();
-                if (tree.held() + r.dormant().size() + r.replaced().size() <= HELD_LIMIT) {
+                e.parent = byId.get(r.parentId());
+                e.stowed = r.stowed();
+                // one hidden by an eye keeps all its blocks here: they are not counted, and dropping them would lose
+                // them
+                if (e.stowedInHierarchy()
+                        || tree.held() + r.dormant().size() + r.replaced().size() <= HELD_LIMIT) {
                     e.dormant = r.dormant();
                     e.replaced = r.replaced();
                 }
-                e.parent = byId.get(r.parentId());
                 byId.put(e.id, e);
                 tree.entries.add(e);
                 e.group = byGroup.get(r.groupId());
@@ -327,7 +353,22 @@ public final class SavedSelections {
             int groupId,
             boolean folded,
             PackedCells dormant,
-            PackedCells replaced) {
+            PackedCells replaced,
+            boolean stowed) {
+        /** A BuildObject of a file from before the eye took its blocks out of the world. */
+        public Saved(
+                int id,
+                String guid,
+                String name,
+                int parentId,
+                int color,
+                List<Point> points,
+                int groupId,
+                boolean folded,
+                PackedCells dormant,
+                PackedCells replaced) {
+            this(id, guid, name, parentId, color, points, groupId, folded, dormant, replaced, false);
+        }
         /** A BuildObject of a file from before dormant blocks. */
         public Saved(
                 int id,
@@ -595,17 +636,19 @@ public final class SavedSelections {
     }
     /**
      * Sets what a BuildObject holds that is not in the world: its dormant blocks and the world blocks it replaced. The stores are copied, so the caller keeps its own.
-     * Refused when either goes past {@link Selection#LIMIT} cells or the tree's total would pass {@link Tree#HELD_LIMIT}; nothing is changed then.
+     * Refused when either goes past {@link Selection#LIMIT} cells or the tree's total would pass {@link Tree#HELD_LIMIT}; nothing is changed then. One hidden by an
+     * eye is not counted in the total, and may keep up to {@link Tree#STOWED_LIMIT} dormant cells.
      * Returns whether anything changed.
      */
     public boolean setHeld(int id, PackedCells dormant, PackedCells replaced) {
         Entry e = byId(id);
         if (e == null) throw new IllegalArgumentException("No such BuildObject");
-        if (dormant.size() > Selection.LIMIT || replaced.size() > Selection.LIMIT)
+        boolean stowed = e.stowedInHierarchy();
+        if (dormant.size() > (stowed ? Tree.STOWED_LIMIT : Selection.LIMIT) || replaced.size() > Selection.LIMIT)
             throw new IllegalArgumentException("A BuildObject holds up to " + String.format("%,d", Selection.LIMIT)
                     + " dormant and as many replaced blocks");
-        long others = tree.held() - e.dormant.size() - e.replaced.size();
-        if (others + dormant.size() + replaced.size() > Tree.HELD_LIMIT)
+        long others = tree.held() - (stowed ? 0 : e.dormant.size() + e.replaced.size());
+        if (!stowed && others + dormant.size() + replaced.size() > Tree.HELD_LIMIT)
             throw new IllegalArgumentException("The BuildObjects of this world hold up to "
                     + String.format("%,d", Tree.HELD_LIMIT) + " dormant and replaced blocks between them");
         if (e.dormant.sameContent(dormant) && e.replaced.sameContent(replaced)) return false;
@@ -1144,11 +1187,12 @@ public final class SavedSelections {
     /** One group as it was: the group itself (it keeps its id and GUID) and its name. */
     public record GroupRow(Group group, String name) {}
     /** One BuildObject as it was: the entry itself (it keeps its id and GUID) with the parts of it that change. */
-    public record Row(Entry entry, String name, int parentId, List<Point> points, int color, int groupId) {}
+    public record Row(
+            Entry entry, String name, int parentId, List<Point> points, int color, int groupId, boolean stowed) {}
 
     public State state() {
         var rows = new ArrayList<Row>();
-        for (var e : entries) rows.add(new Row(e, e.name, e.parentId(), e.points, e.color, e.ownGroupId()));
+        for (var e : entries) rows.add(new Row(e, e.name, e.parentId(), e.points, e.color, e.ownGroupId(), e.stowed));
         var groups = new ArrayList<GroupRow>();
         for (var g : tree.groups) groups.add(new GroupRow(g, g.name));
         return new State(List.copyOf(rows), List.copyOf(groups));
@@ -1165,9 +1209,28 @@ public final class SavedSelections {
                     || !a.name().equals(b.name())
                     || a.parentId() != b.parentId()
                     || a.color() != b.color()
+                    || a.stowed() != b.stowed()
                     || a.groupId() != b.groupId()) return false;
         }
         return true;
+    }
+    /** The ids of the BuildObjects whose blocks are out of the world because of an eye, theirs or one above them. */
+    public Set<Integer> stowedIds() {
+        var out = new HashSet<Integer>();
+        for (var e : entries) if (e.stowedInHierarchy()) out.add(e.id);
+        return out;
+    }
+    /** Closes or opens the eye of these BuildObjects (see {@link Entry#stowed}). Only the flag: the blocks are moved by the caller. Returns whether any changed. */
+    public boolean setStowed(Collection<Integer> ids, boolean stowed) {
+        boolean any = false;
+        for (int id : ids) {
+            var e = need(id);
+            if (e.stowed == stowed) continue;
+            e.stowed = stowed;
+            any = true;
+        }
+        if (any) changed();
+        return any;
     }
     /** Sets the colour of a BuildObject (ARGB; 0 puts it back to the next one from the wheel). */
     public void setColor(int id, int color) {
@@ -1201,6 +1264,7 @@ public final class SavedSelections {
             var e = r.entry();
             e.name = r.name();
             e.color = r.color();
+            e.stowed = r.stowed();
             // The blocks of one that is still here are what they are now: they follow the blocks in the world (and have
             // their own history), and this step is not about them.
             // Only one that comes back after being deleted takes the blocks it had.

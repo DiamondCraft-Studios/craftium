@@ -327,7 +327,8 @@ final class SavedSelectionActions {
                     withData ? hiddenData(s, e, budget) : null,
                     hidden == null ? null : new Point(hidden[0], hidden[1], hidden[2]),
                     hidden == null ? null : new Point(hidden[3], hidden[4], hidden[5]),
-                    ghost));
+                    ghost,
+                    e.stowed()));
         }
         return out;
     }

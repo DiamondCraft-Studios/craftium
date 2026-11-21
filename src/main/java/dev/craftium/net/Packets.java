@@ -283,7 +283,50 @@ public final class Packets {
             Point hiddenMin,
             Point hiddenMax,
             /** The hidden blocks with their block states, as ghost data, for a preview while the BuildObject is dragged: null unless the client asked for them (it holds them only for the drag). */
-            String hiddenGhost) {
+            String hiddenGhost,
+            /** Whether its eye is closed: all its blocks are taken out of the world (they are among the hidden ones), for everyone. False from a server that predates it. */
+            boolean stowed) {
+        /** A BuildObject from a server that predates the eye taking blocks out of the world. */
+        public SavedSelection(
+                int id,
+                String name,
+                int size,
+                Point min,
+                Point max,
+                boolean active,
+                boolean editing,
+                String data,
+                String guid,
+                int parent,
+                int color,
+                int group,
+                boolean folded,
+                int hidden,
+                String hiddenData,
+                Point hiddenMin,
+                Point hiddenMax,
+                String hiddenGhost) {
+            this(
+                    id,
+                    name,
+                    size,
+                    min,
+                    max,
+                    active,
+                    editing,
+                    data,
+                    guid,
+                    parent,
+                    color,
+                    group,
+                    folded,
+                    hidden,
+                    hiddenData,
+                    hiddenMin,
+                    hiddenMax,
+                    hiddenGhost,
+                    false);
+        }
         /** A BuildObject with the hidden blocks of its outline but not their block states. */
         public SavedSelection(
                 int id,

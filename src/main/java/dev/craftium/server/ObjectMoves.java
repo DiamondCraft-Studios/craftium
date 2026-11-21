@@ -69,7 +69,9 @@ final class ObjectMoves {
      */
     static Applied apply(ServerLevel level, Session s, EditPlanner plan, Mover mover) {
         var ordered = new ArrayList<ObjectMove.Obj>();
-        for (var e : s.saved.entries()) ordered.add(new ObjectMove.Obj(e.id(), e.points(), e.dormant(), e.replaced()));
+        for (var e : s.saved.entries())
+            ordered.add(
+                    new ObjectMove.Obj(e.id(), e.points(), e.dormant(), e.replaced(), false, e.stowedInHierarchy()));
         var ownBefore = s.saved.snapshot();
         var heldBefore = s.saved.heldSnapshot();
         var solidCache = new HashMap<String, Boolean>();
@@ -178,8 +180,13 @@ final class ObjectMoves {
             var carried = carried(s, ownStart, heldStart);
             var ordered = new ArrayList<ObjectMove.Obj>();
             for (var e : s.saved.entries())
-                ordered.add(
-                        new ObjectMove.Obj(e.id(), e.points(), e.dormant(), e.replaced(), carried.contains(e.id())));
+                ordered.add(new ObjectMove.Obj(
+                        e.id(),
+                        e.points(),
+                        e.dormant(),
+                        e.replaced(),
+                        carried.contains(e.id()),
+                        e.stowedInHierarchy()));
             var source = c.source().keySet();
             var solidCache = new HashMap<String, Boolean>();
             Predicate<String> solid = text -> solidCache.computeIfAbsent(text, t -> beats(plan.parse(t)));
@@ -235,7 +242,12 @@ final class ObjectMoves {
         var ordered = new ArrayList<ObjectMove.Obj>();
         for (var e : s.saved.entries())
             ordered.add(new ObjectMove.Obj(
-                    e.id(), fresh.containsKey(e.id()) ? List.<Point>of() : e.points(), e.dormant(), e.replaced()));
+                    e.id(),
+                    fresh.containsKey(e.id()) ? List.<Point>of() : e.points(),
+                    e.dormant(),
+                    e.replaced(),
+                    false,
+                    e.stowedInHierarchy()));
         var placements = new ArrayList<ObjectMove.Placement>();
         for (var e : fresh.entrySet())
             for (var p : e.getValue()) {
@@ -263,7 +275,13 @@ final class ObjectMoves {
         var placements = new ArrayList<ObjectMove.Placement>();
         for (var e : s.saved.entries()) {
             boolean here = ids.contains(e.id());
-            ordered.add(new ObjectMove.Obj(e.id(), e.points(), here ? new PackedCells() : e.dormant(), e.replaced()));
+            ordered.add(new ObjectMove.Obj(
+                    e.id(),
+                    e.points(),
+                    here ? new PackedCells() : e.dormant(),
+                    e.replaced(),
+                    false,
+                    e.stowedInHierarchy()));
             if (here)
                 e.dormant()
                         .forEach((p, state) -> placements.add(new ObjectMove.Placement(
@@ -274,9 +292,64 @@ final class ObjectMoves {
         if (placements.isEmpty()) return null;
         var solidCache = new HashMap<String, Boolean>();
         Predicate<String> solid = text -> solidCache.computeIfAbsent(text, t -> beats(plan.parse(t)));
-        Function<Point, ObjectMove.Block> world = p -> block(BlockSnapshot.capture(level, EditPlanner.pos(p)));
-        var result = ObjectMove.place(ordered, placements, world, solid);
+        var result = ObjectMove.place(ordered, placements, world(level, plan), solid);
         return new Transformed(commit(s, plan, result, ownBefore, heldBefore), result.landed());
+    }
+
+    /** The world as an edit being planned sees it: what is staged in {@code plan} counts as what is there. */
+    private static Function<Point, ObjectMove.Block> world(ServerLevel level, EditPlanner plan) {
+        return p -> {
+            var staged = plan.changes.get(p);
+            return block(staged != null ? staged.after() : BlockSnapshot.capture(level, EditPlanner.pos(p)));
+        };
+    }
+
+    /**
+     * Brings the blocks in line with the eyes, after something changed which BuildObjects are hidden by one (theirs or one above them): those hidden now and not in
+     * {@code stowedBefore} have the blocks they hold in the world kept as dormant, their cells written as {@link ObjectMove#stow} says; those shown now that were
+     * hidden have their dormant blocks placed where the world is free, as Place here does. Returns what changed, or null for nothing. Nothing is left changed if it
+     * throws. The cells it touches are {@link #reconcileCells}.
+     */
+    static Applied reconcile(ServerLevel level, Session s, EditPlanner plan, Set<Integer> stowedBefore) {
+        var now = s.saved.stowedIds();
+        var hide = new LinkedHashSet<Integer>();
+        var show = new LinkedHashSet<Integer>();
+        sides(s, stowedBefore, now, hide, show);
+        if (hide.isEmpty() && show.isEmpty()) return null;
+        var ownStart = s.saved.snapshot();
+        var heldStart = s.saved.heldSnapshot();
+        try {
+            if (!hide.isEmpty()) {
+                var result = ObjectMove.stow(ordered(s), hide, world(level, plan));
+                commit(s, plan, result, s.saved.snapshot(), s.saved.heldSnapshot());
+            }
+            if (!show.isEmpty()) placeHere(level, s, plan, show);
+        } catch (RuntimeException ex) {
+            s.saved.setPoints(ownStart);
+            s.saved.restoreHeld(heldStart);
+            throw ex;
+        }
+        return new Applied(ownStart, s.saved.snapshot(), heldStart, s.saved.heldSnapshot());
+    }
+
+    /** The cells {@link #reconcile} reads and writes, for what has to be loaded first. */
+    static List<Point> reconcileCells(Session s, Set<Integer> stowedBefore) {
+        var hide = new LinkedHashSet<Integer>();
+        var show = new LinkedHashSet<Integer>();
+        sides(s, stowedBefore, s.saved.stowedIds(), hide, show);
+        var out = new ArrayList<Point>();
+        for (int id : hide) out.addAll(s.saved.byId(id).points());
+        for (int id : show) out.addAll(s.saved.byId(id).dormant().points());
+        return out;
+    }
+
+    /** The BuildObjects that went from shown to hidden (and hold something in the world), and the other way (and keep something out of it). */
+    private static void sides(Session s, Set<Integer> before, Set<Integer> now, Set<Integer> hide, Set<Integer> show) {
+        for (var e : s.saved.entries()) {
+            boolean was = before.contains(e.id()), is = now.contains(e.id());
+            if (is && !was && !e.points().isEmpty()) hide.add(e.id());
+            if (was && !is && !e.dormant().isEmpty()) show.add(e.id());
+        }
     }
 
     /** The blocks kept hidden by the BuildObjects that are shown, and by everything under them, by cell (where two keep one in the same cell, the first). */
@@ -297,7 +370,8 @@ final class ObjectMoves {
     /** The BuildObjects as the move sees them, in the order of the Hierarchy. */
     private static List<ObjectMove.Obj> ordered(Session s) {
         var out = new ArrayList<ObjectMove.Obj>();
-        for (var e : s.saved.entries()) out.add(new ObjectMove.Obj(e.id(), e.points(), e.dormant(), e.replaced()));
+        for (var e : s.saved.entries())
+            out.add(new ObjectMove.Obj(e.id(), e.points(), e.dormant(), e.replaced(), false, e.stowedInHierarchy()));
         return out;
     }
 
@@ -318,8 +392,7 @@ final class ObjectMoves {
         var heldBefore = s.saved.heldSnapshot();
         var solidCache = new HashMap<String, Boolean>();
         Predicate<String> solid = text -> solidCache.computeIfAbsent(text, t -> beats(plan.parse(t)));
-        Function<Point, ObjectMove.Block> world = p -> block(BlockSnapshot.capture(level, EditPlanner.pos(p)));
-        var result = ObjectMove.reorder(ordered(s), world, solid);
+        var result = ObjectMove.reorder(ordered(s), world(level, plan), solid);
         if (result.writes().isEmpty() && result.objects().isEmpty()) return null;
         return new Transformed(commit(s, plan, result, ownBefore, heldBefore), result.landed());
     }

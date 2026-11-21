@@ -317,7 +317,8 @@ public final class ClientState {
                 e.hiddenData(),
                 e.hiddenMin(),
                 e.hiddenMax(),
-                e.hiddenGhost());
+                e.hiddenGhost(),
+                e.stowed());
     }
     /** The groups of the Hierarchy, in order, as the server last said; empty on a server that predates them, and the Hierarchy then shows no groups. */
     private static List<Packets.SavedGroup> savedGroups = List.of();
@@ -522,7 +523,7 @@ public final class ClientState {
     }
     /** The BuildObject the pointer is over in a viewport while Hover BuildObjects is on, or 0: it shows its own outline and is lit in the Hierarchy. */
     public static int hoverWorld;
-    /** The BuildObjects whose eye is closed, which is every new one: the outline of one shows in the world only with its eye open, or while it is selected. Like the colours, they are kept by id when an entry is deleted, so Undo brings one back as it was. */
+    /** The BuildObjects whose outline is not kept on (Show outline in the row menu), which is every new one: the outline of one shows in the world only when kept on, or while it is selected or hovered. This is the player's own; the eye in the row is the server's, and takes the blocks out of the world. Like the colours, they are kept by id when an entry is deleted, so Undo brings one back as it was. */
     private static final Set<Integer> savedHidden = new HashSet<>();
 
     public static boolean savedHidden(int id) {

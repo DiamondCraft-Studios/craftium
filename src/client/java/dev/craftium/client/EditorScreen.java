@@ -7746,7 +7746,11 @@ public final class EditorScreen extends CraftiumScreen {
                 controls.add(groupFold);
                 foldControls.add(groupFold); // no tooltip: the arrow says what it does
                 var members = model.memberIds.getOrDefault(group.id(), List.of());
-                boolean allHidden = !members.isEmpty() && members.stream().allMatch(ClientState::savedHidden);
+                boolean allHidden = !members.isEmpty()
+                        && members.stream().allMatch(m -> {
+                            var e = ClientState.savedById(m);
+                            return e != null && e.stowed();
+                        });
                 button(
                         g,
                         eye,
@@ -7755,12 +7759,10 @@ public final class EditorScreen extends CraftiumScreen {
                         rowHeight - 4,
                         "",
                         false,
-                        () -> {
-                            for (int m : members) ClientState.setSavedHidden(m, !allHidden);
-                        },
+                        () -> stow(members, !allHidden),
                         allHidden
-                                ? "Show the outlines of everything in this group"
-                                : "Hide the outlines of everything in this group");
+                                ? "Put the blocks of everything in this group back in the world, where it is free"
+                                : "Take the blocks of everything in this group out of the world, for everyone · They are kept, and come back when the eye is opened");
                 glyph(g, eye, ry + 2, 18, rowHeight - 4, EYE, allHidden ? 0xff56606e : TEXT);
                 if (allHidden) {
                     int ox = eye + (18 - 9) / 2, oy = ry + 2 + (rowHeight - 4 - 5) / 2;
@@ -7858,7 +7860,9 @@ public final class EditorScreen extends CraftiumScreen {
                 controls.add(fold);
                 foldControls.add(fold); // no tooltip: the arrow says what it does
             }
-            boolean hidden = ClientState.savedHidden(id);
+            boolean hidden = entry.stowed();
+            boolean above =
+                    hiddenAbove(entry); // a closed eye above wins; this one keeps its own state for when it opens
             button(
                     g,
                     eye,
@@ -7868,10 +7872,11 @@ public final class EditorScreen extends CraftiumScreen {
                     "",
                     false,
                     () -> eyeClick(entry, minecraft.hasControlDown()),
-                    hidden
-                            ? "Show this BuildObject's outline in the world · It shows while it is selected, whatever the eye · Ctrl+click does the same for everything under it"
-                            : "Hide this BuildObject's outline in the world · Ctrl+click does the same for everything under it");
-            glyph(g, eye, ry + 2, 18, rowHeight - 4, EYE, hidden ? 0xff56606e : TEXT);
+                    (above ? "Out of the world while a BuildObject above it is hidden, whatever this eye says · " : "")
+                            + (hidden
+                                    ? "Put this BuildObject's blocks back in the world, where it is free · Ctrl+click does the same for everything under it"
+                                    : "Take this BuildObject's blocks out of the world, for everyone · They are kept, and come back when the eye is opened · Ctrl+click does the same for everything under it"));
+            glyph(g, eye, ry + 2, 18, rowHeight - 4, EYE, hidden ? 0xff56606e : above ? 0xff7c8796 : TEXT);
             if (hidden) {
                 int ox = eye + (18 - 9) / 2, oy = ry + 2 + (rowHeight - 4 - 5) / 2;
                 for (int k = 0; k < 9; k++) g.fill(ox + k, oy + 4 - k / 2, ox + k + 1, oy + 5 - k / 2, 0xffe07070);
@@ -7969,9 +7974,26 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** Opens or closes the eye of a BuildObject; with Ctrl, of everything under it as well, all to the new state. */
     private void eyeClick(dev.craftium.net.Packets.SavedSelection entry, boolean below) {
-        boolean hide = !ClientState.savedHidden(entry.id());
-        for (var e : hierarchyAll)
-            if (e.id() == entry.id() || below && isUnder(e, entry.id())) ClientState.setSavedHidden(e.id(), hide);
+        var ids = new ArrayList<Integer>();
+        for (var e : hierarchyAll) if (e.id() == entry.id() || below && isUnder(e, entry.id())) ids.add(e.id());
+        stow(ids, !entry.stowed());
+    }
+    /** Whether a BuildObject above this one has its eye closed, which keeps this one out of the world whatever its own eye says. */
+    private static boolean hiddenAbove(dev.craftium.net.Packets.SavedSelection entry) {
+        int guard = 0;
+        for (var p = ClientState.savedById(entry.parent());
+                p != null && guard++ < 1024;
+                p = p.parent() == 0 ? null : ClientState.savedById(p.parent())) if (p.stowed()) return true;
+        return false;
+    }
+    /** Takes the blocks of these BuildObjects out of the world ({@code hide}) or puts them back, on the server, for everyone; those already so are left. */
+    private void stow(List<Integer> ids, boolean hide) {
+        var todo = new ArrayList<String>();
+        for (int id : ids) {
+            var e = ClientState.savedById(id);
+            if (e != null && e.stowed() != hide) todo.add(String.valueOf(id));
+        }
+        if (!todo.isEmpty()) action("saved_selection:" + (hide ? "stow:" : "unstow:") + String.join(",", todo));
     }
     /** What happens next, once the server has answered what was just sent and the answer has settled: a copy that a duplicate waits for, a cut that is followed by a delete. */
     private Runnable afterStatus;

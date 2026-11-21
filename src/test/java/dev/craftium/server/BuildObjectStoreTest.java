@@ -248,4 +248,17 @@ class BuildObjectStoreTest {
                 "Name 49",
                 new SavedSelections(BuildObjectStore.load(file)).byId(e.id()).name());
     }
+
+    @Test
+    void aClosedEyeComesBackAfterTheServerRestarts(@TempDir Path dir) throws Exception {
+        var saved = new SavedSelections();
+        var shown = saved.save(live(A));
+        var hidden = saved.save(live(B));
+        saved.setStowed(List.of(hidden.id()), true);
+        var file = dir.resolve("eyes.nbt");
+        BuildObjectStore.write(file, saved.tree().nextId(), saved.tree().saved());
+        var back = new SavedSelections(BuildObjectStore.load(file));
+        assertFalse(back.byId(shown.id()).stowed());
+        assertTrue(back.byId(hidden.id()).stowed());
+    }
 }

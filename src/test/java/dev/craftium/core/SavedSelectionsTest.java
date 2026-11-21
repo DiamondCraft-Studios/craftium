@@ -1184,4 +1184,63 @@ class SavedSelectionsTest {
         assertTrue(saved.sync(s), "the entry changed: the live selection is still what is being edited");
         assertEquals(Set.of(A, B, C), new HashSet<>(e.points()));
     }
+
+    @Test
+    void aClosedEyeIsPartOfTheHistoryAndOfWhatSomeoneElseCanChange() {
+        var saved = new SavedSelections();
+        var s = live(A);
+        var one = saved.save(s);
+        var open = saved.state();
+        assertTrue(saved.setStowed(List.of(one.id()), true));
+        assertFalse(saved.setStowed(List.of(one.id()), true), "closed again is no change");
+        var closed = saved.state();
+        assertFalse(saved.structureMatches(open), "an undo made before it was closed is not run over it");
+        saved.restore(open, s);
+        assertFalse(one.stowed());
+        saved.restore(closed, s);
+        assertTrue(one.stowed());
+    }
+
+    @Test
+    void aClosedEyeAboveHidesWhatIsUnderItWithoutTouchingTheirOwnEyes() {
+        var saved = new SavedSelections();
+        var house = saved.save(live(A));
+        var door = saved.save(live(B));
+        var knob = saved.save(live(C));
+        saved.place(door.id(), house.id(), 0);
+        saved.place(knob.id(), door.id(), 0);
+        saved.setStowed(List.of(knob.id()), true);
+        assertEquals(Set.of(knob.id()), saved.stowedIds());
+
+        saved.setStowed(List.of(house.id()), true);
+        assertEquals(Set.of(house.id(), door.id(), knob.id()), saved.stowedIds(), "the parent wins");
+        assertFalse(door.stowed(), "the child keeps its own eye open");
+        assertTrue(door.stowedInHierarchy());
+
+        saved.setStowed(List.of(house.id()), false);
+        assertEquals(Set.of(knob.id()), saved.stowedIds(), "each goes back to its own eye");
+
+        saved.setStowed(List.of(house.id()), true);
+        saved.place(door.id(), 0, 0); // out from under the closed eye
+        assertEquals(Set.of(house.id(), knob.id()), saved.stowedIds());
+    }
+
+    @Test
+    void whatAnEyeHidesIsNotCountedTowardsTheHeldLimitAndSurvivesALoad() {
+        var saved = new SavedSelections();
+        var house = saved.save(live(A));
+        var door = saved.save(live(B));
+        saved.place(door.id(), house.id(), 0);
+        var kept = new PackedCells();
+        kept.put(C, "minecraft:stone");
+        saved.setHeld(door.id(), kept, new PackedCells());
+        assertEquals(1, saved.tree().held());
+        saved.setStowed(List.of(house.id()), true);
+        assertEquals(0, saved.tree().held(), "the parent's closed eye takes the child out of the count too");
+
+        var back = new SavedSelections(
+                SavedSelections.Tree.load(saved.tree().nextId(), saved.tree().saved(), 1, List.of()));
+        assertEquals("minecraft:stone", back.byId(door.id()).dormant().get(C));
+        assertTrue(back.byId(door.id()).stowedInHierarchy());
+    }
 }
