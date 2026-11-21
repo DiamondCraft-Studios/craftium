@@ -8231,6 +8231,11 @@ public final class EditorScreen extends CraftiumScreen {
             action("saved_selection:createchild:" + id);
         }));
         items.add(divider());
+        items.add(item(
+                n > 1 ? "Trim (" + n + ")" : "Trim",
+                "",
+                () -> action("saved_selection:trim:" + csv))); // lets go of the blocks that are air in the world
+        items.add(divider());
         items.add(item("Rename", n == 1 && row.active() ? "F2" : "", () -> startRename(new RenameArea(null, id))));
         items.add(item("Duplicate", "Ctrl+D", this::duplicateObjects));
         items.add(item("Copy", "Ctrl+C", () -> {

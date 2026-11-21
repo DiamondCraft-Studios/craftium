@@ -660,6 +660,48 @@ public final class EditorServer {
                 }
                 if (r.action()
                         .startsWith(SavedSelectionActions.PREFIX
+                                + "trim:")) { // trim:<ids separated by commas>: each BuildObject, and
+                    // everything under it, lets go of the blocks that are air in the world
+                    HierarchyPermissions.require(player, "edit");
+                    var named = SavedSelectionActions.idsOf(
+                            r.action().substring((SavedSelectionActions.PREFIX + "trim:").length()));
+                    var everything = s.saved.withDescendants(named);
+                    var all = new ArrayList<Point>();
+                    for (int id : everything) {
+                        var kept = s.saved.byId(id);
+                        if (kept != null) all.addAll(kept.points());
+                    }
+                    if (all.isEmpty()) throw new IllegalArgumentException("Nothing to trim: no blocks");
+                    ChunkLease.planning(ChunkLease.area()
+                            .points(all, 0, 0)
+                            .lease(player.level())); // the blocks may be far from every player
+                    var plan = new EditPlanner(player.level(), s, o);
+                    var trimmed = new LinkedHashMap<Integer, List<Point>>();
+                    int removed = 0;
+                    for (int id : everything) {
+                        var kept = s.saved.byId(id);
+                        if (kept == null) continue;
+                        var solid = new ArrayList<Point>();
+                        for (Point at : kept.points()) if (!plan.state(at).isAir()) solid.add(at);
+                        removed += kept.points().size() - solid.size();
+                        trimmed.put(id, solid);
+                    }
+                    if (removed == 0) throw new IllegalArgumentException("Nothing to trim: no air blocks");
+                    var hierarchyBefore = s.saved.state();
+                    s.saved.setPoints(trimmed);
+                    if (!s.saved.viewed().isEmpty() && !s.saved.editing())
+                        s.saved.viewSet(
+                                s.saved.viewed().stream()
+                                        .map(SavedSelections.Entry::id)
+                                        .toList(),
+                                s.selection);
+                    s.remember(Session.Edit.selecting(
+                            "Trim BuildObject", Session.SelectionChange.hierarchy(hierarchyBefore, s.saved.state())));
+                    send(player, s, "Trimmed " + removed + " air blocks", false);
+                    return;
+                }
+                if (r.action()
+                        .startsWith(SavedSelectionActions.PREFIX
                                 + "placehere:")) { // placehere:<ids separated by commas>: what these
                     // BuildObjects keep out of the world is placed where it is
                     // free now
