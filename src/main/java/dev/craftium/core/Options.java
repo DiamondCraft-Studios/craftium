@@ -159,7 +159,13 @@ public final class Options {
 
     public String biome = "minecraft:plains";
     public String text = "CRAFTIUM";
-    public int minY = -64, maxY = 319;
+    /**
+     * The mask's height range, inclusive. The extremes mean no limit, so the world's own height is the only bound: a
+     * fixed default would cut off worlds that mods such as Higher Heights make taller.
+     */
+    public int minY = NO_MIN_Y, maxY = NO_MAX_Y;
+
+    public static final int NO_MIN_Y = Integer.MIN_VALUE, NO_MAX_Y = Integer.MAX_VALUE;
     public float flySpeed = 1;
     public int offsetX, offsetY = 1, offsetZ, copies = 3;
     /** The Builder's Stack: how many whole copies of the selection to lay along each axis, negative for the other way. Only meaningful while a stack is being sent. */
@@ -966,6 +972,12 @@ public final class Options {
         exposedFaces = Math.clamp(exposedFaces, 1, 6);
         if (fluidType == null) throw new IllegalArgumentException("Choose a fluid");
         flattenY = Math.clamp(flattenY, -2048, 2048); // the server also keeps it inside the world's height
+        // The old fixed default was the vanilla overworld, -64 to 319. Saved options still carry it, and it hides
+        // everything outside it in a taller world, so it reads as no limit.
+        if (minY == -64 && maxY == 319) {
+            minY = NO_MIN_Y;
+            maxY = NO_MAX_Y;
+        }
         if (flattenMode == null) flattenMode = FlattenMode.BOTH;
         floodGap = Math.clamp(floodGap, 0, MAX_FLOOD_GAP);
         flowLength = Math.clamp(flowLength, 1, 32);

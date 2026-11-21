@@ -563,8 +563,7 @@ final class EditPlanner {
             session.flattenStroke = session.requestStroke;
             session.flattenLevel = c.y();
         }
-        int target =
-                Math.clamp(o.flattenPick ? session.flattenLevel : o.flattenY, level.getMinY(), level.getMaxY() - 1);
+        int target = Math.clamp(o.flattenPick ? session.flattenLevel : o.flattenY, level.getMinY(), level.getMaxY());
         // Elevation's strength is the height, in blocks, the middle of the mound moves with each click.
         int height = Math.max(1, (int) Math.round(o.strength));
         for (int dx = -o.radius; dx <= o.radius; dx++)
@@ -647,7 +646,7 @@ final class EditPlanner {
     /** {@link #column(int, int, int, int, java.util.function.IntUnaryOperator)} with the depth the ground is looked for to and the most it is raised. */
     private void column(
             int x, int z, int reference, int above, int depth, int raise, java.util.function.IntUnaryOperator desired) {
-        int maxY = level.getMaxY() - 1;
+        int maxY = level.getMaxY(); // the top block layer: getMaxY is inclusive
         int top = Math.min(maxY, reference + above), bottom = Math.max(level.getMinY(), reference - depth);
         while (top >= bottom && !ground(new Point(x, top, z))) top--;
         if (top < bottom) return;
@@ -712,7 +711,7 @@ final class EditPlanner {
         for (Point p : points) {
             if (!accepted(p)) continue;
             int start = o.fillVertically ? level.getMinY() >> 2 : p.y() >> 2,
-                    end = o.fillVertically ? (level.getMaxY() - 1) >> 2 : start;
+                    end = o.fillVertically ? level.getMaxY() >> 2 : start;
             for (int y = start; y <= end; y++) {
                 Point cell = new Point(p.x() >> 2, y, p.z() >> 2);
                 var old = level.getNoiseBiome(cell.x(), cell.y(), cell.z());

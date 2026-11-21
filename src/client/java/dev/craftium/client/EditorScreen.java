@@ -323,18 +323,33 @@ public final class EditorScreen extends CraftiumScreen {
                 masksY = masksTop();
         layoutKey = layoutKey();
         if (maskLimitsOpen) {
-            field("minY", w - RIGHT + 10, masksY + masksH - 39, 80, Integer.toString(o().minY), s -> {
-                try {
-                    o().minY = Integer.parseInt(s);
-                } catch (NumberFormatException ignored) {
-                }
-            });
-            field("maxY", w - RIGHT + masksW - 90, masksY + masksH - 39, 80, Integer.toString(o().maxY), s -> {
-                try {
-                    o().maxY = Integer.parseInt(s);
-                } catch (NumberFormatException ignored) {
-                }
-            });
+            // Blank is no limit, so the world's own height (however tall a mod makes it) is the bound.
+            field(
+                    "minY",
+                    w - RIGHT + 10,
+                    masksY + masksH - 39,
+                    80,
+                    o().minY == Options.NO_MIN_Y ? "" : Integer.toString(o().minY),
+                    s -> {
+                        try {
+                            o().minY = s.isBlank() ? Options.NO_MIN_Y : Integer.parseInt(s.trim());
+                        } catch (NumberFormatException ignored) {
+                        }
+                    });
+            fields.get("minY").setHint(Component.literal("bottom"));
+            field(
+                    "maxY",
+                    w - RIGHT + masksW - 90,
+                    masksY + masksH - 39,
+                    80,
+                    o().maxY == Options.NO_MAX_Y ? "" : Integer.toString(o().maxY),
+                    s -> {
+                        try {
+                            o().maxY = s.isBlank() ? Options.NO_MAX_Y : Integer.parseInt(s.trim());
+                        } catch (NumberFormatException ignored) {
+                        }
+                    });
+            fields.get("maxY").setHint(Component.literal("top"));
         }
         if (!builder) {
             if (pinnedTab) pinnedFields();
@@ -4555,7 +4570,7 @@ public final class EditorScreen extends CraftiumScreen {
                         () -> o.flattenPick = !o.flattenPick,
                         "Each stroke takes its level from the block it starts on and keeps it while held · off: use Target Y");
                 int low = minecraft.level == null ? -64 : minecraft.level.getMinY(),
-                        high = minecraft.level == null ? 319 : minecraft.level.getMaxY() - 1;
+                        high = minecraft.level == null ? 319 : minecraft.level.getMaxY();
                 slider(
                         g,
                         10,
