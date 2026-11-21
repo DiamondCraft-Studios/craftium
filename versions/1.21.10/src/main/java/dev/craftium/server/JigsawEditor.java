@@ -143,6 +143,97 @@ final class JigsawEditor {
         return tag.get("size") != null && (tag.get("palette") != null || tag.get("palettes") != null);
     }
 
+    /** The most blueprints one command adds to a pool, as the blueprint browser allows. */
+    private static final int BLUEPRINT_BATCH = 64;
+
+    /** The bytes of a blueprint in the server's library. */
+    private static byte[] serverBlueprint(String file) throws IOException {
+        var path = BlueprintLibrary.file("blueprints", file);
+        if (!Files.isRegularFile(path))
+            throw new IllegalArgumentException("There is no blueprint called " + file + " in the server's library");
+        if (Files.size(path) > 1_048_576) throw new IllegalArgumentException("A blueprint over 1 MiB cannot be used");
+        return Files.readAllBytes(path);
+    }
+
+    /**
+     * A blueprint file as a structure template. A structure file is used as it is, jigsaw blocks and block entities
+     * included; a schematic is turned into one through the blocks of a clipboard.
+     */
+    private static CompoundTag blueprintStructure(ServerPlayer player, byte[] bytes) throws IOException {
+        CompoundTag tag;
+        try {
+            tag = NbtIo.readCompressed(new java.io.ByteArrayInputStream(bytes), NbtAccounter.create(32L * 1024 * 1024));
+        } catch (IOException e) {
+            throw new IllegalArgumentException("That blueprint could not be read");
+        }
+        if (isStructure(tag)) return tag;
+        var session = new Session();
+        var planner = new EditPlanner(player.level(), session, new dev.craftium.core.Options());
+        session.clipboard.putAll(BlueprintLibrary.read(tag, planner));
+        if (session.clipboard.isEmpty()) throw new IllegalArgumentException("That blueprint has no blocks");
+        return BlueprintLibrary.structure(planner);
+    }
+
+    /**
+     * Adds several blueprints to a pool as one undo step: {@code files} names them, {@code names} gives each template's
+     * name, and the player's own files come as {@code data}, a JSON list of their bytes in the same order. A file that
+     * cannot be used is skipped and named in the answer; the rest still go in.
+     */
+    private static String addBlueprints(ServerPlayer player, JigsawPlanner.Env env, Edit edit, JsonObject c)
+            throws IOException {
+        var home = poolId(text(c, "pool"));
+        var files = c.has("files") ? c.getAsJsonArray("files") : new com.google.gson.JsonArray();
+        var names = c.has("names") ? c.getAsJsonArray("names") : new com.google.gson.JsonArray();
+        if (files.isEmpty() || files.size() != names.size())
+            throw new IllegalArgumentException("Choose some blueprints");
+        if (files.size() > BLUEPRINT_BATCH)
+            throw new IllegalArgumentException("At most " + BLUEPRINT_BATCH + " blueprints go in at once");
+        com.google.gson.JsonArray data = null;
+        if (c.has("data")) {
+            try {
+                data = JsonParser.parseString(text(c, "data")).getAsJsonArray();
+            } catch (RuntimeException e) {
+                throw new IllegalArgumentException("The files did not arrive whole");
+            }
+            if (data.size() != files.size()) throw new IllegalArgumentException("The files did not arrive whole");
+        }
+        var pool = readPool(env, home);
+        var skipped = new ArrayList<String>();
+        int added = 0;
+        for (int i = 0; i < files.size(); i++) {
+            String file = files.get(i).getAsString();
+            try {
+                byte[] bytes;
+                if (data == null) bytes = serverBlueprint(file);
+                else {
+                    try {
+                        bytes = Base64.getDecoder().decode(data.get(i).getAsString());
+                    } catch (RuntimeException e) {
+                        throw new IllegalArgumentException("did not arrive whole");
+                    }
+                }
+                var tag = blueprintStructure(player, bytes);
+                var typed = names.get(i).getAsString().strip();
+                var name = poolId(typed.contains(":") ? typed : home.getNamespace() + ":" + typed);
+                writeTemplate(env, edit, name, tag);
+                pool.getAsJsonArray("elements").add(single(name.toString(), 1, "rigid"));
+                added++;
+            } catch (IllegalArgumentException | IOException e) {
+                skipped.add(file.substring(file.lastIndexOf('/') + 1) + " (" + e.getMessage() + ")");
+            }
+        }
+        if (added > 0) writePool(env, edit, home, pool);
+        String answer = added == 0
+                ? "No blueprints were added to " + home
+                : "Added " + added + (added == 1 ? " blueprint" : " blueprints") + " to " + home;
+        if (!skipped.isEmpty()) {
+            answer += " · skipped " + skipped.size() + ": "
+                    + String.join(", ", skipped.subList(0, Math.min(5, skipped.size())));
+            if (skipped.size() > 5) answer += " and " + (skipped.size() - 5) + " more";
+        }
+        return answer;
+    }
+
     /** Saves a structure as a template of the draft, named as the command says (a bare name goes in the pool's namespace), and adds it to the pool. */
     private static String addTemplate(JigsawPlanner.Env env, Edit edit, JsonObject c, CompoundTag tag, String what)
             throws IOException {
@@ -288,36 +379,12 @@ final class JigsawEditor {
                 return addTemplate(env, edit, c, tag, "Imported the structure");
             }
             case "element_from_blueprint" -> {
-                // A blueprint of the server's library is read here; one of the player's own comes with the request. A
-                // structure file is used as it is,
-                // jigsaw blocks and block entities included; a schematic is turned into one through the blocks of a
-                // clipboard.
-                byte[] bytes;
-                if (c.has("data")) bytes = fileData(c);
-                else {
-                    var path = BlueprintLibrary.file("blueprints", text(c, "file"));
-                    if (!Files.isRegularFile(path))
-                        throw new IllegalArgumentException(
-                                "There is no blueprint called " + text(c, "file") + " in the server's library");
-                    if (Files.size(path) > 1_048_576)
-                        throw new IllegalArgumentException("A blueprint over 1 MiB cannot be used");
-                    bytes = Files.readAllBytes(path);
-                }
-                CompoundTag tag;
-                try {
-                    tag = NbtIo.readCompressed(
-                            new java.io.ByteArrayInputStream(bytes), NbtAccounter.create(32L * 1024 * 1024));
-                } catch (IOException e) {
-                    throw new IllegalArgumentException("That blueprint could not be read");
-                }
-                if (!isStructure(tag)) {
-                    var session = new Session();
-                    var planner = new EditPlanner(player.level(), session, new dev.craftium.core.Options());
-                    session.clipboard.putAll(BlueprintLibrary.read(tag, planner));
-                    if (session.clipboard.isEmpty()) throw new IllegalArgumentException("That blueprint has no blocks");
-                    tag = BlueprintLibrary.structure(planner);
-                }
-                return addTemplate(env, edit, c, tag, "Took the blueprint");
+                // A blueprint of the server's library is read here; one of the player's own comes with the request.
+                byte[] bytes = c.has("data") ? fileData(c) : serverBlueprint(text(c, "file"));
+                return addTemplate(env, edit, c, blueprintStructure(player, bytes), "Took the blueprint");
+            }
+            case "elements_from_blueprints" -> {
+                return addBlueprints(player, env, edit, c);
             }
             case "features" -> {
                 memory.featureQuery = c.has("query") ? text(c, "query") : "";
