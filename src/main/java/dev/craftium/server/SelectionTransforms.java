@@ -17,6 +17,10 @@ final class SelectionTransforms {
                 for (Point at : source) if (AdvancedTools.matches(p, p.material, at) && p.accepted(at)) result.add(at);
             }
             case "selection_bounds" -> result.addAll(Selection.box(min, max));
+            case "selection_trim" -> {
+                for (Point at : source) if (!p.state(at).isAir()) result.add(at);
+                if (result.isEmpty()) throw new IllegalArgumentException("The selection is only air");
+            }
             case "selection_scale" -> {
                 Point end = new Point(
                         min.x() + (int) Math.ceil((max.x() - min.x() + 1) * o.sizeX) - 1,
