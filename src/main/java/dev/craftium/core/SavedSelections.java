@@ -165,6 +165,35 @@ public final class SavedSelections {
             hiddenBoxFor = heldVersion;
             return hiddenBox = b;
         }
+
+        private int[] box;
+        private int boxFor = -1;
+        /**
+         * The box around its own blocks as {x0,y0,z0,x1,y1,z1}, or null when it holds none. Worked out once for each change of the blocks: the list every
+         * player is sent carries it, and going through every block of every BuildObject for each list made a click in the Hierarchy cost a scan of the world's BuildObjects.
+         */
+        public int[] bounds() {
+            if (points.isEmpty()) return null;
+            if (box != null && boxFor == version) return box;
+            int[] b = {
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                Integer.MIN_VALUE,
+                Integer.MIN_VALUE,
+                Integer.MIN_VALUE
+            };
+            for (var p : points) {
+                b[0] = Math.min(b[0], p.x());
+                b[1] = Math.min(b[1], p.y());
+                b[2] = Math.min(b[2], p.z());
+                b[3] = Math.max(b[3], p.x());
+                b[4] = Math.max(b[4], p.y());
+                b[5] = Math.max(b[5], p.z());
+            }
+            boxFor = version;
+            return box = b;
+        }
         /** Goes up whenever the blocks change, so what was sent of them can be told from what is there now. */
         public int version() {
             return version;

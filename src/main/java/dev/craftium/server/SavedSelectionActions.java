@@ -268,18 +268,9 @@ final class SavedSelectionActions {
     private static List<Packets.SavedSelection> list(Session s, boolean withData) {
         var out = new java.util.ArrayList<Packets.SavedSelection>();
         for (var e : s.saved.entries()) {
-            Point min = e.points().isEmpty()
-                    ? new Point(0, 0, 0)
-                    : new Point(
-                            e.points().stream().mapToInt(Point::x).min().getAsInt(),
-                            e.points().stream().mapToInt(Point::y).min().getAsInt(),
-                            e.points().stream().mapToInt(Point::z).min().getAsInt());
-            Point max = e.points().isEmpty()
-                    ? min
-                    : new Point(
-                            e.points().stream().mapToInt(Point::x).max().getAsInt(),
-                            e.points().stream().mapToInt(Point::y).max().getAsInt(),
-                            e.points().stream().mapToInt(Point::z).max().getAsInt());
+            var box = e.bounds(); // kept with the entry until its blocks change
+            Point min = box == null ? new Point(0, 0, 0) : new Point(box[0], box[1], box[2]);
+            Point max = box == null ? min : new Point(box[3], box[4], box[5]);
             var hidden = e.hiddenBounds();
             out.add(new Packets.SavedSelection(
                     e.id(),
