@@ -1168,4 +1168,20 @@ class SavedSelectionsTest {
         saved.setPoints(Map.of(e.id(), List.of()));
         assertNull(e.bounds(), "none for no blocks");
     }
+
+    @Test
+    void syncNoticesEveryChangeOnEitherSideAfterSkippingAnUnchangedOne() {
+        var saved = new SavedSelections();
+        var s = live(A, B);
+        var e = saved.save(s);
+        saved.edit(e.id(), s);
+        assertFalse(saved.sync(s));
+        assertFalse(saved.sync(s), "nothing changed: skipped");
+        s.combine(List.of(C), Selection.Mode.ADD);
+        assertTrue(saved.sync(s), "the live selection changed");
+        assertEquals(Set.of(A, B, C), new HashSet<>(e.points()));
+        saved.setPoints(Map.of(e.id(), List.of(A)));
+        assertTrue(saved.sync(s), "the entry changed: the live selection is still what is being edited");
+        assertEquals(Set.of(A, B, C), new HashSet<>(e.points()));
+    }
 }

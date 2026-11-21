@@ -1103,12 +1103,30 @@ public final class SavedSelections {
         if (!editing() || live.size() == 0)
             return false; // an emptied selection (Clear, Delete) never empties the saved one; delete it from the window
         // instead
-        if (active.points.size() == live.size() && new HashSet<>(active.points).equals(live.points())) return false;
-        active.points = List.copyOf(live.points());
-        active.version++;
-        changed();
-        return true;
+        // Called for every status: with nothing changed on either side since the last call they still agree, so the
+        // blocks are not compared again (a copy of up to two million of them).
+        if (live == syncedLive
+                && live.revision() == syncedRevision
+                && active == syncedEntry
+                && active.version == syncedVersion) return false;
+        boolean same = active.points.size() == live.size() && new HashSet<>(active.points).equals(live.points());
+        if (!same) {
+            active.points = List.copyOf(live.points());
+            active.version++;
+            changed();
+        }
+        syncedLive = live;
+        syncedRevision = live.revision();
+        syncedEntry = active;
+        syncedVersion = active.version;
+        return !same;
     }
+    /** What {@link #sync} last found in agreement: the live selection at a revision and the entry at a version. */
+    private Selection syncedLive;
+
+    private long syncedRevision;
+    private Entry syncedEntry;
+    private int syncedVersion;
     /** Removes the entry and everything under it; if one of them was being looked at, the live selection comes back first. Returns the removed entry so a delete can be undone. */
     public Entry delete(int id, Selection live) {
         var entry = need(id);
