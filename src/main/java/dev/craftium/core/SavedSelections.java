@@ -839,8 +839,11 @@ public final class SavedSelections {
             for (var e : subtree(r)) {
                 var relative = new ArrayList<Point>(e.points.size());
                 for (var p : e.points) relative.add(p.subtract(origin));
-                if (withHidden)
-                    for (var p : e.dormant.points()) if (!e.points.contains(p)) relative.add(p.subtract(origin));
+                if (withHidden && !e.dormant.isEmpty()) {
+                    var own = new HashSet<>(
+                            e.points); // a set: looking each hidden block up in the list was blocks x hidden
+                    for (var p : e.dormant.points()) if (!own.contains(p)) relative.add(p.subtract(origin));
+                }
                 index.put(e, out.size());
                 out.add(new Copy(e.name, e == r ? -1 : index.get(e.parent), e.color, List.copyOf(relative)));
             }
