@@ -104,6 +104,14 @@ public final class SavedSelections {
         public boolean stowed() {
             return stowed;
         }
+        /**
+         * Whether its blocks are out of the world because of an eye: its own, or that of any BuildObject it is under. A closed eye above wins over an open one below,
+         * which keeps its own state for when the one above opens again (as an inactive parent does in Unity).
+         */
+        public boolean stowedInHierarchy() {
+            for (var e = this; e != null; e = e.parent) if (e.stowed) return true;
+            return false;
+        }
         /** The group it is in: the group of the BuildObject at the top that it is under, or its own when it is at the top. */
         public Group group() {
             var top = this;
@@ -1195,6 +1203,12 @@ public final class SavedSelections {
                     || a.groupId() != b.groupId()) return false;
         }
         return true;
+    }
+    /** The ids of the BuildObjects whose blocks are out of the world because of an eye, theirs or one above them. */
+    public Set<Integer> stowedIds() {
+        var out = new HashSet<Integer>();
+        for (var e : entries) if (e.stowedInHierarchy()) out.add(e.id);
+        return out;
     }
     /** Closes or opens the eye of these BuildObjects (see {@link Entry#stowed}). Only the flag: the blocks are moved by the caller. Returns whether any changed. */
     public boolean setStowed(Collection<Integer> ids, boolean stowed) {

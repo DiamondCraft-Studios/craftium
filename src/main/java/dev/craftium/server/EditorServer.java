@@ -726,7 +726,7 @@ public final class EditorServer {
                     for (int id : s.saved.withDescendants(
                             named)) { // one whose eye is closed keeps its blocks out of the world
                         var kept = s.saved.byId(id);
-                        if (kept == null || !kept.stowed()) everything.add(id);
+                        if (kept == null || !kept.stowedInHierarchy()) everything.add(id);
                     }
                     if (everything.isEmpty())
                         throw new IllegalArgumentException("Its eye is closed: open it to put its blocks back");
@@ -786,6 +786,7 @@ public final class EditorServer {
                 var needs = SavedSelectionActions.permission(r.action());
                 SavedSelections.State before;
                 String said;
+                var stowedBefore = s.saved.stowedIds(); // a move under a closed eye, or out from under one
                 try {
                     if (needs != null) HierarchyPermissions.require(player, needs);
                     before = SavedSelectionActions.changesHierarchy(r.action())
@@ -806,13 +807,14 @@ public final class EditorServer {
                                 SavedSelectionActions.historyName(r.action()),
                                 Session.SelectionChange.hierarchy(before, after));
                 }
-                if (SavedSelectionActions.changesPriority(r.action())) {
+                if (SavedSelectionActions.changesPriority(r.action())
+                        || !s.saved.stowedIds().equals(stowedBefore)) {
                     // The order of the Hierarchy is the priority between BuildObjects: where a hidden block now
                     // outranks the one standing in its cell, they change places. That is part of the
                     // same step in the history as the move itself, so one Ctrl+Z puts back both the order and the
                     // blocks.
                     try {
-                        if (reorderObjects(player, s, o, hierarchyStep)) return;
+                        if (reorderObjects(player, s, o, hierarchyStep, stowedBefore)) return;
                     } catch (RuntimeException ex) {
                         said = said + " · Not re-resolved: " + ex.getMessage();
                     }
@@ -2606,19 +2608,43 @@ public final class EditorServer {
     }
     /** Every edit comes in here: it is checked by the {@link EditGate}, then built, or held as a ghost until the player confirms it. */
     /** Applies what a new order of the Hierarchy means for the BuildObjects that overlap, in one undo step, without waiting for confirmation. Returns whether it applied anything. */
-    private static boolean reorderObjects(ServerPlayer player, Session s, Options o, Session.Edit hierarchyStep) {
-        var cells = ObjectMoves.outranked(s);
+    private static boolean reorderObjects(
+            ServerPlayer player, Session s, Options o, Session.Edit hierarchyStep, Set<Integer> stowedBefore) {
+        var cells = new ArrayList<>(ObjectMoves.outranked(s));
+        cells.addAll(ObjectMoves.reconcileCells(s, stowedBefore));
         if (cells.isEmpty()) return false;
         ChunkLease.planning(
                 ChunkLease.area().points(cells, 0, 0).lease(player.level())); // the cells may be far from every player
         var plan = EditPlanner.forSelection(player.level(), s, o);
-        var done = ObjectMoves.reorder(player.level(), s, plan);
-        var edit = plan.finish(hierarchyStep != null ? hierarchyStep.name() : "Reorder BuildObjects");
-        if (done == null || edit.changes().isEmpty()) {
-            if (done != null) done.applied().undo(s);
-            return false;
+        var ownStart = s.saved.snapshot();
+        var heldStart = s.saved.heldSnapshot();
+        // first the eyes (a BuildObject that went under a closed one, or came out from under it), then the order
+        var eyes = ObjectMoves.reconcile(player.level(), s, plan, stowedBefore);
+        ObjectMoves.Transformed reordered;
+        try {
+            reordered = ObjectMoves.reorder(player.level(), s, plan);
+        } catch (RuntimeException ex) {
+            if (eyes != null) eyes.undo(s);
+            throw ex;
         }
-        var change = done.applied().change();
+        var edit = plan.finish(hierarchyStep != null ? hierarchyStep.name() : "Reorder BuildObjects");
+        if (eyes == null && reordered == null) return false;
+        var done = new ObjectMoves.Applied(ownStart, s.saved.snapshot(), heldStart, s.saved.heldSnapshot());
+        if (edit.changes().isEmpty()) {
+            if (eyes == null) { // the order moved blocks between BuildObjects but wrote nothing: as before, not a step
+                done.undo(s);
+                return false;
+            }
+            var quiet = done.change();
+            if (hierarchyStep != null)
+                quiet = quiet.withHierarchy(
+                        hierarchyStep.selection().hierarchyBefore(),
+                        hierarchyStep.selection().hierarchyAfter());
+            s.remember(Session.Edit.selecting(edit.name(), quiet));
+            send(player, s, edit.name(), false);
+            return true;
+        }
+        var change = done.change();
         if (hierarchyStep != null)
             change = change.withHierarchy(
                     hierarchyStep.selection().hierarchyBefore(),
@@ -2628,7 +2654,7 @@ public final class EditorServer {
         try {
             start(player, s, edit.withSelection(change));
         } catch (RuntimeException ex) {
-            done.applied().undo(s);
+            done.undo(s);
             throw ex;
         } finally {
             s.bypassConfirm = wasBypassing;
@@ -2897,58 +2923,51 @@ public final class EditorServer {
             if (e != null && e.stowed() != stow) ids.add(id);
         }
         if (ids.isEmpty())
-            throw new IllegalArgumentException(stow ? "Its blocks are already hidden" : "Its blocks are already shown");
-        if (stow
-                && s.saved.editing()
-                && s.saved.active() != null
-                && ids.contains(s.saved.active().id()))
-            throw new IllegalArgumentException("Finish editing that BuildObject before hiding it");
-        var cells = new ArrayList<Point>();
-        for (int id : ids) {
-            var e = s.saved.byId(id);
-            cells.addAll(stow ? e.points() : e.dormant().points());
+            throw new IllegalArgumentException(stow ? "Its eye is already closed" : "Its eye is already open");
+        if (stow && s.saved.editing() && s.saved.active() != null) {
+            var active = s.saved.active();
+            for (var e = active; e != null; e = e.parent())
+                if (ids.contains(e.id()))
+                    throw new IllegalArgumentException("Finish editing " + active.name() + " before hiding it");
         }
         String what = ids.size() == 1 ? s.saved.byId(ids.iterator().next()).name() : ids.size() + " BuildObjects";
         String step = (stow ? "Hide " : "Show ") + (ids.size() == 1 ? "BuildObject" : "BuildObjects");
         var hierarchyBefore = s.saved.state();
-        if (!cells.isEmpty())
-            ChunkLease.planning(ChunkLease.area()
-                    .points(cells, 0, 0)
-                    .lease(player.level())); // the blocks may be far from every player
-        var plan = EditPlanner.forSelection(player.level(), s, o);
+        var stowedBefore = s.saved.stowedIds();
+        s.saved.setStowed(ids, stow);
         ObjectMoves.Applied applied;
-        if (stow) applied = cells.isEmpty() ? null : ObjectMoves.stow(player.level(), s, plan, ids);
-        else {
-            s.saved.setStowed(ids, false);
-            ObjectMoves.Transformed placed;
-            try {
-                placed = cells.isEmpty() ? null : ObjectMoves.placeHere(player.level(), s, plan, ids);
-            } catch (RuntimeException ex) {
-                s.saved.setStowed(ids, true);
-                throw ex;
-            }
-            applied = placed == null ? null : placed.applied();
+        Session.Edit edit;
+        try {
+            var cells = ObjectMoves.reconcileCells(s, stowedBefore);
+            if (!cells.isEmpty())
+                ChunkLease.planning(ChunkLease.area()
+                        .points(cells, 0, 0)
+                        .lease(player.level())); // the blocks may be far from every player
+            var plan = EditPlanner.forSelection(player.level(), s, o);
+            applied = ObjectMoves.reconcile(player.level(), s, plan, stowedBefore);
+            edit = plan.finish(step);
+        } catch (RuntimeException ex) {
+            s.saved.setStowed(ids, !stow);
+            throw ex;
         }
-        if (stow && applied == null) s.saved.setStowed(ids, true); // nothing of it is in the world: only the flag
         var hierarchyAfter = s.saved.state();
-        var edit = plan.finish(step);
+        boolean above = false; // a BuildObject above still keeps it hidden
+        for (int id : ids) {
+            var e = s.saved.byId(id);
+            if (!stow && e.parent() != null && e.parent().stowedInHierarchy()) above = true;
+        }
         if (applied == null
-                || edit.changes()
-                        .isEmpty()) { // nothing to write in the world: the flag, and what the BuildObjects keep
+                || edit.changes().isEmpty()) { // nothing to write in the world: the eye, and what the BuildObjects keep
             var change = applied == null
                     ? Session.SelectionChange.hierarchy(hierarchyBefore, hierarchyAfter)
                     : applied.change().withHierarchy(hierarchyBefore, hierarchyAfter);
             s.remember(Session.Edit.selecting(step, change));
-            send(
-                    player,
-                    s,
-                    stow
-                            ? "Hid " + what
-                            : "Showed " + what
-                                    + (cells.isEmpty()
-                                            ? ""
-                                            : " · The world holds every cell it needs, so its blocks stay hidden"),
-                    false);
+            String note = above
+                    ? " · It stays out of the world while a BuildObject above it is hidden"
+                    : !stow && applied != null
+                            ? " · The world holds every cell it needs, so its blocks stay hidden"
+                            : "";
+            send(player, s, (stow ? "Hid " : "Showed ") + what + note, false);
             return;
         }
         try {

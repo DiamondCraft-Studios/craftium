@@ -7861,6 +7861,8 @@ public final class EditorScreen extends CraftiumScreen {
                 foldControls.add(fold); // no tooltip: the arrow says what it does
             }
             boolean hidden = entry.stowed();
+            boolean above =
+                    hiddenAbove(entry); // a closed eye above wins; this one keeps its own state for when it opens
             button(
                     g,
                     eye,
@@ -7870,10 +7872,11 @@ public final class EditorScreen extends CraftiumScreen {
                     "",
                     false,
                     () -> eyeClick(entry, minecraft.hasControlDown()),
-                    hidden
-                            ? "Put this BuildObject's blocks back in the world, where it is free · Ctrl+click does the same for everything under it"
-                            : "Take this BuildObject's blocks out of the world, for everyone · They are kept, and come back when the eye is opened · Ctrl+click does the same for everything under it");
-            glyph(g, eye, ry + 2, 18, rowHeight - 4, EYE, hidden ? 0xff56606e : TEXT);
+                    (above ? "Out of the world while a BuildObject above it is hidden, whatever this eye says · " : "")
+                            + (hidden
+                                    ? "Put this BuildObject's blocks back in the world, where it is free · Ctrl+click does the same for everything under it"
+                                    : "Take this BuildObject's blocks out of the world, for everyone · They are kept, and come back when the eye is opened · Ctrl+click does the same for everything under it"));
+            glyph(g, eye, ry + 2, 18, rowHeight - 4, EYE, hidden ? 0xff56606e : above ? 0xff7c8796 : TEXT);
             if (hidden) {
                 int ox = eye + (18 - 9) / 2, oy = ry + 2 + (rowHeight - 4 - 5) / 2;
                 for (int k = 0; k < 9; k++) g.fill(ox + k, oy + 4 - k / 2, ox + k + 1, oy + 5 - k / 2, 0xffe07070);
@@ -7974,6 +7977,14 @@ public final class EditorScreen extends CraftiumScreen {
         var ids = new ArrayList<Integer>();
         for (var e : hierarchyAll) if (e.id() == entry.id() || below && isUnder(e, entry.id())) ids.add(e.id());
         stow(ids, !entry.stowed());
+    }
+    /** Whether a BuildObject above this one has its eye closed, which keeps this one out of the world whatever its own eye says. */
+    private static boolean hiddenAbove(dev.craftium.net.Packets.SavedSelection entry) {
+        int guard = 0;
+        for (var p = ClientState.savedById(entry.parent());
+                p != null && guard++ < 1024;
+                p = p.parent() == 0 ? null : ClientState.savedById(p.parent())) if (p.stowed()) return true;
+        return false;
     }
     /** Takes the blocks of these BuildObjects out of the world ({@code hide}) or puts them back, on the server, for everyone; those already so are left. */
     private void stow(List<Integer> ids, boolean hide) {

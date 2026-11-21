@@ -1200,4 +1200,28 @@ class SavedSelectionsTest {
         saved.restore(closed, s);
         assertTrue(one.stowed());
     }
+
+    @Test
+    void aClosedEyeAboveHidesWhatIsUnderItWithoutTouchingTheirOwnEyes() {
+        var saved = new SavedSelections();
+        var house = saved.save(live(A));
+        var door = saved.save(live(B));
+        var knob = saved.save(live(C));
+        saved.place(door.id(), house.id(), 0);
+        saved.place(knob.id(), door.id(), 0);
+        saved.setStowed(List.of(knob.id()), true);
+        assertEquals(Set.of(knob.id()), saved.stowedIds());
+
+        saved.setStowed(List.of(house.id()), true);
+        assertEquals(Set.of(house.id(), door.id(), knob.id()), saved.stowedIds(), "the parent wins");
+        assertFalse(door.stowed(), "the child keeps its own eye open");
+        assertTrue(door.stowedInHierarchy());
+
+        saved.setStowed(List.of(house.id()), false);
+        assertEquals(Set.of(knob.id()), saved.stowedIds(), "each goes back to its own eye");
+
+        saved.setStowed(List.of(house.id()), true);
+        saved.place(door.id(), 0, 0); // out from under the closed eye
+        assertEquals(Set.of(house.id(), knob.id()), saved.stowedIds());
+    }
 }
