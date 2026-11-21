@@ -723,11 +723,20 @@ public final class EditorServer {
                     return;
                 }
                 var needs = SavedSelectionActions.permission(r.action());
-                if (needs != null) HierarchyPermissions.require(player, needs);
-                var before = SavedSelectionActions.changesHierarchy(r.action())
-                        ? s.saved.state()
-                        : null; // what is done in the Hierarchy is in the history, so Undo and Redo reach it
-                String said = SavedSelectionActions.run(s, r.action());
+                SavedSelections.State before;
+                String said;
+                try {
+                    if (needs != null) HierarchyPermissions.require(player, needs);
+                    before = SavedSelectionActions.changesHierarchy(r.action())
+                            ? s.saved.state()
+                            : null; // what is done in the Hierarchy is in the history, so Undo and Redo reach it
+                    said = SavedSelectionActions.run(s, r.action());
+                } catch (RuntimeException ex) {
+                    // The client shows the likely result of some actions before the answer comes: a refused one
+                    // changes nothing here, so the list is sent again to put the client's rows back.
+                    s.savedSent = -1;
+                    throw ex;
+                }
                 Session.Edit hierarchyStep = null;
                 if (before != null) {
                     var after = s.saved.state();

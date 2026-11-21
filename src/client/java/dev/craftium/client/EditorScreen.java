@@ -5598,6 +5598,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if (action.equals("use") && Interactions.of(o().tool).sendUse(context))
             return; // a tool that sends its own request when it is applied
+        ClientState.predictSaved(action); // the Hierarchy shows the likely result now; the server's status confirms it
         CraftiumClient.send(
                 action,
                 hit == null ? null : CraftiumClient.point(hit.getBlockPos()),
