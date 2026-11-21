@@ -232,4 +232,20 @@ class BuildObjectStoreTest {
         assertEquals(List.of(new Point(0, 50, 0)), back.points());
         assertTrue(back.dormant().isEmpty());
     }
+
+    @Test
+    void manyChangesInARowEndWithTheLastOneOnDisk(@TempDir Path dir) throws Exception {
+        var saved = new SavedSelections();
+        var e = saved.save(live(A, B));
+        var file = dir.resolve("a/burst.nbt");
+        BuildObjectStore.track(file, saved.tree());
+        for (int i = 0; i < 50; i++) {
+            saved.rename(e.id(), "Name " + i);
+            BuildObjectStore.saveChanged(); // a write may still be waiting: it takes the newer state
+        }
+        BuildObjectStore.shutdown();
+        assertEquals(
+                "Name 49",
+                new SavedSelections(BuildObjectStore.load(file)).byId(e.id()).name());
+    }
 }
