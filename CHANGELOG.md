@@ -5,6 +5,7 @@
 Changes since 1.6.0-beta.1.
 
 ### Interface
+- The Surface Painter and the Surface Noise Painter are one tool now. The Surface Painter has a Palette | Material switch: Palette paints your foreground block as before, and Material blends the Materials list with seeded noise (with its Scale, Blend and Noise seed), which is what the Noise Painter did. The Noise Painter is gone from the Paint section and its O key is free. Settings saved from the Noise Painter open as the Surface Painter on Palette, with its noise settings back at their defaults. Material mode now also keeps the block properties and follows Type replace, as Palette does.
 - Changes to the settings in the Tool options window are in the undo history now, in one order with block edits: Ctrl+Z undoes whichever you did last, and a note on screen says which setting it put back ("Undid: Radius 5 → 9"). A slider dragged through many values is one step. Setting changes are kept on your computer, never touch the server's history or its limit, and only the last 100 are kept.
 - Window titles are no longer in capitals: History, Report, Options, Palette, Keyboard shortcuts, Save blueprint and the others read as written.
 - The Export structure window has a third tab, Blueprint, that saves the source into the blueprint library with a name, author and tags. Ctrl + P opens the same window with only that form, replacing the old Save blueprint dialog.

@@ -11,8 +11,7 @@ This is a functional development preview. Implemented equivalents do not establi
 | Freehand Select | Boolean brush selection | Samples brush dabs rather than a continuous rasterized stroke |
 | Lasso Select | Screen polygon projected through depth | Adaptive ray sampling; 8192 rays and 32768 selected blocks |
 | Ruler | Chains, Euclidean/Manhattan totals, circles, splits, center selection, point axes | No complete yaw/pitch/bounds statistics panel |
-| Painter | Surface painting, exact source-state masks, compatible properties and variant family replacement | Variant matching is name based |
-| Noise Painter | Eight noise choices, fractal controls, axis scales, 2D/3D and material lists | Cellular/metaball/splatter behavior is Craftium-specific; no weighted material editor |
+| Surface Painter | Surface painting, exact source-state masks, compatible properties and variant family replacement; Palette paints the foreground block, Material blends the Materials list with noise (eight noise choices, fractal controls, axis scales, 2D/3D, weighted materials) | Variant matching is name based; cellular/metaball/splatter behavior is Craftium-specific |
 | Biome Painter | Native quart-biome editing, vertical fill, undo and biome label | Local biome-cell visualization is bounded around the player |
 | Clentaminator | Biome change plus surface material conversion | Simple explicit list of convertible surface blocks |
 | Gradient Painter | Palette sampled along two control endpoints; dithering | No separate draggable multi-stop gradient editor |

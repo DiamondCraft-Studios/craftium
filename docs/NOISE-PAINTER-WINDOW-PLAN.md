@@ -2,6 +2,8 @@
 
 Status: 2026-11-13. Step 0 and step 1 are built; the rest is still a plan.
 
+Update 2026-11-22: the Noise Painter is no longer a tool of its own. It is the Surface Painter's **Material** mode (Palette | Material). Read "Noise Painter" below as that mode.
+
 ## Why
 
 Noise Painter used to take its second material from the **Background block**. Its "Secondary block" field was the same setting (`Options.secondary`), so pressing X (swap foreground/background) or changing the background silently changed the noise. The tool also only blended two materials unless the Materials list had three or more entries.
