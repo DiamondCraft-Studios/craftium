@@ -66,6 +66,13 @@ public final class Options {
     }
 
     public Tool tool = Tool.BOX_SELECT;
+    /** What the Surface Painter paints with: the Palette (the foreground block) or the Material list blended by noise. */
+    public PaintSource paintSource = PaintSource.PALETTE;
+
+    public enum PaintSource {
+        PALETTE,
+        MATERIAL
+    }
     /** The id of a plugin's tool in use ({@code plugin_id:tool}), or null when it is one of the editor's own, which {@link #tool} names. */
     public String pluginTool;
     /** The values of that tool's declared settings, by the id of each. The server holds them to what the tool declared, so what arrives here is only checked to be well formed. */
@@ -695,6 +702,13 @@ public final class Options {
 
     public void validate() {
         if (tool == null || shape == null || mode == null) throw new IllegalArgumentException("Invalid tool options");
+        // The Surface Noise Painter is now the Surface Painter set to Material, so a saved setting or an older client
+        // that still names it is read as that.
+        if (tool == Tool.NOISE_PAINTER) {
+            tool = Tool.PAINTER;
+            paintSource = PaintSource.MATERIAL;
+        }
+        if (paintSource == null) paintSource = PaintSource.PALETTE;
         if (pluginTool != null && !PLUGIN_TOOL.matcher(pluginTool).matches())
             throw new IllegalArgumentException("Invalid plugin tool");
         if (toolSettings == null) toolSettings = new java.util.HashMap<>();

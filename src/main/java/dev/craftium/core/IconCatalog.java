@@ -93,6 +93,8 @@ public final class IconCatalog {
         // Read from the group, not tool.transform(): that asks the ToolCatalog, which asks this class for the tools'
         // icon ids while it is being built.
         for (Tool tool : Tool.values()) if (tool.group.equals("Transform")) add(icons, tool);
+        // A retired tool is in no section, but its icon stays listed.
+        for (Tool tool : Tool.values()) if (tool.retired()) add(icons, tool);
         for (Options.Compare compare : Options.Compare.values()) {
             String label =
                     switch (compare) {

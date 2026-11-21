@@ -118,7 +118,6 @@ public final class ToolCatalog {
             case FREEHAND_SELECT -> 'N';
             case LASSO_SELECT -> 'L';
             case PAINTER -> 'P';
-            case NOISE_PAINTER -> 'O';
             case FREEHAND_DRAW -> 'G';
             case MOVE -> 'V';
             case ROTATE -> 'R';

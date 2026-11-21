@@ -417,6 +417,13 @@ final class EditPlanner {
                 value, o.materialWeights, materials.size(), BrushMath.hash(at.x(), at.y(), at.z(), o.seed), 1));
     }
 
+    /** The block the Material list gives at a point: one entry paints it, two split at the Blend slider, three or more use the weighted palette. */
+    BlockState materialAt(double value, Point at) {
+        return materials.size() > 2
+                ? palette(value, at)
+                : materials.size() == 2 ? (value < o.density ? materials.get(0) : materials.get(1)) : materials.get(0);
+    }
+
     void tool(Point c, Point normal) {
         if (AdvancedTools.handle(this, c, normal)) return;
         if (o.tool == Tool.TEXT) {
@@ -447,24 +454,14 @@ final class EditPlanner {
             double n = noise.sample(p);
             switch (o.tool) {
                 case PAINTER -> {
-                    if (filled && (!o.surfaceOnly || surface(p)))
+                    if (filled && (!o.surfaceOnly || surface(p))) {
+                        BlockState target = o.paintSource == Options.PaintSource.MATERIAL ? materialAt(n, p) : material;
                         put(
                                 p,
                                 o.typeReplace
-                                        ? AdvancedTools.typeReplace(this, old, material)
-                                        : o.copyProperties ? preserve(old, material) : material);
-                }
-                case NOISE_PAINTER -> {
-                    if (filled && (!o.surfaceOnly || surface(p)))
-                        put(
-                                p,
-                                preserve(
-                                        old,
-                                        materials.size() > 2
-                                                ? palette(n, p)
-                                                : materials.size() == 2
-                                                        ? (n < o.density ? materials.get(0) : materials.get(1))
-                                                        : materials.get(0)));
+                                        ? AdvancedTools.typeReplace(this, old, target)
+                                        : o.copyProperties ? preserve(old, target) : target);
+                    }
                 }
                 case FREEHAND_DRAW, SHAPE -> put(p, o.invert ? Blocks.AIR.defaultBlockState() : material);
                 case ERASE -> put(p, Blocks.AIR.defaultBlockState());

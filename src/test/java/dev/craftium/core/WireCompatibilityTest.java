@@ -456,7 +456,9 @@ class WireCompatibilityTest {
             """;
         var options = JSON.fromJson(saved, Options.class);
         options.validate();
-        assertEquals(Tool.NOISE_PAINTER, options.tool);
+        // The old Surface Noise Painter is read as the Surface Painter set to Material.
+        assertEquals(Tool.PAINTER, options.tool);
+        assertEquals(Options.PaintSource.MATERIAL, options.paintSource);
         assertEquals(7, options.radius);
         assertEquals(2.5, options.strength);
         assertEquals("minecraft:andesite", options.block);
