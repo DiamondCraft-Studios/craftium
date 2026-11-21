@@ -4264,6 +4264,7 @@ public final class EditorScreen extends CraftiumScreen {
                 List.of(
                         item("Deselect", "Alt+D", () -> action("clear")),
                         item("Inverse", "", () -> action("selection_invert")),
+                        item("Trim", "", () -> action("selection_trim")),
                         item(
                                 showSelection ? "Hide selection" : "Show selection",
                                 "",

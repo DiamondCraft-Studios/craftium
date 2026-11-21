@@ -1149,6 +1149,7 @@ public final class EditorServer {
                 }
                 case "selection_filter",
                         "selection_bounds",
+                        "selection_trim",
                         "selection_distort",
                         "selection_smooth",
                         "selection_scale",
@@ -3140,6 +3141,7 @@ public final class EditorServer {
                     "selection_outline",
                     "selection_filter",
                     "selection_bounds",
+                    "selection_trim",
                     "selection_distort",
                     "selection_smooth",
                     "selection_scale",
@@ -3161,6 +3163,7 @@ public final class EditorServer {
             case "selection_expand" -> "Expand selection";
             case "selection_shrink" -> "Shrink selection";
             case "selection_invert" -> "Invert selection";
+            case "selection_trim" -> "Trim selection";
             case "selection_outline" -> "Select outline";
             case "selection_move" -> "Move selection";
             default -> "Select " + size + " blocks";

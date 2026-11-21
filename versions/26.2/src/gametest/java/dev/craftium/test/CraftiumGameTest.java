@@ -1822,6 +1822,32 @@ public final class CraftiumGameTest implements FabricClientGameTest {
         require(
                 ctx.computeOnClient(mc -> ClientState.status.selectionSize() == 1),
                 "Selection filter retained blocks of the wrong type");
+        world.getServer().runOnServer(server -> {
+            var level = server.overworld();
+            for (BlockPos at : BlockPos.betweenClosed(new BlockPos(40, 15, 40), new BlockPos(42, 17, 42)))
+                level.setBlock(at, Blocks.AIR.defaultBlockState(), 18);
+            level.setBlock(new BlockPos(40, 15, 40), Blocks.GOLD_BLOCK.defaultBlockState(), 18);
+            level.setBlock(new BlockPos(42, 17, 42), Blocks.STONE.defaultBlockState(), 18);
+        });
+        options(o -> {
+            o.position1 = new Point(40, 15, 40);
+            o.position2 = new Point(42, 17, 42);
+        });
+        request("select_box", null);
+        request("selection_trim", null);
+        require(
+                ctx.computeOnClient(mc -> ClientState.status.selectionSize() == 2),
+                "Trim kept air blocks or dropped solid ones");
+        request("undo", null);
+        require(
+                ctx.computeOnClient(mc -> ClientState.status.selectionSize() == 27),
+                "Undo did not bring back the trimmed air");
+        options(o -> {
+            o.position1 = new Point(30, 15, 30);
+            o.position2 = new Point(32, 17, 32);
+        });
+        request("select_box", null);
+        request("selection_filter", null);
         request("selection_bounds", null);
         options(o -> {
             o.sizeX = 2;
