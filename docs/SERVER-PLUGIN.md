@@ -47,7 +47,7 @@ Additional permissions require `craftium.edit`. No permission grants arbitrary s
 
 Clients and the companion tell each other their version and a protocol number as a player joins. If a client speaks a different protocol, the player is told which side to update and their edits are refused until they reconnect updated; a client or companion with the same protocol works whatever its patch version.
 
-Shared assets live in `plugins/Craftium/blueprints`, `fonts`, `heightmaps` and `exports`. History and saved views live in the server world directory under `craftium/`. Client downloads go to the local `config/craftium` library when explicitly requested by that client. History is separated by player and dimension. Edits retain the existing 131,072-cell and 32 MiB history limits.
+Shared assets live in `plugins/Craftium/blueprints`, `fonts`, `heightmaps` and `exports`. Shared palettes are one JSON file each in `plugins/Craftium/palettes` (up to 100, 12,000 characters each): every player with `craftium.edit` can load them, and only operators can save or delete them. You can also add or edit the files by hand. History and saved views live in the server world directory under `craftium/`. Client downloads go to the local `config/craftium` library when explicitly requested by that client. History is separated by player and dimension. Edits retain the existing 131,072-cell and 32 MiB history limits.
 
 ## Protection integration
 

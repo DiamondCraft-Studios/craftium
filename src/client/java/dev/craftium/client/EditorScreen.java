@@ -136,14 +136,15 @@ public final class EditorScreen extends CraftiumScreen {
             double def,
             DoubleConsumer set,
             boolean unbounded) {
-        /** Sets the value for a pointer at {@code px}; Ctrl steps it by 1 and Shift by 0.01. */
-        void update(double px, boolean ctrl, boolean shift) {
-            set.accept(Math.clamp(
-                    FlatSlider.step(min + FlatSlider.fractionAt(px, x, width) * (max - min), ctrl, shift), min, max));
-        }
-        /** An unbounded slider's drag: the value turns from where it was when the drag began by the distance moved, one track width being the whole range, with no end to it. */
+        /**
+         * A drag: the value moves from where it was when the drag began by the distance moved, one track width being
+         * the whole range, so a click alone changes nothing. Ctrl steps it by 1 and Shift by 0.01. A bounded slider
+         * stops at its ends (or at a typed value past them, which the drag may come back to); an unbounded one has no
+         * end.
+         */
         void drag(double px, double startPx, double startValue, boolean ctrl, boolean shift) {
-            set.accept(FlatSlider.step(startValue + (px - startPx) / (width - 4) * (max - min), ctrl, shift));
+            double v = FlatSlider.step(startValue + (px - startPx) / (width - 4) * (max - min), ctrl, shift);
+            set.accept(unbounded ? v : Math.clamp(v, Math.min(min, startValue), Math.max(max, startValue)));
         }
 
         void reset() {
@@ -2094,7 +2095,7 @@ public final class EditorScreen extends CraftiumScreen {
             boolean integer) {
         return sliderRow(w, label, value, min, max, typedMax, def, set, integer, false);
     }
-    /** {@code unbounded}: dragging turns the value by the distance moved, as far as it goes, instead of setting it from where the pointer is on the track. */
+    /** {@code unbounded}: dragging turns the value by the distance moved as far as it goes, instead of stopping at the track's ends. */
     private ModifyRow sliderRow(
             int w,
             String label,
@@ -3036,7 +3037,7 @@ public final class EditorScreen extends CraftiumScreen {
                 ClientState.notify("The palette is full");
             ClientState.save();
         }); // a block dropped anywhere on the window joins the palette
-        int rowTop = y + 36, pitch = 36, fit = Math.max(1, (pb - 50 - rowTop) / pitch);
+        int rowTop = y + 36, pitch = 36, fit = Math.max(1, (pb - 72 - rowTop) / pitch);
         materialsScroll = Math.clamp(materialsScroll, 0, Math.max(0, blocks.size() - fit));
         for (int r = 0; r < fit && materialsScroll + r < blocks.size(); r++) {
             int i = materialsScroll + r, ry = rowTop + r * pitch;
@@ -3117,7 +3118,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(
                 g,
                 x + 10,
-                pb - 26,
+                pb - 48,
                 top[0],
                 19,
                 "Add block",
@@ -3131,7 +3132,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(
                 g,
                 x + 14 + top[0],
-                pb - 26,
+                pb - 48,
                 top[1],
                 19,
                 "Add hotbar",
@@ -3157,7 +3158,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(
                 g,
                 x + 18 + top[0] + top[1],
-                pb - 26,
+                pb - 48,
                 top[2],
                 19,
                 "Sort",
@@ -3175,13 +3176,34 @@ public final class EditorScreen extends CraftiumScreen {
                     ClientState.save();
                 },
                 "Put the blocks in order from dark to light");
+        int[] low = flex(pw - 20, 4, 1, 1);
+        button(
+                g,
+                x + 10,
+                pb - 26,
+                low[0],
+                19,
+                "Save…",
+                false,
+                () -> ClientCompat.setScreen(minecraft, new SavePaletteScreen(this, false, "")),
+                "Save this palette with a name, author and tags, on the server or on your computer");
+        button(
+                g,
+                x + 14 + low[0],
+                pb - 26,
+                low[1],
+                19,
+                "Library",
+                false,
+                () -> ClientCompat.setScreen(minecraft, new PaletteLibraryScreen(this)),
+                "Load and save palettes: the server's, which everyone on it can use, and your own");
         text(
                 g,
                 blocks.size()
                         + (blocks.size() == 1 ? " block" : " blocks")
                         + (blocks.size() > fit ? " · scroll for more" : " · drop blocks here to add"),
                 x + 10,
-                pb - 40,
+                pb - 62,
                 MUTED);
     }
     /** The Materials palette as a row of its blocks' icons, 24 pixels tall; a click opens the window where blocks are added, weighed and put in order. */
@@ -4410,7 +4432,11 @@ public final class EditorScreen extends CraftiumScreen {
                         item(
                                 "Colour picker / gradient",
                                 "",
-                                () -> ClientCompat.setScreen(minecraft, new ColourScreen(this))));
+                                () -> ClientCompat.setScreen(minecraft, new ColourScreen(this))),
+                        item(
+                                "Palette library",
+                                "",
+                                () -> ClientCompat.setScreen(minecraft, new PaletteLibraryScreen(this))));
             case 8 -> {
                 int sessions = ClientState.aiSessions.size();
                 var items = new ArrayList<MenuItem>();
@@ -5539,10 +5565,8 @@ public final class EditorScreen extends CraftiumScreen {
                     }
                     dragging = slider;
                     draggingSliderPanel = panel;
-                    if (unbounded) {
-                        sliderStartX = WorkspaceLayout.inverse(panel, mx, my)[0];
-                        sliderStartValue = value;
-                    } else slider.update(WorkspaceLayout.inverse(panel, mx, my)[0], false, minecraft.hasShiftDown());
+                    sliderStartX = WorkspaceLayout.inverse(panel, mx, my)[0];
+                    sliderStartValue = value;
                 },
                 "Drag to change " + label.toLowerCase(Locale.ROOT) + " · Ctrl-click to type"
                         + (typedMax == Double.POSITIVE_INFINITY
@@ -6557,9 +6581,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if (dragging != null) {
             double px = WorkspaceLayout.inverse(draggingSliderPanel, event.x() / scale, event.y() / scale)[0];
-            if (dragging.unbounded())
-                dragging.drag(px, sliderStartX, sliderStartValue, minecraft.hasControlDown(), minecraft.hasShiftDown());
-            else dragging.update(px, minecraft.hasControlDown(), minecraft.hasShiftDown());
+            dragging.drag(px, sliderStartX, sliderStartValue, minecraft.hasControlDown(), minecraft.hasShiftDown());
             return true;
         }
         if (help || transform || menu >= 0) return true;

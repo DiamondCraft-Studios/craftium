@@ -37,12 +37,21 @@ public final class Handshake {
     public static final String SAVED_SELECTIONS = "saved-selections";
     /** The Surface Painters can paint the blocks the client names in {@code screenBlocks}: what the brush ring covers on the screen. */
     public static final String SCREEN_BRUSH = "screen-brush";
+    /** The server's shared palette library: the {@code palette_*} actions and the {@code palettes} list in the status. */
+    public static final String SHARED_PALETTES = "shared-palettes";
     /** What this build supports. */
-    public static final Set<String> CAPABILITIES =
-            Set.of(MODIFY_EXPANSION, AI_SPEC_V2, AI_SESSIONS, PLUGIN_TOOLS, SAVED_SELECTIONS, SCREEN_BRUSH);
+    public static final Set<String> CAPABILITIES = Set.of(
+            MODIFY_EXPANSION, AI_SPEC_V2, AI_SESSIONS, PLUGIN_TOOLS, SAVED_SELECTIONS, SCREEN_BRUSH, SHARED_PALETTES);
     /** What the Fabric server adds to that: things only a server with mixins can do. */
     public static final Set<String> FABRIC_SERVER_CAPABILITIES = Set.of(
-            MODIFY_EXPANSION, AI_SPEC_V2, AI_SESSIONS, PLUGIN_TOOLS, SAVED_SELECTIONS, SCREEN_BRUSH, FAST_MOVEMENT);
+            MODIFY_EXPANSION,
+            AI_SPEC_V2,
+            AI_SESSIONS,
+            PLUGIN_TOOLS,
+            SAVED_SELECTIONS,
+            SCREEN_BRUSH,
+            SHARED_PALETTES,
+            FAST_MOVEMENT);
     /** {@code version} is the mod or plugin version, such as 0.9.1-beta.1. {@code capabilities} is null from a build that predates the list, which means none. */
     public record Hello(int protocol, String version, Set<String> capabilities) {
         public boolean has(String capability) {
