@@ -612,6 +612,7 @@ public final class EditorServer {
                     && now - s.lastRequest < 65_000_000L
                     && !popup
                     && !r.action().equals("blueprint_list")
+                    && !r.action().equals("palette_list")
                     && !r.action().equals("hotbar_list")) return;
             if (!popup) s.lastRequest = now;
             if (r.action().equals("tool_preview")) {
@@ -1256,6 +1257,17 @@ public final class EditorServer {
                 case "ruler_clear" -> {
                     s.ruler = null;
                     send(player, s, "Measurement cleared", false);
+                }
+                case "palette_list", "palette_save", "palette_delete" -> {
+                    if (!Handshake.clientHas(player.getUUID(), Handshake.SHARED_PALETTES))
+                        throw new IllegalArgumentException("This client does not know shared palettes");
+                    boolean change = !r.action().equals("palette_list");
+                    if (change && !dev.craftium.compat.Compat.isGamemaster(player))
+                        throw new IllegalArgumentException("Only operators can change the server's palette library");
+                    String result = PaletteLibrary.act(r.action(), o.assetData, player);
+                    s.palettes = PaletteLibrary.json();
+                    send(player, s, result, false);
+                    if (change) PaletteLibrary.push(player);
                 }
                 case "asset_upload",
                         "blueprint_list",
@@ -3491,7 +3503,9 @@ public final class EditorServer {
                 savedList,
                 savedList == null ? null : SavedSelectionActions.groups(s),
                 s.takeJigsawReport(),
-                s.takeJigsawModel());
+                s.takeJigsawModel(),
+                s.palettes);
+        s.palettes = null;
         s.library = List.of();
         s.pivotUpdate = "";
         s.restoreUpdate = "";
