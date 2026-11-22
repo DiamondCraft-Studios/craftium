@@ -253,6 +253,12 @@ public final class EditorScreen extends CraftiumScreen {
         }
 
         @Override
+        public void requestAt(String action, Point target, Point normal) {
+            ClientState.predictSaved(action);
+            CraftiumClient.send(action, target, normal);
+        }
+
+        @Override
         public boolean asking() {
             return confirm != null;
         }

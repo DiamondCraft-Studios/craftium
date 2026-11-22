@@ -11,6 +11,9 @@ import java.util.List;
  */
 final class DragPointsInteraction implements Interaction {
     private Point start;
+    /** The face of the end block the drag last crossed, sent with the stroke. */
+    private Point normal = new Point(0, 1, 0);
+
     private boolean moved;
 
     @Override
@@ -28,6 +31,7 @@ final class DragPointsInteraction implements Interaction {
         var end = CraftiumClient.point(hit.getBlockPos());
         if (end.equals(start) && !moved) return true;
         moved = true;
+        normal = CraftiumClient.normal(hit);
         var points = editor.options().gradientAnchors;
         points.clear();
         points.add(start);
@@ -42,8 +46,10 @@ final class DragPointsInteraction implements Interaction {
         start = null;
         moved = false;
         if (from == null) return;
-        if (dragged) {
-            editor.request("use");
+        var anchors = editor.options().gradientAnchors;
+        if (dragged && anchors.size() == 2) {
+            // Sent for the end of the stroke, not the block under the pointer, which may be sky or a panel by now
+            editor.requestAt("use", anchors.getLast(), normal);
             // Painted: the line and its points go, and the next drag starts a new gradient. The request has already
             // taken the points with it.
             editor.options().gradientAnchors.clear();
