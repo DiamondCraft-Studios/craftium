@@ -39,21 +39,14 @@ public final class MaterialPalette {
         o.materialWeights = new ArrayList<>(weights);
     }
     /**
-     * Sets the palette to {@code steps} in order, as the Gradient window generates it: a run of the same block becomes one entry, weighted by
-     * how many steps it covers, so its band is as wide as the run.
+     * Sets the palette to {@code steps} in order, one entry of weight 1 for each, as the Gradient window generates it. A block that several
+     * steps share keeps one entry per step: entries of equal weight are painted at evenly spaced places, so each step's band is the width
+     * its stops give it, which one entry weighted by the run's length would not be.
      */
-    public static void setRuns(Options o, List<String> steps) {
-        var blocks = new ArrayList<String>();
+    public static void setSteps(Options o, List<String> steps) {
         var weights = new ArrayList<Double>();
-        for (String step : steps) {
-            if (!blocks.isEmpty() && blocks.getLast().equals(step))
-                weights.set(weights.size() - 1, weights.getLast() + 1);
-            else {
-                blocks.add(step);
-                weights.add(1d);
-            }
-        }
-        set(o, blocks, weights);
+        for (int i = 0; i < steps.size(); i++) weights.add(1d);
+        set(o, steps, weights);
     }
 
     /**

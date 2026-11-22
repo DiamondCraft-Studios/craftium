@@ -74,26 +74,32 @@ class GradientTest {
     }
 
     @Test
-    void generatedRunsBecomeWeightedEntries() {
+    void generatedStepsKeepOneEntryEach() {
         var o = new Options();
-        MaterialPalette.setRuns(
-                o,
-                List.of(
-                        "minecraft:stone",
-                        "minecraft:stone",
-                        "minecraft:andesite",
-                        "minecraft:stone",
-                        "minecraft:tuff"));
-        assertEquals(
-                List.of("minecraft:stone", "minecraft:andesite", "minecraft:stone", "minecraft:tuff"),
-                MaterialPalette.blocks(o));
-        assertEquals(List.of(2d, 1d, 1d, 1d), o.materialWeights);
+        var steps = List.of("minecraft:stone", "minecraft:stone", "minecraft:andesite", "minecraft:tuff");
+        MaterialPalette.setSteps(o, steps);
+        assertEquals(steps, MaterialPalette.blocks(o));
+        assertEquals(List.of(1d, 1d, 1d, 1d), o.materialWeights);
+    }
+
+    @Test
+    void aRunOfOneBlockPaintsAsWideAsItsSteps() {
+        // Five steps A,B,B,B,C sampled at 0, .25, .5, .75, 1: B covers the middle three, so it paints from .125 to .875
+        var o = new Options();
+        MaterialPalette.setSteps(o, List.of("minecraft:a", "minecraft:b", "minecraft:b", "minecraft:b", "minecraft:c"));
+        var blocks = MaterialPalette.blocks(o);
+        int b = 0, total = 1000;
+        for (int i = 0; i <= total; i++) {
+            int at = MaterialList.index(i / (double) total, o.materialWeights, blocks.size(), .5, 0);
+            if (blocks.get(at).equals("minecraft:b")) b++;
+        }
+        assertEquals(.75, b / (double) total, .01);
     }
 
     @Test
     void positionsMatchWhereTheGradientPaintsEachEntry() {
         var o = new Options();
-        MaterialPalette.setRuns(o, List.of("minecraft:a", "minecraft:a", "minecraft:b", "minecraft:c"));
+        MaterialPalette.setSteps(o, List.of("minecraft:a", "minecraft:a", "minecraft:b", "minecraft:c"));
         int n = MaterialPalette.blocks(o).size();
         assertEquals(0, MaterialPalette.position(o, 0));
         assertEquals(1, MaterialPalette.position(o, n - 1));

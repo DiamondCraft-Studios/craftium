@@ -3461,7 +3461,7 @@ public final class EditorScreen extends CraftiumScreen {
             return;
         }
         Runnable apply = () -> {
-            ClientOptionHistory.change("Generate gradient", () -> MaterialPalette.setRuns(o(), steps));
+            ClientOptionHistory.change("Generate gradient", () -> MaterialPalette.setSteps(o(), steps));
             gradientGenerated = materialsKey();
             ClientState.save();
             int n = MaterialPalette.blocks(o()).size();
