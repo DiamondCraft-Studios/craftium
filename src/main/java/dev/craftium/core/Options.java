@@ -66,7 +66,7 @@ public final class Options {
     }
 
     public Tool tool = Tool.BOX_SELECT;
-    /** What the Surface Painter paints with: the Palette (the foreground block) or the Material list blended by noise. */
+    /** What the Surface Painter and the Paint Bucket paint with: the Palette (the foreground block) or the Material list blended by noise. */
     public PaintSource paintSource = PaintSource.PALETTE;
 
     public enum PaintSource {

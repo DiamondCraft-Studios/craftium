@@ -20,7 +20,7 @@ public enum Tool {
             "Paint Bucket",
             "PB",
             "Paint",
-            "Fill the connected blocks you click with your foreground block. Directions and select type work as in the Magic Wand."),
+            "Fill the connected blocks you click with your Palette block, or switch to Material to blend the Materials list with noise. Directions and select type work as in the Magic Wand."),
     /** Kept so saved settings and older clients that name it still read: it is the Surface Painter set to Material, and is no longer listed or bound. */
     @Deprecated
     NOISE_PAINTER("Surface Noise Painter", "NP", "Paint", "Blend the Materials palette with coherent seeded noise."),

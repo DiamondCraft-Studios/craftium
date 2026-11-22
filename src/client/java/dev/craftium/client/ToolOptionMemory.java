@@ -14,6 +14,7 @@ import java.util.*;
 public final class ToolOptionMemory {
     /** The options a tool has of its own. Names of fields of {@link Options}. */
     static final List<String> OWN = List.of(
+            "paintSource",
             "shape",
             "radius",
             "strength",
