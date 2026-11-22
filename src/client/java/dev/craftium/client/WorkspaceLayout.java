@@ -1,6 +1,7 @@
 package dev.craftium.client;
 
 import dev.craftium.client.compat.Gfx;
+import dev.craftium.core.WindowFold;
 import dev.craftium.net.Packets;
 import java.nio.file.*;
 import java.util.*;
@@ -17,6 +18,13 @@ final class WorkspaceLayout {
         boolean visible = true, folded;
         int sx, sy, cw, ch;
         boolean right, bottom;
+        /** Where the window was before folding moved it onto the bottom edge, so unfolding puts it back. 0 when folding did not move it (a window is never at 0). */
+        int unfoldY;
+
+        /** The height it takes up now: its title bar when folded. */
+        int eh() {
+            return folded ? TITLE : h;
+        }
 
         Rect(int x, int y, int w, int h) {
             this.x = x;
@@ -33,7 +41,7 @@ final class WorkspaceLayout {
         r.cw = cw;
         r.ch = ch;
         r.right = r.x + r.w / 2.0 > cw / 2.0;
-        r.bottom = r.y + r.h / 2.0 > ch / 2.0;
+        r.bottom = r.y + r.eh() / 2.0 > ch / 2.0;
     }
 
     static final Map<String, Rect> base = new LinkedHashMap<>(), windows = new LinkedHashMap<>();
@@ -115,10 +123,12 @@ final class WorkspaceLayout {
             // From what the player chose, never from where it is now: the editor is laid out at one size and then
             // another as it opens, and a place worked out
             // from the last one would drift
+            int eh = r.eh();
             r.x = r.right ? w - (r.cw - r.sx - r.w) - r.w : r.sx;
-            r.y = r.bottom ? h - (r.ch - r.sy - r.h) - r.h : r.sy;
+            r.y = r.bottom ? h - (r.ch - r.sy - eh) - eh : r.sy;
             r.x = Math.clamp(r.x, 0, Math.max(0, w - 50));
             r.y = Math.clamp(r.y, 24, Math.max(24, h - 40));
+            r.y = WindowFold.unfoldedY(r.y, eh, h); // never cut off by the bottom edge when the editor gets smaller
         }
     }
 
@@ -167,12 +177,13 @@ final class WorkspaceLayout {
         if (window.x < 12) window.x = 0;
         if (window.y < 37) window.y = 27;
         if (Math.abs(window.x + window.w - width) < 12) window.x = width - window.w;
-        if (Math.abs(window.y + window.h - height + 25) < 12) window.y = height - 25 - window.h;
+        int eh = window.eh();
+        if (Math.abs(window.y + eh - height + 25) < 12) window.y = height - 25 - eh;
         for (var e : windows.entrySet())
             if (!e.getKey().equals(id) && e.getValue().visible) {
                 var other = e.getValue();
                 if (Math.abs(window.x - other.x - other.w) < 10) window.x = other.x + other.w + 6;
-                if (Math.abs(window.y - other.y - other.h) < 10) window.y = other.y + other.h + 6;
+                if (Math.abs(window.y - other.y - other.eh()) < 10) window.y = other.y + other.eh() + 6;
             }
         window.x = Math.clamp(window.x, 0, Math.max(0, width - 50));
         window.y = Math.clamp(window.y, 27, Math.max(27, height - 40));
@@ -186,12 +197,70 @@ final class WorkspaceLayout {
         return r != null && r.folded;
     }
 
+    /** Whether opening a window folds the others in its column. */
+    static boolean autoFold;
+
+    static void toggleAutoFold() {
+        autoFold = !autoFold;
+        save();
+    }
+    /** Folds the window if it is open and unfolds it if it is folded. */
     static void fold(String id) {
         var r = windows.get(id);
-        if (r != null) {
-            r.folded = !r.folded;
-            save();
+        if (r == null) return;
+        boolean opening = r.folded;
+        setFolded(id, r, !r.folded);
+        if (opening && autoFold) foldColumnOf(id, r);
+        save();
+    }
+    /** Folds every shown window. */
+    static void foldAll() {
+        windows.forEach((id, r) -> {
+            if (r.visible) setFolded(id, r, true);
+        });
+        save();
+    }
+    /** Unfolds every shown window, each moved up as far as it needs not to be cut off by the bottom edge. */
+    static void unfoldAll() {
+        windows.forEach((id, r) -> {
+            if (r.visible) setFolded(id, r, false);
+        });
+        save();
+    }
+    /** Folds the other open windows that share a column with {@code opened}, so the one just opened has the room. */
+    private static void foldColumnOf(String id, Rect opened) {
+        windows.forEach((otherId, r) -> {
+            if (!otherId.equals(id) && r.visible && !r.folded && WindowFold.sameColumn(opened.x, opened.w, r.x, r.w))
+                setFolded(otherId, r, true);
+        });
+    }
+    /**
+     * Folds or unfolds a window and moves it with it: a window near the bottom edge folds onto the edge (and sits beside the folded windows already along it),
+     * and one that would be cut off by the edge when unfolded is moved up. A window that folding moved goes back where it was when it unfolds.
+     */
+    private static void setFolded(String id, Rect r, boolean folded) {
+        if (r.folded == folded) return;
+        r.folded = folded;
+        if (currentH <= 0) return;
+        if (folded) {
+            int y = WindowFold.foldedY(r.y, r.h, currentH);
+            r.unfoldY = y != r.y ? r.y : 0;
+            r.y = y;
+            if (r.unfoldY != 0) r.x = foldedRowX(id, r);
+        } else {
+            int from = r.unfoldY != 0 ? r.unfoldY : r.y;
+            r.unfoldY = 0;
+            r.y = WindowFold.unfoldedY(from, r.h, currentH);
         }
+        place(r, currentW, currentH);
+    }
+
+    private static int foldedRowX(String id, Rect r) {
+        var row = new ArrayList<int[]>();
+        windows.forEach((otherId, o) -> {
+            if (!otherId.equals(id) && o.visible && o.folded && o.y == r.y) row.add(new int[] {o.x, o.w});
+        });
+        return WindowFold.rowX(r.x, r.w, row.toArray(new int[0][]), currentW, 6);
     }
     /** Whether a point of the panel's own (unmoved) space lies in the part a folded panel hides. */
     static boolean hiddenByFold(String id, double y) {
@@ -278,6 +347,7 @@ final class WorkspaceLayout {
     static String json() {
         var tree = Packets.JSON.toJsonTree(windows).getAsJsonObject();
         tree.addProperty("_v", VERSION);
+        tree.addProperty("_autofold", autoFold);
         return Packets.JSON.toJson(tree);
     }
 
@@ -285,6 +355,7 @@ final class WorkspaceLayout {
         var data = Packets.JSON.fromJson(json, com.google.gson.JsonObject.class);
         var next = new LinkedHashMap<String, Rect>();
         int saved = data.has("_v") ? data.get("_v").getAsInt() : 0;
+        autoFold = data.has("_autofold") && data.get("_autofold").getAsBoolean();
         canvasW = data.has("_cw") ? data.get("_cw").getAsInt() : 0;
         canvasH = data.has("_ch") ? data.get("_ch").getAsInt() : 0;
         for (var e : data.entrySet()) {
