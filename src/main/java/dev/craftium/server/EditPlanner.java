@@ -417,6 +417,18 @@ final class EditPlanner {
                 value, o.materialWeights, materials.size(), BrushMath.hash(at.x(), at.y(), at.z(), o.seed), 1));
     }
 
+    /**
+     * The Gradient Painter's block at {@code value} along the gradient: the Materials list in order, in hard bands at Blend 0 and mixed over
+     * a wider band between neighbours as Blend grows, in an even weave or, with Noise on, at random.
+     */
+    BlockState gradient(double value, Point at) {
+        double threshold = o.gradientNoise
+                ? BrushMath.hash(at.x(), at.y(), at.z(), o.seed)
+                : MaterialList.ordered(at.x(), at.y(), at.z());
+        return materials.get(
+                MaterialList.index(value, o.materialWeights, materials.size(), threshold, o.gradientBlend));
+    }
+
     /** The block the Material list gives at a point: one entry paints it, two split at the Blend slider, three or more use the weighted palette. */
     BlockState materialAt(double value, Point at) {
         return materials.size() > 2

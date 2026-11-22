@@ -1799,6 +1799,30 @@ public final class EditorScreen extends CraftiumScreen {
                     materialsRow(g, 10, next + 4, pw - 20);
                     next += 48;
                 }
+                if (o().tool == Tool.GRADIENT_PAINTER) {
+                    slider(
+                            g,
+                            10,
+                            next + 10,
+                            pw - 20,
+                            "Blend",
+                            o().gradientBlend,
+                            0,
+                            1,
+                            0,
+                            v -> o().gradientBlend = Math.round(v * 100) / 100d,
+                            false);
+                    next += 34;
+                    toggle(
+                            g,
+                            10,
+                            next,
+                            "Noise",
+                            o().gradientNoise,
+                            () -> o().gradientNoise = !o().gradientNoise,
+                            "Mix the blended band at random instead of in an even weave · Blend 0 keeps hard bands either way");
+                    next += 22;
+                }
                 if (o().tool == Tool.EXTRUDE) {
                     toggle(
                             g,

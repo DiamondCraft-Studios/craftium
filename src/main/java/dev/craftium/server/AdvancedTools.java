@@ -140,7 +140,7 @@ final class AdvancedTools {
                                                 .subtract(Geometry.vector(a))
                                                 .dot(vector)
                                         / length;
-                        p.put(at, p.preserve(p.state(at), p.palette(t, at)));
+                        p.put(at, p.preserve(p.state(at), p.gradient(t, at)));
                     }
             }
             case FLOODFILL -> {

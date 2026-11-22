@@ -307,6 +307,15 @@ public final class Options {
     public boolean noise3D = true, copyProperties = true, typeReplace, fillVertically, visualizeBiome = true;
     public String materials = "minecraft:stone,minecraft:andesite";
     public java.util.List<Double> materialWeights = new java.util.ArrayList<>();
+    /**
+     * Gradient Painter: how wide the mixed band between two neighbouring blocks of the Materials list is, from 0 (hard bands) to 1 (mixed all
+     * the way), and whether that band is mixed as random noise rather than an even weave.
+     */
+    public double gradientBlend = 0;
+
+    public boolean gradientNoise;
+    /** The colour stops the Gradient window makes the Materials list from. Kept with the options so they come back; the server does not use them. */
+    public java.util.List<GradientStop> gradientStops = GradientStop.defaults();
 
     public enum ShadeFrom {
         PLAYER_POSITION,
@@ -757,6 +766,11 @@ public final class Options {
                     || light.intensity() > 16) throw new IllegalArgumentException("Invalid light source");
         for (int i = 0; i < materialWeights.size(); i++)
             materialWeights.set(i, bounded(materialWeights.get(i), .01, 100));
+        gradientBlend = bounded(gradientBlend, 0, 1);
+        if (gradientStops == null || gradientStops.size() > GradientStop.MAX || gradientStops.contains(null))
+            throw new IllegalArgumentException("Invalid gradient stops");
+        for (var stop : gradientStops)
+            if (stop.block().length() > 256) throw new IllegalArgumentException("Invalid gradient stop");
         shadeAzimuth = bounded(shadeAzimuth, -360, 360);
         shadeAltitude = bounded(shadeAltitude, -90, 90);
         shadeAmbientOcclusion = bounded(shadeAmbientOcclusion, 0, 1);

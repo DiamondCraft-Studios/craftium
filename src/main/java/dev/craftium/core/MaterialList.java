@@ -28,6 +28,16 @@ public final class MaterialList {
         return result;
     }
 
+    private static final int[] BAYER = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+
+    /**
+     * An even threshold for {@link #index}'s {@code random}, from 0 to 1, in a 4 by 4 Bayer pattern that shifts with the height, so a mixed band
+     * reads as a fine, regular weave instead of noise.
+     */
+    public static double ordered(int x, int y, int z) {
+        return (BAYER[Math.floorMod(x + y, 4) * 4 + Math.floorMod(z + 2 * y, 4)] + .5) / 16;
+    }
+
     private static void add(List<String> result, String value) {
         if (!value.isBlank()) result.add(value.trim());
     }
