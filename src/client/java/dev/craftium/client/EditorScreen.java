@@ -3036,7 +3036,7 @@ public final class EditorScreen extends CraftiumScreen {
                 ClientState.notify("The palette is full");
             ClientState.save();
         }); // a block dropped anywhere on the window joins the palette
-        int rowTop = y + 36, pitch = 36, fit = Math.max(1, (pb - 50 - rowTop) / pitch);
+        int rowTop = y + 36, pitch = 36, fit = Math.max(1, (pb - 72 - rowTop) / pitch);
         materialsScroll = Math.clamp(materialsScroll, 0, Math.max(0, blocks.size() - fit));
         for (int r = 0; r < fit && materialsScroll + r < blocks.size(); r++) {
             int i = materialsScroll + r, ry = rowTop + r * pitch;
@@ -3113,11 +3113,11 @@ public final class EditorScreen extends CraftiumScreen {
                     },
                     "Remove this block");
         }
-        int[] top = flex(pw - 20, 4, 1, 1, 1, 1);
+        int[] top = flex(pw - 20, 4, 1, 1, 1);
         button(
                 g,
                 x + 10,
-                pb - 26,
+                pb - 48,
                 top[0],
                 19,
                 "Add block",
@@ -3131,7 +3131,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(
                 g,
                 x + 14 + top[0],
-                pb - 26,
+                pb - 48,
                 top[1],
                 19,
                 "Add hotbar",
@@ -3157,7 +3157,7 @@ public final class EditorScreen extends CraftiumScreen {
         button(
                 g,
                 x + 18 + top[0] + top[1],
-                pb - 26,
+                pb - 48,
                 top[2],
                 19,
                 "Sort",
@@ -3175,11 +3175,22 @@ public final class EditorScreen extends CraftiumScreen {
                     ClientState.save();
                 },
                 "Put the blocks in order from dark to light");
+        int[] low = flex(pw - 20, 4, 1, 1);
         button(
                 g,
-                x + 22 + top[0] + top[1] + top[2],
+                x + 10,
                 pb - 26,
-                top[3],
+                low[0],
+                19,
+                "Save…",
+                false,
+                () -> ClientCompat.setScreen(minecraft, new SavePaletteScreen(this, false, "")),
+                "Save this palette with a name, author and tags, on the server or on your computer");
+        button(
+                g,
+                x + 14 + low[0],
+                pb - 26,
+                low[1],
                 19,
                 "Library",
                 false,
@@ -3191,7 +3202,7 @@ public final class EditorScreen extends CraftiumScreen {
                         + (blocks.size() == 1 ? " block" : " blocks")
                         + (blocks.size() > fit ? " · scroll for more" : " · drop blocks here to add"),
                 x + 10,
-                pb - 40,
+                pb - 62,
                 MUTED);
     }
     /** The Materials palette as a row of its blocks' icons, 24 pixels tall; a click opens the window where blocks are added, weighed and put in order. */

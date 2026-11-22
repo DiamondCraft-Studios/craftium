@@ -33,12 +33,13 @@ final class ClientLibrary {
         }
     }
 
-    private record Palette(List<String> blocks, List<Double> weights, List<String> recent) {}
+    private record Palette(
+            List<String> blocks, List<Double> weights, List<String> recent, String author, String tags) {}
 
     private static Palette readPaletteFile(String name) throws java.io.IOException {
         var json = com.google.gson.JsonParser.parseString(Files.readString(file("palettes", name)));
         Palette value = json.isJsonArray()
-                ? new Palette(List.of(Packets.JSON.fromJson(json, String[].class)), List.of(), List.of())
+                ? new Palette(List.of(Packets.JSON.fromJson(json, String[].class)), List.of(), List.of(), "", "")
                 : Packets.JSON.fromJson(json, Palette.class);
         if (value.blocks() == null
                 || value.blocks().isEmpty()
@@ -67,7 +68,13 @@ final class ClientLibrary {
                                     ? value.weights().get(i)
                                     : null));
                 out.add(new dev.craftium.core.SharedPalettes.Palette(
-                        name, "", "", List.copyOf(value.blocks()), weights, 0));
+                        name,
+                        value.author() == null ? "" : value.author(),
+                        "",
+                        List.copyOf(value.blocks()),
+                        weights,
+                        0,
+                        value.tags() == null ? "" : value.tags()));
             } catch (Exception skipped) {
                 // a file that is not a palette
             }
@@ -82,8 +89,32 @@ final class ClientLibrary {
         }
     }
     /** Saves blocks and weights as one of the client's palettes, replacing one of the same name. */
-    static void savePalette(String name, List<String> blocks, List<Double> weights) {
-        write(file("palettes", name), Packets.JSON.toJson(new Palette(blocks, weights, List.of())));
+    static void savePalette(String name, List<String> blocks, List<Double> weights, String author, String tags) {
+        write(file("palettes", name), Packets.JSON.toJson(new Palette(blocks, weights, List.of(), author, tags)));
+    }
+    /** Asks the server to do something with the shared palettes, putting what it needs in the request's data for the one request. A null name sends none (a list). */
+    static void requestShared(
+            String action, String name, String author, String tags, List<String> blocks, List<Double> weights) {
+        var o = ClientState.options;
+        String prior = o.assetData;
+        o.assetData = name == null
+                ? ""
+                : Packets.JSON.toJson(java.util.Map.of(
+                        "name",
+                        name,
+                        "author",
+                        author == null ? "" : author,
+                        "tags",
+                        tags == null ? "" : tags,
+                        "blocks",
+                        blocks == null ? List.of() : blocks,
+                        "weights",
+                        weights == null ? List.of() : weights));
+        try {
+            CraftiumClient.send(action, null, null);
+        } finally {
+            o.assetData = prior;
+        }
     }
 
     static List<String> list(String type) {

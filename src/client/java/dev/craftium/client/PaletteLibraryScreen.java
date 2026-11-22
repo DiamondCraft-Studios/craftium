@@ -4,11 +4,8 @@ import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
 import dev.craftium.core.Handshake;
-import dev.craftium.core.MaterialPalette;
 import dev.craftium.core.SharedPalettes.Palette;
-import dev.craftium.net.Packets;
 import java.util.List;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -22,7 +19,6 @@ final class PaletteLibraryScreen extends CraftiumScreen {
     private boolean server = true;
     private int scroll;
     private List<Palette> local = List.of();
-    private EditBox name;
     /** What the last thing the player did here said, until the server says something newer. */
     private String message = "";
     /** The palette whose Delete was clicked once: a second click within three seconds deletes it. */
@@ -45,15 +41,16 @@ final class PaletteLibraryScreen extends CraftiumScreen {
         clearWidgets();
         addRenderableWidget(new FlatButton(12, 34, 120, 22, "Server palettes", () -> tab(true)).lit(server));
         addRenderableWidget(new FlatButton(138, 34, 120, 22, "My palettes", () -> tab(false)).lit(!server));
-        name = new EditBox(font, 12, height - 34, 230, 22, Component.literal("Palette name"));
-        name.setHint(Component.literal("Name for the Materials palette"));
-        name.setMaxLength(64);
-        addRenderableWidget(name);
         addRenderableWidget(new FlatButton(
-                        248, height - 34, 150, 22, server ? "Save to server" : "Save to my palettes", this::saveCurrent)
+                        12,
+                        height - 34,
+                        200,
+                        22,
+                        "Save Materials palette…",
+                        () -> ClientCompat.setScreen(minecraft, new SavePaletteScreen(this, server, "")))
                 .lit(true));
         addRenderableWidget(new FlatButton(width - 112, height - 34, 100, 22, "Return", this::onClose));
-        if (server && supported()) request("palette_list", null, null, null);
+        if (server && supported()) ClientLibrary.requestShared("palette_list", null, null, null, null, null);
     }
 
     private void tab(boolean toServer) {
@@ -68,60 +65,21 @@ final class PaletteLibraryScreen extends CraftiumScreen {
         return server ? (supported() ? ClientState.sharedPalettes : List.of()) : local;
     }
 
-    /** Asks the server to do something with the library, putting what it needs in the request's data for the one request. */
-    private void request(String action, String paletteName, List<String> blocks, List<Double> weights) {
-        var o = ClientState.options;
-        String prior = o.assetData;
-        o.assetData = paletteName == null
-                ? ""
-                : Packets.JSON.toJson(java.util.Map.of(
-                        "name",
-                        paletteName,
-                        "blocks",
-                        blocks == null ? List.of() : blocks,
-                        "weights",
-                        weights == null ? List.of() : weights));
-        try {
-            CraftiumClient.send(action, null, null);
-        } finally {
-            o.assetData = prior;
-        }
-    }
-
-    private void saveCurrent() {
-        String chosen = name.getValue().trim();
-        var o = ClientState.options;
-        var blocks = MaterialPalette.blocks(o);
-        if (blocks.isEmpty()) {
-            message = "The Materials palette has no blocks to save";
-            return;
-        }
-        var weights = MaterialPalette.weights(o, blocks.size());
-        save(chosen, blocks, weights, server);
-    }
-
-    private void save(String chosen, List<String> blocks, List<Double> weights, boolean toServer) {
-        try {
-            dev.craftium.core.SharedPalettes.cleanName(chosen);
-        } catch (IllegalArgumentException e) {
-            message = chosen.isEmpty() ? "Type a name for the palette first" : e.getMessage();
-            return;
-        }
-        if (toServer) {
-            if (!supported()) {
-                message = "This server does not have shared palettes";
-                return;
-            }
-            message = "";
-            request("palette_save", chosen, blocks, weights);
-        } else {
+    /** Saves a copy of a palette under its own name in the other list (the player's own when this is the server's, and the other way round). */
+    private void copy(Palette from) {
+        if (server) {
             try {
-                ClientLibrary.savePalette(chosen, blocks, weights);
-                message = "Saved " + chosen + " to my palettes";
+                ClientLibrary.savePalette(from.name(), from.blocks(), from.weights(), from.owner(), from.tags());
+                message = "Copied " + from.name() + " to my palettes";
             } catch (IllegalArgumentException e) {
                 message = e.getMessage();
             }
             local = ClientLibrary.localPalettes();
+        } else if (!supported()) message = "This server does not have shared palettes";
+        else {
+            message = "";
+            ClientLibrary.requestShared(
+                    "palette_save", from.name(), from.owner(), from.tags(), from.blocks(), from.weights());
         }
     }
 
@@ -135,12 +93,7 @@ final class PaletteLibraryScreen extends CraftiumScreen {
                     message = "Cannot load " + p.name() + ": " + e.getMessage();
                 }
             }
-            case 1 -> {
-                if (server) {
-                    save(p.name(), p.blocks(), p.weights(), false);
-                    if (message.startsWith("Saved ")) message = "Copied " + p.name() + " to my palettes";
-                } else save(p.name(), p.blocks(), p.weights(), true);
-            }
+            case 1 -> copy(p);
             default -> {
                 long now = System.currentTimeMillis();
                 if (!p.name().equals(armed) || now - armedAt > 3000) {
@@ -151,7 +104,7 @@ final class PaletteLibraryScreen extends CraftiumScreen {
                 armed = "";
                 if (server) {
                     message = "";
-                    request("palette_delete", p.name(), null, null);
+                    ClientLibrary.requestShared("palette_delete", p.name(), "", "", null, null);
                 } else {
                     try {
                         ClientLibrary.deletePalette(p.name());
@@ -199,7 +152,8 @@ final class PaletteLibraryScreen extends CraftiumScreen {
             String detail = p.blocks().size()
                     + (p.blocks().size() == 1 ? " block" : " blocks")
                     + (p.blocks().size() > ICONS ? " · +" + (p.blocks().size() - ICONS) + " more" : "")
-                    + (p.owner().isBlank() ? "" : " · by " + p.owner());
+                    + (p.owner().isBlank() ? "" : " · by " + p.owner())
+                    + (p.tags().isBlank() ? "" : " · " + p.tags());
             g.text(font, font.plainSubstrByWidth(detail, textW), textX, top + 18, 0xff9db5cb, false);
             for (int button = 0; button < 3; button++) {
                 int bx = buttonX(button);
