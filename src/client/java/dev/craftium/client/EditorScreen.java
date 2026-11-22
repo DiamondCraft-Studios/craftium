@@ -3121,10 +3121,15 @@ public final class EditorScreen extends CraftiumScreen {
                 "Add block",
                 false,
                 () -> ClientCompat.setScreen(
-                        minecraft, new BlockPickerScreen(this, "Add to Materials", "minecraft:stone", id -> {
-                            if (!MaterialPalette.add(o(), id)) ClientState.notify("The palette is full");
-                            ClientState.save();
-                        })),
+                        minecraft,
+                        new BlockPickerScreen(
+                                this,
+                                "Add to Materials",
+                                "minecraft:stone",
+                                id -> ClientOptionHistory.change("Add " + BlockPickerScreen.name(id), () -> {
+                                    if (!MaterialPalette.add(o(), id)) ClientState.notify("The palette is full");
+                                    ClientState.save();
+                                }))),
                 "Pick a block to add · or drag one onto this window");
         button(
                 g,
@@ -9290,6 +9295,8 @@ public final class EditorScreen extends CraftiumScreen {
 
     @Override
     public void removed() {
+        // Another screen took over, and it gets the mouse release: an undo gesture begun here must not wait for it
+        ClientOptionHistory.pressed(false);
         BlockDragCursor.release();
         keysDown.clear();
         pipetting = false;
