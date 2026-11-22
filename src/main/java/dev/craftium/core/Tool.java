@@ -65,7 +65,7 @@ public enum Tool {
             "Gradient Painter",
             "GP",
             "Paint",
-            "Hold right-click and drag from start to end; letting go paints the surface along the stroke."),
+            "Right-click sets the start; hold and brush over the surface to aim the end, and letting go paints what the brush passed over from the Materials list in order, start to end."),
     SCRIPT_BRUSH("Script Brush", "LU", "Paint", "Run a bounded Lua script for each block in the brush."),
     MODELLING("Modelling", "MD", "Draw", "Place control points and build a hull, triangle strip or lofted surface."),
     STAMP("Stamp", "ST", "Sculpt", "Scatter the clipboard with spacing, random rotation and chance."),
@@ -143,7 +143,7 @@ public enum Tool {
     /** Whether the tool can work on the blocks the brush ring covers on the screen ({@link Options#screenBlocks}) instead of a shape around the block under the pointer. */
     public boolean screenBrush() {
         return switch (this) {
-            case PAINTER -> true;
+            case PAINTER, GRADIENT_PAINTER -> true;
             default -> false;
         };
     }

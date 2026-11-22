@@ -374,6 +374,14 @@ public final class Options {
     public java.util.List<Point> nodes = new java.util.ArrayList<>();
     /** The Gradient Painter's start and end, apart from {@link #nodes} so a stroke never touches the Path and Modelling points. */
     public java.util.List<Point> gradientAnchors = new java.util.ArrayList<>();
+    /**
+     * The Gradient Painter's stroke for one use: the blocks the pointer passed over from start to end, in order, as a {@link BlockList}.
+     * The blocks the ring covered on the way come in {@link #screenBlocks}. Empty means the straight line between the anchors. Set by the
+     * client as it sends, not kept.
+     */
+    public String gradientPath = "";
+    /** The most points a {@link #gradientPath} may have. */
+    public static final int MAX_GRADIENT_PATH = 4096;
 
     public java.util.List<Point> selectionPoints = new java.util.ArrayList<>();
     public Point position1 = new Point(0, 0, 0), position2 = new Point(0, 0, 0), symmetryOrigin = new Point(0, 0, 0);
@@ -963,6 +971,8 @@ public final class Options {
         modelColumns = Math.clamp(modelColumns, 2, 32);
         if (screenBlocks == null || screenBlocks.length() > MAX_SCREEN_BLOCKS_TEXT)
             throw new IllegalArgumentException("Screen brush footprint too large");
+        if (gradientPath == null || gradientPath.length() > MAX_GRADIENT_PATH * 12)
+            throw new IllegalArgumentException("Gradient stroke too long");
         if (nodes == null || nodes.size() > 64 || nodes.contains(null))
             throw new IllegalArgumentException("Maximum 64 control points");
         if (gradientAnchors == null || gradientAnchors.size() > 2 || gradientAnchors.contains(null))

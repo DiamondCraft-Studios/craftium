@@ -120,6 +120,20 @@ class GradientTest {
     }
 
     @Test
+    void aFullStrokePathFitsARequestAndALongerOneIsRefused() {
+        var o = new Options();
+        var path = new java.util.ArrayList<Point>();
+        // the longest path the client sends, far from the origin and in steps as wide as thinning leaves them
+        for (int i = 0; i < Options.MAX_GRADIENT_PATH - 2; i++)
+            path.add(new Point(29_000_000 - i * 40, -60 + i % 300, 29_000_000));
+        o.gradientPath = BlockList.encode(path);
+        o.validate();
+        assertEquals(path, BlockList.decode(o.gradientPath, Options.MAX_GRADIENT_PATH));
+        o.gradientPath = "A".repeat(Options.MAX_GRADIENT_PATH * 12 + 1);
+        assertThrows(IllegalArgumentException.class, o::validate);
+    }
+
+    @Test
     void optionsRefuseTooManyStopsAndBoundTheBlend() {
         var o = new Options();
         o.gradientBlend = 7;
