@@ -3582,7 +3582,8 @@ public final class EditorScreen extends CraftiumScreen {
             return;
         }
         int at = -1;
-        for (int i = 0; i < near.size(); i++) if (near.get(i).id().equals(blocks.get(index))) at = i;
+        String current = blocks.get(index).split("\\[", 2)[0]; // the block without its state, as the matches name it
+        for (int i = 0; i < near.size(); i++) if (near.get(i).id().equals(current)) at = i;
         String next = near.get((at + 1) % near.size()).id();
         MaterialPalette.replace(o(), index, next);
         ClientState.save();
