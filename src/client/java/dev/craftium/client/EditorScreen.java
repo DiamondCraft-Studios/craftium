@@ -1896,8 +1896,8 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if (o().tool.selection()) {
             fixed(g, () -> fillClear(g));
-        } else if (nodeTool())
-            fixed(
+        } else if (nodeTool() && o().tool != Tool.GRADIENT_PAINTER) // its line clears itself once it has painted
+        fixed(
                     g,
                     () -> button(
                             g,
