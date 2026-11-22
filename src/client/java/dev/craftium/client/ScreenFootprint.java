@@ -120,6 +120,84 @@ final class ScreenFootprint {
         return new ArrayList<>(found);
     }
 
+    /**
+     * The first solid block of the rays through the ring swept along the line from {@code a} to {@code b} as the camera sees it: the
+     * Gradient Painter's footprint. The ring keeps the size in the world it has at the pointer, so it grows on the screen towards the near
+     * end. Null when part of the swept ring is off the screen or the line passes behind the camera, so the caller can fall back to the
+     * brush shape instead of leaving out what cannot be seen.
+     */
+    static List<Point> alongLine(View v, Point a, Point b, double reach, java.util.function.Predicate<BlockPos> solid) {
+        Vec3 pa = Vec3.atCenterOf(new BlockPos(a.x(), a.y(), a.z())),
+                pb = Vec3.atCenterOf(new BlockPos(b.x(), b.y(), b.z()));
+        double za = pa.subtract(v.eye).dot(v.forward), zb = pb.subtract(v.eye).dot(v.forward);
+        if (za < .5 || zb < .5 || v.depth <= 0) return null;
+        double ax = screenX(v, pa, za), ay = screenY(v, pa, za), bx = screenX(v, pb, zb), by = screenY(v, pb, zb);
+        double worldRing = v.radius * v.depth; // the ring's radius in pixels at depth 1
+        double ra = worldRing / za, rb = worldRing / zb, rMax = Math.max(ra, rb);
+        double minX = Math.min(ax - ra, bx - rb), maxX = Math.max(ax + ra, bx + rb);
+        double minY = Math.min(ay - ra, by - rb), maxY = Math.max(ay + ra, by + rb);
+        if (minX < 0 || minY < 0 || maxX >= v.screenWidth || maxY >= v.screenHeight) return null;
+        double dx = bx - ax, dy = by - ay, length2 = dx * dx + dy * dy;
+        double area = Math.PI * rMax * rMax + 2 * rMax * Math.sqrt(length2);
+        double step = Math.max(Math.min(ra, rb) / (reach + .5) / 3, Math.sqrt(area / MAX_SAMPLES));
+        step = Math.max(step, 1);
+        var found = new LinkedHashSet<Point>();
+        var memo = new HashMap<Long, Boolean>();
+        java.util.function.Predicate<BlockPos> stops = p -> memo.computeIfAbsent(p.asLong(), k -> solid.test(p));
+        for (double sy = minY; sy <= maxY; sy += step)
+            for (double sx = minX; sx <= maxX; sx += step) {
+                double s = length2 == 0 ? 0 : Math.clamp(((sx - ax) * dx + (sy - ay) * dy) / length2, 0, 1);
+                // depth along the line, interpolated as the screen does (in 1 / depth), and the ring's size there
+                double depth = 1 / ((1 - s) / za + s / zb), r = worldRing / depth;
+                double ex = sx - (ax + s * dx), ey = sy - (ay + s * dy);
+                if (ex * ex + ey * ey > r * r) continue;
+                Vec3 dir = v.forward
+                        .add(v.right.scale((sx - v.centreX) / v.focal))
+                        .add(v.up.scale((v.centreY - sy) / v.focal));
+                var hit = march(v.eye, dir, Math.max(.1, depth - 2 * reach - 4), depth + 2 * reach + 4, stops);
+                if (hit != null) found.add(new Point(hit.getX(), hit.getY(), hit.getZ()));
+            }
+        return new ArrayList<>(found);
+    }
+
+    private static double screenX(View v, Vec3 p, double depth) {
+        return v.centreX + v.focal * p.subtract(v.eye).dot(v.right) / depth;
+    }
+
+    private static double screenY(View v, Vec3 p, double depth) {
+        return v.centreY - v.focal * p.subtract(v.eye).dot(v.up) / depth;
+    }
+
+    private static List<Object> lineKey = List.of();
+    private static List<Point> lineCached = List.of();
+
+    /**
+     * The Gradient Painter's footprint from {@code a} to {@code b}, as the preview shows it and the stroke names it: the solid blocks the
+     * ring swept along the line covers, kept to those within reach of the line as the server keeps them. Null when the ring cannot be
+     * swept on the screen (see {@link #alongLine}). Worked out again when the camera, the ends, the ring, the world (once a second) or the
+     * mask changes.
+     */
+    static List<Point> coveredAlong(
+            net.minecraft.world.level.Level level, dev.craftium.core.Options o, Point a, Point b, View v) {
+        var cameraKey = new ArrayList<>(v.key());
+        cameraKey.remove(6); // the pointer: the line, not the pointer, places the ring
+        cameraKey.remove(6);
+        var key =
+                List.<Object>of(cameraKey, a, b, o.radius, o.mask, List.copyOf(o.maskActive), level.getGameTime() / 20);
+        if (key.equals(lineKey)) return lineCached;
+        var mask = new PaintMask(level, o);
+        int reach = dev.craftium.core.Options.screenReach(o.radius);
+        var swept = alongLine(v, a, b, o.radius, q -> mask.solid(new Point(q.getX(), q.getY(), q.getZ())));
+        List<Point> kept = null;
+        if (swept != null) {
+            kept = new ArrayList<>();
+            for (Point p : swept) if (dev.craftium.core.BrushMath.nearSegment(p, a, b, reach)) kept.add(p);
+        }
+        lineKey = key;
+        lineCached = kept;
+        return kept;
+    }
+
     /** The first block {@code stops} accepts along {@code eye + t * dir} for {@code t} from {@code near} to {@code far} (a voxel walk), or null. */
     static BlockPos march(Vec3 eye, Vec3 dir, double near, double far, java.util.function.Predicate<BlockPos> stops) {
         Vec3 start = eye.add(dir.scale(near));

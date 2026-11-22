@@ -1,66 +1,38 @@
 package dev.craftium.client;
 
+import dev.craftium.core.BlockList;
 import dev.craftium.core.Options;
 import dev.craftium.core.Point;
-import java.util.*;
+import java.util.List;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
 
 /**
- * The Gradient Painter's stroke while the button is held: the blocks the brush ring has covered so far, which the preview shows together
- * with the ring and which are painted when the button is let go.
+ * The Gradient Painter's line with Match the ring on: the blocks the brush ring covers swept from start to end, as the preview shows
+ * them while the line is dragged and as the stroke names them to the server when it is let go.
  */
 public final class GradientStroke {
     private GradientStroke() {}
 
-    private static final LinkedHashSet<Point> covered = new LinkedHashSet<>();
-    private static int version;
-    private static boolean full;
-
-    /** Starts a new stroke with nothing covered. */
-    public static void clear() {
-        if (covered.isEmpty() && !full) return;
-        covered.clear();
-        full = false;
-        version++;
-    }
-
     /**
-     * Adds what the ring covers now, with the pointer on {@code at}, when the tool paints in screen space. Returns false once the stroke
-     * names as many blocks as a request may carry, when nothing more is added.
+     * The blocks the ring swept from {@code a} to {@code b} covers, or null when the tool does not paint in screen space or the swept ring
+     * does not fit on the screen: the server then puts the brush shape down along the line.
      */
-    public static boolean addRing(BlockPos at) {
-        var o = ClientState.options;
+    static List<Point> covered(Options o, Point a, Point b) {
         var ring = ScreenFootprint.active(o);
         var level = Minecraft.getInstance().level;
-        if (ring == null || level == null || at == null) return true;
-        int before = covered.size();
-        for (Point p : ScreenFootprint.covered(level, o, at, ring)) {
-            if (covered.size() >= Options.MAX_SCREEN_BLOCKS) {
-                full = true;
-                break;
-            }
-            covered.add(p);
+        if (ring == null || level == null) return null;
+        return ScreenFootprint.coveredAlong(level, o, a, b, ring);
+    }
+
+    /** {@link #covered} as a request carries it in {@link Options#screenBlocks}; empty for the brush shape. */
+    public static String encoded(Point a, Point b) {
+        var o = ClientState.options;
+        var blocks = covered(o, a, b);
+        if (blocks == null) {
+            if (ScreenFootprint.active(o) != null)
+                ClientState.notify("Part of the line was off the screen, so it was painted with the brush shape");
+            return "";
         }
-        if (covered.size() != before) version++;
-        return !full;
-    }
-
-    /** Whether the ring paints this stroke, so its blocks are named, or the server puts the brush down along the path instead. */
-    public static boolean ringActive() {
-        return ScreenFootprint.active(ClientState.options) != null;
-    }
-
-    public static List<Point> covered() {
-        return List.copyOf(covered);
-    }
-
-    static Set<Point> view() {
-        return Collections.unmodifiableSet(covered);
-    }
-
-    /** Changes each time the covered blocks do, for the preview's key. */
-    static int version() {
-        return version;
+        return blocks.size() > Options.MAX_SCREEN_BLOCKS ? "" : BlockList.encode(blocks);
     }
 }

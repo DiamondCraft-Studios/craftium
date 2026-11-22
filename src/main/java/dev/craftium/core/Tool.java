@@ -65,7 +65,7 @@ public enum Tool {
             "Gradient Painter",
             "GP",
             "Paint",
-            "Right-click sets the start; hold and brush over the surface to aim the end, and letting go paints what the brush passed over from the Materials list in order, start to end."),
+            "Hold right-click and drag from start to end; letting go paints the surface along the stroke."),
     SCRIPT_BRUSH("Script Brush", "LU", "Paint", "Run a bounded Lua script for each block in the brush."),
     MODELLING("Modelling", "MD", "Draw", "Place control points and build a hull, triangle strip or lofted surface."),
     STAMP("Stamp", "ST", "Sculpt", "Scatter the clipboard with spacing, random rotation and chance."),

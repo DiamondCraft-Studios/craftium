@@ -42,7 +42,7 @@ class ToolMetadataTest {
         ERASE @@ Erase @@ ER @@ Draw @@ Remove blocks inside the brush with undo. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
         TINKER @@ Tinker @@ TK @@ Utility @@ Right click a block to change it the way you aim: full blocks, stairs and slabs turn into each other, walls and fences change the arm you point at. Sneak to pick a property to cycle. @@ NONE @@ false @@ false @@ false @@ false @@ -1
         LASSO_SELECT @@ Lasso Select @@ LS @@ Select @@ Draw a screen-space polygon; release to project it into the world. @@ NONE @@ false @@ false @@ false @@ true @@ 76
-        GRADIENT_PAINTER @@ Gradient Painter @@ GP @@ Paint @@ Right-click sets the start; hold and brush over the surface to aim the end, and letting go paints what the brush passed over from the Materials list in order, start to end. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
+        GRADIENT_PAINTER @@ Gradient Painter @@ GP @@ Paint @@ Hold right-click and drag from start to end; letting go paints the surface along the stroke. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
         SCRIPT_BRUSH @@ Script Brush @@ LU @@ Paint @@ Run a bounded Lua script for each block in the brush. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
         MODELLING @@ Modelling @@ MD @@ Draw @@ Place control points and build a hull, triangle strip or lofted surface. @@ NONE @@ false @@ false @@ true @@ false @@ -1
         STAMP @@ Stamp @@ ST @@ Sculpt @@ Scatter the clipboard with spacing, random rotation and chance. @@ DISC @@ false @@ false @@ true @@ false @@ -1

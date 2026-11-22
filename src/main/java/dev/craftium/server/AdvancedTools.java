@@ -18,56 +18,39 @@ final class AdvancedTools {
     static final int MAX_STROKE = 1024;
 
     /**
-     * The Gradient Painter's stroke, painted as the Surface Painter paints (solid blocks, with Surface only on only those open to the air,
-     * Copy properties and Type replace as set), each block taking the Materials list at how far along the line from start to end it lies.
-     * The blocks are those the brush covered on the way: with Match the ring on, those the ring showed, which the client names and which
-     * are kept to those within reach of the path the pointer took; otherwise the brush put down along that path every half radius. A stroke
-     * with no path is the straight line between its ends. The path comes from the client, so a stroke reaching further than {@link
-     * #MAX_STROKE} is refused before anything is gathered, and the cells are counted as they are, so none can grow past what an edit may change.
+     * The Gradient Painter's stroke from A to B, painted as the Surface Painter paints (solid blocks, with Surface only on only those open
+     * to the air, Copy properties and Type replace as set), each block taking the Materials list at how far along the line it lies. The
+     * blocks are those the brush covers moved along the whole line, whatever block the click itself was on: with Match the ring on, those
+     * the ring covers on the screen swept along the line, which the client names and which are kept to those within reach of the line;
+     * otherwise the brush shape put down every half radius, which leaves no gaps. The ends come from the client: a stroke longer than any
+     * reach is refused before anything is gathered, and the cells are counted as they are, so none can grow past what an edit may change.
      */
     private static void gradientStroke(EditPlanner p) {
         var o = p.o;
         if (o.gradientAnchors.size() < 2) throw new IllegalArgumentException("Drag from a start to an end");
         Point a = o.gradientAnchors.getFirst(), b = o.gradientAnchors.getLast();
-        var path = new ArrayList<Point>();
-        path.add(a);
-        path.addAll(BlockList.decode(o.gradientPath, Options.MAX_GRADIENT_PATH));
-        path.add(b);
-        for (Point at : path)
-            if (Math.max(Math.abs(at.x() - a.x()), Math.max(Math.abs(at.y() - a.y()), Math.abs(at.z() - a.z())))
-                    > MAX_STROKE)
-                throw new IllegalArgumentException(
-                        "A gradient stroke reaches at most " + MAX_STROKE + " blocks; drag a shorter one");
+        int span = Math.max(Math.abs(b.x() - a.x()), Math.max(Math.abs(b.y() - a.y()), Math.abs(b.z() - a.z())));
+        if (span > MAX_STROKE)
+            throw new IllegalArgumentException(
+                    "A gradient stroke reaches at most " + MAX_STROKE + " blocks; drag a shorter one");
         var cells = new LinkedHashSet<Point>();
         if (o.screenSpace && !o.screenBlocks.isEmpty()) {
             int reach = Options.screenReach(o.radius);
-            var near = new HashMap<Long, List<Point>>(); // the path in cells of the reach, to find a point near a block
-            for (Point at : path)
-                near.computeIfAbsent(cell(at, reach), k -> new ArrayList<>()).add(at);
             for (Point at : BlockList.decode(o.screenBlocks, Options.MAX_SCREEN_BLOCKS))
-                if (nearPath(at, near, reach)) cells.add(at);
-            if (cells.size() > Selection.LIMIT)
-                throw new IllegalArgumentException(
-                        "This stroke covers too many blocks; use a smaller brush or a shorter stroke");
+                if (BrushMath.nearSegment(at, a, b, reach)) cells.add(at);
         } else {
             int stride = Math.max(1, o.radius / 2);
-            for (int i = 0; i < path.size(); i++) {
-                Point from = path.get(Math.max(0, i - 1)), to = path.get(i);
-                int steps = Math.max(
-                        Math.abs(to.x() - from.x()),
-                        Math.max(Math.abs(to.y() - from.y()), Math.abs(to.z() - from.z())));
-                // the brush every stride along each piece of the path, and always at its end
-                for (int step = Math.min(stride, steps); ; step = Math.min(step + stride, steps)) {
-                    double f = steps == 0 ? 1 : step / (double) steps;
-                    cells.addAll(p.brush(new Point(
-                            (int) Math.round(from.x() + (to.x() - from.x()) * f),
-                            (int) Math.round(from.y() + (to.y() - from.y()) * f),
-                            (int) Math.round(from.z() + (to.z() - from.z()) * f))));
-                    if (cells.size() > Selection.LIMIT)
-                        throw new IllegalArgumentException(
-                                "This stroke covers too many blocks; use a smaller brush or a shorter stroke");
-                    if (step >= steps) break;
-                }
+            // the brush every stride along the line, and always at its end
+            for (int step = 0; ; step = Math.min(step + stride, span)) {
+                double f = span == 0 ? 1 : step / (double) span;
+                cells.addAll(p.brush(new Point(
+                        (int) Math.round(a.x() + (b.x() - a.x()) * f),
+                        (int) Math.round(a.y() + (b.y() - a.y()) * f),
+                        (int) Math.round(a.z() + (b.z() - a.z()) * f))));
+                if (cells.size() > Selection.LIMIT)
+                    throw new IllegalArgumentException(
+                            "This stroke covers too many blocks; use a smaller brush or a shorter stroke");
+                if (step >= span) break;
             }
         }
         var vector = Geometry.vector(b).subtract(Geometry.vector(a));
@@ -84,27 +67,6 @@ final class AdvancedTools {
                                 ? typeReplace(p, old, target)
                                 : o.copyProperties ? p.preserve(old, target) : target);
             }
-    }
-
-    private static long cell(Point at, int size) {
-        return net.minecraft.core.BlockPos.asLong(
-                Math.floorDiv(at.x(), size), Math.floorDiv(at.y(), size), Math.floorDiv(at.z(), size));
-    }
-
-    /** Whether a point of the path lies within {@code reach} of {@code at} on each axis, looking in the cells around it. */
-    private static boolean nearPath(Point at, Map<Long, List<Point>> near, int reach) {
-        int cx = Math.floorDiv(at.x(), reach), cy = Math.floorDiv(at.y(), reach), cz = Math.floorDiv(at.z(), reach);
-        for (int dx = -1; dx <= 1; dx++)
-            for (int dy = -1; dy <= 1; dy++)
-                for (int dz = -1; dz <= 1; dz++) {
-                    var points = near.get(net.minecraft.core.BlockPos.asLong(cx + dx, cy + dy, cz + dz));
-                    if (points == null) continue;
-                    for (Point q : points)
-                        if (Math.abs(q.x() - at.x()) <= reach
-                                && Math.abs(q.y() - at.y()) <= reach
-                                && Math.abs(q.z() - at.z()) <= reach) return true;
-                }
-        return false;
     }
 
     static boolean handle(EditPlanner p, Point center, Point normal) {

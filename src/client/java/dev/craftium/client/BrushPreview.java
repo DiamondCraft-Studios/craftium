@@ -69,7 +69,7 @@ public final class BrushPreview {
                 sculpts(o.tool) ? rockKey(o) : 0,
                 normal,
                 screenView(o) == null ? at : screenView(o).key(),
-                o.tool == dev.craftium.core.Tool.GRADIENT_PAINTER ? GradientStroke.version() : 0,
+                o.tool == dev.craftium.core.Tool.GRADIENT_PAINTER ? List.copyOf(o.gradientAnchors) : 0,
                 shownBlocks > Selection.LIMIT
                         ? 0
                         : mc.level.getGameTime() / 20); // a huge brush is not worked out again every second
@@ -320,12 +320,10 @@ public final class BrushPreview {
         var view = screenView(o);
         if (view != null) { // the blocks the ring covers on the screen, whatever shape is picked
             List<Point> seen = ScreenFootprint.covered(mc.level, o, at, view);
-            if (o.tool == dev.craftium.core.Tool.GRADIENT_PAINTER
-                    && !GradientStroke.view().isEmpty()) {
-                // what the Gradient Painter's stroke has brushed so far, with the ring where it is now
-                var stroke = new LinkedHashSet<>(GradientStroke.view());
-                stroke.addAll(seen);
-                seen = new ArrayList<>(stroke);
+            if (o.tool == dev.craftium.core.Tool.GRADIENT_PAINTER && o.gradientAnchors.size() == 2) {
+                // while the Gradient Painter's line is dragged: the ring swept along it, as letting go paints it
+                var line = GradientStroke.covered(o, o.gradientAnchors.getFirst(), o.gradientAnchors.getLast());
+                if (line != null) seen = line;
             }
             shownBlocks = seen.size();
             removedShape = SceneShape.EMPTY;

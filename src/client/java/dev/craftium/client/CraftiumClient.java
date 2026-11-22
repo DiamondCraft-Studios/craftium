@@ -764,8 +764,8 @@ public final class CraftiumClient implements ClientModInitializer {
                 || options.maskScript.contains("findClosestBlockToRGB");
         options.scriptColours =
                 colours ? new java.util.ArrayList<>(BlockColours.snapshot()) : new java.util.ArrayList<>();
-        // A screen-space stroke names the blocks the ring covers, as the preview shows them. The Gradient Painter has
-        // gathered those of its whole stroke already.
+        // A screen-space stroke names the blocks the ring covers, as the preview shows them. The Gradient Painter names
+        // those of the ring swept along its line itself.
         var ring = action.equals("use") && target != null ? ScreenFootprint.active(options) : null;
         var mc = Minecraft.getInstance();
         if (!(action.equals("use") && options.tool == dev.craftium.core.Tool.GRADIENT_PAINTER))
@@ -807,7 +807,6 @@ public final class CraftiumClient implements ClientModInitializer {
         } finally {
             options.scriptColours = new java.util.ArrayList<>();
             options.screenBlocks = "";
-            options.gradientPath = "";
             options.modifyTranslateScale = scale;
         }
     }

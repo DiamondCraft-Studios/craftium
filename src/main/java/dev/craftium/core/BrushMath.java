@@ -353,6 +353,21 @@ public final class BrushMath {
         return hollow && pixelPerfect ? OutlineMath.thin(points, wall) : points;
     }
 
+    /**
+     * Whether {@code p} lies within {@code reach} blocks, on each axis, of the point of the segment from {@code a} to {@code b} nearest to
+     * it. The Gradient Painter's screen-space ring is kept to these blocks, by the client as it gathers them and by the server as it takes them.
+     */
+    public static boolean nearSegment(Point p, Point a, Point b, int reach) {
+        double vx = b.x() - a.x(), vy = b.y() - a.y(), vz = b.z() - a.z();
+        double length = vx * vx + vy * vy + vz * vz;
+        double t = length == 0
+                ? 0
+                : Math.clamp(((p.x() - a.x()) * vx + (p.y() - a.y()) * vy + (p.z() - a.z()) * vz) / length, 0, 1);
+        return Math.abs(p.x() - (a.x() + t * vx)) <= reach + .5
+                && Math.abs(p.y() - (a.y() + t * vy)) <= reach + .5
+                && Math.abs(p.z() - (a.z() + t * vz)) <= reach + .5;
+    }
+
     public static List<Point> line(Point a, Point b) {
         int steps = Math.max(Math.max(Math.abs(b.x() - a.x()), Math.abs(b.y() - a.y())), Math.abs(b.z() - a.z()));
         if (steps > 512) throw new IllegalArgumentException("Line exceeds 512 blocks");

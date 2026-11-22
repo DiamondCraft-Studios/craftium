@@ -120,17 +120,13 @@ class GradientTest {
     }
 
     @Test
-    void aFullStrokePathFitsARequestAndALongerOneIsRefused() {
-        var o = new Options();
-        var path = new java.util.ArrayList<Point>();
-        // the longest path the client sends, far from the origin and in steps as wide as thinning leaves them
-        for (int i = 0; i < Options.MAX_GRADIENT_PATH - 2; i++)
-            path.add(new Point(29_000_000 - i * 40, -60 + i % 300, 29_000_000));
-        o.gradientPath = BlockList.encode(path);
-        o.validate();
-        assertEquals(path, BlockList.decode(o.gradientPath, Options.MAX_GRADIENT_PATH));
-        o.gradientPath = "A".repeat(Options.MAX_GRADIENT_PATH * 12 + 1);
-        assertThrows(IllegalArgumentException.class, o::validate);
+    void theSweptRingIsKeptWithinReachOfTheLine() {
+        Point a = new Point(0, 64, 0), b = new Point(40, 64, 0);
+        assertTrue(BrushMath.nearSegment(new Point(20, 70, 6), a, b, 6), "beside the middle of the line");
+        assertTrue(BrushMath.nearSegment(new Point(-6, 64, 0), a, b, 6), "past the start, within reach of it");
+        assertFalse(BrushMath.nearSegment(new Point(20, 64, 7), a, b, 6), "too far to the side");
+        assertFalse(BrushMath.nearSegment(new Point(47, 64, 0), a, b, 6), "too far past the end");
+        assertTrue(BrushMath.nearSegment(new Point(3, 60, -2), a, a, 4), "a line of one block is a box around it");
     }
 
     @Test
