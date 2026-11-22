@@ -1343,7 +1343,7 @@ public final class EditorScreen extends CraftiumScreen {
             if (o().tool.picksShape()) shapeSelector(g, 305);
             // The track stops at 64 to stay usable; a bigger radius is typed in. Shapes are limited by their block
             // count and reach, not by this.
-            if (o().tool == Tool.FLUID_BLOCK)
+            if (pouringBlocks())
                 slider(
                         g,
                         10,
@@ -1835,7 +1835,7 @@ public final class EditorScreen extends CraftiumScreen {
                             "The shape is also made a new BuildObject in the Hierarchy when it is built · Undo takes both away");
                     next += 22;
                 }
-                if (MATERIAL_TOOLS.contains(o().tool)) {
+                if (materialsShown()) {
                     materialsRow(g, 10, next + 4, pw - 20);
                     next += 48;
                 }
@@ -2999,7 +2999,13 @@ public final class EditorScreen extends CraftiumScreen {
                 block);
     }
     /** The tools that blend or pour the Materials palette, and so show its window. */
-    private static final EnumSet<Tool> MATERIAL_TOOLS = EnumSet.of(Tool.FLUID_BLOCK, Tool.GRADIENT_PAINTER);
+    private boolean materialsShown() {
+        return o().tool == Tool.GRADIENT_PAINTER || pouringBlocks();
+    }
+    /** Fluid Ball set to Blocks, which pours the Materials list: it counts blocks instead of a radius and has a pour shape. */
+    private boolean pouringBlocks() {
+        return o().tool == Tool.FLUID_BALL && o().fluidType == Options.FluidType.BLOCKS;
+    }
     /** Where the Surface Painter's Materials row starts when it is set to Material; its seed, Scale and Blend follow it. */
     private static final int PAINTER_MATERIALS_Y = 443;
 
@@ -4623,7 +4629,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** The Terrain tools, whose own controls {@link #terrainRows} draws in place of Surface only. */
     private static final EnumSet<Tool> TERRAIN_CONTROLS =
-            EnumSet.of(Tool.ELEVATION, Tool.FLATTEN, Tool.SLOPE, Tool.FLOODFILL, Tool.FLUID_BALL, Tool.FLUID_BLOCK);
+            EnumSet.of(Tool.ELEVATION, Tool.FLATTEN, Tool.SLOPE, Tool.FLOODFILL, Tool.FLUID_BALL);
 
     /** The Terrain tools' own controls from {@code y} down; returns the row after them. */
     private int terrainRows(Gfx g, int y) {
@@ -4719,28 +4725,33 @@ public final class EditorScreen extends CraftiumScreen {
                 return y + 46;
             }
             case FLUID_BALL -> {
-                text(g, "Fluid", 10, y, MUTED);
+                text(g, "Pour", 10, y, MUTED);
                 var types = Options.FluidType.values();
+                int quarter = (pw - 32) / 4;
                 for (int i = 0; i < types.length; i++) {
                     var type = types[i];
                     String name =
                             type.name().charAt(0) + type.name().substring(1).toLowerCase(Locale.ROOT);
                     button(
                             g,
-                            10 + i * (third + 4),
+                            10 + i * (quarter + 4),
                             y + 12,
-                            third,
+                            quarter,
                             19,
                             name,
                             o.fluidType == type,
-                            () -> o.fluidType = type,
+                            () -> {
+                                o.fluidType = type;
+                                ClientState.save();
+                            },
                             type == Options.FluidType.SNOW
                                     ? "Settle snow layers over the ground"
-                                    : "Pour " + name.toLowerCase(Locale.ROOT));
+                                    : type == Options.FluidType.BLOCKS
+                                            ? "Pour your Materials list like powder: the blocks fall, settle and spread thinner towards the edges"
+                                            : "Pour " + name.toLowerCase(Locale.ROOT));
                 }
                 y += 40;
-            }
-            case FLUID_BLOCK -> {
+                if (o.fluidType != Options.FluidType.BLOCKS) break;
                 text(g, "Shape", 10, y, MUTED);
                 var shapes = Options.PourShape.values();
                 for (int i = 0; i < shapes.length; i++) {

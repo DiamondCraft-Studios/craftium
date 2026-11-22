@@ -84,21 +84,23 @@ final class ToolIcons {
                 line(g, x + 8, y + 3, x + 16, y + 3, color);
                 line(g, x + 16, y + 3, x + 18, y + 8, color);
             }
-            case FLUID_BALL -> {
-                line(g, x + 12, y + 2, x + 3, y + 15, color);
-                line(g, x + 12, y + 2, x + 21, y + 15, color);
-                line(g, x + 3, y + 15, x + 8, y + 22, color);
-                line(g, x + 8, y + 22, x + 17, y + 22, color);
-                line(g, x + 17, y + 22, x + 21, y + 15, color);
-            }
-            case FLUID_BLOCK -> { // a pile of blocks, a wide row under a narrower one, with a few loose ones falling
-                // above
-                g.fill(x + 2, y + 17, x + 22, y + 22, color);
-                g.fill(x + 6, y + 12, x + 18, y + 16, color);
-                g.fill(x + 10, y + 8, x + 14, y + 11, color);
-                g.fill(x + 4, y + 4, x + 7, y + 7, color);
-                g.fill(x + 17, y + 3, x + 20, y + 6, color);
-                g.fill(x + 11, y + 1, x + 13, y + 3, color);
+            case FLUID_BALL, FLUID_BLOCK -> {
+                if (tool == Tool.FLUID_BLOCK
+                        || ClientState.options.fluidType == dev.craftium.core.Options.FluidType.BLOCKS) {
+                    // a pile of blocks, a wide row under a narrower one, with a few loose ones falling above
+                    g.fill(x + 2, y + 17, x + 22, y + 22, color);
+                    g.fill(x + 6, y + 12, x + 18, y + 16, color);
+                    g.fill(x + 10, y + 8, x + 14, y + 11, color);
+                    g.fill(x + 4, y + 4, x + 7, y + 7, color);
+                    g.fill(x + 17, y + 3, x + 20, y + 6, color);
+                    g.fill(x + 11, y + 1, x + 13, y + 3, color);
+                } else {
+                    line(g, x + 12, y + 2, x + 3, y + 15, color);
+                    line(g, x + 12, y + 2, x + 21, y + 15, color);
+                    line(g, x + 3, y + 15, x + 8, y + 22, color);
+                    line(g, x + 8, y + 22, x + 17, y + 22, color);
+                    line(g, x + 17, y + 22, x + 21, y + 15, color);
+                }
             }
             case MOVE -> {
                 line(g, x + 12, y + 2, x + 12, y + 22, color);
