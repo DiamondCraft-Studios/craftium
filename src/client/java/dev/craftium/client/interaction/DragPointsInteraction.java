@@ -28,7 +28,7 @@ final class DragPointsInteraction implements Interaction {
         var end = CraftiumClient.point(hit.getBlockPos());
         if (end.equals(start) && !moved) return true;
         moved = true;
-        var points = editor.options().nodes;
+        var points = editor.options().gradientAnchors;
         points.clear();
         points.add(start);
         points.add(end);
@@ -46,7 +46,7 @@ final class DragPointsInteraction implements Interaction {
             editor.request("use");
             // Painted: the line and its points go, and the next drag starts a new gradient. The request has already
             // taken the points with it.
-            editor.options().nodes.clear();
+            editor.options().gradientAnchors.clear();
         } else {
             ClientState.notify("Hold right-click on a block and drag to another to paint a gradient");
         }
@@ -55,7 +55,7 @@ final class DragPointsInteraction implements Interaction {
     /** Putting the tool away, or choosing another, drops its anchors. */
     @Override
     public void unchosen(EditorContext editor) {
-        editor.options().nodes.clear();
+        editor.options().gradientAnchors.clear();
         start = null;
         moved = false;
     }
@@ -72,6 +72,6 @@ final class DragPointsInteraction implements Interaction {
 
     @Override
     public List<Point> points(EditorContext editor) {
-        return editor.options().nodes;
+        return editor.options().gradientAnchors;
     }
 }

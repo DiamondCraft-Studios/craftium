@@ -372,6 +372,9 @@ public final class Options {
     public boolean sizeChain = true;
 
     public java.util.List<Point> nodes = new java.util.ArrayList<>();
+    /** The Gradient Painter's start and end, apart from {@link #nodes} so a stroke never touches the Path and Modelling points. */
+    public java.util.List<Point> gradientAnchors = new java.util.ArrayList<>();
+
     public java.util.List<Point> selectionPoints = new java.util.ArrayList<>();
     public Point position1 = new Point(0, 0, 0), position2 = new Point(0, 0, 0), symmetryOrigin = new Point(0, 0, 0);
     public boolean looped, extendToGround, useStairsAndSlabs, deferred, symmetryX, symmetryY, symmetryZ;
@@ -962,6 +965,8 @@ public final class Options {
             throw new IllegalArgumentException("Screen brush footprint too large");
         if (nodes == null || nodes.size() > 64 || nodes.contains(null))
             throw new IllegalArgumentException("Maximum 64 control points");
+        if (gradientAnchors == null || gradientAnchors.size() > 2 || gradientAnchors.contains(null))
+            throw new IllegalArgumentException("A gradient has a start and an end");
         if (selectionPoints == null || selectionPoints.size() > 32768 || selectionPoints.contains(null))
             throw new IllegalArgumentException("Lasso selection limit: 32,768 blocks");
         for (String value : new String[] {

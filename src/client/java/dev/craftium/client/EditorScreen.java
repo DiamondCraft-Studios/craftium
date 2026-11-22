@@ -1896,8 +1896,8 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if (o().tool.selection()) {
             fixed(g, () -> fillClear(g));
-        } else if (nodeTool() && o().tool != Tool.GRADIENT_PAINTER) // its line clears itself once it has painted
-        fixed(
+        } else if (nodeTool())
+            fixed(
                     g,
                     () -> button(
                             g,
@@ -6063,6 +6063,7 @@ public final class EditorScreen extends CraftiumScreen {
             ClientState.boxCorners.clear();
             o().pivotSet = false;
             o().nodes.clear();
+            o().gradientAnchors.clear();
             selectedNode = -1;
         }
         if (action.equals("duplicate") || action.equals("cut")) {

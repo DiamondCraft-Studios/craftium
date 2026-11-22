@@ -128,8 +128,8 @@ final class AdvancedTools {
                 } else for (Point at : p.brush(center)) if (p.accepted(at)) script.paint(at);
             }
             case GRADIENT_PAINTER -> {
-                if (o.nodes.size() < 2) throw new IllegalArgumentException("Set two gradient endpoints");
-                Point a = o.nodes.getFirst(), b = o.nodes.getLast();
+                if (o.gradientAnchors.size() < 2) throw new IllegalArgumentException("Drag from a start to an end");
+                Point a = o.gradientAnchors.getFirst(), b = o.gradientAnchors.getLast();
                 var vector = Geometry.vector(b).subtract(Geometry.vector(a));
                 double length = vector.dot(vector);
                 // A stroke from A to B: the blocks the brush covers moved along the whole line, painted as the

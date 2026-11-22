@@ -102,6 +102,18 @@ class GradientTest {
     }
 
     @Test
+    void gradientAnchorsAreTheirOwnListOfAtMostTwo() {
+        var o = new Options();
+        o.nodes.add(new Point(1, 2, 3));
+        o.gradientAnchors.add(new Point(0, 0, 0));
+        o.gradientAnchors.add(new Point(9, 0, 0));
+        o.validate();
+        assertEquals(List.of(new Point(1, 2, 3)), o.nodes, "a stroke never touches the line tools' points");
+        o.gradientAnchors.add(new Point(5, 0, 0));
+        assertThrows(IllegalArgumentException.class, o::validate);
+    }
+
+    @Test
     void optionsRefuseTooManyStopsAndBoundTheBlend() {
         var o = new Options();
         o.gradientBlend = 7;
