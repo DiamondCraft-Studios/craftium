@@ -4420,7 +4420,11 @@ public final class EditorScreen extends CraftiumScreen {
                         item(
                                 "Colour picker / gradient",
                                 "",
-                                () -> ClientCompat.setScreen(minecraft, new ColourScreen(this))));
+                                () -> ClientCompat.setScreen(minecraft, new ColourScreen(this))),
+                        item(
+                                "Palette library",
+                                "",
+                                () -> ClientCompat.setScreen(minecraft, new PaletteLibraryScreen(this))));
             case 8 -> {
                 int sessions = ClientState.aiSessions.size();
                 var items = new ArrayList<MenuItem>();
