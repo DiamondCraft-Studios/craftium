@@ -19,7 +19,7 @@ class ToolMetadataTest {
         FREEHAND_SELECT @@ Freehand Select @@ FS @@ Select @@ Brush a selection; use selection mode to add or subtract. @@ SHAPE @@ true @@ false @@ false @@ true @@ 78
         RULER @@ Ruler @@ RL @@ Utility @@ Add measurement points; use the inspector for circles, splits and center selection. @@ NONE @@ false @@ false @@ false @@ false @@ -1
         PAINTER @@ Surface Painter @@ PA @@ Paint @@ Paint existing blocks with your Palette block, or switch to Material to blend the Materials list with coherent seeded noise. @@ SHAPE @@ true @@ false @@ true @@ false @@ 80
-        PAINT_BUCKET @@ Paint Bucket @@ PB @@ Paint @@ Fill the connected blocks you click with your foreground block. Directions and select type work as in the Magic Wand. @@ NONE @@ false @@ false @@ true @@ false @@ -1
+        PAINT_BUCKET @@ Paint Bucket @@ PB @@ Paint @@ Fill the connected blocks you click with your Palette block, or switch to Material to blend the Materials list with noise. Directions and select type work as in the Magic Wand. @@ NONE @@ false @@ false @@ true @@ false @@ -1
         NOISE_PAINTER @@ Surface Noise Painter @@ NP @@ Paint @@ Blend the Materials palette with coherent seeded noise. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
         BIOME_PAINTER @@ Biome Painter @@ BP @@ Paint @@ Paint biome cells inside the brush. Biomes use 4-block cells. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
         CLENTAMINATOR @@ Clentaminator @@ CL @@ Paint @@ Convert biome and matching surface materials together. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
@@ -48,7 +48,7 @@ class ToolMetadataTest {
         STAMP @@ Stamp @@ ST @@ Sculpt @@ Scatter the clipboard with spacing, random rotation and chance. @@ DISC @@ false @@ false @@ true @@ false @@ -1
         PATH @@ Path @@ PT @@ Draw @@ Create straight, Bezier, Catmull-Rom or hanging catenary paths. @@ SMALL_SHAPE @@ true @@ false @@ true @@ false @@ -1
         FLOODFILL @@ Floodfill @@ FF @@ Terrain @@ Fill connected space with a block count and directional limits. @@ NONE @@ false @@ false @@ true @@ false @@ -1
-        FLUID_BALL @@ Fluid Ball @@ FB @@ Terrain @@ Simulate bounded water, lava or snow flow over terrain. @@ SPHERE @@ false @@ false @@ true @@ false @@ -1
+        FLUID_BALL @@ Fluid Ball @@ FB @@ Terrain @@ Simulate bounded water, lava or snow flow over terrain, or switch to Blocks to pour your Materials list like powder. @@ SPHERE @@ false @@ false @@ true @@ false @@ -1
         MODIFY @@ Modify @@ MF @@ Sculpt @@ Translate copies, revolve, rotate copies or twist your selection. @@ NONE @@ false @@ false @@ true @@ false @@ -1
         ANNOTATION @@ Annotation @@ AN @@ Utility @@ Draw world-space notes, outlines and labels without changing blocks. @@ NONE @@ false @@ false @@ false @@ false @@ -1
         SMEAR @@ Smear @@ SR @@ Sculpt @@ Stretch a selection along an offset, stopping at existing solid blocks. @@ NONE @@ false @@ false @@ true @@ false @@ -1
@@ -67,7 +67,7 @@ class ToolMetadataTest {
         Draw: SHAPE,LINE,PATH,MODELLING,FREEHAND_DRAW,TEXT,ERASE
         Paint: PAINTER,PAINT_BUCKET,GRADIENT_PAINTER,SCRIPT_BRUSH,BIOME_PAINTER,CLENTAMINATOR
         Sculpt: SMOOTH,ROUGHEN,DISTORT,MELT,WELD,SHATTER,EXTRUDE,SMEAR,SCULPT_DRAW,MODIFY,STAMP
-        Terrain: ELEVATION,FLATTEN,SLOPE,ROCK,FLOODFILL,FLUID_BALL,FLUID_BLOCK
+        Terrain: ELEVATION,FLATTEN,SLOPE,ROCK,FLOODFILL,FLUID_BALL
         Utility: RULER,TINKER,ANNOTATION,INSPECT
         """;
 

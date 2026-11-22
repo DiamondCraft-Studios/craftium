@@ -20,7 +20,7 @@ public enum Tool {
             "Paint Bucket",
             "PB",
             "Paint",
-            "Fill the connected blocks you click with your foreground block. Directions and select type work as in the Magic Wand."),
+            "Fill the connected blocks you click with your Palette block, or switch to Material to blend the Materials list with noise. Directions and select type work as in the Magic Wand."),
     /** Kept so saved settings and older clients that name it still read: it is the Surface Painter set to Material, and is no longer listed or bound. */
     @Deprecated
     NOISE_PAINTER("Surface Noise Painter", "NP", "Paint", "Blend the Materials palette with coherent seeded noise."),
@@ -67,7 +67,11 @@ public enum Tool {
     STAMP("Stamp", "ST", "Sculpt", "Scatter the clipboard with spacing, random rotation and chance."),
     PATH("Path", "PT", "Draw", "Create straight, Bezier, Catmull-Rom or hanging catenary paths."),
     FLOODFILL("Floodfill", "FF", "Terrain", "Fill connected space with a block count and directional limits."),
-    FLUID_BALL("Fluid Ball", "FB", "Terrain", "Simulate bounded water, lava or snow flow over terrain."),
+    FLUID_BALL(
+            "Fluid Ball",
+            "FB",
+            "Terrain",
+            "Simulate bounded water, lava or snow flow over terrain, or switch to Blocks to pour your Materials list like powder."),
     MODIFY("Modify", "MF", "Sculpt", "Translate copies, revolve, rotate copies or twist your selection."),
     ANNOTATION("Annotation", "AN", "Utility", "Draw world-space notes, outlines and labels without changing blocks."),
     SMEAR("Smear", "SR", "Sculpt", "Stretch a selection along an offset, stopping at existing solid blocks."),
@@ -87,6 +91,8 @@ public enum Tool {
             "PV",
             "Transform",
             "Click a block, or drag the arrows, to set the point Rotate and Scale work around."),
+    /** Kept so saved settings and older clients that name it still read: it is Fluid Ball set to Blocks, and is no longer listed or shown. */
+    @Deprecated
     FLUID_BLOCK(
             "Fluid Block",
             "FK",
@@ -120,7 +126,7 @@ public enum Tool {
     /** This tool's facts, kept in {@link ToolCatalog}: the methods below read them so the callers that ask a {@code Tool} keep working. */
     /** A tool that is only still here so saved settings and older clients that name it keep reading: it is not listed, bound or shown. */
     public boolean retired() {
-        return this == NOISE_PAINTER;
+        return this == NOISE_PAINTER || this == FLUID_BLOCK;
     }
 
     public ToolSpec spec() {
@@ -168,7 +174,7 @@ public enum Tool {
         all.put(
                 "Sculpt",
                 List.of(SMOOTH, ROUGHEN, DISTORT, MELT, WELD, SHATTER, EXTRUDE, SMEAR, SCULPT_DRAW, MODIFY, STAMP));
-        all.put("Terrain", List.of(ELEVATION, FLATTEN, SLOPE, ROCK, FLOODFILL, FLUID_BALL, FLUID_BLOCK));
+        all.put("Terrain", List.of(ELEVATION, FLATTEN, SLOPE, ROCK, FLOODFILL, FLUID_BALL));
         all.put("Utility", List.of(RULER, TINKER, ANNOTATION, INSPECT));
         return Collections.unmodifiableMap(all);
     }

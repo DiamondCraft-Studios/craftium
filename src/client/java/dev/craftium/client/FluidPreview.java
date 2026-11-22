@@ -21,7 +21,7 @@ public final class FluidPreview {
     private FluidPreview() {}
 
     public static boolean handles(Tool tool) {
-        return tool == Tool.FLUID_BALL || tool == Tool.FLUID_BLOCK;
+        return tool == Tool.FLUID_BALL;
     }
 
     public static void draw(Minecraft mc, BlockHitResult hit, Options o) {
@@ -54,7 +54,7 @@ public final class FluidPreview {
         var level = mc.level;
         var placed = new LinkedHashSet<Point>();
         var solidPlaced = new HashSet<Point>();
-        boolean block = o.tool == Tool.FLUID_BLOCK;
+        boolean block = o.fluidType == Options.FluidType.BLOCKS;
         var cells = new FluidFlow.Cells() {
             public boolean solid(Point p) {
                 if (solidPlaced.contains(p)) return true;

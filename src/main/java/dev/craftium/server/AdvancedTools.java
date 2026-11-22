@@ -172,8 +172,10 @@ final class AdvancedTools {
                         o.floodHorizontal,
                         o.floodCorners)) p.put(at, p.material);
             }
-            case FLUID_BALL -> fluid(p, center, normal);
-            case FLUID_BLOCK -> powder(p, center, normal);
+            case FLUID_BALL -> {
+                if (o.fluidType == Options.FluidType.BLOCKS) powder(p, center, normal);
+                else fluid(p, center, normal);
+            }
             case SMEAR -> {
                 var source = new LinkedHashMap<Point, BlockSnapshot>();
                 if (!p.session.selection.points().isEmpty()) {
@@ -253,7 +255,7 @@ final class AdvancedTools {
                 o,
                 center.add(normal.x(), normal.y(), normal.z()));
     }
-    /** Fluid Ball's flow, but pouring the palette: works for gravity blocks and for ones that float. */
+    /** Fluid Ball set to Blocks: the flow, but pouring the palette: works for gravity blocks and for ones that float. */
     private static void powder(EditPlanner p, Point center, Point normal) {
         var o = p.o;
         dev.craftium.core.FluidFlow.powder(

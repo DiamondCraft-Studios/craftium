@@ -445,6 +445,16 @@ class WireCompatibilityTest {
     }
 
     @Test
+    void theRetiredFluidBlockToolIsReadAsFluidBallPouringBlocks() {
+        var options =
+                JSON.fromJson("{\"tool\":\"FLUID_BLOCK\",\"fluidBlocks\":200,\"fluidType\":\"LAVA\"}", Options.class);
+        options.validate();
+        assertEquals(Tool.FLUID_BALL, options.tool);
+        assertEquals(Options.FluidType.BLOCKS, options.fluidType);
+        assertEquals(200, options.fluidBlocks);
+    }
+
+    @Test
     void aSavedSettingsFileFromThePreviousReleaseStillLoads() {
         // A trimmed craftium.json as 0.9.0-beta.1 saves it: only some fields, in any order, plus one this version has
         // never heard of.

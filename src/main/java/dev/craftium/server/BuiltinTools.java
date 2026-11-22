@@ -95,9 +95,18 @@ final class BuiltinTools {
         u.say("Magic Wand: " + s.selection.size() + " blocks (128-block search radius)");
     };
 
-    /** Fills what is connected to the clicked block, found as the Magic Wand finds it with its directions and select type, with the foreground block. */
-    static final ToolBehaviour PAINT_BUCKET = u ->
-            u.submit(bucketFill(u.player(), u.plan(), u.options(), u.point(), u.options().compare, "Paint Bucket"));
+    /**
+     * Fills what is connected to the clicked block, found as the Magic Wand finds it with its directions and select type, with the Palette block, or with
+     * the Materials list blended by noise when the bucket is set to Material.
+     */
+    static final ToolBehaviour PAINT_BUCKET = u -> u.submit(bucketFill(
+            u.player(),
+            u.plan(),
+            u.options(),
+            u.point(),
+            u.options().compare,
+            "Paint Bucket",
+            u.options().paintSource == Options.PaintSource.MATERIAL));
 
     /**
      * The blocks connected to {@code target} that the Magic Wand would pick with {@code compare}, replaced with the active block. Shared by the
@@ -105,6 +114,18 @@ final class BuiltinTools {
      */
     static Session.Edit bucketFill(
             ServerPlayer player, EditPlanner plan, Options o, Point target, Options.Compare compare, String name) {
+        return bucketFill(player, plan, o, target, compare, name, false);
+    }
+
+    /** As above; {@code material} fills with the Materials list blended by the noise settings instead of the Palette block. */
+    static Session.Edit bucketFill(
+            ServerPlayer player,
+            EditPlanner plan,
+            Options o,
+            Point target,
+            Options.Compare compare,
+            String name,
+            boolean material) {
         var origin = plan.state(target);
         if (origin.isAir()) throw new IllegalArgumentException(name + " needs a block, not empty space");
         var originData = compare == Options.Compare.NBT ? AdvancedTools.data(plan, target) : null;
@@ -142,9 +163,13 @@ final class BuiltinTools {
         if (found.isEmpty())
             throw new IllegalArgumentException(
                     name + " found no connected blocks there; check the directions and surface settings");
-        for (Point at : found) plan.put(at, plan.preserve(plan.state(at), plan.material));
+        for (Point at : found)
+            plan.put(
+                    at,
+                    plan.preserve(
+                            plan.state(at), material ? plan.materialAt(plan.noise.sample(at), at) : plan.material));
         if (plan.changes.isEmpty()) {
-            String why = origin.getBlock() == plan.material.getBlock()
+            String why = !material && origin.getBlock() == plan.material.getBlock()
                     ? "those blocks are already that block"
                     : !BlockMask.of(o).allows(origin, AdvancedTools.missingEntry(plan, target)) || !o.mask.isBlank()
                             ? "the block mask excludes them"

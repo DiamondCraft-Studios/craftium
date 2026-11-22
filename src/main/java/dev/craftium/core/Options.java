@@ -66,7 +66,7 @@ public final class Options {
     }
 
     public Tool tool = Tool.BOX_SELECT;
-    /** What the Surface Painter paints with: the Palette (the foreground block) or the Material list blended by noise. */
+    /** What the Surface Painter and the Paint Bucket paint with: the Palette (the foreground block) or the Material list blended by noise. */
     public PaintSource paintSource = PaintSource.PALETTE;
 
     public enum PaintSource {
@@ -511,18 +511,20 @@ public final class Options {
             uiMuted = 0xff8595a8,
             uiBorder = 0xff303b49;
 
+    /** What Fluid Ball pours: a fluid, or {@code BLOCKS}, the Materials list poured like powder (what Fluid Block did). */
     public enum FluidType {
         WATER,
         LAVA,
-        SNOW
+        SNOW,
+        BLOCKS
     }
 
     public FluidType fluidType = FluidType.WATER;
     public int floodGap, flowLength = 7, fluidQuality = 1;
-    /** Fluid Block: how many blocks one pour places. */
+    /** Fluid Ball set to Blocks: how many blocks one pour places. */
     public int fluidBlocks = 64;
 
-    /** Fluid Block: the outline the pour spreads in. */
+    /** Fluid Ball set to Blocks: the outline the pour spreads in. */
     public enum PourShape {
         CIRCLE,
         DIAMOND,
@@ -704,6 +706,11 @@ public final class Options {
         if (tool == null || shape == null || mode == null) throw new IllegalArgumentException("Invalid tool options");
         // The Surface Noise Painter is now the Surface Painter set to Material, so a saved setting or an older client
         // that still names it is read as that.
+        // Fluid Block is Fluid Ball set to Blocks.
+        if (tool == Tool.FLUID_BLOCK) {
+            tool = Tool.FLUID_BALL;
+            fluidType = FluidType.BLOCKS;
+        }
         if (tool == Tool.NOISE_PAINTER) {
             tool = Tool.PAINTER;
             paintSource = PaintSource.MATERIAL;
