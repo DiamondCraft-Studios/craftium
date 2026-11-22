@@ -135,6 +135,9 @@ final class ScreenFootprint {
         /** 1 for a block that stops a ray, 2 for one that does not. */
         final it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap solid =
                 new it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap();
+        /** 1 for a solid block the eye sees a face of, 2 for one it does not; the fill between the rays asks it. */
+        final it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap visible =
+                new it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap();
 
         Sweep(List<Object> camera) {
             this.camera = camera;
@@ -166,7 +169,8 @@ final class ScreenFootprint {
      * too. Null when part of the swept ring is off the screen or the line passes behind the camera, so the caller can fall back to the
      * brush shape instead of leaving out what cannot be seen.
      */
-    static List<Point> alongLine(View v, Point a, Point b, double reach, net.minecraft.world.level.Level level) {
+    static List<Point> alongLine(
+            View v, Point a, Point b, double reach, java.util.function.Predicate<BlockPos> isSolid) {
         Vec3 pa = Vec3.atCenterOf(new BlockPos(a.x(), a.y(), a.z())),
                 pb = Vec3.atCenterOf(new BlockPos(b.x(), b.y(), b.z()));
         double za = pa.subtract(v.eye).dot(v.forward), zb = pb.subtract(v.eye).dot(v.forward);
@@ -179,7 +183,8 @@ final class ScreenFootprint {
         if (minX < 0 || minY < 0 || maxX >= v.screenWidth || maxY >= v.screenHeight) return null;
         double dx = bx - ax, dy = by - ay, length2 = dx * dx + dy * dy;
         double area = Math.PI * rMax * rMax + 2 * rMax * Math.sqrt(length2);
-        double wanted = Math.max(1, Math.max(Math.min(ra, rb) / (reach + .5) / 3, Math.sqrt(area / MAX_SAMPLES)));
+        // About a ray a block where the line is furthest: the rays only find the surface, and the fill below joins them
+        double wanted = Math.max(1, Math.max(Math.min(ra, rb) / (reach + .5), Math.sqrt(area / MAX_SAMPLES)));
         int power = Math.min(20, (int) Math.ceil(Math.log(wanted) / Math.log(2) - 1e-9));
         double step = 1 << power;
         marched = 0;
@@ -189,8 +194,7 @@ final class ScreenFootprint {
         java.util.function.Predicate<BlockPos> stops = p -> {
             byte known = cache.solid.get(p.asLong());
             if (known == 0) {
-                var state = level.getBlockState(p);
-                known = !state.isAir() && state.getFluidState().isEmpty() ? (byte) 1 : (byte) 2;
+                known = isSolid.test(p) ? (byte) 1 : (byte) 2;
                 cache.solid.put(p.asLong(), known);
             }
             return known == 1;
@@ -226,7 +230,87 @@ final class ScreenFootprint {
                     found.add(new Point(at.getX(), at.getY(), at.getZ()));
                 }
             }
+        // The rays are a grid on the screen, and ground seen at a slant puts several blocks between two of them. So
+        // from
+        // the blocks they found, the fill takes in each neighbour that is solid, inside the swept ring and seen by the
+        // eye, until there is none left: every visible block of the surface in the ring, at any angle.
+        var line = new Swept(v, za, zb, ax, ay, dx, dy, length2, worldRing, 2 * reach + 4);
+        var queue = new it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue();
+        for (long hit : seen) queue.enqueue(hit);
+        var refused = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+        var at = new BlockPos.MutableBlockPos();
+        while (!queue.isEmpty() && found.size() < dev.craftium.core.Options.MAX_SCREEN_BLOCKS) {
+            long from = queue.dequeueLong();
+            int fx = BlockPos.getX(from), fy = BlockPos.getY(from), fz = BlockPos.getZ(from);
+            for (int ox = -1; ox <= 1; ox++)
+                for (int oy = -1; oy <= 1; oy++)
+                    for (int oz = -1; oz <= 1; oz++) {
+                        if (ox == 0 && oy == 0 && oz == 0) continue;
+                        at.set(fx + ox, fy + oy, fz + oz);
+                        long id = at.asLong();
+                        if (seen.contains(id) || refused.contains(id)) continue;
+                        if (!stops.test(at) || !line.contains(at) || !visible(v, at, stops, cache)) {
+                            refused.add(id);
+                            continue;
+                        }
+                        seen.add(id);
+                        found.add(new Point(at.getX(), at.getY(), at.getZ()));
+                        queue.enqueue(id);
+                    }
+        }
         return found;
+    }
+
+    /** The ring swept along a line as the screen sees it, and the depths around the line a block may lie at. */
+    private record Swept(
+            View v,
+            double za,
+            double zb,
+            double ax,
+            double ay,
+            double dx,
+            double dy,
+            double length2,
+            double worldRing,
+            double window) {
+        /** Whether the middle of block {@code p} is inside the swept ring on the screen, and near the line's depth there. */
+        boolean contains(BlockPos p) {
+            Vec3 c = Vec3.atCenterOf(p);
+            double z = c.subtract(v.eye).dot(v.forward);
+            if (z < .1) return false;
+            double sx = screenX(v, c, z), sy = screenY(v, c, z);
+            double s = length2 == 0 ? 0 : Math.clamp(((sx - ax) * dx + (sy - ay) * dy) / length2, 0, 1);
+            double depth = 1 / ((1 - s) / za + s / zb), r = worldRing / depth;
+            double ex = sx - (ax + s * dx), ey = sy - (ay + s * dy);
+            return ex * ex + ey * ey <= r * r && Math.abs(z - depth) <= window;
+        }
+    }
+
+    /**
+     * Whether the eye sees a face of solid block {@code p}: a face open to a block that does not stop rays, turned to the eye, with
+     * nothing solid between the eye and it. Kept for the camera, since the fill asks again for every line of a drag.
+     */
+    private static boolean visible(View v, BlockPos p, java.util.function.Predicate<BlockPos> stops, Sweep cache) {
+        long id = p.asLong();
+        byte known = cache.visible.get(id);
+        if (known != 0) return known == 1;
+        boolean seen = false;
+        Vec3 c = Vec3.atCenterOf(p);
+        for (var d : net.minecraft.core.Direction.values()) {
+            if (stops.test(p.relative(d))) continue; // a buried face
+            // just outside the middle of the face, so the walk to it never enters the block itself
+            Vec3 target = c.add(d.getStepX() * .51, d.getStepY() * .51, d.getStepZ() * .51);
+            Vec3 to = target.subtract(v.eye);
+            if (to.dot(new Vec3(d.getStepX(), d.getStepY(), d.getStepZ())) >= 0) continue; // turned away
+            double z = to.dot(v.forward);
+            if (z <= .2) continue;
+            if (march(v.eye, to.scale(1 / z), .1, z - 1e-3, stops) == null) {
+                seen = true;
+                break;
+            }
+        }
+        cache.visible.put(id, seen ? (byte) 1 : (byte) 2);
+        return seen;
     }
 
     private static double screenX(View v, Vec3 p, double depth) {
@@ -252,7 +336,10 @@ final class ScreenFootprint {
         if (key.equals(lineKey)) return lineCached;
         int reach = dev.craftium.core.Options.screenReach(o.radius);
         long began = System.nanoTime();
-        var swept = alongLine(v, a, b, o.radius, level);
+        var swept = alongLine(v, a, b, o.radius, p -> {
+            var state = level.getBlockState(p);
+            return !state.isAir() && state.getFluidState().isEmpty();
+        });
         long ms = (System.nanoTime() - began) / 1_000_000;
         if (ms >= 30) // for game tests of a big ring: what a slow sweep cost
         dev.craftium.Craftium.LOG.info(
