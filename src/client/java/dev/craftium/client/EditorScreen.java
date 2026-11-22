@@ -2396,22 +2396,38 @@ public final class EditorScreen extends CraftiumScreen {
         button(g, 16 + cell[0], pb - 27, cell[1], 20, "Clear", false, () -> action("clear"), "Clear the selection");
     }
 
-    private int optionsScroll, scrollLimit, fieldShift, viewTop, viewBottom;
+    private int fieldShift, viewTop, viewBottom;
+    /** How far a scroll view is scrolled, in pixels, and how far it can be: kept by the window that has it. */
+    private static final class ScrollView {
+        int scroll, limit;
+    }
+
+    private final ScrollView optionsView = new ScrollView();
     /**
      * Draws the options panel's contents in the room between {@code top} and the panel's bottom less {@code reserve}, moved up by
      * {@code gap}. Whatever reaches below that room scrolls: the wheel moves it and a bar on the right shows where it is.
      */
     private void scrolled(Gfx g, int top, int reserve, int gap, Runnable content) {
         int bottom = pb - reserve;
-        optionsScroll = Math.clamp(optionsScroll, 0, scrollLimit);
         viewTop = top;
         viewBottom = bottom;
-        fieldShift = -gap - optionsScroll;
-        g.enableScissor(0, top, pw, bottom);
+        fieldShift = -gap - Math.clamp(optionsView.scroll, 0, optionsView.limit);
+        scrollView(g, "options", optionsView, 0, pw, top, bottom, gap, content);
+    }
+    /**
+     * Draws {@code content} of the window {@code panel} in the room from {@code left} to {@code right} and {@code top} to {@code bottom},
+     * moved up by {@code gap} and by how far {@code view} is scrolled. What reaches below the room scrolls: the wheel moves it, and a bar on
+     * the right shows where it is and jumps there when clicked. Controls outside the room cannot be clicked.
+     */
+    private void scrollView(
+            Gfx g, String panel, ScrollView view, int left, int right, int top, int bottom, int gap, Runnable content) {
+        view.scroll = Math.clamp(view.scroll, 0, view.limit);
+        int shift = -gap - view.scroll;
+        g.enableScissor(left, top, right, bottom);
         g.pose().pushMatrix();
-        g.pose().translate(0, fieldShift);
+        g.pose().translate(0, shift);
         scrollActive = true;
-        scrollShift = fieldShift;
+        scrollShift = shift;
         scrollContent = 0;
         scrollClipTop = top;
         scrollClipBottom = bottom;
@@ -2425,23 +2441,24 @@ public final class EditorScreen extends CraftiumScreen {
             g.pose().popMatrix();
             g.disableScissor();
         }
-        scrollLimit = Math.max(0, scrollContent - gap - bottom + 6);
-        if (scrollLimit > 0) {
+        view.limit = Math.max(0, scrollContent - gap - bottom + 6);
+        view.scroll = Math.min(view.scroll, view.limit);
+        if (view.limit > 0) {
             int track = bottom - top,
-                    thumb = Math.max(14, track * track / (track + scrollLimit)),
-                    at = top + (track - thumb) * optionsScroll / scrollLimit,
+                    thumb = Math.max(14, track * track / (track + view.limit)),
+                    at = top + (track - thumb) * view.scroll / view.limit,
                     span = Math.max(1, track - thumb),
-                    limit = scrollLimit;
-            g.fill(pw - 7, top, pw - 3, bottom, 0xff1b2b40);
-            g.fill(pw - 7, at, pw - 3, at + thumb, MUTED);
+                    limit = view.limit;
+            g.fill(right - 7, top, right - 3, bottom, 0xff1b2b40);
+            g.fill(right - 7, at, right - 3, at + thumb, MUTED);
             controls.add(new Control(
-                    pw - 10,
+                    right - 10,
                     top,
                     10,
                     track,
                     () -> {
-                        double py = WorkspaceLayout.inverse("options", mx, my)[1];
-                        optionsScroll = Math.clamp((int) Math.round((py - top - thumb / 2.0) / span * limit), 0, limit);
+                        double py = WorkspaceLayout.inverse(panel, mx, my)[1];
+                        view.scroll = Math.clamp((int) Math.round((py - top - thumb / 2.0) / span * limit), 0, limit);
                     },
                     ""));
         }
@@ -3065,7 +3082,7 @@ public final class EditorScreen extends CraftiumScreen {
         init();
     }
 
-    private int materialsScroll;
+    private final ScrollView materialsView = new ScrollView(), gradientView = new ScrollView();
     /** The Materials window: the palette the blending and pouring tools draw from, one row per block with its icon, a weight and where it sits in the order. It opens from the tool panel or the Window menu and is moved, sized and folded like the others. */
     private void materialsPanel(Gfx g) {
         int x = w - RIGHT - 300, y = 300;
@@ -3078,7 +3095,16 @@ public final class EditorScreen extends CraftiumScreen {
             ClientState.save();
         }); // a block dropped anywhere on the window joins the palette
         int fit = materialRowsFit(y + 36, pb - 50);
-        materialsScroll = materialRows(g, x, y + 36, fit, materialsScroll, BlockList.MATERIALS);
+        scrollView(
+                g,
+                "materials",
+                materialsView,
+                x,
+                x + pw,
+                y + 22,
+                pb - 50,
+                0,
+                () -> materialRows(g, x, y + 36, blocks.size(), 0, BlockList.MATERIALS));
         int[] top = flex(pw - 20, 4, 1, 1, 1);
         button(
                 g,
@@ -3244,7 +3270,9 @@ public final class EditorScreen extends CraftiumScreen {
         return scroll;
     }
 
-    private int gradientScroll, draggingStop = -1, gradientBarX, gradientBarW = 1;
+    private int draggingStop = -1, gradientBarX, gradientBarW = 1, pressedStop = -1;
+    /** Whether the press being handled is the second of a double click. */
+    private boolean pressDouble;
     /** How many blocks Generate samples along the gradient, and the Colour Studio's filters for which blocks it may pick. Kept for the game session. */
     private static int gradientSteps = 9;
 
@@ -3291,13 +3319,17 @@ public final class EditorScreen extends CraftiumScreen {
                     handleY - 1,
                     11,
                     14,
-                    () -> draggingStop = index,
+                    () -> {
+                        if (pressDouble && pressedStop == index) editStopColour(index);
+                        else draggingStop = index;
+                        pressedStop = index;
+                    },
                     () -> openBlockMenu(BlockList.STOPS, index),
                     String.format(Locale.ROOT, "Colour stop · #%06X", stop.rgb())
                             + (stop.block().isEmpty() ? "" : " · from " + BlockPickerScreen.name(stop.block()))
-                            + " · Drag to move it · Right-click to set its colour or remove it"));
+                            + " · Drag to move it · Double-click to set its colour · Right-click for more"));
         }
-        text(g, "Click the bar to add a stop · right-click a stop to set it", x + 12, handleY + 18, MUTED);
+        text(g, "Click the bar to add a stop · double-click a stop to set it", x + 12, handleY + 18, MUTED);
         int next = handleY + 34;
         slider(
                 g,
@@ -3337,9 +3369,18 @@ public final class EditorScreen extends CraftiumScreen {
                 this::generateGradient,
                 "Pick the block closest in colour at each step along the gradient, in order, into the Materials list");
         next += 36;
-        int fit = materialRowsFit(next, pb - 22);
-        gradientScroll = materialRows(g, x, next, fit, gradientScroll, BlockList.GRADIENT);
+        int rowsTop = next, fit = materialRowsFit(next, pb - 22);
         int count = MaterialPalette.blocks(o).size();
+        scrollView(
+                g,
+                "gradient",
+                gradientView,
+                x,
+                x + pw,
+                rowsTop - 14,
+                pb - 22,
+                0,
+                () -> materialRows(g, x, rowsTop, count, 0, BlockList.GRADIENT));
         text(
                 g,
                 count
@@ -3348,6 +3389,33 @@ public final class EditorScreen extends CraftiumScreen {
                 x + 10,
                 pb - 14,
                 MUTED);
+    }
+
+    /**
+     * The colour picker for stop {@code index}: the colour shows live on the bar, Set keeps it as one undo, and closing the picker any other way
+     * puts the stop back as it was. Alt + click on a block in the world takes the colour of the face clicked.
+     */
+    private void editStopColour(int index) {
+        var stops = o().gradientStops;
+        if (index >= stops.size()) return;
+        var original = stops.get(index);
+        var before = ClientOptionHistory.mark();
+        draggingStop = -1;
+        ColourPickerScreen.openWithPipette(
+                this,
+                "Stop colour",
+                () -> index < o().gradientStops.size()
+                        ? o().gradientStops.get(index).rgb()
+                        : original.rgb(),
+                rgb -> {
+                    var list = o().gradientStops;
+                    if (index >= list.size()) return;
+                    var now = list.get(index);
+                    // Back to the colour it had: the block it was taken from comes back with it
+                    list.set(index, rgb == original.rgb() ? original.at(now.at()) : now.coloured(rgb, ""));
+                },
+                original::rgb,
+                () -> ClientOptionHistory.since("Gradient stop colour", before));
     }
 
     /** A new stop at {@code t} along the bar, in the colour the gradient already has there, so adding one changes nothing until it is set. */
@@ -3387,7 +3455,7 @@ public final class EditorScreen extends CraftiumScreen {
             return;
         }
         Runnable apply = () -> {
-            MaterialPalette.setRuns(o(), steps);
+            ClientOptionHistory.change("Generate gradient", () -> MaterialPalette.setRuns(o(), steps));
             gradientGenerated = materialsKey();
             ClientState.save();
             int n = MaterialPalette.blocks(o()).size();
@@ -3415,34 +3483,27 @@ public final class EditorScreen extends CraftiumScreen {
             if (index >= stops.size()) return;
             var stop = stops.get(index);
             switch (label) {
-                case "Set colour..." ->
-                    ColourPickerScreen.openWithPipette(
-                            this,
-                            "Stop colour",
-                            () -> stops.get(index).rgb(),
-                            rgb -> {
-                                stops.set(index, stops.get(index).coloured(rgb, ""));
-                                ClientState.save();
-                            },
-                            stop::rgb);
+                case "Set colour..." -> editStopColour(index);
                 case "Set from block..." -> {
                     var picker = new BlockPickerScreen(this, "Stop colour from a block", stop.block(), id -> {
                         var known = BlockColours.get(id.split("\\[", 2)[0]);
                         if (known == null)
                             ClientState.notify(BlockPickerScreen.name(id) + " has no colour Craftium can read");
-                        else {
-                            stops.set(index, stops.get(index).coloured(known.rgb(), known.id()));
-                            ClientState.save();
-                        }
+                        else
+                            ClientOptionHistory.change("Gradient stop from " + BlockPickerScreen.name(id), () -> {
+                                stops.set(index, stops.get(index).coloured(known.rgb(), known.id()));
+                                ClientState.save();
+                            });
                     });
                     ClientCompat.setScreen(minecraft, picker.similarTo(stop.rgb()));
                 }
                 default -> {
                     if (stops.size() <= 2) ClientState.notify("A gradient keeps at least two stops");
-                    else {
-                        stops.remove(index);
-                        ClientState.save();
-                    }
+                    else
+                        ClientOptionHistory.change("Remove gradient stop", () -> {
+                            stops.remove(index);
+                            ClientState.save();
+                        });
                 }
             }
             return;
@@ -3452,16 +3513,23 @@ public final class EditorScreen extends CraftiumScreen {
         String block = blocks.get(index);
         switch (label) {
             case "Replace..." -> chooseMaterialReplacement(index);
-            case "Next closest colour" -> nextClosestMaterial(index);
+            case "Next closest colour" ->
+                ClientOptionHistory.change("Next closest colour", () -> nextClosestMaterial(index));
             case "Edit block state" ->
-                ClientCompat.setScreen(minecraft, new BlockStateScreen(this, block, edited -> {
-                    MaterialPalette.replace(o(), index, edited);
+                ClientCompat.setScreen(
+                        minecraft,
+                        new BlockStateScreen(
+                                this,
+                                block,
+                                edited -> ClientOptionHistory.change("Edit block state", () -> {
+                                    MaterialPalette.replace(o(), index, edited);
+                                    ClientState.save();
+                                })));
+            default ->
+                ClientOptionHistory.change("Remove " + BlockPickerScreen.name(block), () -> {
+                    if (!MaterialPalette.remove(o(), index)) ClientState.notify("The palette keeps at least one block");
                     ClientState.save();
-                }));
-            default -> {
-                if (!MaterialPalette.remove(o(), index)) ClientState.notify("The palette keeps at least one block");
-                ClientState.save();
-            }
+                });
         }
     }
 
@@ -3470,10 +3538,14 @@ public final class EditorScreen extends CraftiumScreen {
         var blocks = MaterialPalette.blocks(o());
         if (index >= blocks.size()) return;
         String block = blocks.get(index);
-        var picker = new BlockPickerScreen(this, "Replace " + BlockPickerScreen.name(block), block, id -> {
-            MaterialPalette.replace(o(), index, id);
-            ClientState.save();
-        });
+        var picker = new BlockPickerScreen(
+                this,
+                "Replace " + BlockPickerScreen.name(block),
+                block,
+                id -> ClientOptionHistory.change("Replace " + BlockPickerScreen.name(block), () -> {
+                    MaterialPalette.replace(o(), index, id);
+                    ClientState.save();
+                }));
         BlockColours.build();
         var known = BlockColours.get(block.split("\\[", 2)[0]);
         ClientCompat.setScreen(minecraft, known == null ? picker : picker.similarTo(known.rgb()));
@@ -6214,10 +6286,12 @@ public final class EditorScreen extends CraftiumScreen {
         my = (int) y;
         pointerX = event.x();
         pointerY = event.y();
+        pressDouble = doubleClick;
         if (event.button() == 0) {
             ClientOptionHistory.pressed(true);
-            if ("options".equals(WorkspaceLayout.hit(x, y, false)))
-                ClientOptionHistory.begin(); // a gesture in the Tool options window is one undo
+            String window = WorkspaceLayout.hit(x, y, false);
+            if (window.equals("options") || window.equals("gradient") || window.equals("materials"))
+                ClientOptionHistory.begin(); // a gesture in the Tool options, Gradient or Materials window is one undo
         }
         if (typing != null) {
             // A click on the slider being typed in moves the caret (Shift stretches the selection, Ctrl or a double
@@ -6956,11 +7030,11 @@ public final class EditorScreen extends CraftiumScreen {
             return true;
         } // clamped when drawn
         if (panels && WorkspaceLayout.hit(x / scale, y / scale, false).equals("materials")) {
-            materialsScroll = Math.max(0, materialsScroll + (vertical < 0 ? 1 : -1));
+            materialsView.scroll = Math.max(0, materialsView.scroll + (vertical < 0 ? 24 : -24));
             return true;
         } // clamped when drawn
         if (panels && WorkspaceLayout.hit(x / scale, y / scale, false).equals("gradient")) {
-            gradientScroll = Math.max(0, gradientScroll + (vertical < 0 ? 1 : -1));
+            gradientView.scroll = Math.max(0, gradientView.scroll + (vertical < 0 ? 24 : -24));
             return true;
         } // clamped when drawn
         if (panels && WorkspaceLayout.hit(x / scale, y / scale, false).equals("selection")) {
@@ -6979,7 +7053,7 @@ public final class EditorScreen extends CraftiumScreen {
                 && !pinnedTab
                 && o().tool != Tool.MODIFY
                 && WorkspaceLayout.hit(x / scale, y / scale, false).equals("options")) {
-            optionsScroll = Math.clamp(optionsScroll + (vertical < 0 ? 24 : -24), 0, scrollLimit);
+            optionsView.scroll = Math.clamp(optionsView.scroll + (vertical < 0 ? 24 : -24), 0, optionsView.limit);
             return true;
         }
         if (panels

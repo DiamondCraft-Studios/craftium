@@ -60,6 +60,29 @@ final class ClientOptionHistory {
             history.record(new OptionHistory.Entry(name(change), change.before(), change.after(), lastChange));
     }
 
+    /**
+     * The settings as they are now, for a change that is finished elsewhere, such as in a chooser or a colour picker opened from a window:
+     * hand them to {@link #since} once it is done. A gesture still open is ended first, so it stays an entry of its own.
+     */
+    static Map<String, Object> mark() {
+        flush();
+        return OptionDiff.snapshot(ClientState.options);
+    }
+
+    /** Records what changed since {@code before} (from {@link #mark}) as one entry called {@code name}; nothing when nothing changed. */
+    static void since(String name, Map<String, Object> before) {
+        var change = OptionDiff.between(before, OptionDiff.snapshot(ClientState.options));
+        if (!change.isEmpty())
+            history.record(new OptionHistory.Entry(name, change.before(), change.after(), System.currentTimeMillis()));
+    }
+
+    /** Runs {@code change} and records what it changed as one entry called {@code name}. */
+    static void change(String name, Runnable change) {
+        var before = mark();
+        change.run();
+        since(name, before);
+    }
+
     /** Ends a gesture that is still open, so a change made a moment ago is in the history before it is undone. */
     private static void flush() {
         if (baseline != null) finish(OptionDiff.snapshot(ClientState.options));
@@ -99,8 +122,10 @@ final class ClientOptionHistory {
     private static String name(OptionDiff.Change change) {
         if (change.after().size() != 1) return "Tool options (" + change.after().size() + " settings)";
         String field = change.after().keySet().iterator().next();
-        return OptionFields.human(field) + " " + show(change.before().get(field)) + " → "
-                + show(change.after().get(field));
+        String was = show(change.before().get(field)), now = show(change.after().get(field));
+        // A list that changed inside, such as a moved gradient stop, reads the same before and after
+        if (was.equals(now)) return OptionFields.human(field) + " changed";
+        return OptionFields.human(field) + " " + was + " → " + now;
     }
 
     private static String show(Object v) {
