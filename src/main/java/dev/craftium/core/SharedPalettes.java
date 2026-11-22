@@ -20,9 +20,20 @@ public final class SharedPalettes {
     private static final Pattern NAME = Pattern.compile("[A-Za-z0-9 _.-]{1,64}");
     private static final Gson GSON = new Gson();
 
-    /** One palette. {@code owner} is the name of the player who saved it, and {@code ownerId} their UUID text ("" for one put in the folder by hand). */
+    /** The longest author and tags a palette has, as for a blueprint's. */
+    public static final int MAX_AUTHOR = 80, MAX_TAGS = 256;
+    /**
+     * One palette. {@code owner} is the author as the player typed it (their name when they left it empty) and {@code ownerId} the UUID text of the player who saved it
+     * ("" for one put in the folder by hand). {@code tags} are words to search by, separated by commas or spaces.
+     */
     public record Palette(
-            String name, String owner, String ownerId, List<String> blocks, List<Double> weights, long modified) {}
+            String name,
+            String owner,
+            String ownerId,
+            List<String> blocks,
+            List<Double> weights,
+            long modified,
+            String tags) {}
 
     private final Path directory;
 
@@ -67,8 +78,14 @@ public final class SharedPalettes {
      *
      * @throws IllegalArgumentException with what is wrong, for the player to read
      */
-    public Palette save(String name, String owner, String ownerId, List<String> blocks, List<Double> weights) {
+    public Palette save(
+            String name, String owner, String ownerId, List<String> blocks, List<Double> weights, String tags) {
         String clean = cleanName(name);
+        String cleanTags = tags == null ? "" : tags.trim();
+        if (cleanTags.length() > MAX_TAGS)
+            throw new IllegalArgumentException("Tags are at most " + MAX_TAGS + " characters");
+        if (owner != null && owner.trim().length() > MAX_AUTHOR)
+            throw new IllegalArgumentException("The author is at most " + MAX_AUTHOR + " characters");
         if (blocks == null || blocks.isEmpty()) throw new IllegalArgumentException("The palette needs a block");
         if (blocks.size() > MaterialList.MAX)
             throw new IllegalArgumentException("A palette holds at most " + MaterialList.MAX + " blocks");
@@ -91,11 +108,12 @@ public final class SharedPalettes {
             throw new IllegalArgumentException("The server's palette library is full (" + MAX_PALETTES + ")");
         var palette = new Palette(
                 old == null ? clean : stem(old),
-                owner == null ? "" : owner,
+                owner == null ? "" : owner.trim(),
                 ownerId == null ? "" : ownerId,
                 cleanBlocks,
                 cleanWeights,
-                System.currentTimeMillis());
+                System.currentTimeMillis(),
+                cleanTags);
         String json = GSON.toJson(palette);
         if (json.length() > MAX_FILE) throw new IllegalArgumentException("The palette is too big to share");
         write(directory.resolve(palette.name() + ".json"), json);
@@ -185,7 +203,8 @@ public final class SharedPalettes {
                     palette.ownerId() == null ? "" : palette.ownerId(),
                     palette.blocks(),
                     weights,
-                    palette.modified());
+                    palette.modified(),
+                    palette.tags() == null ? "" : palette.tags());
             return valid(out) ? out : null;
         } catch (IOException | RuntimeException e) {
             return null;

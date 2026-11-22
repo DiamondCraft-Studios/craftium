@@ -19,7 +19,7 @@ final class PaletteLibrary {
     }
 
     /** What a client sends to save a palette, as JSON in the request's {@code assetData}; for a delete only {@code name} is read. */
-    record Entry(String name, List<String> blocks, List<Double> weights) {}
+    record Entry(String name, String author, String tags, List<String> blocks, List<Double> weights) {}
 
     /** The whole library as the status carries it. */
     static String json() {
@@ -36,10 +36,13 @@ final class PaletteLibrary {
                 var entry = read(data);
                 var saved = store().save(
                                 entry.name(),
-                                player.getGameProfile().name(),
+                                entry.author() == null || entry.author().isBlank()
+                                        ? player.getGameProfile().name()
+                                        : entry.author(),
                                 player.getUUID().toString(),
                                 entry.blocks(),
-                                entry.weights());
+                                entry.weights(),
+                                entry.tags());
                 return "Palettes · saved " + saved.name() + " for everyone on the server";
             }
             case "palette_delete" -> {
