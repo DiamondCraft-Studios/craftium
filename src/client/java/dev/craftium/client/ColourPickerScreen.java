@@ -55,10 +55,17 @@ public final class ColourPickerScreen extends CraftiumScreen {
 
     /** As {@link #open}, and Alt + click on a block in the editor's world takes the colour of the face clicked, with the pipette's crosshair and a swatch beside the pointer. */
     static void openWithPipette(
-            Screen parent, String title, IntSupplier get, IntConsumer set, IntSupplier fallback, Runnable onSet) {
+            Screen parent,
+            String title,
+            IntSupplier get,
+            IntConsumer set,
+            IntSupplier fallback,
+            Runnable onSet,
+            java.util.function.Consumer<String> onBlock) {
         var screen = new ColourPickerScreen(parent, title, get, set, fallback);
         screen.pipette = true;
         screen.onSet = onSet;
+        screen.onBlock = onBlock;
         screen.opened = get.getAsInt();
         ClientCompat.setScreen(net.minecraft.client.Minecraft.getInstance(), screen);
     }
@@ -67,6 +74,11 @@ public final class ColourPickerScreen extends CraftiumScreen {
      * The colour Alt + click would take at {@code mx}, {@code my}: the face of the block under the pointer in the editor's world, or -1 when
      * the pipette is off, Alt is up, the pointer is on this window or there is no block there.
      */
+    /** Told the block a colour was just taken from with the pipette, after the colour itself; null for none. */
+    private java.util.function.Consumer<String> onBlock;
+    /** The block {@link #pipetteColour} read last. */
+    private String pipetteBlock = "";
+
     private int pipetteColour(double mx, double my) {
         if (!pipette || !(parent instanceof EditorScreen editor) || minecraft == null || minecraft.level == null)
             return -1;
@@ -78,6 +90,7 @@ public final class ColourPickerScreen extends CraftiumScreen {
         String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK
                 .getKey(state.getBlock())
                 .toString();
+        pipetteBlock = id;
         var faces = BlockColours.faces(id);
         int colour = faces == null
                 ? -1
@@ -167,6 +180,7 @@ public final class ColourPickerScreen extends CraftiumScreen {
         int picked = event.button() == 0 ? pipetteColour(mx, my) : -1;
         if (picked >= 0) {
             set.accept(picked); // taken from the world, and the picker shows it
+            if (onBlock != null) onBlock.accept(pipetteBlock);
             init();
             return true;
         }

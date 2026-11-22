@@ -3426,7 +3426,12 @@ public final class EditorScreen extends CraftiumScreen {
                     list.set(index, rgb == original.rgb() ? original.at(now.at()) : now.coloured(rgb, ""));
                 },
                 original::rgb,
-                () -> ClientOptionHistory.since("Gradient stop colour", before));
+                () -> ClientOptionHistory.since("Gradient stop colour", before),
+                block -> { // a colour taken from a block with the pipette remembers the block
+                    var list = o().gradientStops;
+                    if (index < list.size())
+                        list.set(index, list.get(index).coloured(list.get(index).rgb(), block));
+                });
     }
 
     /** A new stop at {@code t} along the bar, in the colour the gradient already has there, so adding one changes nothing until it is set. */
