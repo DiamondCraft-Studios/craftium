@@ -74,6 +74,34 @@ class GradientTest {
     }
 
     @Test
+    void generatedRunsBecomeWeightedEntries() {
+        var o = new Options();
+        MaterialPalette.setRuns(
+                o,
+                List.of(
+                        "minecraft:stone",
+                        "minecraft:stone",
+                        "minecraft:andesite",
+                        "minecraft:stone",
+                        "minecraft:tuff"));
+        assertEquals(
+                List.of("minecraft:stone", "minecraft:andesite", "minecraft:stone", "minecraft:tuff"),
+                MaterialPalette.blocks(o));
+        assertEquals(List.of(2d, 1d, 1d, 1d), o.materialWeights);
+    }
+
+    @Test
+    void positionsMatchWhereTheGradientPaintsEachEntry() {
+        var o = new Options();
+        MaterialPalette.setRuns(o, List.of("minecraft:a", "minecraft:a", "minecraft:b", "minecraft:c"));
+        int n = MaterialPalette.blocks(o).size();
+        assertEquals(0, MaterialPalette.position(o, 0));
+        assertEquals(1, MaterialPalette.position(o, n - 1));
+        for (int i = 0; i < n; i++)
+            assertEquals(i, MaterialList.index(MaterialPalette.position(o, i), o.materialWeights, n, .5, 0));
+    }
+
+    @Test
     void optionsRefuseTooManyStopsAndBoundTheBlend() {
         var o = new Options();
         o.gradientBlend = 7;

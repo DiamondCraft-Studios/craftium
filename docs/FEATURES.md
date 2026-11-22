@@ -14,7 +14,7 @@ This is a functional development preview. Implemented equivalents do not establi
 | Surface Painter | Surface painting, exact source-state masks, compatible properties and variant family replacement; Palette paints the foreground block, Material blends the Materials list with noise (eight noise choices, fractal controls, axis scales, 2D/3D, weighted materials) | Variant matching is name based; cellular/metaball/splatter behavior is Craftium-specific |
 | Biome Painter | Native quart-biome editing, vertical fill, undo and biome label | Local biome-cell visualization is bounded around the player |
 | Clentaminator | Biome change plus surface material conversion | Simple explicit list of convertible surface blocks |
-| Gradient Painter | Palette sampled along two control endpoints; dithering | No separate draggable multi-stop gradient editor |
+| Gradient Painter | Ordered Materials list along two anchors; Blend with even or noisy mixing; Gradient window with draggable colour stops and Generate | — |
 | Script Brush | Bounded Lua brush and Lua mask | Documented helper coverage under a sandbox; third-party script compatibility is limited |
 | Freehand Draw | Solid/hollow drawing and carving with transformed brush shapes | No complete simulated edit preview |
 | Sculpt Draw | Estimated surface normal, Y mask, strength and carve | Discrete voxel-density normal |

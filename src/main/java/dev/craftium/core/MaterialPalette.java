@@ -38,6 +38,42 @@ public final class MaterialPalette {
         o.materials = String.join(",", blocks);
         o.materialWeights = new ArrayList<>(weights);
     }
+    /**
+     * Sets the palette to {@code steps} in order, as the Gradient window generates it: a run of the same block becomes one entry, weighted by
+     * how many steps it covers, so its band is as wide as the run.
+     */
+    public static void setRuns(Options o, List<String> steps) {
+        var blocks = new ArrayList<String>();
+        var weights = new ArrayList<Double>();
+        for (String step : steps) {
+            if (!blocks.isEmpty() && blocks.getLast().equals(step))
+                weights.set(weights.size() - 1, weights.getLast() + 1);
+            else {
+                blocks.add(step);
+                weights.add(1d);
+            }
+        }
+        set(o, blocks, weights);
+    }
+
+    /**
+     * Where entry {@code index} sits along a gradient painted from the palette, 0 to 1: the value {@link MaterialList#index} gives it for, with
+     * the weights widening the bands.
+     */
+    public static double position(Options o, int index) {
+        int n = blocks(o).size();
+        if (n <= 1) return 0;
+        double sum = 0, first = 0, centre = 0, last = 0;
+        for (int i = 0; i < n; i++) {
+            double w = weight(o, i), c = sum + w / 2;
+            if (i == 0) first = c;
+            if (i == index) centre = c;
+            last = c;
+            sum += w;
+        }
+        return last == first ? 0 : (centre - first) / (last - first);
+    }
+
     /** Adds a block at the end with weight 1; false when the palette is full. */
     public static boolean add(Options o, String block) {
         var blocks = new ArrayList<>(blocks(o));
