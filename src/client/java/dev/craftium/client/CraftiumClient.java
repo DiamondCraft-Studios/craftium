@@ -102,6 +102,8 @@ public final class CraftiumClient implements ClientModInitializer {
             PlacementPreview.update("");
             ClientState.blueprints = List.of();
             ClientState.libraryVersion++;
+            ClientState.sharedPalettes = List.of();
+            ClientState.sharedPalettesVersion++;
         });
         // What the shared placement mixins ask about the local player; only when the server runs the mod too, as it
         // must agree with the client.
@@ -220,6 +222,7 @@ public final class CraftiumClient implements ClientModInitializer {
             ClientState.updatePluginPreview(next);
             ClientState.updatePluginTools(next);
             ClientState.updateSavedSelections(next);
+            ClientState.updatePalettes(next);
             return;
         } // somebody else's preview changed: not a reply to anything this client asked, and nothing else in it
         if (next != null) {
@@ -228,6 +231,7 @@ public final class CraftiumClient implements ClientModInitializer {
             ClientState.updatePluginTools(next);
             ClientState.updateSavedSelections(next);
             ClientState.updateJigsawReport(next);
+            ClientState.updatePalettes(next);
             ClientState.status = next;
             if (next.error()) {
                 if (next.message().startsWith("Too many edits waiting")) BuilderPrediction.rejectedNewest();

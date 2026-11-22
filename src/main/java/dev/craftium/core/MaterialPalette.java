@@ -20,6 +20,11 @@ public final class MaterialPalette {
         return Math.clamp(index < o.materialWeights.size() ? o.materialWeights.get(index) : 1, MIN_WEIGHT, MAX_WEIGHT);
     }
 
+    /** A weight from a file or a packet, kept in range; 1 when there is none. */
+    public static double clamp(Double weight) {
+        return weight == null || !Double.isFinite(weight) ? 1 : Math.clamp(weight, MIN_WEIGHT, MAX_WEIGHT);
+    }
+
     public static List<Double> weights(Options o, int count) {
         var list = new ArrayList<Double>(count);
         for (int i = 0; i < count; i++) list.add(weight(o, i));

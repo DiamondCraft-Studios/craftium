@@ -615,6 +615,7 @@ public final class EditorServer {
                     && now - s.lastRequest < 65_000_000L
                     && !popup
                     && !r.action().equals("blueprint_list")
+                    && !r.action().equals("palette_list")
                     && !r.action().equals("hotbar_list")) return;
             if (!popup) s.lastRequest = now;
             if (r.action().equals("tool_preview")) {
@@ -693,6 +694,7 @@ public final class EditorServer {
                     }
                     if (removed == 0) throw new IllegalArgumentException("Nothing to trim: no air blocks");
                     var hierarchyBefore = s.saved.state();
+                    var ownBefore = s.saved.snapshot();
                     s.saved.setPoints(trimmed);
                     if (!s.saved.viewed().isEmpty() && !s.saved.editing())
                         s.saved.viewSet(
@@ -700,8 +702,13 @@ public final class EditorServer {
                                         .map(SavedSelections.Entry::id)
                                         .toList(),
                                 s.selection);
+                    // The blocks go with the step: putting the Hierarchy back leaves the blocks of a BuildObject that
+                    // is
+                    // still there as they are now (see SavedSelections.restore), so undo would not give them back.
                     s.remember(Session.Edit.selecting(
-                            "Trim BuildObject", Session.SelectionChange.hierarchy(hierarchyBefore, s.saved.state())));
+                            "Trim BuildObject",
+                            Session.SelectionChange.hierarchy(hierarchyBefore, s.saved.state())
+                                    .withObjects(ownBefore, trimmed)));
                     send(player, s, "Trimmed " + removed + " air blocks", false);
                     return;
                 }
@@ -1259,6 +1266,17 @@ public final class EditorServer {
                 case "ruler_clear" -> {
                     s.ruler = null;
                     send(player, s, "Measurement cleared", false);
+                }
+                case "palette_list", "palette_save", "palette_delete" -> {
+                    if (!Handshake.clientHas(player.getUUID(), Handshake.SHARED_PALETTES))
+                        throw new IllegalArgumentException("This client does not know shared palettes");
+                    boolean change = !r.action().equals("palette_list");
+                    if (change && !dev.craftium.compat.Compat.isGamemaster(player))
+                        throw new IllegalArgumentException("Only operators can change the server's palette library");
+                    String result = PaletteLibrary.act(r.action(), o.assetData, player);
+                    s.palettes = PaletteLibrary.json();
+                    send(player, s, result, false);
+                    if (change) PaletteLibrary.push(player);
                 }
                 case "asset_upload",
                         "blueprint_list",
@@ -2884,13 +2902,8 @@ public final class EditorServer {
         for (var c : edit.changes()) if (c.after().state().isAir()) gone.add(c.pos());
         if (gone.isEmpty()) return edit;
         var before = s.saved.snapshot();
-        var after = new LinkedHashMap<Integer, List<Point>>();
-        for (var e : before.entrySet()) {
-            var points = e.getValue();
-            var kept = new ArrayList<Point>(points.size());
-            for (var p : points) if (!gone.contains(p)) kept.add(p);
-            if (kept.size() != points.size()) after.put(e.getKey(), kept);
-        }
+        // Only the BuildObjects whose box reaches what became air are looked through, not every block of every one.
+        var after = s.saved.without(gone);
         if (after.isEmpty()) return edit;
         s.saved.setPoints(after);
         var change =
@@ -3494,7 +3507,9 @@ public final class EditorServer {
                 savedList,
                 savedList == null ? null : SavedSelectionActions.groups(s),
                 s.takeJigsawReport(),
-                s.takeJigsawModel());
+                s.takeJigsawModel(),
+                s.palettes);
+        s.palettes = null;
         s.library = List.of();
         s.pivotUpdate = "";
         s.restoreUpdate = "";

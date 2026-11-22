@@ -78,7 +78,93 @@ public final class Packets {
             /** What the jigsaw planner has to say about its last run (problems in the pools, connectors left open), as text lines. Null means the same as last time; empty clears it. */
             String jigsawReport,
             /** The pool editor's view of the pools and the one being edited, as JSON text. Null means the same as last time. */
-            String jigsawModel) {
+            String jigsawModel,
+            /** The server's shared palettes as {@link dev.craftium.core.SharedPalettes#toJson} text. Null means the same as last time, and a server that predates them never sends it. */
+            String palettes) {
+        /** A status without the shared palettes: they stay as they were. */
+        public Status(
+                String message,
+                boolean error,
+                boolean busy,
+                int selectionSize,
+                Point min,
+                Point max,
+                int clipboardSize,
+                List<String> history,
+                int undo,
+                int redo,
+                String entityUuid,
+                String entityNbt,
+                List<dev.craftium.core.Annotation> annotations,
+                String selectionData,
+                String clipboardData,
+                List<dev.craftium.core.BlueprintInfo> blueprints,
+                int clipboardEntityCount,
+                String pendingData,
+                String clipboardGhost,
+                String pivotUpdate,
+                long undoAge,
+                long redoAge,
+                String undoName,
+                String redoName,
+                String pulse,
+                String aiPendingData,
+                int aiUndo,
+                String aiUndoName,
+                String restore,
+                Point clipboardOrigin,
+                List<SharedPreview> sharedAi,
+                boolean background,
+                List<AiSession> aiSessions,
+                String pluginPreviewData,
+                List<PluginTool> pluginTools,
+                List<SavedSelection> savedSelections,
+                List<SavedGroup> savedGroups,
+                String jigsawReport,
+                String jigsawModel) {
+            this(
+                    message,
+                    error,
+                    busy,
+                    selectionSize,
+                    min,
+                    max,
+                    clipboardSize,
+                    history,
+                    undo,
+                    redo,
+                    entityUuid,
+                    entityNbt,
+                    annotations,
+                    selectionData,
+                    clipboardData,
+                    blueprints,
+                    clipboardEntityCount,
+                    pendingData,
+                    clipboardGhost,
+                    pivotUpdate,
+                    undoAge,
+                    redoAge,
+                    undoName,
+                    redoName,
+                    pulse,
+                    aiPendingData,
+                    aiUndo,
+                    aiUndoName,
+                    restore,
+                    clipboardOrigin,
+                    sharedAi,
+                    background,
+                    aiSessions,
+                    pluginPreviewData,
+                    pluginTools,
+                    savedSelections,
+                    savedGroups,
+                    jigsawReport,
+                    jigsawModel,
+                    null);
+        }
+
         public Status(
                 String message,
                 boolean error,
@@ -414,6 +500,14 @@ public final class Packets {
         return new Status(
                 "", false, false, 0, null, null, 0, List.of(), 0, 0, "", "", List.of(), "", "", List.of(), 0, "", "",
                 "", -1, -1, "", "", "", "", 0, "", "", null, shared, true, null, null, null, null, null, null, null);
+    }
+
+    /** A status that carries only the shared palettes, sent when someone changed them: not a reply to anything, so the client takes the list and nothing else from it. */
+    public static Status palettesOnly(String palettes) {
+        return new Status(
+                "", false, false, 0, null, null, 0, List.of(), 0, 0, "", "", List.of(), "", "", List.of(), 0, "", "",
+                "", -1, -1, "", "", "", "", 0, "", "", null, null, true, null, null, null, null, null, null, null,
+                palettes);
     }
 
     public record Bridge(byte[] bytes) implements CustomPacketPayload {
