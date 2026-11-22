@@ -690,6 +690,7 @@ public final class EditorServer {
                     }
                     if (removed == 0) throw new IllegalArgumentException("Nothing to trim: no air blocks");
                     var hierarchyBefore = s.saved.state();
+                    var ownBefore = s.saved.snapshot();
                     s.saved.setPoints(trimmed);
                     if (!s.saved.viewed().isEmpty() && !s.saved.editing())
                         s.saved.viewSet(
@@ -697,8 +698,13 @@ public final class EditorServer {
                                         .map(SavedSelections.Entry::id)
                                         .toList(),
                                 s.selection);
+                    // The blocks go with the step: putting the Hierarchy back leaves the blocks of a BuildObject that
+                    // is
+                    // still there as they are now (see SavedSelections.restore), so undo would not give them back.
                     s.remember(Session.Edit.selecting(
-                            "Trim BuildObject", Session.SelectionChange.hierarchy(hierarchyBefore, s.saved.state())));
+                            "Trim BuildObject",
+                            Session.SelectionChange.hierarchy(hierarchyBefore, s.saved.state())
+                                    .withObjects(ownBefore, trimmed)));
                     send(player, s, "Trimmed " + removed + " air blocks", false);
                     return;
                 }
