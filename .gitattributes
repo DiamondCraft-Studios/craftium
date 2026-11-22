@@ -3,3 +3,5 @@
 *.png binary
 *.jar binary
 *.zip binary
+
+gradle.properties merge=gradle-version
