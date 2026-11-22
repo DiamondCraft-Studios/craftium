@@ -334,7 +334,10 @@ public final class ClientState {
     }
 
     public static void toggleGroupFolded(int id) {
-        boolean folded = !groupFolded.contains(id);
+        setGroupFolded(id, !groupFolded.contains(id));
+    }
+
+    public static void setGroupFolded(int id, boolean folded) {
         if (folded) groupFolded.add(id);
         else groupFolded.remove(id);
         hierarchyVersion++;
@@ -633,12 +636,19 @@ public final class ClientState {
     }
 
     public static void toggleSavedFolded(int id) {
-        boolean folded = !savedFolded.contains(id);
-        if (folded) savedFolded.add(id);
-        else savedFolded.remove(id);
+        setSavedFolded(List.of(id), !savedFolded.contains(id));
+    }
+    /** Folds or unfolds each of these BuildObjects at once, as Alt+click on an arrow does to one and everything under it, saving the view once. */
+    public static void setSavedFolded(Collection<Integer> ids, boolean folded) {
+        boolean changed = false;
+        for (int id : ids) {
+            if (folded) savedFolded.add(id);
+            else savedFolded.remove(id);
+            var guid = guidOf(id);
+            if (guid != null && view.setFolded(guid, folded)) changed = true;
+        }
         hierarchyVersion++;
-        var guid = guidOf(id);
-        if (guid != null && view.setFolded(guid, folded)) viewChanged();
+        if (changed) viewChanged();
     }
 
     static void clearSavedSelections() {

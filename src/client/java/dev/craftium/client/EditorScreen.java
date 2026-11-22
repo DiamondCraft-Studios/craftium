@@ -7608,6 +7608,23 @@ public final class EditorScreen extends CraftiumScreen {
         return row.group() != null ? row.group().id() : groupIdOf(row.entry());
     }
 
+    /** Alt+click on a BuildObject's arrow: folds or unfolds it and every BuildObject under it that has something under it in turn. */
+    private void foldAll(int id, boolean folded) {
+        var model = hierarchyModel();
+        var ids = new ArrayList<Integer>();
+        for (var e : ClientState.savedSelections())
+            if (model.parents.contains(e.id()) && ClientState.savedUnder(e, id)) ids.add(e.id());
+        ClientState.setSavedFolded(ids, folded);
+    }
+    /** Alt+click on a group's arrow: folds or unfolds the group and every BuildObject in it that has something under it. */
+    private void foldGroupAll(int groupId, boolean folded) {
+        var model = hierarchyModel();
+        var ids = new ArrayList<Integer>();
+        for (int id : model.memberIds.getOrDefault(groupId, List.of())) if (model.parents.contains(id)) ids.add(id);
+        ClientState.setSavedFolded(ids, folded);
+        ClientState.setGroupFolded(groupId, folded);
+    }
+
     private dev.craftium.net.Packets.SavedGroup groupById(int id) {
         for (var gr : ClientState.savedGroups()) if (gr.id() == id) return gr;
         return null;
@@ -7824,7 +7841,10 @@ public final class EditorScreen extends CraftiumScreen {
                         ry,
                         14,
                         rowHeight,
-                        () -> ClientState.toggleGroupFolded(group.id()),
+                        () -> {
+                            if (minecraft.hasAltDown()) foldGroupAll(group.id(), !folded);
+                            else ClientState.toggleGroupFolded(group.id());
+                        },
                         HIDDEN_TIP + (folded ? "Show this group's BuildObjects" : "Fold this group's BuildObjects"));
                 controls.add(groupFold);
                 foldControls.add(groupFold); // no tooltip: the arrow says what it does
@@ -7935,7 +7955,10 @@ public final class EditorScreen extends CraftiumScreen {
                         ry,
                         14,
                         rowHeight,
-                        () -> ClientState.toggleSavedFolded(id),
+                        () -> {
+                            if (minecraft.hasAltDown()) foldAll(id, !folded); // as in Unity: everything under it too
+                            else ClientState.toggleSavedFolded(id);
+                        },
                         HIDDEN_TIP
                                 + (folded
                                         ? "Show what is under this BuildObject"
