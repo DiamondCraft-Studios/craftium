@@ -48,6 +48,7 @@ public final class BrushPreview {
         var normal = dev.craftium.core.BrushRules.keepsToFront(o.tool)
                 ? new Point(face.getStepX(), face.getStepY(), face.getStepZ())
                 : new Point(0, 1, 0);
+        lineEnd = lineView(o) == null ? null : GradientStroke.previewEnd(o);
         var now = List.<Object>of(
                 o.tool.brushUse(),
                 o.shape,
@@ -68,11 +69,12 @@ public final class BrushPreview {
                 o.sizeZ,
                 sculpts(o.tool) ? rockKey(o) : 0,
                 normal,
-                screenView(o) == null ? at : screenView(o).key(),
-                o.tool == dev.craftium.core.Tool.GRADIENT_PAINTER ? List.copyOf(o.gradientAnchors) : 0,
-                shownBlocks > Selection.LIMIT
-                        ? 0
-                        : mc.level.getGameTime() / 20); // a huge brush is not worked out again every second
+                lineView(o) != null
+                        ? List.of(ScreenFootprint.cameraKey(lineView(o)), o.gradientAnchors.getFirst(), lineEnd)
+                        : screenView(o) == null ? at : screenView(o).key(),
+                // A huge brush is not worked out again every second, nor is a Gradient Painter line being dragged:
+                // its rays are kept for the drag, so the world is looked at when the next line begins.
+                shownBlocks > Selection.LIMIT || lineEnd != null ? 0 : mc.level.getGameTime() / 20);
         if (!now.equals(key)) {
             key = now;
             rebuild(mc, at, normal, o);
@@ -309,6 +311,16 @@ public final class BrushPreview {
         return count;
     }
 
+    /** The end of the Gradient Painter's line the preview shows while it is dragged (see {@link GradientStroke#previewEnd}), or null. */
+    private static Point lineEnd;
+
+    /** The ring while a Gradient Painter line is being dragged in screen space, or null. */
+    private static ScreenFootprint.View lineView(Options o) {
+        return o.tool == dev.craftium.core.Tool.GRADIENT_PAINTER && o.gradientAnchors.size() == 2
+                ? screenView(o)
+                : null;
+    }
+
     /** Where the shape was last built, and what it was, so a rebuild in the same place can keep its contour. */
     private static BlockPos builtAt;
 
@@ -319,12 +331,11 @@ public final class BrushPreview {
         tooLarge = false;
         var view = screenView(o);
         if (view != null) { // the blocks the ring covers on the screen, whatever shape is picked
-            List<Point> seen = ScreenFootprint.covered(mc.level, o, at, view);
-            if (o.tool == dev.craftium.core.Tool.GRADIENT_PAINTER && o.gradientAnchors.size() == 2) {
-                // while the Gradient Painter's line is dragged: the ring swept along it, as letting go paints it
-                var line = GradientStroke.covered(o, o.gradientAnchors.getFirst(), o.gradientAnchors.getLast());
-                if (line != null) seen = line;
-            }
+            // While the Gradient Painter's line is dragged: the ring swept along it, as letting go paints it, and the
+            // ring at the pointer is not worked out at all. A line that does not fit on the screen shows the ring.
+            List<Point> seen =
+                    lineEnd == null ? null : GradientStroke.covered(o, o.gradientAnchors.getFirst(), lineEnd);
+            if (seen == null) seen = ScreenFootprint.covered(mc.level, o, at, view);
             shownBlocks = seen.size();
             removedShape = SceneShape.EMPTY;
             shape = SceneShape.of(mc.level, paintable(mc.level, seen, o), true);

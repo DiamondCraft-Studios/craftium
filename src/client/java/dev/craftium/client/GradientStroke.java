@@ -13,6 +13,42 @@ import net.minecraft.client.Minecraft;
 public final class GradientStroke {
     private GradientStroke() {}
 
+    /** The end the preview last showed, and when: the preview follows the end in steps, not at every block. */
+    private static Point shownStart, shownEnd;
+
+    private static long shownAt;
+    /** How long the preview may lag behind an end that has stopped moving by less than a step. */
+    private static final long CATCH_UP_MS = 150;
+
+    /** A new line begins: the world is looked at afresh and the preview starts from its first end. */
+    public static void reset() {
+        ScreenFootprint.forgetSweep();
+        shownStart = shownEnd = null;
+    }
+
+    /**
+     * The end the preview shows for the line being dragged: the real end once it has moved a quarter of the ring from the one shown,
+     * or has been somewhere else for a moment. Working the swept ring out again for every block the pointer crosses is what a big ring
+     * cannot afford.
+     */
+    static Point previewEnd(Options o) {
+        Point a = o.gradientAnchors.getFirst(), b = o.gradientAnchors.getLast();
+        long now = System.currentTimeMillis();
+        int step = Math.max(1, o.radius / 4);
+        if (shownEnd == null
+                || !a.equals(shownStart)
+                || Math.max(
+                                Math.abs(b.x() - shownEnd.x()),
+                                Math.max(Math.abs(b.y() - shownEnd.y()), Math.abs(b.z() - shownEnd.z())))
+                        >= step
+                || !b.equals(shownEnd) && now - shownAt >= CATCH_UP_MS) {
+            shownStart = a;
+            shownEnd = b;
+            shownAt = now;
+        }
+        return shownEnd;
+    }
+
     /**
      * The blocks the ring swept from {@code a} to {@code b} covers, or null when the tool does not paint in screen space or the swept ring
      * does not fit on the screen: the server then puts the brush shape down along the line.

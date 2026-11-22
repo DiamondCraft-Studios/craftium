@@ -30,6 +30,7 @@ final class DragPointsInteraction implements Interaction {
         var hit = editor.target();
         start = hit == null ? null : CraftiumClient.point(hit.getBlockPos());
         moved = false;
+        GradientStroke.reset(); // a new line looks at the world as it is now
         return true; // nothing is sent on the press: it may be the start of a drag
     }
 
