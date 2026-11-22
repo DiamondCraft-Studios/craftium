@@ -16,6 +16,9 @@ import org.lwjgl.glfw.GLFW;
 abstract class FlatSlider extends CraftiumSlider {
     private double min, max = 1, initial = Double.NaN;
     private boolean sliding, cursorHidden;
+    /** Where the pointer and the value (in units) were when the drag began; the value moves by the distance from there. */
+    private double slideStartX, slideStartUnits;
+
     private NumberEntry entry;
     private boolean selectingText;
 
@@ -46,17 +49,13 @@ abstract class FlatSlider extends CraftiumSlider {
         applyValue();
         updateMessage();
     }
-    /** Where the pointer puts a slider's value, 0 to 1 along a track starting at {@code x}. Every slider in the mod reads the pointer this way. */
-    static double fractionAt(double mouseX, int x, int width) {
-        return Math.clamp((mouseX - x - 2) / (width - 4), 0, 1);
-    }
     /** Ctrl steps a value by 1 and Shift by 0.01. */
     static double step(double units, boolean ctrl, boolean shift) {
         return ctrl ? Math.round(units) : shift ? Math.round(units * 100) / 100d : units;
     }
-
+    /** A drag moves the value from where it began by the distance moved, one track width being the whole range, so a click alone changes nothing. Every slider in the mod drags this way. */
     private void slideTo(double mouseX, boolean ctrl, boolean shift) {
-        setUnits(step(min + fractionAt(mouseX, getX(), getWidth()) * (max - min), ctrl, shift));
+        setUnits(step(slideStartUnits + (mouseX - slideStartX) / (getWidth() - 4) * (max - min), ctrl, shift));
     }
     /** How every slider looks: the track, the part filled up to {@code fraction}, and the value (or the digits being typed). */
     static void track(
@@ -137,7 +136,8 @@ abstract class FlatSlider extends CraftiumSlider {
         finishTyping(true);
         sliding = true;
         hideCursor(true);
-        slideTo(event.x(), false, Minecraft.getInstance().hasShiftDown());
+        slideStartX = event.x();
+        slideStartUnits = units();
         return true;
     }
 

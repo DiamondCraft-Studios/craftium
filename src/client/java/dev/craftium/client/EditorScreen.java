@@ -136,14 +136,15 @@ public final class EditorScreen extends CraftiumScreen {
             double def,
             DoubleConsumer set,
             boolean unbounded) {
-        /** Sets the value for a pointer at {@code px}; Ctrl steps it by 1 and Shift by 0.01. */
-        void update(double px, boolean ctrl, boolean shift) {
-            set.accept(Math.clamp(
-                    FlatSlider.step(min + FlatSlider.fractionAt(px, x, width) * (max - min), ctrl, shift), min, max));
-        }
-        /** An unbounded slider's drag: the value turns from where it was when the drag began by the distance moved, one track width being the whole range, with no end to it. */
+        /**
+         * A drag: the value moves from where it was when the drag began by the distance moved, one track width being
+         * the whole range, so a click alone changes nothing. Ctrl steps it by 1 and Shift by 0.01. A bounded slider
+         * stops at its ends (or at a typed value past them, which the drag may come back to); an unbounded one has no
+         * end.
+         */
         void drag(double px, double startPx, double startValue, boolean ctrl, boolean shift) {
-            set.accept(FlatSlider.step(startValue + (px - startPx) / (width - 4) * (max - min), ctrl, shift));
+            double v = FlatSlider.step(startValue + (px - startPx) / (width - 4) * (max - min), ctrl, shift);
+            set.accept(unbounded ? v : Math.clamp(v, Math.min(min, startValue), Math.max(max, startValue)));
         }
 
         void reset() {
@@ -2094,7 +2095,7 @@ public final class EditorScreen extends CraftiumScreen {
             boolean integer) {
         return sliderRow(w, label, value, min, max, typedMax, def, set, integer, false);
     }
-    /** {@code unbounded}: dragging turns the value by the distance moved, as far as it goes, instead of setting it from where the pointer is on the track. */
+    /** {@code unbounded}: dragging turns the value by the distance moved as far as it goes, instead of stopping at the track's ends. */
     private ModifyRow sliderRow(
             int w,
             String label,
@@ -5564,10 +5565,8 @@ public final class EditorScreen extends CraftiumScreen {
                     }
                     dragging = slider;
                     draggingSliderPanel = panel;
-                    if (unbounded) {
-                        sliderStartX = WorkspaceLayout.inverse(panel, mx, my)[0];
-                        sliderStartValue = value;
-                    } else slider.update(WorkspaceLayout.inverse(panel, mx, my)[0], false, minecraft.hasShiftDown());
+                    sliderStartX = WorkspaceLayout.inverse(panel, mx, my)[0];
+                    sliderStartValue = value;
                 },
                 "Drag to change " + label.toLowerCase(Locale.ROOT) + " · Ctrl-click to type"
                         + (typedMax == Double.POSITIVE_INFINITY
@@ -6582,9 +6581,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if (dragging != null) {
             double px = WorkspaceLayout.inverse(draggingSliderPanel, event.x() / scale, event.y() / scale)[0];
-            if (dragging.unbounded())
-                dragging.drag(px, sliderStartX, sliderStartValue, minecraft.hasControlDown(), minecraft.hasShiftDown());
-            else dragging.update(px, minecraft.hasControlDown(), minecraft.hasShiftDown());
+            dragging.drag(px, sliderStartX, sliderStartValue, minecraft.hasControlDown(), minecraft.hasShiftDown());
             return true;
         }
         if (help || transform || menu >= 0) return true;
@@ -7633,6 +7630,23 @@ public final class EditorScreen extends CraftiumScreen {
         return row.group() != null ? row.group().id() : groupIdOf(row.entry());
     }
 
+    /** Alt+click on a BuildObject's arrow: folds or unfolds it and every BuildObject under it that has something under it in turn. */
+    private void foldAll(int id, boolean folded) {
+        var model = hierarchyModel();
+        var ids = new ArrayList<Integer>();
+        for (var e : ClientState.savedSelections())
+            if (model.parents.contains(e.id()) && ClientState.savedUnder(e, id)) ids.add(e.id());
+        ClientState.setSavedFolded(ids, folded);
+    }
+    /** Alt+click on a group's arrow: folds or unfolds the group and every BuildObject in it that has something under it. */
+    private void foldGroupAll(int groupId, boolean folded) {
+        var model = hierarchyModel();
+        var ids = new ArrayList<Integer>();
+        for (int id : model.memberIds.getOrDefault(groupId, List.of())) if (model.parents.contains(id)) ids.add(id);
+        ClientState.setSavedFolded(ids, folded);
+        ClientState.setGroupFolded(groupId, folded);
+    }
+
     private dev.craftium.net.Packets.SavedGroup groupById(int id) {
         for (var gr : ClientState.savedGroups()) if (gr.id() == id) return gr;
         return null;
@@ -7849,7 +7863,10 @@ public final class EditorScreen extends CraftiumScreen {
                         ry,
                         14,
                         rowHeight,
-                        () -> ClientState.toggleGroupFolded(group.id()),
+                        () -> {
+                            if (minecraft.hasAltDown()) foldGroupAll(group.id(), !folded);
+                            else ClientState.toggleGroupFolded(group.id());
+                        },
                         HIDDEN_TIP + (folded ? "Show this group's BuildObjects" : "Fold this group's BuildObjects"));
                 controls.add(groupFold);
                 foldControls.add(groupFold); // no tooltip: the arrow says what it does
@@ -7960,7 +7977,10 @@ public final class EditorScreen extends CraftiumScreen {
                         ry,
                         14,
                         rowHeight,
-                        () -> ClientState.toggleSavedFolded(id),
+                        () -> {
+                            if (minecraft.hasAltDown()) foldAll(id, !folded); // as in Unity: everything under it too
+                            else ClientState.toggleSavedFolded(id);
+                        },
                         HIDDEN_TIP
                                 + (folded
                                         ? "Show what is under this BuildObject"
@@ -8405,15 +8425,17 @@ public final class EditorScreen extends CraftiumScreen {
                                         : "saved_selection:place:" + id + ":" + up.parent() + ":"
                                                 + (siblingIndex(up) + 1))));
         }
-        if (row.parent() == 0 && ClientState.savedGroups().size() > 1)
+        if (row.parent() == 0 && ClientState.savedGroups().size() > 1) {
+            var groups = new ArrayList<MenuItem>();
             for (var gr : ClientState.savedGroups()) { // a BuildObject at the top goes to the end of another group
                 if (gr.id() == groupIdOf(row)) continue;
-                if (moves.size() >= 10) break;
-                moves.add(item(
-                        "Move to group: " + shorten(gr.name(), 120),
+                groups.add(item(
+                        shorten(gr.name(), 180),
                         "",
                         () -> action("saved_selection:place:" + id + ":0:" + rootCount(gr.id()) + ":" + gr.id())));
             }
+            if (!groups.isEmpty()) moves.add(new MenuItem("Move to group", "", () -> {}, List.copyOf(groups)));
+        }
         if (!moves.isEmpty()) {
             items.add(divider());
             items.addAll(moves);
@@ -8555,10 +8577,32 @@ public final class EditorScreen extends CraftiumScreen {
         menuAlign = true;
         try {
             int row = y + 3;
+            MenuItem sub = null;
+            int subY = 0;
             for (var item : rowMenu) {
                 if (item.action == null) {
                     g.fill(x + 8, row + 4, x + width - 8, row + 5, LINE);
                     row += 9;
+                    continue;
+                }
+                if (!item.children.isEmpty()) { // opens a submenu beside the menu, as the menus of the top bar do
+                    boolean open = openSub.equals(item.label);
+                    button(
+                            g,
+                            x + 3,
+                            row,
+                            width - 6,
+                            24,
+                            item.label,
+                            open,
+                            () -> openSub = open ? "" : item.label,
+                            HIDDEN_TIP + "menu " + item.label);
+                    text(g, ">", x + width - 14, row + 8, MUTED);
+                    if (open) {
+                        sub = item;
+                        subY = row;
+                    }
+                    row += 25;
                     continue;
                 }
                 final var run = item.action;
@@ -8579,8 +8623,40 @@ public final class EditorScreen extends CraftiumScreen {
                     text(g, item.shortcut, x + width - 14 - font.width(item.shortcut), row + 8, MUTED);
                 row += 25;
             }
+            if (sub != null) rowSubmenuDraw(g, sub, x, width, subY);
         } finally {
             menuAlign = false;
+        }
+    }
+    /** The open submenu of the row menu: beside the menu (on its left when there is no room on the right), as many entries as fit on the screen. */
+    private void rowSubmenuDraw(Gfx g, MenuItem parent, int menuX, int width, int parentY) {
+        int fit = Math.max(1, (h - 27 - 4) / 25);
+        var children = parent.children.size() > fit ? parent.children.subList(0, fit) : parent.children;
+        int height = 4 + children.size() * 25;
+        int sx = menuX + width + width > w ? menuX - width : menuX + width;
+        int sy = Math.clamp(parentY - 3, 27, Math.max(27, h - height));
+        g.fill(sx, sy, sx + width, sy + height, 0xff1c2735);
+        g.outline(sx, sy, width, height, LINE);
+        controls.add(
+                new Control(sx, sy, width, height, () -> {}, BLOCK_TIP)); // nothing behind it is clicked through it
+        int row = sy + 3;
+        for (var child : children) {
+            final var run = child.action;
+            button(
+                    g,
+                    sx + 3,
+                    row,
+                    width - 6,
+                    24,
+                    child.label,
+                    false,
+                    () -> {
+                        menu = -1;
+                        openSub = "";
+                        run.run();
+                    },
+                    HIDDEN_TIP + "menu " + parent.label + " > " + child.label);
+            row += 25;
         }
     }
     /** A row of the Hierarchy that a double click renames: the row's own control, so a click on a button of the row is not a rename. */
