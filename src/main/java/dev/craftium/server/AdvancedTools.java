@@ -132,7 +132,15 @@ final class AdvancedTools {
                 Point a = o.nodes.getFirst(), b = o.nodes.getLast();
                 var vector = Geometry.vector(b).subtract(Geometry.vector(a));
                 double length = vector.dot(vector);
-                for (Point at : p.brush(center))
+                // A stroke from A to B: the blocks the brush covers moved along the whole line, painted as the
+                // Surface Painter paints them (solid, and with Surface only on, only those open to the air), whatever
+                // block the click itself was on. The brush is put down every half radius, which leaves no gaps.
+                var cells = new LinkedHashSet<Point>();
+                var line = BrushMath.line(a, b);
+                int stride = Math.max(1, o.radius / 2);
+                for (int i = 0; i < line.size(); i += stride) cells.addAll(p.brush(line.get(i)));
+                cells.addAll(p.brush(line.getLast()));
+                for (Point at : cells)
                     if (p.solid(at) && (!o.surfaceOnly || p.surface(at))) {
                         double t = length == 0
                                 ? 0
