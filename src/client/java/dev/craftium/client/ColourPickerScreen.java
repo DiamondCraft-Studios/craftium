@@ -31,12 +31,53 @@ public final class ColourPickerScreen extends CraftiumScreen {
     private ColourPicker picker;
     private boolean dragging;
     private double grabX, grabY;
+    /** Whether Alt + click on a block in the world takes its colour, that of the face clicked. On for the Gradient window's stops. */
+    private boolean pipette;
 
     /** Opens the picker over {@code parent}. {@code fallback} is what the Reset button puts back. */
     static void open(Screen parent, String title, IntSupplier get, IntConsumer set, IntSupplier fallback) {
         ClientCompat.setScreen(
                 net.minecraft.client.Minecraft.getInstance(),
                 new ColourPickerScreen(parent, title, get, set, fallback));
+    }
+
+    /** As {@link #open}, and Alt + click on a block in the editor's world takes the colour of the face clicked, with the pipette's crosshair and a swatch beside the pointer. */
+    static void openWithPipette(Screen parent, String title, IntSupplier get, IntConsumer set, IntSupplier fallback) {
+        var screen = new ColourPickerScreen(parent, title, get, set, fallback);
+        screen.pipette = true;
+        ClientCompat.setScreen(net.minecraft.client.Minecraft.getInstance(), screen);
+    }
+
+    /**
+     * The colour Alt + click would take at {@code mx}, {@code my}: the face of the block under the pointer in the editor's world, or -1 when
+     * the pipette is off, Alt is up, the pointer is on this window or there is no block there.
+     */
+    private int pipetteColour(double mx, double my) {
+        if (!pipette || !(parent instanceof EditorScreen editor) || minecraft == null || minecraft.level == null)
+            return -1;
+        if (!minecraft.hasAltDown() || in(mx, my, windowX, windowY, W, folded ? TITLE : H)) return -1;
+        var hit = editor.pipetteTarget(mx, my);
+        if (hit == null) return -1;
+        var state = minecraft.level.getBlockState(hit.getBlockPos());
+        if (state.isAir()) return -1;
+        String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                .getKey(state.getBlock())
+                .toString();
+        var faces = BlockColours.faces(id);
+        int colour = faces == null
+                ? -1
+                : switch (hit.getDirection()) {
+                    case UP -> faces.top();
+                    case DOWN -> faces.bottom();
+                    default -> faces.side();
+                };
+        if (colour < 0) {
+            var known = BlockColours.get(id);
+            colour = known != null
+                    ? known.rgb()
+                    : state.getMapColor(minecraft.level, hit.getBlockPos()).col; // no model to read: its map colour
+        }
+        return colour & 0xffffff;
     }
 
     private ColourPickerScreen(Screen parent, String title, IntSupplier get, IntConsumer set, IntSupplier fallback) {
@@ -82,10 +123,17 @@ public final class ColourPickerScreen extends CraftiumScreen {
         g.text(font, folded ? "▸" : "▾", x + 7, y + 6, o.uiMuted, false);
         g.text(font, title, x + 17, y + 6, o.uiText, false);
         g.text(font, "×", x + W - 12, y + 5, o.uiMuted, false);
+        if (pipette) {
+            String hint = "Alt + click: pipette";
+            g.text(font, hint, x + W - 20 - font.width(hint), y + 6, o.uiMuted, false);
+        }
         if (picker != null) {
             picker.draw(g, font);
             drawWidgets(g, mouseX, mouseY, delta);
         }
+        int picked = pipetteColour(mouseX, mouseY);
+        if (picked >= 0) BlockDragCursor.drawColour(g, picked, mouseX, mouseY, width, height, o.uiAccent);
+        else if (pipette) BlockDragCursor.release();
     }
 
     private static boolean in(double mx, double my, int x, int y, int w, int h) {
@@ -95,6 +143,12 @@ public final class ColourPickerScreen extends CraftiumScreen {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean twice) {
         double mx = event.x(), my = event.y();
+        int picked = event.button() == 0 ? pipetteColour(mx, my) : -1;
+        if (picked >= 0) {
+            set.accept(picked); // taken from the world, and the picker shows it
+            init();
+            return true;
+        }
         if (event.button() == 0) {
             if (in(mx, my, windowX + W - 17, windowY + 2, 15, 14)) {
                 onClose();
@@ -151,7 +205,14 @@ public final class ColourPickerScreen extends CraftiumScreen {
     }
 
     @Override
+    public void removed() {
+        BlockDragCursor.release(); // the pipette's crosshair goes with the window, however it closes
+        super.removed();
+    }
+
+    @Override
     public void onClose() {
+        BlockDragCursor.release();
         ClientState.save();
         ClientCompat.setScreen(minecraft, parent);
     }

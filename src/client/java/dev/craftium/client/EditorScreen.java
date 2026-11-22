@@ -3416,7 +3416,7 @@ public final class EditorScreen extends CraftiumScreen {
             var stop = stops.get(index);
             switch (label) {
                 case "Set colour..." ->
-                    ColourPickerScreen.open(
+                    ColourPickerScreen.openWithPipette(
                             this,
                             "Stop colour",
                             () -> stops.get(index).rgb(),
