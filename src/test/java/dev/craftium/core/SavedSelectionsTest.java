@@ -1243,4 +1243,17 @@ class SavedSelectionsTest {
         assertEquals("minecraft:stone", back.byId(door.id()).dormant().get(C));
         assertTrue(back.byId(door.id()).stowedInHierarchy());
     }
+
+    @Test
+    void withoutTakesAirOutOfTheBuildObjectsThatHoldItAndLeavesTheOthers() {
+        var saved = new SavedSelections();
+        var near = saved.create(live(new Point(0, 0, 0), new Point(1, 0, 0), new Point(2, 0, 0)));
+        saved.create(live(new Point(500, 0, 0), new Point(501, 0, 0)));
+        var out = saved.without(Set.of(new Point(1, 0, 0), new Point(9, 0, 0)));
+        assertEquals(Set.of(near.id()), out.keySet(), "only the one that held a block that went");
+        assertEquals(List.of(new Point(0, 0, 0), new Point(2, 0, 0)), out.get(near.id()));
+        assertTrue(saved.without(Set.of(new Point(700, 0, 0))).isEmpty(), "a block no one holds changes nothing");
+        assertTrue(saved.without(Set.of()).isEmpty());
+        assertEquals(3, near.size(), "it only says; setPoints does the change");
+    }
 }
