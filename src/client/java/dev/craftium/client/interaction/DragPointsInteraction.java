@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * Gradient Painter: holding the use button on a block sets the first anchor, dragging moves the second to the block under the cursor, and letting go
- * fixes it. A click that never moved to another block paints with the anchors that are set.
+ * fixes it and paints at once. A click that never moved to another block paints with the anchors that are set.
  */
 final class DragPointsInteraction implements Interaction {
     private Point start;
@@ -42,13 +42,19 @@ final class DragPointsInteraction implements Interaction {
         start = null;
         moved = false;
         if (from == null) return;
-        if (dragged) {
-            ClientState.notify("Gradient set · right-click to paint it");
-        } else if (editor.options().nodes.size() >= 2) {
+        if (dragged || editor.options().nodes.size() >= 2) {
             editor.request("use");
         } else {
             ClientState.notify("Hold right-click on a block and drag to another to set the gradient");
         }
+    }
+
+    /** Putting the tool away, or choosing another, drops its anchors. */
+    @Override
+    public void unchosen(EditorContext editor) {
+        editor.options().nodes.clear();
+        start = null;
+        moved = false;
     }
 
     @Override

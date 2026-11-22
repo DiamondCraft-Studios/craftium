@@ -480,6 +480,7 @@ public final class EditorScreen extends CraftiumScreen {
 
     private void deselectTool() {
         cancelSelectionJobs();
+        if (toolActive) Interactions.of(o().tool).unchosen(context);
         toolActive = false;
         selectedNode = -1;
     }
@@ -488,6 +489,7 @@ public final class EditorScreen extends CraftiumScreen {
         cancelSelectionJobs();
         if (tool.transform() && tool != Tool.PIVOT && ClientState.gizmoSize() == 0 && !ShapeObject.active())
             ClientState.notify("Select blocks first, then use " + tool.label);
+        if (toolActive && o().tool != tool) Interactions.of(o().tool).unchosen(context);
         toolActive = true;
         previousTool = o().tool;
         selectedNode = -1;

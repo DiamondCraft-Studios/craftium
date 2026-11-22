@@ -59,7 +59,7 @@ Choose Box Select and right-click two opposite corners. Pick a block in the pale
 
 Copy with Ctrl+C, point at the destination and press Ctrl+V. A translucent voxel outline appears without placing blocks. Drag its axis lines or use the camera-relative arrow keys, or right-click another surface to reposition it. Enter confirms; Delete or Escape cancels. The inspector's Placement tab provides snap-to-ground, paste-copy, paste-and-select, shape merging and nearest-neighbour rotation/scaling. Representable facing, axis, half and connection properties turn with the geometry. Vanilla blocks still have only their legal discrete orientations; unsupported variants use a legal approximation.
 
-For Path or Modelling, right-click control points and press Enter to build. Select a point with left-click, drag its gizmo or use the arrow keys to adjust it. Choose algorithms and settings under Geometry. For Gradient Painter, hold right-click on the start block, drag to the end block and let go, then right-click to paint.
+For Path or Modelling, right-click control points and press Enter to build. Select a point with left-click, drag its gizmo or use the arrow keys to adjust it. Choose algorithms and settings under Geometry. For Gradient Painter, hold right-click on the start block, drag to the end block and let go to paint. A plain right-click paints again with the same anchors.
 
 For terrain, use Rock, Weld, Melt, Smooth, Elevation and Slope. The inspector exposes noise, smoothing, surface, symmetry and mask settings. Imported PNG heightmaps are used by Elevation. Floodfill has a count limit independent of brush radius; Fluid Ball uses a bounded flow approximation.
 
