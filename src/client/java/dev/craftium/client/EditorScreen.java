@@ -313,8 +313,9 @@ public final class EditorScreen extends CraftiumScreen {
         }
         scale = 1;
         w = width;
-        h = height; // the interface size is the window's: CraftiumScreen draws at the zoom and the window counts in
-        // unitsWorkspaceLayout.fit(w,h,InterfaceScale.legacyCanvas(minecraft));
+        // The interface size is the window's: CraftiumScreen draws at the zoom and the window counts in units.
+        h = height;
+        WorkspaceLayout.fit(w, h, InterfaceScale.legacyCanvas(minecraft));
         fields.clear();
         renaming = -1;
         suspended = false;
