@@ -615,6 +615,32 @@ public final class SavedSelections {
             out.add(entries.get(i));
         return out;
     }
+    /**
+     * The own blocks of the BuildObjects that hold any of {@code gone}, without those, by id; the others are left out. Each one's box ({@link Entry#bounds}, kept up
+     * to date as its blocks change) is checked first, so a BuildObject nowhere near costs nothing however many blocks it holds.
+     */
+    public Map<Integer, List<Point>> without(Set<Point> gone) {
+        var out = new LinkedHashMap<Integer, List<Point>>();
+        if (gone.isEmpty()) return out;
+        int x0 = Integer.MAX_VALUE, y0 = x0, z0 = x0, x1 = Integer.MIN_VALUE, y1 = x1, z1 = x1;
+        for (var p : gone) {
+            x0 = Math.min(x0, p.x());
+            y0 = Math.min(y0, p.y());
+            z0 = Math.min(z0, p.z());
+            x1 = Math.max(x1, p.x());
+            y1 = Math.max(y1, p.y());
+            z1 = Math.max(z1, p.z());
+        }
+        for (var e : entries) {
+            var b = e.bounds();
+            if (b == null || b[3] < x0 || b[0] > x1 || b[4] < y0 || b[1] > y1 || b[5] < z0 || b[2] > z1) continue;
+            var kept = new ArrayList<Point>(e.points.size());
+            for (var p : e.points) if (!gone.contains(p)) kept.add(p);
+            if (kept.size() != e.points.size()) out.put(e.id, kept);
+        }
+        return out;
+    }
+
     /** The blocks every BuildObject holds itself, by id, as they are now: what a transform remaps from, and what undo puts back. */
     public Map<Integer, List<Point>> snapshot() {
         var out = new LinkedHashMap<Integer, List<Point>>();

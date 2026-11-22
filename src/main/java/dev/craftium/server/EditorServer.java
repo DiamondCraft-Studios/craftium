@@ -2899,13 +2899,8 @@ public final class EditorServer {
         for (var c : edit.changes()) if (c.after().state().isAir()) gone.add(c.pos());
         if (gone.isEmpty()) return edit;
         var before = s.saved.snapshot();
-        var after = new LinkedHashMap<Integer, List<Point>>();
-        for (var e : before.entrySet()) {
-            var points = e.getValue();
-            var kept = new ArrayList<Point>(points.size());
-            for (var p : points) if (!gone.contains(p)) kept.add(p);
-            if (kept.size() != points.size()) after.put(e.getKey(), kept);
-        }
+        // Only the BuildObjects whose box reaches what became air are looked through, not every block of every one.
+        var after = s.saved.without(gone);
         if (after.isEmpty()) return edit;
         s.saved.setPoints(after);
         var change =
