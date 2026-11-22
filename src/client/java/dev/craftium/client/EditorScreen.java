@@ -8380,15 +8380,17 @@ public final class EditorScreen extends CraftiumScreen {
                                         : "saved_selection:place:" + id + ":" + up.parent() + ":"
                                                 + (siblingIndex(up) + 1))));
         }
-        if (row.parent() == 0 && ClientState.savedGroups().size() > 1)
+        if (row.parent() == 0 && ClientState.savedGroups().size() > 1) {
+            var groups = new ArrayList<MenuItem>();
             for (var gr : ClientState.savedGroups()) { // a BuildObject at the top goes to the end of another group
                 if (gr.id() == groupIdOf(row)) continue;
-                if (moves.size() >= 10) break;
-                moves.add(item(
-                        "Move to group: " + shorten(gr.name(), 120),
+                groups.add(item(
+                        shorten(gr.name(), 180),
                         "",
                         () -> action("saved_selection:place:" + id + ":0:" + rootCount(gr.id()) + ":" + gr.id())));
             }
+            if (!groups.isEmpty()) moves.add(new MenuItem("Move to group", "", () -> {}, List.copyOf(groups)));
+        }
         if (!moves.isEmpty()) {
             items.add(divider());
             items.addAll(moves);
@@ -8530,10 +8532,32 @@ public final class EditorScreen extends CraftiumScreen {
         menuAlign = true;
         try {
             int row = y + 3;
+            MenuItem sub = null;
+            int subY = 0;
             for (var item : rowMenu) {
                 if (item.action == null) {
                     g.fill(x + 8, row + 4, x + width - 8, row + 5, LINE);
                     row += 9;
+                    continue;
+                }
+                if (!item.children.isEmpty()) { // opens a submenu beside the menu, as the menus of the top bar do
+                    boolean open = openSub.equals(item.label);
+                    button(
+                            g,
+                            x + 3,
+                            row,
+                            width - 6,
+                            24,
+                            item.label,
+                            open,
+                            () -> openSub = open ? "" : item.label,
+                            HIDDEN_TIP + "menu " + item.label);
+                    text(g, ">", x + width - 14, row + 8, MUTED);
+                    if (open) {
+                        sub = item;
+                        subY = row;
+                    }
+                    row += 25;
                     continue;
                 }
                 final var run = item.action;
@@ -8554,8 +8578,40 @@ public final class EditorScreen extends CraftiumScreen {
                     text(g, item.shortcut, x + width - 14 - font.width(item.shortcut), row + 8, MUTED);
                 row += 25;
             }
+            if (sub != null) rowSubmenuDraw(g, sub, x, width, subY);
         } finally {
             menuAlign = false;
+        }
+    }
+    /** The open submenu of the row menu: beside the menu (on its left when there is no room on the right), as many entries as fit on the screen. */
+    private void rowSubmenuDraw(Gfx g, MenuItem parent, int menuX, int width, int parentY) {
+        int fit = Math.max(1, (h - 27 - 4) / 25);
+        var children = parent.children.size() > fit ? parent.children.subList(0, fit) : parent.children;
+        int height = 4 + children.size() * 25;
+        int sx = menuX + width + width > w ? menuX - width : menuX + width;
+        int sy = Math.clamp(parentY - 3, 27, Math.max(27, h - height));
+        g.fill(sx, sy, sx + width, sy + height, 0xff1c2735);
+        g.outline(sx, sy, width, height, LINE);
+        controls.add(
+                new Control(sx, sy, width, height, () -> {}, BLOCK_TIP)); // nothing behind it is clicked through it
+        int row = sy + 3;
+        for (var child : children) {
+            final var run = child.action;
+            button(
+                    g,
+                    sx + 3,
+                    row,
+                    width - 6,
+                    24,
+                    child.label,
+                    false,
+                    () -> {
+                        menu = -1;
+                        openSub = "";
+                        run.run();
+                    },
+                    HIDDEN_TIP + "menu " + parent.label + " > " + child.label);
+            row += 25;
         }
     }
     /** A row of the Hierarchy that a double click renames: the row's own control, so a click on a button of the row is not a rename. */
