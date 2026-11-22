@@ -77,7 +77,6 @@ public final class KeybindGameTest {
             Tool.FREEHAND_SELECT,
             Tool.LASSO_SELECT,
             Tool.PAINTER,
-            Tool.NOISE_PAINTER,
             Tool.FREEHAND_DRAW,
             Tool.ROCK,
             Tool.WELD,
@@ -86,7 +85,7 @@ public final class KeybindGameTest {
             Tool.SMOOTH,
             Tool.EXTRUDE
         };
-        String letters = "MBNLPOGHJKEUZ";
+        String letters = "MBNLPGHJKEUZ";
         for (int i = 0; i < tools.length; i++) {
             c.getInput().pressKey(letters.charAt(i));
             Tool expected = tools[i];

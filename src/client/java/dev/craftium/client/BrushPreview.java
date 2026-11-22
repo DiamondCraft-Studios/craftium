@@ -408,8 +408,8 @@ public final class BrushPreview {
         shownBlocks = relative.size();
         List<Point> absolute = new ArrayList<>(relative.size());
         for (Point r : relative) absolute.add(new Point(at.getX() + r.x(), at.getY() + r.y(), at.getZ() + r.z()));
-        if (o.tool == dev.craftium.core.Tool.PAINTER || o.tool == dev.craftium.core.Tool.NOISE_PAINTER)
-            absolute = paintable(mc.level, absolute, o); // only what the Surface (Noise) Painter would paint
+        if (o.tool == dev.craftium.core.Tool.PAINTER)
+            absolute = paintable(mc.level, absolute, o); // only what the Surface Painter would paint
         List<Point> removed = List.of();
         if (o.tool == dev.craftium.core.Tool.ROCK) {
             absolute = rock(mc.level, absolute, at, o);

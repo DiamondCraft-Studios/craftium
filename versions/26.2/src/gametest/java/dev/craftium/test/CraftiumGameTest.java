@@ -876,7 +876,6 @@ public final class CraftiumGameTest implements FabricClientGameTest {
     private void brushTools() {
         Tool[] tools = {
             Tool.PAINTER,
-            Tool.NOISE_PAINTER,
             Tool.FREEHAND_DRAW,
             Tool.SCULPT_DRAW,
             Tool.ROCK,
@@ -2079,7 +2078,8 @@ public final class CraftiumGameTest implements FabricClientGameTest {
         ctx.waitTicks(6);
         ctx.takeScreenshot("craftium-builder");
         ctx.runOnClient(mc -> {
-            ClientState.options.tool = Tool.NOISE_PAINTER;
+            ClientState.options.tool = Tool.PAINTER;
+            ClientState.options.paintSource = dev.craftium.core.Options.PaintSource.MATERIAL;
             mc.gui.setScreen(new EditorScreen(false));
         });
         ctx.waitTicks(6);

@@ -12,7 +12,10 @@ class ToolSectionsTest {
         Tool.SECTIONS.values().forEach(seen::addAll);
         assertEquals(seen.size(), new HashSet<>(seen).size(), "a tool is listed in two sections");
         for (Tool tool : Tool.values())
-            assertEquals(!tool.transform(), seen.contains(tool), tool + " is missing from or wrongly in the sections");
+            assertEquals(
+                    !tool.transform() && !tool.retired(),
+                    seen.contains(tool),
+                    tool + " is missing from or wrongly in the sections");
     }
 
     @Test

@@ -354,13 +354,14 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if (!builder) {
             if (pinnedTab) pinnedFields();
-            else if (o().tool == Tool.NOISE_PAINTER) {
-                field("seed", 10, 444, optionsWidth() - 20, Long.toString(o().seed), s -> {
-                    try {
-                        o().seed = Long.parseLong(s);
-                    } catch (NumberFormatException ignored) {
-                    }
-                });
+            else if (o().tool == Tool.PAINTER) {
+                if (o().paintSource == Options.PaintSource.MATERIAL)
+                    field("seed", 10, PAINTER_MATERIALS_Y + 75, optionsWidth() - 20, Long.toString(o().seed), s -> {
+                        try {
+                            o().seed = Long.parseLong(s);
+                        } catch (NumberFormatException ignored) {
+                        }
+                    });
             } else if (o().tool == Tool.BIOME_PAINTER || o().tool == Tool.CLENTAMINATOR)
                 field("biome", 10, 382, optionsWidth() - 20, o().biome, s -> o().biome = s);
             else if (o().tool == Tool.TEXT) field("text", 10, 326, optionsWidth() - 20, o().text, s -> o().text = s);
@@ -1478,22 +1479,66 @@ public final class EditorScreen extends CraftiumScreen {
         }
         // Tool-specific controls occupy the same familiar options area.
         switch (o().tool) {
-            case NOISE_PAINTER -> {
-                materialsRow(g, 10, 369, pw - 20);
-                text(g, "Noise seed", 10, 431, MUTED);
-                slider(
+            case PAINTER -> {
+                int half = (pw - 24) / 2;
+                var source = o().paintSource;
+                button(
                         g,
                         10,
-                        480,
-                        pw - 20,
-                        "Scale",
-                        o().noiseScale,
-                        1,
-                        64,
-                        DEFAULTS.noiseScale,
-                        v -> o().noiseScale = v,
-                        false);
-                slider(g, 10, 508, pw - 20, "Blend", o().density, 0, 1, DEFAULTS.density, v -> o().density = v, false);
+                        369,
+                        half,
+                        19,
+                        "Palette",
+                        source == Options.PaintSource.PALETTE,
+                        () -> setPaintSource(Options.PaintSource.PALETTE),
+                        "Paint with your Palette block, the foreground block");
+                button(
+                        g,
+                        14 + half,
+                        369,
+                        half,
+                        19,
+                        "Material",
+                        source == Options.PaintSource.MATERIAL,
+                        () -> setPaintSource(Options.PaintSource.MATERIAL),
+                        "Paint with the Materials list, blended by seeded noise");
+                toggle(g, 10, 397, "Surface only", o().surfaceOnly, () -> o().surfaceOnly = !o().surfaceOnly);
+                toggle(
+                        g,
+                        10,
+                        419,
+                        "Match the ring",
+                        o().screenSpace,
+                        () -> o().screenSpace = !o().screenSpace,
+                        "Paint the blocks the ring covers on the screen, as you see them, instead of a shape around the block under the pointer · Needs a server that has this feature");
+                if (source == Options.PaintSource.MATERIAL) {
+                    materialsRow(g, 10, PAINTER_MATERIALS_Y, pw - 20);
+                    text(g, "Noise seed", 10, PAINTER_MATERIALS_Y + 62, MUTED);
+                    slider(
+                            g,
+                            10,
+                            PAINTER_MATERIALS_Y + 111,
+                            pw - 20,
+                            "Scale",
+                            o().noiseScale,
+                            1,
+                            64,
+                            DEFAULTS.noiseScale,
+                            v -> o().noiseScale = v,
+                            false);
+                    slider(
+                            g,
+                            10,
+                            PAINTER_MATERIALS_Y + 139,
+                            pw - 20,
+                            "Blend",
+                            o().density,
+                            0,
+                            1,
+                            DEFAULTS.density,
+                            v -> o().density = v,
+                            false);
+                }
             }
             case BIOME_PAINTER, CLENTAMINATOR -> text(g, "Biome identifier", 10, 369, MUTED);
             case TEXT -> {
@@ -2954,8 +2999,17 @@ public final class EditorScreen extends CraftiumScreen {
                 block);
     }
     /** The tools that blend or pour the Materials palette, and so show its window. */
-    private static final EnumSet<Tool> MATERIAL_TOOLS =
-            EnumSet.of(Tool.NOISE_PAINTER, Tool.FLUID_BLOCK, Tool.GRADIENT_PAINTER);
+    private static final EnumSet<Tool> MATERIAL_TOOLS = EnumSet.of(Tool.FLUID_BLOCK, Tool.GRADIENT_PAINTER);
+    /** Where the Surface Painter's Materials row starts when it is set to Material; its seed, Scale and Blend follow it. */
+    private static final int PAINTER_MATERIALS_Y = 443;
+
+    /** Switches what the Surface Painter paints with. The seed box only exists in Material mode, so the options are laid out again. */
+    private void setPaintSource(Options.PaintSource source) {
+        if (o().paintSource == source) return;
+        o().paintSource = source;
+        ClientState.save();
+        init();
+    }
 
     private int materialsScroll;
     /** The Materials window: the palette the blending and pouring tools draw from, one row per block with its icon, a weight and where it sits in the order. It opens from the tool panel or the Window menu and is moved, sized and folded like the others. */
@@ -4860,13 +4914,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** The tools whose brush is the picked shape have its size as properties: a control for each dimension that shape has, and a Chain that keeps the proportions. */
     private static final EnumSet<Tool> FIXED_LAYOUT = EnumSet.of(
-            Tool.ROCK,
-            Tool.DISTORT,
-            Tool.ROUGHEN,
-            Tool.SHATTER,
-            Tool.NOISE_PAINTER,
-            Tool.BIOME_PAINTER,
-            Tool.CLENTAMINATOR);
+            Tool.ROCK, Tool.DISTORT, Tool.ROUGHEN, Tool.SHATTER, Tool.PAINTER, Tool.BIOME_PAINTER, Tool.CLENTAMINATOR);
 
     private boolean sizes() {
         return o().tool.brushUse() == Tool.BrushUse.SHAPE;
@@ -5010,7 +5058,7 @@ public final class EditorScreen extends CraftiumScreen {
                                 Tool.DISTORT,
                                 Tool.ROUGHEN,
                                 Tool.SHATTER,
-                                Tool.NOISE_PAINTER,
+                                Tool.PAINTER,
                                 Tool.BIOME_PAINTER,
                                 Tool.CLENTAMINATOR)
                         .contains(o().tool);

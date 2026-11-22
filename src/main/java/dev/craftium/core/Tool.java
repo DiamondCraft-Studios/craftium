@@ -11,12 +11,18 @@ public enum Tool {
             "RL",
             "Utility",
             "Add measurement points; use the inspector for circles, splits and center selection."),
-    PAINTER("Surface Painter", "PA", "Paint", "Paint existing blocks with your active material."),
+    PAINTER(
+            "Surface Painter",
+            "PA",
+            "Paint",
+            "Paint existing blocks with your Palette block, or switch to Material to blend the Materials list with coherent seeded noise."),
     PAINT_BUCKET(
             "Paint Bucket",
             "PB",
             "Paint",
             "Fill the connected blocks you click with your foreground block. Directions and select type work as in the Magic Wand."),
+    /** Kept so saved settings and older clients that name it still read: it is the Surface Painter set to Material, and is no longer listed or bound. */
+    @Deprecated
     NOISE_PAINTER("Surface Noise Painter", "NP", "Paint", "Blend the Materials palette with coherent seeded noise."),
     BIOME_PAINTER("Biome Painter", "BP", "Paint", "Paint biome cells inside the brush. Biomes use 4-block cells."),
     CLENTAMINATOR("Clentaminator", "CL", "Paint", "Convert biome and matching surface materials together."),
@@ -112,6 +118,11 @@ public enum Tool {
         NONE
     }
     /** This tool's facts, kept in {@link ToolCatalog}: the methods below read them so the callers that ask a {@code Tool} keep working. */
+    /** A tool that is only still here so saved settings and older clients that name it keep reading: it is not listed, bound or shown. */
+    public boolean retired() {
+        return this == NOISE_PAINTER;
+    }
+
     public ToolSpec spec() {
         return ToolCatalog.of(this);
     }
@@ -122,7 +133,7 @@ public enum Tool {
     /** Whether the tool can work on the blocks the brush ring covers on the screen ({@link Options#screenBlocks}) instead of a shape around the block under the pointer. */
     public boolean screenBrush() {
         return switch (this) {
-            case PAINTER, NOISE_PAINTER -> true;
+            case PAINTER -> true;
             default -> false;
         };
     }
@@ -153,16 +164,7 @@ public enum Tool {
         var all = new LinkedHashMap<String, List<Tool>>();
         all.put("Select", List.of(BOX_SELECT, MAGIC_SELECT, LASSO_SELECT, FREEHAND_SELECT));
         all.put("Draw", List.of(SHAPE, LINE, PATH, MODELLING, FREEHAND_DRAW, TEXT, ERASE));
-        all.put(
-                "Paint",
-                List.of(
-                        PAINTER,
-                        PAINT_BUCKET,
-                        GRADIENT_PAINTER,
-                        NOISE_PAINTER,
-                        SCRIPT_BRUSH,
-                        BIOME_PAINTER,
-                        CLENTAMINATOR));
+        all.put("Paint", List.of(PAINTER, PAINT_BUCKET, GRADIENT_PAINTER, SCRIPT_BRUSH, BIOME_PAINTER, CLENTAMINATOR));
         all.put(
                 "Sculpt",
                 List.of(SMOOTH, ROUGHEN, DISTORT, MELT, WELD, SHATTER, EXTRUDE, SMEAR, SCULPT_DRAW, MODIFY, STAMP));
