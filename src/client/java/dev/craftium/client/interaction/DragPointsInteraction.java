@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * Gradient Painter: holding the use button on a block sets the first anchor, dragging moves the second to the block under the cursor, and letting go
- * fixes it and paints at once. A click that never moved to another block paints with the anchors that are set.
+ * paints the gradient between them at once, then clears the line. A click that never moved to another block paints nothing.
  */
 final class DragPointsInteraction implements Interaction {
     private Point start;
@@ -42,10 +42,13 @@ final class DragPointsInteraction implements Interaction {
         start = null;
         moved = false;
         if (from == null) return;
-        if (dragged || editor.options().nodes.size() >= 2) {
+        if (dragged) {
             editor.request("use");
+            // Painted: the line and its points go, and the next drag starts a new gradient. The request has already
+            // taken the points with it.
+            editor.options().nodes.clear();
         } else {
-            ClientState.notify("Hold right-click on a block and drag to another to set the gradient");
+            ClientState.notify("Hold right-click on a block and drag to another to paint a gradient");
         }
     }
 
