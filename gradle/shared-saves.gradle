@@ -1,0 +1,51 @@
+// Makes every worktree's development client use the main checkout's worlds, so there is no need to create a new world in each one.
+// In a linked worktree, run/saves becomes a link (a junction on Windows) to the same folder in the main checkout. The main checkout
+// itself is left alone. A saves folder that already holds worlds is never replaced: it is kept and a warning is printed, so move
+// the worlds you want into the main checkout's saves folder and delete the local one to switch over.
+// Set CRAFTIUM_SHARED_SAVES=false to turn it off. Do not open the same world in two clients at once (the world lock refuses it).
+def runDir = { file(loom.runs.getByName('client').runDir) }
+
+def linkSaves = tasks.register('linkSharedSaves') {
+    onlyIf { System.getenv('CRAFTIUM_SHARED_SAVES') != 'false' }
+    doLast {
+        def root = rootProject.projectDir.toPath().toAbsolutePath().normalize()
+        // The main checkout is the folder that holds the shared .git directory.
+        def proc = new ProcessBuilder('git', 'rev-parse', '--path-format=absolute', '--git-common-dir')
+                .directory(root.toFile()).redirectErrorStream(true).start()
+        def common = proc.inputStream.text.trim()
+        proc.waitFor()
+        if (proc.exitValue() != 0 || common.isEmpty()) return
+        def mainRoot = java.nio.file.Paths.get(common).parent.toAbsolutePath().normalize()
+        if (mainRoot == root) return // this is the main checkout
+
+        def rel = root.relativize(runDir().toPath().toAbsolutePath().normalize())
+        def target = mainRoot.resolve(rel).resolve('saves')
+        def link = runDir().toPath().resolve('saves')
+        java.nio.file.Files.createDirectories(target)
+        if (java.nio.file.Files.isSymbolicLink(link) || (System.getProperty('os.name').toLowerCase().contains('win') && link.toFile().exists() && link.toRealPath() != link.toAbsolutePath().normalize())) {
+            return // already linked
+        }
+        if (link.toFile().exists()) {
+            def contents = link.toFile().list()
+            if (contents != null && contents.length > 0) {
+                logger.warn("Craftium: ${link} already holds worlds, so it was not linked to ${target}.")
+                return
+            }
+            link.toFile().delete()
+        }
+        java.nio.file.Files.createDirectories(link.parent)
+        if (System.getProperty('os.name').toLowerCase().contains('win')) {
+            def p = new ProcessBuilder('cmd', '/c', 'mklink', '/J', link.toString(), target.toString())
+                    .redirectErrorStream(true).start()
+            p.inputStream.text
+            if (p.waitFor() != 0) logger.warn("Craftium: could not link ${link} to ${target}.")
+        } else {
+            java.nio.file.Files.createSymbolicLink(link, target)
+        }
+        logger.lifecycle("Craftium: ${link} now shares worlds with ${target}.")
+    }
+}
+
+tasks.named('runClient') {
+    dependsOn linkSaves
+}
