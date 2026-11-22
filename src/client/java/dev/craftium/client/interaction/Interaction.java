@@ -82,6 +82,9 @@ public interface Interaction {
         ModifyPreview.edit();
     }
 
+    /** The server's answer to a request came back, now in {@code ClientState.status}: whether it is still busy, and any error. */
+    default void statusReceived(EditorContext editor) {}
+
     /** The tool was put away or another was chosen in its place: a chance to drop what it gathered. */
     default void unchosen(EditorContext editor) {}
 

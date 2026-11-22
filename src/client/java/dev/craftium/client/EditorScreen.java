@@ -6264,6 +6264,7 @@ public final class EditorScreen extends CraftiumScreen {
     /** Called when the server's status arrives: sends the block the cursor has moved to meanwhile, if there is one. */
     void statusReceived() {
         repliedSince = true;
+        if (toolActive) Interactions.of(o().tool).statusReceived(context);
         if (useQueued && painting && !ClientState.status.busy()) dragUse();
     }
 

@@ -15,6 +15,14 @@ final class DragPointsInteraction implements Interaction {
     private Point normal = new Point(0, 1, 0);
 
     private boolean moved;
+    /** A stroke let go of while the server was still applying the last one, and its face: sent as soon as the server is free. */
+    private List<Point> waiting;
+
+    private Point waitingNormal;
+    /** The stroke sent last, kept until the server answers, so one refused for being busy can wait its turn instead of being lost. */
+    private List<Point> sent;
+
+    private Point sentNormal;
 
     @Override
     public boolean pressed(EditorContext editor, double x, double y) {
@@ -48,20 +56,62 @@ final class DragPointsInteraction implements Interaction {
         if (from == null) return;
         var anchors = editor.options().gradientAnchors;
         if (dragged && anchors.size() == 2) {
-            // Sent for the end of the stroke, not the block under the pointer, which may be sky or a panel by now
-            editor.requestAt("use", anchors.getLast(), normal);
-            // Painted: the line and its points go, and the next drag starts a new gradient. The request has already
-            // taken the points with it.
-            editor.options().gradientAnchors.clear();
+            var stroke = List.copyOf(anchors);
+            // The line and its points go, and the next drag starts a new gradient
+            anchors.clear();
+            if (ClientState.status.busy()) {
+                waiting = stroke;
+                waitingNormal = normal;
+                ClientState.notify("This stroke paints as soon as the last one has finished");
+            } else send(editor, stroke, normal);
         } else {
             ClientState.notify("Hold right-click on a block and drag to another to paint a gradient");
         }
     }
 
-    /** Putting the tool away, or choosing another, drops its anchors. */
+    /**
+     * Sends {@code stroke} for its end block and {@code face}, wherever the pointer is now: the block under it may be sky or a panel by then.
+     * The request carries the stroke in the anchors, which are put back as they were straight after, as a new drag may have begun.
+     */
+    private void send(EditorContext editor, List<Point> stroke, Point face) {
+        var anchors = editor.options().gradientAnchors;
+        var current = List.copyOf(anchors);
+        anchors.clear();
+        anchors.addAll(stroke);
+        try {
+            editor.requestAt("use", stroke.getLast(), face);
+        } finally {
+            anchors.clear();
+            anchors.addAll(current);
+        }
+        sent = stroke;
+        sentNormal = face;
+    }
+
+    /** A stroke the server refused for being busy waits its turn; a waiting stroke is sent once the server is free. */
+    @Override
+    public void statusReceived(EditorContext editor) {
+        var status = ClientState.status;
+        if (sent != null) {
+            if (status.error() && status.message().contains("please wait") && waiting == null) {
+                waiting = sent;
+                waitingNormal = sentNormal;
+            }
+            sent = null;
+        }
+        if (waiting != null && !status.busy()) {
+            var stroke = waiting;
+            waiting = null;
+            send(editor, stroke, waitingNormal);
+        }
+    }
+
+    /** Putting the tool away, or choosing another, drops its anchors and any stroke still waiting. */
     @Override
     public void unchosen(EditorContext editor) {
         editor.options().gradientAnchors.clear();
+        waiting = null;
+        sent = null;
         start = null;
         moved = false;
     }
