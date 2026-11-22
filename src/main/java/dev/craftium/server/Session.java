@@ -187,6 +187,9 @@ final class Session {
     String clipboardData = "";
     boolean clipboardDirty = true;
     List<dev.craftium.core.BlueprintInfo> library = List.of();
+    /** The shared palettes to send with the next status (JSON text), or null when it carries none. */
+    String palettes;
+
     boolean noClip;
     /** Whether the player steps up a whole block on their own, as they step up a slab. */
     boolean blockStep;

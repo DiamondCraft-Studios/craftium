@@ -460,18 +460,16 @@ public final class StudioScreen extends CraftiumScreen {
                 init();
                 message = "Preset loaded";
             });
-            button("Save palette", left, top + 189, 180, 24, () -> {
-                ClientLibrary.savePalette(ClientState.options.name);
-                message = "Palette saved";
-            });
-            button("Load palette", left + 190, top + 189, 180, 24, () -> {
-                ClientLibrary.loadPalette(ClientState.options.name);
-                message = "Palette loaded";
-            });
+            button(
+                    "Palette library…",
+                    left,
+                    top + 189,
+                    180,
+                    24,
+                    () -> ClientCompat.setScreen(minecraft, new PaletteLibraryScreen(this)));
             button("Save clipboard blueprint", left, top + 223, 180, 24, () -> send("blueprint_save"));
             button("Load blueprint", left + 190, top + 223, 180, 24, () -> send("blueprint_load"));
             labels.add(new Label("Presets: " + String.join(", ", ClientLibrary.list("presets")), left, top + 270));
-            labels.add(new Label("Palettes: " + String.join(", ", ClientLibrary.list("palettes")), left, top + 286));
         } else if (tab.equals("Assets")) {
             actionRow(
                     new String[] {
