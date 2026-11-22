@@ -897,6 +897,12 @@ public final class ClientState {
     public record SharedAi(String owner, GhostBlocks ghost) {}
     /** The AI previews other players in this dimension are holding, as the server last said. */
     public static List<SharedAi> sharedAi = List.of();
+    /** Takes in the server's shared palettes when a status brings them (a status without them leaves the list as it was). */
+    static void updatePalettes(dev.craftium.net.Packets.Status status) {
+        if (status.palettes() == null) return;
+        sharedPalettes = dev.craftium.core.SharedPalettes.fromJson(status.palettes());
+        sharedPalettesVersion++;
+    }
     /** Takes in the list a status brings of other players' AI previews; a status without one leaves it as it was. */
     static void updateShared(dev.craftium.net.Packets.Status status) {
         var list = status.sharedAi();

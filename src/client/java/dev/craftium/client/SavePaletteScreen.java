@@ -23,6 +23,8 @@ final class SavePaletteScreen extends CraftiumScreen {
     private int left, top;
     private boolean toServer;
     private String name, author, tags, problem = "";
+    /** The names (lower case) of the player's own palettes, read once: the window asks whether a name is taken on every frame. */
+    private java.util.Set<String> ownNames = java.util.Set.of();
 
     SavePaletteScreen(Screen parent, boolean toServer, String name) {
         super(Component.literal("Save palette"));
@@ -44,6 +46,10 @@ final class SavePaletteScreen extends CraftiumScreen {
     protected void init() {
         left = (width - W) / 2;
         top = (height - H) / 2;
+        ownNames = new java.util.HashSet<>();
+        for (var p : ClientLibrary.localPalettes()) ownNames.add(p.name().toLowerCase(java.util.Locale.ROOT));
+        // The server's list may be out of date (or never asked for), and the window warns about a name that is taken.
+        if (toServer && supported()) ClientLibrary.requestShared("palette_list", null, null, null, null, null);
         field(66, name, 64, "my_palette", v -> name = v);
         field(104, author, SharedPalettes.MAX_AUTHOR, "Your name", v -> author = v);
         field(142, tags, SharedPalettes.MAX_TAGS, "walls, stone, castle", v -> tags = v);
@@ -75,7 +81,7 @@ final class SavePaletteScreen extends CraftiumScreen {
         if (toServer == server) return;
         toServer = server;
         problem = "";
-        rebuildWidgets();
+        rebuildWidgets(); // asks the server for its list again when that is where it goes
     }
 
     private void save() {
@@ -95,8 +101,8 @@ final class SavePaletteScreen extends CraftiumScreen {
         o.tags = tags; // the same two fields as a blueprint's, so one is filled in once
         ClientState.save();
         if (toServer) {
-            ClientLibrary.requestShared("palette_save", chosen, author, tags, blocks, weights);
-            ClientState.notify("Sent " + chosen + " to the server");
+            ClientLibrary.requestShared(
+                    "palette_save", chosen, author, tags, blocks, weights); // the server's reply says how it went
         } else {
             try {
                 ClientLibrary.savePalette(chosen, blocks, weights, author.trim(), tags.trim());
@@ -112,8 +118,8 @@ final class SavePaletteScreen extends CraftiumScreen {
     private boolean exists() {
         String clean = name.trim();
         if (clean.isEmpty()) return false;
-        var list = toServer ? ClientState.sharedPalettes : ClientLibrary.localPalettes();
-        for (var p : list) if (p.name().equalsIgnoreCase(clean)) return true;
+        if (!toServer) return ownNames.contains(clean.toLowerCase(java.util.Locale.ROOT));
+        for (var p : ClientState.sharedPalettes) if (p.name().equalsIgnoreCase(clean)) return true;
         return false;
     }
 

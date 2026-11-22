@@ -58,6 +58,7 @@ final class PaletteLibraryScreen extends CraftiumScreen {
         server = toServer;
         scroll = 0;
         message = "";
+        armed = ""; // a Delete clicked once on one list must not count for a palette of the same name on the other
         rebuildWidgets();
     }
 

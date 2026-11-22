@@ -222,6 +222,7 @@ public final class CraftiumClient implements ClientModInitializer {
             ClientState.updatePluginPreview(next);
             ClientState.updatePluginTools(next);
             ClientState.updateSavedSelections(next);
+            ClientState.updatePalettes(next);
             return;
         } // somebody else's preview changed: not a reply to anything this client asked, and nothing else in it
         if (next != null) {
@@ -230,6 +231,7 @@ public final class CraftiumClient implements ClientModInitializer {
             ClientState.updatePluginTools(next);
             ClientState.updateSavedSelections(next);
             ClientState.updateJigsawReport(next);
+            ClientState.updatePalettes(next);
             ClientState.status = next;
             if (next.error()) {
                 if (next.message().startsWith("Too many edits waiting")) BuilderPrediction.rejectedNewest();
@@ -241,10 +243,6 @@ public final class CraftiumClient implements ClientModInitializer {
             if (next.message().startsWith("Undid ") || next.message().startsWith("Redid "))
                 ClientState.boxCorners.clear();
             ClientRestore.apply(next.restore());
-            if (next.palettes() != null) {
-                ClientState.sharedPalettes = dev.craftium.core.SharedPalettes.fromJson(next.palettes());
-                ClientState.sharedPalettesVersion++;
-            }
             if (next.message().startsWith("Blueprint library")) {
                 ClientState.blueprints = next.blueprints() == null ? List.of() : next.blueprints();
                 ClientState.libraryVersion++;

@@ -50,9 +50,18 @@ final class ClientLibrary {
 
     /** Makes the blocks and weights the Materials palette. */
     static void apply(List<String> blocks, List<Double> weights) {
-        ClientState.options.materials = String.join(",", blocks);
-        ClientState.options.materialWeights = new ArrayList<>(weights == null ? List.of() : weights);
-        ClientState.options.validate();
+        var o = ClientState.options;
+        String oldBlocks = o.materials;
+        var oldWeights = o.materialWeights;
+        o.materials = String.join(",", blocks);
+        o.materialWeights = new ArrayList<>(weights == null ? List.of() : weights);
+        try {
+            o.validate();
+        } catch (RuntimeException bad) {
+            o.materials = oldBlocks; // a palette that is refused leaves the Materials window as it was
+            o.materialWeights = oldWeights;
+            throw bad;
+        }
         ClientState.save();
     }
     /** The client's own saved palettes, in the shape the shared ones have (no owner); one that cannot be read is left out. */
