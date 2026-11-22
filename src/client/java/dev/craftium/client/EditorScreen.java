@@ -313,8 +313,9 @@ public final class EditorScreen extends CraftiumScreen {
         }
         scale = 1;
         w = width;
-        h = height; // the interface size is the window's: CraftiumScreen draws at the zoom and the window counts in
-        // unitsWorkspaceLayout.fit(w,h,InterfaceScale.legacyCanvas(minecraft));
+        // The interface size is the window's: CraftiumScreen draws at the zoom and the window counts in units.
+        h = height;
+        WorkspaceLayout.fit(w, h, InterfaceScale.legacyCanvas(minecraft));
         fields.clear();
         renaming = -1;
         suspended = false;
@@ -4438,6 +4439,15 @@ public final class EditorScreen extends CraftiumScreen {
                     }
                 }
                 items.add(divider());
+                items.add(item("Fold all", "", WorkspaceLayout::foldAll));
+                items.add(item("Unfold all", "", WorkspaceLayout::unfoldAll));
+                items.add(new MenuItem(
+                        "Fold others when opening",
+                        "",
+                        WorkspaceLayout::toggleAutoFold,
+                        List.of(),
+                        WorkspaceLayout.autoFold));
+                items.add(divider());
                 items.add(item("Save layout", "", WorkspaceLayout::save));
                 items.add(item("Reset layout", "", WorkspaceLayout::reset));
                 items.add(
@@ -5992,6 +6002,10 @@ public final class EditorScreen extends CraftiumScreen {
                 String id = WorkspaceLayout.hit(x, y, true);
                 if (!id.isBlank()) {
                     var r = WorkspaceLayout.windows.get(id);
+                    if (doubleClick) { // a double click on the title bar folds or unfolds the window
+                        WorkspaceLayout.fold(id);
+                        return true;
+                    }
                     draggedPanel = id;
                     resizePanel = false;
                     dragOriginX = r.x;
@@ -6322,6 +6336,9 @@ public final class EditorScreen extends CraftiumScreen {
         draggingPlacement = false;
         dragging = null;
         if (!draggedPanel.isBlank()) {
+            var moved = WorkspaceLayout.windows.get(draggedPanel);
+            if (moved != null && !resizePanel && (moved.x != dragOriginX || moved.y != dragOriginY))
+                moved.unfoldY = 0; // the player put it somewhere: unfolding keeps it there
             WorkspaceLayout.snap(draggedPanel, w, h);
             WorkspaceLayout.save();
             draggedPanel = "";
