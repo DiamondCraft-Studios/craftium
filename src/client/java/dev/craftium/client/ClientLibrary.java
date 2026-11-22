@@ -35,39 +35,55 @@ final class ClientLibrary {
 
     private record Palette(List<String> blocks, List<Double> weights, List<String> recent) {}
 
-    static void savePalette(String name) {
-        write(
-                file("palettes", name),
-                Packets.JSON.toJson(new Palette(
-                        dev.craftium.core.MaterialList.split(ClientState.options.materials),
-                        ClientState.options.materialWeights,
-                        ClientState.palette)));
+    private static Palette readPaletteFile(String name) throws java.io.IOException {
+        var json = com.google.gson.JsonParser.parseString(Files.readString(file("palettes", name)));
+        Palette value = json.isJsonArray()
+                ? new Palette(List.of(Packets.JSON.fromJson(json, String[].class)), List.of(), List.of())
+                : Packets.JSON.fromJson(json, Palette.class);
+        if (value.blocks() == null
+                || value.blocks().isEmpty()
+                || value.blocks().size() > 256
+                || value.blocks().contains(null)) throw new IllegalArgumentException("Invalid palette");
+        return value;
     }
 
-    static void loadPalette(String name) {
+    /** Makes the blocks and weights the Materials palette. */
+    static void apply(List<String> blocks, List<Double> weights) {
+        ClientState.options.materials = String.join(",", blocks);
+        ClientState.options.materialWeights = new ArrayList<>(weights == null ? List.of() : weights);
+        ClientState.options.validate();
+        ClientState.save();
+    }
+    /** The client's own saved palettes, in the shape the shared ones have (no owner); one that cannot be read is left out. */
+    static List<dev.craftium.core.SharedPalettes.Palette> localPalettes() {
+        var out = new ArrayList<dev.craftium.core.SharedPalettes.Palette>();
+        for (String name : list("palettes"))
+            try {
+                var value = readPaletteFile(name);
+                var weights = new ArrayList<Double>();
+                for (int i = 0; i < value.blocks().size(); i++)
+                    weights.add(dev.craftium.core.MaterialPalette.clamp(
+                            value.weights() != null && i < value.weights().size()
+                                    ? value.weights().get(i)
+                                    : null));
+                out.add(new dev.craftium.core.SharedPalettes.Palette(
+                        name, "", "", List.copyOf(value.blocks()), weights, 0));
+            } catch (Exception skipped) {
+                // a file that is not a palette
+            }
+        return out;
+    }
+
+    static void deletePalette(String name) {
         try {
-            var json = com.google.gson.JsonParser.parseString(Files.readString(file("palettes", name)));
-            Palette value = json.isJsonArray()
-                    ? new Palette(List.of(Packets.JSON.fromJson(json, String[].class)), List.of(), List.of())
-                    : Packets.JSON.fromJson(json, Palette.class);
-            if (value.blocks() == null
-                    || value.blocks().isEmpty()
-                    || value.blocks().size() > 256
-                    || value.blocks().contains(null)) throw new IllegalArgumentException("Invalid palette");
-            ClientState.options.materials = String.join(",", value.blocks());
-            ClientState.options.materialWeights =
-                    new ArrayList<>(value.weights() == null ? List.of() : value.weights());
-            ClientState.options.validate();
-            ClientState.palette.clear();
-            ClientState.palette.addAll(
-                    value.recent() == null || value.recent().isEmpty()
-                            ? value.blocks()
-                                    .subList(0, Math.min(18, value.blocks().size()))
-                            : value.recent()
-                                    .subList(0, Math.min(18, value.recent().size())));
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Cannot load palette: " + name, e);
+            Files.deleteIfExists(file("palettes", name));
+        } catch (java.io.IOException e) {
+            throw new IllegalArgumentException("Cannot delete palette: " + name, e);
         }
+    }
+    /** Saves blocks and weights as one of the client's palettes, replacing one of the same name. */
+    static void savePalette(String name, List<String> blocks, List<Double> weights) {
+        write(file("palettes", name), Packets.JSON.toJson(new Palette(blocks, weights, List.of())));
     }
 
     static List<String> list(String type) {

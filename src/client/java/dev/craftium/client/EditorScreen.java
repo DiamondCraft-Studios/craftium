@@ -3113,7 +3113,7 @@ public final class EditorScreen extends CraftiumScreen {
                     },
                     "Remove this block");
         }
-        int[] top = flex(pw - 20, 4, 1, 1, 1);
+        int[] top = flex(pw - 20, 4, 1, 1, 1, 1);
         button(
                 g,
                 x + 10,
@@ -3175,6 +3175,16 @@ public final class EditorScreen extends CraftiumScreen {
                     ClientState.save();
                 },
                 "Put the blocks in order from dark to light");
+        button(
+                g,
+                x + 22 + top[0] + top[1] + top[2],
+                pb - 26,
+                top[3],
+                19,
+                "Library",
+                false,
+                () -> ClientCompat.setScreen(minecraft, new PaletteLibraryScreen(this)),
+                "Load and save palettes: the server's, which everyone on it can use, and your own");
         text(
                 g,
                 blocks.size()

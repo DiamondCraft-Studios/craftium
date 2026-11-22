@@ -102,6 +102,8 @@ public final class CraftiumClient implements ClientModInitializer {
             PlacementPreview.update("");
             ClientState.blueprints = List.of();
             ClientState.libraryVersion++;
+            ClientState.sharedPalettes = List.of();
+            ClientState.sharedPalettesVersion++;
         });
         // What the shared placement mixins ask about the local player; only when the server runs the mod too, as it
         // must agree with the client.
@@ -239,6 +241,10 @@ public final class CraftiumClient implements ClientModInitializer {
             if (next.message().startsWith("Undid ") || next.message().startsWith("Redid "))
                 ClientState.boxCorners.clear();
             ClientRestore.apply(next.restore());
+            if (next.palettes() != null) {
+                ClientState.sharedPalettes = dev.craftium.core.SharedPalettes.fromJson(next.palettes());
+                ClientState.sharedPalettesVersion++;
+            }
             if (next.message().startsWith("Blueprint library")) {
                 ClientState.blueprints = next.blueprints() == null ? List.of() : next.blueprints();
                 ClientState.libraryVersion++;

@@ -1019,6 +1019,10 @@ public final class ClientState {
 
     public static List<BlueprintInfo> blueprints = List.of();
     public static int libraryVersion;
+    /** The server's shared palettes as it last sent them, and a number that changes with each list. */
+    public static java.util.List<dev.craftium.core.SharedPalettes.Palette> sharedPalettes = java.util.List.of();
+
+    public static int sharedPalettesVersion;
     public static final List<String> palette = new ArrayList<>(List.of(
             "minecraft:stone",
             "minecraft:andesite",
