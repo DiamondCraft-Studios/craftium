@@ -60,7 +60,7 @@ class ToolCatalogTest {
         special.put(Tool.MOVE, InteractionKind.TRANSFORM);
         special.put(Tool.ROTATE, InteractionKind.TRANSFORM);
         special.put(Tool.SCALE, InteractionKind.TRANSFORM);
-        special.put(Tool.GRADIENT_PAINTER, InteractionKind.SHIFT_POINTS);
+        special.put(Tool.GRADIENT_PAINTER, InteractionKind.DRAG_POINTS);
         special.put(Tool.SLOPE, InteractionKind.ANCHOR_PAIR);
         special.put(Tool.INSPECT, InteractionKind.INSPECT);
         for (Tool tool : Tool.values())
@@ -96,7 +96,7 @@ class ToolCatalogTest {
         assertFalse(InteractionKind.PIVOT.forPlugins);
         assertFalse(InteractionKind.ANNOTATION.forPlugins);
         assertFalse(InteractionKind.TRANSFORM.forPlugins);
-        assertFalse(InteractionKind.SHIFT_POINTS.forPlugins);
+        assertFalse(InteractionKind.DRAG_POINTS.forPlugins);
         assertFalse(InteractionKind.ANCHOR_PAIR.forPlugins);
     }
 

@@ -103,7 +103,7 @@ public final class ToolCatalog {
             case PIVOT -> InteractionKind.PIVOT;
             case ANNOTATION -> InteractionKind.ANNOTATION;
             case MOVE, ROTATE, SCALE -> InteractionKind.TRANSFORM;
-            case GRADIENT_PAINTER -> InteractionKind.SHIFT_POINTS;
+            case GRADIENT_PAINTER -> InteractionKind.DRAG_POINTS;
             case SLOPE -> InteractionKind.ANCHOR_PAIR;
             case INSPECT -> InteractionKind.INSPECT;
             default -> InteractionKind.CLICK;

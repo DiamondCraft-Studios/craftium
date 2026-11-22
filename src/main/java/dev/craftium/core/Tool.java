@@ -61,7 +61,8 @@ public enum Tool {
             "Utility",
             "Right click a block to change it the way you aim: full blocks, stairs and slabs turn into each other, walls and fences change the arm you point at. Sneak to pick a property to cycle."),
     LASSO_SELECT("Lasso Select", "LS", "Select", "Draw a screen-space polygon; release to project it into the world."),
-    GRADIENT_PAINTER("Gradient Painter", "GP", "Paint", "Shift-right-click gradient anchors, then paint between them."),
+    GRADIENT_PAINTER(
+            "Gradient Painter", "GP", "Paint", "Hold right-click and drag to set the gradient, then click to paint."),
     SCRIPT_BRUSH("Script Brush", "LU", "Paint", "Run a bounded Lua script for each block in the brush."),
     MODELLING("Modelling", "MD", "Draw", "Place control points and build a hull, triangle strip or lofted surface."),
     STAMP("Stamp", "ST", "Sculpt", "Scatter the clipboard with spacing, random rotation and chance."),
