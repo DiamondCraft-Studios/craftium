@@ -17,7 +17,7 @@ public final class Interactions {
             PIVOT = new PivotInteraction(),
             ANNOTATION = new AnnotationInteraction(),
             TRANSFORM = new TransformInteraction(),
-            SHIFT_POINTS = new ShiftPointsInteraction(),
+            DRAG_POINTS = new DragPointsInteraction(),
             ANCHOR_PAIR = new AnchorPairInteraction(),
             INSPECT = new InspectInteraction();
 
@@ -41,7 +41,7 @@ public final class Interactions {
             case PIVOT -> PIVOT;
             case ANNOTATION -> ANNOTATION;
             case TRANSFORM -> TRANSFORM;
-            case SHIFT_POINTS -> SHIFT_POINTS;
+            case DRAG_POINTS -> DRAG_POINTS;
             case ANCHOR_PAIR -> ANCHOR_PAIR;
             case INSPECT -> INSPECT;
         };

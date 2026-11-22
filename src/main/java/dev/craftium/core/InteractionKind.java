@@ -32,8 +32,8 @@ public enum InteractionKind {
     MODIFY_ANCHOR(false),
     /** A click does nothing: the tool works through its handles on the selection. Built in for Move, Rotate and Scale. */
     TRANSFORM(false),
-    /** Clicks work as {@link #CLICK} does, and a click with Shift held adds an anchor point instead. Built in for the Gradient Painter. */
-    SHIFT_POINTS(false),
+    /** Holding the use button on a block sets the first anchor, dragging moves the second and letting go fixes it; a plain click paints. Built in for the Gradient Painter. */
+    DRAG_POINTS(false),
     /** The first click sets an anchor; the next ones move a second point and send the request. Built in for the Slope tool. */
     ANCHOR_PAIR(false),
     /** A click lists the tags of the block under the cursor in chat, and nothing is sent to the server. Built in for the Inspect tool. */

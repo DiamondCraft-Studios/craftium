@@ -14,6 +14,9 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 final class AdvancedTools {
     private AdvancedTools() {}
 
+    /** The longest Gradient Painter stroke, in blocks along its longest axis: further than anyone reaches while dragging. */
+    static final int MAX_STROKE = 1024;
+
     static boolean handle(EditPlanner p, Point center, Point normal) {
         var o = p.o;
         switch (o.tool) {
@@ -128,11 +131,32 @@ final class AdvancedTools {
                 } else for (Point at : p.brush(center)) if (p.accepted(at)) script.paint(at);
             }
             case GRADIENT_PAINTER -> {
-                if (o.nodes.size() < 2) throw new IllegalArgumentException("Set two gradient endpoints");
-                Point a = o.nodes.getFirst(), b = o.nodes.getLast();
+                if (o.gradientAnchors.size() < 2) throw new IllegalArgumentException("Drag from a start to an end");
+                Point a = o.gradientAnchors.getFirst(), b = o.gradientAnchors.getLast();
                 var vector = Geometry.vector(b).subtract(Geometry.vector(a));
                 double length = vector.dot(vector);
-                for (Point at : p.brush(center))
+                // A stroke from A to B: the blocks the brush covers moved along the whole line, painted as the
+                // Surface Painter paints them (solid, and with Surface only on, only those open to the air), whatever
+                // block the click itself was on. The brush is put down every half radius, which leaves no gaps.
+                // The ends come from the client: a stroke longer than any reach is refused before its line is made,
+                // and the cells are counted as they are gathered, so neither can grow past what an edit may change.
+                int span =
+                        Math.max(Math.abs(b.x() - a.x()), Math.max(Math.abs(b.y() - a.y()), Math.abs(b.z() - a.z())));
+                if (span > MAX_STROKE)
+                    throw new IllegalArgumentException(
+                            "A gradient stroke reaches at most " + MAX_STROKE + " blocks; drag a shorter one");
+                var cells = new LinkedHashSet<Point>();
+                var line = BrushMath.line(a, b);
+                int stride = Math.max(1, o.radius / 2);
+                for (int i = 0, last = line.size() - 1; ; i += stride) {
+                    int at = Math.min(i, last); // every stride, and always the end
+                    cells.addAll(p.brush(line.get(at)));
+                    if (cells.size() > Selection.LIMIT)
+                        throw new IllegalArgumentException(
+                                "This stroke covers too many blocks; use a smaller brush or a shorter stroke");
+                    if (at == last) break;
+                }
+                for (Point at : cells)
                     if (p.solid(at) && (!o.surfaceOnly || p.surface(at))) {
                         double t = length == 0
                                 ? 0
@@ -140,7 +164,7 @@ final class AdvancedTools {
                                                 .subtract(Geometry.vector(a))
                                                 .dot(vector)
                                         / length;
-                        p.put(at, p.preserve(p.state(at), p.palette(t, at)));
+                        p.put(at, p.preserve(p.state(at), p.gradient(t, at)));
                     }
             }
             case FLOODFILL -> {

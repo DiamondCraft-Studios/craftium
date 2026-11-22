@@ -254,6 +254,12 @@ public final class EditorScreen extends CraftiumScreen {
         }
 
         @Override
+        public void requestAt(String action, Point target, Point normal) {
+            ClientState.predictSaved(action);
+            CraftiumClient.send(action, target, normal);
+        }
+
+        @Override
         public boolean asking() {
             return confirm != null;
         }
@@ -481,6 +487,7 @@ public final class EditorScreen extends CraftiumScreen {
 
     private void deselectTool() {
         cancelSelectionJobs();
+        if (toolActive) Interactions.of(o().tool).unchosen(context);
         toolActive = false;
         selectedNode = -1;
     }
@@ -489,6 +496,7 @@ public final class EditorScreen extends CraftiumScreen {
         cancelSelectionJobs();
         if (tool.transform() && tool != Tool.PIVOT && ClientState.gizmoSize() == 0 && !ShapeObject.active())
             ClientState.notify("Select blocks first, then use " + tool.label);
+        if (toolActive && o().tool != tool) Interactions.of(o().tool).unchosen(context);
         toolActive = true;
         previousTool = o().tool;
         selectedNode = -1;
@@ -568,6 +576,7 @@ public final class EditorScreen extends CraftiumScreen {
             missingPanel(g);
             progressPanel(g);
             materialsPanel(g);
+            gradientPanel(g);
             selectionPanel(g);
             shapePanel(g);
         }
@@ -1798,6 +1807,44 @@ public final class EditorScreen extends CraftiumScreen {
                     materialsRow(g, 10, next + 4, pw - 20);
                     next += 48;
                 }
+                if (o().tool == Tool.GRADIENT_PAINTER) {
+                    slider(
+                            g,
+                            10,
+                            next + 10,
+                            pw - 20,
+                            "Blend",
+                            o().gradientBlend,
+                            0,
+                            1,
+                            0,
+                            v -> o().gradientBlend = Math.round(v * 100) / 100d,
+                            false);
+                    next += 34;
+                    toggle(
+                            g,
+                            10,
+                            next,
+                            "Noise",
+                            o().gradientNoise,
+                            () -> o().gradientNoise = !o().gradientNoise,
+                            "Mix the blended band at random instead of in an even weave · Blend 0 keeps hard bands either way");
+                    next += 22;
+                    button(
+                            g,
+                            10,
+                            next,
+                            pw - 20,
+                            19,
+                            "Gradient window",
+                            WorkspaceLayout.visible("gradient"),
+                            () -> {
+                                if (WorkspaceLayout.visible("gradient")) WorkspaceLayout.toggle("gradient");
+                                else WorkspaceLayout.show("gradient");
+                            },
+                            "Open the window where the gradient's colour stops make the ordered Materials list");
+                    next += 24;
+                }
                 if (o().tool == Tool.EXTRUDE) {
                     toggle(
                             g,
@@ -2356,22 +2403,38 @@ public final class EditorScreen extends CraftiumScreen {
         button(g, 16 + cell[0], pb - 27, cell[1], 20, "Clear", false, () -> action("clear"), "Clear the selection");
     }
 
-    private int optionsScroll, scrollLimit, fieldShift, viewTop, viewBottom;
+    private int fieldShift, viewTop, viewBottom;
+    /** How far a scroll view is scrolled, in pixels, and how far it can be: kept by the window that has it. */
+    private static final class ScrollView {
+        int scroll, limit;
+    }
+
+    private final ScrollView optionsView = new ScrollView();
     /**
      * Draws the options panel's contents in the room between {@code top} and the panel's bottom less {@code reserve}, moved up by
      * {@code gap}. Whatever reaches below that room scrolls: the wheel moves it and a bar on the right shows where it is.
      */
     private void scrolled(Gfx g, int top, int reserve, int gap, Runnable content) {
         int bottom = pb - reserve;
-        optionsScroll = Math.clamp(optionsScroll, 0, scrollLimit);
         viewTop = top;
         viewBottom = bottom;
-        fieldShift = -gap - optionsScroll;
-        g.enableScissor(0, top, pw, bottom);
+        fieldShift = -gap - Math.clamp(optionsView.scroll, 0, optionsView.limit);
+        scrollView(g, "options", optionsView, 0, pw, top, bottom, gap, content);
+    }
+    /**
+     * Draws {@code content} of the window {@code panel} in the room from {@code left} to {@code right} and {@code top} to {@code bottom},
+     * moved up by {@code gap} and by how far {@code view} is scrolled. What reaches below the room scrolls: the wheel moves it, and a bar on
+     * the right shows where it is and jumps there when clicked. Controls outside the room cannot be clicked.
+     */
+    private void scrollView(
+            Gfx g, String panel, ScrollView view, int left, int right, int top, int bottom, int gap, Runnable content) {
+        view.scroll = Math.clamp(view.scroll, 0, view.limit);
+        int shift = -gap - view.scroll;
+        g.enableScissor(left, top, right, bottom);
         g.pose().pushMatrix();
-        g.pose().translate(0, fieldShift);
+        g.pose().translate(0, shift);
         scrollActive = true;
-        scrollShift = fieldShift;
+        scrollShift = shift;
         scrollContent = 0;
         scrollClipTop = top;
         scrollClipBottom = bottom;
@@ -2385,23 +2448,24 @@ public final class EditorScreen extends CraftiumScreen {
             g.pose().popMatrix();
             g.disableScissor();
         }
-        scrollLimit = Math.max(0, scrollContent - gap - bottom + 6);
-        if (scrollLimit > 0) {
+        view.limit = Math.max(0, scrollContent - gap - bottom + 6);
+        view.scroll = Math.min(view.scroll, view.limit);
+        if (view.limit > 0) {
             int track = bottom - top,
-                    thumb = Math.max(14, track * track / (track + scrollLimit)),
-                    at = top + (track - thumb) * optionsScroll / scrollLimit,
+                    thumb = Math.max(14, track * track / (track + view.limit)),
+                    at = top + (track - thumb) * view.scroll / view.limit,
                     span = Math.max(1, track - thumb),
-                    limit = scrollLimit;
-            g.fill(pw - 7, top, pw - 3, bottom, 0xff1b2b40);
-            g.fill(pw - 7, at, pw - 3, at + thumb, MUTED);
+                    limit = view.limit;
+            g.fill(right - 7, top, right - 3, bottom, 0xff1b2b40);
+            g.fill(right - 7, at, right - 3, at + thumb, MUTED);
             controls.add(new Control(
-                    pw - 10,
+                    right - 10,
                     top,
                     10,
                     track,
                     () -> {
-                        double py = WorkspaceLayout.inverse("options", mx, my)[1];
-                        optionsScroll = Math.clamp((int) Math.round((py - top - thumb / 2.0) / span * limit), 0, limit);
+                        double py = WorkspaceLayout.inverse(panel, mx, my)[1];
+                        view.scroll = Math.clamp((int) Math.round((py - top - thumb / 2.0) / span * limit), 0, limit);
                     },
                     ""));
         }
@@ -3025,7 +3089,7 @@ public final class EditorScreen extends CraftiumScreen {
         init();
     }
 
-    private int materialsScroll;
+    private final ScrollView materialsView = new ScrollView(), gradientView = new ScrollView();
     /** The Materials window: the palette the blending and pouring tools draw from, one row per block with its icon, a weight and where it sits in the order. It opens from the tool panel or the Window menu and is moved, sized and folded like the others. */
     private void materialsPanel(Gfx g) {
         int x = w - RIGHT - 300, y = 300;
@@ -3037,83 +3101,17 @@ public final class EditorScreen extends CraftiumScreen {
                 ClientState.notify("The palette is full");
             ClientState.save();
         }); // a block dropped anywhere on the window joins the palette
-        int rowTop = y + 36, pitch = 36, fit = Math.max(1, (pb - 72 - rowTop) / pitch);
-        materialsScroll = Math.clamp(materialsScroll, 0, Math.max(0, blocks.size() - fit));
-        for (int r = 0; r < fit && materialsScroll + r < blocks.size(); r++) {
-            int i = materialsScroll + r, ry = rowTop + r * pitch;
-            String block = blocks.get(i);
-            int sliderX = x + 32, sliderW = pw - 10 - 32 - 3 * 17 - 6;
-            g.fill(x + 6, ry - 12, x + pw - 6, ry + 25, 0xff1b2838);
-            BlockPickerScreen.icon(g, font, block, x + 10, ry - 1);
-            controls.add(new Control(
-                    x + 8,
-                    ry - 3,
-                    20,
-                    20,
-                    () -> ClientCompat.setScreen(
-                            minecraft, new BlockPickerScreen(this, "Replace " + block, block, id -> {
-                                MaterialPalette.replace(o(), i, id);
-                                ClientState.save();
-                            })),
-                    BlockPickerScreen.name(block) + " · " + block + " · Click to change the block"));
-            slider(
-                    g,
-                    sliderX,
-                    ry + 2,
-                    sliderW,
-                    (i + 1) + "  " + shorten(BlockPickerScreen.name(block), sliderW - 44),
-                    MaterialPalette.weight(o, i),
-                    MaterialPalette.MIN_WEIGHT,
-                    10,
-                    MaterialPalette.MAX_WEIGHT,
-                    1,
-                    v -> {
-                        MaterialPalette.setWeight(o(), i, Math.round(v * 100) / 100d);
-                    },
-                    false);
-            String share = Math.round(100 * MaterialPalette.share(o, i)) + "%";
-            text(g, share, sliderX + sliderW - TextCache.width(font, share), ry - 8, TEXT);
-            int bx = x + pw - 10 - 3 * 17 - 4;
-            button(
-                    g,
-                    bx,
-                    ry + 2,
-                    15,
-                    17,
-                    "▲",
-                    false,
-                    () -> {
-                        MaterialPalette.move(o(), i, -1);
-                        ClientState.save();
-                    },
-                    "Move up");
-            button(
-                    g,
-                    bx + 17,
-                    ry + 2,
-                    15,
-                    17,
-                    "▼",
-                    false,
-                    () -> {
-                        MaterialPalette.move(o(), i, 1);
-                        ClientState.save();
-                    },
-                    "Move down");
-            button(
-                    g,
-                    bx + 34,
-                    ry + 2,
-                    15,
-                    17,
-                    "×",
-                    false,
-                    () -> {
-                        if (!MaterialPalette.remove(o(), i)) ClientState.notify("The palette keeps at least one block");
-                        ClientState.save();
-                    },
-                    "Remove this block");
-        }
+        int fit = materialRowsFit(y + 36, pb - 72);
+        scrollView(
+                g,
+                "materials",
+                materialsView,
+                x,
+                x + pw,
+                y + 22,
+                pb - 72,
+                0,
+                () -> materialRows(g, x, y + 36, blocks.size(), 0, BlockList.MATERIALS));
         int[] top = flex(pw - 20, 4, 1, 1, 1);
         button(
                 g,
@@ -3124,10 +3122,15 @@ public final class EditorScreen extends CraftiumScreen {
                 "Add block",
                 false,
                 () -> ClientCompat.setScreen(
-                        minecraft, new BlockPickerScreen(this, "Add to Materials", "minecraft:stone", id -> {
-                            if (!MaterialPalette.add(o(), id)) ClientState.notify("The palette is full");
-                            ClientState.save();
-                        })),
+                        minecraft,
+                        new BlockPickerScreen(
+                                this,
+                                "Add to Materials",
+                                "minecraft:stone",
+                                id -> ClientOptionHistory.change("Add " + BlockPickerScreen.name(id), () -> {
+                                    if (!MaterialPalette.add(o(), id)) ClientState.notify("The palette is full");
+                                    ClientState.save();
+                                }))),
                 "Pick a block to add · or drag one onto this window");
         button(
                 g,
@@ -3206,6 +3209,409 @@ public final class EditorScreen extends CraftiumScreen {
                 pb - 62,
                 MUTED);
     }
+
+    private static final int MATERIAL_PITCH = 36;
+
+    /** How many rows of the Materials list fit between {@code rowTop} and {@code bottom}. */
+    private static int materialRowsFit(int rowTop, int bottom) {
+        return Math.max(1, (bottom - rowTop) / MATERIAL_PITCH);
+    }
+
+    /**
+     * The rows of the Materials list from {@code scroll}, in order: the block (click to replace it, right-click for the {@code menuList} menu), its weight,
+     * and buttons that move or remove it. Shared by the Materials and Gradient windows; returns the scroll kept in range.
+     */
+    private int materialRows(Gfx g, int x, int rowTop, int fit, int scroll, BlockList menuList) {
+        var o = o();
+        var blocks = MaterialPalette.blocks(o);
+        scroll = Math.clamp(scroll, 0, Math.max(0, blocks.size() - fit));
+        for (int r = 0; r < fit && scroll + r < blocks.size(); r++) {
+            int i = scroll + r, ry = rowTop + r * MATERIAL_PITCH;
+            String block = blocks.get(i);
+            int sliderX = x + 32, sliderW = pw - 10 - 32 - 3 * 17 - 6;
+            g.fill(x + 6, ry - 12, x + pw - 6, ry + 25, 0xff1b2838);
+            BlockPickerScreen.icon(g, font, block, x + 10, ry - 1);
+            controls.add(new Control(
+                    x + 8,
+                    ry - 3,
+                    20,
+                    20,
+                    () -> chooseMaterialReplacement(i),
+                    () -> openBlockMenu(menuList, i),
+                    BlockPickerScreen.name(block)
+                            + " · "
+                            + block
+                            + " · Click to replace it, blocks of a similar colour first · Right-click for options"));
+            slider(
+                    g,
+                    sliderX,
+                    ry + 2,
+                    sliderW,
+                    (i + 1) + "  " + shorten(BlockPickerScreen.name(block), sliderW - 44),
+                    MaterialPalette.weight(o, i),
+                    MaterialPalette.MIN_WEIGHT,
+                    10,
+                    MaterialPalette.MAX_WEIGHT,
+                    1,
+                    v -> {
+                        MaterialPalette.setWeight(o(), i, Math.round(v * 100) / 100d);
+                    },
+                    false);
+            String share = Math.round(100 * MaterialPalette.share(o, i)) + "%";
+            text(g, share, sliderX + sliderW - TextCache.width(font, share), ry - 8, TEXT);
+            int bx = x + pw - 10 - 3 * 17 - 4;
+            button(
+                    g,
+                    bx,
+                    ry + 2,
+                    15,
+                    17,
+                    "▲",
+                    false,
+                    () -> {
+                        MaterialPalette.move(o(), i, -1);
+                        ClientState.save();
+                    },
+                    "Move up");
+            button(
+                    g,
+                    bx + 17,
+                    ry + 2,
+                    15,
+                    17,
+                    "▼",
+                    false,
+                    () -> {
+                        MaterialPalette.move(o(), i, 1);
+                        ClientState.save();
+                    },
+                    "Move down");
+            button(
+                    g,
+                    bx + 34,
+                    ry + 2,
+                    15,
+                    17,
+                    "×",
+                    false,
+                    () -> {
+                        if (!MaterialPalette.remove(o(), i)) ClientState.notify("The palette keeps at least one block");
+                        ClientState.save();
+                    },
+                    "Remove this block");
+        }
+        return scroll;
+    }
+
+    private int draggingStop = -1, gradientBarX, gradientBarW = 1, pressedStop = -1;
+    /** Whether the press being handled is the second of a double click. */
+    private boolean pressDouble;
+    /** How many blocks Generate samples along the gradient, and the Colour Studio's filters for which blocks it may pick. Kept for the game session. */
+    private static int gradientSteps = 9;
+
+    private static boolean gradientFull = true, gradientSolid = true, gradientOpaque, gradientUniform;
+    /** The Materials list as Generate last left it, so Generate asks first only when it was changed since. Null before the first Generate. */
+    private static String gradientGenerated;
+
+    /**
+     * The Gradient window: a bar of colour stops that can sit anywhere along it, Generate, which makes the ordered Materials list from them,
+     * and that list's rows, as in the Materials window. Opens from the Gradient Painter's panel or the Window menu.
+     */
+    private void gradientPanel(Gfx g) {
+        int x = w - RIGHT - 300, y = 250;
+        panel(g, x, y, 290, 380, "Gradient");
+        var o = o();
+        var stops = o.gradientStops;
+        int barX = x + 12, barW = Math.max(20, pw - 24), barY = y + 28, barH = 20;
+        gradientBarX = barX;
+        gradientBarW = barW;
+        if (!culled(barY, barH)) {
+            for (int px = 0; px < barW; px += 2) {
+                int rgb = GradientStop.colourAt(stops, (px + 1d) / barW);
+                g.fill(barX + px, barY, barX + Math.min(barW, px + 2), barY + barH, 0xff000000 | rgb);
+            }
+            g.outline(barX - 1, barY - 1, barW + 2, barH + 2, LINE);
+        }
+        controls.add(new Control(
+                barX,
+                barY,
+                barW,
+                barH,
+                () -> addStop((WorkspaceLayout.inverse("gradient", mx, my)[0] - gradientBarX) / gradientBarW),
+                "Gradient · Click to add a colour stop here"));
+        int handleY = barY + barH + 3;
+        for (int i = 0; i < stops.size(); i++) {
+            var stop = stops.get(i);
+            int sx = barX + (int) Math.round(stop.at() * barW), index = i;
+            boolean held = draggingStop == i;
+            g.fill(sx, barY + barH, sx + 1, handleY, TEXT);
+            g.fill(sx - 4, handleY, sx + 5, handleY + 12, 0xff000000 | stop.rgb());
+            g.outline(sx - 5, handleY - 1, 11, 14, held ? ACCENT : LINE);
+            controls.add(new Control(
+                    sx - 5,
+                    handleY - 1,
+                    11,
+                    14,
+                    () -> {
+                        if (pressDouble && pressedStop == index) editStopColour(index);
+                        else draggingStop = index;
+                        pressedStop = index;
+                    },
+                    () -> openBlockMenu(BlockList.STOPS, index),
+                    String.format(Locale.ROOT, "Colour stop · #%06X", stop.rgb())
+                            + (stop.block().isEmpty() ? "" : " · from " + BlockPickerScreen.name(stop.block()))
+                            + " · Drag to move it · Double-click to set its colour · Right-click for more"));
+        }
+        text(g, "Click the bar to add a stop · double-click a stop to set it", x + 12, handleY + 18, MUTED);
+        int next = handleY + 34;
+        slider(
+                g,
+                x + 12,
+                next + 10,
+                pw - 24,
+                "Steps",
+                gradientSteps,
+                2,
+                32,
+                9,
+                v -> gradientSteps = Math.clamp((int) Math.round(v), 2, 32),
+                true);
+        next += 34;
+        int half = (pw - 24) / 2;
+        toggle(g, x + 12, next, "Full cube", gradientFull, () -> gradientFull = !gradientFull);
+        toggle(g, x + 12 + half, next, "Solid", gradientSolid, () -> gradientSolid = !gradientSolid);
+        next += 18;
+        toggle(g, x + 12, next, "Opaque", gradientOpaque, () -> gradientOpaque = !gradientOpaque);
+        toggle(
+                g,
+                x + 12 + half,
+                next,
+                "Same texture",
+                gradientUniform,
+                () -> gradientUniform = !gradientUniform,
+                "Only blocks with one texture on every side");
+        next += 22;
+        button(
+                g,
+                x + 12,
+                next,
+                pw - 24,
+                19,
+                "Generate",
+                false,
+                this::generateGradient,
+                "Pick the block closest in colour at each step along the gradient, in order, into the Materials list");
+        next += 36;
+        int rowsTop = next, fit = materialRowsFit(next, pb - 22);
+        int count = MaterialPalette.blocks(o).size();
+        scrollView(
+                g,
+                "gradient",
+                gradientView,
+                x,
+                x + pw,
+                rowsTop - 14,
+                pb - 22,
+                0,
+                () -> materialRows(g, x, rowsTop, count, 0, BlockList.GRADIENT));
+        text(
+                g,
+                count
+                        + (count == 1 ? " block" : " blocks")
+                        + (count > fit ? " · scroll for more" : " · painted top to bottom"),
+                x + 10,
+                pb - 14,
+                MUTED);
+    }
+
+    /**
+     * The colour picker for stop {@code index}: the colour shows live on the bar, Set keeps it as one undo, and closing the picker any other way
+     * puts the stop back as it was. Alt + click on a block in the world takes the colour of the face clicked.
+     */
+    private void editStopColour(int index) {
+        var stops = o().gradientStops;
+        if (index >= stops.size()) return;
+        var original = stops.get(index);
+        var before = ClientOptionHistory.mark();
+        draggingStop = -1;
+        ColourPickerScreen.openWithPipette(
+                this,
+                "Stop colour",
+                () -> index < o().gradientStops.size()
+                        ? o().gradientStops.get(index).rgb()
+                        : original.rgb(),
+                rgb -> {
+                    var list = o().gradientStops;
+                    if (index >= list.size()) return;
+                    var now = list.get(index);
+                    // Back to the colour it had: the block it was taken from comes back with it
+                    list.set(index, rgb == original.rgb() ? original.at(now.at()) : now.coloured(rgb, ""));
+                },
+                original::rgb,
+                () -> ClientOptionHistory.since("Gradient stop colour", before),
+                block -> { // a colour taken from a block with the pipette remembers the block
+                    var list = o().gradientStops;
+                    if (index < list.size())
+                        list.set(index, list.get(index).coloured(list.get(index).rgb(), block));
+                });
+    }
+
+    /** A new stop at {@code t} along the bar, in the colour the gradient already has there, so adding one changes nothing until it is set. */
+    private void addStop(double t) {
+        var stops = o().gradientStops;
+        if (stops.size() >= GradientStop.MAX) {
+            ClientState.notify("A gradient holds up to " + GradientStop.MAX + " stops");
+            return;
+        }
+        double at = Math.clamp(t, 0, 1);
+        stops.add(new GradientStop(at, GradientStop.colourAt(stops, at), ""));
+        draggingStop = stops.size() - 1;
+        ClientState.save();
+    }
+
+    /** Moves the stop being dragged to the pointer at {@code px}, across the bar. */
+    private void dragStop(double px) {
+        var stops = o().gradientStops;
+        if (draggingStop >= stops.size()) {
+            draggingStop = -1;
+            return;
+        }
+        stops.set(draggingStop, stops.get(draggingStop).at((px - gradientBarX) / gradientBarW));
+    }
+
+    /** Generate: the block closest in colour at each step along the gradient, into the Materials list, asking first when the list was changed by hand. */
+    private void generateGradient() {
+        BlockColours.build();
+        var steps = new ArrayList<String>();
+        for (int i = 0; i < gradientSteps; i++) {
+            int rgb = GradientStop.colourAt(o().gradientStops, i / (gradientSteps - 1d));
+            var near = BlockColours.nearest(rgb, gradientFull, gradientSolid, gradientOpaque, gradientUniform, 1);
+            if (!near.isEmpty()) steps.add(near.getFirst().id());
+        }
+        if (steps.isEmpty()) {
+            ClientState.notify("No block passes these filters");
+            return;
+        }
+        Runnable apply = () -> {
+            ClientOptionHistory.change("Generate gradient", () -> MaterialPalette.setSteps(o(), steps));
+            gradientGenerated = materialsKey();
+            ClientState.save();
+            int n = MaterialPalette.blocks(o()).size();
+            ClientState.notify("Generated " + n + (n == 1 ? " block" : " blocks") + " from the gradient");
+        };
+        boolean untouched =
+                materialsKey().equals(gradientGenerated) || o().materials.equals(DEFAULTS.materials);
+        if (untouched) apply.run();
+        else
+            confirm = new Confirm(
+                    "Replace the Materials list, which has changes of yours, with the generated gradient?",
+                    "Replace it",
+                    apply);
+    }
+
+    /** The Materials list and its weights, to tell whether it changed since Generate. */
+    private String materialsKey() {
+        return o().materials + "|" + o().materialWeights;
+    }
+
+    /** What an entry of the right-click menu of a Materials row or a colour stop does; {@code label} is the entry chosen. */
+    private void gradientMenu(BlockList list, int index, String label) {
+        if (list == BlockList.STOPS) {
+            var stops = o().gradientStops;
+            if (index >= stops.size()) return;
+            var stop = stops.get(index);
+            switch (label) {
+                case "Set colour..." -> editStopColour(index);
+                case "Set from block..." -> {
+                    var picker = new BlockPickerScreen(this, "Stop colour from a block", stop.block(), id -> {
+                        var known = BlockColours.get(id.split("\\[", 2)[0]);
+                        if (known == null)
+                            ClientState.notify(BlockPickerScreen.name(id) + " has no colour Craftium can read");
+                        else
+                            ClientOptionHistory.change("Gradient stop from " + BlockPickerScreen.name(id), () -> {
+                                stops.set(index, stops.get(index).coloured(known.rgb(), known.id()));
+                                ClientState.save();
+                            });
+                    });
+                    ClientCompat.setScreen(minecraft, picker.similarTo(stop.rgb()));
+                }
+                default -> {
+                    if (stops.size() <= 2) ClientState.notify("A gradient keeps at least two stops");
+                    else
+                        ClientOptionHistory.change("Remove gradient stop", () -> {
+                            stops.remove(index);
+                            ClientState.save();
+                        });
+                }
+            }
+            return;
+        }
+        var blocks = MaterialPalette.blocks(o());
+        if (index >= blocks.size()) return;
+        String block = blocks.get(index);
+        switch (label) {
+            case "Replace..." -> chooseMaterialReplacement(index);
+            case "Next closest colour" ->
+                ClientOptionHistory.change("Next closest colour", () -> nextClosestMaterial(index));
+            case "Edit block state" ->
+                ClientCompat.setScreen(
+                        minecraft,
+                        new BlockStateScreen(
+                                this,
+                                block,
+                                edited -> ClientOptionHistory.change("Edit block state", () -> {
+                                    MaterialPalette.replace(o(), index, edited);
+                                    ClientState.save();
+                                })));
+            default ->
+                ClientOptionHistory.change("Remove " + BlockPickerScreen.name(block), () -> {
+                    if (!MaterialPalette.remove(o(), index)) ClientState.notify("The palette keeps at least one block");
+                    ClientState.save();
+                });
+        }
+    }
+
+    /** Replace: choose a block for entry {@code index} of the Materials list, those of a colour like its own listed first. */
+    private void chooseMaterialReplacement(int index) {
+        var blocks = MaterialPalette.blocks(o());
+        if (index >= blocks.size()) return;
+        String block = blocks.get(index);
+        var picker = new BlockPickerScreen(
+                this,
+                "Replace " + BlockPickerScreen.name(block),
+                block,
+                id -> ClientOptionHistory.change("Replace " + BlockPickerScreen.name(block), () -> {
+                    MaterialPalette.replace(o(), index, id);
+                    ClientState.save();
+                }));
+        BlockColours.build();
+        var known = BlockColours.get(block.split("\\[", 2)[0]);
+        ClientCompat.setScreen(minecraft, known == null ? picker : picker.similarTo(known.rgb()));
+    }
+
+    /**
+     * Swaps entry {@code index} of the Materials list for the next block in order of closeness to the gradient's colour at that entry, going
+     * round the closest few, so pressing it again steps on through the near matches.
+     */
+    private void nextClosestMaterial(int index) {
+        var blocks = MaterialPalette.blocks(o());
+        if (index >= blocks.size()) return;
+        BlockColours.build();
+        int rgb = GradientStop.colourAt(o().gradientStops, MaterialPalette.position(o(), index));
+        var near = BlockColours.nearest(rgb, gradientFull, gradientSolid, gradientOpaque, gradientUniform, 12);
+        if (near.isEmpty()) {
+            ClientState.notify("No block passes these filters");
+            return;
+        }
+        int at = -1;
+        String current = blocks.get(index).split("\\[", 2)[0]; // the block without its state, as the matches name it
+        for (int i = 0; i < near.size(); i++) if (near.get(i).id().equals(current)) at = i;
+        String next = near.get((at + 1) % near.size()).id();
+        MaterialPalette.replace(o(), index, next);
+        ClientState.save();
+        ClientState.notify(BlockPickerScreen.name(next));
+    }
+
     /** The Materials palette as a row of its blocks' icons, 24 pixels tall; a click opens the window where blocks are added, weighed and put in order. */
     private void materialsRow(Gfx g, int x, int y, int width) {
         List<String> blocks;
@@ -3727,12 +4133,18 @@ public final class EditorScreen extends CraftiumScreen {
     private int maskCols = 7, maskRows = 3;
     private static final int MASK_PITCH = 25, MASK_MENU_WIDTH = 110, MASK_MENU_ROW = 18;
     private int maskScroll, paletteScroll, ctxCell = -1, ctxX, ctxY;
-    /** The two lists of blocks that share the Change / Edit block state / Remove menu. */
+    /** The lists whose cells share the right-click menu: each list has its own entries ({@link #menuLabels}). */
     private enum BlockList {
         MASK,
         PALETTE,
         /** The cells of the Selection window, which have a menu of their own. */
-        SELECTION
+        SELECTION,
+        /** The rows of the Materials list in the Materials window. */
+        MATERIALS,
+        /** The same rows in the Gradient window, whose menu also swaps a block for the next closest to the gradient. */
+        GRADIENT,
+        /** The colour stops of the Gradient window. */
+        STOPS
     }
 
     private BlockList ctxList = BlockList.MASK;
@@ -3741,6 +4153,11 @@ public final class EditorScreen extends CraftiumScreen {
         return switch (list) {
             case MASK -> o().maskBlocks;
             case PALETTE -> ClientState.palette;
+            case MATERIALS, GRADIENT -> MaterialPalette.blocks(o());
+            case STOPS ->
+                o().gradientStops.stream()
+                        .map(dev.craftium.core.GradientStop::block)
+                        .toList();
             case SELECTION ->
                 SelectionBlocks.entries().stream()
                         .map(SelectionBlocks.Entry::id)
@@ -3749,7 +4166,13 @@ public final class EditorScreen extends CraftiumScreen {
     }
 
     private String[] menuLabels(BlockList list) {
-        return list == BlockList.SELECTION ? SELECTION_MENU_LABELS : BLOCK_MENU_LABELS;
+        return switch (list) {
+            case SELECTION -> SELECTION_MENU_LABELS;
+            case MATERIALS -> MATERIAL_MENU_LABELS;
+            case GRADIENT -> GRADIENT_MENU_LABELS;
+            case STOPS -> STOP_MENU_LABELS;
+            default -> BLOCK_MENU_LABELS;
+        };
     }
     /** The block of the Selection window cell whose menu is open: kept by name, as the cells change under a menu that is left open. */
     private String ctxBlock = "";
@@ -3841,10 +4264,15 @@ public final class EditorScreen extends CraftiumScreen {
         ctxList = list;
         ctxCell = index;
         ctxX = Math.min(mx, w - MASK_MENU_WIDTH - 4);
-        ctxY = Math.min(my, h - BLOCK_MENU_LABELS.length * MASK_MENU_ROW - 4);
+        ctxY = Math.min(my, h - menuLabels(list).length * MASK_MENU_ROW - 4);
     }
 
     private static final String[] BLOCK_MENU_LABELS = {"Change", "Edit block state", "Remove"};
+    private static final String[] MATERIAL_MENU_LABELS = {"Replace...", "Edit block state", "Remove"};
+    private static final String[] GRADIENT_MENU_LABELS = {
+        "Replace...", "Next closest colour", "Edit block state", "Remove"
+    };
+    private static final String[] STOP_MENU_LABELS = {"Set colour...", "Set from block...", "Remove stop"};
     private static final String[] SELECTION_MENU_LABELS = {"Replace...", "Edit block state", "Change material"};
 
     private void toggleMaskBlock(String block) {
@@ -4498,6 +4926,8 @@ public final class EditorScreen extends CraftiumScreen {
                         "Block palette",
                         "materials",
                         "Materials",
+                        "gradient",
+                        "Gradient",
                         "selection",
                         "Selection",
                         "clipboard",
@@ -5674,6 +6104,7 @@ public final class EditorScreen extends CraftiumScreen {
             ClientState.boxCorners.clear();
             o().pivotSet = false;
             o().nodes.clear();
+            o().gradientAnchors.clear();
             selectedNode = -1;
         }
         if (action.equals("duplicate") || action.equals("cut")) {
@@ -5868,6 +6299,7 @@ public final class EditorScreen extends CraftiumScreen {
     /** Called when the server's status arrives: sends the block the cursor has moved to meanwhile, if there is one. */
     void statusReceived() {
         repliedSince = true;
+        if (toolActive) Interactions.of(o().tool).statusReceived(context);
         if (useQueued && painting && !ClientState.status.busy()) dragUse();
     }
 
@@ -5897,10 +6329,12 @@ public final class EditorScreen extends CraftiumScreen {
         my = (int) y;
         pointerX = event.x();
         pointerY = event.y();
+        pressDouble = doubleClick;
         if (event.button() == 0) {
             ClientOptionHistory.pressed(true);
-            if ("options".equals(WorkspaceLayout.hit(x, y, false)))
-                ClientOptionHistory.begin(); // a gesture in the Tool options window is one undo
+            String window = WorkspaceLayout.hit(x, y, false);
+            if (window.equals("options") || window.equals("gradient") || window.equals("materials"))
+                ClientOptionHistory.begin(); // a gesture in the Tool options, Gradient or Materials window is one undo
         }
         if (typing != null) {
             // A click on the slider being typed in moves the caret (Shift stretches the selection, Ctrl or a double
@@ -5970,6 +6404,10 @@ public final class EditorScreen extends CraftiumScreen {
                         case 1 -> editSelectionState(ctxBlock);
                         default -> chooseMaterial(ctxBlock);
                     }
+                    return true;
+                }
+                if (ctxList == BlockList.MATERIALS || ctxList == BlockList.GRADIENT || ctxList == BlockList.STOPS) {
+                    gradientMenu(ctxList, cell, menuLabels(ctxList)[(int) ((y - ctxY) / MASK_MENU_ROW)]);
                     return true;
                 }
                 switch ((int) ((y - ctxY) / MASK_MENU_ROW)) {
@@ -6394,6 +6832,10 @@ public final class EditorScreen extends CraftiumScreen {
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
         if (event.button() == 0) ClientOptionHistory.pressed(false);
+        if (draggingStop >= 0) {
+            draggingStop = -1;
+            ClientState.save();
+        }
         if (event.button() == 0 && objectPickPending) {
             objectPickPending = false;
             if (Math.hypot(event.x() - objectPickX, event.y() - objectPickY) <= 3) pickBuildObject(objectPickHit);
@@ -6579,6 +7021,10 @@ public final class EditorScreen extends CraftiumScreen {
             }
             return true;
         }
+        if (draggingStop >= 0) {
+            dragStop(WorkspaceLayout.inverse("gradient", event.x() / scale, event.y() / scale)[0]);
+            return true;
+        }
         if (dragging != null) {
             double px = WorkspaceLayout.inverse(draggingSliderPanel, event.x() / scale, event.y() / scale)[0];
             dragging.drag(px, sliderStartX, sliderStartValue, minecraft.hasControlDown(), minecraft.hasShiftDown());
@@ -6625,7 +7071,11 @@ public final class EditorScreen extends CraftiumScreen {
             return true;
         } // clamped when drawn
         if (panels && WorkspaceLayout.hit(x / scale, y / scale, false).equals("materials")) {
-            materialsScroll = Math.max(0, materialsScroll + (vertical < 0 ? 1 : -1));
+            materialsView.scroll = Math.max(0, materialsView.scroll + (vertical < 0 ? 24 : -24));
+            return true;
+        } // clamped when drawn
+        if (panels && WorkspaceLayout.hit(x / scale, y / scale, false).equals("gradient")) {
+            gradientView.scroll = Math.max(0, gradientView.scroll + (vertical < 0 ? 24 : -24));
             return true;
         } // clamped when drawn
         if (panels && WorkspaceLayout.hit(x / scale, y / scale, false).equals("selection")) {
@@ -6644,7 +7094,7 @@ public final class EditorScreen extends CraftiumScreen {
                 && !pinnedTab
                 && o().tool != Tool.MODIFY
                 && WorkspaceLayout.hit(x / scale, y / scale, false).equals("options")) {
-            optionsScroll = Math.clamp(optionsScroll + (vertical < 0 ? 24 : -24), 0, scrollLimit);
+            optionsView.scroll = Math.clamp(optionsView.scroll + (vertical < 0 ? 24 : -24), 0, optionsView.limit);
             return true;
         }
         if (panels
@@ -8952,6 +9402,8 @@ public final class EditorScreen extends CraftiumScreen {
 
     @Override
     public void removed() {
+        // Another screen took over, and it gets the mouse release: an undo gesture begun here must not wait for it
+        ClientOptionHistory.pressed(false);
         BlockDragCursor.release();
         keysDown.clear();
         pipetting = false;

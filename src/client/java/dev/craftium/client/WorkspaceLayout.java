@@ -79,6 +79,7 @@ final class WorkspaceLayout {
             case "Missing blocks" -> "missing";
             case "Large edit" -> "progress";
             case "Materials" -> "materials";
+            case "Gradient" -> "gradient";
             case "Selection" -> "selection";
             default -> "";
         };
@@ -167,6 +168,7 @@ final class WorkspaceLayout {
                 && !id.equals("clipboard")
                 && !id.equals("rulers")
                 && !id.equals("materials")
+                && !id.equals("gradient")
                 && !id.equals("selection");
         return r;
     }
@@ -385,6 +387,7 @@ final class WorkspaceLayout {
                             "hierarchy",
                             "progress",
                             "materials",
+                            "gradient",
                             "selection",
                             "shape")
                     .contains(e.getKey())) continue;

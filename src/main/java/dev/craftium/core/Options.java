@@ -307,6 +307,15 @@ public final class Options {
     public boolean noise3D = true, copyProperties = true, typeReplace, fillVertically, visualizeBiome = true;
     public String materials = "minecraft:stone,minecraft:andesite";
     public java.util.List<Double> materialWeights = new java.util.ArrayList<>();
+    /**
+     * Gradient Painter: how wide the mixed band between two neighbouring blocks of the Materials list is, from 0 (hard bands) to 1 (mixed all
+     * the way), and whether that band is mixed as random noise rather than an even weave.
+     */
+    public double gradientBlend = 0;
+
+    public boolean gradientNoise;
+    /** The colour stops the Gradient window makes the Materials list from. Kept with the options so they come back; the server does not use them. */
+    public java.util.List<GradientStop> gradientStops = GradientStop.defaults();
 
     public enum ShadeFrom {
         PLAYER_POSITION,
@@ -363,6 +372,9 @@ public final class Options {
     public boolean sizeChain = true;
 
     public java.util.List<Point> nodes = new java.util.ArrayList<>();
+    /** The Gradient Painter's start and end, apart from {@link #nodes} so a stroke never touches the Path and Modelling points. */
+    public java.util.List<Point> gradientAnchors = new java.util.ArrayList<>();
+
     public java.util.List<Point> selectionPoints = new java.util.ArrayList<>();
     public Point position1 = new Point(0, 0, 0), position2 = new Point(0, 0, 0), symmetryOrigin = new Point(0, 0, 0);
     public boolean looped, extendToGround, useStairsAndSlabs, deferred, symmetryX, symmetryY, symmetryZ;
@@ -757,6 +769,11 @@ public final class Options {
                     || light.intensity() > 16) throw new IllegalArgumentException("Invalid light source");
         for (int i = 0; i < materialWeights.size(); i++)
             materialWeights.set(i, bounded(materialWeights.get(i), .01, 100));
+        gradientBlend = bounded(gradientBlend, 0, 1);
+        if (gradientStops == null || gradientStops.size() > GradientStop.MAX || gradientStops.contains(null))
+            throw new IllegalArgumentException("Invalid gradient stops");
+        for (var stop : gradientStops)
+            if (stop.block().length() > 256) throw new IllegalArgumentException("Invalid gradient stop");
         shadeAzimuth = bounded(shadeAzimuth, -360, 360);
         shadeAltitude = bounded(shadeAltitude, -90, 90);
         shadeAmbientOcclusion = bounded(shadeAmbientOcclusion, 0, 1);
@@ -948,6 +965,8 @@ public final class Options {
             throw new IllegalArgumentException("Screen brush footprint too large");
         if (nodes == null || nodes.size() > 64 || nodes.contains(null))
             throw new IllegalArgumentException("Maximum 64 control points");
+        if (gradientAnchors == null || gradientAnchors.size() > 2 || gradientAnchors.contains(null))
+            throw new IllegalArgumentException("A gradient has a start and an end");
         if (selectionPoints == null || selectionPoints.size() > 32768 || selectionPoints.contains(null))
             throw new IllegalArgumentException("Lasso selection limit: 32,768 blocks");
         for (String value : new String[] {

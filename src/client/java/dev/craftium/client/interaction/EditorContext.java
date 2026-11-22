@@ -18,6 +18,8 @@ public interface EditorContext {
     boolean shiftDown();
     /** Sends the editor's own request of that name for the block under the cursor, as a menu item or a shortcut would. */
     void request(String action);
+    /** Sends the request of that name for {@code target} and its face {@code normal}, wherever the cursor is now. */
+    void requestAt(String action, Point target, Point normal);
     /** Whether a question is already waiting for an answer. */
     boolean asking();
     /** Puts a question to the player: {@code text} is what is asked, {@code hint} what Confirm is for, and {@code action} what Confirm does. Escape or Cancel drops it. */

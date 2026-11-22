@@ -476,7 +476,10 @@ public final class EditorServer {
                     || r.action().equals("pending_confirm")
                     || r.action().equals("stroke_end")
                     || r.action().equals("use")
-                            && (o.tool == Tool.EXTRUDE || o.tool == Tool.FLOODFILL || o.tool == Tool.PAINT_BUCKET)
+                            && (o.tool == Tool.EXTRUDE
+                                    || o.tool == Tool.FLOODFILL
+                                    || o.tool == Tool.PAINT_BUCKET
+                                    || o.tool == Tool.GRADIENT_PAINTER)
                     || !o.enterToBuild
                             && !r.action()
                                     .equals("use"); // with Enter to build off, a stroke is staged until the button is

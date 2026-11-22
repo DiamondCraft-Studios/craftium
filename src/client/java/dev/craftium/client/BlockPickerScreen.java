@@ -50,12 +50,20 @@ public final class BlockPickerScreen extends CraftiumScreen {
     private int row, left, top, cw, ch, offsetX, offsetY;
     private boolean dragging, scrolling;
     private EditBox search;
-    private FlatButton cancel, limitButton;
+    private FlatButton cancel;
+    private dev.craftium.client.compat.CraftiumButton limitButton;
     /** What the chooser can be limited to: what it is called ("stairs") and which blocks it keeps, and whether the limit is on. Null for a chooser that lists every block. */
     private String limitLabel = "";
 
     private java.util.function.Predicate<String> limit;
     private boolean limitOn;
+    /** The order the limited list is shown in, or null for the usual one; and whether the limit is turned off with a "Show all blocks" check box. */
+    private Comparator<String> order;
+
+    private boolean showAll;
+    /** How many blocks of the nearest colours {@link #similarTo} lists. */
+    private static final int SIMILAR = 64;
+
     private float scale = 1;
     private String query = "", hover = "";
     /** A cell pressed to be dragged out to the editor's slots: which, where, and whether the pointer has moved far enough for it to be a drag rather than a click. */
@@ -79,6 +87,21 @@ public final class BlockPickerScreen extends CraftiumScreen {
         limitLabel = label;
         limit = keep;
         limitOn = true;
+        return this;
+    }
+    /**
+     * Lists the blocks closest in colour to {@code rgb} first, the closest at the top, with a "Show all blocks" check box that lists every
+     * block again in the usual order.
+     */
+    BlockPickerScreen similarTo(int rgb) {
+        BlockColours.build();
+        var lab = dev.craftium.core.ColourMath.lab(rgb);
+        var near = new HashMap<String, Double>();
+        for (var e : BlockColours.nearest(rgb, false, false, false, false, SIMILAR))
+            near.put(e.id(), dev.craftium.core.ColourMath.distance(lab, e.lab()));
+        limitedTo("similar colours", near::containsKey);
+        order = Comparator.comparingDouble(id -> near.getOrDefault(id, Double.MAX_VALUE));
+        showAll = true;
         return this;
     }
     /** Air, then the parent blocks in item registration order. Built once; the registries do not change while the game runs. */
@@ -256,11 +279,14 @@ public final class BlockPickerScreen extends CraftiumScreen {
         cancel = new FlatButton(0, 0, 80, 22, "Cancel", this::onClose);
         addRenderableWidget(cancel);
         if (limit != null) {
-            limitButton = new FlatButton(0, 0, 170, 22, "Only " + limitLabel + ": " + (limitOn ? "on" : "off"), () -> {
+            Runnable flip = () -> {
                 limitOn = !limitOn;
                 row = 0;
                 init();
-            });
+            };
+            limitButton = showAll
+                    ? new FlatCheckbox(0, 0, 170, 22, "Show all blocks", !limitOn, flip)
+                    : new FlatButton(0, 0, 170, 22, "Only " + limitLabel + ": " + (limitOn ? "on" : "off"), flip);
             addRenderableWidget(limitButton);
         }
         place();
@@ -310,7 +336,12 @@ public final class BlockPickerScreen extends CraftiumScreen {
 
     private void filter() {
         var found = dev.craftium.core.BlockQuery.parse(query);
-        var pool = limit != null && limitOn ? all().stream().filter(limit).toList() : all();
+        var pool = limit != null && limitOn
+                ? all().stream()
+                        .filter(limit)
+                        .sorted(order != null ? order : (a, b) -> 0)
+                        .toList()
+                : all();
         shown = found.isEmpty()
                 ? pool
                 : pool.stream()

@@ -1290,7 +1290,10 @@ public final class CraftiumClient implements ClientModInitializer {
             // batch.
             Overlay.frame(() -> handles(screen));
             if (screen == null) return;
-            var nodes = ClientState.options.nodes;
+            // The Gradient Painter's start and end are a list of their own; the line tools draw their control points
+            var nodes = ClientState.options.tool == dev.craftium.core.Tool.GRADIENT_PAINTER
+                    ? ClientState.options.gradientAnchors
+                    : ClientState.options.nodes;
             for (int i = 0; i < nodes.size(); i++) {
                 Point n = nodes.get(i);
                 Vec3 at = new Vec3(n.x() + .5, n.y() + .5, n.z() + .5);

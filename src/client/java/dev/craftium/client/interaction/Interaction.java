@@ -82,6 +82,12 @@ public interface Interaction {
         ModifyPreview.edit();
     }
 
+    /** The server's answer to a request came back, now in {@code ClientState.status}: whether it is still busy, and any error. */
+    default void statusReceived(EditorContext editor) {}
+
+    /** The tool was put away or another was chosen in its place: a chance to drop what it gathered. */
+    default void unchosen(EditorContext editor) {}
+
     /**
      * Draws, in the world, what the tool shows for the block under the cursor ({@code hit}, null over sky or a panel), once a tick while the editor
      * is open and this tool is chosen. What it draws is its own on top of what the editor always shows (the selection, rulers, annotations, a waiting

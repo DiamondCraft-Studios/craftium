@@ -34,6 +34,14 @@ final class BlockDragCursor {
         g.outline(mx - 13, my - 13, 26, 26, accent);
         BlockPickerScreen.icon(g, font, block, mx - 8, my - 8);
     }
+    /** A colour being taken from the world: the pointer becomes the pipette's crosshair, and the colour is shown in a cell above and to the right of it. */
+    static void drawColour(Gfx g, int rgb, int mx, int my, int width, int height, int accent) {
+        int cx = Math.clamp(mx + 12, 0, width - 30), cy = Math.clamp(my - 42, 25, Math.max(25, height - 52));
+        g.fill(cx, cy, cx + 30, cy + 30, 0xf01b2838);
+        g.outline(cx, cy, 30, 30, accent);
+        g.fill(cx + 5, cy + 5, cx + 25, cy + 25, 0xff000000 | rgb);
+        set(true);
+    }
     /** Gives the pointer back. Safe to call whenever a drag ends or its screen closes. */
     static void release() {
         set(false);
