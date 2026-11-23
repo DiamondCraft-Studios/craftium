@@ -45,7 +45,9 @@ public final class BrushPreview {
         // Only the sculpting tools, which build out from the aimed face or keep to its side, need it. For the rest it
         // must not be in the key: with the camera inside a block the hit face follows the look direction, and every
         // turn would otherwise work the whole preview out again.
-        var normal = dev.craftium.core.BrushRules.keepsToFront(o.tool) || o.tool == dev.craftium.core.Tool.THICKEN
+        var normal = dev.craftium.core.BrushRules.keepsToFront(o.tool)
+                        || o.tool == dev.craftium.core.Tool.DEFORM
+                        || o.tool == dev.craftium.core.Tool.THICKEN
                 ? new Point(face.getStepX(), face.getStepY(), face.getStepZ())
                 : new Point(0, 1, 0);
         var now = List.<Object>of(
