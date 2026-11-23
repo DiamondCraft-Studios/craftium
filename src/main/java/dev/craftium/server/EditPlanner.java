@@ -459,6 +459,18 @@ final class EditPlanner {
         var inside = BrushRules.keepsToFront(o.tool) ? new HashSet<>(points) : null;
         var front = inside != null ? BrushRules.front(inside, c, normal, cells, BrushRules.reach(o)) : null;
         var measured = front == null ? cells : front.filled(cells);
+        // One way in or out for the whole dab, so the brush's blocks move together instead of each its own way.
+        Geometry.Vector sculptDirection = null;
+        if (o.tool == Tool.SCULPT_DRAW || o.tool == Tool.EXTRUDE)
+            sculptDirection = o.tool == Tool.SCULPT_DRAW
+                    ? BrushRules.sculptDirection(
+                            front == null
+                                    ? points
+                                    : points.stream().filter(front::contains).toList(),
+                            normal,
+                            o,
+                            cells)
+                    : Geometry.vector(normal);
         for (Point p : points) {
             if (front != null && !front.contains(p)) continue;
             BlockState old = state(p);
@@ -482,7 +494,7 @@ final class EditPlanner {
                         put(p, o.invert ? Blocks.AIR.defaultBlockState() : material);
                 }
                 case SCULPT_DRAW, EXTRUDE -> {
-                    for (Point at : BrushRules.sculpt(p, c, normal, o, cells))
+                    for (Point at : BrushRules.sculpt(p, c, sculptDirection, o, cells))
                         put(at, o.invert ? Blocks.AIR.defaultBlockState() : old);
                 }
                 case WELD -> {
