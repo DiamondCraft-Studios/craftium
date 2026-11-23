@@ -9,7 +9,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 /**
- * Which blocks the sculpting brushes (Weld, Melt, Roughen, Shatter, Distort, Sculpt Draw) change. The server builds with these rules
+ * Which blocks the sculpting brushes (Weld, Crevice Fill, Melt, Roughen, Shatter, Distort, Sculpt Draw) change. The server builds with these rules
  * and the editor's hover preview draws with them, so the preview shows the blocks that will really change.
  */
 public final class BrushRules {
@@ -41,7 +41,7 @@ public final class BrushRules {
     /** The tools that keep to the side of the surface the brush was put on, see {@link #front}. */
     public static boolean keepsToFront(Tool tool) {
         return switch (tool) {
-            case WELD, MELT, SMOOTH, ROUGHEN, SHATTER, SCULPT_DRAW -> true;
+            case WELD, CREVICE_FILL, MELT, SMOOTH, ROUGHEN, SHATTER, SCULPT_DRAW -> true;
             default -> false;
         };
     }
@@ -181,6 +181,57 @@ public final class BrushRules {
             if (world.air(at)) return at;
         }
         return null;
+    }
+
+    /**
+     * The margin around the brush that {@link #front} looks through: as far as the tool measures, so the far side of a thin wall counts as
+     * solid out to there.
+     */
+    public static int frontMargin(Options o) {
+        return o.tool == Tool.CREVICE_FILL ? Math.max(reach(o), o.creviceWidth) : reach(o);
+    }
+
+    /** The most passes Crevice Fill makes: each pass may close gaps that the blocks the one before filled have narrowed. */
+    static final int CREVICE_PASSES = 16;
+
+    /**
+     * The empty blocks of {@code cells} that Crevice Fill fills, in the order it fills them. A block is filled when it sits in a gap at most
+     * {@link Options#creviceWidth} blocks wide on at least {@link Options#creviceSides} of the three axes: walls close it in both ways along
+     * that axis. The search runs again with the blocks found counted as walls, so a crack that widens away from the surface, or a hole with
+     * a crack off its side, fills right through; open surfaces have walls on one side only and never fill.
+     */
+    public static List<Point> crevices(Collection<Point> cells, Options o, Cells world) {
+        var filled = new java.util.LinkedHashSet<Point>();
+        Predicate<Point> wall = p -> filled.contains(p) || world.solid(p);
+        var open = new ArrayList<Point>();
+        for (Point p : cells) if (!world.solid(p)) open.add(p);
+        for (int pass = 0; pass < CREVICE_PASSES; pass++) {
+            var found = new ArrayList<Point>();
+            for (Point p : open)
+                if (!filled.contains(p) && enclosed(p, o.creviceWidth, wall) >= o.creviceSides) found.add(p);
+            if (found.isEmpty()) break;
+            // Added after the pass, not during it, so the result does not hang on the order the blocks are looked at.
+            filled.addAll(found);
+        }
+        return new ArrayList<>(filled);
+    }
+
+    /** On how many of the three axes {@code p} lies between two walls with at most {@code width} blocks between them, itself included. */
+    static int enclosed(Point p, int width, Predicate<Point> wall) {
+        int axes = 0;
+        for (int axis = 0; axis < 3; axis++) {
+            Point d = NEIGHBOURS[axis * 2];
+            int before = 0;
+            for (int i = 1; i <= width && before == 0; i++)
+                if (wall.test(p.add(-i * d.x(), -i * d.y(), -i * d.z()))) before = i;
+            if (before == 0) continue;
+            for (int i = 1; i <= width + 1 - before; i++)
+                if (wall.test(p.add(i * d.x(), i * d.y(), i * d.z()))) {
+                    axes++;
+                    break;
+                }
+        }
+        return axes;
     }
 
     /** Shatter cuts the seams where the cracks run. */

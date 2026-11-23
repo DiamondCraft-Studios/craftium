@@ -168,6 +168,8 @@ final class Session {
     long requestStroke, lastStroke;
     /** Flatten with Level from click: the stroke whose first click set the level, and that level, so a held stroke keeps it. */
     long flattenStroke;
+    /** The Deform stroke being staged, worked out as one move on the world as it was before it; null between strokes. */
+    DeformStroke deformStroke;
 
     int flattenLevel;
     /** The stroke the game's own placements belong to while the place button is held, so they undo as one; 0 when no stroke is open. */

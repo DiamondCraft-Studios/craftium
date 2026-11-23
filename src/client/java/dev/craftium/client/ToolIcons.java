@@ -269,6 +269,18 @@ final class ToolIcons {
                 line(g, x + 8, y + (tool == Tool.WELD ? 10 : 8), x + 12, y + (tool == Tool.WELD ? 6 : 12), color);
                 line(g, x + 12, y + (tool == Tool.WELD ? 6 : 12), x + 16, y + (tool == Tool.WELD ? 10 : 8), color);
             }
+            case CREVICE_FILL -> { // a block of rock with a V-shaped crack in its top, the crack filled in
+                line(g, x + 3, y + 7, x + 8, y + 7, color);
+                line(g, x + 16, y + 7, x + 21, y + 7, color);
+                line(g, x + 3, y + 7, x + 3, y + 21, color);
+                line(g, x + 21, y + 7, x + 21, y + 21, color);
+                line(g, x + 3, y + 21, x + 21, y + 21, color);
+                line(g, x + 8, y + 7, x + 12, y + 18, color);
+                line(g, x + 16, y + 7, x + 12, y + 18, color);
+                g.fill(x + 9, y + 9, x + 16, y + 12, color);
+                g.fill(x + 10, y + 12, x + 15, y + 15, color);
+                g.fill(x + 11, y + 15, x + 14, y + 17, color);
+            }
             case EXTRUDE -> { // a face pulled out along its normal: where it was, where it ends up, and the edges
                 // between
                 g.outline(x + 3, y + 11, 11, 11, color);

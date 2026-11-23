@@ -91,7 +91,11 @@ final class ProtocolSnapshot {
         dev.craftium.core.Options.copies : int
         dev.craftium.core.Options.copyEntities : boolean
         dev.craftium.core.Options.copyProperties : boolean
+        dev.craftium.core.Options.creviceActiveBlock : boolean
+        dev.craftium.core.Options.creviceSides : int
+        dev.craftium.core.Options.creviceWidth : int
         dev.craftium.core.Options.deferred : boolean
+        dev.craftium.core.Options.deformFalloff : int
         dev.craftium.core.Options.denoise : boolean
         dev.craftium.core.Options.density : double
         dev.craftium.core.Options.distortDistance : double
@@ -552,6 +556,7 @@ final class ProtocolSnapshot {
         enum dev.craftium.core.Tool.BIOME_PAINTER
         enum dev.craftium.core.Tool.BOX_SELECT
         enum dev.craftium.core.Tool.CLENTAMINATOR
+        enum dev.craftium.core.Tool.CREVICE_FILL
         enum dev.craftium.core.Tool.DISTORT
         enum dev.craftium.core.Tool.ELEVATION
         enum dev.craftium.core.Tool.ERASE

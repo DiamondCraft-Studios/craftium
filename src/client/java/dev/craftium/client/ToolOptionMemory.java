@@ -48,7 +48,11 @@ public final class ToolOptionMemory {
             "distortZ",
             "distortDistance",
             "fractureMaterial",
-            "thickenMaterials");
+            "thickenMaterials",
+            "creviceWidth",
+            "creviceSides",
+            "creviceActiveBlock",
+            "deformFalloff");
 
     private static final Map<String, Field> FIELDS = new LinkedHashMap<>();
     private static final Map<String, Map<String, Object>> KEPT = new HashMap<>();
