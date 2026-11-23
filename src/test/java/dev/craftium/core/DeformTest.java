@@ -269,4 +269,97 @@ class DeformTest {
                 new ArrayList<>(
                         Deform.plan(ball(c, 6), c, new Point(1, 0, 0), o, w, 2).entrySet()));
     }
+
+    /** Ground with its top at {@code height(x, z)}, ten blocks deep, grass on top. */
+    private static World ground(java.util.function.IntBinaryOperator height) {
+        var w = new World();
+        for (int x = -20; x <= 20; x++)
+            for (int z = -20; z <= 20; z++) {
+                int h = height.applyAsInt(x, z);
+                w.blocks.put(new Point(x, h, z), "grass");
+                for (int y = -12; y < h; y++) w.blocks.put(new Point(x, y, z), "dirt");
+            }
+        return w;
+    }
+
+    private static int top(World w, int x, int z) {
+        for (int y = 12; y > -14; y--) if (w.solid(new Point(x, y, z))) return y;
+        return Integer.MIN_VALUE;
+    }
+
+    /** A stroke along x, one dab per block, each clicked on the ground's top as it was before the stroke. */
+    private static Deform.Stroke strokeAlongX(World w, int from, int to, int z, Options o) {
+        var stroke = new Deform.Stroke();
+        for (int x = from; x <= to; x++) {
+            var c = new Point(x, top(w, x, z), z);
+            stroke.add(ball(c, o.radius), c, new Point(0, 1, 0), o, w, 2);
+        }
+        return stroke;
+    }
+
+    @Test
+    void overlappingDabsPushAnEvenLayerWithNoBump() {
+        var w = ground((x, z) -> 0);
+        var o = options(5, 3, false);
+        // Two strokes crossing each other, so every block in the middle is under many dabs.
+        var stroke = strokeAlongX(w, -6, 6, 0, o);
+        for (int z = -6; z <= 6; z++) {
+            var c = new Point(0, 0, z);
+            stroke.add(ball(c, 5), c, new Point(0, 1, 0), o, w, 2);
+        }
+        var after = w.after(stroke.plan());
+        for (int x = -20; x <= 20; x++)
+            for (int z = -20; z <= 20; z++) {
+                int t = top(after, x, z);
+                assertTrue(t <= 0 && t >= -3, "the ground at " + x + ", " + z + " is at " + t);
+                assertEquals("grass", after.blocks.get(new Point(x, t, z)), "grass is still on top at " + x + ", " + z);
+            }
+        for (int x = -6; x <= 6; x++)
+            assertEquals(-3, top(after, x, 0), "the middle of the stroke is pushed in by the strength");
+    }
+
+    @Test
+    void aStrokeKeepsTheRoughnessOfTheGround() {
+        java.util.function.IntBinaryOperator height = (x, z) -> Math.floorMod(x * 7 + z * 13, 3) == 0 ? 1 : 0;
+        var w = ground(height);
+        var after = w.after(strokeAlongX(w, -8, 8, 0, options(6, 3, false)).plan());
+        // Along the middle of the stroke, where every block moves by the full strength.
+        for (int x = -6; x <= 6; x++)
+            assertEquals(height.applyAsInt(x, 0) - 3, top(after, x, 0), "the relief moved down as it is at x " + x);
+    }
+
+    @Test
+    void aStrokeOverAHollowBallNeverOpensIt() {
+        for (int thickness = 1; thickness <= 2; thickness++) {
+            var w = hollow(thickness);
+            var stroke = new Deform.Stroke();
+            var o = options(6, 3, false);
+            // Along the outside of the +x side, each dab on the wall as it was before the stroke.
+            for (int y = -6; y <= 6; y++) {
+                int x = BOX;
+                while (!w.solid(new Point(x, y, 0))) x--;
+                var c = new Point(x, y, 0);
+                stroke.add(ball(c, 6), c, new Point(1, 0, 0), o, w, 2);
+                assertFalse(leaks(w.after(stroke.plan())), "a hole after the dab at " + c + ", thickness " + thickness);
+            }
+            assertTrue(outerX(w.after(stroke.plan())) <= outerX(w) - 3);
+        }
+    }
+
+    @Test
+    void whatEachDabReportsAddsUpToTheStroke() {
+        var w = hollow(2);
+        var stroke = new Deform.Stroke();
+        var sum = new HashMap<Point, Point>();
+        var o = options(5, 3, false);
+        for (int y = -4; y <= 4; y += 2) {
+            int x = BOX;
+            while (!w.solid(new Point(x, y, 0))) x--;
+            var c = new Point(x, y, 0);
+            for (var e : stroke.add(ball(c, 5), c, new Point(1, 0, 0), o, w, 2).entrySet())
+                if (e.getKey().equals(e.getValue())) sum.remove(e.getKey());
+                else sum.put(e.getKey(), e.getValue());
+        }
+        assertEquals(stroke.plan(), sum);
+    }
 }
