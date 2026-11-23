@@ -24,7 +24,8 @@ class ToolBehavioursTest {
                 Tool.PAINT_BUCKET,
                 Tool.RULER,
                 Tool.LINE,
-                Tool.SHAPE);
+                Tool.SHAPE,
+                Tool.DEFORM);
         for (Tool tool : Tool.values()) assertEquals(own.contains(tool), ToolBehaviours.hasOwn(tool), tool.name());
     }
 

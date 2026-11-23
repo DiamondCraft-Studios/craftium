@@ -20,6 +20,7 @@ Changes since 1.6.0-beta.1.
 - The Builder's destination preview (where a move, clone, stack or smear would land) is drawn like its selection: dim faces on the ground and an outline in open air, hidden by terrain in front of it.
 
 ### Editing
+- New Deform tool, in Sculpt: push the side of a shape in, or pull it out, by moving its blocks instead of adding or removing them. A wall keeps its thickness, blocks and contents, and even a one-block shell, such as a hollow mountain, stays closed while you push it smaller. The push is strongest in the middle of the brush and fades to nothing at its edge. Strength goes up to two thirds of the radius, Flow sets how often a stroke pushes, and Push | Pull picks the way. A wall pushed onto something inside it, such as a pillar, replaces it; undo brings it back.
 - The clipboard is kept packed, at about 14 bytes a block instead of about 128, so copying two million blocks holds roughly 190 MB less memory.
 - An AI or jigsaw preview describes up to 49,152 blocks (was 32,768), and an edit may reach up to 256 chunks that are not loaded (was 128), which can make the server pause longer while they generate.
 - A world holds up to 1,024 BuildObjects per dimension, up from 64.

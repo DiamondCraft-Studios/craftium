@@ -116,7 +116,7 @@ public final class BrushPreview {
     /** The tools whose blocks are picked by a rule, so the preview draws only what changes. */
     private static boolean sculpts(dev.craftium.core.Tool tool) {
         return switch (tool) {
-            case ROCK, WELD, MELT, ROUGHEN, SHATTER, DISTORT, SCULPT_DRAW, SMOOTH -> true;
+            case ROCK, WELD, MELT, ROUGHEN, SHATTER, DISTORT, SCULPT_DRAW, SMOOTH, DEFORM -> true;
             default -> false;
         };
     }
@@ -150,6 +150,20 @@ public final class BrushPreview {
         var centre = new Point(at.getX(), at.getY(), at.getZ());
         var changed = new LinkedHashSet<Point>();
         var gone = new LinkedHashSet<Point>();
+        if (o.tool == dev.craftium.core.Tool.DEFORM) {
+            // Where the wall arrives, and where it leaves open air behind it.
+            for (var e : dev.craftium.core.Deform.plan(
+                            cells, centre, normal, o, world, dev.craftium.core.BrushRules.reach(o))
+                    .entrySet()) {
+                var to = level.getBlockState(new BlockPos(
+                        e.getValue().x(), e.getValue().y(), e.getValue().z()));
+                if (to
+                        == level.getBlockState(new BlockPos(
+                                e.getKey().x(), e.getKey().y(), e.getKey().z()))) continue;
+                (to.isAir() ? gone : changed).add(e.getKey());
+            }
+            return new Changes(keep(changed, o, mask), keep(gone, o, mask));
+        }
         var inside = new HashSet<>(cells);
         var front = dev.craftium.core.BrushRules.keepsToFront(o.tool)
                 ? dev.craftium.core.BrushRules.front(

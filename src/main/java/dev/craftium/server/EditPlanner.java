@@ -158,9 +158,40 @@ final class EditPlanner {
     }
 
     BlockState state(Point p) {
+        if (staged != null) {
+            var after = staged.get(p);
+            if (after != null) return after.state();
+        }
         if (!level.isInWorldBounds(pos(p)) || !level.hasChunk(p.x() >> 4, p.z() >> 4))
             return Blocks.AIR.defaultBlockState();
         return level.getBlockState(pos(p));
+    }
+
+    /** What the planner reads at {@code p}, with its contents: the staged block when it reads through a stroke, air outside the world. */
+    BlockSnapshot snapshot(Point p) {
+        if (staged != null) {
+            var after = staged.get(p);
+            if (after != null) return after;
+        }
+        if (!level.isInWorldBounds(pos(p)) || !level.hasChunk(p.x() >> 4, p.z() >> 4))
+            return new BlockSnapshot(Blocks.AIR.defaultBlockState());
+        return BlockSnapshot.capture(level, pos(p));
+    }
+
+    /** The edit a stroke has staged so far, read as if it were built; null to read the world. */
+    private Map<Point, BlockSnapshot> staged;
+
+    /**
+     * Reads the world as if {@code changes}, the edit a stroke has staged, were built, and carries them in this plan, so a tool that works
+     * on what it changed itself (Deform, moving a wall on from where its last dab left it) sees its own stroke. The finished plan then holds
+     * the whole stroke and takes the staged edit's place; a block changed back to what the world holds drops out of it.
+     */
+    void readThrough(List<Session.Change> changes) {
+        staged = new HashMap<>();
+        for (var c : changes) {
+            staged.put(c.pos(), c.after());
+            this.changes.put(c.pos(), c);
+        }
     }
     /** Set for the builder tools, which ignore the tool masks unless {@link Options#maskInBuilder} is on. */
     boolean builder;
@@ -455,6 +486,10 @@ final class EditPlanner {
         // big, for them.
         var points = o.tool == Tool.TINKER ? List.of(c) : screenBlocks(c);
         for (Point p : points) validate(p);
+        if (o.tool == Tool.DEFORM) {
+            deform(c, normal);
+            return;
+        }
         if (o.tool == Tool.BIOME_PAINTER || o.tool == Tool.CLENTAMINATOR) paintBiomes(points);
         var inside = BrushRules.keepsToFront(o.tool) ? new HashSet<>(points) : null;
         var front = inside != null ? BrushRules.front(inside, c, normal, cells, BrushRules.reach(o)) : null;
@@ -546,6 +581,21 @@ final class EditPlanner {
                 default -> {}
             }
         }
+    }
+
+    /**
+     * One dab of Deform: the wall under a ball of the radius moves, each block taking the block {@link Deform#plan} brings to it. Every new
+     * block is read before any is written, so the dab works from the world as it was.
+     */
+    private void deform(Point c, Point normal) {
+        var ball = BrushMath.brush(c, o.radius, BrushMath.Shape.SPHERE, false);
+        for (Point p : ball) validate(p);
+        var taken = new LinkedHashMap<Point, BlockSnapshot>();
+        for (var e : Deform.plan(ball, c, normal, o, cells, BrushRules.reach(o)).entrySet()) {
+            validate(e.getKey());
+            taken.put(e.getKey(), snapshot(e.getValue()));
+        }
+        for (var e : taken.entrySet()) put(e.getKey(), e.getValue());
     }
 
     double density(Point p) {

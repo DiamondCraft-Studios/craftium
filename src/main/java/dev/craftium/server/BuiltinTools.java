@@ -24,6 +24,39 @@ final class BuiltinTools {
         u.submit(u.plan().finish(u.options().tool.label));
     };
 
+    /**
+     * Deform moves a wall on from where its last dab left it, so while a stroke is staged it reads the world as if the stroke were built
+     * ({@link EditPlanner#readThrough}). Its plan then holds the whole stroke and takes the staged edit's place, instead of being added to it
+     * block by block, which would mix two positions of the wall and could leave a hole between them.
+     */
+    static final ToolBehaviour DEFORM = u -> {
+        var s = u.session();
+        var staged = s.confirmEdits && !s.bypassConfirm ? s.pendingEdit : null;
+        if (staged == null) {
+            PLAIN.use(u);
+            return;
+        }
+        var plan = u.plan();
+        plan.readThrough(staged.changes());
+        plan.tool(u.point(), u.normal());
+        var made = plan.finish(u.options().tool.label);
+        var whole = new Session.Edit(
+                staged.name(),
+                made.changes(),
+                staged.biomes(),
+                staged.flags() | made.flags(),
+                staged.entities(),
+                staged.annotations(),
+                staged.selection());
+        s.pendingEdit = null;
+        try {
+            u.submit(whole);
+        } catch (RuntimeException e) {
+            s.pendingEdit = staged; // refused: the stroke so far still waits
+            throw e;
+        }
+    };
+
     static final ToolBehaviour ANNOTATION =
             u -> u.submit(AnnotationEdits.plan("annotation_create", u.player().level(), u.options(), u.point()));
 
