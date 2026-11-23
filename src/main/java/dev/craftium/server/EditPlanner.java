@@ -17,11 +17,7 @@ final class EditPlanner {
     final ServerLevel level;
     final Session session;
     final Options o;
-    /** The planned changes. Write them through {@link #record} so {@link #blocks} stays right. */
     final LinkedHashMap<Point, Session.Change> changes = new LinkedHashMap<>();
-    /** How many planned changes leave a block that is not air: what the block limits count. Removing a block (a change to air) is not counted. */
-    private int blocks;
-
     final LinkedHashMap<Point, Session.BiomeChange> biomes = new LinkedHashMap<>();
     final BlockState material, secondary, mask;
     final NoiseField noise;
@@ -358,40 +354,18 @@ final class EditPlanner {
                 && before.data() != null
                 && before.state().is(value.state().getBlock())) value = new BlockSnapshot(value.state(), before.data());
         if (before.state() == value.state() && Objects.equals(before.data(), value.data())) {
-            forget(p);
+            changes.remove(p);
             skip(Skip.SAME);
             return;
         }
-        record(new Session.Change(p, before, value));
+        changes.put(p, new Session.Change(p, before, value));
         int limit = limited ? Math.clamp(o.blockLimit, 1, Selection.LIMIT) : Selection.LIMIT;
-        if (blocks + biomes.size() > limit)
+        if (changes.size() + biomes.size() > limit)
             throw new IllegalArgumentException(
                     limit < Selection.LIMIT
                             ? "Operation exceeds your block limit of " + String.format("%,d", limit)
-                                    + " blocks; raise the Block limit in the tool's options"
-                            : "Operation exceeds " + String.format("%,d", Selection.LIMIT) + " blocks");
-        if (changes.size() + biomes.size() > Selection.CELL_LIMIT)
-            throw new IllegalArgumentException(
-                    "Operation exceeds " + String.format("%,d", Selection.CELL_LIMIT) + " changes, air included");
-    }
-
-    /** Plans {@code change}, replacing what was planned at its position, and keeps the count of blocks that are not air. */
-    void record(Session.Change change) {
-        var old = changes.put(change.pos(), change);
-        if (old != null && !old.after().state().isAir()) blocks--;
-        if (!change.after().state().isAir()) blocks++;
-    }
-
-    private void forget(Point p) {
-        var old = changes.remove(p);
-        if (old != null && !old.after().state().isAir()) blocks--;
-    }
-
-    /** How many changes of {@code changes} leave a block that is not air: what the block limits count. */
-    static int blocks(Collection<Session.Change> changes) {
-        int n = 0;
-        for (var c : changes) if (!c.after().state().isAir()) n++;
-        return n;
+                                    + " changes; raise the Block limit in the tool's options"
+                            : "Operation exceeds " + String.format("%,d", Selection.LIMIT) + " changes");
     }
     /**
      * Whether a block may stand at {@code p}. The upper half of a door or tall plant is judged by its lower half standing one
