@@ -1479,7 +1479,22 @@ public final class EditorScreen extends CraftiumScreen {
                         DEFAULTS.strength,
                         v -> o().strength = Math.clamp(Math.round(v * 100) / 100d, .1, 1),
                         false);
-            else if (hasStrength())
+            else if (o().tool
+                    == Tool.DEFORM) { // whole blocks, up to the most the radius allows without the wall folding over
+                int most = dev.craftium.core.Deform.maxStrength(o().radius);
+                slider(
+                        g,
+                        10,
+                        375 + sidesRow() - lift(),
+                        pw - 20,
+                        "Strength",
+                        Math.clamp(Math.round(o().strength), 1, most),
+                        1,
+                        most,
+                        DEFAULTS.strength,
+                        v -> o().strength = Math.clamp(Math.round(v), 1, most),
+                        true);
+            } else if (hasStrength())
                 slider(
                         g,
                         10,
@@ -1789,6 +1804,30 @@ public final class EditorScreen extends CraftiumScreen {
                             "Each stroke pushes the surface in, shaving it down");
                     row += 26;
                 }
+                if (o().tool == Tool.DEFORM) { // under its Strength and Flow
+                    int half = (pw - 24) / 2;
+                    button(
+                            g,
+                            10,
+                            403 + row,
+                            half,
+                            19,
+                            "Push",
+                            !o().invert,
+                            () -> o().invert = false,
+                            "Each stroke pushes the wall in, moving its blocks, so it keeps its thickness");
+                    button(
+                            g,
+                            14 + half,
+                            403 + row,
+                            half,
+                            19,
+                            "Pull",
+                            o().invert,
+                            () -> o().invert = true,
+                            "Each stroke pulls the wall out, moving its blocks, so it keeps its thickness");
+                    row += 26;
+                }
                 int fillRow = o().tool.picksShape() ? 23 : 0;
                 if (o().tool.picksShape()) fillButtons(g, 403 + row);
                 int next;
@@ -1796,6 +1835,8 @@ public final class EditorScreen extends CraftiumScreen {
                     next = terrainRows(
                             g, 403 + row); // these tools work on the ground's height, so Surface only means nothing to
                 // them
+                else if (o().tool == Tool.DEFORM)
+                    next = 403 + fillRow + row; // it moves the whole wall, not only its surface
                 else {
                     toggle(
                             g,
@@ -5476,9 +5517,9 @@ public final class EditorScreen extends CraftiumScreen {
         return sizes() && !o().tool.selection() && o().tool != Tool.SHAPE;
     }
 
-    /** Elevation and Flatten repeat while the button is held, each step adding to the last, so they have a flow too. Slope, Rock, Floodfill and the fluids are one click. */
+    /** Elevation, Flatten and Deform repeat while the button is held, each step adding to the last, so they have a flow too. Slope, Rock, Floodfill and the fluids are one click. */
     private boolean terrainFlowShown() {
-        return o().tool == Tool.ELEVATION || o().tool == Tool.FLATTEN;
+        return o().tool == Tool.ELEVATION || o().tool == Tool.FLATTEN || o().tool == Tool.DEFORM;
     }
 
     private int sizeHeight() {
@@ -5561,7 +5602,7 @@ public final class EditorScreen extends CraftiumScreen {
      */
     /** The tools with a Strength slider under the radius. */
     private boolean hasStrength() {
-        return EnumSet.of(Tool.SCULPT_DRAW, Tool.ROCK, Tool.ELEVATION, Tool.FLATTEN, Tool.EXTRUDE)
+        return EnumSet.of(Tool.SCULPT_DRAW, Tool.ROCK, Tool.ELEVATION, Tool.FLATTEN, Tool.EXTRUDE, Tool.DEFORM)
                 .contains(o().tool);
     }
 

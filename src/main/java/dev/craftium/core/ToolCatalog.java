@@ -85,7 +85,7 @@ public final class ToolCatalog {
                     SCRIPT_BRUSH -> Tool.BrushUse.SHAPE;
             case LINE, PATH -> Tool.BrushUse.SMALL_SHAPE;
             case ELEVATION, FLATTEN, SLOPE, STAMP -> Tool.BrushUse.DISC;
-            case ROCK, FLUID_BALL, FLUID_BLOCK -> Tool.BrushUse.SPHERE;
+            case ROCK, FLUID_BALL, FLUID_BLOCK, DEFORM -> Tool.BrushUse.SPHERE;
             default -> Tool.BrushUse.NONE;
         };
     }

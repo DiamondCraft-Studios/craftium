@@ -107,6 +107,11 @@ public enum Tool {
             "IN",
             "Utility",
             "Point at a block to see its tags above it; right-click to list them all in chat. Changes nothing."),
+    DEFORM(
+            "Deform",
+            "DF",
+            "Sculpt",
+            "Push a wall in or pull it out by moving its blocks, so it keeps its thickness and leaves no holes."),
     CREVICE_FILL(
             "Crevice Fill",
             "CF",
@@ -193,6 +198,7 @@ public enum Tool {
                         EXTRUDE,
                         SMEAR,
                         SCULPT_DRAW,
+                        DEFORM,
                         MODIFY,
                         STAMP));
         all.put("Terrain", List.of(ELEVATION, FLATTEN, SLOPE, ROCK, FLOODFILL, FLUID_BALL));
