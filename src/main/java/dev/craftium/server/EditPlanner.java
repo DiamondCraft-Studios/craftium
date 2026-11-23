@@ -525,6 +525,10 @@ final class EditPlanner {
             deform(c, normal);
             return;
         }
+        if (o.tool == Tool.THICKEN) {
+            thicken(c, normal);
+            return;
+        }
         if (o.tool == Tool.BIOME_PAINTER || o.tool == Tool.CLENTAMINATOR) paintBiomes(points);
         var inside = BrushRules.keepsToFront(o.tool) ? new HashSet<>(points) : null;
         var front = inside != null ? BrushRules.front(inside, c, normal, cells, BrushRules.frontMargin(o)) : null;
@@ -639,6 +643,28 @@ final class EditPlanner {
             taken.put(e.getKey(), snapshot(e.getValue()));
         }
         for (var e : taken.entrySet()) put(e.getKey(), e.getValue());
+    }
+
+    /**
+     * One dab of Thicken: the surface in a column of the radius across it (as Deform's), or under the ring on the screen when Match the ring is on, grows out (or,
+     * inverted, is thinned) by {@link Thicken#plan}. Each new block is a copy of the surface block nearest it, or with
+     * {@link Options#thickenMaterials} the Materials list's block there. Every copied block is read before any is written, so the dab works
+     * from the world as it was.
+     */
+    private void thicken(Point c, Point normal) {
+        boolean sheet = o.screenSpace && !o.screenBlocks.isEmpty();
+        var brush = sheet ? screenBlocks(c) : BrushMath.brush(c, o.radius, BrushMath.Shape.SPHERE, false);
+        for (Point p : brush) validate(p);
+        var plan = Thicken.plan(brush, c, normal, o, cells, sheet);
+        var copied = new LinkedHashMap<Point, BlockState>();
+        for (var e : plan.added().entrySet()) {
+            Point at = e.getKey();
+            validate(at);
+            copied.put(at, o.thickenMaterials ? materialAt(noise.sample(at), at) : state(e.getValue()));
+        }
+        for (var e : copied.entrySet()) put(e.getKey(), e.getValue());
+        for (Point p : plan.removed()) validate(p);
+        for (Point p : plan.removed()) put(p, Blocks.AIR.defaultBlockState());
     }
 
     double density(Point p) {

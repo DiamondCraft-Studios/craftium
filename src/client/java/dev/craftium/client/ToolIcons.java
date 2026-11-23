@@ -358,6 +358,17 @@ final class ToolIcons {
                 line(g, x + 9, y + 7, x + 12, y + 10, color);
                 line(g, x + 15, y + 7, x + 12, y + 10, color);
             }
+            case THICKEN -> { // a curved surface, a second one grown out along it, and an arrow between them
+                int[][] wall = {{2, 22}, {5, 16}, {9, 13}, {15, 13}, {19, 16}, {22, 22}};
+                int[][] grown = {{2, 14}, {5, 9}, {9, 6}, {15, 6}, {19, 9}, {22, 14}};
+                for (int i = 0; i < wall.length - 1; i++) {
+                    line(g, x + wall[i][0], y + wall[i][1], x + wall[i + 1][0], y + wall[i + 1][1], color);
+                    line(g, x + grown[i][0], y + grown[i][1], x + grown[i + 1][0], y + grown[i + 1][1], color);
+                }
+                line(g, x + 12, y + 12, x + 12, y + 8, color);
+                line(g, x + 10, y + 10, x + 12, y + 8, color);
+                line(g, x + 14, y + 10, x + 12, y + 8, color);
+            }
             case INSPECT -> {
                 ring(g, x + 10, y + 10, 7, 7, color);
                 line(g, x + 15, y + 15, x + 21, y + 21, color);

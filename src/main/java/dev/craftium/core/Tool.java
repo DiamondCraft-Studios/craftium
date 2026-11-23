@@ -116,7 +116,12 @@ public enum Tool {
             "Crevice Fill",
             "CF",
             "Sculpt",
-            "Fill every crack, hole and nook in the brush up to the gap width, leaving open surfaces alone.");
+            "Fill every crack, hole and nook in the brush up to the gap width, leaving open surfaces alone."),
+    THICKEN(
+            "Thicken",
+            "TK",
+            "Sculpt",
+            "Grow a surface out evenly along its own shape, such as the inside of a cave, or thin it; keeps to the side you brush.");
     public final String label, icon, group, description;
 
     Tool(String label, String icon, String group, String description) {
@@ -153,7 +158,7 @@ public enum Tool {
     /** Whether the tool can work on the blocks the brush ring covers on the screen ({@link Options#screenBlocks}) instead of a shape around the block under the pointer. */
     public boolean screenBrush() {
         return switch (this) {
-            case PAINTER, GRADIENT_PAINTER -> true;
+            case PAINTER, GRADIENT_PAINTER, THICKEN -> true;
             default -> false;
         };
     }
@@ -199,6 +204,7 @@ public enum Tool {
                         SMEAR,
                         SCULPT_DRAW,
                         DEFORM,
+                        THICKEN,
                         MODIFY,
                         STAMP));
         all.put("Terrain", List.of(ELEVATION, FLATTEN, SLOPE, ROCK, FLOODFILL, FLUID_BALL));

@@ -54,6 +54,10 @@ public final class GoldenToolExpected {
             Map.entry("stamp", "135 09aefbd5a39c2b5f"),
             Map.entry("stamp_random", "144 cd5330ac2feed29d"),
             Map.entry("text", "46 ebdf08c11b839e7c"),
+            Map.entry("thicken", "64 e95ad3eb1c644c39"),
+            Map.entry("thicken_deep", "198 d83cb723d75a7719"),
+            Map.entry("thicken_materials", "54 48c95bb9283cdba3"),
+            Map.entry("thicken_thin", "62 4882ce454a82637e"),
             Map.entry("tinker", "1 954256ab78d77f94"),
             Map.entry("weld", "33 fb0243d44565b3b0"));
 }
