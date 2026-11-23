@@ -151,6 +151,9 @@ public final class BrushPreview {
         var changed = new LinkedHashSet<Point>();
         var gone = new LinkedHashSet<Point>();
         if (o.tool == dev.craftium.core.Tool.DEFORM) {
+            // While a stroke is held the staged ghost shows what it does, and working the dab out here as well would
+            // cost the frame time.
+            if (ClientState.strokeId != 0) return new Changes(List.of(), List.of());
             // Where the wall arrives, and where it leaves open air behind it.
             for (var e : dev.craftium.core.Deform.plan(
                             cells, centre, normal, o, world, dev.craftium.core.BrushRules.reach(o))

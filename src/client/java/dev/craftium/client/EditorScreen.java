@@ -1805,6 +1805,19 @@ public final class EditorScreen extends CraftiumScreen {
                     row += 26;
                 }
                 if (o().tool == Tool.DEFORM) { // under its Strength and Flow
+                    slider(
+                            g,
+                            10,
+                            403 + row,
+                            pw - 20,
+                            "Falloff",
+                            o().deformFalloff,
+                            0,
+                            100,
+                            DEFAULTS.deformFalloff,
+                            v -> o().deformFalloff = (int) Math.clamp(Math.round(v), 0, 100),
+                            true);
+                    row += 28;
                     int half = (pw - 24) / 2;
                     button(
                             g,

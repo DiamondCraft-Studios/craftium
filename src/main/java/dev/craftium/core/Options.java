@@ -524,6 +524,11 @@ public final class Options {
     public int creviceWidth = 2, creviceSides = 1;
 
     public boolean creviceActiveBlock;
+    /**
+     * Deform: how wide the edge of a dab is, where its push fades out, from 0 to 100. 100 fades from the centre to the rim, a round dent;
+     * lower keeps the push full nearer the rim, so the dent fills more of the brush ring.
+     */
+    public int deformFalloff = 25;
     /** The widest gap Crevice Fill can be set to fill. */
     public static final int MAX_CREVICE_WIDTH = 8;
 
@@ -920,6 +925,7 @@ public final class Options {
         if (shatterAxis == null) shatterAxis = ShatterAxis.ALL;
         creviceWidth = Math.clamp(creviceWidth, 1, MAX_CREVICE_WIDTH);
         creviceSides = Math.clamp(creviceSides, 1, 3);
+        deformFalloff = Math.clamp(deformFalloff, 0, 100);
         smoothRatio = Double.isFinite(smoothRatio) ? Math.max(0, smoothRatio) : 100;
         distortDistance = Double.isFinite(distortDistance) ? Math.max(0, distortDistance) : 2;
         distortX = Double.isFinite(distortX) ? Math.max(0, distortX) : 2;

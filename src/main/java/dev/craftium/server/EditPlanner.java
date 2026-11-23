@@ -178,21 +178,56 @@ final class EditPlanner {
         return BlockSnapshot.capture(level, pos(p));
     }
 
-    /** The edit a stroke has staged so far, read as if it were built; null to read the world. */
+    /** The blocks a stroke has staged, read as if they were built; null to read the world. */
     private Map<Point, BlockSnapshot> staged;
 
-    /**
-     * Reads the world as if {@code changes}, the edit a stroke has staged, were built, and carries them in this plan, so a tool that works
-     * on what it changed itself (Deform, moving a wall on from where its last dab left it) sees its own stroke. The finished plan then holds
-     * the whole stroke and takes the staged edit's place; a block changed back to what the world holds drops out of it.
-     */
-    void readThrough(List<Session.Change> changes) {
-        staged = new HashMap<>();
-        for (var c : changes) {
-            staged.put(c.pos(), c.after());
-            this.changes.put(c.pos(), c);
-        }
+    /** Reads the world as if the blocks of {@code view} were built, without carrying them in this plan. */
+    void readThrough(Map<Point, BlockSnapshot> view) {
+        staged = view;
     }
+
+    /** Carries {@code change}, made earlier, in this plan, so a block put on it again keeps its first before-state. */
+    void carry(Session.Change change) {
+        changes.put(change.pos(), change);
+    }
+
+    /** What this plan holds for {@code p}, or null when it leaves the block as the world has it. */
+    Session.Change planned(Point p) {
+        return changes.get(p);
+    }
+
+    /** Refuses an edit of {@code count} changes when it goes past the player's block limit. */
+    void checkLimit(int count) {
+        int limit = limited ? Math.clamp(o.blockLimit, 1, Selection.LIMIT) : Selection.LIMIT;
+        if (count > limit)
+            throw new IllegalArgumentException(
+                    limit < Selection.LIMIT
+                            ? "Operation exceeds your block limit of " + String.format("%,d", limit)
+                                    + " changes; raise the Block limit in the tool's options"
+                            : "Operation exceeds " + String.format("%,d", Selection.LIMIT) + " changes");
+    }
+
+    /**
+     * A dab of a staged Deform {@code stroke}: adds it to the stroke and builds the blocks whose source it changed, each read from the world
+     * as it was before the stroke, on top of what {@code staged} says is staged there already. Returns those blocks.
+     */
+    java.util.Set<Point> deform(
+            Deform.Stroke stroke, Point c, Point normal, java.util.function.Function<Point, Session.Change> staged) {
+        var ball = BrushMath.brush(c, o.radius, BrushMath.Shape.SPHERE, false);
+        for (Point p : ball) validate(p);
+        var taken = new LinkedHashMap<Point, BlockSnapshot>();
+        for (var e : stroke.add(ball, c, normal, o, cells, BrushRules.reach(o)).entrySet()) {
+            validate(e.getKey());
+            taken.put(e.getKey(), snapshot(e.getValue()));
+        }
+        for (Point p : taken.keySet()) {
+            var earlier = staged.apply(p);
+            if (earlier != null) carry(earlier);
+        }
+        for (var e : taken.entrySet()) put(e.getKey(), e.getValue());
+        return taken.keySet();
+    }
+
     /** Set for the builder tools, which ignore the tool masks unless {@link Options#maskInBuilder} is on. */
     boolean builder;
 

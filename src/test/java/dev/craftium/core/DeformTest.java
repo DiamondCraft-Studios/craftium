@@ -93,7 +93,10 @@ class DeformTest {
         return w;
     }
 
-    /** Whether air can get from inside the ball to outside its box through faces alone. */
+    /** Past every wall a pull can move out. */
+    private static final int ESCAPE = BOX + 8;
+
+    /** Whether air can get from inside the ball to well outside it through faces alone. */
     private static boolean leaks(World w) {
         var seen = new HashSet<Point>();
         var queue = new ArrayDeque<Point>();
@@ -103,7 +106,7 @@ class DeformTest {
         seen.add(start);
         while (!queue.isEmpty()) {
             Point p = queue.poll();
-            if (Math.abs(p.x()) >= BOX || Math.abs(p.y()) >= BOX || Math.abs(p.z()) >= BOX) return true;
+            if (Math.abs(p.x()) >= ESCAPE || Math.abs(p.y()) >= ESCAPE || Math.abs(p.z()) >= ESCAPE) return true;
             for (Point f : FACES) {
                 Point q = p.add(f.x(), f.y(), f.z());
                 if (!w.solid(q) && seen.add(q)) queue.add(q);
@@ -268,5 +271,159 @@ class DeformTest {
                         Deform.plan(ball(c, 6), c, new Point(1, 0, 0), o, w, 2).entrySet()),
                 new ArrayList<>(
                         Deform.plan(ball(c, 6), c, new Point(1, 0, 0), o, w, 2).entrySet()));
+    }
+
+    /** Ground with its top at {@code height(x, z)}, ten blocks deep, grass on top. */
+    private static World ground(java.util.function.IntBinaryOperator height) {
+        var w = new World();
+        for (int x = -20; x <= 20; x++)
+            for (int z = -20; z <= 20; z++) {
+                int h = height.applyAsInt(x, z);
+                w.blocks.put(new Point(x, h, z), "grass");
+                for (int y = -12; y < h; y++) w.blocks.put(new Point(x, y, z), "dirt");
+            }
+        return w;
+    }
+
+    private static int top(World w, int x, int z) {
+        for (int y = 12; y > -14; y--) if (w.solid(new Point(x, y, z))) return y;
+        return Integer.MIN_VALUE;
+    }
+
+    /** A stroke along x, one dab per block, each clicked on the ground's top as it was before the stroke. */
+    private static Deform.Stroke strokeAlongX(World w, int from, int to, int z, Options o) {
+        var stroke = new Deform.Stroke();
+        for (int x = from; x <= to; x++) {
+            var c = new Point(x, top(w, x, z), z);
+            stroke.add(ball(c, o.radius), c, new Point(0, 1, 0), o, w, 2);
+        }
+        return stroke;
+    }
+
+    @Test
+    void overlappingDabsPushAnEvenLayerWithNoBump() {
+        var w = ground((x, z) -> 0);
+        var o = options(5, 3, false);
+        // Two strokes crossing each other, so every block in the middle is under many dabs.
+        var stroke = strokeAlongX(w, -6, 6, 0, o);
+        for (int z = -6; z <= 6; z++) {
+            var c = new Point(0, 0, z);
+            stroke.add(ball(c, 5), c, new Point(0, 1, 0), o, w, 2);
+        }
+        var after = w.after(stroke.plan());
+        for (int x = -20; x <= 20; x++)
+            for (int z = -20; z <= 20; z++) {
+                int t = top(after, x, z);
+                assertTrue(t <= 0 && t >= -3, "the ground at " + x + ", " + z + " is at " + t);
+                assertEquals("grass", after.blocks.get(new Point(x, t, z)), "grass is still on top at " + x + ", " + z);
+            }
+        for (int x = -6; x <= 6; x++)
+            assertEquals(-3, top(after, x, 0), "the middle of the stroke is pushed in by the strength");
+    }
+
+    @Test
+    void aStrokeKeepsTheRoughnessOfTheGround() {
+        java.util.function.IntBinaryOperator height = (x, z) -> Math.floorMod(x * 7 + z * 13, 3) == 0 ? 1 : 0;
+        var w = ground(height);
+        var after = w.after(strokeAlongX(w, -8, 8, 0, options(6, 3, false)).plan());
+        // Along the middle of the stroke, where every block moves by the full strength.
+        for (int x = -6; x <= 6; x++)
+            assertEquals(height.applyAsInt(x, 0) - 3, top(after, x, 0), "the relief moved down as it is at x " + x);
+    }
+
+    @Test
+    void aStrokeOverAHollowBallNeverOpensIt() {
+        for (int thickness = 1; thickness <= 2; thickness++) {
+            var w = hollow(thickness);
+            var stroke = new Deform.Stroke();
+            var o = options(6, 3, false);
+            // Along the outside of the +x side, each dab on the wall as it was before the stroke.
+            for (int y = -6; y <= 6; y++) {
+                int x = BOX;
+                while (!w.solid(new Point(x, y, 0))) x--;
+                var c = new Point(x, y, 0);
+                stroke.add(ball(c, 6), c, new Point(1, 0, 0), o, w, 2);
+                assertFalse(leaks(w.after(stroke.plan())), "a hole after the dab at " + c + ", thickness " + thickness);
+            }
+            assertTrue(outerX(w.after(stroke.plan())) <= outerX(w) - 3);
+        }
+    }
+
+    @Test
+    void whatEachDabReportsAddsUpToTheStroke() {
+        var w = hollow(2);
+        var stroke = new Deform.Stroke();
+        var sum = new HashMap<Point, Point>();
+        var o = options(5, 3, false);
+        for (int y = -4; y <= 4; y += 2) {
+            int x = BOX;
+            while (!w.solid(new Point(x, y, 0))) x--;
+            var c = new Point(x, y, 0);
+            for (var e : stroke.add(ball(c, 5), c, new Point(1, 0, 0), o, w, 2).entrySet())
+                if (e.getKey().equals(e.getValue())) sum.remove(e.getKey());
+                else sum.put(e.getKey(), e.getValue());
+        }
+        assertEquals(stroke.plan(), sum);
+    }
+
+    private static World dabFlat(int radius, int strength, int falloff) {
+        var w = ground((x, z) -> 0);
+        var o = options(radius, strength, false);
+        o.deformFalloff = falloff;
+        var c = new Point(0, 0, 0);
+        return w.after(Deform.plan(ball(c, radius), c, new Point(0, 1, 0), o, w, 2));
+    }
+
+    @Test
+    void aHarderFalloffFillsMoreOfTheRing() {
+        int radius = 8, s = 2;
+        var soft = dabFlat(radius, s, 100);
+        var hard = dabFlat(radius, s, 0);
+        int softMoved = 0, hardMoved = 0;
+        for (int x = -radius; x <= radius; x++)
+            for (int z = -radius; z <= radius; z++) {
+                if (top(soft, x, z) < 0) softMoved++;
+                if (top(hard, x, z) < 0) hardMoved++;
+            }
+        assertTrue(hardMoved > softMoved * 1.5, "hard " + hardMoved + " soft " + softMoved);
+        // Fully pushed out to where the edge starts, one and a half strengths inside the rim.
+        // The last block before the edge has a seam filled above it, where its neighbour moves less.
+        int full = (int) Math.floor(radius + 1 - Deform.ramp(radius + 1, s, 0)) - 1;
+        for (int x = 0; x <= full; x++) assertEquals(-s, top(hard, x, 0), "full push at " + x);
+        assertEquals(radius + 1, Deform.ramp(radius + 1, s, 100), 1e-9, "100 is the round dent the brush had");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 50, 100})
+    void neighboursNeverMoveMoreThanABlockApart(int falloff) {
+        for (int radius = 3; radius <= 10; radius++) {
+            var w = dabFlat(radius, Deform.maxStrength(radius), falloff);
+            for (int x = -radius - 1; x <= radius + 1; x++)
+                for (int z = -radius - 1; z <= radius + 1; z++) {
+                    assertTrue(
+                            Math.abs(top(w, x, z) - top(w, x + 1, z)) <= 1,
+                            "a step at " + x + ", " + z + " radius " + radius);
+                    assertTrue(
+                            Math.abs(top(w, x, z) - top(w, x, z + 1)) <= 1,
+                            "a step at " + x + ", " + z + " radius " + radius);
+                }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 50, 100})
+    void everyFalloffKeepsTheShellClosed(int falloff) {
+        for (int thickness = 1; thickness <= 2; thickness++)
+            for (int radius = 4; radius <= 8; radius += 2) {
+                var w = hollow(thickness);
+                var c = new Point(outerX(w), 0, 0);
+                var o = options(radius, Deform.maxStrength(radius), false);
+                o.deformFalloff = falloff;
+                var pushed = w.after(Deform.plan(ball(c, radius), c, new Point(1, 0, 0), o, w, 2));
+                assertFalse(leaks(pushed), "a hole, thickness " + thickness + " radius " + radius);
+                o.invert = true;
+                assertFalse(
+                        leaks(w.after(Deform.plan(ball(c, radius), c, new Point(1, 0, 0), o, w, 2))), "a hole pulling");
+            }
     }
 }
