@@ -234,28 +234,92 @@ public final class BrushRules {
     }
 
     /**
-     * The blocks Sculpt Draw (or Extrude's older path) puts or removes for the brush block {@code p}: a column of blocks leaving the surface
-     * along the way the open air lies, as long as the strength allows nearer the centre.
+     * The one way out of the surface for a whole Sculpt Draw dab: the open sides of every solid block of {@code cells} added up, so the
+     * whole brush pushes or pulls along one line and the blocks move together. Straight up with Mask Y on; the clicked face's normal when
+     * the open sides cancel out (or there are none).
      */
-    public static List<Point> sculpt(Point p, Point c, Point normal, Options o, Cells world) {
+    public static Geometry.Vector sculptDirection(Collection<Point> cells, Point normal, Options o, Cells world) {
+        if (o.maskY) return new Geometry.Vector(0, 1, 0);
+        double x = 0, y = 0, z = 0;
+        for (Point p : cells) {
+            if (!world.solid(p)) continue;
+            for (Point n : NEIGHBOURS)
+                if (!world.solid(p.add(n.x(), n.y(), n.z()))) {
+                    x += n.x();
+                    y += n.y();
+                    z += n.z();
+                }
+        }
+        var sum = new Geometry.Vector(x, y, z);
+        if (sum.length() < .01) sum = normal == null ? new Geometry.Vector(0, 1, 0) : Geometry.vector(normal);
+        if (sum.length() < .01) sum = new Geometry.Vector(0, 1, 0);
+        return sum.scale(1 / sum.length());
+    }
+
+    /**
+     * The blocks Sculpt Draw puts (or, inverted, removes) for the brush block {@code p}, moving along {@code direction} from
+     * {@link #sculptDirection}: for a surface block open on that side, a column of the blocks a line along it passes through, every one of
+     * them, as deep as the strength allows nearer the centre. Pulling out stops at the first solid block; pushing in removes the surface
+     * block and those behind it, and stops at the first empty one, so it never reaches through to another surface.
+     */
+    public static List<Point> sculpt(Point p, Point c, Geometry.Vector direction, Options o, Cells world) {
         var targets = new ArrayList<Point>();
-        if (!world.solid(p) || !world.air(p.add(normal.x(), normal.y(), normal.z()))) return targets;
+        if (!world.solid(p) || !openToward(p, direction, world)) return targets;
         int length = o.tool == Tool.EXTRUDE
                 ? Math.max(1, (int) o.strength)
                 : Math.max(1, (int) Math.ceil(o.strength * (1 - Math.sqrt(p.distanceSquared(c)) / (o.radius + 1))));
-        Geometry.Vector direction = new Geometry.Vector(normal.x(), normal.y(), normal.z());
-        if (o.tool == Tool.SCULPT_DRAW) {
-            Geometry.Vector estimated = new Geometry.Vector(0, 0, 0);
-            for (Point neighbour : NEIGHBOURS)
-                if (!world.solid(p.add(neighbour.x(), neighbour.y(), neighbour.z())))
-                    estimated = estimated.add(Geometry.vector(neighbour));
-            if (estimated.length() > .01) direction = estimated.scale(1 / estimated.length());
-            if (o.maskY) direction = new Geometry.Vector(0, 1, 0);
-        }
-        for (int i = 1; i <= length; i++) {
-            Point delta = direction.scale(o.invert ? 1 - i : i).voxel();
-            targets.add(p.add(delta.x(), delta.y(), delta.z()));
-        }
+        if (o.invert) {
+            targets.add(p);
+            // A column of n blocks along an axis takes the surface block and the n - 1 entered before 0.5 short of n.
+            for (Point at : traverse(p, direction.scale(-1), length - .5)) {
+                if (!world.solid(at)) break;
+                targets.add(at);
+            }
+        } else
+            for (Point at : traverse(p, direction, length)) {
+                if (world.solid(at)) break;
+                targets.add(at);
+            }
         return targets;
+    }
+
+    /** Whether a block has an empty neighbour on the side {@code direction} points to. */
+    private static boolean openToward(Point p, Geometry.Vector direction, Cells world) {
+        for (Point n : NEIGHBOURS)
+            if (n.x() * direction.x() + n.y() * direction.y() + n.z() * direction.z() > 1e-6
+                    && !world.solid(p.add(n.x(), n.y(), n.z()))) return true;
+        return false;
+    }
+
+    /**
+     * The blocks a line from the centre of {@code p} along the unit {@code direction} enters before it has gone {@code distance}, in order,
+     * leaving out {@code p}: every block it passes through, so a slanted line leaves no gaps (a grid walk, as Amanatides and Woo's).
+     */
+    static List<Point> traverse(Point p, Geometry.Vector direction, double distance) {
+        var found = new ArrayList<Point>();
+        int x = p.x(), y = p.y(), z = p.z();
+        int sx = (int) Math.signum(direction.x()),
+                sy = (int) Math.signum(direction.y()),
+                sz = (int) Math.signum(direction.z());
+        double dx = sx == 0 ? Double.POSITIVE_INFINITY : 1 / Math.abs(direction.x());
+        double dy = sy == 0 ? Double.POSITIVE_INFINITY : 1 / Math.abs(direction.y());
+        double dz = sz == 0 ? Double.POSITIVE_INFINITY : 1 / Math.abs(direction.z());
+        // From a block's centre the first face is half a block away on every axis.
+        double tx = dx / 2, ty = dy / 2, tz = dz / 2;
+        while (true) {
+            double t = Math.min(tx, Math.min(ty, tz));
+            if (t >= distance || Double.isInfinite(t)) return found;
+            if (t == tx) {
+                x += sx;
+                tx += dx;
+            } else if (t == ty) {
+                y += sy;
+                ty += dy;
+            } else {
+                z += sz;
+                tz += dz;
+            }
+            found.add(new Point(x, y, z));
+        }
     }
 }

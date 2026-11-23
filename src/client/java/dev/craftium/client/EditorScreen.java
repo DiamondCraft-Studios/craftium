@@ -1764,6 +1764,30 @@ public final class EditorScreen extends CraftiumScreen {
                             true);
                     row += 28;
                 }
+                if (o().tool == Tool.SCULPT_DRAW) { // under its Strength slider
+                    int half = (pw - 24) / 2;
+                    button(
+                            g,
+                            10,
+                            403 + row,
+                            half,
+                            19,
+                            "Pull",
+                            !o().invert,
+                            () -> o().invert = false,
+                            "Each stroke pulls the surface out");
+                    button(
+                            g,
+                            14 + half,
+                            403 + row,
+                            half,
+                            19,
+                            "Push",
+                            o().invert,
+                            () -> o().invert = true,
+                            "Each stroke pushes the surface in, shaving it down");
+                    row += 26;
+                }
                 int fillRow = o().tool.picksShape() ? 23 : 0;
                 if (o().tool.picksShape()) fillButtons(g, 403 + row);
                 int next;

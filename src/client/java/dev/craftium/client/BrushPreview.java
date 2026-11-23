@@ -156,6 +156,15 @@ public final class BrushPreview {
                         inside, centre, normal, world, dev.craftium.core.BrushRules.reach(o))
                 : null;
         var measured = front == null ? world : front.filled(world);
+        var sculptDirection = o.tool == dev.craftium.core.Tool.SCULPT_DRAW
+                ? dev.craftium.core.BrushRules.sculptDirection(
+                        front == null
+                                ? cells
+                                : cells.stream().filter(front::contains).toList(),
+                        normal,
+                        o,
+                        measured)
+                : null;
         if (o.tool == dev.craftium.core.Tool.SMOOTH) smoothed(level, cells, front, o, mask, world, changed, gone);
         else
             for (Point p : cells) {
@@ -178,7 +187,7 @@ public final class BrushPreview {
                     }
                     case SCULPT_DRAW ->
                         (o.invert ? gone : changed)
-                                .addAll(dev.craftium.core.BrushRules.sculpt(p, centre, normal, o, world));
+                                .addAll(dev.craftium.core.BrushRules.sculpt(p, centre, sculptDirection, o, world));
                     case DISTORT -> {
                         var source = dev.craftium.core.BrushRules.distortSource(p, centre, o, noise);
                         if (level.getBlockState(new BlockPos(p.x(), p.y(), p.z()))
