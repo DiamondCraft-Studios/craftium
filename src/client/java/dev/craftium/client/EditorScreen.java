@@ -1864,6 +1864,29 @@ public final class EditorScreen extends CraftiumScreen {
                             () -> o().invert = true,
                             "Each stroke takes the thickness off the surface, following its shape");
                     row += 26;
+                    if (!o().invert) { // what the new layer is made of
+                        button(
+                                g,
+                                10,
+                                403 + row,
+                                half,
+                                19,
+                                "Copy surface",
+                                !o().thickenMaterials,
+                                () -> o().thickenMaterials = false,
+                                "New blocks copy the surface block nearest them, so its stone, ores and dirt carry on");
+                        button(
+                                g,
+                                14 + half,
+                                403 + row,
+                                half,
+                                19,
+                                "Materials",
+                                o().thickenMaterials,
+                                () -> o().thickenMaterials = true,
+                                "New blocks come from the Materials list, blended as the Surface Painter blends it");
+                        row += 26;
+                    }
                 }
                 int fillRow = o().tool.picksShape() ? 23 : 0;
                 if (o().tool.picksShape()) fillButtons(g, 403 + row);

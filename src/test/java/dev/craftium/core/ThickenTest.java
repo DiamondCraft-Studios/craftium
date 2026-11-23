@@ -128,6 +128,48 @@ class ThickenTest {
         assertTrue(dab(w, new Point(0, -3, 0), new Point(0, 1, 0), 4, 2, false).isEmpty());
     }
 
+    /** The top blocks of the floor within {@code r} of the middle, as the ring on the screen names them looking down. */
+    private static List<Point> sheet(int r) {
+        var cells = new ArrayList<Point>();
+        for (int x = -r; x <= r; x++)
+            for (int z = -r; z <= r; z++) if (x * x + z * z <= r * r) cells.add(new Point(x, 0, z));
+        return cells;
+    }
+
+    @Test
+    void withTheRingItGrowsFromTheBlocksTheRingCovers() {
+        var w = floor();
+        var o = options(4, 3, false);
+        var plan = Thicken.plan(sheet(8), new Point(0, 0, 0), new Point(0, 1, 0), o, w, true);
+        for (int y = 1; y <= 3; y++) assertTrue(plan.added().containsKey(new Point(0, y, 0)), "y " + y);
+        // The taper follows the ring, not the radius: halfway out to the ring's edge there is still a layer.
+        assertTrue(height(plan, 5) > 0);
+        for (Point p : plan.added().keySet()) assertTrue(p.y() >= 1, p.toString());
+    }
+
+    @Test
+    void withTheRingThinReachesIntoTheWallBehindTheSurface() {
+        var w = floor();
+        var plan = Thicken.plan(sheet(8), new Point(0, 0, 0), new Point(0, 1, 0), options(4, 3, true), w, true);
+        assertTrue(plan.removed().contains(new Point(0, 0, 0)));
+        assertTrue(plan.removed().contains(new Point(0, -2, 0)));
+        assertFalse(plan.removed().contains(new Point(0, -3, 0)));
+    }
+
+    @Test
+    void withTheRingThinNeverReachesAnotherWallPastAGap() {
+        // A one-block floor at y 0 with open air under it and another floor at y -2.
+        var w = new DeformTest.World();
+        for (int x = -12; x <= 12; x++)
+            for (int z = -12; z <= 12; z++) {
+                w.blocks.put(new Point(x, 0, z), "stone");
+                w.blocks.put(new Point(x, -2, z), "stone");
+            }
+        var plan = Thicken.plan(sheet(8), new Point(0, 0, 0), new Point(0, 1, 0), options(4, 5, true), w, true);
+        assertTrue(plan.removed().contains(new Point(0, 0, 0)));
+        for (Point p : plan.removed()) assertEquals(0, p.y(), p.toString());
+    }
+
     @Test
     void thicknessIsWholeBlocksWithinItsRange() {
         assertEquals(1, Thicken.thickness(options(4, .2, false)));

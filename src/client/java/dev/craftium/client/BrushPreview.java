@@ -167,7 +167,7 @@ public final class BrushPreview {
             return new Changes(keep(changed, o, mask), keep(gone, o, mask));
         }
         if (o.tool == dev.craftium.core.Tool.THICKEN) {
-            var plan = dev.craftium.core.Thicken.plan(cells, centre, normal, o, world);
+            var plan = dev.craftium.core.Thicken.plan(cells, centre, normal, o, world, screenView(o) != null);
             return new Changes(keep(plan.added().keySet(), o, mask), keep(plan.removed(), o, mask));
         }
         var inside = new HashSet<>(cells);
@@ -350,7 +350,11 @@ public final class BrushPreview {
             var seen = ScreenFootprint.covered(mc.level, o, at, view);
             shownBlocks = seen.size();
             removedShape = SceneShape.EMPTY;
-            shape = SceneShape.of(mc.level, paintable(mc.level, seen, o), true);
+            if (o.tool == dev.craftium.core.Tool.THICKEN) {
+                var changes = sculpted(mc.level, seen, at, normal, o);
+                removedShape = SceneShape.of(mc.level, changes.removed());
+                shape = SceneShape.of(mc.level, changes.added(), true);
+            } else shape = SceneShape.of(mc.level, paintable(mc.level, seen, o), true);
             builtAt = null; // the footprint moves with the pointer: no old contour to keep
             tooLarge = shape.tooLarge();
             return;

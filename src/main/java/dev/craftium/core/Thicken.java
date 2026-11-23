@@ -1,11 +1,14 @@
 package dev.craftium.core;
 
+import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * What one dab of the Thicken brush does: it grows the surface the brush is on outward by a few blocks, each surface block along its own
@@ -54,26 +57,48 @@ public final class Thicken {
      * {@link Options#invert} is on. Empty when the click is not on a solid block facing open air.
      */
     public static Plan plan(Collection<Point> brush, Point c, Point normal, Options o, BrushRules.Cells world) {
+        return plan(brush, c, normal, o, world, false);
+    }
+
+    /**
+     * One dab as {@link #plan(Collection, Point, Point, Options, BrushRules.Cells)}, where {@code sheet} says the brush is not a ball but the
+     * surface blocks the ring covers on the screen ({@link Options#screenBlocks}): those are the surface, every one of them on the side the
+     * camera sees, the taper reaches as far across as they do, and Thin follows the wall behind them instead of keeping to the brush.
+     */
+    public static Plan plan(
+            Collection<Point> brush, Point c, Point normal, Options o, BrushRules.Cells world, boolean sheet) {
         var inside = brush instanceof Set<Point> set ? set : new LinkedHashSet<>(brush);
         int most = thickness(o);
         // The margin lets the layer grow past the rim of the brush as far as it can reach.
         var front = BrushRules.front(inside, c, normal, world, most + 1);
         if (front == null) return Plan.NONE;
+        var surface = new LinkedHashSet<Point>();
+        for (Point s : inside)
+            if (world.solid(s) && (sheet || front.contains(s)) && touches(s, front.open())) surface.add(s);
+        if (surface.isEmpty()) return Plan.NONE;
         // The taper is measured across the surface, not along it, so the whole thickness under the centre gets the full
         // amount.
         var n = BrushRules.sculptDirection(
-                inside.stream().filter(front::contains).toList(), normal, o, front.filled(world));
-        var taper = new Taper(c, n, o.radius + 1);
-        return o.invert ? thin(inside, front, world, most, taper) : thicken(inside, front, world, most, taper);
+                sheet ? surface : inside.stream().filter(front::contains).toList(), normal, o, front.filled(world));
+        double reach = o.radius + 1;
+        if (sheet) {
+            reach = 1;
+            for (Point s : surface) reach = Math.max(reach, Taper.across(s, c, n) + 1);
+        }
+        var taper = new Taper(c, n, reach);
+        if (!o.invert) return thicken(surface, front, world, most, taper);
+        Predicate<Point> wall = sheet
+                ? joined(surface, front.region(), world)::contains
+                : at -> inside.contains(at) && world.solid(at) && front.contains(at);
+        return thin(surface, front, most, taper, wall);
     }
 
     /** Every empty block on the brushed side within the local thickness of a surface block gains a copy of the nearest one. */
     private static Plan thicken(
-            Set<Point> inside, BrushRules.Front front, BrushRules.Cells world, int most, Taper taper) {
+            Set<Point> surface, BrushRules.Front front, BrushRules.Cells world, int most, Taper taper) {
         var source = new LinkedHashMap<Point, Point>();
         var distance = new HashMap<Point, Integer>();
-        for (Point s : inside) {
-            if (!world.solid(s) || !front.contains(s) || !touches(s, front.open())) continue;
+        for (Point s : surface) {
             double local = most * taper.weight(s);
             if (local < 1) continue;
             int r = (int) Math.floor(local);
@@ -95,15 +120,14 @@ public final class Thicken {
     }
 
     /** Every solid block of the brushed wall within the local thickness of the open air in front of it is taken off. */
-    private static Plan thin(Set<Point> inside, BrushRules.Front front, BrushRules.Cells world, int most, Taper taper) {
+    private static Plan thin(Set<Point> surface, BrushRules.Front front, int most, Taper taper, Predicate<Point> wall) {
         var removed = new LinkedHashSet<Point>();
         var skin = new LinkedHashSet<Point>();
-        for (Point s : inside)
-            if (world.solid(s) && front.contains(s))
-                for (Point n : NEIGHBOURS) {
-                    Point at = s.add(n.x(), n.y(), n.z());
-                    if (front.open().contains(at)) skin.add(at);
-                }
+        for (Point s : surface)
+            for (Point n : NEIGHBOURS) {
+                Point at = s.add(n.x(), n.y(), n.z());
+                if (front.open().contains(at)) skin.add(at);
+            }
         for (Point a : skin) {
             double local = most * taper.weight(a);
             if (local < 1) continue;
@@ -115,7 +139,7 @@ public final class Thicken {
                         int d = x * x + y * y + z * z;
                         if (d == 0 || d > limit) continue;
                         Point at = a.add(x, y, z);
-                        if (inside.contains(at) && world.solid(at) && front.contains(at)) removed.add(at);
+                        if (wall.test(at)) removed.add(at);
                     }
         }
         return new Plan(Map.of(), removed);
@@ -124,11 +148,34 @@ public final class Thicken {
     /** How much of the thickness a block gets: all of it on the axis through the centre along {@code n}, fading smoothly to none at the rim. */
     private record Taper(Point c, Geometry.Vector n, double reach) {
         double weight(Point p) {
-            var r = new Geometry.Vector(p.x() - c.x(), p.y() - c.y(), p.z() - c.z());
-            var across = r.subtract(n.scale(r.dot(n)));
-            double t = Math.clamp(1 - across.length() / reach, 0, 1);
+            double t = Math.clamp(1 - across(p, c, n) / reach, 0, 1);
             return t * t * (3 - 2 * t);
         }
+
+        /** How far {@code p} is from the axis through {@code c} along {@code n}. */
+        static double across(Point p, Point c, Geometry.Vector n) {
+            var r = new Geometry.Vector(p.x() - c.x(), p.y() - c.y(), p.z() - c.z());
+            return r.subtract(n.scale(r.dot(n))).length();
+        }
+    }
+
+    /**
+     * The solid blocks of {@code region} joined through faces, edges or corners to the surface: the wall behind the blocks the ring covers,
+     * and not another one past a gap, which Thin must not reach.
+     */
+    private static Set<Point> joined(Set<Point> surface, Set<Point> region, BrushRules.Cells world) {
+        var found = new HashSet<>(surface);
+        var queue = new ArrayDeque<>(surface);
+        while (!queue.isEmpty()) {
+            Point p = queue.poll();
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dz = -1; dz <= 1; dz++) {
+                        Point q = p.add(dx, dy, dz);
+                        if (region.contains(q) && world.solid(q) && found.add(q)) queue.add(q);
+                    }
+        }
+        return found;
     }
 
     private static boolean touches(Point p, Set<Point> open) {

@@ -479,6 +479,8 @@ public final class Options {
     public int worldTime = 6000, randomTickSpeed = 3;
     public boolean worldToggle = true;
     public boolean fractureMaterial;
+    /** Thicken: whether new blocks come from the Materials list instead of copying the surface block nearest them. */
+    public boolean thickenMaterials;
     /** Smooth: the share of its blocks the stroke keeps (100 keeps them all), which way ties lean, and whether the brush's outer layer is left as it was. */
     public enum SmoothMode {
         STABLE("Stable"),
@@ -622,7 +624,7 @@ public final class Options {
     public java.util.Map<String, String> scriptVariables = new java.util.LinkedHashMap<>();
     public java.util.Map<String, String> maskVariables = new java.util.LinkedHashMap<>();
     public java.util.List<BlockColour> scriptColours = new java.util.ArrayList<>();
-    /** Whether the Surface Painters paint the blocks the ring shows on the screen (sent in {@link #screenBlocks}) instead of a shape around the block under the pointer. */
+    /** Whether the Surface Painter and Thicken work on the blocks the ring shows on the screen (sent in {@link #screenBlocks}) instead of a shape around the block under the pointer. */
     public boolean screenSpace = true;
     /** The blocks the ring covers on the screen for this one use, as a {@link BlockList}; empty for any use that is not a screen-space stroke. Set by the client as it sends, not kept. */
     public String screenBlocks = "";
