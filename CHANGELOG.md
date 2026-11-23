@@ -18,6 +18,7 @@ Changes since 1.6.0-beta.1.
 - The Move tool's gizmo now has the free move handle in the middle: drag it to move the selection anywhere on the screen's plane.
 - New Inspect tool, in Utility: point at a block to see its name and the first few of its block tags floating above it, and use the tool (right-click by default) to list every block and fluid tag in chat. It changes nothing in the world and sends nothing to the server.
 - The Builder's destination preview (where a move, clone, stack or smear would land) is drawn like its selection: dim faces on the ground and an outline in open air, hidden by terrain in front of it.
+- The Hierarchy keeps its scroll position when the editor is closed and opened again, instead of going back to the top.
 
 ### Editing
 - New Crevice Fill tool, in Sculpt: a stroke fills every crack, hole and nook in the brush, right to the bottom, and leaves open surfaces alone. Gap width sets the widest gap it fills (1 to 8 blocks). Cracks, Holes and Hollows set how closed in a gap must be: Cracks fills anything walled in across one axis, Holes only pockets and holes walled in across two, and Hollows only spaces walled in all round. Each gap is filled with the block beside it, or with the active block when Use active block is on. Like the other sculpt brushes it stays on the side of a thin wall you brush, and the hover preview shows the blocks it will fill.
