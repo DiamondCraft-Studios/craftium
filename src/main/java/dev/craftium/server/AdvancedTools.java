@@ -17,6 +17,58 @@ final class AdvancedTools {
     /** The longest Gradient Painter stroke, in blocks along its longest axis: further than anyone reaches while dragging. */
     static final int MAX_STROKE = 1024;
 
+    /**
+     * The Gradient Painter's stroke from A to B, painted as the Surface Painter paints (solid blocks, with Surface only on only those open
+     * to the air, Copy properties and Type replace as set), each block taking the Materials list at how far along the line it lies. The
+     * blocks are those the brush covers moved along the whole line, whatever block the click itself was on: with Match the ring on, those
+     * the ring covers on the screen swept along the line, which the client names and which are kept to those within reach of the line;
+     * otherwise the brush shape put down every half radius, which leaves no gaps. The ends come from the client: a stroke longer than any
+     * reach is refused before anything is gathered, and the cells are counted as they are, so none can grow past what an edit may change.
+     */
+    private static void gradientStroke(EditPlanner p) {
+        var o = p.o;
+        if (o.gradientAnchors.size() < 2) throw new IllegalArgumentException("Drag from a start to an end");
+        Point a = o.gradientAnchors.getFirst(), b = o.gradientAnchors.getLast();
+        int span = Math.max(Math.abs(b.x() - a.x()), Math.max(Math.abs(b.y() - a.y()), Math.abs(b.z() - a.z())));
+        if (span > MAX_STROKE)
+            throw new IllegalArgumentException(
+                    "A gradient stroke reaches at most " + MAX_STROKE + " blocks; drag a shorter one");
+        var cells = new LinkedHashSet<Point>();
+        if (o.screenSpace && !o.screenBlocks.isEmpty()) {
+            int reach = Options.screenReach(o.radius);
+            for (Point at : BlockList.decode(o.screenBlocks, Options.MAX_SCREEN_BLOCKS))
+                if (BrushMath.nearSegment(at, a, b, reach)) cells.add(at);
+        } else {
+            int stride = Math.max(1, o.radius / 2);
+            // the brush every stride along the line, and always at its end
+            for (int step = 0; ; step = Math.min(step + stride, span)) {
+                double f = span == 0 ? 1 : step / (double) span;
+                cells.addAll(p.brush(new Point(
+                        (int) Math.round(a.x() + (b.x() - a.x()) * f),
+                        (int) Math.round(a.y() + (b.y() - a.y()) * f),
+                        (int) Math.round(a.z() + (b.z() - a.z()) * f))));
+                if (cells.size() > Selection.LIMIT)
+                    throw new IllegalArgumentException(
+                            "This stroke covers too many blocks; use a smaller brush or a shorter stroke");
+                if (step >= span) break;
+            }
+        }
+        var vector = Geometry.vector(b).subtract(Geometry.vector(a));
+        double length = vector.dot(vector);
+        for (Point at : cells)
+            if (p.solid(at) && (!o.surfaceOnly || p.surface(at))) {
+                double t = length == 0
+                        ? 0
+                        : Geometry.vector(at).subtract(Geometry.vector(a)).dot(vector) / length;
+                BlockState old = p.state(at), target = p.gradient(Math.clamp(t, 0, 1), at);
+                p.put(
+                        at,
+                        o.typeReplace
+                                ? typeReplace(p, old, target)
+                                : o.copyProperties ? p.preserve(old, target) : target);
+            }
+    }
+
     static boolean handle(EditPlanner p, Point center, Point normal) {
         var o = p.o;
         switch (o.tool) {
@@ -130,43 +182,7 @@ final class AdvancedTools {
                     if (p.accepted(center)) script.paint(center);
                 } else for (Point at : p.brush(center)) if (p.accepted(at)) script.paint(at);
             }
-            case GRADIENT_PAINTER -> {
-                if (o.gradientAnchors.size() < 2) throw new IllegalArgumentException("Drag from a start to an end");
-                Point a = o.gradientAnchors.getFirst(), b = o.gradientAnchors.getLast();
-                var vector = Geometry.vector(b).subtract(Geometry.vector(a));
-                double length = vector.dot(vector);
-                // A stroke from A to B: the blocks the brush covers moved along the whole line, painted as the
-                // Surface Painter paints them (solid, and with Surface only on, only those open to the air), whatever
-                // block the click itself was on. The brush is put down every half radius, which leaves no gaps.
-                // The ends come from the client: a stroke longer than any reach is refused before its line is made,
-                // and the cells are counted as they are gathered, so neither can grow past what an edit may change.
-                int span =
-                        Math.max(Math.abs(b.x() - a.x()), Math.max(Math.abs(b.y() - a.y()), Math.abs(b.z() - a.z())));
-                if (span > MAX_STROKE)
-                    throw new IllegalArgumentException(
-                            "A gradient stroke reaches at most " + MAX_STROKE + " blocks; drag a shorter one");
-                var cells = new LinkedHashSet<Point>();
-                var line = BrushMath.line(a, b);
-                int stride = Math.max(1, o.radius / 2);
-                for (int i = 0, last = line.size() - 1; ; i += stride) {
-                    int at = Math.min(i, last); // every stride, and always the end
-                    cells.addAll(p.brush(line.get(at)));
-                    if (cells.size() > Selection.LIMIT)
-                        throw new IllegalArgumentException(
-                                "This stroke covers too many blocks; use a smaller brush or a shorter stroke");
-                    if (at == last) break;
-                }
-                for (Point at : cells)
-                    if (p.solid(at) && (!o.surfaceOnly || p.surface(at))) {
-                        double t = length == 0
-                                ? 0
-                                : Geometry.vector(at)
-                                                .subtract(Geometry.vector(a))
-                                                .dot(vector)
-                                        / length;
-                        p.put(at, p.preserve(p.state(at), p.gradient(t, at)));
-                    }
-            }
+            case GRADIENT_PAINTER -> gradientStroke(p);
             case FLOODFILL -> {
                 Point start = p.state(center).isAir() ? center : center.add(normal.x(), normal.y(), normal.z());
                 var matching = p.state(start);

@@ -158,7 +158,7 @@ public enum Tool {
     /** Whether the tool can work on the blocks the brush ring covers on the screen ({@link Options#screenBlocks}) instead of a shape around the block under the pointer. */
     public boolean screenBrush() {
         return switch (this) {
-            case PAINTER, THICKEN -> true;
+            case PAINTER, GRADIENT_PAINTER, THICKEN -> true;
             default -> false;
         };
     }

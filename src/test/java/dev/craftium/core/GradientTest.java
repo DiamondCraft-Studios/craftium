@@ -120,6 +120,16 @@ class GradientTest {
     }
 
     @Test
+    void theSweptRingIsKeptWithinReachOfTheLine() {
+        Point a = new Point(0, 64, 0), b = new Point(40, 64, 0);
+        assertTrue(BrushMath.nearSegment(new Point(20, 70, 6), a, b, 6), "beside the middle of the line");
+        assertTrue(BrushMath.nearSegment(new Point(-6, 64, 0), a, b, 6), "past the start, within reach of it");
+        assertFalse(BrushMath.nearSegment(new Point(20, 64, 7), a, b, 6), "too far to the side");
+        assertFalse(BrushMath.nearSegment(new Point(47, 64, 0), a, b, 6), "too far past the end");
+        assertTrue(BrushMath.nearSegment(new Point(3, 60, -2), a, a, 4), "a line of one block is a box around it");
+    }
+
+    @Test
     void optionsRefuseTooManyStopsAndBoundTheBlend() {
         var o = new Options();
         o.gradientBlend = 7;

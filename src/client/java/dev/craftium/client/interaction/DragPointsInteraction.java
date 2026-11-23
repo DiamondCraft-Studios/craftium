@@ -2,6 +2,7 @@ package dev.craftium.client.interaction;
 
 import dev.craftium.client.ClientState;
 import dev.craftium.client.CraftiumClient;
+import dev.craftium.client.GradientStroke;
 import dev.craftium.core.Point;
 import java.util.List;
 
@@ -29,6 +30,7 @@ final class DragPointsInteraction implements Interaction {
         var hit = editor.target();
         start = hit == null ? null : CraftiumClient.point(hit.getBlockPos());
         moved = false;
+        GradientStroke.reset(); // a new line looks at the world as it is now
         return true; // nothing is sent on the press: it may be the start of a drag
     }
 
@@ -78,11 +80,14 @@ final class DragPointsInteraction implements Interaction {
         var current = List.copyOf(anchors);
         anchors.clear();
         anchors.addAll(stroke);
+        // With Match the ring on, the blocks the ring covers swept along the line, as the preview showed them
+        editor.options().screenBlocks = GradientStroke.encoded(stroke.getFirst(), stroke.getLast());
         try {
             editor.requestAt("use", stroke.getLast(), face);
         } finally {
             anchors.clear();
             anchors.addAll(current);
+            editor.options().screenBlocks = "";
         }
         sent = stroke;
         sentNormal = face;
