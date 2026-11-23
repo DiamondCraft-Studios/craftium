@@ -11,7 +11,7 @@ public final class GoldenToolExpected {
             Map.entry("clentaminator", "69 4b3965adca77d4ca"),
             Map.entry("deform", "113 158607d157f58d18"),
             Map.entry("deform_pull", "103 5331f28f233e86f8"),
-            Map.entry("deform_stroke", "185 6e962e37050e014f"),
+            Map.entry("deform_stroke", "160 720d1ea16ad62bcb"),
             Map.entry("distort", "100 533b6b0e51fbf18c"),
             Map.entry("elevation", "47 6f1635aaef8b62da"),
             Map.entry("elevation_invert", "107 c1599558a9128c8e"),

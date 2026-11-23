@@ -701,6 +701,7 @@ public final class GoldenToolGameTest {
         }
         ctx.runOnClient(mc -> {
             ClientState.options.confirmEdits = staging;
+            ClientState.strokeId = staging ? 1 : 0; // one stroke, held from its first click to its last
             CraftiumClient.send(action, at, UP);
         });
         world.getConnection().waitForServerboundPackets();
