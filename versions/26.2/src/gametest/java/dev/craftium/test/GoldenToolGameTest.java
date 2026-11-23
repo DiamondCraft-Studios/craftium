@@ -160,6 +160,7 @@ public final class GoldenToolGameTest {
             Tool.SHAPE,
             Tool.SCULPT_DRAW,
             Tool.DEFORM,
+            Tool.THICKEN,
             Tool.ROCK,
             Tool.WELD,
             Tool.MELT,
@@ -291,6 +292,40 @@ public final class GoldenToolGameTest {
                 false,
                 a,
                 surface(2, 0)));
+        // Thicken several blocks deep, thinned, and built from the Materials list.
+        all.add(new Case(
+                "thicken_deep",
+                Tool.THICKEN,
+                base(o -> {
+                    o.tool = Tool.THICKEN;
+                    o.strength = 4;
+                }),
+                null,
+                false,
+                c));
+        all.add(new Case(
+                "thicken_thin",
+                Tool.THICKEN,
+                base(o -> {
+                    o.tool = Tool.THICKEN;
+                    o.strength = 2;
+                    o.invert = true;
+                }),
+                null,
+                false,
+                b));
+        all.add(new Case(
+                "thicken_materials",
+                Tool.THICKEN,
+                base(o -> {
+                    o.tool = Tool.THICKEN;
+                    o.strength = 2;
+                    o.thickenMaterials = true;
+                    o.materials = "minecraft:andesite,minecraft:stone,minecraft:gravel";
+                }),
+                null,
+                false,
+                d));
         all.add(new Case(
                 "elevation_invert",
                 Tool.ELEVATION,
