@@ -1855,7 +1855,20 @@ public final class EditorScreen extends CraftiumScreen {
                             "Each stroke pulls the wall out, moving its blocks, so it keeps its thickness");
                     row += 26;
                 }
-                if (o().tool == Tool.THICKEN) { // under its Thickness
+                if (o().tool == Tool.THICKEN) { // under its Thickness, laid out as Deform's are
+                    slider(
+                            g,
+                            10,
+                            403 + row,
+                            pw - 20,
+                            "Falloff",
+                            o().deformFalloff,
+                            0,
+                            100,
+                            DEFAULTS.deformFalloff,
+                            v -> o().deformFalloff = (int) Math.clamp(Math.round(v), 0, 100),
+                            true);
+                    row += 28;
                     int half = (pw - 24) / 2;
                     button(
                             g,

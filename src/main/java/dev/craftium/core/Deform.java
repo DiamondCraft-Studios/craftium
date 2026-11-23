@@ -147,21 +147,6 @@ public final class Deform {
             return changed;
         }
 
-        /** The blocks within {@code radius} of the line through {@code c} along {@code n}, as far along it either way as the radius. */
-        private static Set<Point> column(Point c, Geometry.Vector n, int radius) {
-            var cells = new HashSet<Point>();
-            int r = (int) Math.ceil(radius * Math.sqrt(2));
-            double reach = radius + .5;
-            for (int x = -r; x <= r; x++)
-                for (int y = -r; y <= r; y++)
-                    for (int z = -r; z <= r; z++) {
-                        double along = x * n.x() + y * n.y() + z * n.z();
-                        double across2 = x * x + y * y + z * z - along * along;
-                        if (Math.abs(along) <= reach && across2 <= reach * reach) cells.add(c.add(x, y, z));
-                    }
-            return cells;
-        }
-
         /** Every block the stroke changes so far, with the place its new block is taken from. */
         public Map<Point, Point> plan() {
             return Collections.unmodifiableMap(plan);
@@ -237,9 +222,29 @@ public final class Deform {
     }
 
     /**
+     * The blocks within {@code radius} of the line through {@code c} along {@code n}, as far along it either way as the radius: the part of
+     * the world a dab works on, so a curved wall is taken in whole as far out as the ring, which a ball would leave out near its rim. Thicken
+     * uses it too.
+     */
+    static Set<Point> column(Point c, Geometry.Vector n, int radius) {
+        var cells = new HashSet<Point>();
+        int r = (int) Math.ceil(radius * Math.sqrt(2));
+        double reach = radius + .5;
+        for (int x = -r; x <= r; x++)
+            for (int y = -r; y <= r; y++)
+                for (int z = -r; z <= r; z++) {
+                    double along = x * n.x() + y * n.y() + z * n.z();
+                    double across2 = x * x + y * y + z * z - along * along;
+                    if (Math.abs(along) <= reach && across2 <= reach * reach) cells.add(c.add(x, y, z));
+                }
+        return cells;
+    }
+
+    /**
      * How wide the edge of a dab is, where its push fades from full to nothing, for a {@code falloff} from 0 to 100. At 100 the push fades
      * all the way from the centre to the rim; lower, it stays full further out and fades over a narrower edge, but never narrower than one
-     * and a half times the strength, or neighbouring blocks would move more than a block apart and a thin wall could open.
+     * and a half times the strength, or neighbouring blocks would move more than a block apart and a thin wall could open. Thicken shares
+     * it, so the same Falloff gives the same edge on both.
      */
     static double ramp(double reach, int s, int falloff) {
         double narrowest = Math.min(reach, Math.max(1, 1.5 * s));

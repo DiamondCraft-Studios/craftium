@@ -69,6 +69,24 @@ class ThickenTest {
         assertEquals(0, rim);
     }
 
+    @Test
+    void aLowFalloffKeepsTheLayerFullNearerTheRing() {
+        var w = floor();
+        var hard = options(8, 2, false);
+        hard.deformFalloff = 0;
+        var soft = options(8, 2, false);
+        soft.deformFalloff = 100;
+        var c = new Point(0, 0, 0);
+        var up = new Point(0, 1, 0);
+        int hardAt5 = height(Thicken.plan(ball(c, 8), c, up, hard, w), 5);
+        int softAt5 = height(Thicken.plan(ball(c, 8), c, up, soft, w), 5);
+        assertEquals(2, hardAt5);
+        assertTrue(softAt5 < 2, "soft " + softAt5);
+        // Even with no falloff the edge is never a cliff: it fades over one and a half times the thickness, as
+        // Deform's.
+        assertEquals(0, height(Thicken.plan(ball(c, 8), c, up, hard, w), 9));
+    }
+
     private static int height(Thicken.Plan plan, int x) {
         int top = 0;
         for (Point p : plan.added().keySet()) if (p.x() == x && p.z() == 0) top = Math.max(top, p.y());

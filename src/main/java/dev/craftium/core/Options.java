@@ -527,8 +527,9 @@ public final class Options {
 
     public boolean creviceActiveBlock;
     /**
-     * Deform: how wide the edge of a dab is, where its push fades out, from 0 to 100. 100 fades from the centre to the rim, a round dent;
-     * lower keeps the push full nearer the rim, so the dent fills more of the brush ring.
+     * Deform and Thicken: how wide the edge of a dab is, where its push (or its layer) fades out, from 0 to 100. 100 fades from the centre to
+     * the rim, a round dent or mound; lower keeps it full nearer the rim, so it fills more of the brush ring. Each tool keeps its own value
+     * ({@code ToolOptionMemory}).
      */
     public int deformFalloff = 25;
     /** The widest gap Crevice Fill can be set to fill. */

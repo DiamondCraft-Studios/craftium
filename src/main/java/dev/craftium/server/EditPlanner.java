@@ -646,7 +646,7 @@ final class EditPlanner {
     }
 
     /**
-     * One dab of Thicken: the surface under a ball of the radius, or under the ring on the screen when Match the ring is on, grows out (or,
+     * One dab of Thicken: the surface in a column of the radius across it (as Deform's), or under the ring on the screen when Match the ring is on, grows out (or,
      * inverted, is thinned) by {@link Thicken#plan}. Each new block is a copy of the surface block nearest it, or with
      * {@link Options#thickenMaterials} the Materials list's block there. Every copied block is read before any is written, so the dab works
      * from the world as it was.
@@ -663,6 +663,7 @@ final class EditPlanner {
             copied.put(at, o.thickenMaterials ? materialAt(noise.sample(at), at) : state(e.getValue()));
         }
         for (var e : copied.entrySet()) put(e.getKey(), e.getValue());
+        for (Point p : plan.removed()) validate(p);
         for (Point p : plan.removed()) put(p, Blocks.AIR.defaultBlockState());
     }
 

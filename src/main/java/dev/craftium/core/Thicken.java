@@ -17,7 +17,8 @@ import java.util.function.Predicate;
  *
  * <p>It keeps to the side of the surface the brush was put on ({@link BrushRules#front}): it grows only into the open air on that side, so
  * the outside of a one-block shell is never touched from the inside. The layer is thickest at the centre of the brush and tapers to nothing
- * at its rim, so strokes blend into the surface around them instead of leaving a step. Each new block copies the surface block nearest to
+ * at its rim, so strokes blend into the surface around them instead of leaving a step; Falloff ({@link Options#deformFalloff}, shared with
+ * Deform) sets how wide that fading edge is. Each new block copies the surface block nearest to
  * it, so the stone, ore and dirt of a wall carry on into its new layer.
  */
 public final class Thicken {
@@ -67,11 +68,24 @@ public final class Thicken {
      */
     public static Plan plan(
             Collection<Point> brush, Point c, Point normal, Options o, BrushRules.Cells world, boolean sheet) {
-        var inside = brush instanceof Set<Point> set ? set : new LinkedHashSet<>(brush);
+        Set<Point> inside = brush instanceof Set<Point> set ? set : new LinkedHashSet<>(brush);
         int most = thickness(o);
         // The margin lets the layer grow past the rim of the brush as far as it can reach.
         var front = BrushRules.front(inside, c, normal, world, most + 1);
         if (front == null) return Plan.NONE;
+        if (!sheet) {
+            // As Deform does, the dab works on a column of the radius across the surface, not the ball: on a curved
+            // wall the
+            // ball leaves out the wall near its rim, so with a low Falloff the layer would stop short of the ring.
+            var across = BrushRules.sculptDirection(
+                    inside.stream().filter(front::contains).toList(), normal, o, front.filled(world));
+            var column = Deform.column(c, across, o.radius);
+            var wider = BrushRules.front(column, c, normal, world, most + 1);
+            if (wider != null) {
+                inside = column;
+                front = wider;
+            }
+        }
         var surface = new LinkedHashSet<Point>();
         for (Point s : inside)
             if (world.solid(s) && (sheet || front.contains(s)) && touches(s, front.open())) surface.add(s);
@@ -85,11 +99,13 @@ public final class Thicken {
             reach = 1;
             for (Point s : surface) reach = Math.max(reach, Taper.across(s, c, n) + 1);
         }
-        var taper = new Taper(c, n, reach);
+        var taper = new Taper(c, n, reach, Deform.ramp(reach, most, o.deformFalloff));
         if (!o.invert) return thicken(surface, front, world, most, taper);
+        var brushed = inside;
+        var side = front;
         Predicate<Point> wall = sheet
-                ? joined(surface, front.region(), world)::contains
-                : at -> inside.contains(at) && world.solid(at) && front.contains(at);
+                ? joined(surface, side.region(), world)::contains
+                : at -> brushed.contains(at) && world.solid(at) && side.contains(at);
         return thin(surface, front, most, taper, wall);
     }
 
@@ -145,10 +161,13 @@ public final class Thicken {
         return new Plan(Map.of(), removed);
     }
 
-    /** How much of the thickness a block gets: all of it on the axis through the centre along {@code n}, fading smoothly to none at the rim. */
-    private record Taper(Point c, Geometry.Vector n, double reach) {
+    /**
+     * How much of the thickness a block gets: all of it near the axis through the centre along {@code n}, fading smoothly to none at the rim
+     * over an edge {@code ramp} wide, which the Falloff sets as it does for Deform ({@link Deform#ramp}).
+     */
+    private record Taper(Point c, Geometry.Vector n, double reach, double ramp) {
         double weight(Point p) {
-            double t = Math.clamp(1 - across(p, c, n) / reach, 0, 1);
+            double t = Math.clamp((reach - across(p, c, n)) / ramp, 0, 1);
             return t * t * (3 - 2 * t);
         }
 
