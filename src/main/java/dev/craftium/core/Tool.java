@@ -106,7 +106,12 @@ public enum Tool {
             "Inspect",
             "IN",
             "Utility",
-            "Point at a block to see its tags above it; right-click to list them all in chat. Changes nothing.");
+            "Point at a block to see its tags above it; right-click to list them all in chat. Changes nothing."),
+    CREVICE_FILL(
+            "Crevice Fill",
+            "CF",
+            "Sculpt",
+            "Fill every crack, hole and nook in the brush up to the gap width, leaving open surfaces alone.");
     public final String label, icon, group, description;
 
     Tool(String label, String icon, String group, String description) {
@@ -177,7 +182,19 @@ public enum Tool {
         all.put("Paint", List.of(PAINTER, PAINT_BUCKET, GRADIENT_PAINTER, SCRIPT_BRUSH, BIOME_PAINTER, CLENTAMINATOR));
         all.put(
                 "Sculpt",
-                List.of(SMOOTH, ROUGHEN, DISTORT, MELT, WELD, SHATTER, EXTRUDE, SMEAR, SCULPT_DRAW, MODIFY, STAMP));
+                List.of(
+                        SMOOTH,
+                        ROUGHEN,
+                        DISTORT,
+                        MELT,
+                        WELD,
+                        CREVICE_FILL,
+                        SHATTER,
+                        EXTRUDE,
+                        SMEAR,
+                        SCULPT_DRAW,
+                        MODIFY,
+                        STAMP));
         all.put("Terrain", List.of(ELEVATION, FLATTEN, SLOPE, ROCK, FLOODFILL, FLUID_BALL));
         all.put("Utility", List.of(RULER, TINKER, ANNOTATION, INSPECT));
         return Collections.unmodifiableMap(all);

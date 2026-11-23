@@ -457,8 +457,16 @@ final class EditPlanner {
         for (Point p : points) validate(p);
         if (o.tool == Tool.BIOME_PAINTER || o.tool == Tool.CLENTAMINATOR) paintBiomes(points);
         var inside = BrushRules.keepsToFront(o.tool) ? new HashSet<>(points) : null;
-        var front = inside != null ? BrushRules.front(inside, c, normal, cells, BrushRules.reach(o)) : null;
+        var front = inside != null ? BrushRules.front(inside, c, normal, cells, BrushRules.frontMargin(o)) : null;
         var measured = front == null ? cells : front.filled(cells);
+        if (o.tool == Tool.CREVICE_FILL) {
+            var kept = front == null
+                    ? points
+                    : points.stream().filter(front::contains).toList();
+            for (Point p : BrushRules.crevices(kept, o, measured))
+                put(p, o.creviceActiveBlock ? material : creviceMaterial(p));
+            return;
+        }
         for (Point p : points) {
             if (front != null && !front.contains(p)) continue;
             BlockState old = state(p);
@@ -538,6 +546,23 @@ final class EditPlanner {
 
     double density(Point p) {
         return BrushRules.density(p, o, cells);
+    }
+
+    /**
+     * The block Crevice Fill puts at {@code p}: the block beside it, as Weld takes, or for a block deep in a gap with only air around
+     * it, the one already planned beside it, so a crack fills with the rock it runs through rather than the active block.
+     */
+    BlockState creviceMaterial(Point p) {
+        for (Point n : NEIGHBOURS) {
+            BlockState s = state(p.add(n.x(), n.y(), n.z()));
+            if (!s.isAir() && !s.hasBlockEntity() && s.getFluidState().isEmpty()) return s;
+        }
+        for (Point n : NEIGHBOURS) {
+            var pending = changes.get(p.add(n.x(), n.y(), n.z()));
+            if (pending != null && !pending.after().state().isAir())
+                return pending.after().state();
+        }
+        return material;
     }
 
     BlockState nearestMaterial(Point p) {

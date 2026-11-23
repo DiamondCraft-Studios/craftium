@@ -116,7 +116,7 @@ public final class BrushPreview {
     /** The tools whose blocks are picked by a rule, so the preview draws only what changes. */
     private static boolean sculpts(dev.craftium.core.Tool tool) {
         return switch (tool) {
-            case ROCK, WELD, MELT, ROUGHEN, SHATTER, DISTORT, SCULPT_DRAW, SMOOTH -> true;
+            case ROCK, WELD, CREVICE_FILL, MELT, ROUGHEN, SHATTER, DISTORT, SCULPT_DRAW, SMOOTH -> true;
             default -> false;
         };
     }
@@ -153,10 +153,17 @@ public final class BrushPreview {
         var inside = new HashSet<>(cells);
         var front = dev.craftium.core.BrushRules.keepsToFront(o.tool)
                 ? dev.craftium.core.BrushRules.front(
-                        inside, centre, normal, world, dev.craftium.core.BrushRules.reach(o))
+                        inside, centre, normal, world, dev.craftium.core.BrushRules.frontMargin(o))
                 : null;
         var measured = front == null ? world : front.filled(world);
         if (o.tool == dev.craftium.core.Tool.SMOOTH) smoothed(level, cells, front, o, mask, world, changed, gone);
+        else if (o.tool == dev.craftium.core.Tool.CREVICE_FILL)
+            changed.addAll(dev.craftium.core.BrushRules.crevices(
+                    front == null
+                            ? cells
+                            : cells.stream().filter(front::contains).toList(),
+                    o,
+                    measured));
         else
             for (Point p : cells) {
                 if (front != null && !front.contains(p)) continue;

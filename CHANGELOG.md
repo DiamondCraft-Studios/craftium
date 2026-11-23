@@ -20,6 +20,7 @@ Changes since 1.6.0-beta.1.
 - The Builder's destination preview (where a move, clone, stack or smear would land) is drawn like its selection: dim faces on the ground and an outline in open air, hidden by terrain in front of it.
 
 ### Editing
+- New Crevice Fill tool, in Sculpt: a stroke fills every crack, hole and nook in the brush, right to the bottom, and leaves open surfaces alone. Gap width sets the widest gap it fills (1 to 8 blocks). Cracks, Holes and Hollows set how closed in a gap must be: Cracks fills anything walled in across one axis, Holes only pockets and holes walled in across two, and Hollows only spaces walled in all round. Each gap is filled with the block beside it, or with the active block when Use active block is on. Like the other sculpt brushes it stays on the side of a thin wall you brush, and the hover preview shows the blocks it will fill.
 - The clipboard is kept packed, at about 14 bytes a block instead of about 128, so copying two million blocks holds roughly 190 MB less memory.
 - An AI or jigsaw preview describes up to 49,152 blocks (was 32,768), and an edit may reach up to 256 chunks that are not loaded (was 128), which can make the server pause longer while they generate.
 - A world holds up to 1,024 BuildObjects per dimension, up from 64.

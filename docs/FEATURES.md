@@ -20,6 +20,7 @@ This is a functional development preview. Implemented equivalents do not establi
 | Sculpt Draw | Estimated surface normal, Y mask, strength and carve | Discrete voxel-density normal |
 | Rock | Coherent noisy rock, denoising, Gaussian density melding | Approximate rock generator |
 | Weld / Melt | Gaussian voxel-density fill/erosion with threshold | Kernel radius capped at three |
+| Crevice Fill | Fills empty blocks walled in across 1, 2 or 3 axes within a gap width, repeating until no more close | Gap width up to 8; up to 16 passes |
 | Text | Original 5×7 font or AWT/TTF/OTF text, rotations, thickness and slab text | 48 UTF-16 units; imported-font availability determines glyph support; slab mode needs a slab material |
 | Modelling | Convex hull, triangle strip/fan, flat/curved lofts and control points | 64 nodes; Smart currently uses convex hull |
 | Stamp | Clipboard scattering, spacing, chance, yaw and mirroring | Grid sampling; does not fully conform each stamp to uneven terrain |
