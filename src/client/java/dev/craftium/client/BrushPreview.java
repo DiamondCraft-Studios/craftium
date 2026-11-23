@@ -46,6 +46,8 @@ public final class BrushPreview {
         // must not be in the key: with the camera inside a block the hit face follows the look direction, and every
         // turn would otherwise work the whole preview out again.
         var normal = dev.craftium.core.BrushRules.keepsToFront(o.tool)
+                        || o.tool == dev.craftium.core.Tool.DEFORM
+                        || o.tool == dev.craftium.core.Tool.THICKEN
                 ? new Point(face.getStepX(), face.getStepY(), face.getStepZ())
                 : new Point(0, 1, 0);
         var now = List.<Object>of(
@@ -116,7 +118,8 @@ public final class BrushPreview {
     /** The tools whose blocks are picked by a rule, so the preview draws only what changes. */
     private static boolean sculpts(dev.craftium.core.Tool tool) {
         return switch (tool) {
-            case ROCK, WELD, CREVICE_FILL, MELT, ROUGHEN, SHATTER, DISTORT, SCULPT_DRAW, SMOOTH, DEFORM -> true;
+            case ROCK, WELD, CREVICE_FILL, MELT, ROUGHEN, SHATTER, DISTORT, SCULPT_DRAW, SMOOTH, DEFORM, THICKEN ->
+                true;
             default -> false;
         };
     }
@@ -166,6 +169,10 @@ public final class BrushPreview {
                 (to.isAir() ? gone : changed).add(e.getKey());
             }
             return new Changes(keep(changed, o, mask), keep(gone, o, mask));
+        }
+        if (o.tool == dev.craftium.core.Tool.THICKEN) {
+            var plan = dev.craftium.core.Thicken.plan(cells, centre, normal, o, world, screenView(o) != null);
+            return new Changes(keep(plan.added().keySet(), o, mask), keep(plan.removed(), o, mask));
         }
         var inside = new HashSet<>(cells);
         var front = dev.craftium.core.BrushRules.keepsToFront(o.tool)
@@ -354,7 +361,11 @@ public final class BrushPreview {
             var seen = ScreenFootprint.covered(mc.level, o, at, view);
             shownBlocks = seen.size();
             removedShape = SceneShape.EMPTY;
-            shape = SceneShape.of(mc.level, paintable(mc.level, seen, o), true);
+            if (o.tool == dev.craftium.core.Tool.THICKEN) {
+                var changes = sculpted(mc.level, seen, at, normal, o);
+                removedShape = SceneShape.of(mc.level, changes.removed());
+                shape = SceneShape.of(mc.level, changes.added(), true);
+            } else shape = SceneShape.of(mc.level, paintable(mc.level, seen, o), true);
             builtAt = null; // the footprint moves with the pointer: no old contour to keep
             tooLarge = shape.tooLarge();
             return;

@@ -60,6 +60,7 @@ class ToolMetadataTest {
         INSPECT @@ Inspect @@ IN @@ Utility @@ Point at a block to see its tags above it; right-click to list them all in chat. Changes nothing. @@ NONE @@ false @@ false @@ false @@ false @@ -1
         DEFORM @@ Deform @@ DF @@ Sculpt @@ Push a wall in or pull it out by moving its blocks, so it keeps its thickness and leaves no holes. @@ SPHERE @@ false @@ false @@ true @@ false @@ -1
         CREVICE_FILL @@ Crevice Fill @@ CF @@ Sculpt @@ Fill every crack, hole and nook in the brush up to the gap width, leaving open surfaces alone. @@ SHAPE @@ true @@ false @@ true @@ false @@ -1
+        THICKEN @@ Thicken @@ TK @@ Sculpt @@ Grow a surface out evenly along its own shape, such as the inside of a cave, or thin it; keeps to the side you brush. @@ SPHERE @@ false @@ false @@ true @@ false @@ -1
         """;
 
     /** The sections of the Tools panel, in order, with the tools in each in the order shown. */
@@ -68,7 +69,7 @@ class ToolMetadataTest {
         Select: BOX_SELECT,MAGIC_SELECT,LASSO_SELECT,FREEHAND_SELECT
         Draw: SHAPE,LINE,PATH,MODELLING,FREEHAND_DRAW,TEXT,ERASE
         Paint: PAINTER,PAINT_BUCKET,GRADIENT_PAINTER,SCRIPT_BRUSH,BIOME_PAINTER,CLENTAMINATOR
-        Sculpt: SMOOTH,ROUGHEN,DISTORT,MELT,WELD,CREVICE_FILL,SHATTER,EXTRUDE,SMEAR,SCULPT_DRAW,DEFORM,MODIFY,STAMP
+        Sculpt: SMOOTH,ROUGHEN,DISTORT,MELT,WELD,CREVICE_FILL,SHATTER,EXTRUDE,SMEAR,SCULPT_DRAW,DEFORM,THICKEN,MODIFY,STAMP
         Terrain: ELEVATION,FLATTEN,SLOPE,ROCK,FLOODFILL,FLUID_BALL
         Utility: RULER,TINKER,ANNOTATION,INSPECT
         """;

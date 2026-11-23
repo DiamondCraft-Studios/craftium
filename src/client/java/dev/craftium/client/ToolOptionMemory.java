@@ -48,6 +48,7 @@ public final class ToolOptionMemory {
             "distortZ",
             "distortDistance",
             "fractureMaterial",
+            "thickenMaterials",
             "creviceWidth",
             "creviceSides",
             "creviceActiveBlock",

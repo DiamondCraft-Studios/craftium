@@ -225,5 +225,10 @@ final class ToolHintsExpected {
             "CREVICE_FILL gizmo=false shape=false :: LMB Drag: Camera | RMB: Use Crevice Fill | MMB: Pick block | Wheel: Zoom | Ctrl+MMB+Wheel / [ ]: Radius | WASD / Space Shift: Fly",
             "CREVICE_FILL gizmo=false shape=true :: LMB Drag: Camera | RMB: Use Crevice Fill | MMB: Pick block | Wheel: Size shape | Ctrl+MMB+Wheel / [ ]: Radius | WASD / Space Shift: Fly",
             "CREVICE_FILL gizmo=true shape=false :: LMB Drag: Camera | RMB: Use Crevice Fill | MMB: Pick block | Wheel: Nudge | Ctrl+MMB+Wheel / [ ]: Radius | WASD / Space Shift: Fly",
-            "CREVICE_FILL gizmo=true shape=true :: LMB Drag: Camera | RMB: Use Crevice Fill | MMB: Pick block | Wheel: Size shape | Ctrl+MMB+Wheel / [ ]: Radius | WASD / Space Shift: Fly");
+            "CREVICE_FILL gizmo=true shape=true :: LMB Drag: Camera | RMB: Use Crevice Fill | MMB: Pick block | Wheel: Size shape | Ctrl+MMB+Wheel / [ ]: Radius | WASD / Space Shift: Fly",
+            "THICKEN radiusHint=true",
+            "THICKEN gizmo=false shape=false :: LMB Drag: Camera | RMB: Use Thicken | MMB: Pick block | Wheel: Zoom | Ctrl+MMB+Wheel / [ ]: Radius | Ctrl+Alt Drag: Brush size | WASD / Space Shift: Fly",
+            "THICKEN gizmo=false shape=true :: LMB Drag: Camera | RMB: Use Thicken | MMB: Pick block | Wheel: Size shape | Ctrl+MMB+Wheel / [ ]: Radius | Ctrl+Alt Drag: Brush size | WASD / Space Shift: Fly",
+            "THICKEN gizmo=true shape=false :: LMB Drag: Camera | RMB: Use Thicken | MMB: Pick block | Wheel: Nudge | Ctrl+MMB+Wheel / [ ]: Radius | Ctrl+Alt Drag: Brush size | WASD / Space Shift: Fly",
+            "THICKEN gizmo=true shape=true :: LMB Drag: Camera | RMB: Use Thicken | MMB: Pick block | Wheel: Size shape | Ctrl+MMB+Wheel / [ ]: Radius | Ctrl+Alt Drag: Brush size | WASD / Space Shift: Fly");
 }
