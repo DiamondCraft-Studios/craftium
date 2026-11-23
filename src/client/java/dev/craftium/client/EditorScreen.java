@@ -1494,6 +1494,20 @@ public final class EditorScreen extends CraftiumScreen {
                         DEFAULTS.strength,
                         v -> o().strength = Math.clamp(Math.round(v), 1, most),
                         true);
+            } else if (o().tool == Tool.THICKEN) { // whole blocks added (or taken off) at the centre of each dab
+                int most = dev.craftium.core.Thicken.MAX_THICKNESS;
+                slider(
+                        g,
+                        10,
+                        375 + sidesRow() - lift(),
+                        pw - 20,
+                        "Thickness",
+                        Math.clamp(Math.round(o().strength), 1, most),
+                        1,
+                        most,
+                        DEFAULTS.strength,
+                        v -> o().strength = Math.clamp(Math.round(v), 1, most),
+                        true);
             } else if (hasStrength())
                 slider(
                         g,
@@ -1827,6 +1841,30 @@ public final class EditorScreen extends CraftiumScreen {
                             "Each stroke pulls the wall out, moving its blocks, so it keeps its thickness");
                     row += 26;
                 }
+                if (o().tool == Tool.THICKEN) { // under its Thickness
+                    int half = (pw - 24) / 2;
+                    button(
+                            g,
+                            10,
+                            403 + row,
+                            half,
+                            19,
+                            "Thicken",
+                            !o().invert,
+                            () -> o().invert = false,
+                            "Each stroke grows the surface out by the thickness, following its shape, with copies of its own blocks");
+                    button(
+                            g,
+                            14 + half,
+                            403 + row,
+                            half,
+                            19,
+                            "Thin",
+                            o().invert,
+                            () -> o().invert = true,
+                            "Each stroke takes the thickness off the surface, following its shape");
+                    row += 26;
+                }
                 int fillRow = o().tool.picksShape() ? 23 : 0;
                 if (o().tool.picksShape()) fillButtons(g, 403 + row);
                 int next;
@@ -1834,8 +1872,8 @@ public final class EditorScreen extends CraftiumScreen {
                     next = terrainRows(
                             g, 403 + row); // these tools work on the ground's height, so Surface only means nothing to
                 // them
-                else if (o().tool == Tool.DEFORM)
-                    next = 403 + fillRow + row; // it moves the whole wall, not only its surface
+                else if (o().tool == Tool.DEFORM || o().tool == Tool.THICKEN)
+                    next = 403 + fillRow + row; // they work on the whole wall, so Surface only means nothing to them
                 else {
                     toggle(
                             g,
@@ -5556,7 +5594,14 @@ public final class EditorScreen extends CraftiumScreen {
      */
     /** The tools with a Strength slider under the radius. */
     private boolean hasStrength() {
-        return EnumSet.of(Tool.SCULPT_DRAW, Tool.ROCK, Tool.ELEVATION, Tool.FLATTEN, Tool.EXTRUDE, Tool.DEFORM)
+        return EnumSet.of(
+                        Tool.SCULPT_DRAW,
+                        Tool.ROCK,
+                        Tool.ELEVATION,
+                        Tool.FLATTEN,
+                        Tool.EXTRUDE,
+                        Tool.DEFORM,
+                        Tool.THICKEN)
                 .contains(o().tool);
     }
 

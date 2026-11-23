@@ -55,6 +55,7 @@ class IconCatalogTest {
         craftium:tool/annotation @@ Tools/Utility @@ 24x24
         craftium:tool/inspect @@ Tools/Utility @@ 24x24
         craftium:tool/deform @@ Tools/Sculpt @@ 24x24
+        craftium:tool/thicken @@ Tools/Sculpt @@ 24x24
         craftium:tool/move @@ Tools/Transform @@ 24x24
         craftium:tool/rotate @@ Tools/Transform @@ 24x24
         craftium:tool/scale @@ Tools/Transform @@ 24x24

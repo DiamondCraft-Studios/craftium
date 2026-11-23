@@ -490,6 +490,10 @@ final class EditPlanner {
             deform(c, normal);
             return;
         }
+        if (o.tool == Tool.THICKEN) {
+            thicken(c, normal);
+            return;
+        }
         if (o.tool == Tool.BIOME_PAINTER || o.tool == Tool.CLENTAMINATOR) paintBiomes(points);
         var inside = BrushRules.keepsToFront(o.tool) ? new HashSet<>(points) : null;
         var front = inside != null ? BrushRules.front(inside, c, normal, cells, BrushRules.reach(o)) : null;
@@ -596,6 +600,24 @@ final class EditPlanner {
             taken.put(e.getKey(), snapshot(e.getValue()));
         }
         for (var e : taken.entrySet()) put(e.getKey(), e.getValue());
+    }
+
+    /**
+     * One dab of Thicken: the surface under a ball of the radius grows out (or, inverted, is thinned) by {@link Thicken#plan}, each new
+     * block a copy of the surface block nearest it. Every copied block is read before any is written, so the dab works from the world as
+     * it was.
+     */
+    private void thicken(Point c, Point normal) {
+        var ball = BrushMath.brush(c, o.radius, BrushMath.Shape.SPHERE, false);
+        for (Point p : ball) validate(p);
+        var plan = Thicken.plan(ball, c, normal, o, cells);
+        var copied = new LinkedHashMap<Point, BlockState>();
+        for (var e : plan.added().entrySet()) {
+            validate(e.getKey());
+            copied.put(e.getKey(), state(e.getValue()));
+        }
+        for (var e : copied.entrySet()) put(e.getKey(), e.getValue());
+        for (Point p : plan.removed()) put(p, Blocks.AIR.defaultBlockState());
     }
 
     double density(Point p) {

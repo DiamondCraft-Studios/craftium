@@ -111,7 +111,12 @@ public enum Tool {
             "Deform",
             "DF",
             "Sculpt",
-            "Push a wall in or pull it out by moving its blocks, so it keeps its thickness and leaves no holes.");
+            "Push a wall in or pull it out by moving its blocks, so it keeps its thickness and leaves no holes."),
+    THICKEN(
+            "Thicken",
+            "TK",
+            "Sculpt",
+            "Grow a surface out evenly along its own shape, such as the inside of a cave, or thin it; keeps to the side you brush.");
     public final String label, icon, group, description;
 
     Tool(String label, String icon, String group, String description) {
@@ -193,6 +198,7 @@ public enum Tool {
                         SMEAR,
                         SCULPT_DRAW,
                         DEFORM,
+                        THICKEN,
                         MODIFY,
                         STAMP));
         all.put("Terrain", List.of(ELEVATION, FLATTEN, SLOPE, ROCK, FLOODFILL, FLUID_BALL));
