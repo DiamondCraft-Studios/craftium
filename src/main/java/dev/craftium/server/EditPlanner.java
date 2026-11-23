@@ -158,10 +158,76 @@ final class EditPlanner {
     }
 
     BlockState state(Point p) {
+        if (staged != null) {
+            var after = staged.get(p);
+            if (after != null) return after.state();
+        }
         if (!level.isInWorldBounds(pos(p)) || !level.hasChunk(p.x() >> 4, p.z() >> 4))
             return Blocks.AIR.defaultBlockState();
         return level.getBlockState(pos(p));
     }
+
+    /** What the planner reads at {@code p}, with its contents: the staged block when it reads through a stroke, air outside the world. */
+    BlockSnapshot snapshot(Point p) {
+        if (staged != null) {
+            var after = staged.get(p);
+            if (after != null) return after;
+        }
+        if (!level.isInWorldBounds(pos(p)) || !level.hasChunk(p.x() >> 4, p.z() >> 4))
+            return new BlockSnapshot(Blocks.AIR.defaultBlockState());
+        return BlockSnapshot.capture(level, pos(p));
+    }
+
+    /** The blocks a stroke has staged, read as if they were built; null to read the world. */
+    private Map<Point, BlockSnapshot> staged;
+
+    /** Reads the world as if the blocks of {@code view} were built, without carrying them in this plan. */
+    void readThrough(Map<Point, BlockSnapshot> view) {
+        staged = view;
+    }
+
+    /** Carries {@code change}, made earlier, in this plan, so a block put on it again keeps its first before-state. */
+    void carry(Session.Change change) {
+        changes.put(change.pos(), change);
+    }
+
+    /** What this plan holds for {@code p}, or null when it leaves the block as the world has it. */
+    Session.Change planned(Point p) {
+        return changes.get(p);
+    }
+
+    /** Refuses an edit of {@code count} changes when it goes past the player's block limit. */
+    void checkLimit(int count) {
+        int limit = limited ? Math.clamp(o.blockLimit, 1, Selection.LIMIT) : Selection.LIMIT;
+        if (count > limit)
+            throw new IllegalArgumentException(
+                    limit < Selection.LIMIT
+                            ? "Operation exceeds your block limit of " + String.format("%,d", limit)
+                                    + " changes; raise the Block limit in the tool's options"
+                            : "Operation exceeds " + String.format("%,d", Selection.LIMIT) + " changes");
+    }
+
+    /**
+     * A dab of a staged Deform {@code stroke}: adds it to the stroke and builds the blocks whose source it changed, each read from the world
+     * as it was before the stroke, on top of what {@code staged} says is staged there already. Returns those blocks.
+     */
+    java.util.Set<Point> deform(
+            Deform.Stroke stroke, Point c, Point normal, java.util.function.Function<Point, Session.Change> staged) {
+        var ball = BrushMath.brush(c, o.radius, BrushMath.Shape.SPHERE, false);
+        for (Point p : ball) validate(p);
+        var taken = new LinkedHashMap<Point, BlockSnapshot>();
+        for (var e : stroke.add(ball, c, normal, o, cells, BrushRules.reach(o)).entrySet()) {
+            validate(e.getKey());
+            taken.put(e.getKey(), snapshot(e.getValue()));
+        }
+        for (Point p : taken.keySet()) {
+            var earlier = staged.apply(p);
+            if (earlier != null) carry(earlier);
+        }
+        for (var e : taken.entrySet()) put(e.getKey(), e.getValue());
+        return taken.keySet();
+    }
+
     /** Set for the builder tools, which ignore the tool masks unless {@link Options#maskInBuilder} is on. */
     boolean builder;
 
@@ -455,10 +521,34 @@ final class EditPlanner {
         // big, for them.
         var points = o.tool == Tool.TINKER ? List.of(c) : screenBlocks(c);
         for (Point p : points) validate(p);
+        if (o.tool == Tool.DEFORM) {
+            deform(c, normal);
+            return;
+        }
         if (o.tool == Tool.BIOME_PAINTER || o.tool == Tool.CLENTAMINATOR) paintBiomes(points);
         var inside = BrushRules.keepsToFront(o.tool) ? new HashSet<>(points) : null;
-        var front = inside != null ? BrushRules.front(inside, c, normal, cells, BrushRules.reach(o)) : null;
+        var front = inside != null ? BrushRules.front(inside, c, normal, cells, BrushRules.frontMargin(o)) : null;
         var measured = front == null ? cells : front.filled(cells);
+        if (o.tool == Tool.CREVICE_FILL) {
+            var kept = front == null
+                    ? points
+                    : points.stream().filter(front::contains).toList();
+            for (Point p : BrushRules.crevices(kept, o, measured))
+                put(p, o.creviceActiveBlock ? material : creviceMaterial(p));
+            return;
+        }
+        // One way in or out for the whole dab, so the brush's blocks move together instead of each its own way.
+        Geometry.Vector sculptDirection = null;
+        if (o.tool == Tool.SCULPT_DRAW || o.tool == Tool.EXTRUDE)
+            sculptDirection = o.tool == Tool.SCULPT_DRAW
+                    ? BrushRules.sculptDirection(
+                            front == null
+                                    ? points
+                                    : points.stream().filter(front::contains).toList(),
+                            normal,
+                            o,
+                            measured)
+                    : Geometry.vector(normal);
         for (Point p : points) {
             if (front != null && !front.contains(p)) continue;
             BlockState old = state(p);
@@ -482,7 +572,7 @@ final class EditPlanner {
                         put(p, o.invert ? Blocks.AIR.defaultBlockState() : material);
                 }
                 case SCULPT_DRAW, EXTRUDE -> {
-                    for (Point at : BrushRules.sculpt(p, c, normal, o, cells))
+                    for (Point at : BrushRules.sculpt(p, c, sculptDirection, o, cells))
                         put(at, o.invert ? Blocks.AIR.defaultBlockState() : old);
                 }
                 case WELD -> {
@@ -536,8 +626,40 @@ final class EditPlanner {
         }
     }
 
+    /**
+     * One dab of Deform: the wall under a ball of the radius moves, each block taking the block {@link Deform#plan} brings to it. Every new
+     * block is read before any is written, so the dab works from the world as it was.
+     */
+    private void deform(Point c, Point normal) {
+        var ball = BrushMath.brush(c, o.radius, BrushMath.Shape.SPHERE, false);
+        for (Point p : ball) validate(p);
+        var taken = new LinkedHashMap<Point, BlockSnapshot>();
+        for (var e : Deform.plan(ball, c, normal, o, cells, BrushRules.reach(o)).entrySet()) {
+            validate(e.getKey());
+            taken.put(e.getKey(), snapshot(e.getValue()));
+        }
+        for (var e : taken.entrySet()) put(e.getKey(), e.getValue());
+    }
+
     double density(Point p) {
         return BrushRules.density(p, o, cells);
+    }
+
+    /**
+     * The block Crevice Fill puts at {@code p}: the block beside it, as Weld takes, or for a block deep in a gap with only air around
+     * it, the one already planned beside it, so a crack fills with the rock it runs through rather than the active block.
+     */
+    BlockState creviceMaterial(Point p) {
+        for (Point n : NEIGHBOURS) {
+            BlockState s = state(p.add(n.x(), n.y(), n.z()));
+            if (!s.isAir() && !s.hasBlockEntity() && s.getFluidState().isEmpty()) return s;
+        }
+        for (Point n : NEIGHBOURS) {
+            var pending = changes.get(p.add(n.x(), n.y(), n.z()));
+            if (pending != null && !pending.after().state().isAir())
+                return pending.after().state();
+        }
+        return material;
     }
 
     BlockState nearestMaterial(Point p) {

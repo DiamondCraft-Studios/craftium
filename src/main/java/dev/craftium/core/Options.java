@@ -516,6 +516,22 @@ public final class Options {
     public double shatterWidth = 1;
     public ShatterAxis shatterAxis = ShatterAxis.ALL;
     public int exposedFaces = 2;
+    /**
+     * Crevice Fill: the widest gap, in blocks, it fills; on how many of the three axes an empty block must sit between walls that
+     * close (1 fills cracks and slots, 2 holes and pockets, 3 only hollows closed all round); and whether it fills with the active
+     * block instead of the block beside each gap.
+     */
+    public int creviceWidth = 2, creviceSides = 1;
+
+    public boolean creviceActiveBlock;
+    /**
+     * Deform: how wide the edge of a dab is, where its push fades out, from 0 to 100. 100 fades from the centre to the rim, a round dent;
+     * lower keeps the push full nearer the rim, so the dent fills more of the brush ring.
+     */
+    public int deformFalloff = 25;
+    /** The widest gap Crevice Fill can be set to fill. */
+    public static final int MAX_CREVICE_WIDTH = 8;
+
     public int uiBackground = 0xf510141a,
             uiPanel = 0xff10151c,
             uiAccent = 0xff5b9fdb,
@@ -907,6 +923,9 @@ public final class Options {
         entityScaleZ = bounded(entityScaleZ, .01, 16);
         if (smoothMode == null) smoothMode = SmoothMode.STABLE;
         if (shatterAxis == null) shatterAxis = ShatterAxis.ALL;
+        creviceWidth = Math.clamp(creviceWidth, 1, MAX_CREVICE_WIDTH);
+        creviceSides = Math.clamp(creviceSides, 1, 3);
+        deformFalloff = Math.clamp(deformFalloff, 0, 100);
         smoothRatio = Double.isFinite(smoothRatio) ? Math.max(0, smoothRatio) : 100;
         distortDistance = Double.isFinite(distortDistance) ? Math.max(0, distortDistance) : 2;
         distortX = Double.isFinite(distortX) ? Math.max(0, distortX) : 2;

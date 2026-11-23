@@ -24,6 +24,35 @@ final class BuiltinTools {
         u.submit(u.plan().finish(u.options().tool.label));
     };
 
+    /**
+     * While a stroke is staged, Deform works out the whole stroke as one move on the world as it was before it ({@link DeformStroke}), so dabs
+     * over the same place push an even layer and the surface keeps its roughness. Each dab builds only the blocks it changes, and the stroke's
+     * edit takes the staged edit's place instead of being added to it block by block, which would mix two positions of the wall.
+     */
+    static final ToolBehaviour DEFORM = u -> {
+        var s = u.session();
+        if (!s.confirmEdits || s.bypassConfirm) {
+            s.deformStroke = null;
+            PLAIN.use(u);
+            return;
+        }
+        var staged = s.pendingEdit;
+        var stroke = s.deformStroke;
+        if (stroke == null || !stroke.continues(s.requestStroke, staged))
+            stroke = s.deformStroke = new DeformStroke(s.requestStroke, staged);
+        try {
+            var whole = stroke.dab(u.plan(), u.point(), u.normal(), u.options().tool.label);
+            s.pendingEdit = null;
+            u.submit(whole);
+            stroke.made = s.pendingEdit;
+        } catch (RuntimeException e) {
+            s.pendingEdit =
+                    staged; // refused: the stroke so far still waits, and the next dab starts a new stroke from it
+            s.deformStroke = null;
+            throw e;
+        }
+    };
+
     static final ToolBehaviour ANNOTATION =
             u -> u.submit(AnnotationEdits.plan("annotation_create", u.player().level(), u.options(), u.point()));
 

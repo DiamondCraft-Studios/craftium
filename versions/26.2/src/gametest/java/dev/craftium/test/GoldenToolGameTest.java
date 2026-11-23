@@ -159,6 +159,7 @@ public final class GoldenToolGameTest {
             Tool.ERASE,
             Tool.SHAPE,
             Tool.SCULPT_DRAW,
+            Tool.DEFORM,
             Tool.ROCK,
             Tool.WELD,
             Tool.MELT,
@@ -266,6 +267,30 @@ public final class GoldenToolGameTest {
                 null,
                 false,
                 b));
+        all.add(new Case(
+                "deform_pull",
+                Tool.DEFORM,
+                base(o -> {
+                    o.tool = Tool.DEFORM;
+                    o.invert = true;
+                }),
+                null,
+                false,
+                b));
+        // Two dabs of one stroke, staged as a stroke is and built when it ends: the second moves the ground on from
+        // where
+        // the first left it.
+        all.add(new Case(
+                "deform_stroke",
+                Tool.DEFORM,
+                base(o -> {
+                    o.tool = Tool.DEFORM;
+                    o.confirmEdits = true;
+                }),
+                null,
+                false,
+                a,
+                surface(2, 0)));
         all.add(new Case(
                 "elevation_invert",
                 Tool.ELEVATION,
@@ -573,7 +598,15 @@ public final class GoldenToolGameTest {
         }
         options(test.options);
         var before = capture(world);
-        for (Point click : test.clicks) request("use", click);
+        var probe = new Options();
+        test.options.accept(probe);
+        staging = probe.confirmEdits; // a case that stages its clicks is built as a stroke is, when it ends
+        try {
+            for (Point click : test.clicks) request("use", click);
+        } finally {
+            staging = false;
+        }
+        if (probe.confirmEdits) request("stroke_end", null);
         var lines = changes(before, capture(world));
         try {
             Files.createDirectories(out);
@@ -656,6 +689,9 @@ public final class GoldenToolGameTest {
         });
     }
 
+    /** Whether the clicks being sent are staged, as a stroke's are, instead of built one by one. */
+    private boolean staging;
+
     private void request(String action, Point at) {
         // The production server throttles requests by wall-clock time, including in accelerated game tests.
         try {
@@ -664,7 +700,8 @@ public final class GoldenToolGameTest {
             throw new AssertionError(e);
         }
         ctx.runOnClient(mc -> {
-            ClientState.options.confirmEdits = false;
+            ClientState.options.confirmEdits = staging;
+            ClientState.strokeId = staging ? 1 : 0; // one stroke, held from its first click to its last
             CraftiumClient.send(action, at, UP);
         });
         world.getConnection().waitForServerboundPackets();

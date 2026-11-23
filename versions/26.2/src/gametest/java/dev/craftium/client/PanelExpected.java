@@ -40,6 +40,7 @@ final class PanelExpected {
             Map.entry("panel_biome_painter", "146 texts=48 controls=98 af41e3bfe33f197d"),
             Map.entry("panel_box_select", "137 texts=42 controls=95 d860afe2a81914d4"),
             Map.entry("panel_clentaminator", "146 texts=48 controls=98 53682621bf5c0a1e"),
+            Map.entry("panel_deform", "260 texts=77 controls=183 5288a25b1c48dc5b"),
             Map.entry("panel_distort", "153 texts=51 controls=102 b9571818305e6895"),
             Map.entry("panel_elevation", "133 texts=41 controls=92 5876722442cad262"),
             Map.entry("panel_erase", "148 texts=47 controls=101 4c790f3fcc938ac7"),
