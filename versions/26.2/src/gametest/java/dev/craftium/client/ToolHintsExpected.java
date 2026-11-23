@@ -215,5 +215,10 @@ final class ToolHintsExpected {
             "PIVOT gizmo=false shape=false :: LMB Drag: Camera | RMB: Set pivot | MMB: Pick block | Wheel: Zoom | WASD / Space Shift: Fly",
             "PIVOT gizmo=false shape=true :: LMB Drag: Camera | RMB: Set pivot | MMB: Pick block | Wheel: Size shape | WASD / Space Shift: Fly",
             "PIVOT gizmo=true shape=false :: LMB Drag: Camera | RMB: Set pivot | MMB: Pick block | Wheel: Nudge | WASD / Space Shift: Fly",
-            "PIVOT gizmo=true shape=true :: LMB Drag: Camera | RMB: Set pivot | MMB: Pick block | Wheel: Size shape | WASD / Space Shift: Fly");
+            "PIVOT gizmo=true shape=true :: LMB Drag: Camera | RMB: Set pivot | MMB: Pick block | Wheel: Size shape | WASD / Space Shift: Fly",
+            "DEFORM radiusHint=true",
+            "DEFORM gizmo=false shape=false :: LMB Drag: Camera | RMB: Use Deform | MMB: Pick block | Wheel: Zoom | Ctrl+MMB+Wheel / [ ]: Radius | Ctrl+Alt Drag: Brush size | WASD / Space Shift: Fly",
+            "DEFORM gizmo=false shape=true :: LMB Drag: Camera | RMB: Use Deform | MMB: Pick block | Wheel: Size shape | Ctrl+MMB+Wheel / [ ]: Radius | Ctrl+Alt Drag: Brush size | WASD / Space Shift: Fly",
+            "DEFORM gizmo=true shape=false :: LMB Drag: Camera | RMB: Use Deform | MMB: Pick block | Wheel: Nudge | Ctrl+MMB+Wheel / [ ]: Radius | Ctrl+Alt Drag: Brush size | WASD / Space Shift: Fly",
+            "DEFORM gizmo=true shape=true :: LMB Drag: Camera | RMB: Use Deform | MMB: Pick block | Wheel: Size shape | Ctrl+MMB+Wheel / [ ]: Radius | Ctrl+Alt Drag: Brush size | WASD / Space Shift: Fly");
 }

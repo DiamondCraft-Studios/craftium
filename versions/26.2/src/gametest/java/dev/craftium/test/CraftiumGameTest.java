@@ -878,6 +878,7 @@ public final class CraftiumGameTest implements FabricClientGameTest {
             Tool.PAINTER,
             Tool.FREEHAND_DRAW,
             Tool.SCULPT_DRAW,
+            Tool.DEFORM,
             Tool.ROCK,
             Tool.WELD,
             Tool.MELT,

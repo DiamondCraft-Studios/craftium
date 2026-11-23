@@ -19,6 +19,7 @@ final class ToolBehaviours {
         BUILTIN.put(Tool.RULER, BuiltinTools.RULER);
         BUILTIN.put(Tool.LINE, BuiltinTools.LINE);
         BUILTIN.put(Tool.SHAPE, BuiltinTools.SHAPE);
+        BUILTIN.put(Tool.DEFORM, BuiltinTools.DEFORM);
     }
 
     static ToolBehaviour of(Tool tool) {

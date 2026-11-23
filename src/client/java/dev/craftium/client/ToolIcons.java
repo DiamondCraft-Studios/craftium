@@ -338,6 +338,14 @@ final class ToolIcons {
                 line(g, x + 11, y + 22, x + 3, y + 14, color);
                 line(g, x + 7, y + 10, x + 15, y + 18, color);
             }
+            case DEFORM -> { // a mound whose middle is pushed in, and the arrow pushing it
+                int[][] wall = {{2, 21}, {4, 14}, {8, 10}, {12, 15}, {16, 10}, {20, 14}, {22, 21}};
+                for (int i = 0; i < wall.length - 1; i++)
+                    line(g, x + wall[i][0], y + wall[i][1], x + wall[i + 1][0], y + wall[i + 1][1], color);
+                line(g, x + 12, y + 2, x + 12, y + 10, color);
+                line(g, x + 9, y + 7, x + 12, y + 10, color);
+                line(g, x + 15, y + 7, x + 12, y + 10, color);
+            }
             case INSPECT -> {
                 ring(g, x + 10, y + 10, 7, 7, color);
                 line(g, x + 15, y + 15, x + 21, y + 21, color);

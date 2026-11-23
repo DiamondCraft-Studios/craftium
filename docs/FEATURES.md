@@ -18,6 +18,7 @@ This is a functional development preview. Implemented equivalents do not establi
 | Script Brush | Bounded Lua brush and Lua mask | Documented helper coverage under a sandbox; third-party script compatibility is limited |
 | Freehand Draw | Solid/hollow drawing and carving with transformed brush shapes | No complete simulated edit preview |
 | Sculpt Draw | Estimated surface normal, Y mask, strength and carve | Discrete voxel-density normal |
+| Deform | Pushes a wall in or pulls it out by moving its blocks: keeps its thickness, block states and contents, and fills seams so a one-block shell stays closed; Push and Pull, strength up to two thirds of the radius, flow | Round brush only; the moved wall overwrites solid blocks it is pushed onto; the hover preview shows the first dab of a stroke against the world, not the stroke so far |
 | Rock | Coherent noisy rock, denoising, Gaussian density melding | Approximate rock generator |
 | Weld / Melt | Gaussian voxel-density fill/erosion with threshold | Kernel radius capped at three |
 | Text | Original 5×7 font or AWT/TTF/OTF text, rotations, thickness and slab text | 48 UTF-16 units; imported-font availability determines glyph support; slab mode needs a slab material |

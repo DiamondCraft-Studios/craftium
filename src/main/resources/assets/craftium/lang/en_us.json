@@ -47,5 +47,6 @@
   "key.craftium.tool.fluid_block": "Fluid Block",
   "key.craftium.tool.modify": "Modify",
   "key.craftium.tool.annotation": "Annotation",
-  "key.craftium.tool.smear": "Smear"
+  "key.craftium.tool.smear": "Smear",
+  "key.craftium.tool.deform": "Deform"
 }
