@@ -8122,7 +8122,10 @@ public final class EditorScreen extends CraftiumScreen {
                 "Delete every ruler in this world");
     }
 
-    private int savedScroll, revealId;
+    /** Static so the Hierarchy reopens where it was left; clamped to the list each frame. */
+    private static int savedScroll;
+
+    private int revealId;
     private long revealUntil;
     /** The ids there were when a BuildObject was asked for, to find the new one among the list that comes back. */
     private Set<Integer> newKnown;
