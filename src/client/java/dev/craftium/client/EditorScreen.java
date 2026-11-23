@@ -1764,6 +1764,7 @@ public final class EditorScreen extends CraftiumScreen {
                             true);
                     row += 38;
                 }
+                if (o().tool == Tool.CREVICE_FILL) row += creviceRows(g, 403 + row);
                 if (terrainFlowShown()) { // under the tool's own Strength slider
                     slider(
                             g,
@@ -5330,6 +5331,51 @@ public final class EditorScreen extends CraftiumScreen {
         };
         for (int i = 0; i < 4; i++)
             button(g, 10 + (i % 2) * (half + 4), y + (i / 2) * 21, half, 19, labels[i], on[i], flip[i], tips[i]);
+    }
+    /** Crevice Fill's own controls from {@code y} down; returns the room they took. */
+    private int creviceRows(Gfx g, int y) {
+        var o = o();
+        slider(
+                g,
+                10,
+                y + 10,
+                pw - 20,
+                "Gap width",
+                o.creviceWidth,
+                1,
+                Options.MAX_CREVICE_WIDTH,
+                DEFAULTS.creviceWidth,
+                v -> o.creviceWidth = (int) Math.clamp(Math.round(v), 1, Options.MAX_CREVICE_WIDTH),
+                true);
+        int third = (pw - 28) / 3;
+        String[] labels = {"Cracks", "Holes", "Hollows"};
+        String[] tips = {
+            "Fill gaps closed in on one axis or more: cracks, slots, seams and everything below",
+            "Fill gaps closed in on two axes or more: holes, pockets and nooks, not long cracks open along their length",
+            "Fill only gaps closed in on all three axes: hollows with walls all round"
+        };
+        for (int i = 0; i < 3; i++) {
+            int sides = i + 1;
+            button(
+                    g,
+                    10 + i * (third + 4),
+                    y + 38,
+                    third,
+                    20,
+                    labels[i],
+                    o.creviceSides == sides,
+                    () -> o.creviceSides = sides,
+                    tips[i]);
+        }
+        toggle(
+                g,
+                10,
+                y + 66,
+                "Use active block",
+                o.creviceActiveBlock,
+                () -> o.creviceActiveBlock = !o.creviceActiveBlock,
+                "Fill with the active block instead of the block beside each gap");
+        return 92;
     }
     /** Smooth's own controls from {@code y} down, as the docs list them; returns the room they took. */
     private int smoothRows(Gfx g, int y) {

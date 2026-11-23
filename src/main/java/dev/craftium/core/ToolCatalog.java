@@ -75,6 +75,7 @@ public final class ToolCatalog {
                     ERASE,
                     SCULPT_DRAW,
                     WELD,
+                    CREVICE_FILL,
                     MELT,
                     SMOOTH,
                     DISTORT,

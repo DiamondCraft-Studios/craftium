@@ -37,6 +37,7 @@ class IconCatalogTest {
         craftium:tool/distort @@ Tools/Sculpt @@ 24x24
         craftium:tool/melt @@ Tools/Sculpt @@ 24x24
         craftium:tool/weld @@ Tools/Sculpt @@ 24x24
+        craftium:tool/crevice_fill @@ Tools/Sculpt @@ 24x24
         craftium:tool/shatter @@ Tools/Sculpt @@ 24x24
         craftium:tool/extrude @@ Tools/Sculpt @@ 24x24
         craftium:tool/smear @@ Tools/Sculpt @@ 24x24

@@ -111,7 +111,12 @@ public enum Tool {
             "Deform",
             "DF",
             "Sculpt",
-            "Push a wall in or pull it out by moving its blocks, so it keeps its thickness and leaves no holes.");
+            "Push a wall in or pull it out by moving its blocks, so it keeps its thickness and leaves no holes."),
+    CREVICE_FILL(
+            "Crevice Fill",
+            "CF",
+            "Sculpt",
+            "Fill every crack, hole and nook in the brush up to the gap width, leaving open surfaces alone.");
     public final String label, icon, group, description;
 
     Tool(String label, String icon, String group, String description) {
@@ -188,6 +193,7 @@ public enum Tool {
                         DISTORT,
                         MELT,
                         WELD,
+                        CREVICE_FILL,
                         SHATTER,
                         EXTRUDE,
                         SMEAR,

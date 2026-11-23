@@ -48,5 +48,6 @@
   "key.craftium.tool.modify": "Modify",
   "key.craftium.tool.annotation": "Annotation",
   "key.craftium.tool.smear": "Smear",
-  "key.craftium.tool.deform": "Deform"
+  "key.craftium.tool.deform": "Deform",
+  "key.craftium.tool.crevice_fill": "Crevice Fill"
 }

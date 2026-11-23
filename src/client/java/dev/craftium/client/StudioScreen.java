@@ -72,6 +72,9 @@ public final class StudioScreen extends CraftiumScreen {
                         "denoise",
                         "maskY",
                         "fractureMaterial",
+                        "creviceWidth",
+                        "creviceSides",
+                        "creviceActiveBlock",
                         "exposedFaces",
                         "property"));
         GROUPS.put(
