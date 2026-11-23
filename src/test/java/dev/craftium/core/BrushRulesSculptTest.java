@@ -77,6 +77,25 @@ class BrushRulesSculptTest {
         assertEquals(new Geometry.Vector(0, 0, -1), d);
     }
 
+    /**
+     * A slanted wall one step thick, with air on both sides, as the shell of a hollow mountain has: measured with the far side filled, as
+     * the brushes measure, its open sides no longer cancel out, and the dab follows the slope instead of the clicked face.
+     */
+    @Test
+    void aThinSlantedWallStillGivesTheSlopesDirection() {
+        Predicate<Point> shell = p -> p.y() == -p.x() || p.y() == -p.x() - 1;
+        var w = world(shell);
+        var c = new Point(0, 0, 0);
+        var up = new Point(0, 1, 0);
+        var cells = ball(c, 4);
+        var front = BrushRules.front(cells, c, up, w, 2);
+        assertNotNull(front);
+        var d = BrushRules.sculptDirection(
+                cells.stream().filter(front::contains).toList(), up, options(2, true), front.filled(w));
+        assertEquals(d.x(), d.y(), 1e-9, "as far out as up");
+        assertTrue(d.x() > 0);
+    }
+
     /** Pushed in, a staircase slope loses an even layer: the cut is the same at every step, and no surface block is left as a rib. */
     @Test
     void pushingIntoAStaircaseCutsAnEvenLayer() {

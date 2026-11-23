@@ -163,7 +163,7 @@ public final class BrushPreview {
                                 : cells.stream().filter(front::contains).toList(),
                         normal,
                         o,
-                        world)
+                        measured)
                 : null;
         if (o.tool == dev.craftium.core.Tool.SMOOTH) smoothed(level, cells, front, o, mask, world, changed, gone);
         else

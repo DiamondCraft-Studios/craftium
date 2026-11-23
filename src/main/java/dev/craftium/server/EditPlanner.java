@@ -469,7 +469,7 @@ final class EditPlanner {
                                     : points.stream().filter(front::contains).toList(),
                             normal,
                             o,
-                            cells)
+                            measured)
                     : Geometry.vector(normal);
         for (Point p : points) {
             if (front != null && !front.contains(p)) continue;
