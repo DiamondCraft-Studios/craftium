@@ -93,7 +93,10 @@ class DeformTest {
         return w;
     }
 
-    /** Whether air can get from inside the ball to outside its box through faces alone. */
+    /** Past every wall a pull can move out. */
+    private static final int ESCAPE = BOX + 8;
+
+    /** Whether air can get from inside the ball to well outside it through faces alone. */
     private static boolean leaks(World w) {
         var seen = new HashSet<Point>();
         var queue = new ArrayDeque<Point>();
@@ -103,7 +106,7 @@ class DeformTest {
         seen.add(start);
         while (!queue.isEmpty()) {
             Point p = queue.poll();
-            if (Math.abs(p.x()) >= BOX || Math.abs(p.y()) >= BOX || Math.abs(p.z()) >= BOX) return true;
+            if (Math.abs(p.x()) >= ESCAPE || Math.abs(p.y()) >= ESCAPE || Math.abs(p.z()) >= ESCAPE) return true;
             for (Point f : FACES) {
                 Point q = p.add(f.x(), f.y(), f.z());
                 if (!w.solid(q) && seen.add(q)) queue.add(q);
@@ -361,5 +364,66 @@ class DeformTest {
                 else sum.put(e.getKey(), e.getValue());
         }
         assertEquals(stroke.plan(), sum);
+    }
+
+    private static World dabFlat(int radius, int strength, int falloff) {
+        var w = ground((x, z) -> 0);
+        var o = options(radius, strength, false);
+        o.deformFalloff = falloff;
+        var c = new Point(0, 0, 0);
+        return w.after(Deform.plan(ball(c, radius), c, new Point(0, 1, 0), o, w, 2));
+    }
+
+    @Test
+    void aHarderFalloffFillsMoreOfTheRing() {
+        int radius = 8, s = 2;
+        var soft = dabFlat(radius, s, 100);
+        var hard = dabFlat(radius, s, 0);
+        int softMoved = 0, hardMoved = 0;
+        for (int x = -radius; x <= radius; x++)
+            for (int z = -radius; z <= radius; z++) {
+                if (top(soft, x, z) < 0) softMoved++;
+                if (top(hard, x, z) < 0) hardMoved++;
+            }
+        assertTrue(hardMoved > softMoved * 1.5, "hard " + hardMoved + " soft " + softMoved);
+        // Fully pushed out to where the edge starts, one and a half strengths inside the rim.
+        // The last block before the edge has a seam filled above it, where its neighbour moves less.
+        int full = (int) Math.floor(radius + 1 - Deform.ramp(radius + 1, s, 0)) - 1;
+        for (int x = 0; x <= full; x++) assertEquals(-s, top(hard, x, 0), "full push at " + x);
+        assertEquals(radius + 1, Deform.ramp(radius + 1, s, 100), 1e-9, "100 is the round dent the brush had");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 50, 100})
+    void neighboursNeverMoveMoreThanABlockApart(int falloff) {
+        for (int radius = 3; radius <= 10; radius++) {
+            var w = dabFlat(radius, Deform.maxStrength(radius), falloff);
+            for (int x = -radius - 1; x <= radius + 1; x++)
+                for (int z = -radius - 1; z <= radius + 1; z++) {
+                    assertTrue(
+                            Math.abs(top(w, x, z) - top(w, x + 1, z)) <= 1,
+                            "a step at " + x + ", " + z + " radius " + radius);
+                    assertTrue(
+                            Math.abs(top(w, x, z) - top(w, x, z + 1)) <= 1,
+                            "a step at " + x + ", " + z + " radius " + radius);
+                }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 50, 100})
+    void everyFalloffKeepsTheShellClosed(int falloff) {
+        for (int thickness = 1; thickness <= 2; thickness++)
+            for (int radius = 4; radius <= 8; radius += 2) {
+                var w = hollow(thickness);
+                var c = new Point(outerX(w), 0, 0);
+                var o = options(radius, Deform.maxStrength(radius), false);
+                o.deformFalloff = falloff;
+                var pushed = w.after(Deform.plan(ball(c, radius), c, new Point(1, 0, 0), o, w, 2));
+                assertFalse(leaks(pushed), "a hole, thickness " + thickness + " radius " + radius);
+                o.invert = true;
+                assertFalse(
+                        leaks(w.after(Deform.plan(ball(c, radius), c, new Point(1, 0, 0), o, w, 2))), "a hole pulling");
+            }
     }
 }

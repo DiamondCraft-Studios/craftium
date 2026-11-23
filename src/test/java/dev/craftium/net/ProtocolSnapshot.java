@@ -95,6 +95,7 @@ final class ProtocolSnapshot {
         dev.craftium.core.Options.creviceSides : int
         dev.craftium.core.Options.creviceWidth : int
         dev.craftium.core.Options.deferred : boolean
+        dev.craftium.core.Options.deformFalloff : int
         dev.craftium.core.Options.denoise : boolean
         dev.craftium.core.Options.density : double
         dev.craftium.core.Options.distortDistance : double

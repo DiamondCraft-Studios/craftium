@@ -50,7 +50,8 @@ public final class ToolOptionMemory {
             "fractureMaterial",
             "creviceWidth",
             "creviceSides",
-            "creviceActiveBlock");
+            "creviceActiveBlock",
+            "deformFalloff");
 
     private static final Map<String, Field> FIELDS = new LinkedHashMap<>();
     private static final Map<String, Map<String, Object>> KEPT = new HashMap<>();

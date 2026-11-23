@@ -16,8 +16,8 @@ import java.util.Set;
  * with it and the hover preview draws with it.
  *
  * <p>Each block of the area takes the block that was where the push brings it from, as Distort does, so blocks keep their states and contents.
- * The push is greatest at the centre and fades to nothing at the rim, measured across the push and not along it, so a column of blocks along
- * the push moves as one. Strength is kept below two thirds of the radius, so neighbours never move more than a block apart, and where they move
+ * The push is full in the middle and fades to nothing at the rim, measured across the push and not along it, so a column of blocks along the
+ * push moves as one. {@link Options#deformFalloff} sets how wide the fading edge is. Strength is kept below two thirds of the radius, so neighbours never move more than a block apart, and where they move
  * one block apart the seam between them is filled, so a one-block wall does not come apart at the corners.
  *
  * <p>A stroke of dabs is worked out as one move on the world as it was before the stroke (see {@link Stroke}), so overlapping dabs push an
@@ -65,7 +65,15 @@ public final class Deform {
      */
     public static final class Stroke {
         /** One dab: where it was put, its direction out of the surface, the way blocks move, how far, and how far it reaches. */
-        private record Dab(Point c, Geometry.Vector n, Geometry.Vector d, int s, double reach, double extent) {}
+        private record Dab(
+                Point c,
+                Geometry.Vector n,
+                Geometry.Vector d,
+                int s,
+                double reach,
+                double ramp,
+                double length,
+                double extent) {}
 
         private static final int CELL = 8;
         private final Map<Long, List<Dab>> index = new HashMap<>();
@@ -92,19 +100,29 @@ public final class Deform {
             var inside = brush instanceof Set<Point> set ? set : new HashSet<>(brush);
             var front = BrushRules.front(inside, c, normal, world, margin);
             if (front == null) return changed;
-            wall.addAll(body(inside, world.solid(c) ? c : c.add(-normal.x(), -normal.y(), -normal.z()), world));
-            open.addAll(front.open());
             var n = BrushRules.sculptDirection(
                     brush.stream().filter(front::contains).toList(), normal, o, front.filled(world));
             int s = strength(o);
+            // What moves is a column of the brush's radius along the push, not the ball: on a curved wall the ball
+            // leaves out the
+            // wall near its rim, which would stay behind while the wall beside it moves, and tear. In a column, every
+            // block a push
+            // reaches moves whole.
+            var column = column(c, n, o.radius);
+            var region = BrushRules.front(column, c, normal, world, margin);
+            if (region == null) region = front;
+            Point seed = world.solid(c) ? c : c.add(-normal.x(), -normal.y(), -normal.z());
+            wall.addAll(body(column, seed, world));
+            open.addAll(region.open());
             // The way the blocks move: in for Push, out for Pull.
             var d = o.invert ? n : n.scale(-1);
-            var dab = new Dab(c, n, d, s, o.radius + 1, o.radius + s + 1);
+            double reach = o.radius + 1, length = o.radius + s + 1;
+            var dab = new Dab(c, n, d, s, reach, ramp(reach, s, o.deformFalloff), length, Math.hypot(reach, length));
             index(dab);
             dabs++;
             most = Math.max(most, s);
-            // The area that changes: the brush, and as far past it as the blocks can go.
-            for (Point p : brush) {
+            // The area that changes: the column, and as far past it as the blocks can go.
+            for (Point p : column) {
                 area.add(p);
                 area.addAll(BrushRules.traverse(p, d, s + .5));
             }
@@ -113,7 +131,7 @@ public final class Deform {
             // wall and air it adds to the move.
             var move = new Moving(wall, open, world);
             var shifts = new HashMap<Point, Geometry.Vector>();
-            int r = o.radius + Math.max(s + 2, margin + most + 1);
+            int r = (int) Math.ceil(dab.extent()) + Math.max(2, margin + most + 1);
             for (int x = -r; x <= r; x++)
                 for (int y = -r; y <= r; y++)
                     for (int z = -r; z <= r; z++) {
@@ -127,6 +145,21 @@ public final class Deform {
                         changed.put(p, taken);
                     }
             return changed;
+        }
+
+        /** The blocks within {@code radius} of the line through {@code c} along {@code n}, as far along it either way as the radius. */
+        private static Set<Point> column(Point c, Geometry.Vector n, int radius) {
+            var cells = new HashSet<Point>();
+            int r = (int) Math.ceil(radius * Math.sqrt(2));
+            double reach = radius + .5;
+            for (int x = -r; x <= r; x++)
+                for (int y = -r; y <= r; y++)
+                    for (int z = -r; z <= r; z++) {
+                        double along = x * n.x() + y * n.y() + z * n.z();
+                        double across2 = x * x + y * y + z * z - along * along;
+                        if (Math.abs(along) <= reach && across2 <= reach * reach) cells.add(c.add(x, y, z));
+                    }
+            return cells;
         }
 
         /** Every block the stroke changes so far, with the place its new block is taken from. */
@@ -185,8 +218,10 @@ public final class Deform {
                         x.x() - dab.c().x(),
                         x.y() - dab.c().y(),
                         x.z() - dab.c().z());
-                var across = r.subtract(dab.n().scale(r.dot(dab.n())));
-                double t = Math.clamp(1 - across.length() / dab.reach(), 0, 1);
+                double along = r.dot(dab.n());
+                if (Math.abs(along) > dab.length()) continue;
+                var across = r.subtract(dab.n().scale(along));
+                double t = Math.clamp((dab.reach() - across.length()) / dab.ramp(), 0, 1);
                 if (t <= 0) continue;
                 double w = t * t * (3 - 2 * t);
                 furthest = Math.max(furthest, dab.s() * w);
@@ -199,6 +234,16 @@ public final class Deform {
             double k = -furthest / length;
             return new Geometry.Vector(wx * k, wy * k, wz * k);
         }
+    }
+
+    /**
+     * How wide the edge of a dab is, where its push fades from full to nothing, for a {@code falloff} from 0 to 100. At 100 the push fades
+     * all the way from the centre to the rim; lower, it stays full further out and fades over a narrower edge, but never narrower than one
+     * and a half times the strength, or neighbouring blocks would move more than a block apart and a thin wall could open.
+     */
+    static double ramp(double reach, int s, int falloff) {
+        double narrowest = Math.min(reach, Math.max(1, 1.5 * s));
+        return narrowest + Math.clamp(falloff, 0, 100) / 100d * (reach - narrowest);
     }
 
     private static Point round(Point x, Geometry.Vector shift) {
