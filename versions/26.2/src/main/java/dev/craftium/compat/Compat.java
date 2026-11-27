@@ -232,4 +232,9 @@ public final class Compat {
     public static net.minecraft.world.level.block.Block block(net.minecraft.resources.Identifier id) {
         return net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(id);
     }
+
+    /** The block registry, as a lookup that reads saved block states. */
+    public static net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> blockLookup() {
+        return net.minecraft.core.registries.BuiltInRegistries.BLOCK;
+    }
 }
