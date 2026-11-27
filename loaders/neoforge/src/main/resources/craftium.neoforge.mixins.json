@@ -1,0 +1,1 @@
+{"required":true,"package":"dev.craftium.neoforge.mixin","compatibilityLevel":"JAVA_21","client":["CommandSentMixin"],"injectors":{"defaultRequire":1}}

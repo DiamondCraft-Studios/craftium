@@ -1,0 +1,104 @@
+// The NeoForge build of Craftium for Minecraft 1.21.1. It compiles the same shared sources as the Fabric module
+// (versions/1.21.1), with NeoForge's own entrypoints and platform layer in place of Fabric's.
+plugins {
+    id 'net.neoforged.moddev'
+}
+
+version = "${rootProject.mod_version}+mc${minecraft_version}"
+group = rootProject.maven_group
+base { archivesName = "${rootProject.archives_base_name}-neoforge" }
+
+repositories {
+    mavenCentral()
+    exclusiveContent {
+        forRepository { maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' } }
+        filter { includeGroup 'maven.modrinth' }
+    }
+}
+
+// The sources are layered, and a later layer replaces a file of the same relative path:
+//   src/ (shared), loaders/neoforge/src/ (the loader's half), this version's src/, then this version's neoforge/src/.
+// NeoForge has no split between client and common source sets, so the client sources join the main ones; the client
+// entrypoint is a separate class that NeoForge loads on the client only.
+def versionDir = layout.projectDirectory.dir('..')
+def layers = [
+        rootProject.file('src'),
+        rootProject.file('loaders/neoforge/src'),
+        versionDir.dir('src').asFile,
+        layout.projectDirectory.dir('src').asFile,
+]
+def merged = layout.buildDirectory.dir('merged')
+
+def mergeJava = tasks.register('mergeJavaSources', Sync) {
+    into merged.map { it.dir('java') }
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE // later layers win
+    layers.each { layer ->
+        from(new File(layer, 'main/java'))
+        from(new File(layer, 'client/java'))
+    }
+}
+def mergeResources = tasks.register('mergeResources', Sync) {
+    into merged.map { it.dir('resources') }
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    layers.each { layer -> from(new File(layer, 'main/resources')) }
+}
+
+sourceSets {
+    main {
+        java.srcDirs = [merged.map { it.dir('java') }]
+        resources.srcDirs = [merged.map { it.dir('resources') }]
+    }
+}
+tasks.named('compileJava') { dependsOn mergeJava }
+tasks.named('processResources') { dependsOn mergeResources }
+tasks.matching { it.name == 'sourcesJar' }.configureEach { dependsOn mergeJava, mergeResources }
+
+neoForge {
+    version = project.neoforge_version
+    runs {
+        client {
+            client()
+            // The development client opens maximized; CraftiumClient reads this.
+            systemProperty 'craftium.maximize', 'true'
+        }
+        server {
+            server()
+            programArgument '--nogui'
+        }
+    }
+    mods {
+        craftium {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    implementation 'org.luaj:luaj-jse:3.0.1'
+    jarJar(implementation('org.luaj:luaj-jse')) { version { strictly '[3.0.1,4)'; prefer '3.0.1' } }
+    additionalRuntimeClasspath 'org.luaj:luaj-jse:3.0.1'
+    // Sodium runs in the dev client only; it is not a compile or published dependency.
+    runtimeOnly "maven.modrinth:sodium:${project.sodium_version}"
+}
+
+processResources {
+    from(rootProject.file('branding/craftium.svg')) { into 'assets/craftium' }
+    inputs.property 'version', project.version
+    inputs.property 'neoforge_version', project.neoforge_version
+    inputs.property 'minecraft_version', project.minecraft_version
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand version: project.version, neoforge_version: project.neoforge_version, minecraft_version: project.minecraft_version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach { options.release = 21; options.compilerArgs << '-Xmaxerrs' << '2000' }
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+    from(rootProject.file('LICENSE')) { rename { 'LICENSE_Craftium' } }
+    from(rootProject.file('THIRD-PARTY-NOTICES.md'))
+}

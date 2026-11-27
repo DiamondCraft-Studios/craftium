@@ -4,7 +4,7 @@ Craftium is a vibe-coded, open-source building studio inspired by Axiom. AI assi
 
 ## Build
 
-Use Java 25 and the checked-in Gradle wrapper. Craftium builds for Minecraft Java 26.2, 1.21.10 and 1.21.1; the Paper/Purpur companion targets 26.2 and 1.21.10. The 1.21.1 module (`:versions:mc-1.21.1`) is a Fabric mod with no Paper plugin and no client game tests (Fabric added those in 1.21.4); it lacks the jigsaw planner, and it carries 1.21.1-only copies of the later input records in `versions/1.21.1/src/client/java/net/minecraft/client/input` so the shared screens compile unchanged.
+Use Java 25 and the checked-in Gradle wrapper. Craftium builds for Minecraft Java 26.2, 1.21.10 and 1.21.1; the Paper/Purpur companion targets 26.2 and 1.21.10. 1.21.1 has a Fabric module (`:versions:mc-1.21.1`) and a NeoForge module (`:neoforge-1.21.1`, `versions/1.21.1/neoforge`), no Paper plugin and no client game tests (Fabric added those in 1.21.4). The NeoForge module merges `src`, `loaders/neoforge/src`, `versions/1.21.1/src` and `versions/1.21.1/neoforge/src` into one source set; its `Platform` keeps registry entries and payloads until NeoForge's events ask for them. Run it with `./gradlew :neoforge-1.21.1:runClient`. The 1.21.1 build lacks the jigsaw planner and carries 1.21.1-only copies of the later input records in `versions/1.21.1/src/client/java/net/minecraft/client/input` so the shared screens compile unchanged.
 
 ```sh
 ./gradlew build compileGametestJava
