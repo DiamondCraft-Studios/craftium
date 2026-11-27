@@ -313,7 +313,7 @@ final class BlockColours {
         for (var e : entries) {
             var id = dev.craftium.compat.Compat.parse(e.id);
             boolean entity =
-                    BuiltInRegistries.BLOCK.getValue(id).defaultBlockState().hasBlockEntity();
+                    dev.craftium.compat.Compat.block(id).defaultBlockState().hasBlockEntity();
             int flags = (e.solid ? 1 : 0)
                     | (e.opaque ? 2 : 0)
                     | (e.full ? 4 : 0)

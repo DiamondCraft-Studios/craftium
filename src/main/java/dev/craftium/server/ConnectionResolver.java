@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.Point;
 import java.util.*;
 import net.minecraft.core.BlockPos;
@@ -74,7 +75,7 @@ final class ConnectionResolver {
         var dry = state.hasProperty(BlockStateProperties.WATERLOGGED)
                 ? state.setValue(BlockStateProperties.WATERLOGGED, false)
                 : state;
-        BlockState updated = dry.updateShape(level, level, pos, side, beside, neighbour, level.getRandom());
+        BlockState updated = Compat.updateShape(dry, level, pos, side, beside, neighbour);
         for (Property<?> property : updated.getProperties()) {
             if (property == BlockStateProperties.WATERLOGGED
                     || keep.contains(property.getName())

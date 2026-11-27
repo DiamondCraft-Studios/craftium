@@ -1,9 +1,10 @@
 package dev.craftium.client;
 
 import dev.craftium.Craftium;
+import dev.craftium.compat.Nbt;
+import dev.craftium.platform.Platform;
 import java.nio.file.*;
 import java.util.*;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.*;
 import net.minecraft.world.item.ItemStack;
@@ -15,8 +16,7 @@ import net.minecraft.world.item.ItemStack;
  */
 final class HotbarPages {
     static final int COUNT = 99, ROWS = 5, SLOTS = 9, NAME_LIMIT = 24;
-    private static final Path FILE =
-            FabricLoader.getInstance().getConfigDir().resolve("craftium").resolve("hotbar_pages.nbt");
+    private static final Path FILE = Platform.configDir().resolve("craftium").resolve("hotbar_pages.nbt");
     private static final Map<Integer, List<ItemStack>> HOTBARS = new HashMap<>();
     private static final Map<Integer, String> NAMES = new HashMap<>();
     private static boolean loaded, dirty;
@@ -39,11 +39,11 @@ final class HotbarPages {
         try {
             var ops = ops(mc);
             var root = NbtIo.readCompressed(FILE, NbtAccounter.create(64_000_000));
-            for (String key : root.keySet()) {
+            for (String key : Nbt.keySet(root)) {
                 if (key.startsWith("n")) {
                     try {
                         int page = Integer.parseInt(key.substring(1));
-                        if (page >= 1 && page <= COUNT) NAMES.put(page, root.getStringOr(key, ""));
+                        if (page >= 1 && page <= COUNT) NAMES.put(page, Nbt.getStringOr(root, key, ""));
                     } catch (NumberFormatException ignored) {
                     }
                     continue;
@@ -55,7 +55,7 @@ final class HotbarPages {
                     continue;
                 }
                 if (number < 1 || number > COUNT * ROWS) continue;
-                var slots = root.getListOrEmpty(key);
+                var slots = Nbt.getListOrEmpty(root, key);
                 var stacks = new ArrayList<ItemStack>(SLOTS);
                 for (int i = 0; i < SLOTS; i++)
                     stacks.add(

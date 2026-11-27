@@ -1,0 +1,34 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="GPL-3.0-only"
+
+[[mods]]
+modId="craftium"
+version="${version}"
+displayName="Craftium"
+description='''A creative building studio: selection, painting, sculpting and terrain tools in a familiar docked workspace.'''
+authors="Craftium contributors"
+logoFile="assets/craftium/icon.png"
+
+[[mixins]]
+config="craftium.mixins.json"
+
+[[mixins]]
+config="craftium.client.mixins.json"
+
+[[mixins]]
+config="craftium.neoforge.mixins.json"
+
+[[dependencies.craftium]]
+modId="neoforge"
+type="required"
+versionRange="[${neoforge_version},)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.craftium]]
+modId="minecraft"
+type="required"
+versionRange="[${minecraft_version}]"
+ordering="NONE"
+side="BOTH"

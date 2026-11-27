@@ -2,6 +2,7 @@ package dev.craftium.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.core.VoxelOrbit;
 import java.util.*;
 import java.util.function.Consumer;
@@ -77,7 +78,7 @@ final class BlockEntityShapes {
         String colour =
                 name.equals("shulker_box") ? "" : "_" + name.substring(0, name.length() - "_shulker_box".length());
         Direction facing = direction(properties.getOrDefault("facing", "up"));
-        return make(ModelLayers.SHULKER_BOX, "shulker/shulker" + colour, true, pose -> {
+        return make(ClientCompat.shulkerBoxLayer(), "shulker/shulker" + colour, true, pose -> {
             pose.translate(0.5f, 0.5f, 0.5f);
             pose.scale(0.9995f, 0.9995f, 0.9995f);
             pose.mulPose(facing.getRotation());
@@ -120,13 +121,10 @@ final class BlockEntityShapes {
         place.accept(pose);
         var quads = new ArrayList<VoxelOrbit.Quad>();
         root.visit(pose, (at, path, index, cube) -> {
-            for (var polygon : cube.polygons) {
-                var v = polygon.vertices();
-                if (v.length < 4) continue;
-                Vector3f[] p = new Vector3f[4];
-                for (int i = 0; i < 4; i++)
-                    p[i] = at.pose().transformPosition(v[i].worldX(), v[i].worldY(), v[i].worldZ(), new Vector3f());
-                Vector3f normal = at.transformNormal(polygon.normal(), new Vector3f());
+            for (var face : ClientCompat.faces(at, cube)) {
+                Vector3f[] p = face.corners();
+                float[] u = face.u(), v = face.v();
+                Vector3f normal = face.normal();
                 float tw = picture.width(), th = picture.height();
                 float[] o = {p[0].x, p[0].y, p[0].z};
                 float[] a = {p[1].x - p[0].x, p[1].y - p[0].y, p[1].z - p[0].z};
@@ -137,12 +135,12 @@ final class BlockEntityShapes {
                         a,
                         b,
                         n,
-                        v[0].u() * tw,
-                        v[0].v() * th,
-                        (v[1].u() - v[0].u()) * tw,
-                        (v[1].v() - v[0].v()) * th,
-                        (v[3].u() - v[0].u()) * tw,
-                        (v[3].v() - v[0].v()) * th,
+                        u[0] * tw,
+                        v[0] * th,
+                        (u[1] - u[0]) * tw,
+                        (v[1] - v[0]) * th,
+                        (u[3] - u[0]) * tw,
+                        (v[3] - v[0]) * th,
                         picture.pixels(),
                         picture.width(),
                         picture.height(),

@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.*;
 import java.util.*;
 import net.minecraft.server.level.ServerPlayer;
@@ -26,7 +27,7 @@ final class Autoshade {
                     "Lighting exceeds its ray budget; reduce the selection, samples or ray length");
         return occluders.computeIfAbsent(at, q -> {
             var state = p.state(q);
-            return state.isSolidRender()
+            return Compat.isSolidRender(state)
                     && !state.getCollisionShape(p.level, EditPlanner.pos(q)).isEmpty();
         });
     }

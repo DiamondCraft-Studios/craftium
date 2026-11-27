@@ -23,7 +23,7 @@ public final class LassoSelection {
                 maxY = polygon.stream().mapToDouble(Pixel::y).max().orElse(0);
         int step = Math.max(1, (int) Math.ceil(Math.sqrt((maxX - minX) * (maxY - minY) / 8192)));
         var result = new LinkedHashSet<Point>();
-        Vec3 camera = ClientCompat.camera(mc).position();
+        Vec3 camera = ClientCompat.cameraPosition(ClientCompat.camera(mc));
         for (double x = minX; x <= maxX; x += step)
             for (double y = minY; y <= maxY; y += step) {
                 if (!contains(polygon, x, y)) continue;

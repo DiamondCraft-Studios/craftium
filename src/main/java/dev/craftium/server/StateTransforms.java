@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.Geometry;
 import java.util.*;
 import net.minecraft.core.Direction;
@@ -70,7 +71,7 @@ final class StateTransforms {
                 Direction direction = direction(property.getName());
                 if (direction == null) continue;
                 var rotated = rotate(direction, remainingYaw, pitch, roll);
-                Direction destination = Direction.getApproximateNearest(rotated.x(), rotated.y(), rotated.z());
+                Direction destination = Compat.nearest(rotated.x(), rotated.y(), rotated.z());
                 var target = state.getBlock().getStateDefinition().getProperty(destination.getName());
                 var value = from.getValue(property);
                 if (target != null && target.getPossibleValues().contains(value)) state = set(state, target, value);

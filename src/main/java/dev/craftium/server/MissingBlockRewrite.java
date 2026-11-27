@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.MissingBlockTable;
 import java.util.*;
 import java.util.function.Predicate;
@@ -24,27 +25,27 @@ public final class MissingBlockRewrite {
 
     /** @return how many blocks were turned into placeholders */
     public static int apply(CompoundTag chunk, MissingBlockTable table, Predicate<String> exists) {
-        var sections = chunk.getListOrEmpty("sections");
+        var sections = Nbt.getListOrEmpty(chunk, "sections");
         if (sections.isEmpty()) return 0;
-        int chunkX = chunk.getIntOr("xPos", 0), chunkZ = chunk.getIntOr("zPos", 0), replaced = 0;
+        int chunkX = Nbt.getIntOr(chunk, "xPos", 0), chunkZ = Nbt.getIntOr(chunk, "zPos", 0), replaced = 0;
         Map<Long, CompoundTag> placed = null;
         for (int i = 0; i < sections.size(); i++) {
-            var section = sections.getCompoundOrEmpty(i);
-            var states = section.getCompoundOrEmpty("block_states");
-            var palette = states.getListOrEmpty("palette");
+            var section = Nbt.getCompoundOrEmpty(sections, i);
+            var states = Nbt.getCompoundOrEmpty(section, "block_states");
+            var palette = Nbt.getListOrEmpty(states, "palette");
             int[] keys = null, unknown = null;
             int missing = 0;
             for (int j = 0; j < palette.size(); j++) {
-                var entry = palette.getCompoundOrEmpty(j);
-                String name = entry.getStringOr("Name", "minecraft:air");
+                var entry = Nbt.getCompoundOrEmpty(palette, j);
+                String name = Nbt.getStringOr(entry, "Name", "minecraft:air");
                 if (exists.test(name)) continue;
                 if (keys == null) {
                     keys = new int[palette.size()];
                     Arrays.fill(keys, -1);
                 }
                 var properties = new TreeMap<String, String>();
-                var tag = entry.getCompoundOrEmpty("Properties");
-                for (String property : tag.keySet()) properties.put(property, tag.getStringOr(property, ""));
+                var tag = Nbt.getCompoundOrEmpty(entry, "Properties");
+                for (String property : Nbt.keySet(tag)) properties.put(property, Nbt.getStringOr(tag, property, ""));
                 keys[j] = table.intern(new MissingBlockTable.Entry(name, properties));
                 missing++;
             }
@@ -60,7 +61,7 @@ public final class MissingBlockRewrite {
                 for (int j = 0; j < palette.size(); j++) {
                     if (keys[j] < 0) {
                         remap[j] = packed.size();
-                        packed.add(palette.getCompoundOrEmpty(j));
+                        packed.add(Nbt.getCompoundOrEmpty(palette, j));
                     } else {
                         if (placeholder < 0) {
                             placeholder = packed.size();
@@ -76,7 +77,7 @@ public final class MissingBlockRewrite {
                         palette.set(j, placeholderEntry());
                     }
             if (placed == null) placed = blockEntities(chunk);
-            int base = section.getByteOr("Y", (byte) 0) * 16;
+            int base = Nbt.getByteOr(section, "Y", (byte) 0) * 16;
             for (int cell = 0; cell < 4096; cell++) {
                 int index = indices == null ? 0 : indices[cell];
                 if (index >= keys.length || keys[index] < 0) continue;
@@ -126,10 +127,12 @@ public final class MissingBlockRewrite {
     /** The chunk's block entities by position, in the order they were saved, so one is replaced where it stood. */
     private static Map<Long, CompoundTag> blockEntities(CompoundTag chunk) {
         var result = new LinkedHashMap<Long, CompoundTag>();
-        var list = chunk.getListOrEmpty("block_entities");
+        var list = Nbt.getListOrEmpty(chunk, "block_entities");
         for (int i = 0; i < list.size(); i++) {
-            var entity = list.getCompoundOrEmpty(i);
-            result.put(pack(entity.getIntOr("x", 0), entity.getIntOr("y", 0), entity.getIntOr("z", 0)), entity);
+            var entity = Nbt.getCompoundOrEmpty(list, i);
+            result.put(
+                    pack(Nbt.getIntOr(entity, "x", 0), Nbt.getIntOr(entity, "y", 0), Nbt.getIntOr(entity, "z", 0)),
+                    entity);
         }
         return result;
     }
@@ -137,7 +140,7 @@ public final class MissingBlockRewrite {
     /** The palette number of each of the 4096 cells, or null when the section is one block throughout (it has no data then). */
     static int[] indices(CompoundTag states, int paletteSize) {
         if (paletteSize <= 1) return null;
-        long[] data = states.getLongArray("data").orElse(null);
+        long[] data = Nbt.getLongArray(states, "data").orElse(null);
         if (data == null) return null;
         int bits = bits(paletteSize), perLong = 64 / bits;
         long mask = (1L << bits) - 1;

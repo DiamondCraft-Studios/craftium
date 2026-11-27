@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.Handshake;
 import dev.craftium.core.SharedPalettes;
 import dev.craftium.net.Packets;
@@ -37,7 +38,7 @@ final class PaletteLibrary {
                 var saved = store().save(
                                 entry.name(),
                                 entry.author() == null || entry.author().isBlank()
-                                        ? player.getGameProfile().name()
+                                        ? Compat.profileName(player.getGameProfile())
                                         : entry.author(),
                                 player.getUUID().toString(),
                                 entry.blocks(),
@@ -66,7 +67,7 @@ final class PaletteLibrary {
 
     /** Sends the list to every other player whose client knows palettes, after somebody changed it. */
     static void push(ServerPlayer changer) {
-        var server = changer.level().getServer();
+        var server = Compat.level(changer).getServer();
         if (server == null) return;
         String list = json();
         for (var player : server.getPlayerList().getPlayers()) {

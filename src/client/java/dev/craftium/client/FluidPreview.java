@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.FluidFlow;
 import dev.craftium.core.Options;
 import dev.craftium.core.Point;
@@ -63,7 +64,7 @@ public final class FluidPreview {
             }
 
             public int minY() {
-                return level.getMinY();
+                return Compat.minY(level);
             }
 
             public void fluid(Point p, int l) {

@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.*;
 import java.util.*;
 import net.minecraft.world.level.block.Blocks;
@@ -272,7 +273,7 @@ final class SelectionOperations {
         for (Point at : ordered) p.put(at, Blocks.AIR.defaultBlockState());
         for (Point at : ordered) {
             int y = at.y();
-            while (y > p.level.getMinY() && at.y() - y < 128) {
+            while (y > Compat.minY(p.level) && at.y() - y < 128) {
                 Point below = new Point(at.x(), y - 1, at.z());
                 if (settled.contains(below) || (!source.containsKey(below) && p.solid(below))) break;
                 y--;

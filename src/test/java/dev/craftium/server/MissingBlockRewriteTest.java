@@ -2,6 +2,7 @@ package dev.craftium.server;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.MissingBlockTable;
 import java.util.Arrays;
 import java.util.Map;
@@ -49,8 +50,9 @@ class MissingBlockRewriteTest {
     }
 
     private static int[] numbers(CompoundTag chunk) {
-        var states = chunk.getListOrEmpty("sections").getCompoundOrEmpty(0).getCompoundOrEmpty("block_states");
-        int size = states.getListOrEmpty("palette").size();
+        var states = Nbt.getCompoundOrEmpty(
+                Nbt.getCompoundOrEmpty(Nbt.getListOrEmpty(chunk, "sections"), 0), "block_states");
+        int size = Nbt.getListOrEmpty(states, "palette").size();
         var out = MissingBlockRewrite.indices(states, size);
         return out == null ? new int[4096] : out;
     }
@@ -74,23 +76,23 @@ class MissingBlockRewriteTest {
         var table = new MissingBlockTable();
         assertEquals(2, MissingBlockRewrite.apply(chunk, table, KNOWN::contains));
         assertEquals("mod:marble[axis=y]", table.get(0).text());
-        var palette = chunk.getListOrEmpty("sections")
-                .getCompoundOrEmpty(0)
-                .getCompoundOrEmpty("block_states")
-                .getListOrEmpty("palette");
-        assertEquals(MissingBlockRewrite.BLOCK, palette.getCompoundOrEmpty(1).getStringOr("Name", ""));
-        var entities = chunk.getListOrEmpty("block_entities");
+        var palette = Nbt.getListOrEmpty(
+                Nbt.getCompoundOrEmpty(
+                        Nbt.getCompoundOrEmpty(Nbt.getListOrEmpty(chunk, "sections"), 0), "block_states"),
+                "palette");
+        assertEquals(MissingBlockRewrite.BLOCK, Nbt.getStringOr(Nbt.getCompoundOrEmpty(palette, 1), "Name", ""));
+        var entities = Nbt.getListOrEmpty(chunk, "block_entities");
         assertEquals(2, entities.size());
-        var first = entities.getCompoundOrEmpty(0);
-        assertEquals(16, first.getIntOr("x", 99));
-        assertEquals(48, first.getIntOr("y", 99));
-        assertEquals(-32, first.getIntOr("z", 99));
-        assertEquals(0, first.getIntOr(MissingBlockRewrite.KEY, -1));
-        assertEquals(MissingBlockRewrite.BLOCK, first.getStringOr("id", ""));
-        var second = entities.getCompoundOrEmpty(1);
-        assertEquals(16 + 3, second.getIntOr("x", 99));
-        assertEquals(48 + 1, second.getIntOr("y", 99));
-        assertEquals(-32 + 2, second.getIntOr("z", 99));
+        var first = Nbt.getCompoundOrEmpty(entities, 0);
+        assertEquals(16, Nbt.getIntOr(first, "x", 99));
+        assertEquals(48, Nbt.getIntOr(first, "y", 99));
+        assertEquals(-32, Nbt.getIntOr(first, "z", 99));
+        assertEquals(0, Nbt.getIntOr(first, MissingBlockRewrite.KEY, -1));
+        assertEquals(MissingBlockRewrite.BLOCK, Nbt.getStringOr(first, "id", ""));
+        var second = Nbt.getCompoundOrEmpty(entities, 1);
+        assertEquals(16 + 3, Nbt.getIntOr(second, "x", 99));
+        assertEquals(48 + 1, Nbt.getIntOr(second, "y", 99));
+        assertEquals(-32 + 2, Nbt.getIntOr(second, "z", 99));
     }
 
     @Test
@@ -103,10 +105,10 @@ class MissingBlockRewriteTest {
         var chunk = chunk(c, entry("minecraft:air"), entry("mod:a"), entry("mod:b"), entry("minecraft:stone"));
         var table = new MissingBlockTable();
         assertEquals(3, MissingBlockRewrite.apply(chunk, table, KNOWN::contains));
-        var palette = chunk.getListOrEmpty("sections")
-                .getCompoundOrEmpty(0)
-                .getCompoundOrEmpty("block_states")
-                .getListOrEmpty("palette");
+        var palette = Nbt.getListOrEmpty(
+                Nbt.getCompoundOrEmpty(
+                        Nbt.getCompoundOrEmpty(Nbt.getListOrEmpty(chunk, "sections"), 0), "block_states"),
+                "palette");
         assertEquals(3, palette.size(), "air, the placeholder once, stone");
         var n = numbers(chunk);
         assertEquals(0, n[0]);
@@ -115,10 +117,10 @@ class MissingBlockRewriteTest {
         assertEquals(2, n[3]);
         assertEquals(1, n[4]);
         var keys = new TreeMap<Integer, Integer>();
-        var entities = chunk.getListOrEmpty("block_entities");
+        var entities = Nbt.getListOrEmpty(chunk, "block_entities");
         for (int i = 0; i < entities.size(); i++) {
-            var e = entities.getCompoundOrEmpty(i);
-            keys.put(e.getIntOr("x", 0) - 16, e.getIntOr(MissingBlockRewrite.KEY, -1));
+            var e = Nbt.getCompoundOrEmpty(entities, i);
+            keys.put(Nbt.getIntOr(e, "x", 0) - 16, Nbt.getIntOr(e, MissingBlockRewrite.KEY, -1));
         }
         int a = table.find(MissingBlockTable.Entry.parse("mod:a")),
                 b = table.find(MissingBlockTable.Entry.parse("mod:b"));
@@ -129,7 +131,7 @@ class MissingBlockRewriteTest {
     void aSectionOfOnlyMissingBlocksNeedsNoData() {
         var chunk = chunk(cells(0), entry("mod:a"));
         assertEquals(4096, MissingBlockRewrite.apply(chunk, new MissingBlockTable(), KNOWN::contains));
-        assertEquals(4096, chunk.getListOrEmpty("block_entities").size());
+        assertEquals(4096, Nbt.getListOrEmpty(chunk, "block_entities").size());
     }
 
     @Test
@@ -147,9 +149,9 @@ class MissingBlockRewriteTest {
         list.add(old);
         chunk.put("block_entities", list);
         MissingBlockRewrite.apply(chunk, new MissingBlockTable(), KNOWN::contains);
-        var entities = chunk.getListOrEmpty("block_entities");
+        var entities = Nbt.getListOrEmpty(chunk, "block_entities");
         assertEquals(1, entities.size());
-        assertEquals(old, entities.getCompoundOrEmpty(0).getCompoundOrEmpty(MissingBlockRewrite.KEPT));
+        assertEquals(old, Nbt.getCompoundOrEmpty(Nbt.getCompoundOrEmpty(entities, 0), MissingBlockRewrite.KEPT));
     }
 
     @Test

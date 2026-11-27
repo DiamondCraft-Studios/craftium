@@ -382,8 +382,8 @@ public final class BuilderWidget {
                 if (!name.isEmpty()) HotbarPages.rename(page, name.substring(0, name.length() - 1));
                 return true;
             }
-            boolean shift = GLFW.glfwGetKey(mc.getWindow().handle(), GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
-                    || GLFW.glfwGetKey(mc.getWindow().handle(), GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
+            boolean shift = GLFW.glfwGetKey(ClientCompat.windowHandle(), GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
+                    || GLFW.glfwGetKey(ClientCompat.windowHandle(), GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
             char c = character(key, shift);
             if (c != 0 && name.length() < HotbarPages.NAME_LIMIT) HotbarPages.rename(page, name + c);
             return true;
@@ -454,7 +454,7 @@ public final class BuilderWidget {
         var o = ClientState.options;
         int x = left(g.guiWidth()), y = top(g.guiHeight()), mx = mouseX(mc), my = mouseY(mc);
         if (dragging) {
-            if (GLFW.glfwGetMouseButton(mc.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS)
+            if (GLFW.glfwGetMouseButton(ClientCompat.windowHandle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS)
                 setSpeed(mx, x);
             else {
                 dragging = false;
@@ -592,7 +592,7 @@ public final class BuilderWidget {
         String hint = null;
         var o = ClientState.options;
         if (settingDrag >= 0) {
-            if (GLFW.glfwGetMouseButton(mc.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS)
+            if (GLFW.glfwGetMouseButton(ClientCompat.windowHandle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS)
                 dragSetting(settingDrag, mx, w);
             else {
                 settingDrag = -1;

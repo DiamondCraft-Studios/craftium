@@ -9,8 +9,8 @@
   "icon": "assets/craftium/icon.png",
   "environment": "*",
   "entrypoints": {
-    "main": ["dev.craftium.Craftium"],
-    "client": ["dev.craftium.client.CraftiumClient"]
+    "main": ["dev.craftium.fabric.CraftiumFabric"],
+    "client": ["dev.craftium.fabric.CraftiumFabricClient"]
   },
   "mixins": ["craftium.mixins.json", {"config":"craftium.client.mixins.json","environment":"client"}],
   "depends": {

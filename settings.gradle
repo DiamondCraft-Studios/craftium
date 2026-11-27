@@ -1,6 +1,7 @@
 pluginManagement {
     repositories {
         maven { url = 'https://maven.fabricmc.net/' }
+        maven { url = 'https://maven.neoforged.net/releases' }
         mavenCentral()
         gradlePluginPortal()
     }
@@ -15,3 +16,10 @@ project(':versions:26.2').name = 'mc-26.2'
 
 include('versions:1.21.10')
 project(':versions:1.21.10').name = 'mc-1.21.10'
+
+include('versions:1.21.1')
+project(':versions:1.21.1').name = 'mc-1.21.1'
+
+// NeoForge builds: the loader is a second axis next to the Minecraft version (see CONTRIBUTING.md).
+include('neoforge-1.21.1')
+project(':neoforge-1.21.1').projectDir = file('versions/1.21.1/neoforge')

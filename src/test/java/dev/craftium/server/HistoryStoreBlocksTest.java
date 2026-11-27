@@ -2,10 +2,10 @@ package dev.craftium.server;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.Point;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -40,8 +40,8 @@ class HistoryStoreBlocksTest {
         var packed = PackedChanges.pack(original);
         assertInstanceOf(PackedChanges.class, packed);
         var tag = HistoryStore.blocks(packed);
-        assertEquals(4, tag.getListOrEmpty("palette").size(), "each distinct block is written once");
-        var back = HistoryStore.readBlocks(tag, BuiltInRegistries.BLOCK);
+        assertEquals(4, Nbt.getListOrEmpty(tag, "palette").size(), "each distinct block is written once");
+        var back = HistoryStore.readBlocks(tag, dev.craftium.compat.Compat.blockLookup());
         assertInstanceOf(PackedChanges.class, back, "read back packed, without a change object per block");
         assertEquals(original, back);
     }
@@ -49,28 +49,34 @@ class HistoryStoreBlocksTest {
     @Test
     void anUnpackedEditSurvivesBeingWrittenAndRead() {
         var original = changes(40);
-        var back = HistoryStore.readBlocks(HistoryStore.blocks(original), BuiltInRegistries.BLOCK);
+        var back = HistoryStore.readBlocks(HistoryStore.blocks(original), dev.craftium.compat.Compat.blockLookup());
         assertEquals(original, back);
     }
 
     @Test
     void anEditWithNoBlocksReadsBackEmpty() {
-        assertEquals(List.of(), HistoryStore.readBlocks(HistoryStore.blocks(List.of()), BuiltInRegistries.BLOCK));
+        assertEquals(
+                List.of(),
+                HistoryStore.readBlocks(HistoryStore.blocks(List.of()), dev.craftium.compat.Compat.blockLookup()));
     }
 
     @Test
     void anIndexOutsideThePaletteIsRefused() {
         var tag = HistoryStore.blocks(changes(10));
-        var after = tag.getIntArray("after").orElseThrow();
+        var after = dev.craftium.compat.Nbt.getIntArray(tag, "after").orElseThrow();
         after[3] = 99;
         tag.putIntArray("after", after);
-        assertThrows(IllegalArgumentException.class, () -> HistoryStore.readBlocks(tag, BuiltInRegistries.BLOCK));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> HistoryStore.readBlocks(tag, dev.craftium.compat.Compat.blockLookup()));
     }
 
     @Test
     void arraysOfDifferentLengthsAreRefused() {
         var tag = HistoryStore.blocks(changes(10));
         tag.putIntArray("y", new int[3]);
-        assertThrows(IllegalArgumentException.class, () -> HistoryStore.readBlocks(tag, BuiltInRegistries.BLOCK));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> HistoryStore.readBlocks(tag, dev.craftium.compat.Compat.blockLookup()));
     }
 }

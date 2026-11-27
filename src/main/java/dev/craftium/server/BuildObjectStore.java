@@ -1,5 +1,7 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.*;
 import dev.craftium.runtime.ServerPlatform;
 import java.nio.file.*;
@@ -87,11 +89,11 @@ final class BuildObjectStore {
     }
 
     private static Slot slot(ServerPlayer player) {
-        Path file = player.level()
+        Path file = Compat.level(player)
                 .getServer()
                 .getWorldPath(LevelResource.ROOT)
                 .resolve("craftium/buildobjects")
-                .resolve(dev.craftium.compat.Compat.keyName(player.level().dimension())
+                .resolve(dev.craftium.compat.Compat.keyName(Compat.level(player).dimension())
                                 .replace(':', '_') + ".nbt");
         return SLOTS.computeIfAbsent(file, f -> {
             var tree = load(f);
@@ -239,60 +241,60 @@ final class BuildObjectStore {
     }
     /** The cells {@link #putCells} wrote, or none when absent. A store that does not add up throws, so the file is kept as .bad like any damaged one. */
     static PackedCells readCells(CompoundTag tag, String name) {
-        var c = tag.getCompoundOrEmpty(name);
-        long[] keys = c.getLongArray("cells").orElse(new long[0]);
+        var c = Nbt.getCompoundOrEmpty(tag, name);
+        long[] keys = Nbt.getLongArray(c, "cells").orElse(new long[0]);
         if (keys.length == 0) return PackedCells.EMPTY;
         if (keys.length > SavedSelections.Tree.STOWED_LIMIT) // one hidden by an eye keeps up to twice as many
         throw new IllegalArgumentException("Invalid BuildObject dormant blocks");
-        var states = List.of(c.getStringOr("states", "").split("\n", -1));
-        long[] dataKeys = c.getLongArray("dataCells").orElse(new long[0]);
-        var list = c.getListOrEmpty("data");
+        var states = List.of(Nbt.getStringOr(c, "states", "").split("\n", -1));
+        long[] dataKeys = Nbt.getLongArray(c, "dataCells").orElse(new long[0]);
+        var list = Nbt.getListOrEmpty(c, "data");
         var texts = new ArrayList<String>();
-        for (int i = 0; i < list.size(); i++)
-            texts.add(list.getCompoundOrEmpty(i).getStringOr("v", ""));
-        return PackedCells.of(keys, states, c.getIntArray("index").orElse(new int[0]), dataKeys, texts);
+        for (int i = 0; i < list.size(); i++) texts.add(Nbt.getStringOr(Nbt.getCompoundOrEmpty(list, i), "v", ""));
+        return PackedCells.of(keys, states, Nbt.getIntArray(c, "index").orElse(new int[0]), dataKeys, texts);
     }
 
     static SavedSelections.Tree load(Path file) {
         if (!Files.exists(file)) return new SavedSelections.Tree();
         try {
             var root = NbtIo.readCompressed(file, NbtAccounter.create(256L * 1024 * 1024));
-            int format = root.getIntOr("format", 0);
+            int format = Nbt.getIntOr(root, "format", 0);
             if (format != 1 && format != 2) throw new IllegalArgumentException("Unknown BuildObject file format");
-            var list = root.getListOrEmpty("entries");
+            var list = Nbt.getListOrEmpty(root, "entries");
             if (list.size() > SavedSelections.MAX) throw new IllegalArgumentException("Too many BuildObjects");
             var rows = new ArrayList<SavedSelections.Saved>();
             for (int i = 0; i < list.size(); i++) {
-                var tag = list.getCompoundOrEmpty(i);
-                int[] flat = tag.getIntArray("points").orElse(new int[0]);
+                var tag = Nbt.getCompoundOrEmpty(list, i);
+                int[] flat = Nbt.getIntArray(tag, "points").orElse(new int[0]);
                 if (flat.length % 3 != 0 || flat.length / 3 > Selection.LIMIT)
                     throw new IllegalArgumentException("Invalid BuildObject blocks");
                 var points = new ArrayList<Point>(flat.length / 3);
                 for (int j = 0; j < flat.length; j += 3) points.add(new Point(flat[j], flat[j + 1], flat[j + 2]));
                 rows.add(new SavedSelections.Saved(
-                        tag.getIntOr("id", 0),
-                        tag.getStringOr("guid", UUID.randomUUID().toString()),
-                        tag.getStringOr("name", "BuildObject"),
-                        tag.getIntOr("parent", 0),
-                        tag.getIntOr("color", 0),
+                        Nbt.getIntOr(tag, "id", 0),
+                        Nbt.getStringOr(tag, "guid", UUID.randomUUID().toString()),
+                        Nbt.getStringOr(tag, "name", "BuildObject"),
+                        Nbt.getIntOr(tag, "parent", 0),
+                        Nbt.getIntOr(tag, "color", 0),
                         points,
-                        tag.getIntOr("group", 0),
-                        tag.getBooleanOr("folded", false),
+                        Nbt.getIntOr(tag, "group", 0),
+                        Nbt.getBooleanOr(tag, "folded", false),
                         format >= 2 ? readCells(tag, "dormant") : PackedCells.EMPTY,
                         format >= 2 ? readCells(tag, "replaced") : PackedCells.EMPTY,
-                        tag.getBooleanOr("stowed", false)));
+                        Nbt.getBooleanOr(tag, "stowed", false)));
             }
             var groups = new ArrayList<SavedSelections.SavedGroup>();
-            var groupList = root.getListOrEmpty("groups");
+            var groupList = Nbt.getListOrEmpty(root, "groups");
             for (int i = 0; i < groupList.size(); i++) {
-                var tag = groupList.getCompoundOrEmpty(i);
+                var tag = Nbt.getCompoundOrEmpty(groupList, i);
                 groups.add(new SavedSelections.SavedGroup(
-                        tag.getIntOr("id", 0),
-                        tag.getStringOr("guid", UUID.randomUUID().toString()),
-                        tag.getStringOr("name", "New Group"),
-                        tag.getBooleanOr("folded", false)));
+                        Nbt.getIntOr(tag, "id", 0),
+                        Nbt.getStringOr(tag, "guid", UUID.randomUUID().toString()),
+                        Nbt.getStringOr(tag, "name", "New Group"),
+                        Nbt.getBooleanOr(tag, "folded", false)));
             }
-            return SavedSelections.Tree.load(root.getIntOr("nextId", 1), rows, root.getIntOr("nextGroupId", 1), groups);
+            return SavedSelections.Tree.load(
+                    Nbt.getIntOr(root, "nextId", 1), rows, Nbt.getIntOr(root, "nextGroupId", 1), groups);
         } catch (Exception e) {
             ServerPlatform.LOG.warn(
                     "Cannot load BuildObjects {}: starting with none, and keeping the file as {}.bad",

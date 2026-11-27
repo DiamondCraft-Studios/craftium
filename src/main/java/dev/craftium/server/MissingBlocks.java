@@ -11,7 +11,6 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.LevelResource;
 
@@ -23,15 +22,22 @@ public final class MissingBlocks {
     public static BlockEntityType<MissingBlockEntity> TYPE;
     private static volatile MissingBlockTable table;
 
-    public static void register() {
+    /** Registers the placeholder block; the loader calls this while it takes blocks. */
+    public static void registerBlock() {
         var id = Compat.id("craftium", "missing_block");
-        var key = ResourceKey.create(Registries.BLOCK, id);
         BLOCK = Registry.register(
                 BuiltInRegistries.BLOCK,
                 id,
-                new MissingBlock(BlockBehaviour.Properties.of().setId(key).strength(1.0F)));
+                new MissingBlock(Compat.blockProperties(ResourceKey.create(Registries.BLOCK, id))
+                        .strength(1.0F)));
+    }
+
+    /** Registers the placeholder's block entity, after {@link #registerBlock}. */
+    public static void registerBlockEntity() {
         TYPE = Registry.register(
-                BuiltInRegistries.BLOCK_ENTITY_TYPE, id, Compat.blockEntityType(MissingBlockEntity::new, BLOCK));
+                BuiltInRegistries.BLOCK_ENTITY_TYPE,
+                Compat.id("craftium", "missing_block"),
+                Compat.blockEntityType(MissingBlockEntity::new, BLOCK));
     }
 
     /** Loads the table of the world the server opened. Chunks load right after, so this comes first. */
@@ -72,8 +78,9 @@ public final class MissingBlocks {
      */
     public static java.util.List<net.minecraft.core.BlockPos> loadedAround(
             net.minecraft.server.level.ServerPlayer player, MissingBlockTable.Entry wanted, int limit) {
-        var level = player.level();
-        int radius = Math.max(2, player.level().getServer().getPlayerList().getViewDistance());
+        var level = Compat.level(player);
+        int radius =
+                Math.max(2, Compat.level(player).getServer().getPlayerList().getViewDistance());
         int cx = player.blockPosition().getX() >> 4, cz = player.blockPosition().getZ() >> 4;
         var found = new java.util.ArrayList<net.minecraft.core.BlockPos>();
         for (int x = cx - radius; x <= cx + radius; x++)

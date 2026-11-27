@@ -2,6 +2,7 @@ package dev.craftium.server;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.Point;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,7 +48,7 @@ class PackedChangesTest {
     void keepsBlockEntityData() {
         var original = changes(1_000, true);
         var packed = PackedChanges.pack(original);
-        assertEquals("minecraft:chest", packed.get(0).before().data().getStringOr("id", ""));
+        assertEquals("minecraft:chest", Nbt.getStringOr(packed.get(0).before().data(), "id", ""));
         assertNull(packed.get(1).before().data());
     }
 

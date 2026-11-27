@@ -2,6 +2,7 @@ package dev.craftium.server;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.Point;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -57,7 +58,9 @@ class ClipboardMapTest {
     void keepsBlockEntityData() {
         var clipboard = filled(blocks(1_000));
         clipboard.pack();
-        assertEquals("minecraft:chest", clipboard.get(new Point(0, 0, 0)).data().getStringOr("id", ""));
+        assertEquals(
+                "minecraft:chest",
+                Nbt.getStringOr(clipboard.get(new Point(0, 0, 0)).data(), "id", ""));
     }
 
     @Test

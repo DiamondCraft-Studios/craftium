@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -25,7 +26,7 @@ public record BlockSnapshot(BlockState state, CompoundTag data) {
      * does not fall, water and lava do not flow and redstone does not start), and nothing drops.
      */
     public static final int NO_UPDATES =
-            Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS | Block.UPDATE_SKIP_ON_PLACE;
+            Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS | Compat.UPDATE_SKIP_ON_PLACE;
 
     public void place(ServerLevel level, BlockPos pos, int flags) {
         // Suppress drops: an undoable editor operation must not duplicate container contents as item entities.

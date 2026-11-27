@@ -1,6 +1,7 @@
 package dev.craftium.server;
 
 import com.mojang.brigadier.StringReader;
+import dev.craftium.compat.Compat;
 import dev.craftium.core.*;
 import java.util.*;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
@@ -720,7 +721,8 @@ final class EditPlanner {
             session.flattenStroke = session.requestStroke;
             session.flattenLevel = c.y();
         }
-        int target = Math.clamp(o.flattenPick ? session.flattenLevel : o.flattenY, level.getMinY(), level.getMaxY());
+        int target =
+                Math.clamp(o.flattenPick ? session.flattenLevel : o.flattenY, Compat.minY(level), Compat.maxY(level));
         // Elevation's strength is the height, in blocks, the middle of the mound moves with each click.
         int height = Math.max(1, (int) Math.round(o.strength));
         for (int dx = -o.radius; dx <= o.radius; dx++)
@@ -803,8 +805,8 @@ final class EditPlanner {
     /** {@link #column(int, int, int, int, java.util.function.IntUnaryOperator)} with the depth the ground is looked for to and the most it is raised. */
     private void column(
             int x, int z, int reference, int above, int depth, int raise, java.util.function.IntUnaryOperator desired) {
-        int maxY = level.getMaxY(); // the top block layer: getMaxY is inclusive
-        int top = Math.min(maxY, reference + above), bottom = Math.max(level.getMinY(), reference - depth);
+        int maxY = Compat.maxY(level); // the top block layer: getMaxY is inclusive
+        int top = Math.min(maxY, reference + above), bottom = Math.max(Compat.minY(level), reference - depth);
         while (top >= bottom && !ground(new Point(x, top, z))) top--;
         if (top < bottom) return;
         Point at = new Point(x, top, z);
@@ -826,7 +828,7 @@ final class EditPlanner {
         var layers = new ArrayList<BlockState>(4);
         layers.add(surface);
         if (o.tool == Tool.ELEVATION && o.smear)
-            for (int k = 1; k < o.smearDepth && top - k >= level.getMinY(); k++) {
+            for (int k = 1; k < o.smearDepth && top - k >= Compat.minY(level); k++) {
                 Point p = new Point(x, top - k, z);
                 if (!ground(p) || state(p).hasBlockEntity()) break;
                 layers.add(state(p));
@@ -836,7 +838,7 @@ final class EditPlanner {
         // tools leave the column as it is,
         // instead of tearing it around the object's blocks.
         if (!exact && o.tool.group.equals("Terrain")) {
-            int low = Math.max(level.getMinY(), Math.min(top - n + 1, to - n + 1)),
+            int low = Math.max(Compat.minY(level), Math.min(top - n + 1, to - n + 1)),
                     high = Math.min(maxY, Math.max(top, to) + cover.size());
             for (int y = low; y <= high; y++)
                 if (inBuildObject(new Point(x, y, z))) {
@@ -850,7 +852,7 @@ final class EditPlanner {
         for (int i = 0; i < cover.size(); i++) put(at.add(0, i + 1, 0), Blocks.AIR.defaultBlockState());
         if (to < top) for (int y = top; y > to; y--) put(new Point(x, y, z), Blocks.AIR.defaultBlockState());
         // The layers hang from the new surface; anything under them that the move uncovers is filled.
-        for (int y = Math.max(level.getMinY(), Math.min(top - n + 1, to - n + 1)); y <= to; y++) {
+        for (int y = Math.max(Compat.minY(level), Math.min(top - n + 1, to - n + 1)); y <= to; y++) {
             int i = to - y;
             put(new Point(x, y, z), i < n ? layers.get(i) : fill);
         }
@@ -867,8 +869,8 @@ final class EditPlanner {
                 .orElseThrow(() -> new IllegalArgumentException("Unknown biome: " + o.biome));
         for (Point p : points) {
             if (!accepted(p)) continue;
-            int start = o.fillVertically ? level.getMinY() >> 2 : p.y() >> 2,
-                    end = o.fillVertically ? level.getMaxY() >> 2 : start;
+            int start = o.fillVertically ? Compat.minY(level) >> 2 : p.y() >> 2,
+                    end = o.fillVertically ? Compat.maxY(level) >> 2 : start;
             for (int y = start; y <= end; y++) {
                 Point cell = new Point(p.x() >> 2, y, p.z() >> 2);
                 var old = level.getNoiseBiome(cell.x(), cell.y(), cell.z());

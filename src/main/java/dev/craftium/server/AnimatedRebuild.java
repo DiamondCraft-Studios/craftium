@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.*;
 import java.util.*;
 import net.minecraft.server.MinecraftServer;
@@ -48,7 +49,7 @@ final class AnimatedRebuild {
         if (session.selection.size() == 0) throw new IllegalArgumentException("Create a selection first");
         var next = new Run();
         next.owner = player.getUUID();
-        next.level = player.level();
+        next.level = Compat.level(player);
         next.session = session;
         next.options = options;
         var plan = new EditPlanner(next.level, session, options);

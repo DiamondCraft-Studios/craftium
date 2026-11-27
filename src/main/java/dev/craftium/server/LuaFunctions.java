@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.*;
 import dev.craftium.vendor.FastNoiseLite;
 import java.util.*;
@@ -78,7 +79,7 @@ final class LuaFunctions {
                         .isEmpty()));
         bind(globals, "getHighestBlockYAt", args -> {
             int x = args.arg(1).checkint(), z = args.arg(2).checkint();
-            plan.validate(new Point(x, plan.level.getMinY(), z));
+            plan.validate(new Point(x, Compat.minY(plan.level), z));
             int ground =
                     plan.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, x, z) - 1;
             return LuaValue.valueOf(plannedTop == null ? ground : highest(x, z, ground));

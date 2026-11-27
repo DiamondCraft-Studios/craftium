@@ -1,11 +1,11 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.*;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
-import net.minecraft.nbt.TagParser;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -408,7 +408,7 @@ final class ObjectMoves {
         var state = plan.parse(block.state());
         if (block.data() == null) return new BlockSnapshot(state);
         try {
-            return new BlockSnapshot(state, TagParser.parseCompoundFully(block.data()));
+            return new BlockSnapshot(state, Nbt.parseCompoundFully(block.data()));
         } catch (Exception e) {
             throw new IllegalArgumentException("A block's data could not be read back: " + block.state());
         }

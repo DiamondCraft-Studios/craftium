@@ -1,5 +1,7 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.*;
 import dev.craftium.net.Packets;
 import java.nio.file.*;
@@ -35,12 +37,13 @@ final class HistoryStore {
 
     static void attach(ServerPlayer player, Session session) {
         if (session.historyPath != null) return;
-        session.historyPath = player.level()
+        session.historyPath = Compat.level(player)
                 .getServer()
                 .getWorldPath(LevelResource.ROOT)
                 .resolve("craftium/history")
                 .resolve(player.getUUID() + "-"
-                        + dev.craftium.compat.Compat.keyName(player.level().dimension())
+                        + dev.craftium.compat.Compat.keyName(
+                                        Compat.level(player).dimension())
                                 .replace(':', '_') + ".nbt");
         // A write of this file that has not finished holds the newest history, so it is taken from memory: waiting for
         // the writer here would stall the server for as long as any player's history takes to write.
@@ -66,15 +69,11 @@ final class HistoryStore {
         if (!Files.exists(session.historyPath)) return;
         try {
             var root = NbtIo.readCompressed(session.historyPath, NbtAccounter.create(3L * Selection.HISTORY_BYTES));
-            int format = root.getIntOr("format", 0);
-            if (format != 1 && format != FORMAT
-                    || root.getIntOr("DataVersion", 0)
-                            != net.minecraft.SharedConstants.getCurrentVersion()
-                                    .dataVersion()
-                                    .version())
+            int format = Nbt.getIntOr(root, "format", 0);
+            if (format != 1 && format != FORMAT || Nbt.getIntOr(root, "DataVersion", 0) != Compat.dataVersion())
                 throw new IllegalArgumentException("History version differs from this Minecraft build");
-            var undo = readEdits(root.getListOrEmpty("undo"), player, format);
-            var redo = readEdits(root.getListOrEmpty("redo"), player, format);
+            var undo = readEdits(Nbt.getListOrEmpty(root, "undo"), player, format);
+            var redo = readEdits(Nbt.getListOrEmpty(root, "redo"), player, format);
             int bytes = 0;
             for (var e : undo) bytes += e.estimatedBytes();
             for (var e : redo) bytes += e.estimatedBytes();
@@ -140,11 +139,7 @@ final class HistoryStore {
         try {
             var root = new CompoundTag();
             root.putInt("format", FORMAT);
-            root.putInt(
-                    "DataVersion",
-                    net.minecraft.SharedConstants.getCurrentVersion()
-                            .dataVersion()
-                            .version());
+            root.putInt("DataVersion", Compat.dataVersion());
             root.put("undo", edits(snapshot.undo));
             root.put("redo", edits(snapshot.redo));
             Files.createDirectories(snapshot.file.getParent());
@@ -174,16 +169,17 @@ final class HistoryStore {
 
     private static BlockSnapshot snapshot(
             CompoundTag tag, net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> blocks) {
-        var state = tag.getCompoundOrEmpty("state");
-        var id = dev.craftium.compat.Compat.parse(state.getStringOr("Name", "minecraft:air"));
+        var state = Nbt.getCompoundOrEmpty(tag, "state");
+        var id = dev.craftium.compat.Compat.parse(Nbt.getStringOr(state, "Name", "minecraft:air"));
         if (!net.minecraft.core.registries.BuiltInRegistries.BLOCK.containsKey(id))
             throw new IllegalArgumentException("History uses missing block " + id);
         return new BlockSnapshot(
-                NbtUtils.readBlockState(blocks, state), tag.getCompound("data").orElse(null));
+                NbtUtils.readBlockState(blocks, state),
+                Nbt.getCompound(tag, "data").orElse(null));
     }
 
     private static Point point(CompoundTag tag, String name) {
-        int[] coordinates = tag.getIntArray(name).orElseThrow();
+        int[] coordinates = Nbt.getIntArray(tag, name).orElseThrow();
         if (coordinates.length != 3) throw new IllegalArgumentException("Invalid history position");
         return new Point(coordinates[0], coordinates[1], coordinates[2]);
     }
@@ -260,11 +256,11 @@ final class HistoryStore {
         var before = new LinkedHashMap<Integer, List<Point>>();
         var after = new LinkedHashMap<Integer, List<Point>>();
         for (int i = 0; i < list.size(); i++) {
-            var item = list.getCompoundOrEmpty(i);
-            int id = item.getIntOr("id", 0);
+            var item = Nbt.getCompoundOrEmpty(list, i);
+            int id = Nbt.getIntOr(item, "id", 0);
             if (id <= 0) throw new IllegalArgumentException("Invalid stored BuildObject id");
-            before.put(id, unflatten(item.getIntArray("before").orElse(new int[0])));
-            after.put(id, unflatten(item.getIntArray("after").orElse(new int[0])));
+            before.put(id, unflatten(Nbt.getIntArray(item, "before").orElse(new int[0])));
+            after.put(id, unflatten(Nbt.getIntArray(item, "after").orElse(new int[0])));
         }
         return Session.SelectionChange.restoring(Map.of(), Map.of()).withObjects(before, after);
     }
@@ -291,8 +287,8 @@ final class HistoryStore {
         var before = new LinkedHashMap<Integer, SavedSelections.Held>();
         var after = new LinkedHashMap<Integer, SavedSelections.Held>();
         for (int i = 0; i < list.size(); i++) {
-            var item = list.getCompoundOrEmpty(i);
-            int id = item.getIntOr("id", 0);
+            var item = Nbt.getCompoundOrEmpty(list, i);
+            int id = Nbt.getIntOr(item, "id", 0);
             if (id <= 0) throw new IllegalArgumentException("Invalid stored BuildObject id");
             before.put(
                     id,
@@ -383,19 +379,19 @@ final class HistoryStore {
     /** The block changes {@link #blocks} wrote, packed again when the palette fits, without making a change object for each block. */
     static List<Session.Change> readBlocks(
             CompoundTag tag, net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> blocks) {
-        int[] x = tag.getIntArray("x").orElse(new int[0]),
-                y = tag.getIntArray("y").orElse(new int[0]),
-                z = tag.getIntArray("z").orElse(new int[0]),
-                before = tag.getIntArray("before").orElse(new int[0]),
-                after = tag.getIntArray("after").orElse(new int[0]);
+        int[] x = Nbt.getIntArray(tag, "x").orElse(new int[0]),
+                y = Nbt.getIntArray(tag, "y").orElse(new int[0]),
+                z = Nbt.getIntArray(tag, "z").orElse(new int[0]),
+                before = Nbt.getIntArray(tag, "before").orElse(new int[0]),
+                after = Nbt.getIntArray(tag, "after").orElse(new int[0]);
         int n = x.length;
         if (n > Selection.LIMIT) throw new IllegalArgumentException("Stored edit exceeds cell limit");
         if (y.length != n || z.length != n || before.length != n || after.length != n)
             throw new IllegalArgumentException("Invalid stored blocks");
-        var list = tag.getListOrEmpty("palette");
+        var list = Nbt.getListOrEmpty(tag, "palette");
         if (list.size() > 2L * n) throw new IllegalArgumentException("Invalid stored block palette");
         var palette = new BlockSnapshot[list.size()];
-        for (int i = 0; i < palette.length; i++) palette[i] = snapshot(list.getCompoundOrEmpty(i), blocks);
+        for (int i = 0; i < palette.length; i++) palette[i] = snapshot(Nbt.getCompoundOrEmpty(list, i), blocks);
         for (int i = 0; i < n; i++)
             if (before[i] < 0 || before[i] >= palette.length || after[i] < 0 || after[i] >= palette.length)
                 throw new IllegalArgumentException("Invalid stored block palette index");
@@ -419,65 +415,65 @@ final class HistoryStore {
         if (list.size() > 32) throw new IllegalArgumentException("Invalid history length");
         var result = new ArrayList<Session.Edit>();
         for (int i = 0; i < list.size(); i++) {
-            var tag = list.getCompoundOrEmpty(i);
+            var tag = Nbt.getCompoundOrEmpty(list, i);
             List<Session.Change> blocks;
             ListTag entries;
             if (format == 1) {
                 var legacy = new ArrayList<Session.Change>();
-                entries = tag.getListOrEmpty("blocks");
+                entries = Nbt.getListOrEmpty(tag, "blocks");
                 if (entries.size() > Selection.LIMIT)
                     throw new IllegalArgumentException("Stored edit exceeds cell limit");
                 for (int j = 0; j < entries.size(); j++) {
-                    var item = entries.getCompoundOrEmpty(j);
+                    var item = Nbt.getCompoundOrEmpty(entries, j);
                     legacy.add(new Session.Change(
                             point(item, "pos"),
-                            snapshot(item.getCompoundOrEmpty("before"), player),
-                            snapshot(item.getCompoundOrEmpty("after"), player)));
+                            snapshot(Nbt.getCompoundOrEmpty(item, "before"), player),
+                            snapshot(Nbt.getCompoundOrEmpty(item, "after"), player)));
                 }
                 blocks = List.copyOf(legacy);
             } else
                 blocks = readBlocks(
-                        tag.getCompoundOrEmpty("blocks"),
+                        Nbt.getCompoundOrEmpty(tag, "blocks"),
                         player.registryAccess().lookupOrThrow(Registries.BLOCK));
             var biomes = new ArrayList<Session.BiomeChange>();
-            entries = tag.getListOrEmpty("biomes");
+            entries = Nbt.getListOrEmpty(tag, "biomes");
             if (entries.size() > Selection.LIMIT) throw new IllegalArgumentException("Stored biome edit exceeds limit");
             var registry = player.registryAccess().lookupOrThrow(Registries.BIOME);
             for (int j = 0; j < entries.size(); j++) {
-                var item = entries.getCompoundOrEmpty(j);
+                var item = Nbt.getCompoundOrEmpty(entries, j);
                 biomes.add(new Session.BiomeChange(
                         point(item, "pos"),
                         registry.get(ResourceKey.create(
                                         Registries.BIOME,
-                                        dev.craftium.compat.Compat.parse(item.getStringOr("before", ""))))
+                                        dev.craftium.compat.Compat.parse(Nbt.getStringOr(item, "before", ""))))
                                 .orElseThrow(),
                         registry.get(ResourceKey.create(
                                         Registries.BIOME,
-                                        dev.craftium.compat.Compat.parse(item.getStringOr("after", ""))))
+                                        dev.craftium.compat.Compat.parse(Nbt.getStringOr(item, "after", ""))))
                                 .orElseThrow()));
             }
             var entities = new ArrayList<Session.EntityChange>();
-            entries = tag.getListOrEmpty("entities");
+            entries = Nbt.getListOrEmpty(tag, "entities");
             if (entries.size() > 128) throw new IllegalArgumentException("Stored entity edit exceeds limit");
             for (int j = 0; j < entries.size(); j++) {
-                var item = entries.getCompoundOrEmpty(j);
+                var item = Nbt.getCompoundOrEmpty(entries, j);
                 entities.add(new Session.EntityChange(
-                        UUID.fromString(item.getStringOr("uuid", "")),
-                        item.getCompound("before").orElse(null),
-                        item.getCompound("after").orElse(null),
-                        item.getBooleanOr("moving", false)));
+                        UUID.fromString(Nbt.getStringOr(item, "uuid", "")),
+                        Nbt.getCompound(item, "before").orElse(null),
+                        Nbt.getCompound(item, "after").orElse(null),
+                        Nbt.getBooleanOr(item, "moving", false)));
             }
-            var notes = Packets.JSON.fromJson(tag.getStringOr("annotations", "[]"), Annotation.Change[].class);
+            var notes = Packets.JSON.fromJson(Nbt.getStringOr(tag, "annotations", "[]"), Annotation.Change[].class);
             if (notes == null || notes.length > 128) throw new IllegalArgumentException("Invalid stored annotations");
             result.add(new Session.Edit(
-                    tag.getStringOr("name", "Edit"),
+                    Nbt.getStringOr(tag, "name", "Edit"),
                     blocks,
                     List.copyOf(biomes),
-                    tag.getIntOr("flags", 2),
+                    Nbt.getIntOr(tag, "flags", 2),
                     List.copyOf(entities),
                     List.of(notes),
-                    readHeld(tag.getListOrEmpty("held"), readObjects(tag.getListOrEmpty("objects"))),
-                    tag.getLongOr("time", 0L)));
+                    readHeld(Nbt.getListOrEmpty(tag, "held"), readObjects(Nbt.getListOrEmpty(tag, "objects"))),
+                    Nbt.getLongOr(tag, "time", 0L)));
         }
         return List.copyOf(result);
     }

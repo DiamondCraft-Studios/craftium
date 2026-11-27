@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.BlueprintVoxels;
 import dev.craftium.core.Point;
 import java.io.IOException;
@@ -22,7 +23,7 @@ public final class BlueprintFileVoxels {
         try {
             if (Files.size(path) > 1_048_576) return null;
             CompoundTag root = NbtIo.readCompressed(path, NbtAccounter.create(32L * 1024 * 1024));
-            if (root.contains("Schematic")) root = root.getCompoundOrEmpty("Schematic");
+            if (root.contains("Schematic")) root = Nbt.getCompoundOrEmpty(root, "Schematic");
             return root.contains("palette") ? structure(root) : sponge(root);
         } catch (IOException | RuntimeException e) {
             return null;
@@ -43,45 +44,45 @@ public final class BlueprintFileVoxels {
     }
 
     private static Described structure(CompoundTag root) {
-        var palette = root.getListOrEmpty("palette");
+        var palette = Nbt.getListOrEmpty(root, "palette");
         var names = new String[palette.size()];
         for (int i = 0; i < names.length; i++)
-            names[i] = base(palette.getCompoundOrEmpty(i).getStringOr("Name", "minecraft:air"));
-        var blocks = root.getListOrEmpty("blocks");
+            names[i] = base(Nbt.getStringOr(Nbt.getCompoundOrEmpty(palette, i), "Name", "minecraft:air"));
+        var blocks = Nbt.getListOrEmpty(root, "blocks");
         var builder = new BlueprintVoxels.Builder();
         int sx = 1, sy = 1, sz = 1;
         for (int i = 0; i < blocks.size(); i++) {
-            var block = blocks.getCompoundOrEmpty(i);
-            var at = block.getListOrEmpty("pos");
-            int state = block.getIntOr("state", -1),
-                    x = at.getIntOr(0, 0),
-                    y = at.getIntOr(1, 0),
-                    z = at.getIntOr(2, 0);
+            var block = Nbt.getCompoundOrEmpty(blocks, i);
+            var at = Nbt.getListOrEmpty(block, "pos");
+            int state = Nbt.getIntOr(block, "state", -1),
+                    x = Nbt.getIntOr(at, 0, 0),
+                    y = Nbt.getIntOr(at, 1, 0),
+                    z = Nbt.getIntOr(at, 2, 0);
             if (state < 0 || state >= names.length || air(names[state])) continue;
             sx = Math.max(sx, x + 1);
             sy = Math.max(sy, y + 1);
             sz = Math.max(sz, z + 1);
             builder.add(x, y, z, names[state]);
         }
-        var size = root.getListOrEmpty("size");
+        var size = Nbt.getListOrEmpty(root, "size");
         if (size.size() == 3) {
-            sx = Math.max(sx, size.getIntOr(0, 1));
-            sy = Math.max(sy, size.getIntOr(1, 1));
-            sz = Math.max(sz, size.getIntOr(2, 1));
+            sx = Math.max(sx, Nbt.getIntOr(size, 0, 1));
+            sy = Math.max(sy, Nbt.getIntOr(size, 1, 1));
+            sz = Math.max(sz, Nbt.getIntOr(size, 2, 1));
         }
         return new Described(new Point(sx, sy, sz), builder.count(), builder.pack(sx, sy, sz));
     }
 
     private static Described sponge(CompoundTag root) {
-        int sx = root.getShort("Width").orElse((short) 0) & 0xffff,
-                sy = root.getShort("Height").orElse((short) 0) & 0xffff,
-                sz = root.getShort("Length").orElse((short) 0) & 0xffff;
+        int sx = Nbt.getShort(root, "Width").orElse((short) 0) & 0xffff,
+                sy = Nbt.getShort(root, "Height").orElse((short) 0) & 0xffff,
+                sz = Nbt.getShort(root, "Length").orElse((short) 0) & 0xffff;
         if (sx == 0 || sy == 0 || sz == 0 || root.get("Blocks") instanceof ByteArrayTag) return null;
         var data = root.get("Blocks") instanceof CompoundTag blocks ? blocks : root;
-        var palette = data.getCompoundOrEmpty("Palette");
+        var palette = Nbt.getCompoundOrEmpty(data, "Palette");
         var names = new java.util.HashMap<Integer, String>();
-        for (String key : palette.keySet()) names.put(palette.getIntOr(key, 0), base(key));
-        byte[] bytes = data.getByteArray(root.getIntOr("Version", 2) >= 3 ? "Data" : "BlockData")
+        for (String key : Nbt.keySet(palette)) names.put(Nbt.getIntOr(palette, key, 0), base(key));
+        byte[] bytes = Nbt.getByteArray(data, Nbt.getIntOr(root, "Version", 2) >= 3 ? "Data" : "BlockData")
                 .orElse(new byte[0]);
         var builder = new BlueprintVoxels.Builder();
         int cursor = 0;

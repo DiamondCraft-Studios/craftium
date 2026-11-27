@@ -2,6 +2,7 @@ package dev.craftium.client;
 
 import com.google.gson.JsonObject;
 import com.mojang.blaze3d.platform.NativeImage;
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.Gfx;
 import dev.craftium.client.compat.ReferenceTexture;
 import dev.craftium.client.compat.Tex;
@@ -206,7 +207,7 @@ final class OrbitPreview {
             var image = texture.getPixels();
             for (int row = 0; row < ph; row++) {
                 int base = row * pw;
-                for (int col = 0; col < pw; col++) image.setPixel(col, row, pixels[base + col]);
+                for (int col = 0; col < pw; col++) ClientCompat.setPixel(image, col, row, pixels[base + col]);
             }
             texture.upload();
             drawnW = pw;

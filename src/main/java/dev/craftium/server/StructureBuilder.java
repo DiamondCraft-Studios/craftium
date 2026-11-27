@@ -1,5 +1,7 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.*;
 import java.util.*;
 import net.minecraft.core.BlockPos;
@@ -157,13 +159,13 @@ final class StructureBuilder {
             cells[(at.y() * sz + at.z()) * sx + at.x()] = snapshot;
         }
         entities.removeIf(tag -> {
-            var at = tag.getListOrEmpty("Pos");
-            return at.getDoubleOr(0, 0) < 0
-                    || at.getDoubleOr(1, 0) < 0
-                    || at.getDoubleOr(2, 0) < 0
-                    || at.getDoubleOr(0, 0) >= sx
-                    || at.getDoubleOr(1, 0) >= sy
-                    || at.getDoubleOr(2, 0) >= sz;
+            var at = Nbt.getListOrEmpty(tag, "Pos");
+            return Nbt.getDoubleOr(at, 0, 0) < 0
+                    || Nbt.getDoubleOr(at, 1, 0) < 0
+                    || Nbt.getDoubleOr(at, 2, 0) < 0
+                    || Nbt.getDoubleOr(at, 0, 0) >= sx
+                    || Nbt.getDoubleOr(at, 1, 0) >= sy
+                    || Nbt.getDoubleOr(at, 2, 0) >= sz;
         });
         var built = new StructureBuilder(s, sx, sy, sz, cells, entities, clipboard ? new Point(0, 0, 0) : min);
         built.source = new int[] {sx, sy, sz};
@@ -242,10 +244,10 @@ final class StructureBuilder {
         for (var tag : entities) {
             var copy = tag.copy();
             ClipboardEntities.walk(copy, item -> {
-                var at = item.getListOrEmpty("Pos");
-                double x = at.getDoubleOr(0, 0), y = at.getDoubleOr(1, 0), z = at.getDoubleOr(2, 0);
-                var angles = item.getListOrEmpty("Rotation");
-                float yaw = angles.getFloatOr(0, 0);
+                var at = Nbt.getListOrEmpty(item, "Pos");
+                double x = Nbt.getDoubleOr(at, 0, 0), y = Nbt.getDoubleOr(at, 1, 0), z = Nbt.getDoubleOr(at, 2, 0);
+                var angles = Nbt.getListOrEmpty(item, "Rotation");
+                float yaw = Nbt.getFloatOr(angles, 0, 0);
                 if (mirror == Mirror.FRONT_BACK) {
                     x = sizeX - x;
                     yaw = -yaw;
@@ -278,7 +280,7 @@ final class StructureBuilder {
                 ClipboardEntities.position(item, rx, y, rz);
                 var next = new ListTag();
                 next.add(FloatTag.valueOf(yaw));
-                next.add(FloatTag.valueOf(angles.getFloatOr(1, 0)));
+                next.add(FloatTag.valueOf(Nbt.getFloatOr(angles, 1, 0)));
                 item.put("Rotation", next);
             });
             moved.add(copy);
@@ -348,9 +350,7 @@ final class StructureBuilder {
                     }
                     blocks.add(block);
                 }
-        root.putInt(
-                "DataVersion",
-                net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());
+        root.putInt("DataVersion", Compat.dataVersion());
         root.put("size", ints(sizeX, sizeY, sizeZ));
         root.put("palette", palette);
         root.put("blocks", blocks);
@@ -369,9 +369,7 @@ final class StructureBuilder {
     CompoundTag schematicNbt() {
         var root = new CompoundTag();
         root.putInt("Version", 2);
-        root.putInt(
-                "DataVersion",
-                net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());
+        root.putInt("DataVersion", Compat.dataVersion());
         root.putShort("Width", (short) sizeX);
         root.putShort("Height", (short) sizeY);
         root.putShort("Length", (short) sizeZ);
@@ -397,7 +395,7 @@ final class StructureBuilder {
                     var fileData = snapshot == null ? null : AssetNbt.fileData(snapshot);
                     if (fileData != null) {
                         var tag = fileData.copy();
-                        tag.putString("Id", tag.getStringOr("id", ""));
+                        tag.putString("Id", Nbt.getStringOr(tag, "id", ""));
                         tag.remove("id");
                         tag.remove("x");
                         tag.remove("y");
@@ -525,13 +523,13 @@ final class StructureBuilder {
     /** A jigsaw's data as Bedrock keeps it, at the world position the file's origin puts the cell. Java's fields, with the pool as target_pool. */
     private Map<String, Object> jigsawEntity(CompoundTag data, int x, int y, int z, boolean[] lossy) {
         var fields = new JigsawEntity.Fields(
-                data.getStringOr("name", JigsawEntity.EMPTY),
-                data.getStringOr("target", JigsawEntity.EMPTY),
-                data.getStringOr("pool", JigsawEntity.EMPTY),
-                data.getStringOr("joint", JigsawEntity.ROLLABLE),
-                data.getStringOr("final_state", JigsawEntity.AIR),
-                data.getIntOr("selection_priority", 0),
-                data.getIntOr("placement_priority", 0));
+                Nbt.getStringOr(data, "name", JigsawEntity.EMPTY),
+                Nbt.getStringOr(data, "target", JigsawEntity.EMPTY),
+                Nbt.getStringOr(data, "pool", JigsawEntity.EMPTY),
+                Nbt.getStringOr(data, "joint", JigsawEntity.ROLLABLE),
+                Nbt.getStringOr(data, "final_state", JigsawEntity.AIR),
+                Nbt.getIntOr(data, "selection_priority", 0),
+                Nbt.getIntOr(data, "placement_priority", 0));
         return JigsawEntity.toBedrock(
                 fields,
                 origin.x() + settings.offsetX + x,

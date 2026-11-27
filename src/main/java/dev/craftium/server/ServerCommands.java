@@ -1,9 +1,9 @@
 package dev.craftium.server;
 
 import com.mojang.brigadier.arguments.BoolArgumentType;
+import dev.craftium.platform.Platform;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.Commands;
 
 public final class ServerCommands {
@@ -29,7 +29,7 @@ public final class ServerCommands {
     }
 
     public static void register() {
-        CommandRegistrationCallback.EVENT.register((dispatcher, access, environment) -> {
+        Platform.onCommands(dispatcher -> {
             var gamerule =
                     Commands.literal("gamerule").requires(source -> dev.craftium.compat.Compat.isGamemaster(source));
             for (var entry : RULES.entrySet())

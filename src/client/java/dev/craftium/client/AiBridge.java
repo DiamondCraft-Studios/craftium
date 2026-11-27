@@ -2,8 +2,12 @@ package dev.craftium.client;
 
 import com.google.gson.*;
 import dev.craftium.Craftium;
+import dev.craftium.client.compat.ClientCompat;
+import dev.craftium.client.platform.ClientPlatform;
+import dev.craftium.compat.Compat;
 import dev.craftium.core.Point;
 import dev.craftium.net.Packets;
+import dev.craftium.platform.Platform;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
@@ -11,8 +15,6 @@ import java.nio.file.*;
 import java.security.*;
 import java.util.*;
 import java.util.concurrent.*;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
@@ -24,8 +26,7 @@ import net.minecraft.core.BlockPos;
  * applies its usual permission, protection and size checks; a build is only ever staged as a ghost until {@code apply_preview}.
  */
 public final class AiBridge {
-    static final Path FILE =
-            FabricLoader.getInstance().getConfigDir().resolve("craftium").resolve("bridge.json");
+    static final Path FILE = Platform.configDir().resolve("craftium").resolve("bridge.json");
     /**
      * What the bridge's tools understand, written to the bridge file so the MCP server can tell a player to update the mod or the plugin
      * instead of failing on a tool the other side does not have. Bump it when a tool gains something the MCP server relies on.
@@ -134,7 +135,7 @@ public final class AiBridge {
     }
 
     public static void install() {
-        ClientTickEvents.END_CLIENT_TICK.register(mc -> {
+        ClientPlatform.onEndTick(mc -> {
             if (ClientState.options.aiBridge != running()) {
                 if (ClientState.options.aiBridge) start();
                 else stop();
@@ -821,8 +822,8 @@ public final class AiBridge {
             var level = mc.level;
             var world = new JsonObject();
             world.addProperty("dimension", dev.craftium.compat.Compat.keyName(level.dimension()));
-            world.addProperty("minY", level.getMinY());
-            world.addProperty("maxY", level.getMinY() + level.getHeight() - 1);
+            world.addProperty("minY", Compat.minY(level));
+            world.addProperty("maxY", Compat.minY(level) + level.getHeight() - 1);
             world.addProperty("seaLevel", level.getSeaLevel());
             world.addProperty(
                     "biome",
@@ -853,7 +854,7 @@ public final class AiBridge {
             if (mc.level == null || mc.player == null) throw new IllegalStateException("Not in a world");
             boolean screenOpen = dev.craftium.client.compat.ClientCompat.screen(mc) != null;
             double yaw = mc.player.getYRot(), pitch = mc.player.getXRot();
-            net.minecraft.client.Screenshot.takeScreenshot(
+            dev.craftium.client.compat.ClientCompat.screenshot(
                     dev.craftium.client.compat.ClientCompat.mainTarget(mc), image -> {
                         try {
                             done.complete(encode(image, screenOpen, yaw, pitch));
@@ -877,7 +878,7 @@ public final class AiBridge {
             throws IOException {
         int width = image.getWidth(), height = image.getHeight();
         var full = new java.awt.image.BufferedImage(width, height, java.awt.image.BufferedImage.TYPE_INT_RGB);
-        full.setRGB(0, 0, width, height, image.getPixels(), 0, width);
+        full.setRGB(0, 0, width, height, ClientCompat.argbPixels(image), 0, width);
         var shown = full;
         if (width > 1024) {
             int w = 1024, h = Math.max(1, Math.round(height * 1024f / width));

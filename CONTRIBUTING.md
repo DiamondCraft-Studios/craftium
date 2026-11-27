@@ -4,7 +4,7 @@ Craftium is a vibe-coded, open-source building studio inspired by Axiom. AI assi
 
 ## Build
 
-Use Java 25 and the checked-in Gradle wrapper. Craftium builds for Minecraft Java 26.2 and 1.21.10; the Paper/Purpur companion targets 26.2 only.
+Use Java 25 and the checked-in Gradle wrapper. Craftium builds for Minecraft Java 26.2, 1.21.10 and 1.21.1; the Paper/Purpur companion targets 26.2 and 1.21.10. 1.21.1 has a Fabric module (`:versions:mc-1.21.1`) and a NeoForge module (`:neoforge-1.21.1`, `versions/1.21.1/neoforge`), no Paper plugin and no client game tests (Fabric added those in 1.21.4). The NeoForge module merges `src`, `loaders/neoforge/src`, `versions/1.21.1/src` and `versions/1.21.1/neoforge/src` into one source set; its `Platform` keeps registry entries and payloads until NeoForge's events ask for them. Run it with `./gradlew :neoforge-1.21.1:runClient`. The 1.21.1 build lacks the jigsaw planner and carries 1.21.1-only copies of the later input records in `versions/1.21.1/src/client/java/net/minecraft/client/input` so the shared screens compile unchanged.
 
 ```sh
 ./gradlew build compileGametestJava
@@ -18,7 +18,9 @@ On Windows, use `gradlew.bat`. Fabric mod JARs are written to `versions/<version
 
 Shared code lives in `src/` and must not contain anything that differs between Minecraft versions. The Paper/Purpur companion follows the same rule: its shared code is in `server-plugin/src/`, and `versions/<version>/server-plugin/` holds that version's `plugin.yml` and dev bundle, built with the shared script `gradle/paper-plugin.gradle`. Each supported version is a module in `versions/<version>/` that adds the code and metadata specific to it: the `compat` adapter classes, mixins that target changed internals, `fabric.mod.json` and the mixin configs. A file in a module replaces the shared file at the same path.
 
-When shared code needs a Minecraft API that differs between versions, call it through an adapter (`Compat`, `ClientCompat`, `Gfx`, `Overlay` and similar) and implement that adapter method in every `versions/<version>/` module. A change inside one module affects only that version.
+When shared code needs a Minecraft API that differs between versions, call it through an adapter (`Compat`, `Nbt`, `ClientCompat`, `Gfx`, `Overlay` and similar) and implement that adapter method in every `versions/<version>/` module. A change inside one module affects only that version.
+
+Shared code does not call the mod loader either. What it needs from the loader (config folder, mod metadata, payloads, events, commands, keys, the HUD) goes through `dev.craftium.platform.Platform` and `dev.craftium.client.platform.ClientPlatform`, which each loader supplies from `loaders/<loader>/src/` along with its entrypoints. A module compiles the shared code, then its loader's folder, then its own `src/`, so a file later in that order replaces one earlier. Fabric API calls that differ between versions go in the version's `FabricCompat` and `FabricClientCompat`.
 
 ## Branches and releases
 

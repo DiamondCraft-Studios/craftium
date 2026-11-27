@@ -43,7 +43,7 @@ Different APIs force different code, and the per-version copies must be kept in 
 
 - **`Overlay.java` is written twice** (1.21.10: 409 lines, `WorldRenderContext`, immediate vertex consumers; 26.2: 303 lines, `LevelRenderContext`, `QuadInstance`, submit-based). Every ghost change (cached ghosts, `cachedBlocks`, the mesh) has to be done twice, and the 26.2 side is the one that gets skipped.
 - **26.2-only workarounds:** `AbstractTextureAccessor` (an accessor mixin to set a font texture's sampler, used by `FontTextures`) and `SpeleothemMixin` in main. Both are reaching into game internals and may break on any 26.2 update. 26.2's `EditBox` also has no input filter (noted in the structure-export gotchas).
-- **Shared code carries `Compat` indirection** (`versions/<mc>/.../compat/`: `Compat`, `FabricCompat`, `ClientCompat`, `CommandCompat`, `Gfx`, `Tex`, `Overlay`, and the Craftium widgets). Anything new that touches the game API needs a method added to both copies.
+- **Shared code carries `Compat` indirection** (`versions/<mc>/.../compat/`: `Compat`, `Nbt`, `FabricCompat`, `FabricClientCompat`, `ClientCompat`, `Gfx`, `Tex`, `Overlay`, and the Craftium widgets). Anything new that touches the game API needs a method added to both copies.
 - **Deprecated API in the build:** both modules compile with "uses or overrides a deprecated API" notes (for example `EditorServer`). Not specific to 26.2, but nothing tracks them.
 - 26.2 is a development target (Java 25, Loom 1.17.21, Sodium `mc26.2-0.9.2-fabric`, Paperweight pin `26.2.build.134-stable`). Each is a pin to keep an eye on when 26.2 updates **[unverified whether any is stale]**.
 

@@ -1,14 +1,13 @@
 package dev.craftium.client.showcase;
 
 import dev.craftium.client.compat.ClientCompat;
+import dev.craftium.client.platform.ClientPlatform;
 import dev.craftium.core.Point;
 import dev.craftium.core.ShotSpec;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.Screenshot;
 
 /**
  * Takes one showcase picture at a time: puts the detached camera in place, waits for the game to draw and mesh what it sees, saves
@@ -62,7 +61,7 @@ public final class ShowcaseCapture {
         try {
             if (current != null) throw new IllegalStateException("Another picture is being taken");
             if (!registered) {
-                ClientTickEvents.END_CLIENT_TICK.register(ShowcaseCapture::tick);
+                ClientPlatform.onEndTick(ShowcaseCapture::tick);
                 registered = true;
             }
             if (mc.level == null) throw new IllegalStateException("Not in a world");
@@ -100,7 +99,7 @@ public final class ShowcaseCapture {
             if (job.ticks < SETTLE_TICKS || (!ready && job.ticks < MAX_WAIT_TICKS)) return;
             job.grabbing = true;
             double[] pose = ClientCompat.cameraPose(ClientCompat.camera(mc));
-            Screenshot.takeScreenshot(ClientCompat.mainTarget(mc), image -> {
+            ClientCompat.screenshot(ClientCompat.mainTarget(mc), image -> {
                 try {
                     image.writeToFile(job.file);
                     var result = new Result(job.file, image.getWidth(), image.getHeight(), ready, job.ticks, pose);

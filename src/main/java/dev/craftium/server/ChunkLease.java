@@ -1,9 +1,9 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.Point;
 import java.util.*;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
 
 /**
@@ -20,18 +20,9 @@ final class ChunkLease implements AutoCloseable {
 
     static final ChunkLease NONE = new ChunkLease(null, List.of());
 
-    /** Loads the chunk and nothing else: it neither ticks, nor saves itself in the world's list of forced chunks, nor times out. */
-    private static TicketType type;
-
     private static final Map<ServerLevel, Map<Long, Integer>> HELD = new WeakHashMap<>();
     /** Leases taken while a request is planned, closed when the request is done: by then the edit has taken its own. */
     private static final List<ChunkLease> PLANNING = new ArrayList<>();
-
-    /** Made on first use, since building it needs the game's registries, which the code around a lease does not always have. */
-    private static TicketType type() {
-        if (type == null) type = new TicketType(TicketType.NO_TIMEOUT, TicketType.FLAG_LOADING);
-        return type;
-    }
 
     private final ServerLevel level;
     private final List<Long> keys;
@@ -97,8 +88,7 @@ final class ChunkLease implements AutoCloseable {
     /** Lets go of every lease, as the server stops or the editor is cleared; the chunks are the world's again. */
     static void releaseAll() {
         for (var entry : HELD.entrySet())
-            for (long key : entry.getValue().keySet())
-                entry.getKey().getChunkSource().removeTicketWithRadius(type(), pos(key), 0);
+            for (long key : entry.getValue().keySet()) Compat.removeLeaseTicket(entry.getKey(), pos(key));
         HELD.clear();
         PLANNING.clear();
     }
@@ -122,7 +112,7 @@ final class ChunkLease implements AutoCloseable {
         if (keys.isEmpty()) return NONE;
         var lease = new ChunkLease(level, keys);
         for (long key : keys) {
-            if (held.merge(key, 1, Integer::sum) == 1) level.getChunkSource().addTicketWithRadius(type(), pos(key), 0);
+            if (held.merge(key, 1, Integer::sum) == 1) Compat.addLeaseTicket(level, pos(key));
         }
         try {
             // The tickets only ask; getting each chunk makes it ready now, so the edit can rely on it being there.
@@ -147,7 +137,7 @@ final class ChunkLease implements AutoCloseable {
             if (count == null) continue;
             if (count <= 1) {
                 held.remove(key);
-                level.getChunkSource().removeTicketWithRadius(type(), pos(key), 0);
+                Compat.removeLeaseTicket(level, pos(key));
             } else held.put(key, count - 1);
         }
         if (held.isEmpty()) HELD.remove(level);

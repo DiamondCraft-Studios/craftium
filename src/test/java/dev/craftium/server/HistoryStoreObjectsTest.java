@@ -2,6 +2,7 @@ package dev.craftium.server;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.Point;
 import java.util.*;
 import net.minecraft.nbt.ListTag;
@@ -36,10 +37,10 @@ class HistoryStoreObjectsTest {
         var change = Session.SelectionChange.restoring(Map.of(), Map.of())
                 .withObjects(Map.of(1, List.of(A)), Map.of(1, List.of()));
         var tag = HistoryStore.objectsTag(change);
-        tag.getCompoundOrEmpty(0).putIntArray("before", new int[] {1, 2}); // not a whole number of points
+        Nbt.getCompoundOrEmpty(tag, 0).putIntArray("before", new int[] {1, 2}); // not a whole number of points
         assertThrows(IllegalArgumentException.class, () -> HistoryStore.readObjects(tag));
         var noId = HistoryStore.objectsTag(change);
-        noId.getCompoundOrEmpty(0).putInt("id", 0);
+        Nbt.getCompoundOrEmpty(noId, 0).putInt("id", 0);
         assertThrows(IllegalArgumentException.class, () -> HistoryStore.readObjects(noId));
     }
 
@@ -92,7 +93,7 @@ class HistoryStoreObjectsTest {
                         Map.of(1, dev.craftium.core.SavedSelections.Held.NONE),
                         Map.of(1, new dev.craftium.core.SavedSelections.Held(d, dev.craftium.core.PackedCells.EMPTY)));
         var tag = HistoryStore.heldTag(change);
-        tag.getCompoundOrEmpty(0).putInt("id", 0);
+        Nbt.getCompoundOrEmpty(tag, 0).putInt("id", 0);
         assertThrows(IllegalArgumentException.class, () -> HistoryStore.readHeld(tag, null));
     }
 }

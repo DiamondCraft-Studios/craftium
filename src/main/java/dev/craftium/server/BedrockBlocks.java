@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.BedrockBlockTable;
 import java.util.TreeMap;
 import net.minecraft.nbt.CompoundTag;
@@ -14,9 +15,9 @@ final class BedrockBlocks {
     static BedrockBlockTable.Bedrock toBedrock(BlockState state) {
         var tag = NbtUtils.writeBlockState(state);
         var properties = new TreeMap<String, String>();
-        var source = tag.getCompoundOrEmpty("Properties");
-        for (String key : source.keySet()) properties.put(key, source.getStringOr(key, ""));
-        return BedrockBlockTable.get().toBedrock(tag.getStringOr("Name", ""), properties);
+        var source = Nbt.getCompoundOrEmpty(tag, "Properties");
+        for (String key : Nbt.keySet(source)) properties.put(key, Nbt.getStringOr(source, key, ""));
+        return BedrockBlockTable.get().toBedrock(Nbt.getStringOr(tag, "Name", ""), properties);
     }
 
     /** The state for a table entry, or null when this game version has no such block. */

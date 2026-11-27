@@ -1,10 +1,10 @@
 package dev.craftium.client;
 
+import dev.craftium.client.platform.ClientPlatform;
 import dev.craftium.core.*;
 import dev.craftium.net.Packets;
 import dev.craftium.server.BuilderEdits;
 import java.util.*;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Block;
@@ -176,7 +176,7 @@ public final class BuilderPrediction {
      * region and world-border protection the client cannot see, so a predicted edit there would show and then snap back.
      */
     private static boolean direct() {
-        return ClientPlayNetworking.canSend(Packets.Edit.TYPE);
+        return ClientPlatform.canSend(Packets.Edit.TYPE);
     }
 
     private static BlockPos pos(Point p) {

@@ -1,5 +1,7 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.*;
 import java.util.*;
 import net.minecraft.nbt.*;
@@ -17,7 +19,7 @@ final class ClipboardEntities {
         Point min = session.selection.min(), max = session.selection.max();
         var bounds = new AABB(
                 Vec3.atLowerCornerOf(EditPlanner.pos(min)), Vec3.atLowerCornerOf(EditPlanner.pos(max.add(1, 1, 1))));
-        var roots = player.level()
+        var roots = Compat.level(player)
                 .getEntities(
                         (Entity) null,
                         bounds,
@@ -35,7 +37,7 @@ final class ClipboardEntities {
         var result = new ArrayList<CompoundTag>();
         var removals = new ArrayList<Session.EntityChange>();
         for (var entity : roots) {
-            var before = EntityEdits.snapshot(entity, player.level());
+            var before = EntityEdits.snapshot(entity, Compat.level(player));
             removals.add(new Session.EntityChange(entity.getUUID(), before, null, true));
             var tag = before.copy();
             offset(tag, -min.x(), -min.y(), -min.z());
@@ -46,8 +48,8 @@ final class ClipboardEntities {
 
     static void offset(CompoundTag tag, double x, double y, double z) {
         walk(tag, item -> {
-            var at = item.getListOrEmpty("Pos");
-            position(item, at.getDoubleOr(0, 0) + x, at.getDoubleOr(1, 0) + y, at.getDoubleOr(2, 0) + z);
+            var at = Nbt.getListOrEmpty(item, "Pos");
+            position(item, Nbt.getDoubleOr(at, 0, 0) + x, Nbt.getDoubleOr(at, 1, 0) + y, Nbt.getDoubleOr(at, 2, 0) + z);
         });
     }
 
@@ -66,8 +68,8 @@ final class ClipboardEntities {
     private static void walk(CompoundTag tag, java.util.function.Consumer<CompoundTag> action, int depth) {
         if (depth > 16) throw new IllegalArgumentException("Entity passenger tree is too deep");
         action.accept(tag);
-        var children = tag.getListOrEmpty("Passengers");
-        for (int i = 0; i < children.size(); i++) walk(children.getCompoundOrEmpty(i), action, depth + 1);
+        var children = Nbt.getListOrEmpty(tag, "Passengers");
+        for (int i = 0; i < children.size(); i++) walk(Nbt.getCompoundOrEmpty(children, i), action, depth + 1);
     }
 
     static List<Session.EntityChange> paste(ServerPlayer player, Session session, Point origin) {
@@ -81,26 +83,27 @@ final class ClipboardEntities {
                 if (++count[0] > 512) throw new IllegalArgumentException("Clipboard has too many entities");
                 item.remove("UUID");
                 var tags = new ListTag();
-                var old = item.getListOrEmpty("Tags");
+                var old = Nbt.getListOrEmpty(item, "Tags");
                 for (int i = 0; i < old.size(); i++) {
-                    String value = old.getStringOr(i, "");
+                    String value = Nbt.getStringOr(old, i, "");
                     if (!value.startsWith("craftium:clipboard:")) tags.add(StringTag.valueOf(value));
                 }
                 tags.add(StringTag.valueOf(token));
                 item.put("Tags", tags);
-                var at = item.getListOrEmpty("Pos");
-                double x = at.getDoubleOr(0, 0), y = at.getDoubleOr(1, 0), z = at.getDoubleOr(2, 0);
+                var at = Nbt.getListOrEmpty(item, "Pos");
+                double x = Nbt.getDoubleOr(at, 0, 0), y = Nbt.getDoubleOr(at, 1, 0), z = Nbt.getDoubleOr(at, 2, 0);
                 if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z))
                     throw new IllegalArgumentException("Invalid clipboard entity coordinates");
                 var p = net.minecraft.core.BlockPos.containing(x, y, z);
-                if (!player.level().isInWorldBounds(p) || !player.level().hasChunk(p.getX() >> 4, p.getZ() >> 4))
+                if (!Compat.level(player).isInWorldBounds(p)
+                        || !Compat.level(player).hasChunk(p.getX() >> 4, p.getZ() >> 4))
                     throw new IllegalArgumentException("Entity placement reaches unloaded chunks or world bounds");
             });
-            Entity entity = dev.craftium.compat.Compat.loadEntity(tag, player.level());
+            Entity entity = dev.craftium.compat.Compat.loadEntity(tag, Compat.level(player));
             if (entity == null || entity instanceof Player)
                 throw new IllegalArgumentException("Unsupported clipboard entity");
             result.add(new Session.EntityChange(
-                    entity.getUUID(), null, EntityEdits.snapshot(entity, player.level()), true));
+                    entity.getUUID(), null, EntityEdits.snapshot(entity, Compat.level(player)), true));
         }
         return List.copyOf(result);
     }
@@ -109,15 +112,15 @@ final class ClipboardEntities {
             Session session, java.util.function.UnaryOperator<Geometry.Vector> position, double yaw, boolean mirror) {
         for (var root : session.clipboardEntities)
             walk(root, tag -> {
-                var at = tag.getListOrEmpty("Pos");
-                var p = position.apply(
-                        new Geometry.Vector(at.getDoubleOr(0, 0), at.getDoubleOr(1, 0), at.getDoubleOr(2, 0)));
+                var at = Nbt.getListOrEmpty(tag, "Pos");
+                var p = position.apply(new Geometry.Vector(
+                        Nbt.getDoubleOr(at, 0, 0), Nbt.getDoubleOr(at, 1, 0), Nbt.getDoubleOr(at, 2, 0)));
                 position(tag, p.x(), p.y(), p.z());
-                var rotation = tag.getListOrEmpty("Rotation");
-                float angle = rotation.getFloatOr(0, 0);
+                var rotation = Nbt.getListOrEmpty(tag, "Rotation");
+                float angle = Nbt.getFloatOr(rotation, 0, 0);
                 var next = new ListTag();
                 next.add(FloatTag.valueOf((float) ((mirror ? -angle : angle) + yaw)));
-                next.add(FloatTag.valueOf(rotation.getFloatOr(1, 0)));
+                next.add(FloatTag.valueOf(Nbt.getFloatOr(rotation, 1, 0)));
                 tag.put("Rotation", next);
             });
     }

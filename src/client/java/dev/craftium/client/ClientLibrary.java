@@ -2,15 +2,15 @@ package dev.craftium.client;
 
 import dev.craftium.core.Options;
 import dev.craftium.net.Packets;
+import dev.craftium.platform.Platform;
 import java.nio.file.*;
 import java.util.*;
-import net.fabricmc.loader.api.FabricLoader;
 
 final class ClientLibrary {
     private ClientLibrary() {}
 
     private static Path directory(String type) {
-        return FabricLoader.getInstance().getConfigDir().resolve("craftium").resolve(type);
+        return Platform.configDir().resolve("craftium").resolve(type);
     }
 
     private static Path file(String type, String name) {

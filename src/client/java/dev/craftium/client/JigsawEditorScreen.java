@@ -2140,7 +2140,7 @@ final class JigsawEditorScreen extends CraftiumScreen {
         }
         if (pendingWeightIndex != null
                 && System.currentTimeMillis() - pendingAt > 350
-                && GLFW.glfwGetMouseButton(minecraft.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                && GLFW.glfwGetMouseButton(ClientCompat.windowHandle(), GLFW.GLFW_MOUSE_BUTTON_LEFT)
                         != GLFW.GLFW_PRESS) {
             int index = pendingWeightIndex;
             pendingWeightIndex = null;

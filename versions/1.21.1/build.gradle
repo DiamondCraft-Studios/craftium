@@ -1,0 +1,114 @@
+plugins {
+    id 'net.fabricmc.fabric-loom-remap'
+}
+
+version = "${rootProject.mod_version}+mc${minecraft_version}"
+group = rootProject.maven_group
+base { archivesName = rootProject.archives_base_name }
+
+repositories {
+    mavenCentral()
+    // Modrinth maven, only for dev-environment mods (Sodium).
+    exclusiveContent {
+        forRepository { maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' } }
+        filter { includeGroup 'maven.modrinth' }
+    }
+}
+
+// Shared sources live in the repository root and the loader's own code in loaders/<loader>/src. A file under
+// this module's own src/ replaces the file with the same relative path, so version differences are explicit
+// overrides. 1.21.1 is built for Fabric and NeoForge: src/ holds what both share, fabric/src what only Fabric uses.
+// The merged tree is assembled into build/merged and compiled from there.
+def merged = layout.buildDirectory.dir('merged')
+
+def mergeTask = { String name, String set ->
+    tasks.register(name, Sync) {
+        into merged.map { it.dir(set) }
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE // later sources win
+        from rootProject.file("src/${set}")
+        from rootProject.file("loaders/fabric/src/${set}")
+        from layout.projectDirectory.dir("src/${set}")
+        from layout.projectDirectory.dir("fabric/src/${set}")
+    }
+}
+def mergeMain = mergeTask('mergeMainSources', 'main')
+def mergeClient = mergeTask('mergeClientSources', 'client')
+def mergeTest = mergeTask('mergeTestSources', 'test')
+
+loom {
+    splitEnvironmentSourceSets()
+    runs {
+        client {
+            // The development client opens maximized; CraftiumClient reads this.
+            vmArg '-Dcraftium.maximize=true'
+        }
+    }
+    mods {
+        craftium {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+}
+
+sourceSets {
+    main {
+        java.srcDirs = [merged.map { it.dir('main/java') }]
+        resources.srcDirs = [merged.map { it.dir('main/resources') }]
+    }
+    client {
+        java.srcDirs = [merged.map { it.dir('client/java') }]
+    }
+    test {
+        java.srcDirs = [merged.map { it.dir('test/java') }]
+    }
+}
+tasks.named('compileJava') { dependsOn mergeMain }
+tasks.named('processResources') { dependsOn mergeMain }
+tasks.named('compileClientJava') { dependsOn mergeClient }
+tasks.named('compileTestJava') { dependsOn mergeTest }
+tasks.matching { it.name == 'sourcesJar' }.configureEach { dependsOn mergeMain, mergeClient }
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    // Sodium runs in the dev client only; it is not a compile or published dependency.
+    modLocalRuntime "maven.modrinth:sodium:${project.sodium_version}"
+    implementation 'org.luaj:luaj-jse:3.0.1'
+    include 'org.luaj:luaj-jse:3.0.1'
+    testImplementation platform('org.junit:junit-bom:5.13.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+processResources {
+    from(rootProject.file('branding/craftium.svg')) { into 'assets/craftium' }
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}
+
+tasks.withType(JavaCompile).configureEach { options.release = 21; options.compilerArgs << '-Xmaxerrs' << '2000' }
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+test {
+    useJUnitPlatform()
+    // Both modules run their tests at once (org.gradle.parallel), and a worker at the default 512 MiB sometimes ran out of heap.
+    maxHeapSize = '1g'
+}
+
+jar {
+    from(rootProject.file('LICENSE')) { rename { 'LICENSE_Craftium' } }
+    from(rootProject.file('THIRD-PARTY-NOTICES.md'))
+}
+
+
+
+// Minecraft options shared by every version and checkout.
+apply from: rootProject.file('gradle/global-options.gradle')
+apply from: rootProject.file('gradle/shared-saves.gradle')

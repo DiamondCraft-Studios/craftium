@@ -2,6 +2,7 @@ package dev.craftium.server;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.*;
 import java.nio.file.*;
 import java.util.*;
@@ -80,8 +81,10 @@ class BuildObjectStoreTest {
         BuildObjectStore.write(file, saved.tree().nextId(), saved.tree().saved());
         assertEquals(
                 1,
-                net.minecraft.nbt.NbtIo.readCompressed(file, net.minecraft.nbt.NbtAccounter.unlimitedHeap())
-                        .getIntOr("format", 0));
+                Nbt.getIntOr(
+                        net.minecraft.nbt.NbtIo.readCompressed(file, net.minecraft.nbt.NbtAccounter.unlimitedHeap()),
+                        "format",
+                        0));
         var tower = saved.entries().getFirst();
         var dormant = new PackedCells();
         dormant.put(B, "minecraft:stone");
@@ -89,8 +92,10 @@ class BuildObjectStoreTest {
         BuildObjectStore.write(file, saved.tree().nextId(), saved.tree().saved());
         assertEquals(
                 2,
-                net.minecraft.nbt.NbtIo.readCompressed(file, net.minecraft.nbt.NbtAccounter.unlimitedHeap())
-                        .getIntOr("format", 0));
+                Nbt.getIntOr(
+                        net.minecraft.nbt.NbtIo.readCompressed(file, net.minecraft.nbt.NbtAccounter.unlimitedHeap()),
+                        "format",
+                        0));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package dev.craftium.server;
 
 import com.google.gson.*;
+import dev.craftium.compat.Compat;
 import dev.craftium.core.BlockRuns;
 import dev.craftium.core.Point;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
@@ -24,7 +25,7 @@ final class AiWorld {
     /** The blocks in a box, as a palette plus run-length runs running x first, then z, then y upward from the minimum corner. */
     static String blocks(ServerPlayer player, Point a, Point b) {
         require(a, b);
-        var level = (ServerLevel) player.level();
+        var level = (ServerLevel) Compat.level(player);
         int x0 = Math.min(a.x(), b.x()),
                 x1 = Math.max(a.x(), b.x()),
                 y0 = Math.min(a.y(), b.y()),
@@ -65,7 +66,7 @@ final class AiWorld {
      */
     static String surface(ServerPlayer player, Point a, Point b, boolean floor) {
         require(a, b);
-        var level = (ServerLevel) player.level();
+        var level = (ServerLevel) Compat.level(player);
         int x0 = Math.min(a.x(), b.x()),
                 x1 = Math.max(a.x(), b.x()),
                 z0 = Math.min(a.z(), b.z()),
@@ -82,13 +83,13 @@ final class AiWorld {
         var at = new BlockPos.MutableBlockPos();
         for (int z = z0; z <= z1; z++)
             for (int x = x0; x <= x1; x++) {
-                if (!level.getWorldBorder().isWithinBounds(at.set(x, level.getMinY(), z))) {
+                if (!level.getWorldBorder().isWithinBounds(at.set(x, Compat.minY(level), z))) {
                     heights.add(Integer.MIN_VALUE);
                     blocks.add(-1);
                     continue;
                 }
                 int top = level.getHeight(type, x, z) - 1;
-                if (top < level.getMinY()) {
+                if (top < Compat.minY(level)) {
                     heights.add(Integer.MIN_VALUE);
                     blocks.add(-1);
                     continue;
@@ -202,7 +203,7 @@ final class AiWorld {
         if (total > MAX_VIEW_CELLS)
             throw new IllegalArgumentException("Region has " + total + " blocks; read at most "
                     + String.format(java.util.Locale.ROOT, "%,d", MAX_VIEW_CELLS) + " at a time");
-        var level = (ServerLevel) player.level();
+        var level = (ServerLevel) Compat.level(player);
         boolean only = view.equals("only"), withPreview = !view.equals("world");
         var palette = new Palette(!only);
         int[] ids = new int[(int) total];
@@ -478,7 +479,7 @@ final class AiWorld {
     /** Fills {@code ids} with the world's blocks in the box, chunk by chunk, the world border and height limits reading as outside the world. */
     private static void fillFromWorld(
             ServerLevel level, Palette palette, int[] ids, int x0, int y0, int z0, int x1, int y1, int z1) {
-        int sx = x1 - x0 + 1, sz = z1 - z0 + 1, minY = level.getMinY(), maxY = minY + level.getHeight();
+        int sx = x1 - x0 + 1, sz = z1 - z0 + 1, minY = Compat.minY(level), maxY = minY + level.getHeight();
         var at = new BlockPos.MutableBlockPos();
         var border = level.getWorldBorder();
         var inside =
@@ -521,7 +522,7 @@ final class AiWorld {
 
     /** As above for these points, with the entries of {@code extra} added to the answer (what an AI session is told about its pinned selection). */
     static String selection(ServerPlayer player, java.util.Set<Point> points, JsonObject extra) {
-        var level = (ServerLevel) player.level();
+        var level = (ServerLevel) Compat.level(player);
         JsonObject out;
         if (points.isEmpty()) out = dev.craftium.core.SelectionReport.describe(points, null, 0, null);
         else {
@@ -556,7 +557,7 @@ final class AiWorld {
 
         @Override
         public String at(int x, int y, int z) {
-            if (y < level.getMinY() || y >= level.getMinY() + level.getHeight()) return BlockRuns.OUTSIDE;
+            if (y < Compat.minY(level) || y >= Compat.minY(level) + level.getHeight()) return BlockRuns.OUTSIDE;
             int cx = x >> 4, cz = z >> 4;
             long key = ((long) cx << 32)
                     | (cz & 0xffffffffL); // our own key: ChunkPos's differs between Minecraft versions

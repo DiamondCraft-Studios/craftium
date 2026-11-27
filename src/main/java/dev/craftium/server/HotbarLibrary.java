@@ -1,5 +1,7 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.Options;
 import java.nio.file.*;
 import java.util.*;
@@ -12,7 +14,7 @@ final class HotbarLibrary {
     private HotbarLibrary() {}
 
     static String cycle(ServerPlayer player, Session session, Options o, int direction) {
-        Path directory = player.level()
+        Path directory = Compat.level(player)
                 .getServer()
                 .getWorldPath(LevelResource.ROOT)
                 .resolve("craftium/hotbars")
@@ -55,7 +57,7 @@ final class HotbarLibrary {
             throw new IllegalArgumentException("Choose a plain hotbar name");
         Path
                 directory =
-                        player.level()
+                        Compat.level(player)
                                 .getServer()
                                 .getWorldPath(LevelResource.ROOT)
                                 .resolve("craftium/hotbars")
@@ -76,8 +78,7 @@ final class HotbarLibrary {
                 return "Saved hotbar " + o.name;
             }
             if (action.equals("hotbar_load")) {
-                var slots = NbtIo.readCompressed(file, NbtAccounter.create(1_048_576))
-                        .getListOrEmpty("slots");
+                var slots = Nbt.getListOrEmpty(NbtIo.readCompressed(file, NbtAccounter.create(1_048_576)), "slots");
                 if (slots.size() != 9) throw new IllegalArgumentException("Hotbar must contain nine slots");
                 var stacks = new ArrayList<ItemStack>();
                 for (int i = 0; i < 9; i++)

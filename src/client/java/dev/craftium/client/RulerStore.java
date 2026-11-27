@@ -4,9 +4,9 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import dev.craftium.Craftium;
 import dev.craftium.core.Point;
+import dev.craftium.platform.Platform;
 import java.nio.file.*;
 import java.util.*;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.storage.LevelResource;
 
@@ -16,7 +16,7 @@ import net.minecraft.world.level.storage.LevelResource;
  * They are saved as soon as they change.
  */
 final class RulerStore {
-    private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("craftium-rulers.json");
+    private static final Path FILE = Platform.configDir().resolve("craftium-rulers.json");
     /** One ruler as saved: the blocks at its ends, the second being null while it is only started. */
     private record Saved(int[] a, int[] b, String mode) {}
 

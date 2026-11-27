@@ -3,6 +3,7 @@ package dev.craftium.client;
 import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.Gfx;
 import dev.craftium.client.compat.Overlay;
+import dev.craftium.compat.Compat;
 import dev.craftium.core.*;
 import java.util.*;
 import net.minecraft.client.Minecraft;
@@ -196,7 +197,7 @@ public final class BuilderMode {
         if (steps == 0) return enabled;
         wheel -= steps;
         if (!enabled) {
-            int slot = mc.player.getInventory().getSelectedSlot();
+            int slot = Compat.selectedSlot(mc.player.getInventory());
             if (slot == 8 && steps < 0 || slot == 0 && steps > 0) {
                 enable();
                 return true;
@@ -214,11 +215,11 @@ public final class BuilderMode {
         }
         if (first == null || second == null) {
             enabled = false;
-            mc.player.getInventory().setSelectedSlot(steps > 0 ? 8 : 0);
+            Compat.selectSlot(mc.player.getInventory(), steps > 0 ? 8 : 0);
             clear();
             return true;
         }
-        if (mc.hasControlDown() && !mc.hasShiftDown()) {
+        if (ClientCompat.ctrlDown() && !ClientCompat.shiftDown()) {
             magicMode = !magicMode;
             ClientState.notify(
                     "Middle click: " + (magicMode ? "Magic select (add, Ctrl subtracts)" : "Extend the box"));
@@ -226,7 +227,7 @@ public final class BuilderMode {
         } // with a selection, Ctrl + wheel switches what the middle button does
         if (ClientState.options.builderTool == Options.BuilderTool.ERASE)
             return true; // erasing removes the selection where it is: there is nothing to move
-        nudge(nudgeDirection(), steps, mc.hasControlDown());
+        nudge(nudgeDirection(), steps, ClientCompat.ctrlDown());
         return true;
     }
     /** What the middle button does to a selection that is already made: magic select more blocks (Ctrl takes them away) or, when false, grow the box to the block. A magic selection starts in magic mode, a box in extend mode. */
@@ -265,7 +266,7 @@ public final class BuilderMode {
         var look = Minecraft.getInstance().player.getLookAngle();
         boolean x = down(GLFW.GLFW_KEY_X), y = down(GLFW.GLFW_KEY_Y), z = down(GLFW.GLFW_KEY_Z);
         if (!x && !y && !z) {
-            Direction d = Direction.getApproximateNearest(look.x, look.y, look.z);
+            Direction d = Compat.nearest(look.x, look.y, look.z);
             return new Point(d.getStepX(), d.getStepY(), d.getStepZ());
         }
         return new Point(x ? look.x >= 0 ? 1 : -1 : 0, y ? look.y >= 0 ? 1 : -1 : 0, z ? look.z >= 0 ? 1 : -1 : 0);
@@ -281,12 +282,11 @@ public final class BuilderMode {
         if (down(GLFW.GLFW_KEY_X)) return look.x >= 0 ? Direction.EAST : Direction.WEST;
         if (down(GLFW.GLFW_KEY_Y)) return look.y >= 0 ? Direction.UP : Direction.DOWN;
         if (down(GLFW.GLFW_KEY_Z)) return look.z >= 0 ? Direction.SOUTH : Direction.NORTH;
-        return Direction.getApproximateNearest(look.x, look.y, look.z);
+        return Compat.nearest(look.x, look.y, look.z);
     }
 
     private static boolean down(int key) {
-        return com.mojang.blaze3d.platform.InputConstants.isKeyDown(
-                Minecraft.getInstance().getWindow(), key);
+        return ClientCompat.keyDown(key);
     }
 
     public static boolean key(int key, int action, boolean control) {
@@ -297,7 +297,8 @@ public final class BuilderMode {
             return true;
         }
         if (!enabled) return false;
-        if (CraftiumClient.contextKey.matches(new net.minecraft.client.input.KeyEvent(key, 0, 0))) return true;
+        if (ClientCompat.matches(CraftiumClient.contextKey, new net.minecraft.client.input.KeyEvent(key, 0, 0)))
+            return true;
         if (CraftiumClient.held(CraftiumClient.contextKey)
                 && key >= GLFW.GLFW_KEY_1
                 && key
@@ -434,7 +435,7 @@ public final class BuilderMode {
             if (hit != null && button != 2) {
                 boolean prior = o.invert, smart = o.smartExtrude;
                 o.invert = button == 0;
-                o.smartExtrude = mc.hasControlDown();
+                o.smartExtrude = ClientCompat.ctrlDown();
                 CraftiumClient.send(
                         "builder_extrude", CraftiumClient.point(hit.getBlockPos()), CraftiumClient.normal(hit));
                 o.invert = prior;
@@ -536,7 +537,7 @@ public final class BuilderMode {
             magicSelect(
                     hit.getBlockPos(),
                     true,
-                    mc.hasControlDown()); // magic mode: the middle button goes on adding what it finds, and with
+                    ClientCompat.ctrlDown()); // magic mode: the middle button goes on adding what it finds, and with
         // Ctrl takes it away
         else {
             Point low = min(), high = max();
@@ -621,7 +622,7 @@ public final class BuilderMode {
                 != ClientState.options
                         .builderSwapButtons; // dragButton is the logical button; the one to watch may be the other one
         boolean held = GLFW.glfwGetMouseButton(
-                        mc.getWindow().handle(),
+                        ClientCompat.windowHandle(),
                         physicalLeft ? GLFW.GLFW_MOUSE_BUTTON_LEFT : GLFW.GLFW_MOUSE_BUTTON_RIGHT)
                 == GLFW.GLFW_PRESS;
         if (!held || !active() || heldFirst != null || magicStarted || first == null) {

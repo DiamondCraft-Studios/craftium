@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFW;
@@ -23,12 +24,13 @@ final class SelectingIndicator {
             ClientState.notify("Selected large area...");
             if (frames().length > 0)
                 GLFW.glfwSetCursor(
-                        mc.getWindow().handle(), cursors[(int) (System.currentTimeMillis() / FRAME_MILLIS % FRAMES)]);
+                        ClientCompat.windowHandle(),
+                        cursors[(int) (System.currentTimeMillis() / FRAME_MILLIS % FRAMES)]);
             shown = true;
         } else if (shown) {
             shown = false;
             ClientState.noticeUntil = 0; // the toast would otherwise outlast the work
-            GLFW.glfwSetCursor(mc.getWindow().handle(), 0);
+            GLFW.glfwSetCursor(ClientCompat.windowHandle(), 0);
         }
     }
 

@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.*;
 import java.util.*;
 import net.minecraft.world.level.block.state.BlockState;
@@ -38,7 +39,7 @@ final class BuildPlanner {
             Session.Edit onto,
             java.util.function.Function<String, java.util.Set<Point>> named) {
         var spec = BuildSpec.parse(o.buildSpec);
-        var level = (net.minecraft.server.level.ServerLevel) player.level();
+        var level = (net.minecraft.server.level.ServerLevel) Compat.level(player);
         var plan = new EditPlanner(level, ai, o);
         ai.specWarnings = List.of();
         if (onto != null) for (var change : onto.changes()) plan.changes.put(change.pos(), change);
