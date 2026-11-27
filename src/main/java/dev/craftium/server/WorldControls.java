@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.Options;
 import dev.craftium.net.Packets;
 import java.nio.file.*;
@@ -18,8 +19,8 @@ final class WorldControls {
                         "world_trample_farmland",
                         "world_block_drops",
                         "world_player_invulnerability")
-                .contains(action)) return WorldRules.set(player.level(), action, o.worldToggle);
-        var server = player.level().getServer();
+                .contains(action)) return WorldRules.set(Compat.level(player), action, o.worldToggle);
+        var server = Compat.level(player).getServer();
         String command =
                 switch (action) {
                     case "world_time" -> "time set " + o.worldTime;
@@ -46,7 +47,7 @@ final class WorldControls {
         try {
             if (action.equals("view_save")) {
                 var view = new View(
-                        dev.craftium.compat.Compat.keyName(player.level().dimension()),
+                        dev.craftium.compat.Compat.keyName(Compat.level(player).dimension()),
                         player.getX(),
                         player.getY(),
                         player.getZ(),

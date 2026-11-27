@@ -1,5 +1,7 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.*;
 import dev.craftium.runtime.ServerPlatform;
 import java.util.*;
@@ -14,10 +16,11 @@ final class EditProtection {
         for (var c : edit.entities())
             for (var tag : new net.minecraft.nbt.CompoundTag[] {c.before(), c.after()})
                 if (tag != null) {
-                    var p = tag.getListOrEmpty("Pos");
+                    var p = Nbt.getListOrEmpty(tag, "Pos");
                     result.add(new Point(
-                            (int) Math.floor(p.getDoubleOr(0, 0)), (int) Math.floor(p.getDoubleOr(1, 0)), (int)
-                                    Math.floor(p.getDoubleOr(2, 0))));
+                            (int) Math.floor(Nbt.getDoubleOr(p, 0, 0)),
+                            (int) Math.floor(Nbt.getDoubleOr(p, 1, 0)),
+                            (int) Math.floor(Nbt.getDoubleOr(p, 2, 0))));
                 }
         for (var c : edit.annotations())
             for (var a : new Annotation[] {c.before(), c.after()})
@@ -33,7 +36,7 @@ final class EditProtection {
         if (!ServerPlatform.requiresProtection()) return;
         ServerPlatform.checkEdit(
                 player,
-                player.level(),
+                Compat.level(player),
                 points(edit),
                 edit.biomes().stream().map(Session.BiomeChange::cell).toList(),
                 edit.entities().stream().map(Session.EntityChange::id).toList());

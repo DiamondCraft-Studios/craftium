@@ -1,5 +1,7 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.*;
 import java.util.*;
 import net.minecraft.nbt.*;
@@ -32,7 +34,7 @@ final class EntityEdits {
     }
 
     static Session.Edit plan(String action, ServerPlayer player, Session s, Options o, Point at) {
-        var level = player.level();
+        var level = Compat.level(player);
         try {
             if (action.equals("entity_group")
                     || action.equals("entity_ungroup")
@@ -72,7 +74,7 @@ final class EntityEdits {
                 case "entity_delete" -> after = null;
                 case "entity_update" -> {
                     after.merge(TagParser.parseCompoundFully(o.entityNbt));
-                    after.putString("id", before.getStringOr("id", ""));
+                    after.putString("id", Nbt.getStringOr(before, "id", ""));
                     after.put("UUID", before.get("UUID"));
                     after.remove("Passengers");
                 }
@@ -125,10 +127,10 @@ final class EntityEdits {
                             .parse(NbtOps.INSTANCE, after.get("transformation"))
                             .getOrThrow(
                                     error -> new IllegalArgumentException("Invalid display transformation: " + error));
-                var coordinates = after.getListOrEmpty("Pos");
-                double x = coordinates.getDoubleOr(0, Double.NaN),
-                        y = coordinates.getDoubleOr(1, Double.NaN),
-                        z = coordinates.getDoubleOr(2, Double.NaN);
+                var coordinates = Nbt.getListOrEmpty(after, "Pos");
+                double x = Nbt.getDoubleOr(coordinates, 0, Double.NaN),
+                        y = Nbt.getDoubleOr(coordinates, 1, Double.NaN),
+                        z = Nbt.getDoubleOr(coordinates, 2, Double.NaN);
                 if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z))
                     throw new IllegalArgumentException("Entity coordinates must be finite");
                 var position = net.minecraft.core.BlockPos.containing(x, y, z);
@@ -195,7 +197,7 @@ final class EntityEdits {
     private static Session.Edit group(String action, ServerPlayer player, Session s, Options o, Point at) {
         if (o.entityGroup.isBlank()) throw new IllegalArgumentException("Enter an entity group name");
         String group = "craftium:" + o.entityGroup;
-        var level = player.level();
+        var level = Compat.level(player);
         AABB bounds = s.selection.size() > 0
                 ? new AABB(
                         net.minecraft.world.phys.Vec3.atLowerCornerOf(EditPlanner.pos(s.selection.min())),
@@ -262,7 +264,7 @@ final class EntityEdits {
                                             || !net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
                                                     .getKey(current.getType())
                                                     .toString()
-                                                    .equals(expected.getStringOr("id", ""))))) continue;
+                                                    .equals(Nbt.getStringOr(expected, "id", ""))))) continue;
             Entity replacement = desired == null ? null : dev.craftium.compat.Compat.loadEntity(desired.copy(), level);
             if (desired != null && replacement == null) throw new IllegalArgumentException("Entity restoration failed");
             if (replacement != null

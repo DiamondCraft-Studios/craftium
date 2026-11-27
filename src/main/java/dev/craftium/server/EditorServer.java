@@ -1,5 +1,7 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.*;
 import dev.craftium.net.Packets;
 import dev.craftium.runtime.ServerPlatform;
@@ -168,11 +170,11 @@ public final class EditorServer {
                     c.cell().z() * 4,
                     c.cell().x() * 4 + 3,
                     c.cell().z() * 4 + 3);
-        jobLease = area.lease(player.level());
+        jobLease = area.lease(Compat.level(player));
         s.busy = true;
         job = new Job(
                 player.getUUID(),
-                player.level(),
+                Compat.level(player),
                 s,
                 edit,
                 backwards,
@@ -217,7 +219,7 @@ public final class EditorServer {
         var s = SESSIONS.get(player.getUUID());
         if (s != null) restoreMode(player, s);
         disconnect(player.getUUID());
-        refreshShared(player.level().getServer());
+        refreshShared(Compat.level(player).getServer());
     }
 
     public static void disconnect(UUID id) {
@@ -335,10 +337,10 @@ public final class EditorServer {
         if (o == null || !o.placementCapabilities()) return null;
         // The neighbours too: placing a door adds its other half, and a chest or bed changes its partner.
         var near = new LinkedHashMap<BlockPos, BlockSnapshot>();
-        near.put(at.immutable(), BlockSnapshot.capture(player.level(), at));
+        near.put(at.immutable(), BlockSnapshot.capture(Compat.level(player), at));
         for (var d : net.minecraft.core.Direction.values()) {
             var n = at.relative(d);
-            near.put(n, BlockSnapshot.capture(player.level(), n));
+            near.put(n, BlockSnapshot.capture(Compat.level(player), n));
         }
         return near;
     }
@@ -352,7 +354,7 @@ public final class EditorServer {
         var o = capabilities(player);
         if (s == null || o == null) return;
         try {
-            var level = player.level();
+            var level = Compat.level(player);
             Point p = EditPlanner.point(at);
             var near = (Map<BlockPos, BlockSnapshot>) snapshot;
             var before = near.get(at);
@@ -443,13 +445,13 @@ public final class EditorServer {
                     || !inWorld; // a click in the world is the player building by hand; the editor's own tools always
             // are recorded
             s.requestStroke = r.action().equals("use") || inWorld ? r.strokeId() : 0;
-            if (s.dimension != null && !s.dimension.equals(player.level().dimension())) {
+            if (s.dimension != null && !s.dimension.equals(Compat.level(player).dimension())) {
                 if (s.busy) throw new IllegalArgumentException("Wait for the current operation to finish");
                 HistoryStore.save(s);
                 s = new Session();
                 SESSIONS.put(player.getUUID(), s);
             }
-            s.dimension = player.level().dimension();
+            s.dimension = Compat.level(player).dimension();
             HistoryStore.attach(player, s);
             BuildObjectStore.attach(player, s); // the BuildObjects of this dimension, shared with everyone there
             if (o.noClip && !s.noClip && player.isCreative()) {
@@ -651,7 +653,7 @@ public final class EditorServer {
                         if (entry != null) cells.addAll(s.saved.effective(entry));
                     }
                     var hierarchyBefore = s.saved.state();
-                    var plan = new EditPlanner(player.level(), s, o);
+                    var plan = new EditPlanner(Compat.level(player), s, o);
                     for (Point p : cells) plan.put(p, Blocks.AIR.defaultBlockState());
                     s.saved.deleteMany(ids, s.selection);
                     var edit = plan.finish("Delete BuildObject and blocks")
@@ -680,8 +682,8 @@ public final class EditorServer {
                     if (all.isEmpty()) throw new IllegalArgumentException("Nothing to trim: no blocks");
                     ChunkLease.planning(ChunkLease.area()
                             .points(all, 0, 0)
-                            .lease(player.level())); // the blocks may be far from every player
-                    var plan = new EditPlanner(player.level(), s, o);
+                            .lease(Compat.level(player))); // the blocks may be far from every player
+                    var plan = new EditPlanner(Compat.level(player), s, o);
                     var trimmed = new LinkedHashMap<Integer, List<Point>>();
                     int removed = 0;
                     for (int id : everything) {
@@ -751,9 +753,9 @@ public final class EditorServer {
                                 + " is already in the world");
                     ChunkLease.planning(ChunkLease.area()
                             .points(hidden, 0, 0)
-                            .lease(player.level())); // the blocks may be far from every player
-                    var plan = EditPlanner.forSelection(player.level(), s, o);
-                    var placed = ObjectMoves.placeHere(player.level(), s, plan, everything);
+                            .lease(Compat.level(player))); // the blocks may be far from every player
+                    var plan = EditPlanner.forSelection(Compat.level(player), s, o);
+                    var placed = ObjectMoves.placeHere(Compat.level(player), s, plan, everything);
                     var placeEdit = plan.finish("Place BuildObject");
                     if (placed == null || placeEdit.changes().isEmpty()) {
                         if (placed != null) placed.applied().undo(s);
@@ -982,7 +984,7 @@ public final class EditorServer {
                 return;
             }
             if (r.action().equals("palette_hotbar")) {
-                var plan = new EditPlanner(player.level(), s, o);
+                var plan = new EditPlanner(Compat.level(player), s, o);
                 var blocks = MaterialList.split(o.materials);
                 for (int i = 0; i < Math.min(9, blocks.size()); i++)
                     player.getInventory()
@@ -1056,23 +1058,23 @@ public final class EditorServer {
                                 > 256 * 256) throw new IllegalArgumentException("Move within 256 blocks of the target");
                 // A builder commit sends its box's corner as the target, and the box may be far from every player: its
                 // chunks are leased while it is planned.
-                if (!r.action().equals("builder_commit")) new EditPlanner(player.level(), s, o).validate(target);
+                if (!r.action().equals("builder_commit")) new EditPlanner(Compat.level(player), s, o).validate(target);
             }
             switch (r.action()) {
                 case "pick_block" -> {
                     if (target == null) throw new IllegalArgumentException("Point at a block first");
                     var pos = EditPlanner.pos(target);
-                    var state = player.level().getBlockState(pos);
-                    var stack = state.getCloneItemStack(player.level(), pos, true);
+                    var state = Compat.level(player).getBlockState(pos);
+                    var stack = state.getCloneItemStack(Compat.level(player), pos, true);
                     if (stack.isEmpty()) throw new IllegalArgumentException("This block has no item");
                     var properties = net.minecraft.world.item.component.BlockItemStateProperties.EMPTY;
                     for (var property : state.getProperties()) properties = properties.with(property, state);
                     stack.set(net.minecraft.core.component.DataComponents.BLOCK_STATE, properties);
-                    var entity = player.level().getBlockEntity(pos);
+                    var entity = Compat.level(player).getBlockEntity(pos);
                     if (entity != null) {
                         var out = net.minecraft.world.level.storage.TagValueOutput.createWithContext(
                                 net.minecraft.util.ProblemReporter.DISCARDING,
-                                player.level().registryAccess());
+                                Compat.level(player).registryAccess());
                         entity.saveCustomOnly(out);
                         entity.removeComponentsFromTag(out);
                         net.minecraft.world.item.BlockItem.setBlockEntityData(stack, entity.getType(), out);
@@ -1089,7 +1091,7 @@ public final class EditorServer {
                 }
                 case "colour_field" -> {
                     requireSelection(s);
-                    var plan = new EditPlanner(player.level(), s, o);
+                    var plan = new EditPlanner(Compat.level(player), s, o);
                     for (var entry : o.colourField) {
                         if (!s.selection.contains(entry.point()))
                             throw new IllegalArgumentException("Colour field points must be selected");
@@ -1119,13 +1121,13 @@ public final class EditorServer {
                     history(player, s, r.action().equals("history_undo_many"));
                 }
                 case "analyze" -> {
-                    var plan = new EditPlanner(player.level(), s, o);
+                    var plan = new EditPlanner(Compat.level(player), s, o);
                     String report = SelectionTransforms.analyze(plan);
                     ServerPlatform.send(player, new Packets.Report(report));
                     send(player, s, "Selection analyzed", false);
                 }
                 case "selection_transform" -> {
-                    var plan = EditPlanner.forSelection(player.level(), s, o);
+                    var plan = EditPlanner.forSelection(Compat.level(player), s, o);
                     var before = new ArrayList<>(s.selection.points());
                     // While transforms wait for confirmation, a new one works from the original blocks, not from the
                     // preview of the last.
@@ -1170,8 +1172,8 @@ public final class EditorServer {
                                         .isEmpty()) {
                             // The selection holds BuildObject blocks: they move with the world winning, so what they
                             // could not place is kept, not lost (see ObjectMove).
-                            var done =
-                                    ObjectMoves.transform(player.level(), s, plan, computed, objectsStart, heldStart);
+                            var done = ObjectMoves.transform(
+                                    Compat.level(player), s, plan, computed, objectsStart, heldStart);
                             result = ModelTransform.finish(computed, done.moved());
                             objectsAfter = done.applied().ownAfter();
                         } else {
@@ -1236,7 +1238,7 @@ public final class EditorServer {
                         "selection_smooth",
                         "selection_scale",
                         "selection_gizmo" -> {
-                    var plan = new EditPlanner(player.level(), s, o);
+                    var plan = new EditPlanner(Compat.level(player), s, o);
                     s.selection.combine(SelectionTransforms.apply(r.action(), plan), Selection.Mode.REPLACE);
                     send(player, s, "Selection updated: " + s.selection.size() + " blocks", false);
                 }
@@ -1290,7 +1292,7 @@ public final class EditorServer {
                         "selection_csv" -> {
                     if (r.action().equals("blueprint_op") && !dev.craftium.compat.Compat.isGamemaster(player))
                         throw new IllegalArgumentException("Only operators can change the server's blueprint library");
-                    var plan = new EditPlanner(player.level(), s, o);
+                    var plan = new EditPlanner(Compat.level(player), s, o);
                     String result = BlueprintLibrary.act(r.action(), plan);
                     if (Set.of(
                                     "blueprint_save",
@@ -1302,16 +1304,16 @@ public final class EditorServer {
                     send(player, s, result, false);
                 }
                 case "structure_preview", "structure_export_file", "structure_import_file", "blueprint_save_source" -> {
-                    var plan = new EditPlanner(player.level(), s, o);
+                    var plan = new EditPlanner(Compat.level(player), s, o);
                     String result = StructureLibrary.act(r.action(), plan, player);
                     if (!result.isEmpty()) send(player, s, result, false);
                 }
                 case "entity_copy", "entity_cut" -> {
-                    var entity = player.level().getEntity(UUID.fromString(o.entityUuid));
+                    var entity = Compat.level(player).getEntity(UUID.fromString(o.entityUuid));
                     if (entity == null || !EntityEdits.editable(entity) || entity.distanceToSqr(player) > 256 * 256)
                         throw new IllegalArgumentException("Select a nearby display or marker");
-                    new EditPlanner(player.level(), s, o).validate(EditPlanner.point(entity.blockPosition()));
-                    var before = EntityEdits.snapshot(entity, player.level());
+                    new EditPlanner(Compat.level(player), s, o).validate(EditPlanner.point(entity.blockPosition()));
+                    var before = EntityEdits.snapshot(entity, Compat.level(player));
                     var saved = before.copy();
                     ClipboardEntities.offset(saved, -entity.getBlockX(), -entity.getBlockY(), -entity.getBlockZ());
                     if (saved.toString().length() > 1_000_000)
@@ -1338,11 +1340,11 @@ public final class EditorServer {
                 case "entity_select" -> {
                     if (target == null) throw new IllegalArgumentException("Point near a display or marker");
                     s.selectedEntity =
-                            EntityEdits.nearest(player.level(), target).getUUID();
+                            EntityEdits.nearest(Compat.level(player), target).getUUID();
                     send(player, s, "Entity selected", false);
                 }
                 case "entity_select_uuid" -> {
-                    var entity = player.level().getEntity(UUID.fromString(o.entityUuid));
+                    var entity = Compat.level(player).getEntity(UUID.fromString(o.entityUuid));
                     if (entity == null || !EntityEdits.editable(entity) || entity.distanceToSqr(player) > 256 * 256)
                         throw new IllegalArgumentException("Select a nearby display or marker");
                     s.selectedEntity = entity.getUUID();
@@ -1371,20 +1373,20 @@ public final class EditorServer {
                 }
                 case "annotation_create", "annotation_update", "annotation_delete", "annotation_clear" -> {
                     if (target == null) target = o.position1;
-                    start(player, s, AnnotationEdits.plan(r.action(), player.level(), o, target));
+                    start(player, s, AnnotationEdits.plan(r.action(), Compat.level(player), o, target));
                 }
                 case "select_box", "select_box_adjust" -> {
                     // Adjusting a box starts again from the selection as it was before that box was made.
                     if (r.action().equals("select_box_adjust") && s.selectionBefore != null)
                         s.selection.restore(s.selectionBefore);
-                    var plan = new EditPlanner(player.level(), s, o);
+                    var plan = new EditPlanner(Compat.level(player), s, o);
                     var points = Selection.box(o.position1, o.position2);
                     for (Point p : points) plan.validate(p);
                     s.selection.combine(masked(plan, o, points), o.mode);
                     send(player, s, "Selected " + s.selection.size() + " blocks", false);
                 }
                 case "lasso_select" -> {
-                    var plan = new EditPlanner(player.level(), s, o);
+                    var plan = new EditPlanner(Compat.level(player), s, o);
                     for (Point p : o.selectionPoints) {
                         plan.validate(p);
                         if (p.distanceSquared(new Point((int) player.getX(), (int) player.getY(), (int) player.getZ()))
@@ -1433,7 +1435,7 @@ public final class EditorServer {
                                 throw new IllegalArgumentException("Selection exceeds limit");
                             next = step;
                         }
-                    var plan = new EditPlanner(player.level(), s, o);
+                    var plan = new EditPlanner(Compat.level(player), s, o);
                     for (Point p : next) plan.validate(p);
                     s.selection.combine(next, Selection.Mode.REPLACE);
                     send(player, s, "Selection updated: " + s.selection.size() + " blocks", false);
@@ -1453,7 +1455,7 @@ public final class EditorServer {
                         "trigger_updates",
                         "hollow",
                         "fill_gaps" -> {
-                    var plan = EditPlanner.forSelection(player.level(), s, o);
+                    var plan = EditPlanner.forSelection(Compat.level(player), s, o);
                     if (r.action().equals("autoshade")) Autoshade.apply(plan, player);
                     else SelectionOperations.apply(r.action(), plan);
                     start(player, s, plan.finish(r.action().replace('_', ' ')));
@@ -1493,8 +1495,8 @@ public final class EditorServer {
                                 o.offsetX,
                                 o.offsetZ); // the dormant blocks of a BuildObject go with it, so where they land has to
                     // be loaded too
-                    ChunkLease.planning(reach.lease(player.level()));
-                    var plan = EditPlanner.forSelection(player.level(), s, o);
+                    ChunkLease.planning(reach.lease(Compat.level(player)));
+                    var plan = EditPlanner.forSelection(Compat.level(player), s, o);
                     if (r.action().equals("move") && ObjectMoves.involves(s)) {
                         // A BuildObject moves with the world winning: its blocks do not overwrite solid blocks, and
                         // what it could not place is kept, not lost (see ObjectMove).
@@ -1502,7 +1504,7 @@ public final class EditorServer {
                         var chosen = new LinkedHashSet<Point>(s.selection.points());
                         for (Point p : chosen) plan.validate(p);
                         var applied = ObjectMoves.apply(
-                                player.level(),
+                                Compat.level(player),
                                 s,
                                 plan,
                                 (ordered, world, solid) -> ObjectMove.shift(
@@ -1533,7 +1535,7 @@ public final class EditorServer {
                     var source = new LinkedHashMap<Point, BlockSnapshot>();
                     for (Point p : s.selection.points()) {
                         plan.validate(p);
-                        source.put(p, BlockSnapshot.capture(player.level(), EditPlanner.pos(p)));
+                        source.put(p, BlockSnapshot.capture(Compat.level(player), EditPlanner.pos(p)));
                     }
                     if (r.action().equals("move"))
                         for (Point p : source.keySet()) plan.put(p, Blocks.AIR.defaultBlockState());
@@ -1603,7 +1605,7 @@ public final class EditorServer {
                 }
                 case "fill", "delete" -> {
                     requireSelection(s);
-                    var plan = EditPlanner.forSelection(player.level(), s, o);
+                    var plan = EditPlanner.forSelection(Compat.level(player), s, o);
                     boolean deleting = r.action().equals("delete");
                     for (Point p : s.selection.points())
                         plan.put(p, deleting ? Blocks.AIR.defaultBlockState() : plan.material);
@@ -1636,7 +1638,7 @@ public final class EditorServer {
                         throw new IllegalArgumentException("Point at a block to place the clipboard");
                     if (s.clipboard.isEmpty() && s.clipboardEntities.isEmpty())
                         throw new IllegalArgumentException("Copy a selection first");
-                    var plan = EditPlanner.forSelection(player.level(), s, o);
+                    var plan = EditPlanner.forSelection(Compat.level(player), s, o);
                     Point origin = inPlace
                             ? s.clipboardOrigin
                             : r.action().equals("paste") ? target.add(normal.x(), normal.y(), normal.z()) : target;
@@ -1709,7 +1711,7 @@ public final class EditorServer {
                             ObjectMoves.Transformed settled;
                             try {
                                 settled = ObjectMoves.settlePaste(
-                                        player.level(), s, plan, placedBlocks, ownBeforePaste, heldBeforePaste);
+                                        Compat.level(player), s, plan, placedBlocks, ownBeforePaste, heldBeforePaste);
                             } catch (RuntimeException ex) {
                                 s.saved.restore(hierarchyBefore, s.selection);
                                 s.saved.setPoints(ownBeforePaste);
@@ -1753,7 +1755,7 @@ public final class EditorServer {
                 }
                 case "use", "builder_place", "builder_break" -> {
                     if (target == null) throw new IllegalArgumentException("Point at a block within reach");
-                    var plan = new EditPlanner(player.level(), s, o);
+                    var plan = new EditPlanner(Compat.level(player), s, o);
                     // A click in the world is not a Builder tool, but it follows the same rule: the tool masks apply
                     // only where "Use in Builder tools" is on.
                     if (!r.action().equals("use")) plan.builder = true;
@@ -1786,7 +1788,7 @@ public final class EditorServer {
                     // Dragging a block into the world: the Magic Wand, always comparing by block, then a replace with
                     // the active block.
                     if (target == null) throw new IllegalArgumentException("Drop the block onto a block within reach");
-                    var plan = new EditPlanner(player.level(), s, o);
+                    var plan = new EditPlanner(Compat.level(player), s, o);
                     if (s.selection.contains(target)) { // dropped on the selection: the block fills all of it
                         for (Point p : s.selection.points()) plan.put(p, plan.material);
                         start(player, s, plan.finish("Fill selection"));
@@ -1803,7 +1805,7 @@ public final class EditorServer {
                 when replace.startsWith(SelectionOperations.REPLACE_BLOCK) -> {
                     // "replace_block:<from>><to>": every block of one kind in the selection becomes another, from the
                     // Selection window
-                    var plan = EditPlanner.forSelection(player.level(), s, o);
+                    var plan = EditPlanner.forSelection(Compat.level(player), s, o);
                     String name = SelectionOperations.replaceBlock(plan, replace);
                     start(player, s, plan.finish(name));
                 }
@@ -1811,7 +1813,7 @@ public final class EditorServer {
                 when change.startsWith(SelectionOperations.CHANGE_MATERIAL) -> {
                     // "change_material:<from>><to>": the stairs, slabs, walls and other blocks of one material in the
                     // selection take another material's
-                    var plan = EditPlanner.forSelection(player.level(), s, o);
+                    var plan = EditPlanner.forSelection(Compat.level(player), s, o);
                     String name = SelectionOperations.changeMaterial(plan, change);
                     start(player, s, plan.finish(name));
                 }
@@ -1869,7 +1871,7 @@ public final class EditorServer {
                                 o,
                                 target,
                                 normal,
-                                new EditPlanner(player.level(), s, o),
+                                new EditPlanner(Compat.level(player), s, o),
                                 true,
                                 tool.settings(o.toolSettings)));
                 if (edit != null) EditGate.checkLimit(edit, EditGate.limit(o));
@@ -1924,9 +1926,9 @@ public final class EditorServer {
         int bytes = 0;
         for (Point p : s.selection.points()) {
             BlockPos at = EditPlanner.pos(p);
-            if (!player.level().hasChunk(p.x() >> 4, p.z() >> 4))
+            if (!Compat.level(player).hasChunk(p.x() >> 4, p.z() >> 4))
                 throw new IllegalArgumentException("Selection reaches unloaded chunks");
-            var snapshot = BlockSnapshot.capture(player.level(), at);
+            var snapshot = BlockSnapshot.capture(Compat.level(player), at);
             bytes += 128
                     + (snapshot.data() == null ? 0 : snapshot.data().toString().length() * 2);
             if (bytes > Selection.CLIPBOARD_BYTES)
@@ -1935,7 +1937,7 @@ public final class EditorServer {
             next.put(p.subtract(min), snapshot);
         }
         if (withHidden) {
-            var plan = EditPlanner.forSelection(player.level(), s, o);
+            var plan = EditPlanner.forSelection(Compat.level(player), s, o);
             for (var e : ObjectMoves.shownHidden(s).entrySet()) {
                 var key = e.getKey().subtract(min);
                 if (next.containsKey(key))
@@ -1968,7 +1970,7 @@ public final class EditorServer {
         s.clipboardOrigin = min;
         s.clipboardDirty = true;
         if (cut) {
-            var plan = EditPlanner.forSelection(player.level(), s, o);
+            var plan = EditPlanner.forSelection(Compat.level(player), s, o);
             for (Point p : s.selection.points()) plan.put(p, Blocks.AIR.defaultBlockState());
             var edit = plan.finish("Cut selection");
             start(
@@ -2019,10 +2021,10 @@ public final class EditorServer {
         if (!rotate && axis == 1)
             for (var root : s.clipboardEntities)
                 ClipboardEntities.walk(root, tag -> {
-                    var old = tag.getListOrEmpty("Rotation");
+                    var old = Nbt.getListOrEmpty(tag, "Rotation");
                     var rotation = new net.minecraft.nbt.ListTag();
-                    rotation.add(net.minecraft.nbt.FloatTag.valueOf(old.getFloatOr(0, 0)));
-                    rotation.add(net.minecraft.nbt.FloatTag.valueOf(-old.getFloatOr(1, 0)));
+                    rotation.add(net.minecraft.nbt.FloatTag.valueOf(Nbt.getFloatOr(old, 0, 0)));
+                    rotation.add(net.minecraft.nbt.FloatTag.valueOf(-Nbt.getFloatOr(old, 1, 0)));
                     tag.put("Rotation", rotation);
                 });
         s.clipboardDirty = true;
@@ -2058,7 +2060,7 @@ public final class EditorServer {
             allowed = false;
         }
         if (!allowed) return List.of();
-        var server = viewer.level().getServer();
+        var server = Compat.level(viewer).getServer();
         var all = new ArrayList<SharedPreviews.Entry>();
         for (var entry : AI_SESSIONS.entrySet()) {
             var ai = entry.getValue();
@@ -2067,12 +2069,12 @@ public final class EditorServer {
             all.add(new SharedPreviews.Entry(
                     entry.getKey().owner(),
                     owner == null ? "" : owner.getName().getString() + (ai.label.isEmpty() ? "" : " · " + ai.label),
-                    owner == null ? null : owner.level(),
+                    owner == null ? null : Compat.level(owner),
                     owner != null,
                     aiData(ai),
                     ai.previewId));
         }
-        return SharedPreviews.select(viewer.getUUID(), viewer.level(), all);
+        return SharedPreviews.select(viewer.getUUID(), Compat.level(viewer), all);
     }
 
     /** What to put in this player's status: the other players' AI previews if they differ from what was last sent, else null (unchanged). */
@@ -2193,7 +2195,7 @@ public final class EditorServer {
         Session previous = null;
         if (ai != null
                 && ai.dimension != null
-                && !ai.dimension.equals(player.level().dimension())) {
+                && !ai.dimension.equals(Compat.level(player).dimension())) {
             if (ai.busy) throw new IllegalArgumentException("Wait for the current AI build to finish");
             previous = ai;
             ai = null;
@@ -2208,7 +2210,7 @@ public final class EditorServer {
             ai.ai = true;
             ai.aiOwner = player.getUUID();
             ai.aiId = key.id();
-            ai.dimension = player.level().dimension();
+            ai.dimension = Compat.level(player).dimension();
             ai.createdAt = now;
             ai.lastActive = now;
             if (previous != null) {
@@ -2405,7 +2407,7 @@ public final class EditorServer {
         try {
             aiActionNow(player, action, o);
         } finally {
-            refreshShared(player.level().getServer());
+            refreshShared(Compat.level(player).getServer());
         } // a preview made, refused, applied or discarded changes what other players are shown
     }
     /** Stopping, resuming, renaming and forgetting an AI session: the player's controls over it, which the AI app cannot reach. */
@@ -2454,7 +2456,7 @@ public final class EditorServer {
             case "ai_session_teleport" -> {
                 var box = ai.region;
                 if (box == null) throw new IllegalArgumentException("That AI session has not placed anything yet");
-                if (!Objects.equals(ai.dimension, player.level().dimension()))
+                if (!Objects.equals(ai.dimension, Compat.level(player).dimension()))
                     throw new IllegalArgumentException("That AI session is building in another dimension");
                 // On top of the middle of its build, which is clear air whatever it is made of; a player who is not
                 // flying lands on it.
@@ -2542,7 +2544,7 @@ public final class EditorServer {
                 var box = AiSessions.around(
                         edit.changes().stream().map(Session.Change::pos).toList());
                 var conflicts = overlaps(
-                        player.level().getServer(),
+                        Compat.level(player).getServer(),
                         ai,
                         box); // against the other sessions, before this one's own box is set
                 ai.pendingEdit = edit;
@@ -2555,7 +2557,7 @@ public final class EditorServer {
                         player,
                         new Packets.AiReply(AiWorld.previewSummary(
                                 added,
-                                (net.minecraft.server.level.ServerLevel) player.level(),
+                                (net.minecraft.server.level.ServerLevel) Compat.level(player),
                                 edit,
                                 ai.specWarnings,
                                 takenBack,
@@ -2634,16 +2636,17 @@ public final class EditorServer {
         var cells = new ArrayList<>(ObjectMoves.outranked(s));
         cells.addAll(ObjectMoves.reconcileCells(s, stowedBefore));
         if (cells.isEmpty()) return false;
-        ChunkLease.planning(
-                ChunkLease.area().points(cells, 0, 0).lease(player.level())); // the cells may be far from every player
-        var plan = EditPlanner.forSelection(player.level(), s, o);
+        ChunkLease.planning(ChunkLease.area()
+                .points(cells, 0, 0)
+                .lease(Compat.level(player))); // the cells may be far from every player
+        var plan = EditPlanner.forSelection(Compat.level(player), s, o);
         var ownStart = s.saved.snapshot();
         var heldStart = s.saved.heldSnapshot();
         // first the eyes (a BuildObject that went under a closed one, or came out from under it), then the order
-        var eyes = ObjectMoves.reconcile(player.level(), s, plan, stowedBefore);
+        var eyes = ObjectMoves.reconcile(Compat.level(player), s, plan, stowedBefore);
         ObjectMoves.Transformed reordered;
         try {
-            reordered = ObjectMoves.reorder(player.level(), s, plan);
+            reordered = ObjectMoves.reorder(Compat.level(player), s, plan);
         } catch (RuntimeException ex) {
             if (eyes != null) eyes.undo(s);
             throw ex;
@@ -2958,9 +2961,9 @@ public final class EditorServer {
             if (!cells.isEmpty())
                 ChunkLease.planning(ChunkLease.area()
                         .points(cells, 0, 0)
-                        .lease(player.level())); // the blocks may be far from every player
-            var plan = EditPlanner.forSelection(player.level(), s, o);
-            applied = ObjectMoves.reconcile(player.level(), s, plan, stowedBefore);
+                        .lease(Compat.level(player))); // the blocks may be far from every player
+            var plan = EditPlanner.forSelection(Compat.level(player), s, o);
+            applied = ObjectMoves.reconcile(Compat.level(player), s, plan, stowedBefore);
             edit = plan.finish(step);
         } catch (RuntimeException ex) {
             s.saved.setStowed(ids, !stow);
@@ -3227,7 +3230,7 @@ public final class EditorServer {
             else release(j);
             if (!appliedAnnotations.isEmpty())
                 for (var other : server.getPlayerList().getPlayers())
-                    if (!other.getUUID().equals(j.owner) && other.level() == j.level) {
+                    if (!other.getUUID().equals(j.owner) && Compat.level(other) == j.level) {
                         var session = SESSIONS.get(other.getUUID());
                         if (session != null) send(other, session, "Annotations updated", false);
                     }
@@ -3419,10 +3422,10 @@ public final class EditorServer {
         if (!ServerPlatform.canSend(player)) return;
         String entityId = "", entityNbt = "";
         if (s.selectedEntity != null) {
-            var entity = player.level().getEntity(s.selectedEntity);
+            var entity = Compat.level(player).getEntity(s.selectedEntity);
             if (entity != null) {
                 entityId = s.selectedEntity.toString();
-                String nbt = EntityEdits.snapshot(entity, player.level()).toString();
+                String nbt = EntityEdits.snapshot(entity, Compat.level(player)).toString();
                 if (nbt.length() < 12000) entityNbt = nbt;
             }
         }
@@ -3481,7 +3484,7 @@ public final class EditorServer {
                 s.redo.size(),
                 entityId,
                 entityNbt,
-                AnnotationEdits.list(player.level()),
+                AnnotationEdits.list(Compat.level(player)),
                 s.selectionData,
                 s.clipboardData,
                 s.library,

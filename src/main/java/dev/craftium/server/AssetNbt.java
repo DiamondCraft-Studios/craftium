@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Nbt;
 import java.util.*;
 import net.minecraft.core.registries.*;
 import net.minecraft.nbt.*;
@@ -27,9 +28,9 @@ final class AssetNbt {
     }
 
     static CompoundTag structure(CompoundTag root, EditPlanner p) {
-        if (root.contains("palette") && root.getIntOr("DataVersion", current()) < current()) {
+        if (root.contains("palette") && Nbt.getIntOr(root, "DataVersion", current()) < current()) {
             var upgraded = net.minecraft.util.datafix.DataFixTypes.STRUCTURE.updateToCurrentVersion(
-                    p.level.getServer().getFixerUpper(), root, root.getIntOr("DataVersion", current()));
+                    p.level.getServer().getFixerUpper(), root, Nbt.getIntOr(root, "DataVersion", current()));
             upgraded.putInt("DataVersion", current());
             return upgraded;
         }
@@ -37,7 +38,7 @@ final class AssetNbt {
     }
 
     static net.minecraft.world.level.block.state.BlockState state(CompoundTag tag, EditPlanner p) {
-        String name = tag.getStringOr("Name", "");
+        String name = Nbt.getStringOr(tag, "Name", "");
         if (!BuiltInRegistries.BLOCK.containsKey(dev.craftium.compat.Compat.parse(name)))
             throw new IllegalArgumentException("Asset requires missing block " + name);
         return NbtUtils.readBlockState(p.level.registryAccess().lookupOrThrow(Registries.BLOCK), tag);
@@ -64,11 +65,11 @@ final class AssetNbt {
 
     /** The block of a file entry, or a placeholder for it when no mod provides it; block entity data it had rides along inside the placeholder. */
     static BlockSnapshot snapshot(CompoundTag tag, CompoundTag data, EditPlanner p) {
-        String name = tag.getStringOr("Name", "");
+        String name = Nbt.getStringOr(tag, "Name", "");
         if (MissingBlocks.exists(name)) return new BlockSnapshot(state(tag, p), data);
         var properties = new TreeMap<String, String>();
-        var source = tag.getCompoundOrEmpty("Properties");
-        for (String key : source.keySet()) properties.put(key, source.getStringOr(key, ""));
+        var source = Nbt.getCompoundOrEmpty(tag, "Properties");
+        for (String key : source.keySet()) properties.put(key, Nbt.getStringOr(source, key, ""));
         return missing(new dev.craftium.core.MissingBlockTable.Entry(name, properties), data);
     }
     /** Same for a block written as text, like {@code mod:stone[axis=y]}. */
@@ -99,7 +100,7 @@ final class AssetNbt {
     static dev.craftium.core.MissingBlockTable.Entry standsFor(BlockSnapshot s) {
         if (s.data() == null || !MissingBlocks.isMissing(s.state())) return null;
         var table = MissingBlocks.table();
-        return table == null ? null : table.get(s.data().getIntOr(MissingBlockRewrite.KEY, -1));
+        return table == null ? null : table.get(Nbt.getIntOr(s.data(), MissingBlockRewrite.KEY, -1));
     }
     /** What identifies the block in a file palette: equal for equal blocks, so one palette entry serves them all. */
     static Object paletteKey(BlockSnapshot s) {
@@ -134,7 +135,7 @@ final class AssetNbt {
 
     static CompoundTag blockEntity(CompoundTag source, int version, EditPlanner p) {
         var tag = source.getCompound("Data").orElse(source).copy();
-        String id = source.getStringOr("Id", tag.getStringOr("id", ""));
+        String id = Nbt.getStringOr(source, "Id", Nbt.getStringOr(tag, "id", ""));
         if (id.isBlank()) throw new IllegalArgumentException("Schematic block entity is missing its type");
         tag.putString("id", id);
         tag.remove("Id");
@@ -143,35 +144,36 @@ final class AssetNbt {
     }
 
     static List<CompoundTag> entities(CompoundTag raw, EditPlanner p) {
-        CompoundTag root = raw.contains("Schematic") ? raw.getCompoundOrEmpty("Schematic") : raw;
+        CompoundTag root = raw.contains("Schematic") ? Nbt.getCompoundOrEmpty(raw, "Schematic") : raw;
         boolean structure = root.contains("palette");
         if (structure) root = structure(root, p);
-        int version = root.getIntOr("DataVersion", current());
-        var entries = root.getListOrEmpty(structure ? "entities" : "Entities");
+        int version = Nbt.getIntOr(root, "DataVersion", current());
+        var entries = Nbt.getListOrEmpty(root, structure ? "entities" : "Entities");
         if (entries.size() > 128) throw new IllegalArgumentException("Asset entity limit: 128 roots");
         var result = new ArrayList<CompoundTag>();
         int[] count = {0};
         for (int i = 0; i < entries.size(); i++) {
-            var entry = entries.getCompoundOrEmpty(i);
+            var entry = Nbt.getCompoundOrEmpty(entries, i);
             CompoundTag tag;
             if (structure) {
-                tag = entry.getCompoundOrEmpty("nbt").copy();
-                tag.put("Pos", entry.getListOrEmpty("pos").copy());
+                tag = Nbt.getCompoundOrEmpty(entry, "nbt").copy();
+                tag.put("Pos", Nbt.getListOrEmpty(entry, "pos").copy());
             } else {
                 tag = entry.getCompound("Data").orElse(entry).copy();
-                String id = entry.getStringOr("Id", tag.getStringOr("id", ""));
+                String id = Nbt.getStringOr(entry, "Id", Nbt.getStringOr(tag, "id", ""));
                 tag.putString("id", id);
                 tag.remove("Id");
-                tag.put("Pos", entry.getListOrEmpty("Pos").copy());
+                tag.put("Pos", Nbt.getListOrEmpty(entry, "Pos").copy());
             }
             int from = raw.get("Blocks") instanceof ByteArrayTag
-                    ? raw.getIntOr("DataVersion", tag.getStringOr("id", "").contains(":") ? 1343 : 99)
+                    ? Nbt.getIntOr(
+                            raw, "DataVersion", Nbt.getStringOr(tag, "id", "").contains(":") ? 1343 : 99)
                     : version;
             tag = upgrade(tag, References.ENTITY_TREE, from, p);
             ClipboardEntities.walk(tag, item -> {
                 if (++count[0] > 512)
                     throw new IllegalArgumentException("Asset entity limit: 512 including passengers");
-                var pos = item.getListOrEmpty("Pos");
+                var pos = Nbt.getListOrEmpty(item, "Pos");
                 if (pos.size() != 3) throw new IllegalArgumentException("Invalid asset entity position");
             });
             result.add(tag);
@@ -187,10 +189,10 @@ final class AssetNbt {
         var result = new ListTag();
         for (var saved : entities) {
             var entry = new CompoundTag();
-            var at = saved.getListOrEmpty("Pos");
+            var at = Nbt.getListOrEmpty(saved, "Pos");
             entry.put("pos", at.copy());
             var blockPos = new ListTag();
-            for (int i = 0; i < 3; i++) blockPos.add(IntTag.valueOf((int) Math.floor(at.getDoubleOr(i, 0))));
+            for (int i = 0; i < 3; i++) blockPos.add(IntTag.valueOf((int) Math.floor(Nbt.getDoubleOr(at, i, 0))));
             entry.put("blockPos", blockPos);
             entry.put("nbt", saved.copy());
             result.add(entry);
@@ -206,7 +208,7 @@ final class AssetNbt {
         var result = new ListTag();
         for (var saved : entities) {
             var tag = saved.copy();
-            tag.putString("Id", tag.getStringOr("id", ""));
+            tag.putString("Id", Nbt.getStringOr(tag, "id", ""));
             tag.remove("id");
             tag.remove("UUID");
             result.add(tag);

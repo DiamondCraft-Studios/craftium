@@ -2,6 +2,7 @@ package dev.craftium.server;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.Point;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,7 +41,7 @@ class HistoryStoreBlocksTest {
         var packed = PackedChanges.pack(original);
         assertInstanceOf(PackedChanges.class, packed);
         var tag = HistoryStore.blocks(packed);
-        assertEquals(4, tag.getListOrEmpty("palette").size(), "each distinct block is written once");
+        assertEquals(4, Nbt.getListOrEmpty(tag, "palette").size(), "each distinct block is written once");
         var back = HistoryStore.readBlocks(tag, BuiltInRegistries.BLOCK);
         assertInstanceOf(PackedChanges.class, back, "read back packed, without a change object per block");
         assertEquals(original, back);

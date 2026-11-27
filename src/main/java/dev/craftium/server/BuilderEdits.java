@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.*;
 import java.util.*;
 import net.minecraft.server.level.ServerPlayer;
@@ -14,7 +15,7 @@ public final class BuilderEdits {
             ServerPlayer player, Session session, Options o, Point target, Point normal, String action) {
         o.keepExisting =
                 o.builderKeepExisting; // the Builder has its own Keep existing, so the editor's does not apply to it
-        var p = new EditPlanner(player.level(), session, o);
+        var p = new EditPlanner(Compat.level(player), session, o);
         p.builder = true;
         if (action.equals("builder_extrude")) {
             o.tool = Tool.EXTRUDE;
@@ -74,7 +75,7 @@ public final class BuilderEdits {
                             min.z() + Math.max(0, oz) + size.z() - 1);
                 else area.box(min.x() + ox, min.z() + oz, min.x() + ox + reach - 1, min.z() + oz + reach - 1);
             }
-            ChunkLease.planning(area.lease(player.level()));
+            ChunkLease.planning(area.lease(Compat.level(player)));
         }
         Point shift = o.builderOffset;
         for (Point at : points) p.validate(at);
@@ -84,7 +85,7 @@ public final class BuilderEdits {
         }
         if (o.builderTool == Options.BuilderTool.SMEAR) {
             var source = new LinkedHashMap<Point, BlockSnapshot>();
-            for (Point at : points) source.put(at, BlockSnapshot.capture(player.level(), EditPlanner.pos(at)));
+            for (Point at : points) source.put(at, BlockSnapshot.capture(Compat.level(player), EditPlanner.pos(at)));
             var line = BrushMath.line(new Point(0, 0, 0), shift);
             for (var e : source.entrySet())
                 if (!e.getValue().state().isAir())
@@ -119,7 +120,7 @@ public final class BuilderEdits {
         for (Point at : points) {
             Point q = at.add(-min.x(), -min.y(), -min.z());
             Point transformed = BuilderTransform.apply(q, size, o.builderRotation, o.builderFlipAxis);
-            var value = BlockSnapshot.capture(player.level(), EditPlanner.pos(at));
+            var value = BlockSnapshot.capture(Compat.level(player), EditPlanner.pos(at));
             BlockState state = turn(value.state(), o.builderRotation, o.builderFlipAxis);
             captureSession.clipboard.put(transformed, new BlockSnapshot(state, value.data()));
         }

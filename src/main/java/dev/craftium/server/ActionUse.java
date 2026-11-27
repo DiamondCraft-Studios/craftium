@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.Options;
 import dev.craftium.core.Point;
 import net.minecraft.server.level.ServerPlayer;
@@ -14,7 +15,7 @@ import net.minecraft.server.level.ServerPlayer;
 record ActionUse(ServerPlayer player, Session session, Options options, Point target, Point normal) {
     /** A planner that reads the world as it will be once the edits waiting have been built. */
     EditPlanner plan() {
-        return new EditPlanner(player.level(), session, options);
+        return new EditPlanner(Compat.level(player), session, options);
     }
 
     /** Hands an edit in: held to the block limit, checked by the gate, then built or, when edits are confirmed first, shown as a ghost until the player says so. */

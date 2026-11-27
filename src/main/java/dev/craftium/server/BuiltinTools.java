@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.BrushMath;
 import dev.craftium.core.MagicWand;
 import dev.craftium.core.Options;
@@ -54,7 +55,7 @@ final class BuiltinTools {
     };
 
     static final ToolBehaviour ANNOTATION =
-            u -> u.submit(AnnotationEdits.plan("annotation_create", u.player().level(), u.options(), u.point()));
+            u -> u.submit(AnnotationEdits.plan("annotation_create", Compat.level(u.player()), u.options(), u.point()));
 
     static final ToolBehaviour BOX_SELECT = u -> {
         var s = u.session();
@@ -90,7 +91,7 @@ final class BuiltinTools {
                         p,
                         new MagicWand.World() {
                             public boolean loaded(Point at) {
-                                return player.level().hasChunk(at.x() >> 4, at.z() >> 4);
+                                return Compat.level(player).hasChunk(at.x() >> 4, at.z() >> 4);
                             }
 
                             public boolean air(Point at) {
@@ -163,7 +164,7 @@ final class BuiltinTools {
                         target,
                         new MagicWand.World() {
                             public boolean loaded(Point at) {
-                                return player.level().hasChunk(at.x() >> 4, at.z() >> 4);
+                                return Compat.level(player).hasChunk(at.x() >> 4, at.z() >> 4);
                             }
 
                             public boolean air(Point at) {

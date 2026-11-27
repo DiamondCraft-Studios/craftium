@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.*;
 import dev.craftium.runtime.ServerPlatform;
 import java.io.*;
@@ -286,7 +287,7 @@ final class BlueprintLibrary {
                     var fileData = snapshot == null ? null : AssetNbt.fileData(snapshot);
                     if (fileData != null) {
                         var tag = fileData.copy();
-                        tag.putString("Id", tag.getStringOr("id", ""));
+                        tag.putString("Id", Nbt.getStringOr(tag, "id", ""));
                         tag.remove("id");
                         tag.remove("x");
                         tag.remove("y");
@@ -305,23 +306,23 @@ final class BlueprintLibrary {
     }
 
     static LinkedHashMap<Point, BlockSnapshot> read(CompoundTag root, EditPlanner p) throws IOException {
-        if (root.contains("Schematic")) root = root.getCompoundOrEmpty("Schematic");
+        if (root.contains("Schematic")) root = Nbt.getCompoundOrEmpty(root, "Schematic");
         root = AssetNbt.structure(root, p);
         var result = new LinkedHashMap<Point, BlockSnapshot>();
         if (root.get("Blocks") instanceof ByteArrayTag) root = upgradeLegacy(root, p);
         if (root.contains("palette")) {
-            var palette = root.getListOrEmpty("palette");
-            var blocks = root.getListOrEmpty("blocks");
+            var palette = Nbt.getListOrEmpty(root, "palette");
+            var blocks = Nbt.getListOrEmpty(root, "blocks");
             if (blocks.size() > Selection.LIMIT) throw new IllegalArgumentException("Blueprint too large");
             for (int i = 0; i < blocks.size(); i++) {
-                var block = blocks.getCompoundOrEmpty(i);
-                var at = block.getListOrEmpty("pos");
-                int state = block.getIntOr("state", 0);
+                var block = Nbt.getCompoundOrEmpty(blocks, i);
+                var at = Nbt.getListOrEmpty(block, "pos");
+                int state = Nbt.getIntOr(block, "state", 0);
                 if (state < 0 || state >= palette.size()) throw new IllegalArgumentException("Invalid palette index");
                 result.put(
-                        new Point(at.getIntOr(0, 0), at.getIntOr(1, 0), at.getIntOr(2, 0)),
+                        new Point(Nbt.getIntOr(at, 0, 0), Nbt.getIntOr(at, 1, 0), Nbt.getIntOr(at, 2, 0)),
                         AssetNbt.snapshot(
-                                palette.getCompoundOrEmpty(state),
+                                Nbt.getCompoundOrEmpty(palette, state),
                                 block.getCompound("nbt").orElse(null),
                                 p));
             }
@@ -332,15 +333,15 @@ final class BlueprintLibrary {
             if (sx == 0 || sy == 0 || sz == 0 || (long) sx * sy * sz > Selection.LIMIT)
                 throw new IllegalArgumentException("Invalid schematic dimensions");
             var dataRoot = root.contains("Blocks") && root.get("Blocks") instanceof CompoundTag
-                    ? root.getCompoundOrEmpty("Blocks")
+                    ? Nbt.getCompoundOrEmpty(root, "Blocks")
                     : root;
-            var palette = dataRoot.getCompoundOrEmpty("Palette");
+            var palette = Nbt.getCompoundOrEmpty(dataRoot, "Palette");
             var states = new HashMap<Integer, BlockSnapshot>();
             for (String key : palette.keySet())
                 states.put(
-                        palette.getIntOr(key, 0),
-                        AssetNbt.snapshot(key, root.getIntOr("DataVersion", AssetNbt.current()), p));
-            byte[] data = dataRoot.getByteArray(root.getIntOr("Version", 2) >= 3 ? "Data" : "BlockData")
+                        Nbt.getIntOr(palette, key, 0),
+                        AssetNbt.snapshot(key, Nbt.getIntOr(root, "DataVersion", AssetNbt.current()), p));
+            byte[] data = dataRoot.getByteArray(Nbt.getIntOr(root, "Version", 2) >= 3 ? "Data" : "BlockData")
                     .orElse(new byte[0]);
             int cursor = 0;
             for (int i = 0; i < sx * sy * sz; i++) {
@@ -356,9 +357,9 @@ final class BlueprintLibrary {
                 if (state == null) throw new IllegalArgumentException("Invalid schematic palette index");
                 result.put(new Point(i % sx, i / (sx * sz), (i / sx) % sz), state);
             }
-            var entities = dataRoot.getListOrEmpty("BlockEntities");
+            var entities = Nbt.getListOrEmpty(dataRoot, "BlockEntities");
             for (int i = 0; i < entities.size(); i++) {
-                var tag = entities.getCompoundOrEmpty(i);
+                var tag = Nbt.getCompoundOrEmpty(entities, i);
                 var coordinates = tag.getIntArray("Pos").orElse(new int[0]);
                 if (coordinates.length == 3) {
                     Point at = new Point(coordinates[0], coordinates[1], coordinates[2]);
@@ -369,7 +370,7 @@ final class BlueprintLibrary {
                                 AssetNbt.withEntity(
                                         old,
                                         AssetNbt.blockEntity(
-                                                tag, root.getIntOr("DataVersion", AssetNbt.current()), p)));
+                                                tag, Nbt.getIntOr(root, "DataVersion", AssetNbt.current()), p)));
                 }
             }
         }
@@ -392,10 +393,11 @@ final class BlueprintLibrary {
         var indices = new HashMap<Integer, Integer>();
         var blocks = new ListTag();
         var blockEntities = new HashMap<Point, CompoundTag>();
-        var tiles = source.getListOrEmpty("TileEntities");
+        var tiles = Nbt.getListOrEmpty(source, "TileEntities");
         for (int i = 0; i < tiles.size(); i++) {
-            var tag = tiles.getCompoundOrEmpty(i);
-            blockEntities.put(new Point(tag.getIntOr("x", 0), tag.getIntOr("y", 0), tag.getIntOr("z", 0)), tag);
+            var tag = Nbt.getCompoundOrEmpty(tiles, i);
+            blockEntities.put(
+                    new Point(Nbt.getIntOr(tag, "x", 0), Nbt.getIntOr(tag, "y", 0), Nbt.getIntOr(tag, "z", 0)), tag);
         }
         for (int i = 0; i < volume; i++) {
             int high = extra.length == 0 ? 0 : ((extra[i / 2] & 255) >> (i % 2 * 4)) & 15,
@@ -407,7 +409,7 @@ final class BlueprintLibrary {
                         .getValue();
                 if (!(state instanceof CompoundTag tag))
                     throw new IllegalArgumentException("Unsupported legacy block " + id);
-                if (id != 0 && tag.getStringOr("Name", "").equals("minecraft:air"))
+                if (id != 0 && Nbt.getStringOr(tag, "Name", "").equals("minecraft:air"))
                     throw new IllegalArgumentException("Unsupported legacy numeric block " + id);
                 palette.add(tag);
                 return palette.size() - 1;
@@ -425,14 +427,15 @@ final class BlueprintLibrary {
         structure.put("entities", new ListTag());
         var upgraded = net.minecraft.util.datafix.DataFixTypes.STRUCTURE.updateToCurrentVersion(
                 p.level.getServer().getFixerUpper(), structure, 1451);
-        var upgradedBlocks = upgraded.getListOrEmpty("blocks");
+        var upgradedBlocks = Nbt.getListOrEmpty(upgraded, "blocks");
         for (int i = 0; i < upgradedBlocks.size(); i++) {
-            var block = upgradedBlocks.getCompoundOrEmpty(i);
-            var pos = block.getListOrEmpty("pos");
-            var nbt = blockEntities.get(new Point(pos.getIntOr(0, 0), pos.getIntOr(1, 0), pos.getIntOr(2, 0)));
+            var block = Nbt.getCompoundOrEmpty(upgradedBlocks, i);
+            var pos = Nbt.getListOrEmpty(block, "pos");
+            var nbt = blockEntities.get(
+                    new Point(Nbt.getIntOr(pos, 0, 0), Nbt.getIntOr(pos, 1, 0), Nbt.getIntOr(pos, 2, 0)));
             if (nbt != null) {
-                int version =
-                        source.getIntOr("DataVersion", nbt.getStringOr("id", "").contains(":") ? 1343 : 99);
+                int version = Nbt.getIntOr(
+                        source, "DataVersion", Nbt.getStringOr(nbt, "id", "").contains(":") ? 1343 : 99);
                 block.put(
                         "nbt",
                         AssetNbt.upgrade(

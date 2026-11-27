@@ -2,6 +2,7 @@ package dev.craftium.server;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import dev.craftium.compat.Nbt;
 import dev.craftium.core.BedrockBlockTable;
 import java.util.*;
 import net.minecraft.nbt.CompoundTag;
@@ -52,21 +53,22 @@ final class BedrockBlockEntities {
         data.put("id", state.is(Blocks.BARREL) ? "Barrel" : "Chest");
         var items = new ArrayList<Object>();
         int stacks = 0;
-        var source = java.getListOrEmpty("Items");
+        var source = Nbt.getListOrEmpty(java, "Items");
         for (int i = 0; i < source.size(); i++) {
-            var stack = source.getCompoundOrEmpty(i);
-            String id = stack.getStringOr("id", "minecraft:air");
+            var stack = Nbt.getCompoundOrEmpty(source, i);
+            String id = Nbt.getStringOr(stack, "id", "minecraft:air");
             if (id.equals("minecraft:air")) continue;
             var out = new LinkedHashMap<String, Object>();
-            int count = stack.contains("count") ? stack.getIntOr("count", 1) : stack.getByteOr("Count", (byte) 1);
+            int count =
+                    stack.contains("count") ? Nbt.getIntOr(stack, "count", 1) : Nbt.getByteOr(stack, "Count", (byte) 1);
             out.put("Count", (byte) Math.clamp(count, 1, 127));
             out.put("Damage", (short) 0);
             out.put("Name", bedrockItem(id));
-            out.put("Slot", (byte) stack.getByteOr("Slot", (byte) 0));
+            out.put("Slot", (byte) Nbt.getByteOr(stack, "Slot", (byte) 0));
             out.put("WasPickedUp", (byte) 0);
             items.add(out);
             stacks++;
-            if (!stack.getCompoundOrEmpty("components").isEmpty() || stack.contains("tag"))
+            if (!Nbt.getCompoundOrEmpty(stack, "components").isEmpty() || stack.contains("tag"))
                 lost.add("a stack of " + id
                         + " keeps its item but not its extra data (enchantments, names, potion effects and the like)");
         }
@@ -75,7 +77,7 @@ final class BedrockBlockEntities {
             check.add(
                     "the items of containers are written by their Java names; a few items are named differently in Bedrock, and an unknown one comes out empty");
         if (java.contains("LootTable")) {
-            String table = java.getStringOr("LootTable", "");
+            String table = Nbt.getStringOr(java, "LootTable", "");
             if (table.startsWith("minecraft:")) {
                 data.put("LootTable", "loot_tables/" + table.substring(10) + ".json");
                 check.add("the loot table " + table + " was written as Bedrock's loot_tables/" + table.substring(10)
@@ -84,7 +86,7 @@ final class BedrockBlockEntities {
                 lost.add(
                         "the loot table " + table
                                 + " is not a game table, and Java and Bedrock loot tables are different files, so the container is left without it");
-            int seed = (int) java.getLongOr("LootTableSeed", 0L);
+            int seed = (int) Nbt.getLongOr(java, "LootTableSeed", 0L);
             if (seed != 0) data.put("LootTableSeed", seed);
         }
         if (state.is(Blocks.CHEST) || state.is(Blocks.TRAPPED_CHEST)) {
@@ -113,9 +115,9 @@ final class BedrockBlockEntities {
         var lost = new ArrayList<String>();
         var check = new ArrayList<String>();
         var data = new LinkedHashMap<String, Object>();
-        data.put("BackText", face(java.getCompoundOrEmpty("back_text"), lost, check));
-        data.put("FrontText", face(java.getCompoundOrEmpty("front_text"), lost, check));
-        data.put("IsWaxed", (byte) java.getByteOr("is_waxed", (byte) 0));
+        data.put("BackText", face(Nbt.getCompoundOrEmpty(java, "back_text"), lost, check));
+        data.put("FrontText", face(Nbt.getCompoundOrEmpty(java, "front_text"), lost, check));
+        data.put("IsWaxed", (byte) Nbt.getByteOr(java, "is_waxed", (byte) 0));
         data.put("id", state.is(BlockTags.ALL_HANGING_SIGNS) ? "HangingSign" : "Sign");
         data.put("x", x);
         data.put("y", y);
@@ -126,7 +128,7 @@ final class BedrockBlockEntities {
     private static Map<String, Object> face(CompoundTag java, List<String> lost, List<String> check) {
         var out = new LinkedHashMap<String, Object>();
         var lines = new ArrayList<String>();
-        var messages = java.getListOrEmpty("messages");
+        var messages = Nbt.getListOrEmpty(java, "messages");
         for (int i = 0; i < messages.size(); i++) {
             var line = new StringBuilder();
             if (!text(messages.get(i), line))
@@ -134,8 +136,8 @@ final class BedrockBlockEntities {
             lines.add(line.toString());
         }
         while (!lines.isEmpty() && lines.getLast().isEmpty()) lines.removeLast();
-        boolean glow = java.getByteOr("has_glowing_text", (byte) 0) != 0;
-        String colour = java.getStringOr("color", "black");
+        boolean glow = Nbt.getByteOr(java, "has_glowing_text", (byte) 0) != 0;
+        String colour = Nbt.getStringOr(java, "color", "black");
         int argb = -16777216;
         if (!colour.equals("black")) {
             argb = 0xFF000000 | DyeColor.byName(colour, DyeColor.BLACK).getTextColor();
@@ -171,8 +173,8 @@ final class BedrockBlockEntities {
                     && !compound.contains("keybind")
                     && !compound.contains("score")
                     && !compound.contains("selector");
-            out.append(compound.getStringOr("text", ""));
-            var extra = compound.getListOrEmpty("extra");
+            out.append(Nbt.getStringOr(compound, "text", ""));
+            var extra = Nbt.getListOrEmpty(compound, "extra");
             for (int i = 0; i < extra.size(); i++) plain &= text(extra.get(i), out);
             return plain;
         }

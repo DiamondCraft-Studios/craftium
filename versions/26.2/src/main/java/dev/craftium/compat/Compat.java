@@ -45,6 +45,11 @@ public final class Compat {
         return tag.location().toString();
     }
 
+    /** The level a server player is in. */
+    public static net.minecraft.server.level.ServerLevel level(ServerPlayer player) {
+        return player.level();
+    }
+
     public static boolean isGamemaster(ServerPlayer player) {
         return player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
     }

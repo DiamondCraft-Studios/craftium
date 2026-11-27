@@ -72,8 +72,9 @@ public final class MissingBlocks {
      */
     public static java.util.List<net.minecraft.core.BlockPos> loadedAround(
             net.minecraft.server.level.ServerPlayer player, MissingBlockTable.Entry wanted, int limit) {
-        var level = player.level();
-        int radius = Math.max(2, player.level().getServer().getPlayerList().getViewDistance());
+        var level = Compat.level(player);
+        int radius =
+                Math.max(2, Compat.level(player).getServer().getPlayerList().getViewDistance());
         int cx = player.blockPosition().getX() >> 4, cz = player.blockPosition().getZ() >> 4;
         var found = new java.util.ArrayList<net.minecraft.core.BlockPos>();
         for (int x = cx - radius; x <= cx + radius; x++)

@@ -1,6 +1,7 @@
 package dev.craftium.client;
 
 import dev.craftium.Craftium;
+import dev.craftium.compat.Nbt;
 import java.nio.file.*;
 import java.util.*;
 import net.fabricmc.loader.api.FabricLoader;
@@ -43,7 +44,7 @@ final class HotbarPages {
                 if (key.startsWith("n")) {
                     try {
                         int page = Integer.parseInt(key.substring(1));
-                        if (page >= 1 && page <= COUNT) NAMES.put(page, root.getStringOr(key, ""));
+                        if (page >= 1 && page <= COUNT) NAMES.put(page, Nbt.getStringOr(root, key, ""));
                     } catch (NumberFormatException ignored) {
                     }
                     continue;
@@ -55,7 +56,7 @@ final class HotbarPages {
                     continue;
                 }
                 if (number < 1 || number > COUNT * ROWS) continue;
-                var slots = root.getListOrEmpty(key);
+                var slots = Nbt.getListOrEmpty(root, key);
                 var stacks = new ArrayList<ItemStack>(SLOTS);
                 for (int i = 0; i < SLOTS; i++)
                     stacks.add(

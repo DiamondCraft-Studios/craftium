@@ -1,6 +1,7 @@
 package dev.craftium.server;
 
 import com.google.gson.*;
+import dev.craftium.compat.Nbt;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -721,12 +722,12 @@ final class JigsawEditor {
     /** The names the connectors of a template that lead to a pool ask for. */
     private static List<String> connectorsTo(CompoundTag tag, String pool) {
         var names = new ArrayList<String>();
-        var blocks = tag.getListOrEmpty("blocks");
+        var blocks = Nbt.getListOrEmpty(tag, "blocks");
         for (int i = 0; i < blocks.size(); i++) {
-            var nbt = blocks.getCompoundOrEmpty(i).getCompoundOrEmpty("nbt");
-            if (nbt.getStringOr("id", "").equals("minecraft:jigsaw")
-                    && nbt.getStringOr("pool", "").equals(pool))
-                names.add(nbt.getStringOr("target", "minecraft:empty"));
+            var nbt = Nbt.getCompoundOrEmpty(Nbt.getCompoundOrEmpty(blocks, i), "nbt");
+            if (Nbt.getStringOr(nbt, "id", "").equals("minecraft:jigsaw")
+                    && Nbt.getStringOr(nbt, "pool", "").equals(pool))
+                names.add(Nbt.getStringOr(nbt, "target", "minecraft:empty"));
         }
         return names;
     }
@@ -734,12 +735,12 @@ final class JigsawEditor {
     /** Points the connectors of a template that lead to one pool at another, and says how many. */
     private static int retargetIn(CompoundTag tag, String from, String to) {
         int changed = 0;
-        var blocks = tag.getListOrEmpty("blocks");
+        var blocks = Nbt.getListOrEmpty(tag, "blocks");
         for (int i = 0; i < blocks.size(); i++) {
-            var block = blocks.getCompoundOrEmpty(i);
-            var nbt = block.getCompoundOrEmpty("nbt");
-            if (!nbt.getStringOr("id", "").equals("minecraft:jigsaw")
-                    || !nbt.getStringOr("pool", "").equals(from)) continue;
+            var block = Nbt.getCompoundOrEmpty(blocks, i);
+            var nbt = Nbt.getCompoundOrEmpty(block, "nbt");
+            if (!Nbt.getStringOr(nbt, "id", "").equals("minecraft:jigsaw")
+                    || !Nbt.getStringOr(nbt, "pool", "").equals(from)) continue;
             nbt.putString("pool", to);
             block.put("nbt", nbt);
             blocks.set(i, block);
@@ -951,15 +952,15 @@ final class JigsawEditor {
             tag = template.get().save(new CompoundTag());
         }
         var at = c.getAsJsonArray("pos");
-        var blocks = tag.getListOrEmpty("blocks");
+        var blocks = Nbt.getListOrEmpty(tag, "blocks");
         for (int i = 0; i < blocks.size(); i++) {
-            var block = blocks.getCompoundOrEmpty(i);
-            var pos = block.getListOrEmpty("pos");
-            if (pos.getIntOr(0, Integer.MIN_VALUE) != at.get(0).getAsInt()
-                    || pos.getIntOr(1, Integer.MIN_VALUE) != at.get(1).getAsInt()
-                    || pos.getIntOr(2, Integer.MIN_VALUE) != at.get(2).getAsInt()) continue;
-            var nbt = block.getCompoundOrEmpty("nbt");
-            if (!nbt.getStringOr("id", "").equals("minecraft:jigsaw")) continue;
+            var block = Nbt.getCompoundOrEmpty(blocks, i);
+            var pos = Nbt.getListOrEmpty(block, "pos");
+            if (Nbt.getIntOr(pos, 0, Integer.MIN_VALUE) != at.get(0).getAsInt()
+                    || Nbt.getIntOr(pos, 1, Integer.MIN_VALUE) != at.get(1).getAsInt()
+                    || Nbt.getIntOr(pos, 2, Integer.MIN_VALUE) != at.get(2).getAsInt()) continue;
+            var nbt = Nbt.getCompoundOrEmpty(block, "nbt");
+            if (!Nbt.getStringOr(nbt, "id", "").equals("minecraft:jigsaw")) continue;
             if (c.has("name")) nbt.putString("name", poolId(text(c, "name")).toString());
             if (c.has("target"))
                 nbt.putString("target", poolId(text(c, "target")).toString());
@@ -1235,7 +1236,7 @@ final class JigsawEditor {
                     "final",
                     jigsaw.info().nbt() == null
                             ? "minecraft:air"
-                            : jigsaw.info().nbt().getStringOr("final_state", "minecraft:air"));
+                            : Nbt.getStringOr(jigsaw.info().nbt(), "final_state", "minecraft:air"));
             var at = jigsaw.info().pos();
             item.add("pos", ints(at.getX(), at.getY(), at.getZ()));
             String issue = "";

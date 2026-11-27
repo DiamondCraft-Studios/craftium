@@ -1,6 +1,7 @@
 package dev.craftium.server;
 
 import com.google.gson.*;
+import dev.craftium.compat.Compat;
 import dev.craftium.core.BlockRuns;
 import dev.craftium.core.Point;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
@@ -24,7 +25,7 @@ final class AiWorld {
     /** The blocks in a box, as a palette plus run-length runs running x first, then z, then y upward from the minimum corner. */
     static String blocks(ServerPlayer player, Point a, Point b) {
         require(a, b);
-        var level = (ServerLevel) player.level();
+        var level = (ServerLevel) Compat.level(player);
         int x0 = Math.min(a.x(), b.x()),
                 x1 = Math.max(a.x(), b.x()),
                 y0 = Math.min(a.y(), b.y()),
@@ -65,7 +66,7 @@ final class AiWorld {
      */
     static String surface(ServerPlayer player, Point a, Point b, boolean floor) {
         require(a, b);
-        var level = (ServerLevel) player.level();
+        var level = (ServerLevel) Compat.level(player);
         int x0 = Math.min(a.x(), b.x()),
                 x1 = Math.max(a.x(), b.x()),
                 z0 = Math.min(a.z(), b.z()),
@@ -202,7 +203,7 @@ final class AiWorld {
         if (total > MAX_VIEW_CELLS)
             throw new IllegalArgumentException("Region has " + total + " blocks; read at most "
                     + String.format(java.util.Locale.ROOT, "%,d", MAX_VIEW_CELLS) + " at a time");
-        var level = (ServerLevel) player.level();
+        var level = (ServerLevel) Compat.level(player);
         boolean only = view.equals("only"), withPreview = !view.equals("world");
         var palette = new Palette(!only);
         int[] ids = new int[(int) total];
@@ -521,7 +522,7 @@ final class AiWorld {
 
     /** As above for these points, with the entries of {@code extra} added to the answer (what an AI session is told about its pinned selection). */
     static String selection(ServerPlayer player, java.util.Set<Point> points, JsonObject extra) {
-        var level = (ServerLevel) player.level();
+        var level = (ServerLevel) Compat.level(player);
         JsonObject out;
         if (points.isEmpty()) out = dev.craftium.core.SelectionReport.describe(points, null, 0, null);
         else {
