@@ -3,7 +3,7 @@ package dev.craftium.client;
 import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
-import net.fabricmc.loader.api.FabricLoader;
+import dev.craftium.platform.Platform;
 import net.minecraft.network.chat.Component;
 
 /** A small pop-up over the editor naming the mod, its version and what it is. */
@@ -16,9 +16,8 @@ final class AboutScreen extends CraftiumScreen {
     AboutScreen(EditorScreen parent) {
         super(Component.literal("About Craftium"));
         this.parent = parent;
-        var mod = FabricLoader.getInstance().getModContainer("craftium");
-        version = mod.map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("unknown");
-        description = mod.map(m -> m.getMetadata().getDescription()).orElse("");
+        version = Platform.modVersion();
+        description = Platform.modDescription();
     }
 
     @Override

@@ -3,15 +3,15 @@ package dev.craftium.client;
 import dev.craftium.core.*;
 import dev.craftium.core.EditorControls.*;
 import dev.craftium.net.Packets;
+import dev.craftium.platform.Platform;
 import java.nio.file.*;
 import java.util.*;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.*;
 import org.lwjgl.glfw.GLFW;
 
 final class EditorBindings {
-    private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("craftium-controls.json");
+    private static final Path FILE = Platform.configDir().resolve("craftium-controls.json");
     private static final EnumMap<Action, Binding> bindings = new EnumMap<>(Action.class);
     private static boolean migrated;
 

@@ -1,10 +1,10 @@
 package dev.craftium.client;
 
+import dev.craftium.client.platform.ClientPlatform;
 import dev.craftium.core.*;
 import dev.craftium.net.Packets;
+import dev.craftium.platform.Platform;
 import java.util.Optional;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.loader.api.FabricLoader;
 
 /** The client's side of the handshake with the server, and the look at the project's releases for a newer build. */
 final class ClientHandshake {
@@ -17,10 +17,7 @@ final class ClientHandshake {
 
     /** The full version of this build, such as 0.9.1-beta.1+mc26.2. */
     static String version() {
-        return FabricLoader.getInstance()
-                .getModContainer("craftium")
-                .map(m -> m.getMetadata().getVersion().getFriendlyString())
-                .orElse("unknown");
+        return Platform.modVersion();
     }
     /** The Minecraft version this build is for, read from the +mc suffix of its version. */
     static String minecraft() {
@@ -50,9 +47,8 @@ final class ClientHandshake {
         String hello = Handshake.write(version());
         if (bridge) {
             for (byte[] frame : BridgeCodec.encode(Packets.JSON.toJson(new BridgeCodec.Message("hello", hello))))
-                ClientPlayNetworking.send(new Packets.Bridge(frame));
-        } else if (ClientPlayNetworking.canSend(Packets.Hello.TYPE))
-            ClientPlayNetworking.send(new Packets.Hello(hello));
+                ClientPlatform.send(new Packets.Bridge(frame));
+        } else if (ClientPlatform.canSend(Packets.Hello.TYPE)) ClientPlatform.send(new Packets.Hello(hello));
     }
 
     static void disconnected() {
@@ -88,10 +84,7 @@ final class ClientHandshake {
         UpdateChecker.check(
                         version(),
                         minecraft(),
-                        FabricLoader.getInstance()
-                                .getConfigDir()
-                                .resolve("craftium")
-                                .resolve("update-check.json"))
+                        Platform.configDir().resolve("craftium").resolve("update-check.json"))
                 .thenAccept(found -> {
                     latest = found;
                     announced = false;

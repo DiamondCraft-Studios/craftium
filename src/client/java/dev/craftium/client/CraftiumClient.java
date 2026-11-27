@@ -2,19 +2,13 @@ package dev.craftium.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.craftium.client.compat.ClientCompat;
-import dev.craftium.client.compat.Gfx;
 import dev.craftium.client.compat.Overlay;
 import dev.craftium.client.interaction.Interactions;
+import dev.craftium.client.platform.ClientPlatform;
 import dev.craftium.core.*;
 import dev.craftium.net.Packets;
+import dev.craftium.platform.Platform;
 import java.util.List;
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
-import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -24,7 +18,7 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.*;
 import org.lwjgl.glfw.GLFW;
 
-public final class CraftiumClient implements ClientModInitializer {
+public final class CraftiumClient {
     public static KeyMapping editorKey, contextKey, swapKey, replaceKey, replaceMaterialKey;
     public static final java.util.Map<Tool, KeyMapping> toolKeys = new java.util.EnumMap<>(Tool.class);
     private long lastBuilder;
@@ -35,57 +29,53 @@ public final class CraftiumClient implements ClientModInitializer {
     private boolean hadWorld, toolCursor;
     private double lastLiquidOpacity = 1;
 
-    @Override
-    public void onInitializeClient() {
+    private static final CraftiumClient INSTANCE = new CraftiumClient();
+
+    private CraftiumClient() {}
+
+    /** Sets up the shared client side; the loader's client entrypoint calls this once at startup. */
+    public static void init() {
+        INSTANCE.setup();
+    }
+
+    private void setup() {
         Overlay.install();
         ClientState.load();
         EditorBindings.load();
         AiBridge.install();
-        ClientPlayNetworking.registerGlobalReceiver(Packets.Bridge.TYPE, (payload, context) -> context.client()
-                .execute(() -> receiveBridge(payload.bytes())));
+        ClientPlatform.receive(
+                Packets.Bridge.TYPE, payload -> Minecraft.getInstance().execute(() -> receiveBridge(payload.bytes())));
         ClientCommands.register();
-        ClientPlayNetworking.registerGlobalReceiver(Packets.Download.TYPE, (payload, context) -> context.client()
-                .execute(() -> ClientAssets.receive(payload)));
-        var category = KeyMapping.Category.register(dev.craftium.compat.Compat.id("craftium", "studio"));
-        editorKey = ClientCompat.registerKey(
-                new KeyMapping("key.craftium.editor", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_RIGHT_SHIFT, category));
-        contextKey = ClientCompat.registerKey(
-                new KeyMapping("key.craftium.context", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT, category));
-        swapKey = ClientCompat.registerKey(
-                new KeyMapping("key.craftium.hotbar", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
-        replaceKey = ClientCompat.registerKey(
-                new KeyMapping("key.craftium.replace", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, category));
-        replaceMaterialKey = ClientCompat.registerKey(new KeyMapping(
-                "key.craftium.replace_material", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
+        ClientPlatform.receive(
+                Packets.Download.TYPE, payload -> Minecraft.getInstance().execute(() -> ClientAssets.receive(payload)));
+        editorKey = ClientCompat.key("key.craftium.editor", GLFW.GLFW_KEY_RIGHT_SHIFT);
+        contextKey = ClientCompat.key("key.craftium.context", GLFW.GLFW_KEY_LEFT_ALT);
+        swapKey = ClientCompat.key("key.craftium.hotbar", GLFW.GLFW_KEY_UNKNOWN);
+        replaceKey = ClientCompat.key("key.craftium.replace", GLFW.GLFW_KEY_R);
+        replaceMaterialKey = ClientCompat.key("key.craftium.replace_material", GLFW.GLFW_KEY_UNKNOWN);
         for (Tool tool : Tool.values()) {
             if (tool.retired())
                 continue; // the Surface Noise Painter is now the Surface Painter's Material mode, so it has no key
             var spec = tool.spec();
-            toolKeys.put(
-                    tool,
-                    ClientCompat.registerKey(new KeyMapping(
-                            "key.craftium.tool." + spec.path(),
-                            InputConstants.Type.KEYSYM,
-                            spec.defaultKey(),
-                            category)));
+            toolKeys.put(tool, ClientCompat.key("key.craftium.tool." + spec.path(), spec.defaultKey()));
         }
-        ClientPlayNetworking.registerGlobalReceiver(Packets.MissingBlocks.TYPE, (payload, context) -> context.client()
+        ClientPlatform.receive(Packets.MissingBlocks.TYPE, payload -> Minecraft.getInstance()
                 .execute(() -> ClientState.setMissingBlocks(payload.ids())));
-        ClientPlayNetworking.registerGlobalReceiver(Packets.Progress.TYPE, (payload, context) -> context.client()
+        ClientPlatform.receive(Packets.Progress.TYPE, payload -> Minecraft.getInstance()
                 .execute(() ->
                         ClientState.setProgress(payload.verb(), payload.name(), payload.done(), payload.total())));
-        ClientPlayNetworking.registerGlobalReceiver(Packets.Report.TYPE, (payload, context) -> context.client()
+        ClientPlatform.receive(Packets.Report.TYPE, payload -> Minecraft.getInstance()
                 .execute(() -> ClientCompat.setScreen(
-                        context.client(), new ReportScreen(ClientCompat.screen(context.client()), payload.text()))));
-        ClientPlayNetworking.registerGlobalReceiver(
-                Packets.AiReply.TYPE, (payload, context) -> AiBridge.dataReceived(payload.json()));
-        ClientPlayNetworking.registerGlobalReceiver(Packets.Hello.TYPE, (payload, context) -> context.client()
+                        Minecraft.getInstance(),
+                        new ReportScreen(ClientCompat.screen(Minecraft.getInstance()), payload.text()))));
+        ClientPlatform.receive(Packets.AiReply.TYPE, payload -> AiBridge.dataReceived(payload.json()));
+        ClientPlatform.receive(Packets.Hello.TYPE, payload -> Minecraft.getInstance()
                 .execute(() -> ClientHandshake.receive(payload.json(), false)));
-        ClientPlayNetworking.registerGlobalReceiver(
-                Packets.Update.TYPE, (payload, context) -> context.client().execute(() -> {
+        ClientPlatform.receive(
+                Packets.Update.TYPE, payload -> Minecraft.getInstance().execute(() -> {
                     receiveStatus(payload.json());
                 }));
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+        ClientPlatform.onDisconnect(() -> {
             ClientState.status = new Packets.Status(
                     "Disconnected", false, false, 0, new Point(0, 0, 0), new Point(0, 0, 0), 0, List.of(), 0, 0);
             ClientState.missingBlocks = List.of();
@@ -111,18 +101,18 @@ public final class CraftiumClient implements ClientModInitializer {
             var mc = Minecraft.getInstance();
             return player == mc.player && player.isCreative() && vanillaPlacement() ? ClientState.options : null;
         };
-        ClientTickEvents.END_CLIENT_TICK.register(this::tick);
+        ClientPlatform.onEndTick(this::tick);
         if (Boolean.getBoolean(
                 "craftium.maximize")) { // set by the development run configuration, so the test client opens maximized
             var once = new boolean[1];
-            ClientTickEvents.END_CLIENT_TICK.register(mc -> {
+            ClientPlatform.onEndTick(mc -> {
                 if (!once[0]) {
                     once[0] = true;
                     GLFW.glfwMaximizeWindow(mc.getWindow().handle());
                 }
             });
         }
-        UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
+        Platform.onUseBlock((player, level, hand, hit) -> {
             var o = ClientState.options;
             boolean block = player.getMainHandItem().getItem() instanceof BlockItem;
             boolean tinker = player.getMainHandItem().isEmpty() && o.tinker;
@@ -141,16 +131,15 @@ public final class CraftiumClient implements ClientModInitializer {
                 return InteractionResult.SUCCESS; // SUCCESS skips the server use, and the client swings the arm for it
             return InteractionResult.PASS;
         });
-        AttackBlockCallback.EVENT.register((player, level, hand, pos, face) -> level.isClientSide()
+        ClientPlatform.onAttackBlock((player, level, hand, pos, face) -> level.isClientSide()
                         && player.isCreative()
                         && supported()
                         && (ClientState.symmetry() || ClientState.options.reach == Options.ReachMode.INFINITE)
                 ? InteractionResult.FAIL
                 : InteractionResult.PASS);
-        HudElementRegistry.addLast(dev.craftium.compat.Compat.id("craftium", "builder"), (raw, delta) -> {
+        ClientPlatform.addHud("builder", g -> {
             var mc = Minecraft.getInstance();
             if (mc.player == null || !mc.player.isCreative() || ClientCompat.screen(mc) != null) return;
-            var g = Gfx.of(raw);
             SelectionOverlay.tint(g);
             ReferenceImages.draw(g, false, 0, 0);
             int h = g.guiHeight();
@@ -626,7 +615,7 @@ public final class CraftiumClient implements ClientModInitializer {
     }
     /** Whether the server runs the mod itself, so it can bend the game's own block placement. A Paper server reached over the bridge cannot. */
     public static boolean vanillaPlacement() {
-        return supported() && ClientPlayNetworking.canSend(Packets.Edit.TYPE);
+        return supported() && ClientPlatform.canSend(Packets.Edit.TYPE);
     }
 
     private static String placementSynced = "";
@@ -660,8 +649,7 @@ public final class CraftiumClient implements ClientModInitializer {
 
     public static boolean supported() {
         return Minecraft.getInstance().getConnection() != null
-                && (ClientPlayNetworking.canSend(Packets.Edit.TYPE)
-                        || ClientPlayNetworking.canSend(Packets.Bridge.TYPE));
+                && (ClientPlatform.canSend(Packets.Edit.TYPE) || ClientPlatform.canSend(Packets.Bridge.TYPE));
     }
     /**
      * The previews of the player's AI sessions, each in a colour of its own, and named when the session has a label or there are several.
@@ -800,10 +788,10 @@ public final class CraftiumClient implements ClientModInitializer {
                                     || action.equals("place_stroke")
                             ? ClientState.strokeId
                             : 0));
-            if (ClientPlayNetworking.canSend(Packets.Edit.TYPE)) ClientPlayNetworking.send(new Packets.Edit(request));
+            if (ClientPlatform.canSend(Packets.Edit.TYPE)) ClientPlatform.send(new Packets.Edit(request));
             else
                 for (byte[] frame : BridgeCodec.encode(Packets.JSON.toJson(new BridgeCodec.Message("edit", request))))
-                    ClientPlayNetworking.send(new Packets.Bridge(frame));
+                    ClientPlatform.send(new Packets.Bridge(frame));
         } finally {
             options.scriptColours = new java.util.ArrayList<>();
             options.screenBlocks = "";

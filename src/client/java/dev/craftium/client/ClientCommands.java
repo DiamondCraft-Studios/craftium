@@ -1,15 +1,15 @@
 package dev.craftium.client;
 
-import static dev.craftium.client.compat.CommandCompat.*;
-
+import com.mojang.brigadier.arguments.ArgumentType;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.craftium.client.compat.ClientCompat;
+import dev.craftium.client.platform.ClientPlatform;
 import dev.craftium.core.*;
 import java.util.*;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.minecraft.client.Minecraft;
 
 /** User-facing commands and a non-interfering visual mirror of WorldEdit position commands. */
@@ -49,8 +49,17 @@ final class ClientCommands {
 
     private ClientCommands() {}
 
+    /** Commands are built on the loader's client command source, which only {@link ClientPlatform} knows. */
+    private static LiteralArgumentBuilder<Object> literal(String name) {
+        return LiteralArgumentBuilder.literal(name);
+    }
+
+    private static <T> RequiredArgumentBuilder<Object, T> argument(String name, ArgumentType<T> type) {
+        return RequiredArgumentBuilder.argument(name, type);
+    }
+
     static void register() {
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) -> {
+        ClientPlatform.onClientCommands(dispatcher -> {
             var root = literal("craftium").executes(c -> {
                 pending = () -> CraftiumClient.open(false);
                 return 1;
@@ -72,49 +81,49 @@ final class ClientCommands {
                 return 1;
             }));
             root.then(literal("docs").executes(c -> {
-                c.getSource()
-                        .sendFeedback(dev.craftium.core.Chat.say(
+                ClientPlatform.feedback(
+                        c.getSource(),
+                        dev.craftium.core.Chat.say(
                                 "Documentation is in your download:\n- README.md\n- docs/FEATURES.md"));
                 return 1;
             }));
             root.then(literal("status").executes(c -> {
-                c.getSource()
-                        .sendFeedback(
-                                dev.craftium.core.Chat.say(
-                                        CraftiumClient.supported()
-                                                ? "Connected to the server.\n" + ClientState.status.message()
-                                                        + (ClientHandshake.server() == null
-                                                                ? ""
-                                                                : "\nServer version: "
-                                                                        + ClientHandshake.server()
-                                                                                .version())
-                                                        + (ClientHandshake.problem() == null
-                                                                ? ""
-                                                                : "\n" + ClientHandshake.problem())
-                                                        + (ClientHandshake.missing()
-                                                                        .isEmpty()
-                                                                ? ""
-                                                                : "\nMissing: " + ClientHandshake.missing())
-                                                : "Server channel unavailable.\nInstall the same Craftium version and Fabric API on the server."));
+                ClientPlatform.feedback(
+                        c.getSource(),
+                        dev.craftium.core.Chat.say(
+                                CraftiumClient.supported()
+                                        ? "Connected to the server.\n" + ClientState.status.message()
+                                                + (ClientHandshake.server() == null
+                                                        ? ""
+                                                        : "\nServer version: "
+                                                                + ClientHandshake.server()
+                                                                        .version())
+                                                + (ClientHandshake.problem() == null
+                                                        ? ""
+                                                        : "\n" + ClientHandshake.problem())
+                                                + (ClientHandshake.missing().isEmpty()
+                                                        ? ""
+                                                        : "\nMissing: " + ClientHandshake.missing())
+                                        : "Server channel unavailable.\nInstall the same Craftium version and Fabric API on the server."));
                 return 1;
             }));
             root.then(literal("ai")
                     .executes(c -> {
-                        c.getSource().sendFeedback(dev.craftium.core.Chat.say(aiStatus()));
+                        ClientPlatform.feedback(c.getSource(), dev.craftium.core.Chat.say(aiStatus()));
                         return 1;
                     })
                     .then(literal("on").executes(c -> {
                         ClientState.options.aiBridge = true;
                         AiBridge.start();
                         ClientState.save();
-                        c.getSource().sendFeedback(dev.craftium.core.Chat.say(aiStatus()));
+                        ClientPlatform.feedback(c.getSource(), dev.craftium.core.Chat.say(aiStatus()));
                         return 1;
                     }))
                     .then(literal("off").executes(c -> {
                         ClientState.options.aiBridge = false;
                         AiBridge.stop();
                         ClientState.save();
-                        c.getSource().sendFeedback(dev.craftium.core.Chat.say(aiStatus()));
+                        ClientPlatform.feedback(c.getSource(), dev.craftium.core.Chat.say(aiStatus()));
                         return 1;
                     })));
             root.then(literal("reset").executes(c -> {
@@ -128,8 +137,9 @@ final class ClientCommands {
             root.then(literal("update")
                     .executes(c -> {
                         ClientHandshake.checkForUpdates(true);
-                        c.getSource()
-                                .sendFeedback(dev.craftium.core.Chat.say(
+                        ClientPlatform.feedback(
+                                c.getSource(),
+                                dev.craftium.core.Chat.say(
                                         "Checking for a newer release.\nRun /craftium update again in a moment.\n"
                                                 + ClientHandshake.describe()));
                         return 1;
@@ -137,15 +147,16 @@ final class ClientCommands {
                     .then(literal("on").executes(c -> {
                         ClientState.options.checkForUpdates = true;
                         ClientState.save();
-                        c.getSource()
-                                .sendFeedback(dev.craftium.core.Chat.say(
+                        ClientPlatform.feedback(
+                                c.getSource(),
+                                dev.craftium.core.Chat.say(
                                         "Update checks are on.\nCraftium checks once per game session."));
                         return 1;
                     }))
                     .then(literal("off").executes(c -> {
                         ClientState.options.checkForUpdates = false;
                         ClientState.save();
-                        c.getSource().sendFeedback(dev.craftium.core.Chat.say("Update checks are off."));
+                        ClientPlatform.feedback(c.getSource(), dev.craftium.core.Chat.say("Update checks are off."));
                         return 1;
                     })));
             // The client owns the /craftium root, so a server-only branch is rejected here as an incorrect argument and
@@ -182,13 +193,14 @@ final class ClientCommands {
             root.then(literal("enablecheats").executes(c -> {
                 var server = Minecraft.getInstance().getSingleplayerServer();
                 if (server == null) {
-                    c.getSource()
-                            .sendError(dev.craftium.core.Chat.say(
-                                    "This command works only in your local singleplayer world."));
+                    ClientPlatform.error(
+                            c.getSource(),
+                            dev.craftium.core.Chat.say("This command works only in your local singleplayer world."));
                     return 0;
                 }
                 server.execute(() -> ClientCompat.enableCheats(server));
-                c.getSource().sendFeedback(dev.craftium.core.Chat.say("Cheats are enabled for this local world."));
+                ClientPlatform.feedback(
+                        c.getSource(), dev.craftium.core.Chat.say("Cheats are enabled for this local world."));
                 return 1;
             }));
             root.then(literal("toggle")
@@ -200,7 +212,8 @@ final class ClientCommands {
                             .executes(c -> {
                                 String name = StringArgumentType.getString(c, "capability");
                                 if (!CAPABILITIES.contains(name)) {
-                                    c.getSource().sendError(dev.craftium.core.Chat.say("Unknown builder capability."));
+                                    ClientPlatform.error(
+                                            c.getSource(), dev.craftium.core.Chat.say("Unknown builder capability."));
                                     return 0;
                                 }
                                 try {
@@ -209,9 +222,9 @@ final class ClientCommands {
                                     field.setBoolean(ClientState.options, enabled);
                                     ClientState.save();
                                     CraftiumClient.send("capabilities", null, null);
-                                    c.getSource()
-                                            .sendFeedback(dev.craftium.core.Chat.say(
-                                                    name + (enabled ? " is on." : " is off.")));
+                                    ClientPlatform.feedback(
+                                            c.getSource(),
+                                            dev.craftium.core.Chat.say(name + (enabled ? " is on." : " is off.")));
                                     return 1;
                                 } catch (Exception e) {
                                     return 0;
@@ -235,29 +248,30 @@ final class ClientCommands {
                                         position(index, StringArgumentType.getString(c, "coordinates"));
                                         return 1;
                                     } catch (IllegalArgumentException e) {
-                                        c.getSource().sendError(dev.craftium.core.Chat.say(e.getMessage()));
+                                        ClientPlatform.error(c.getSource(), dev.craftium.core.Chat.say(e.getMessage()));
                                         return 0;
                                     }
                                 })));
             }
             dispatcher.register(root);
             dispatcher.register(literal("craftiumdocs").executes(c -> {
-                c.getSource()
-                        .sendFeedback(dev.craftium.core.Chat.say(
+                ClientPlatform.feedback(
+                        c.getSource(),
+                        dev.craftium.core.Chat.say(
                                 "Documentation is in your download:\n- README.md\n- docs/FEATURES.md"));
                 return 1;
             }));
             dispatcher.register(literal("whynocraftium").executes(c -> {
-                c.getSource()
-                        .sendFeedback(
-                                dev.craftium.core.Chat.say(
-                                        CraftiumClient.supported()
-                                                ? "Connected to the server.\nEdits need creative mode and operator level 2."
-                                                : "No server channel.\nCheck that both sides have matching Craftium and Fabric API versions."));
+                ClientPlatform.feedback(
+                        c.getSource(),
+                        dev.craftium.core.Chat.say(
+                                CraftiumClient.supported()
+                                        ? "Connected to the server.\nEdits need creative mode and operator level 2."
+                                        : "No server channel.\nCheck that both sides have matching Craftium and Fabric API versions."));
                 return 1;
             }));
         });
-        ClientSendMessageEvents.COMMAND.register(command -> {
+        ClientPlatform.onCommandSent(command -> {
             String[] pieces = command.strip().split("\\s+", 2);
             if (pieces[0].equals("/pos1") || pieces[0].equals("/pos2"))
                 try {

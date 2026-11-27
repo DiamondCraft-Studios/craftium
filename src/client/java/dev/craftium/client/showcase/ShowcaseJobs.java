@@ -5,6 +5,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.core.ShowcasePlan;
+import dev.craftium.platform.Platform;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,7 +14,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 
 /**
@@ -48,7 +48,7 @@ public final class ShowcaseJobs {
 
     /** Where every job's folder goes. */
     public static Path root() {
-        return FabricLoader.getInstance().getGameDir().resolve("screenshots").resolve("craftium");
+        return Platform.gameDir().resolve("screenshots").resolve("craftium");
     }
 
     /** Plans the request and starts taking its pictures; returns at once with where they will be. */

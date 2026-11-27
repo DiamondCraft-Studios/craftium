@@ -2,9 +2,9 @@ package dev.craftium.client;
 
 import dev.craftium.Craftium;
 import dev.craftium.compat.Nbt;
+import dev.craftium.platform.Platform;
 import java.nio.file.*;
 import java.util.*;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.*;
 import net.minecraft.world.item.ItemStack;
@@ -16,8 +16,7 @@ import net.minecraft.world.item.ItemStack;
  */
 final class HotbarPages {
     static final int COUNT = 99, ROWS = 5, SLOTS = 9, NAME_LIMIT = 24;
-    private static final Path FILE =
-            FabricLoader.getInstance().getConfigDir().resolve("craftium").resolve("hotbar_pages.nbt");
+    private static final Path FILE = Platform.configDir().resolve("craftium").resolve("hotbar_pages.nbt");
     private static final Map<Integer, List<ItemStack>> HOTBARS = new HashMap<>();
     private static final Map<Integer, String> NAMES = new HashMap<>();
     private static boolean loaded, dirty;

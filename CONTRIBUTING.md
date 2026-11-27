@@ -18,7 +18,9 @@ On Windows, use `gradlew.bat`. Fabric mod JARs are written to `versions/<version
 
 Shared code lives in `src/` and must not contain anything that differs between Minecraft versions. The Paper/Purpur companion follows the same rule: its shared code is in `server-plugin/src/`, and `versions/<version>/server-plugin/` holds that version's `plugin.yml` and dev bundle, built with the shared script `gradle/paper-plugin.gradle`. Each supported version is a module in `versions/<version>/` that adds the code and metadata specific to it: the `compat` adapter classes, mixins that target changed internals, `fabric.mod.json` and the mixin configs. A file in a module replaces the shared file at the same path.
 
-When shared code needs a Minecraft API that differs between versions, call it through an adapter (`Compat`, `ClientCompat`, `Gfx`, `Overlay` and similar) and implement that adapter method in every `versions/<version>/` module. A change inside one module affects only that version.
+When shared code needs a Minecraft API that differs between versions, call it through an adapter (`Compat`, `Nbt`, `ClientCompat`, `Gfx`, `Overlay` and similar) and implement that adapter method in every `versions/<version>/` module. A change inside one module affects only that version.
+
+Shared code does not call the mod loader either. What it needs from the loader (config folder, mod metadata, payloads, events, commands, keys, the HUD) goes through `dev.craftium.platform.Platform` and `dev.craftium.client.platform.ClientPlatform`, which each loader supplies from `loaders/<loader>/src/` along with its entrypoints. A module compiles the shared code, then its loader's folder, then its own `src/`, so a file later in that order replaces one earlier. Fabric API calls that differ between versions go in the version's `FabricCompat` and `FabricClientCompat`.
 
 ## Branches and releases
 

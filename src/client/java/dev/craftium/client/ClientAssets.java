@@ -2,9 +2,9 @@ package dev.craftium.client;
 
 import dev.craftium.core.*;
 import dev.craftium.net.Packets;
+import dev.craftium.platform.Platform;
 import java.nio.file.*;
 import java.util.*;
-import net.fabricmc.loader.api.FabricLoader;
 
 /** Only files explicitly requested by this client may be downloaded into its asset library. */
 public final class ClientAssets {
@@ -15,8 +15,7 @@ public final class ClientAssets {
     private static Path root(String folder) {
         if (!Set.of("blueprints", "exports").contains(folder))
             throw new IllegalArgumentException("Invalid asset library");
-        return FabricLoader.getInstance()
-                .getConfigDir()
+        return Platform.configDir()
                 .resolve("craftium")
                 .resolve(folder)
                 .toAbsolutePath()

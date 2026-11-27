@@ -2,9 +2,11 @@ package dev.craftium.client;
 
 import com.google.gson.*;
 import dev.craftium.Craftium;
+import dev.craftium.client.platform.ClientPlatform;
 import dev.craftium.compat.Compat;
 import dev.craftium.core.Point;
 import dev.craftium.net.Packets;
+import dev.craftium.platform.Platform;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
@@ -12,8 +14,6 @@ import java.nio.file.*;
 import java.security.*;
 import java.util.*;
 import java.util.concurrent.*;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
@@ -25,8 +25,7 @@ import net.minecraft.core.BlockPos;
  * applies its usual permission, protection and size checks; a build is only ever staged as a ghost until {@code apply_preview}.
  */
 public final class AiBridge {
-    static final Path FILE =
-            FabricLoader.getInstance().getConfigDir().resolve("craftium").resolve("bridge.json");
+    static final Path FILE = Platform.configDir().resolve("craftium").resolve("bridge.json");
     /**
      * What the bridge's tools understand, written to the bridge file so the MCP server can tell a player to update the mod or the plugin
      * instead of failing on a tool the other side does not have. Bump it when a tool gains something the MCP server relies on.
@@ -135,7 +134,7 @@ public final class AiBridge {
     }
 
     public static void install() {
-        ClientTickEvents.END_CLIENT_TICK.register(mc -> {
+        ClientPlatform.onEndTick(mc -> {
             if (ClientState.options.aiBridge != running()) {
                 if (ClientState.options.aiBridge) start();
                 else stop();

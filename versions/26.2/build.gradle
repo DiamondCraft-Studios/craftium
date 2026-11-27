@@ -15,8 +15,9 @@ repositories {
     }
 }
 
-// Shared sources live in the repository root. A file under this module's own src/ replaces the
-// shared file with the same relative path, so version differences are explicit overrides.
+// Shared sources live in the repository root and the loader's own code in loaders/<loader>/src. A file under
+// this module's own src/ replaces the file with the same relative path, so version differences are explicit
+// overrides.
 // The merged tree is assembled into build/merged and compiled from there.
 def merged = layout.buildDirectory.dir('merged')
 
@@ -25,6 +26,7 @@ def mergeTask = { String name, String set ->
         into merged.map { it.dir(set) }
         duplicatesStrategy = DuplicatesStrategy.INCLUDE // later sources win
         from rootProject.file("src/${set}")
+        from rootProject.file("loaders/fabric/src/${set}")
         from layout.projectDirectory.dir("src/${set}")
     }
 }

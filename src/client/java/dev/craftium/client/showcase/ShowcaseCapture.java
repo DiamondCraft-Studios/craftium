@@ -1,12 +1,12 @@
 package dev.craftium.client.showcase;
 
 import dev.craftium.client.compat.ClientCompat;
+import dev.craftium.client.platform.ClientPlatform;
 import dev.craftium.core.Point;
 import dev.craftium.core.ShotSpec;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 
@@ -62,7 +62,7 @@ public final class ShowcaseCapture {
         try {
             if (current != null) throw new IllegalStateException("Another picture is being taken");
             if (!registered) {
-                ClientTickEvents.END_CLIENT_TICK.register(ShowcaseCapture::tick);
+                ClientPlatform.onEndTick(ShowcaseCapture::tick);
                 registered = true;
             }
             if (mc.level == null) throw new IllegalStateException("Not in a world");

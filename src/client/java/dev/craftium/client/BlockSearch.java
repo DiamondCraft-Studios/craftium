@@ -30,10 +30,8 @@ final class BlockSearch {
     }
 
     private static String nameOfMod(String namespace) {
-        return MOD_NAMES.computeIfAbsent(namespace, ns -> net.fabricmc.loader.api.FabricLoader.getInstance()
-                .getModContainer(ns)
-                .map(c -> c.getMetadata().getName())
-                .orElse(ns));
+        return MOD_NAMES.computeIfAbsent(
+                namespace, ns -> dev.craftium.platform.Platform.modName(ns).orElse(ns));
     }
 
     /** The creative tabs hold nothing until the game has built them, which it does for the creative inventory; this does it once for the search. */

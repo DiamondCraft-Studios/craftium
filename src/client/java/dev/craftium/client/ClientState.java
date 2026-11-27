@@ -5,12 +5,12 @@ import dev.craftium.Craftium;
 import dev.craftium.core.*;
 import dev.craftium.net.Packets;
 import dev.craftium.net.PluginToolCodec;
+import dev.craftium.platform.Platform;
 import java.nio.file.*;
 import java.util.*;
-import net.fabricmc.loader.api.FabricLoader;
 
 public final class ClientState {
-    private static final Path CONFIG = FabricLoader.getInstance().getConfigDir().resolve("craftium.json");
+    private static final Path CONFIG = Platform.configDir().resolve("craftium.json");
     public static Options options = new Options();
     /** The blocks the world is missing, as the server last told us, in the order of its table. Empty when none is, which keeps the Missing blocks window away. */
     public static java.util.List<String> missingBlocks = java.util.List.of();
@@ -555,9 +555,7 @@ public final class ClientState {
     private static long viewChangedAt;
 
     private static java.nio.file.Path viewFile() {
-        return net.fabricmc.loader.api.FabricLoader.getInstance()
-                .getConfigDir()
-                .resolve("craftium/hierarchy-view.json");
+        return Platform.configDir().resolve("craftium/hierarchy-view.json");
     }
 
     private static void loadView() {

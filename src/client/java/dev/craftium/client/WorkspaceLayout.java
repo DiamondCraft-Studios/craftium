@@ -3,9 +3,9 @@ package dev.craftium.client;
 import dev.craftium.client.compat.Gfx;
 import dev.craftium.core.WindowFold;
 import dev.craftium.net.Packets;
+import dev.craftium.platform.Platform;
 import java.nio.file.*;
 import java.util.*;
-import net.fabricmc.loader.api.FabricLoader;
 
 final class WorkspaceLayout {
     /**
@@ -54,7 +54,7 @@ final class WorkspaceLayout {
         shifts.put(id, dy);
     }
 
-    private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("craftium/layout.json");
+    private static final Path FILE = Platform.configDir().resolve("craftium/layout.json");
     private static boolean loaded;
     /** The size of the editor's canvas that the saved places were made for, 0 when unknown. */
     private static int canvasW, canvasH;

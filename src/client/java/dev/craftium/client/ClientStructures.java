@@ -3,10 +3,10 @@ package dev.craftium.client;
 import dev.craftium.core.StructurePreview;
 import dev.craftium.core.StructureSettings;
 import dev.craftium.net.Packets;
+import dev.craftium.platform.Platform;
 import java.nio.file.*;
 import java.util.*;
 import java.util.function.Consumer;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.storage.LevelResource;
@@ -86,7 +86,7 @@ final class ClientStructures {
                 ? server.getWorldPath(LevelResource.GENERATED_DIR)
                         .resolve(s.namespace())
                         .resolve("structures")
-                : FabricLoader.getInstance().getGameDir().resolve("structures");
+                : Platform.gameDir().resolve("structures");
         String path = s.path();
         int slash = path.lastIndexOf('/');
         return slash < 0 ? base : base.resolve(path.substring(0, slash));

@@ -1,6 +1,5 @@
 package dev.craftium.client.compat;
 
-import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.Camera;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -64,8 +63,14 @@ public final class ClientCompat {
         return nearPlane(camera).getPointOnPlane(x, y).normalize();
     }
 
-    public static KeyMapping registerKey(KeyMapping key) {
-        return KeyMappingHelper.registerKeyMapping(key);
+    private static KeyMapping.Category category;
+
+    /** A key mapping in Craftium's category of the controls screen, registered with the loader. */
+    public static KeyMapping key(String name, int defaultKey) {
+        if (category == null)
+            category = KeyMapping.Category.register(dev.craftium.compat.Compat.id("craftium", "studio"));
+        return dev.craftium.client.platform.ClientPlatform.registerKey(
+                new KeyMapping(name, com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM, defaultKey, category));
     }
 
     /** Lets the local singleplayer owner use commands, then tells connected clients their new permission level. */
