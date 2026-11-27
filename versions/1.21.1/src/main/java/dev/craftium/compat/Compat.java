@@ -90,8 +90,11 @@ public final class Compat {
                 net.minecraft.world.level.EmptyBlockGetter.INSTANCE, net.minecraft.core.BlockPos.ZERO);
     }
 
-    /** Placement flag that skips the new block's onPlace; 1.21.1 has no such flag. */
-    public static final int UPDATE_SKIP_ON_PLACE = 0;
+    /**
+     * Placement flag that skips the new block's onPlace. 1.21.1 has no such flag, so Craftium gives the bit later
+     * versions use (unused as a flag in 1.21.1) the same meaning, through {@link dev.craftium.mixin.SkipOnPlaceMixin}.
+     */
+    public static final int UPDATE_SKIP_ON_PLACE = 512;
 
     /** An entity saved with its id, or null when the entity cannot be saved (a passenger, a removed entity). */
     public static CompoundTag saveEntity(Entity entity, net.minecraft.server.level.ServerLevel level) {
@@ -214,5 +217,10 @@ public final class Compat {
     /** The registered block with this id, or air for an id nothing is registered under. */
     public static net.minecraft.world.level.block.Block block(net.minecraft.resources.ResourceLocation id) {
         return net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(id);
+    }
+
+    /** The block registry, as a lookup that reads saved block states. */
+    public static net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> blockLookup() {
+        return net.minecraft.core.registries.BuiltInRegistries.BLOCK.asLookup();
     }
 }
