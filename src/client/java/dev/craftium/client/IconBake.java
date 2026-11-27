@@ -1,6 +1,7 @@
 package dev.craftium.client;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.Gfx;
 import dev.craftium.client.compat.ReferenceTexture;
 import dev.craftium.client.compat.Tex;
@@ -92,7 +93,7 @@ final class IconBake {
         painter.accept(canvas);
         var image = new NativeImage(pixels, pixels, false);
         for (int py = 0; py < pixels; py++)
-            for (int px = 0; px < pixels; px++) image.setPixel(px, py, canvas.argb[py * pixels + px]);
+            for (int px = 0; px < pixels; px++) ClientCompat.setPixel(image, px, py, canvas.argb[py * pixels + px]);
         var texture = new ReferenceTexture(image);
         texture.filtering(false);
         var id = Tex.of("craftium", "icon/" + UUID.randomUUID());

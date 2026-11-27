@@ -375,18 +375,14 @@ public final class StudioScreen extends CraftiumScreen {
         if (tab.equals("Script")) {
             labels.add(new Label("Lua brush", left, top + 60));
             labels.add(new Label("Lua boolean mask", left + 316, top + 60));
-            var brush = MultiLineEditBox.builder()
-                    .setX(left)
-                    .setY(top + 77)
-                    .build(font, 300, canvasH - 230, Component.literal("Lua brush"));
+            var brush =
+                    ClientCompat.multiLineBox(font, left, top + 77, 300, canvasH - 230, Component.literal("Lua brush"));
             brush.setCharacterLimit(16384);
             brush.setValue(ClientState.options.script);
             brush.setValueListener(value -> ClientState.options.script = value);
             addRenderableWidget(brush);
-            var mask = MultiLineEditBox.builder()
-                    .setX(left + 316)
-                    .setY(top + 77)
-                    .build(font, 300, canvasH - 230, Component.literal("Lua mask"));
+            var mask = ClientCompat.multiLineBox(
+                    font, left + 316, top + 77, 300, canvasH - 230, Component.literal("Lua mask"));
             mask.setCharacterLimit(16384);
             mask.setValue(ClientState.options.maskScript);
             mask.setValueListener(value -> ClientState.options.maskScript = value);

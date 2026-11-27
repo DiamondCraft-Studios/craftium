@@ -1,6 +1,7 @@
 package dev.craftium.client;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.ReferenceTexture;
 import dev.craftium.client.compat.Tex;
 import dev.craftium.core.VoxelView;
@@ -130,7 +131,8 @@ final class AiThumbnails {
         for (int y = 0; y < HEIGHT; y++)
             for (int x = 0; x < WIDTH; x++) {
                 int px = x - ox, py = y - oy;
-                image.setPixel(
+                ClientCompat.setPixel(
+                        image,
                         x,
                         y,
                         px < 0 || py < 0 || px >= picture.getWidth() || py >= picture.getHeight()

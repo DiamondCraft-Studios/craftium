@@ -2,6 +2,7 @@ package dev.craftium.client;
 
 import com.google.gson.JsonObject;
 import com.mojang.blaze3d.platform.NativeImage;
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.ReferenceTexture;
 import dev.craftium.client.compat.Tex;
 import dev.craftium.core.VoxelOrbit;
@@ -47,7 +48,7 @@ final class PoolThumbnails {
         VoxelOrbit.fit(scene, view, w, h, 6); // the piece fills the picture, whatever its shape
         VoxelOrbit.render(scene, view, w, h, pixels, BACKGROUND, null);
         var image = new NativeImage(w, h, false);
-        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) image.setPixel(x, y, pixels[y * w + x]);
+        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) ClientCompat.setPixel(image, x, y, pixels[y * w + x]);
         var texture = new ReferenceTexture(image);
         texture.filtering(true);
         var tex = Tex.of("craftium", "pool_template/" + UUID.randomUUID());

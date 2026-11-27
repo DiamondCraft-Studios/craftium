@@ -57,7 +57,7 @@ final class TransformGizmo {
     /** Records a Move drag: the blocks go to {@code snapped}, and the handle to {@code free}, or to {@code snapped} as well with Ctrl held (entities, which have their own fine steps, always follow {@code snapped}). */
     private static void moveTo(Vec3 free, Vec3 snapped) {
         delta = snapped;
-        smooth = dragging.kind == Kind.ENTITY || Minecraft.getInstance().hasControlDown() ? snapped : free;
+        smooth = dragging.kind == Kind.ENTITY || ClientCompat.ctrlDown() ? snapped : free;
     }
 
     private static Vec3 normalization = Vec3.ZERO;
@@ -103,9 +103,7 @@ final class TransformGizmo {
             request.offsetY = step.y();
             request.offsetZ = step.z();
             if (target.kind == Kind.ENTITY) {
-                double size = Minecraft.getInstance().hasShiftDown()
-                        ? .0001
-                        : Minecraft.getInstance().hasControlDown() ? 1 : 1d / 16;
+                double size = ClientCompat.shiftDown() ? .0001 : ClientCompat.ctrlDown() ? 1 : 1d / 16;
                 request.entityX = step.x() * size;
                 request.entityY = step.y() * size;
                 request.entityZ = step.z() * size;
@@ -175,7 +173,7 @@ final class TransformGizmo {
     private static double[] project(Vec3 at) {
         var mc = Minecraft.getInstance();
         var camera = ClientCompat.camera(mc);
-        Vec3 v = at.subtract(camera.position()),
+        Vec3 v = at.subtract(ClientCompat.cameraPosition(camera)),
                 plane = ClientCompat.nearPlane(camera).getPointOnPlane(0, 0);
         var near = ClientCompat.nearPlane(camera);
         Vec3 right = near.getPointOnPlane(1, 0).subtract(plane).normalize(),
@@ -357,8 +355,8 @@ final class TransformGizmo {
             var pixel = project(center);
             return pixel == null ? 0 : Math.atan2(y - pixel[1], x - pixel[0]);
         }
-        double distance = center.subtract(camera.position()).dot(basis[axis]) / divisor;
-        Vec3 v = camera.position().add(ray.scale(distance)).subtract(center);
+        double distance = center.subtract(ClientCompat.cameraPosition(camera)).dot(basis[axis]) / divisor;
+        Vec3 v = ClientCompat.cameraPosition(camera).add(ray.scale(distance)).subtract(center);
         return Math.atan2(v.dot(basis[(axis + 2) % 3]), v.dot(basis[(axis + 1) % 3]));
     }
 
@@ -371,12 +369,12 @@ final class TransformGizmo {
         normalizationDirty = true;
         var mc = Minecraft.getInstance();
         boolean entity = dragging.kind == Kind.ENTITY;
-        double increment = entity ? (mc.hasShiftDown() ? .0001 : mc.hasControlDown() ? 1 : 1d / 16) : 1;
+        double increment = entity ? (ClientCompat.shiftDown() ? .0001 : ClientCompat.ctrlDown() ? 1 : 1d / 16) : 1;
         if (mode
                 == Options.GizmoMode
                         .MOVE) { // for an entity Ctrl halves the speed of a move: what the pointer travelled while it
             // was held counts half
-            double speed = entity && mc.hasControlDown() ? .5 : 1;
+            double speed = entity && ClientCompat.ctrlDown() ? .5 : 1;
             slowX += (x - lastX) * speed;
             slowY += (y - lastY) * speed;
             lastX = x;
@@ -393,7 +391,8 @@ final class TransformGizmo {
         }
         if (mode == Options.GizmoMode.ROTATE && handle == 7) { // the ring facing the camera: turn about the view
             double view = Math.IEEEremainder(Math.toDegrees(screenAngle(x, y, dragging.anchor) - startAngle), 360);
-            view = snap(view, mc.hasShiftDown() ? 1 : mc.hasControlDown() ? 5 : blocky(dragging.kind) ? 15 : 5);
+            view = snap(
+                    view, ClientCompat.shiftDown() ? 1 : ClientCompat.ctrlDown() ? 5 : blocky(dragging.kind) ? 15 : 5);
             setRotation(axisAngle(cameraAxes()[2], Math.toRadians(view)));
             return true;
         }
@@ -402,9 +401,9 @@ final class TransformGizmo {
             degrees = Math.IEEEremainder(degrees, 360);
             degrees = snap(
                     degrees,
-                    mc.hasShiftDown()
+                    ClientCompat.shiftDown()
                             ? 1
-                            : mc.hasControlDown()
+                            : ClientCompat.ctrlDown()
                                     ? (blocky(dragging.kind) ? 5 : 15)
                                     : entity || ClientState.options.unlockRotation
                                             ? 5
@@ -434,7 +433,7 @@ final class TransformGizmo {
                     factor[axis] = gridFactor(
                             blocks[axis],
                             Math.max(1, blocks[axis]) + amount * (centred() ? 2 : 1),
-                            mc.hasControlDown());
+                            ClientCompat.ctrlDown());
             } else {
                 double all = Math.clamp(snap(1 + amount / (5 * pickScale), 1d / 16), .1, 8);
                 factor[a] = factor[b] = all;
@@ -446,7 +445,7 @@ final class TransformGizmo {
                 && handle == 3) { // the circle in the middle scales every axis: drag up to grow
             double all = Math.clamp(1 + (startY - y) / 120d, .05, 8);
             if (blocky(dragging.kind) && pickExtent != null) {
-                boolean smooth = mc.hasControlDown();
+                boolean smooth = ClientCompat.ctrlDown();
                 size = new Vec3(
                         gridFactor(pickExtent.x, pickExtent.x * all, smooth),
                         gridFactor(pickExtent.y, pickExtent.y * all, smooth),
@@ -474,8 +473,8 @@ final class TransformGizmo {
             // The size is a whole number of blocks unless Ctrl is held, which allows any size.
             double n = Math.max(1, new double[] {pickExtent.x, pickExtent.y, pickExtent.z}[axis]);
             double target = n + amount * (centred() ? 2 : 1);
-            if (!mc.hasControlDown()) target = Math.rint(target);
-            double factor = Math.clamp(Math.max(target, mc.hasControlDown() ? .1 : 1) / n, .01, 64);
+            if (!ClientCompat.ctrlDown()) target = Math.rint(target);
+            double factor = Math.clamp(Math.max(target, ClientCompat.ctrlDown() ? .1 : 1) / n, .01, 64);
             size = new Vec3(axis == 0 ? factor : 1, axis == 1 ? factor : 1, axis == 2 ? factor : 1);
             return true;
         }
@@ -483,8 +482,8 @@ final class TransformGizmo {
             double reach = pickReach == null
                     ? 5 * pickScale
                     : Math.max(1, new double[] {pickReach.x, pickReach.y, pickReach.z}[axis]);
-            double factor = Math.clamp(snap(1 + amount / reach, mc.hasShiftDown() ? .0001 : 1d / 16), .1, 8);
-            size = mc.hasControlDown() || handle == 3
+            double factor = Math.clamp(snap(1 + amount / reach, ClientCompat.shiftDown() ? .0001 : 1d / 16), .1, 8);
+            size = ClientCompat.ctrlDown() || handle == 3
                     ? new Vec3(factor, factor, factor)
                     : new Vec3(axis == 0 ? factor : 1, axis == 1 ? factor : 1, axis == 2 ? factor : 1);
         } else moveTo(basis[axis].scale(amount), basis[axis].scale(snap(amount, increment)));
@@ -607,9 +606,8 @@ final class TransformGizmo {
     }
 
     private static boolean altDown() {
-        var window = Minecraft.getInstance().getWindow();
-        return com.mojang.blaze3d.platform.InputConstants.isKeyDown(window, org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_ALT)
-                || com.mojang.blaze3d.platform.InputConstants.isKeyDown(window, org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_ALT);
+        return ClientCompat.keyDown(org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_ALT)
+                || ClientCompat.keyDown(org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_ALT);
     }
 
     private static Vec3 transformed(Vec3 world) {
@@ -1144,7 +1142,7 @@ final class TransformGizmo {
         double[][] axes = new double[dragAxes.length][];
         for (int i = 0; i < axes.length; i++) axes[i] = vector(dragAxes[i]);
         double[] amounts = DragMath.step(
-                vector(at.subtract(camera.position())),
+                vector(at.subtract(ClientCompat.cameraPosition(camera))),
                 axes,
                 vector(right),
                 vector(up),
@@ -1295,8 +1293,8 @@ final class TransformGizmo {
     private static final double DESIGN_DISTANCE = 8 / .6; // 40% smaller than the size first chosen at 8
     /** How much to scale the gizmo so it covers the same part of the screen whatever its distance from the camera. */
     private static double screenScale(Vec3 anchor) {
-        double distance =
-                ClientCompat.camera(Minecraft.getInstance()).position().distanceTo(anchor);
+        double distance = ClientCompat.cameraPosition(ClientCompat.camera(Minecraft.getInstance()))
+                .distanceTo(anchor);
         return Math.clamp(distance / DESIGN_DISTANCE, .05, 40);
     }
     /** Move handles end in flat triangular arrowheads, rotate handles are rings, scale handles are squares, and the centre is a square of its own. */
@@ -1420,7 +1418,8 @@ final class TransformGizmo {
     private static void arrowhead(Vec3 tip, Vec3 base, int color, float width, double k) {
         Vec3 axis = tip.subtract(base),
                 toCamera =
-                        ClientCompat.camera(Minecraft.getInstance()).position().subtract(base);
+                        ClientCompat.cameraPosition(ClientCompat.camera(Minecraft.getInstance()))
+                                .subtract(base);
         Vec3 side = axis.cross(toCamera);
         if (side.lengthSqr() < 1e-9) return; // looking straight down the axis: nothing to show but the tip
         side = side.normalize().scale(.3 * k);

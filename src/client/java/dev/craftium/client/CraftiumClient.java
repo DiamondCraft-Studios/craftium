@@ -108,7 +108,7 @@ public final class CraftiumClient {
             ClientPlatform.onEndTick(mc -> {
                 if (!once[0]) {
                     once[0] = true;
-                    GLFW.glfwMaximizeWindow(mc.getWindow().handle());
+                    GLFW.glfwMaximizeWindow(ClientCompat.windowHandle());
                 }
             });
         }
@@ -159,10 +159,10 @@ public final class CraftiumClient {
                     GLFW.GLFW_KEY_Y,
                     GLFW.GLFW_KEY_Z
                 })
-                    if (GLFW.glfwGetKey(mc.getWindow().handle(), key) == GLFW.GLFW_PRESS)
+                    if (GLFW.glfwGetKey(ClientCompat.windowHandle(), key) == GLFW.GLFW_PRESS)
                         keys.append((char) key).append(' ');
-                if (mc.hasControlDown()) keys.append("Ctrl ");
-                if (mc.hasShiftDown()) keys.append("Shift ");
+                if (ClientCompat.ctrlDown()) keys.append("Ctrl ");
+                if (ClientCompat.shiftDown()) keys.append("Shift ");
                 g.text(
                         mc.font,
                         keys.toString(),
@@ -385,7 +385,7 @@ public final class CraftiumClient {
         preview(mc);
         if (ClientCompat.screen(mc) != null) return;
         for (var entry : toolKeys.entrySet()) while (entry.getValue().consumeClick()) {}
-        while (swapKey.consumeClick()) if (!mc.hasControlDown()) send("hotbar", null, null);
+        while (swapKey.consumeClick()) if (!ClientCompat.ctrlDown()) send("hotbar", null, null);
         while (replaceKey.consumeClick()) {
             ClientState.options.replaceMode = !ClientState.options.replaceMode;
             ClientCompat.overlayMessage(
@@ -406,7 +406,8 @@ public final class CraftiumClient {
         }
         // Letting go of the place button closes the stroke the game's own placements belonged to.
         if (placeStrokeOpen
-                && GLFW.glfwGetMouseButton(mc.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_RIGHT) != GLFW.GLFW_PRESS) {
+                && GLFW.glfwGetMouseButton(ClientCompat.windowHandle(), GLFW.GLFW_MOUSE_BUTTON_RIGHT)
+                        != GLFW.GLFW_PRESS) {
             placeStrokeOpen = false;
             if (supported()) send("place_stroke_end", null, null);
         }
@@ -414,9 +415,10 @@ public final class CraftiumClient {
         if (BuilderMode.active()) return;
         var o = ClientState.options;
         long now = System.currentTimeMillis();
-        boolean left = GLFW.glfwGetMouseButton(mc.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
+        boolean left =
+                GLFW.glfwGetMouseButton(ClientCompat.windowHandle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
         boolean right =
-                GLFW.glfwGetMouseButton(mc.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
+                GLFW.glfwGetMouseButton(ClientCompat.windowHandle(), GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
         // The click that changed the reach is not a click on the world: it is ignored for a tick, and until the button
         // is let go.
         if (guardLeft && !left) guardLeft = false;
@@ -525,10 +527,10 @@ public final class CraftiumClient {
     public static boolean held(KeyMapping mapping) {
         if (mapping.isUnbound()) return false;
         var key = InputConstants.getKey(mapping.saveString());
-        long window = Minecraft.getInstance().getWindow().handle();
+        long window = ClientCompat.windowHandle();
         return key.getType() == InputConstants.Type.MOUSE
                 ? GLFW.glfwGetMouseButton(window, key.getValue()) == GLFW.GLFW_PRESS
-                : InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), key.getValue());
+                : ClientCompat.keyDown(key.getValue());
     }
     /** Steps the selection's display to the next style (silhouette, outline, all edges) and says which. Used by the editor and the Builder alike. */
     public static void cycleSelectionStyle() {
@@ -819,7 +821,7 @@ public final class CraftiumClient {
         float nx = (float) (guiX / mc.getWindow().getGuiScaledWidth() * 2 - 1),
                 ny = (float) (1 - guiY / mc.getWindow().getGuiScaledHeight() * 2);
         Vec3 direction = ClientCompat.ray(camera, nx, ny);
-        Vec3 start = camera.position();
+        Vec3 start = ClientCompat.cameraPosition(camera);
         BlockHitResult hit;
         SlabSplit.suppress(true); // the whole of a double slab is aimed at, not one half
         try {
@@ -942,7 +944,7 @@ public final class CraftiumClient {
     private static dev.craftium.core.ViewCone viewCone() {
         var mc = Minecraft.getInstance();
         var camera = ClientCompat.camera(mc);
-        var eye = camera.position();
+        var eye = ClientCompat.cameraPosition(camera);
         var forward = camera.rotation().transform(new org.joml.Vector3f(0, 0, -1)); // as the game makes its own
         var window = mc.getWindow();
         double aspect = window.getHeight() == 0 ? 1 : (double) window.getWidth() / window.getHeight();

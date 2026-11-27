@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -27,7 +28,7 @@ public final class SlabSplit {
     public static VoxelShape half(BlockPos pos) {
         if (suppressed > 0) return null;
         var mc = Minecraft.getInstance();
-        if (mc.hasControlDown()
+        if (ClientCompat.ctrlDown()
                 || !(mc.hitResult instanceof BlockHitResult hit)
                 || hit.getType() != HitResult.Type.BLOCK
                 || !hit.getBlockPos().equals(pos)) return null;

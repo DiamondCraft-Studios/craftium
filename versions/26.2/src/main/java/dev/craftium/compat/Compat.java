@@ -227,4 +227,9 @@ public final class Compat {
                     net.minecraft.world.level.block.Block block) {
         return new net.minecraft.world.level.block.entity.BlockEntityType<>(factory, Set.of(block));
     }
+
+    /** The registered block with this id, or air for an id nothing is registered under. */
+    public static net.minecraft.world.level.block.Block block(net.minecraft.resources.Identifier id) {
+        return net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(id);
+    }
 }

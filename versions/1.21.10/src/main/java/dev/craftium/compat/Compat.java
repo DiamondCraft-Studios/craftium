@@ -246,4 +246,9 @@ public final class Compat {
             throw new IllegalStateException("Cannot make a block entity type without Fabric API", e);
         }
     }
+
+    /** The registered block with this id, or air for an id nothing is registered under. */
+    public static net.minecraft.world.level.block.Block block(net.minecraft.resources.ResourceLocation id) {
+        return net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(id);
+    }
 }

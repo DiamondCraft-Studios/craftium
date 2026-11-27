@@ -116,4 +116,137 @@ public final class ClientCompat {
     public static void refreshGui(Minecraft mc) {
         mc.resizeDisplay();
     }
+
+    public static boolean ctrlDown() {
+        return Minecraft.getInstance().hasControlDown();
+    }
+
+    public static boolean shiftDown() {
+        return Minecraft.getInstance().hasShiftDown();
+    }
+
+    public static boolean altDown() {
+        return Minecraft.getInstance().hasAltDown();
+    }
+
+    /** The GLFW handle of the game window. */
+    public static long windowHandle() {
+        return Minecraft.getInstance().getWindow().handle();
+    }
+
+    public static net.minecraft.world.phys.Vec3 cameraPosition(Camera camera) {
+        return camera.position();
+    }
+
+    /** Writes one pixel, given as ARGB. */
+    public static void setPixel(com.mojang.blaze3d.platform.NativeImage image, int x, int y, int argb) {
+        image.setPixel(x, y, argb);
+    }
+
+    /** One pixel, as ARGB. */
+    public static int getPixel(com.mojang.blaze3d.platform.NativeImage image, int x, int y) {
+        return image.getPixel(x, y);
+    }
+
+    /** Every pixel, row by row, as ARGB. */
+    public static int[] argbPixels(com.mojang.blaze3d.platform.NativeImage image) {
+        return image.getPixels();
+    }
+
+    /** Whether the key with this GLFW code is held now. */
+    public static boolean keyDown(int key) {
+        return com.mojang.blaze3d.platform.InputConstants.isKeyDown(
+                Minecraft.getInstance().getWindow(), key);
+    }
+
+    public static boolean matches(KeyMapping mapping, net.minecraft.client.input.KeyEvent event) {
+        return mapping.matches(event);
+    }
+
+    /** Reads the target's pixels and hands them on; the receiver closes the image. */
+    public static void screenshot(
+            com.mojang.blaze3d.pipeline.RenderTarget target,
+            java.util.function.Consumer<com.mojang.blaze3d.platform.NativeImage> then) {
+        net.minecraft.client.Screenshot.takeScreenshot(target, then);
+    }
+
+    public static net.minecraft.client.gui.components.MultiLineEditBox multiLineBox(
+            net.minecraft.client.gui.Font font,
+            int x,
+            int y,
+            int width,
+            int height,
+            net.minecraft.network.chat.Component label) {
+        return net.minecraft.client.gui.components.MultiLineEditBox.builder()
+                .setX(x)
+                .setY(y)
+                .build(font, width, height, label);
+    }
+
+    // Passing input on to a vanilla widget or screen.
+
+    public static boolean mouseClicked(
+            net.minecraft.client.gui.components.events.GuiEventListener target,
+            net.minecraft.client.input.MouseButtonEvent event,
+            boolean doubleClick) {
+        return target.mouseClicked(event, doubleClick);
+    }
+
+    public static boolean mouseReleased(
+            net.minecraft.client.gui.components.events.GuiEventListener target,
+            net.minecraft.client.input.MouseButtonEvent event) {
+        return target.mouseReleased(event);
+    }
+
+    public static boolean mouseDragged(
+            net.minecraft.client.gui.components.events.GuiEventListener target,
+            net.minecraft.client.input.MouseButtonEvent event,
+            double dx,
+            double dy) {
+        return target.mouseDragged(event, dx, dy);
+    }
+
+    public static boolean keyPressed(
+            net.minecraft.client.gui.components.events.GuiEventListener target,
+            net.minecraft.client.input.KeyEvent event) {
+        return target.keyPressed(event);
+    }
+
+    public static boolean keyReleased(
+            net.minecraft.client.gui.components.events.GuiEventListener target,
+            net.minecraft.client.input.KeyEvent event) {
+        return target.keyReleased(event);
+    }
+
+    public static boolean charTyped(
+            net.minecraft.client.gui.components.events.GuiEventListener target,
+            net.minecraft.client.input.CharacterEvent event) {
+        return target.charTyped(event);
+    }
+
+    /** The faces of a box of an entity model, placed by {@code at}. */
+    public static java.util.List<dev.craftium.client.ModelFace> faces(
+            com.mojang.blaze3d.vertex.PoseStack.Pose at, net.minecraft.client.model.geom.ModelPart.Cube cube) {
+        var out = new java.util.ArrayList<dev.craftium.client.ModelFace>();
+        for (var polygon : cube.polygons) {
+            var v = polygon.vertices();
+            if (v.length < 4) continue;
+            var corners = new org.joml.Vector3f[4];
+            float[] u = new float[4], t = new float[4];
+            for (int i = 0; i < 4; i++) {
+                corners[i] = at.pose()
+                        .transformPosition(v[i].worldX(), v[i].worldY(), v[i].worldZ(), new org.joml.Vector3f());
+                u[i] = v[i].u();
+                t[i] = v[i].v();
+            }
+            out.add(new dev.craftium.client.ModelFace(
+                    corners, u, t, at.transformNormal(polygon.normal(), new org.joml.Vector3f())));
+        }
+        return out;
+    }
+
+    /** The model layer of a shulker box. */
+    public static net.minecraft.client.model.geom.ModelLayerLocation shulkerBoxLayer() {
+        return net.minecraft.client.model.geom.ModelLayers.SHULKER_BOX;
+    }
 }

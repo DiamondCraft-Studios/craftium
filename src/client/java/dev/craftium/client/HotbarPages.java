@@ -39,7 +39,7 @@ final class HotbarPages {
         try {
             var ops = ops(mc);
             var root = NbtIo.readCompressed(FILE, NbtAccounter.create(64_000_000));
-            for (String key : root.keySet()) {
+            for (String key : Nbt.keySet(root)) {
                 if (key.startsWith("n")) {
                     try {
                         int page = Integer.parseInt(key.substring(1));

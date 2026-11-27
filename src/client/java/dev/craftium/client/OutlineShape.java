@@ -179,7 +179,7 @@ final class OutlineShape {
     }
     /** A depth-tested line, drawn a little toward the camera: the outline lies in the surface of the blocks, so exactly there it would be cut away by them. */
     static void sceneLine(Vec3 a, Vec3 b, int colour, float width) {
-        Vec3 eye = ClientCompat.camera(Minecraft.getInstance()).position(),
+        Vec3 eye = ClientCompat.cameraPosition(ClientCompat.camera(Minecraft.getInstance())),
                 mid = a.add(b).scale(.5),
                 toEye = eye.subtract(mid);
         double distance = toEye.length();
@@ -240,7 +240,8 @@ final class OutlineShape {
             // Only a camera inside the shape sees its walls from behind; from outside, every face keeps the one fill.
             Vec3 eye = backFill == fill
                     ? null
-                    : ClientCompat.camera(Minecraft.getInstance()).position().subtract(at);
+                    : ClientCompat.cameraPosition(ClientCompat.camera(Minecraft.getInstance()))
+                            .subtract(at);
             boolean inside = eye != null && inside(eye);
             Vec3[][] ready = at.equals(Vec3.ZERO) ? quads() : null;
             int next = 0;
@@ -426,12 +427,12 @@ final class OutlineShape {
         return bounds != null
                 && ready
                 && outline.creases().size() > ASYNC_CREASES
-                && bounds.contains(ClientCompat.camera(Minecraft.getInstance()).position());
+                && bounds.contains(ClientCompat.cameraPosition(ClientCompat.camera(Minecraft.getInstance())));
     }
     /** Whether the camera is inside the shape. Shapes with too many faces to be filled are not worked out, which keeps the frame cheap. */
     boolean cameraInside() {
         if (bounds == null || !ready || outline.faces().size() > maxFaces) return false;
-        return inside(ClientCompat.camera(Minecraft.getInstance()).position());
+        return inside(ClientCompat.cameraPosition(ClientCompat.camera(Minecraft.getInstance())));
     }
     /** Whether {@code eye}, relative to the shape, is inside it: a ray along +x crosses an odd number of the closed surface's faces. */
     private boolean inside(Vec3 eye) {
@@ -579,7 +580,7 @@ final class OutlineShape {
     }
     /** The camera's position, or where it is relative to the shape if the shape is being moved by something. */
     private static Vec3 eyeIn(java.util.function.UnaryOperator<Vec3> eyeInShape) {
-        Vec3 eye = ClientCompat.camera(Minecraft.getInstance()).position();
+        Vec3 eye = ClientCompat.cameraPosition(ClientCompat.camera(Minecraft.getInstance()));
         return eyeInShape == null ? eye : eyeInShape.apply(eye);
     }
     /** True when the face with this direction, on a plane through the point, faces the eye. */
@@ -593,7 +594,7 @@ final class OutlineShape {
             Overlay.box(box, stroke, 1, fill);
             return;
         }
-        Vec3 eye = ClientCompat.camera(Minecraft.getInstance()).position();
+        Vec3 eye = ClientCompat.cameraPosition(ClientCompat.camera(Minecraft.getInstance()));
         for (int i = 0; i < 8; i++)
             for (int bit : new int[] {1, 2, 4})
                 if ((i & bit) == 0 && !farEdge(box, i, bit, eye))
@@ -615,7 +616,7 @@ final class OutlineShape {
     }
 
     private static void boxLines(AABB box, Lines lines) {
-        Vec3 eye = ClientCompat.camera(Minecraft.getInstance()).position();
+        Vec3 eye = ClientCompat.cameraPosition(ClientCompat.camera(Minecraft.getInstance()));
         for (int i = 0; i < 8; i++)
             for (int bit : new int[] {1, 2, 4})
                 if ((i & bit) == 0 && !farEdge(box, i, bit, eye)) lines.line(corner(box, i), corner(box, i | bit));

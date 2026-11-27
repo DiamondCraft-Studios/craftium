@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.Gfx;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -53,6 +54,6 @@ final class BlockDragCursor {
         if (mc == null) return;
         shown = want;
         if (want && crosshair == 0) crosshair = GLFW.glfwCreateStandardCursor(GLFW.GLFW_CROSSHAIR_CURSOR);
-        GLFW.glfwSetCursor(mc.getWindow().handle(), want ? crosshair : 0L);
+        GLFW.glfwSetCursor(ClientCompat.windowHandle(), want ? crosshair : 0L);
     }
 }

@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.CraftiumSlider;
 import dev.craftium.client.compat.Gfx;
 import net.minecraft.client.Minecraft;
@@ -86,7 +87,7 @@ abstract class FlatSlider extends CraftiumSlider {
         if (hide == cursorHidden) return;
         cursorHidden = hide;
         GLFW.glfwSetInputMode(
-                Minecraft.getInstance().getWindow().handle(),
+                ClientCompat.windowHandle(),
                 GLFW.GLFW_CURSOR,
                 hide ? GLFW.GLFW_CURSOR_DISABLED : GLFW.GLFW_CURSOR_NORMAL);
     }
@@ -122,12 +123,12 @@ abstract class FlatSlider extends CraftiumSlider {
         var mc = Minecraft.getInstance();
         if (entry != null) { // already typing: a click puts the caret there, Shift stretches the selection, Ctrl or a
             // double click selects all
-            if (mc.hasControlDown() || doubleClick) entry.selectAll();
-            else entry.click(event.x(), getX(), getWidth(), mc.hasShiftDown());
+            if (ClientCompat.ctrlDown() || doubleClick) entry.selectAll();
+            else entry.click(event.x(), getX(), getWidth(), ClientCompat.shiftDown());
             selectingText = true;
             return true;
         }
-        if (mc.hasControlDown()) {
+        if (ClientCompat.ctrlDown()) {
             String text = Double.toString(Math.rint(units() * 1000) / 1000);
             entry = new NumberEntry();
             entry.start(text.endsWith(".0") ? text.substring(0, text.length() - 2) : text);
@@ -149,7 +150,7 @@ abstract class FlatSlider extends CraftiumSlider {
         }
         if (!sliding || event.button() != 0) return false;
         var mc = Minecraft.getInstance();
-        slideTo(event.x(), mc.hasControlDown(), mc.hasShiftDown());
+        slideTo(event.x(), ClientCompat.ctrlDown(), ClientCompat.shiftDown());
         return true;
     }
 
@@ -193,8 +194,8 @@ abstract class FlatSlider extends CraftiumSlider {
         // A release that never reached the slider, such as the screen closing mid-drag, must not leave the cursor
         // hidden.
         if (sliding
-                && GLFW.glfwGetMouseButton(Minecraft.getInstance().getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT)
-                        != GLFW.GLFW_PRESS) stopSliding();
+                && GLFW.glfwGetMouseButton(ClientCompat.windowHandle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) != GLFW.GLFW_PRESS)
+            stopSliding();
         track(
                 g,
                 getX(),

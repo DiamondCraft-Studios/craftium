@@ -8,7 +8,6 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.storage.LevelResource;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
@@ -263,7 +262,7 @@ final class ClientStructures {
         return colours.computeIfAbsent(id, key -> {
             var entry = BlockColours.get(key);
             if (entry != null) return 0xff000000 | entry.rgb();
-            var block = BuiltInRegistries.BLOCK.getValue(dev.craftium.compat.Compat.parse(key));
+            var block = dev.craftium.compat.Compat.block(dev.craftium.compat.Compat.parse(key));
             return 0xff000000 | block.defaultMapColor().col;
         });
     }

@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.Gfx;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -88,7 +89,7 @@ final class NumberEntry {
     /** Handles a key press. Every key is the entry's while it is open, so the result only says whether typing is over. */
     Result key(KeyEvent event) {
         int key = event.key();
-        boolean ctrl = event.hasControlDown(), shift = Minecraft.getInstance().hasShiftDown();
+        boolean ctrl = event.hasControlDown(), shift = ClientCompat.shiftDown();
         var keyboard = Minecraft.getInstance().keyboardHandler;
         if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) return Result.APPLY;
         if (key == GLFW.GLFW_KEY_ESCAPE) return Result.CANCEL;

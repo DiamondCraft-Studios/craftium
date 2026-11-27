@@ -82,7 +82,7 @@ public final class ColourPickerScreen extends CraftiumScreen {
     private int pipetteColour(double mx, double my) {
         if (!pipette || !(parent instanceof EditorScreen editor) || minecraft == null || minecraft.level == null)
             return -1;
-        if (!minecraft.hasAltDown() || in(mx, my, windowX, windowY, W, folded ? TITLE : bodyHeight())) return -1;
+        if (!ClientCompat.altDown() || in(mx, my, windowX, windowY, W, folded ? TITLE : bodyHeight())) return -1;
         var hit = editor.pipetteTarget(mx, my);
         if (hit == null) return -1;
         var state = minecraft.level.getBlockState(hit.getBlockPos());

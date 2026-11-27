@@ -1,6 +1,7 @@
 package dev.craftium.client;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.Gfx;
 import dev.craftium.client.compat.ReferenceTexture;
 import dev.craftium.client.compat.Tex;
@@ -126,13 +127,14 @@ public final class CrispText {
                         as = coverDark[row][col] * alpha / 255.0,
                         a = am + as * (1 - am);
                 if (a <= 0.002) {
-                    image.setPixel(col, row, 0);
+                    ClientCompat.setPixel(image, col, row, 0);
                     continue;
                 }
                 int outR = (int) Math.round((am * r + as * (1 - am) * dr) / a),
                         outG = (int) Math.round((am * gr + as * (1 - am) * dg) / a),
                         outB = (int) Math.round((am * b + as * (1 - am) * db) / a);
-                image.setPixel(col, row, ((int) Math.round(a * 255) & 255) << 24 | outR << 16 | outG << 8 | outB);
+                ClientCompat.setPixel(
+                        image, col, row, ((int) Math.round(a * 255) & 255) << 24 | outR << 16 | outG << 8 | outB);
             }
         var texture = new ReferenceTexture(image);
         texture.filtering(false);
@@ -203,7 +205,7 @@ public final class CrispText {
                     int widest = 0;
                     for (int row = 0; row < 8; row++)
                         for (int col = 0; col < 8; col++)
-                            if ((image.getPixel(c % 16 * 8 + col, c / 16 * 8 + row) >>> 24) >= 128) {
+                            if ((ClientCompat.getPixel(image, c % 16 * 8 + col, c / 16 * 8 + row) >>> 24) >= 128) {
                                 glyph[c][row * 8 + col] = 1;
                                 widest = Math.max(widest, col + 1);
                             }

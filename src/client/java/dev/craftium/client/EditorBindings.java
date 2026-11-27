@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.core.*;
 import dev.craftium.core.EditorControls.*;
 import dev.craftium.net.Packets;
@@ -117,12 +118,14 @@ final class EditorBindings {
         var b = get(action);
         if (b.key() < 0) return false;
         var mc = Minecraft.getInstance();
-        long window = mc.getWindow().handle();
-        int modifiers = (mc.hasShiftDown() ? 1 : 0) | (mc.hasControlDown() ? 2 : 0) | (mc.hasAltDown() ? 4 : 0);
+        long window = ClientCompat.windowHandle();
+        int modifiers = (ClientCompat.shiftDown() ? 1 : 0)
+                | (ClientCompat.ctrlDown() ? 2 : 0)
+                | (ClientCompat.altDown() ? 4 : 0);
         return b.modifiers() == modifiers
                 && (b.mouse()
                         ? GLFW.glfwGetMouseButton(window, b.key()) == GLFW.GLFW_PRESS
-                        : com.mojang.blaze3d.platform.InputConstants.isKeyDown(mc.getWindow(), b.key()));
+                        : ClientCompat.keyDown(b.key()));
     }
 
     static String label(Action action) {

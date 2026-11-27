@@ -246,7 +246,7 @@ public final class EditorScreen extends CraftiumScreen {
 
         @Override
         public boolean shiftDown() {
-            return minecraft.hasShiftDown();
+            return ClientCompat.shiftDown();
         }
 
         @Override
@@ -3026,7 +3026,7 @@ public final class EditorScreen extends CraftiumScreen {
     private void selectionModeBadge(Gfx g) {
         // The badge belongs to the pointer: with the pointer hidden (a look, an arcball turn, a handle being dragged)
         // or outside the window, there is nothing for it to sit on.
-        if (cursorHidden || GLFW.glfwGetWindowAttrib(minecraft.getWindow().handle(), GLFW.GLFW_HOVERED) == 0) return;
+        if (cursorHidden || GLFW.glfwGetWindowAttrib(ClientCompat.windowHandle(), GLFW.GLFW_HOVERED) == 0) return;
         if (!toolActive
                 || !o().tool.selection()
                 || pipetting
@@ -3094,14 +3094,14 @@ public final class EditorScreen extends CraftiumScreen {
         if (mode == 1 && crosshairCursor == 0)
             crosshairCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_CROSSHAIR_CURSOR);
         if (mode == 2 && handCursor == 0) handCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_HAND_CURSOR);
-        GLFW.glfwSetCursor(minecraft.getWindow().handle(), mode == 2 ? handCursor : mode == 1 ? crosshairCursor : 0L);
+        GLFW.glfwSetCursor(ClientCompat.windowHandle(), mode == 2 ? handCursor : mode == 1 ? crosshairCursor : 0L);
     }
     /** Gives the pointer back as the ordinary arrow for whatever screen comes next: a cursor set here stays on the window until something resets it. */
     private void releaseCursor() {
         cursorShown = 0;
         if (minecraft == null || ClientState.selecting())
             return; // the spinner owns the pointer until the selection is worked out, and puts the arrow back itself
-        GLFW.glfwSetCursor(minecraft.getWindow().handle(), 0L);
+        GLFW.glfwSetCursor(ClientCompat.windowHandle(), 0L);
     }
     /** Whether the pointer is over a handle of a gizmo: the one being worked on, or the other corner's of a box selection. */
     private boolean gizmoHover() {
@@ -6193,7 +6193,7 @@ public final class EditorScreen extends CraftiumScreen {
                 width,
                 17,
                 () -> {
-                    if (minecraft.hasControlDown()) {
+                    if (ClientCompat.ctrlDown()) {
                         typing = new SliderArea(null, slider, key, integer);
                         entry.start(display);
                         selectingText = false;
@@ -6279,7 +6279,7 @@ public final class EditorScreen extends CraftiumScreen {
             var level = minecraft.level;
             var camera = dev.craftium.client.compat.ClientCompat.camera(minecraft);
             long tick = level == null ? 0 : level.getGameTime();
-            var eye = camera.position();
+            var eye = ClientCompat.cameraPosition(camera);
             var look = dev.craftium.client.compat.ClientCompat.ray(camera, 0, 0);
             var key = new double[] {pointerX, pointerY, eye.x, eye.y, eye.z, look.x, look.y, look.z, tick};
             if (!java.util.Arrays.equals(key, hitKey)) {
@@ -6412,7 +6412,7 @@ public final class EditorScreen extends CraftiumScreen {
         Vec3 centre = plane.getPointOnPlane(0, 0);
         double focal = height / (2 * Math.tan(Math.toRadians(ClientCompat.fov(minecraft, camera)) / 2));
         ScreenFootprint.view = new ScreenFootprint.View(
-                camera.position(),
+                ClientCompat.cameraPosition(camera),
                 centre.normalize(),
                 plane.getPointOnPlane(1, 0).subtract(centre).normalize(),
                 plane.getPointOnPlane(0, 1).subtract(centre).normalize(),
@@ -6432,7 +6432,7 @@ public final class EditorScreen extends CraftiumScreen {
         if (hit == null) return 0;
         var camera = ClientCompat.camera(minecraft);
         double depth = hit.getLocation()
-                .subtract(camera.position())
+                .subtract(ClientCompat.cameraPosition(camera))
                 .dot(ClientCompat.nearPlane(camera).getPointOnPlane(0, 0).normalize());
         if (depth <= .05) return 0;
         return height / (2 * Math.tan(Math.toRadians(ClientCompat.fov(minecraft, camera)) / 2)) / depth;
@@ -6548,8 +6548,8 @@ public final class EditorScreen extends CraftiumScreen {
             for (var a : sliderAreas)
                 if (a.key().equals(typing.key()) && a.control().contains(x, y) && event.button() == 0) {
                     double local = WorkspaceLayout.inverse(a.control().panel(), x, y)[0];
-                    if (minecraft.hasControlDown() || doubleClick) entry.selectAll();
-                    else entry.click(local, a.slider().x(), a.slider().width(), minecraft.hasShiftDown());
+                    if (ClientCompat.ctrlDown() || doubleClick) entry.selectAll();
+                    else entry.click(local, a.slider().x(), a.slider().width(), ClientCompat.shiftDown());
                     selectingText = true;
                     return true;
                 }
@@ -6643,7 +6643,7 @@ public final class EditorScreen extends CraftiumScreen {
                 String picked = BlockStateScreen.describe(minecraft.level.getBlockState(hit.getBlockPos()));
                 // Ctrl keeps the pipette in hand and adds each block to the palette; a plain click sets the foreground
                 // and puts it away.
-                if (minecraft.hasControlDown()) {
+                if (ClientCompat.ctrlDown()) {
                     if (ClientState.addToPalette(picked)) ClientState.notify("Added to the palette: " + picked);
                 } else {
                     pipetting = false;
@@ -6677,7 +6677,8 @@ public final class EditorScreen extends CraftiumScreen {
                     String id = "";
                     for (var entry : fields.entrySet()) if (entry.getValue() == selected) id = entry.getKey();
                     var point = WorkspaceLayout.inverse(WorkspaceLayout.fieldPanel(id), x, y);
-                    selected.mouseClicked(new MouseButtonEvent(point[0], point[1], event.buttonInfo()), doubleClick);
+                    ClientCompat.mouseClicked(
+                            selected, new MouseButtonEvent(point[0], point[1], event.buttonInfo()), doubleClick);
                     return true;
                 }
             }
@@ -6824,8 +6825,8 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if (EditorBindings.matches(Action.EXTRUDE_POINT, event) && perform(Action.EXTRUDE_POINT)) return true;
         if (event.button() == 0
-                && minecraft.hasControlDown()
-                && minecraft.hasAltDown()
+                && ClientCompat.ctrlDown()
+                && ClientCompat.altDown()
                 && toolActive
                 && BrushRing.shownFor(o().tool)
                 && !PlacementPreview.active()
@@ -6935,7 +6936,7 @@ public final class EditorScreen extends CraftiumScreen {
                 return true;
             }
         }
-        if (toolActive && o().tool.placesBlocks() && minecraft.hasAltDown()) {
+        if (toolActive && o().tool.placesBlocks() && ClientCompat.altDown()) {
             // Alt + the tool's button is an eyedropper: the clicked block becomes the foreground block, and joins the
             // palette.
             var use = EditorBindings.get(Action.USE_TOOL);
@@ -6993,7 +6994,7 @@ public final class EditorScreen extends CraftiumScreen {
         if (minecraft.player == null || wheel == 0 || !inViewport(x / scale, y / scale)) return;
         var camera = ClientCompat.camera(minecraft);
         var near = ClientCompat.nearPlane(camera);
-        Vec3 eye = camera.position();
+        Vec3 eye = ClientCompat.cameraPosition(camera);
         Vec3 ray = ClientCompat.ray(camera, (float) (x / minecraft.getWindow().getGuiScaledWidth() * 2 - 1), (float)
                 (1 - y / minecraft.getWindow().getGuiScaledHeight() * 2));
         var hit = CraftiumClient.raycast(x, y);
@@ -7233,7 +7234,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if (dragging != null) {
             double px = WorkspaceLayout.inverse(draggingSliderPanel, event.x() / scale, event.y() / scale)[0];
-            dragging.drag(px, sliderStartX, sliderStartValue, minecraft.hasControlDown(), minecraft.hasShiftDown());
+            dragging.drag(px, sliderStartX, sliderStartValue, ClientCompat.ctrlDown(), ClientCompat.shiftDown());
             return true;
         }
         if (help || transform || menu >= 0) return true;
@@ -7359,7 +7360,7 @@ public final class EditorScreen extends CraftiumScreen {
             entry.type(event.codepointAsString());
             return true;
         }
-        for (EditBox field : fields.values()) if (field.isFocused()) return field.charTyped(event);
+        for (EditBox field : fields.values()) if (field.isFocused()) return ClientCompat.charTyped(field, event);
         return false;
     }
     /** Keys currently held, so a repeat of a key already down (a movement key held while Ctrl goes down) is not read as a fresh shortcut such as Ctrl+D. */
@@ -7372,7 +7373,7 @@ public final class EditorScreen extends CraftiumScreen {
     }
     /** The gizmo axes the held X, Y and Z keys lock, as a mask: none while typing or with a modifier held, as Ctrl+X is Cut. */
     int axisLock() {
-        if (typing != null || minecraft.hasControlDown() || minecraft.hasAltDown()) return 0;
+        if (typing != null || ClientCompat.ctrlDown() || ClientCompat.altDown()) return 0;
         for (EditBox field : fields.values()) if (field.isFocused()) return 0;
         return (keysDown.contains(GLFW.GLFW_KEY_X) ? 1 : 0)
                 | (keysDown.contains(GLFW.GLFW_KEY_Y) ? 2 : 0)
@@ -7407,7 +7408,7 @@ public final class EditorScreen extends CraftiumScreen {
                     field.setFocused(false);
                     return true;
                 }
-                return field.keyPressed(event);
+                return ClientCompat.keyPressed(field, event);
             }
         if (confirm != null) {
             if (event.key() == GLFW.GLFW_KEY_ENTER) {
@@ -7429,7 +7430,7 @@ public final class EditorScreen extends CraftiumScreen {
                 return true;
             }
         }
-        if (CraftiumClient.editorKey.matches(event)) {
+        if (ClientCompat.matches(CraftiumClient.editorKey, event)) {
             onClose();
             return true;
         }
@@ -7508,7 +7509,7 @@ public final class EditorScreen extends CraftiumScreen {
         }
         if ((event.modifiers() & 7) == 0)
             for (var entry : CraftiumClient.toolKeys.entrySet())
-                if (entry.getValue().matches(event)) {
+                if (ClientCompat.matches(entry.getValue(), event)) {
                     select(entry.getKey());
                     return true;
                 }
@@ -7663,7 +7664,7 @@ public final class EditorScreen extends CraftiumScreen {
                     - (CraftiumClient.held(minecraft.options.keyLeft) ? 1 : 0),
             // Shift flies down, but not with Ctrl held: Ctrl+Shift is a shortcut, like Ctrl+Shift+Z, not a move.
             (CraftiumClient.held(minecraft.options.keyJump) ? 1 : 0)
-                    - (CraftiumClient.held(minecraft.options.keyShift) && !minecraft.hasControlDown() ? 1 : 0)
+                    - (CraftiumClient.held(minecraft.options.keyShift) && !ClientCompat.ctrlDown() ? 1 : 0)
         };
     }
 
@@ -7686,7 +7687,7 @@ public final class EditorScreen extends CraftiumScreen {
         if (grab == cursorHidden) return;
         cursorHidden = grab;
         GLFW.glfwSetInputMode(
-                minecraft.getWindow().handle(),
+                ClientCompat.windowHandle(),
                 GLFW.GLFW_CURSOR,
                 grab ? GLFW.GLFW_CURSOR_DISABLED : GLFW.GLFW_CURSOR_NORMAL);
     }
@@ -7720,7 +7721,7 @@ public final class EditorScreen extends CraftiumScreen {
         for (EditBox field : fields.values()) if (field.isFocused()) return;
         double[] axes = flightAxes();
         double forward = axes[0], side = axes[1], up = axes[2];
-        boolean moving = forward != 0 || side != 0 || up != 0, ctrl = minecraft.hasControlDown();
+        boolean moving = forward != 0 || side != 0 || up != 0, ctrl = ClientCompat.ctrlDown();
         // Ctrl only sprints when pressed after the player is already moving; pressed first it starts a chord, so it
         // does not move.
         // Holding a gizmo is no chord, so there Ctrl moves the player whichever was pressed first.
@@ -7731,7 +7732,7 @@ public final class EditorScreen extends CraftiumScreen {
         double yaw = Math.toRadians(player.getYRot());
         // Alt slows the camera like sneaking and Ctrl speeds it up like sprinting, both relative to the Fly speed
         // setting.
-        double modifier = minecraft.hasAltDown() ? .3 : sprinting ? 2.5 : 1;
+        double modifier = ClientCompat.altDown() ? .3 : sprinting ? 2.5 : 1;
         Vec3 direction = new Vec3(
                 -Math.sin(yaw) * forward - Math.cos(yaw) * side, up, Math.cos(yaw) * forward - Math.sin(yaw) * side);
         // Only with the right button held, forward follows where the camera looks, pitch included, like a first-person
@@ -8523,7 +8524,7 @@ public final class EditorScreen extends CraftiumScreen {
                         14,
                         rowHeight,
                         () -> {
-                            if (minecraft.hasAltDown()) foldGroupAll(group.id(), !folded);
+                            if (ClientCompat.altDown()) foldGroupAll(group.id(), !folded);
                             else ClientState.toggleGroupFolded(group.id());
                         },
                         HIDDEN_TIP + (folded ? "Show this group's BuildObjects" : "Fold this group's BuildObjects"));
@@ -8637,7 +8638,7 @@ public final class EditorScreen extends CraftiumScreen {
                         14,
                         rowHeight,
                         () -> {
-                            if (minecraft.hasAltDown()) foldAll(id, !folded); // as in Unity: everything under it too
+                            if (ClientCompat.altDown()) foldAll(id, !folded); // as in Unity: everything under it too
                             else ClientState.toggleSavedFolded(id);
                         },
                         HIDDEN_TIP
@@ -8658,7 +8659,7 @@ public final class EditorScreen extends CraftiumScreen {
                     rowHeight - 4,
                     "",
                     false,
-                    () -> eyeClick(entry, minecraft.hasControlDown()),
+                    () -> eyeClick(entry, ClientCompat.ctrlDown()),
                     (above ? "Out of the world while a BuildObject above it is hidden, whatever this eye says · " : "")
                             + (hidden
                                     ? "Put this BuildObject's blocks back in the world, where it is free · Ctrl+click does the same for everything under it"
@@ -8909,7 +8910,7 @@ public final class EditorScreen extends CraftiumScreen {
      * Shift and Ctrl together add every row shown from the last one clicked to this one. The editor's selection is all of the BuildObjects shown, together.
      */
     private void rowClick(dev.craftium.net.Packets.SavedSelection entry) {
-        boolean ctrl = minecraft.hasControlDown(), shift = minecraft.hasShiftDown();
+        boolean ctrl = ClientCompat.ctrlDown(), shift = ClientCompat.shiftDown();
         selectedGroup = 0; // a BuildObject chosen after a group takes the choice back
         var chosen = new ArrayList<Integer>();
         for (var e : hierarchyAll) if (e.active()) chosen.add(e.id());
@@ -9573,7 +9574,7 @@ public final class EditorScreen extends CraftiumScreen {
 
     private double[] project(Vec3 at) {
         var camera = ClientCompat.camera(minecraft);
-        Vec3 v = at.subtract(camera.position());
+        Vec3 v = at.subtract(ClientCompat.cameraPosition(camera));
         var plane = ClientCompat.nearPlane(camera);
         Vec3 center = plane.getPointOnPlane(0, 0);
         Vec3 right = plane.getPointOnPlane(1, 0).subtract(center).normalize(),

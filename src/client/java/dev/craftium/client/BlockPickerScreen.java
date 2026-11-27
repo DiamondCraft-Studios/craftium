@@ -481,7 +481,7 @@ public final class BlockPickerScreen extends CraftiumScreen {
     }
 
     private boolean altDown() {
-        long window = minecraft.getWindow().handle();
+        long window = ClientCompat.windowHandle();
         return org.lwjgl.glfw.GLFW.glfwGetKey(window, org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_ALT)
                         == org.lwjgl.glfw.GLFW.GLFW_PRESS
                 || org.lwjgl.glfw.GLFW.glfwGetKey(window, org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_ALT)
