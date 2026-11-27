@@ -70,6 +70,15 @@ public final class Platform {
         return FabricLoader.getInstance().isModLoaded(id);
     }
 
+    /**
+     * Runs {@code action}, which adds entries to the registry {@code registry}, while the loader takes entries for it.
+     * Fabric takes them at any time during startup, so this runs it now.
+     */
+    public static void onRegister(
+            net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<?>> registry, Runnable action) {
+        action.run();
+    }
+
     /** Registers a payload the server sends; {@code maxSize} is the largest it may encode to. */
     public static <T extends CustomPacketPayload> void clientbound(
             CustomPacketPayload.Type<T> type, StreamCodec<RegistryFriendlyByteBuf, T> codec, int maxSize) {

@@ -13,7 +13,11 @@ public final class Craftium {
 
     /** Sets up the shared server side; the loader's entrypoint calls this once at startup. */
     public static void init() {
-        dev.craftium.server.MissingBlocks.register();
+        Platform.onRegister(
+                net.minecraft.core.registries.Registries.BLOCK, dev.craftium.server.MissingBlocks::registerBlock);
+        Platform.onRegister(
+                net.minecraft.core.registries.Registries.BLOCK_ENTITY_TYPE,
+                dev.craftium.server.MissingBlocks::registerBlockEntity);
         Platform.onServerStarting(dev.craftium.server.MissingBlocks::bind);
         Platform.onServerStopped(server -> dev.craftium.server.MissingBlocks.unbind());
         dev.craftium.runtime.ServerPlatform.install(

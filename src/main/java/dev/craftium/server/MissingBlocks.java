@@ -22,15 +22,22 @@ public final class MissingBlocks {
     public static BlockEntityType<MissingBlockEntity> TYPE;
     private static volatile MissingBlockTable table;
 
-    public static void register() {
+    /** Registers the placeholder block; the loader calls this while it takes blocks. */
+    public static void registerBlock() {
         var id = Compat.id("craftium", "missing_block");
-        var key = ResourceKey.create(Registries.BLOCK, id);
         BLOCK = Registry.register(
                 BuiltInRegistries.BLOCK,
                 id,
-                new MissingBlock(Compat.blockProperties(key).strength(1.0F)));
+                new MissingBlock(Compat.blockProperties(ResourceKey.create(Registries.BLOCK, id))
+                        .strength(1.0F)));
+    }
+
+    /** Registers the placeholder's block entity, after {@link #registerBlock}. */
+    public static void registerBlockEntity() {
         TYPE = Registry.register(
-                BuiltInRegistries.BLOCK_ENTITY_TYPE, id, Compat.blockEntityType(MissingBlockEntity::new, BLOCK));
+                BuiltInRegistries.BLOCK_ENTITY_TYPE,
+                Compat.id("craftium", "missing_block"),
+                Compat.blockEntityType(MissingBlockEntity::new, BLOCK));
     }
 
     /** Loads the table of the world the server opened. Chunks load right after, so this comes first. */
