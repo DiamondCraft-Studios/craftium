@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.compat.Nbt;
 import java.util.*;
 import net.minecraft.core.registries.*;
@@ -11,7 +12,7 @@ final class AssetNbt {
     private AssetNbt() {}
 
     static int current() {
-        return net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version();
+        return Compat.dataVersion();
     }
 
     static CompoundTag upgrade(
@@ -69,7 +70,7 @@ final class AssetNbt {
         if (MissingBlocks.exists(name)) return new BlockSnapshot(state(tag, p), data);
         var properties = new TreeMap<String, String>();
         var source = Nbt.getCompoundOrEmpty(tag, "Properties");
-        for (String key : source.keySet()) properties.put(key, Nbt.getStringOr(source, key, ""));
+        for (String key : Nbt.keySet(source)) properties.put(key, Nbt.getStringOr(source, key, ""));
         return missing(new dev.craftium.core.MissingBlockTable.Entry(name, properties), data);
     }
     /** Same for a block written as text, like {@code mod:stone[axis=y]}. */
@@ -130,11 +131,11 @@ final class AssetNbt {
     /** The block entity data a file holds for the block: what the real block had, for a placeholder. */
     static CompoundTag fileData(BlockSnapshot s) {
         if (standsFor(s) == null) return s.data();
-        return s.data().getCompound(MissingBlockRewrite.KEPT).orElse(null);
+        return Nbt.getCompound(s.data(), MissingBlockRewrite.KEPT).orElse(null);
     }
 
     static CompoundTag blockEntity(CompoundTag source, int version, EditPlanner p) {
-        var tag = source.getCompound("Data").orElse(source).copy();
+        var tag = Nbt.getCompound(source, "Data").orElse(source).copy();
         String id = Nbt.getStringOr(source, "Id", Nbt.getStringOr(tag, "id", ""));
         if (id.isBlank()) throw new IllegalArgumentException("Schematic block entity is missing its type");
         tag.putString("id", id);
@@ -159,7 +160,7 @@ final class AssetNbt {
                 tag = Nbt.getCompoundOrEmpty(entry, "nbt").copy();
                 tag.put("Pos", Nbt.getListOrEmpty(entry, "pos").copy());
             } else {
-                tag = entry.getCompound("Data").orElse(entry).copy();
+                tag = Nbt.getCompound(entry, "Data").orElse(entry).copy();
                 String id = Nbt.getStringOr(entry, "Id", Nbt.getStringOr(tag, "id", ""));
                 tag.putString("id", id);
                 tag.remove("Id");

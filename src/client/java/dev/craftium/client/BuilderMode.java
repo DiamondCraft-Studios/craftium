@@ -3,6 +3,7 @@ package dev.craftium.client;
 import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.Gfx;
 import dev.craftium.client.compat.Overlay;
+import dev.craftium.compat.Compat;
 import dev.craftium.core.*;
 import java.util.*;
 import net.minecraft.client.Minecraft;
@@ -196,7 +197,7 @@ public final class BuilderMode {
         if (steps == 0) return enabled;
         wheel -= steps;
         if (!enabled) {
-            int slot = mc.player.getInventory().getSelectedSlot();
+            int slot = Compat.selectedSlot(mc.player.getInventory());
             if (slot == 8 && steps < 0 || slot == 0 && steps > 0) {
                 enable();
                 return true;
@@ -214,7 +215,7 @@ public final class BuilderMode {
         }
         if (first == null || second == null) {
             enabled = false;
-            mc.player.getInventory().setSelectedSlot(steps > 0 ? 8 : 0);
+            Compat.selectSlot(mc.player.getInventory(), steps > 0 ? 8 : 0);
             clear();
             return true;
         }
@@ -265,7 +266,7 @@ public final class BuilderMode {
         var look = Minecraft.getInstance().player.getLookAngle();
         boolean x = down(GLFW.GLFW_KEY_X), y = down(GLFW.GLFW_KEY_Y), z = down(GLFW.GLFW_KEY_Z);
         if (!x && !y && !z) {
-            Direction d = Direction.getApproximateNearest(look.x, look.y, look.z);
+            Direction d = Compat.nearest(look.x, look.y, look.z);
             return new Point(d.getStepX(), d.getStepY(), d.getStepZ());
         }
         return new Point(x ? look.x >= 0 ? 1 : -1 : 0, y ? look.y >= 0 ? 1 : -1 : 0, z ? look.z >= 0 ? 1 : -1 : 0);
@@ -281,7 +282,7 @@ public final class BuilderMode {
         if (down(GLFW.GLFW_KEY_X)) return look.x >= 0 ? Direction.EAST : Direction.WEST;
         if (down(GLFW.GLFW_KEY_Y)) return look.y >= 0 ? Direction.UP : Direction.DOWN;
         if (down(GLFW.GLFW_KEY_Z)) return look.z >= 0 ? Direction.SOUTH : Direction.NORTH;
-        return Direction.getApproximateNearest(look.x, look.y, look.z);
+        return Compat.nearest(look.x, look.y, look.z);
     }
 
     private static boolean down(int key) {

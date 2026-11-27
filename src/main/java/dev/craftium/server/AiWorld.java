@@ -83,13 +83,13 @@ final class AiWorld {
         var at = new BlockPos.MutableBlockPos();
         for (int z = z0; z <= z1; z++)
             for (int x = x0; x <= x1; x++) {
-                if (!level.getWorldBorder().isWithinBounds(at.set(x, level.getMinY(), z))) {
+                if (!level.getWorldBorder().isWithinBounds(at.set(x, Compat.minY(level), z))) {
                     heights.add(Integer.MIN_VALUE);
                     blocks.add(-1);
                     continue;
                 }
                 int top = level.getHeight(type, x, z) - 1;
-                if (top < level.getMinY()) {
+                if (top < Compat.minY(level)) {
                     heights.add(Integer.MIN_VALUE);
                     blocks.add(-1);
                     continue;
@@ -479,7 +479,7 @@ final class AiWorld {
     /** Fills {@code ids} with the world's blocks in the box, chunk by chunk, the world border and height limits reading as outside the world. */
     private static void fillFromWorld(
             ServerLevel level, Palette palette, int[] ids, int x0, int y0, int z0, int x1, int y1, int z1) {
-        int sx = x1 - x0 + 1, sz = z1 - z0 + 1, minY = level.getMinY(), maxY = minY + level.getHeight();
+        int sx = x1 - x0 + 1, sz = z1 - z0 + 1, minY = Compat.minY(level), maxY = minY + level.getHeight();
         var at = new BlockPos.MutableBlockPos();
         var border = level.getWorldBorder();
         var inside =
@@ -557,7 +557,7 @@ final class AiWorld {
 
         @Override
         public String at(int x, int y, int z) {
-            if (y < level.getMinY() || y >= level.getMinY() + level.getHeight()) return BlockRuns.OUTSIDE;
+            if (y < Compat.minY(level) || y >= Compat.minY(level) + level.getHeight()) return BlockRuns.OUTSIDE;
             int cx = x >> 4, cz = z >> 4;
             long key = ((long) cx << 32)
                     | (cz & 0xffffffffL); // our own key: ChunkPos's differs between Minecraft versions

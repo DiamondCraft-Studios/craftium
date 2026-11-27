@@ -2,6 +2,7 @@ package dev.craftium.client;
 
 import com.google.gson.*;
 import dev.craftium.Craftium;
+import dev.craftium.compat.Compat;
 import dev.craftium.core.Point;
 import dev.craftium.net.Packets;
 import java.io.*;
@@ -821,8 +822,8 @@ public final class AiBridge {
             var level = mc.level;
             var world = new JsonObject();
             world.addProperty("dimension", dev.craftium.compat.Compat.keyName(level.dimension()));
-            world.addProperty("minY", level.getMinY());
-            world.addProperty("maxY", level.getMinY() + level.getHeight() - 1);
+            world.addProperty("minY", Compat.minY(level));
+            world.addProperty("maxY", Compat.minY(level) + level.getHeight() - 1);
             world.addProperty("seaLevel", level.getSeaLevel());
             world.addProperty(
                     "biome",

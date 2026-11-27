@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.compat.Nbt;
 import dev.craftium.core.*;
 import dev.craftium.runtime.ServerPlatform;
@@ -240,9 +241,7 @@ final class BlueprintLibrary {
         }
         if (palette.isEmpty())
             palette.add(NbtUtils.writeBlockState(net.minecraft.world.level.block.Blocks.AIR.defaultBlockState()));
-        root.putInt(
-                "DataVersion",
-                net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());
+        root.putInt("DataVersion", Compat.dataVersion());
         root.put("size", ints(sx, sy, sz));
         root.put("palette", palette);
         root.put("blocks", blocks);
@@ -261,9 +260,7 @@ final class BlueprintLibrary {
         if ((long) sx * sy * sz > Selection.LIMIT)
             throw new IllegalArgumentException("Schematic bounding volume is too large");
         root.putInt("Version", 2);
-        root.putInt(
-                "DataVersion",
-                net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());
+        root.putInt("DataVersion", Compat.dataVersion());
         root.putShort("Width", (short) sx);
         root.putShort("Height", (short) sy);
         root.putShort("Length", (short) sz);
@@ -323,13 +320,13 @@ final class BlueprintLibrary {
                         new Point(Nbt.getIntOr(at, 0, 0), Nbt.getIntOr(at, 1, 0), Nbt.getIntOr(at, 2, 0)),
                         AssetNbt.snapshot(
                                 Nbt.getCompoundOrEmpty(palette, state),
-                                block.getCompound("nbt").orElse(null),
+                                Nbt.getCompound(block, "nbt").orElse(null),
                                 p));
             }
         } else {
-            int sx = root.getShort("Width").orElse((short) 0) & 0xffff,
-                    sy = root.getShort("Height").orElse((short) 0) & 0xffff,
-                    sz = root.getShort("Length").orElse((short) 0) & 0xffff;
+            int sx = Nbt.getShort(root, "Width").orElse((short) 0) & 0xffff,
+                    sy = Nbt.getShort(root, "Height").orElse((short) 0) & 0xffff,
+                    sz = Nbt.getShort(root, "Length").orElse((short) 0) & 0xffff;
             if (sx == 0 || sy == 0 || sz == 0 || (long) sx * sy * sz > Selection.LIMIT)
                 throw new IllegalArgumentException("Invalid schematic dimensions");
             var dataRoot = root.contains("Blocks") && root.get("Blocks") instanceof CompoundTag
@@ -337,11 +334,11 @@ final class BlueprintLibrary {
                     : root;
             var palette = Nbt.getCompoundOrEmpty(dataRoot, "Palette");
             var states = new HashMap<Integer, BlockSnapshot>();
-            for (String key : palette.keySet())
+            for (String key : Nbt.keySet(palette))
                 states.put(
                         Nbt.getIntOr(palette, key, 0),
                         AssetNbt.snapshot(key, Nbt.getIntOr(root, "DataVersion", AssetNbt.current()), p));
-            byte[] data = dataRoot.getByteArray(Nbt.getIntOr(root, "Version", 2) >= 3 ? "Data" : "BlockData")
+            byte[] data = Nbt.getByteArray(dataRoot, Nbt.getIntOr(root, "Version", 2) >= 3 ? "Data" : "BlockData")
                     .orElse(new byte[0]);
             int cursor = 0;
             for (int i = 0; i < sx * sy * sz; i++) {
@@ -360,7 +357,7 @@ final class BlueprintLibrary {
             var entities = Nbt.getListOrEmpty(dataRoot, "BlockEntities");
             for (int i = 0; i < entities.size(); i++) {
                 var tag = Nbt.getCompoundOrEmpty(entities, i);
-                var coordinates = tag.getIntArray("Pos").orElse(new int[0]);
+                var coordinates = Nbt.getIntArray(tag, "Pos").orElse(new int[0]);
                 if (coordinates.length == 3) {
                     Point at = new Point(coordinates[0], coordinates[1], coordinates[2]);
                     var old = result.get(at);
@@ -378,15 +375,15 @@ final class BlueprintLibrary {
     }
 
     private static CompoundTag upgradeLegacy(CompoundTag source, EditPlanner p) {
-        int sx = source.getShort("Width").orElse((short) 0) & 65535,
-                sy = source.getShort("Height").orElse((short) 0) & 65535,
-                sz = source.getShort("Length").orElse((short) 0) & 65535;
+        int sx = Nbt.getShort(source, "Width").orElse((short) 0) & 65535,
+                sy = Nbt.getShort(source, "Height").orElse((short) 0) & 65535,
+                sz = Nbt.getShort(source, "Length").orElse((short) 0) & 65535;
         long volume = (long) sx * sy * sz;
         if (volume < 1 || volume > Selection.LIMIT)
             throw new IllegalArgumentException("Invalid legacy schematic dimensions");
-        byte[] ids = source.getByteArray("Blocks").orElseThrow(),
-                metadata = source.getByteArray("Data").orElseThrow(),
-                extra = source.getByteArray("AddBlocks").orElse(new byte[0]);
+        byte[] ids = Nbt.getByteArray(source, "Blocks").orElseThrow(),
+                metadata = Nbt.getByteArray(source, "Data").orElseThrow(),
+                extra = Nbt.getByteArray(source, "AddBlocks").orElse(new byte[0]);
         if (ids.length != volume || metadata.length != volume || (extra.length > 0 && extra.length < (volume + 1) / 2))
             throw new IllegalArgumentException("Truncated legacy schematic");
         var palette = new ListTag();

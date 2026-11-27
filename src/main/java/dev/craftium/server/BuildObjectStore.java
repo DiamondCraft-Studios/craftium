@@ -242,16 +242,16 @@ final class BuildObjectStore {
     /** The cells {@link #putCells} wrote, or none when absent. A store that does not add up throws, so the file is kept as .bad like any damaged one. */
     static PackedCells readCells(CompoundTag tag, String name) {
         var c = Nbt.getCompoundOrEmpty(tag, name);
-        long[] keys = c.getLongArray("cells").orElse(new long[0]);
+        long[] keys = Nbt.getLongArray(c, "cells").orElse(new long[0]);
         if (keys.length == 0) return PackedCells.EMPTY;
         if (keys.length > SavedSelections.Tree.STOWED_LIMIT) // one hidden by an eye keeps up to twice as many
         throw new IllegalArgumentException("Invalid BuildObject dormant blocks");
         var states = List.of(Nbt.getStringOr(c, "states", "").split("\n", -1));
-        long[] dataKeys = c.getLongArray("dataCells").orElse(new long[0]);
+        long[] dataKeys = Nbt.getLongArray(c, "dataCells").orElse(new long[0]);
         var list = Nbt.getListOrEmpty(c, "data");
         var texts = new ArrayList<String>();
         for (int i = 0; i < list.size(); i++) texts.add(Nbt.getStringOr(Nbt.getCompoundOrEmpty(list, i), "v", ""));
-        return PackedCells.of(keys, states, c.getIntArray("index").orElse(new int[0]), dataKeys, texts);
+        return PackedCells.of(keys, states, Nbt.getIntArray(c, "index").orElse(new int[0]), dataKeys, texts);
     }
 
     static SavedSelections.Tree load(Path file) {
@@ -265,7 +265,7 @@ final class BuildObjectStore {
             var rows = new ArrayList<SavedSelections.Saved>();
             for (int i = 0; i < list.size(); i++) {
                 var tag = Nbt.getCompoundOrEmpty(list, i);
-                int[] flat = tag.getIntArray("points").orElse(new int[0]);
+                int[] flat = Nbt.getIntArray(tag, "points").orElse(new int[0]);
                 if (flat.length % 3 != 0 || flat.length / 3 > Selection.LIMIT)
                     throw new IllegalArgumentException("Invalid BuildObject blocks");
                 var points = new ArrayList<Point>(flat.length / 3);

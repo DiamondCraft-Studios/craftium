@@ -156,7 +156,7 @@ final class BedrockBlockEntities {
     /** Appends the plain text of a Java text component (a string, JSON text or a compound), and says whether all of it was plain. */
     static boolean text(Tag tag, StringBuilder out) {
         if (tag instanceof StringTag string) {
-            String value = string.value();
+            String value = Nbt.value(string);
             if (value.startsWith("{") || value.startsWith("[") || value.startsWith("\"")) {
                 try {
                     return json(JsonParser.parseString(value), out);

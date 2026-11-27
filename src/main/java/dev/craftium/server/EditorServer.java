@@ -922,7 +922,7 @@ public final class EditorServer {
                 // What is in the hand is not thrown away: the block goes to the first empty hotbar slot, which is then
                 // the one held. Only a full hotbar replaces the held item.
                 var inventory = player.getInventory();
-                int slot = inventory.getSelectedSlot();
+                int slot = Compat.selectedSlot(inventory);
                 if (!inventory.getItem(slot).isEmpty())
                     for (int i = 0; i < 9; i++)
                         if (inventory.getItem(i).isEmpty()) {
@@ -930,7 +930,7 @@ public final class EditorServer {
                             break;
                         }
                 inventory.setItem(slot, new net.minecraft.world.item.ItemStack(item));
-                inventory.setSelectedSlot(slot);
+                Compat.selectSlot(inventory, slot);
                 player.inventoryMenu.broadcastChanges();
                 return;
             }
@@ -1065,22 +1065,9 @@ public final class EditorServer {
                     if (target == null) throw new IllegalArgumentException("Point at a block first");
                     var pos = EditPlanner.pos(target);
                     var state = Compat.level(player).getBlockState(pos);
-                    var stack = state.getCloneItemStack(Compat.level(player), pos, true);
+                    var stack = Compat.pickBlock(Compat.level(player), pos, state);
                     if (stack.isEmpty()) throw new IllegalArgumentException("This block has no item");
-                    var properties = net.minecraft.world.item.component.BlockItemStateProperties.EMPTY;
-                    for (var property : state.getProperties()) properties = properties.with(property, state);
-                    stack.set(net.minecraft.core.component.DataComponents.BLOCK_STATE, properties);
-                    var entity = Compat.level(player).getBlockEntity(pos);
-                    if (entity != null) {
-                        var out = net.minecraft.world.level.storage.TagValueOutput.createWithContext(
-                                net.minecraft.util.ProblemReporter.DISCARDING,
-                                Compat.level(player).registryAccess());
-                        entity.saveCustomOnly(out);
-                        entity.removeComponentsFromTag(out);
-                        net.minecraft.world.item.BlockItem.setBlockEntityData(stack, entity.getType(), out);
-                        stack.applyComponents(entity.collectComponents());
-                    }
-                    player.getInventory().setItem(player.getInventory().getSelectedSlot(), stack);
+                    player.getInventory().setItem(Compat.selectedSlot(player.getInventory()), stack);
                     player.inventoryMenu.broadcastChanges();
                     send(player, s, "Copied block state and data to hotbar", false);
                 }
@@ -1463,9 +1450,7 @@ public final class EditorServer {
                 case "rotate", "flip", "flip_facing" -> {
                     var look = player.getLookAngle();
                     int axis = r.action().equals("flip_facing")
-                            ? net.minecraft.core.Direction.getApproximateNearest(look.x, look.y, look.z)
-                                    .getAxis()
-                                    .ordinal()
+                            ? Compat.nearest(look.x, look.y, look.z).getAxis().ordinal()
                             : 0;
                     transform(player, s, r.action().equals("rotate"), axis);
                 }
@@ -3308,7 +3293,7 @@ public final class EditorServer {
             chunk.fillBiomesFromNoise(
                     (x, y, z, sampler) -> replacements.getOrDefault(new Point(x, y, z), chunk.getNoiseBiome(x, y, z)),
                     j.level.getChunkSource().randomState().sampler());
-            chunk.markUnsaved();
+            Compat.markUnsaved(chunk);
             chunks.add(chunk);
         }
         if (!chunks.isEmpty()) j.level.getChunkSource().chunkMap.resendBiomesForChunks(chunks);

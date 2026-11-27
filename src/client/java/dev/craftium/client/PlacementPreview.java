@@ -1,5 +1,6 @@
 package dev.craftium.client;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.*;
 import java.util.*;
 import net.minecraft.world.phys.Vec3;
@@ -159,7 +160,7 @@ public final class PlacementPreview {
             for (; distance < drop; distance++) {
                 var at = new net.minecraft.core.BlockPos(
                         origin.x() + p.x(), origin.y() + p.y() - distance - 1, origin.z() + p.z());
-                if (at.getY() < mc.level.getMinY()
+                if (at.getY() < Compat.minY(mc.level)
                         || !mc.level.hasChunk(at.getX() >> 4, at.getZ() >> 4)
                         || !mc.level
                                 .getBlockState(at)

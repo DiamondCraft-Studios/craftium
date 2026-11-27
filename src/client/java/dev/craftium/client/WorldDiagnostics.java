@@ -2,6 +2,7 @@ package dev.craftium.client;
 
 import dev.craftium.client.compat.ClientCompat;
 import dev.craftium.client.compat.Overlay;
+import dev.craftium.compat.Compat;
 import java.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -22,8 +23,9 @@ final class WorldDiagnostics {
         for (int x = cx - 3; x <= cx + 3; x++)
             for (int y = cy - 2; y <= cy + 2; y++)
                 for (int z = cz - 3; z <= cz + 3; z++) {
-                    if (y * 4 < mc.level.getMinY() || y * 4 >= mc.level.getMaxY() || !mc.level.hasChunk(x >> 2, z >> 2))
-                        continue;
+                    if (y * 4 < Compat.minY(mc.level)
+                            || y * 4 >= Compat.maxY(mc.level)
+                            || !mc.level.hasChunk(x >> 2, z >> 2)) continue;
                     String biome = mc.level
                             .getNoiseBiome(x, y, z)
                             .unwrapKey()

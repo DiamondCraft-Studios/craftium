@@ -70,11 +70,7 @@ final class HistoryStore {
         try {
             var root = NbtIo.readCompressed(session.historyPath, NbtAccounter.create(3L * Selection.HISTORY_BYTES));
             int format = Nbt.getIntOr(root, "format", 0);
-            if (format != 1 && format != FORMAT
-                    || Nbt.getIntOr(root, "DataVersion", 0)
-                            != net.minecraft.SharedConstants.getCurrentVersion()
-                                    .dataVersion()
-                                    .version())
+            if (format != 1 && format != FORMAT || Nbt.getIntOr(root, "DataVersion", 0) != Compat.dataVersion())
                 throw new IllegalArgumentException("History version differs from this Minecraft build");
             var undo = readEdits(Nbt.getListOrEmpty(root, "undo"), player, format);
             var redo = readEdits(Nbt.getListOrEmpty(root, "redo"), player, format);
@@ -143,11 +139,7 @@ final class HistoryStore {
         try {
             var root = new CompoundTag();
             root.putInt("format", FORMAT);
-            root.putInt(
-                    "DataVersion",
-                    net.minecraft.SharedConstants.getCurrentVersion()
-                            .dataVersion()
-                            .version());
+            root.putInt("DataVersion", Compat.dataVersion());
             root.put("undo", edits(snapshot.undo));
             root.put("redo", edits(snapshot.redo));
             Files.createDirectories(snapshot.file.getParent());
@@ -182,11 +174,12 @@ final class HistoryStore {
         if (!net.minecraft.core.registries.BuiltInRegistries.BLOCK.containsKey(id))
             throw new IllegalArgumentException("History uses missing block " + id);
         return new BlockSnapshot(
-                NbtUtils.readBlockState(blocks, state), tag.getCompound("data").orElse(null));
+                NbtUtils.readBlockState(blocks, state),
+                Nbt.getCompound(tag, "data").orElse(null));
     }
 
     private static Point point(CompoundTag tag, String name) {
-        int[] coordinates = tag.getIntArray(name).orElseThrow();
+        int[] coordinates = Nbt.getIntArray(tag, name).orElseThrow();
         if (coordinates.length != 3) throw new IllegalArgumentException("Invalid history position");
         return new Point(coordinates[0], coordinates[1], coordinates[2]);
     }
@@ -266,8 +259,8 @@ final class HistoryStore {
             var item = Nbt.getCompoundOrEmpty(list, i);
             int id = Nbt.getIntOr(item, "id", 0);
             if (id <= 0) throw new IllegalArgumentException("Invalid stored BuildObject id");
-            before.put(id, unflatten(item.getIntArray("before").orElse(new int[0])));
-            after.put(id, unflatten(item.getIntArray("after").orElse(new int[0])));
+            before.put(id, unflatten(Nbt.getIntArray(item, "before").orElse(new int[0])));
+            after.put(id, unflatten(Nbt.getIntArray(item, "after").orElse(new int[0])));
         }
         return Session.SelectionChange.restoring(Map.of(), Map.of()).withObjects(before, after);
     }
@@ -386,11 +379,11 @@ final class HistoryStore {
     /** The block changes {@link #blocks} wrote, packed again when the palette fits, without making a change object for each block. */
     static List<Session.Change> readBlocks(
             CompoundTag tag, net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> blocks) {
-        int[] x = tag.getIntArray("x").orElse(new int[0]),
-                y = tag.getIntArray("y").orElse(new int[0]),
-                z = tag.getIntArray("z").orElse(new int[0]),
-                before = tag.getIntArray("before").orElse(new int[0]),
-                after = tag.getIntArray("after").orElse(new int[0]);
+        int[] x = Nbt.getIntArray(tag, "x").orElse(new int[0]),
+                y = Nbt.getIntArray(tag, "y").orElse(new int[0]),
+                z = Nbt.getIntArray(tag, "z").orElse(new int[0]),
+                before = Nbt.getIntArray(tag, "before").orElse(new int[0]),
+                after = Nbt.getIntArray(tag, "after").orElse(new int[0]);
         int n = x.length;
         if (n > Selection.LIMIT) throw new IllegalArgumentException("Stored edit exceeds cell limit");
         if (y.length != n || z.length != n || before.length != n || after.length != n)
@@ -466,8 +459,8 @@ final class HistoryStore {
                 var item = Nbt.getCompoundOrEmpty(entries, j);
                 entities.add(new Session.EntityChange(
                         UUID.fromString(Nbt.getStringOr(item, "uuid", "")),
-                        item.getCompound("before").orElse(null),
-                        item.getCompound("after").orElse(null),
+                        Nbt.getCompound(item, "before").orElse(null),
+                        Nbt.getCompound(item, "after").orElse(null),
                         Nbt.getBooleanOr(item, "moving", false)));
             }
             var notes = Packets.JSON.fromJson(Nbt.getStringOr(tag, "annotations", "[]"), Annotation.Change[].class);

@@ -5,6 +5,7 @@ import dev.craftium.client.compat.CraftiumScreen;
 import dev.craftium.client.compat.Gfx;
 import dev.craftium.client.interaction.EditorContext;
 import dev.craftium.client.interaction.Interactions;
+import dev.craftium.compat.Compat;
 import dev.craftium.core.*;
 import dev.craftium.core.EditorControls.Action;
 import java.util.*;
@@ -3884,7 +3885,7 @@ public final class EditorScreen extends CraftiumScreen {
         // What is in the hand is not thrown away: the block goes to the first empty hotbar slot, which is then the one
         // held. Only a full hotbar replaces the held item.
         var inventory = minecraft.player.getInventory();
-        int slot = inventory.getSelectedSlot();
+        int slot = Compat.selectedSlot(inventory);
         if (!inventory.getItem(slot).isEmpty())
             for (int i = 0; i < 9; i++)
                 if (inventory.getItem(i).isEmpty()) {
@@ -3892,7 +3893,7 @@ public final class EditorScreen extends CraftiumScreen {
                     break;
                 }
         minecraft.gameMode.handleCreativeModeItemAdd(new net.minecraft.world.item.ItemStack(item), 36 + slot);
-        inventory.setSelectedSlot(slot);
+        Compat.selectSlot(inventory, slot);
     }
     /** Ends a drag from a block cell: a plain click does what the cell does, a drop in the world bucket fills where it lands. */
     private void finishBlockDrag(MouseButtonEvent event) {
@@ -5296,8 +5297,8 @@ public final class EditorScreen extends CraftiumScreen {
                         o.flattenPick,
                         () -> o.flattenPick = !o.flattenPick,
                         "Each stroke takes its level from the block it starts on and keeps it while held · off: use Target Y");
-                int low = minecraft.level == null ? -64 : minecraft.level.getMinY(),
-                        high = minecraft.level == null ? 319 : minecraft.level.getMaxY();
+                int low = minecraft.level == null ? -64 : Compat.minY(minecraft.level),
+                        high = minecraft.level == null ? 319 : Compat.maxY(minecraft.level);
                 slider(
                         g,
                         10,

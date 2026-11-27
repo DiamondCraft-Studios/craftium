@@ -74,4 +74,38 @@ public final class Nbt {
     public static ListTag getListOrEmpty(ListTag list, int index) {
         return list.getListOrEmpty(index);
     }
+
+    public static java.util.Optional<CompoundTag> getCompound(CompoundTag tag, String key) {
+        return tag.getCompound(key);
+    }
+
+    public static java.util.Optional<Short> getShort(CompoundTag tag, String key) {
+        return tag.getShort(key);
+    }
+
+    public static java.util.Optional<int[]> getIntArray(CompoundTag tag, String key) {
+        return tag.getIntArray(key);
+    }
+
+    public static java.util.Optional<long[]> getLongArray(CompoundTag tag, String key) {
+        return tag.getLongArray(key);
+    }
+
+    public static java.util.Optional<byte[]> getByteArray(CompoundTag tag, String key) {
+        return tag.getByteArray(key);
+    }
+
+    public static java.util.Set<String> keySet(CompoundTag tag) {
+        return tag.keySet();
+    }
+
+    public static String value(net.minecraft.nbt.StringTag tag) {
+        return tag.value();
+    }
+
+    /** Reads SNBT text, such as {@code {Name:"x"}}, into a compound tag. */
+    public static CompoundTag parseCompoundFully(String text)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        return net.minecraft.nbt.TagParser.parseCompoundFully(text);
+    }
 }

@@ -6,18 +6,16 @@ import dev.craftium.core.*;
 import java.util.*;
 import net.minecraft.nbt.*;
 import net.minecraft.server.level.*;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.*;
-import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.phys.AABB;
 
 final class EntityEdits {
     private EntityEdits() {}
 
     static CompoundTag snapshot(Entity entity, ServerLevel level) {
-        var out = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
-        if (!entity.save(out)) throw new IllegalArgumentException("Entity cannot be saved");
-        return out.buildResult();
+        CompoundTag saved = Compat.saveEntity(entity, level);
+        if (saved == null) throw new IllegalArgumentException("Entity cannot be saved");
+        return saved;
     }
 
     static boolean editable(Entity entity) {
@@ -43,7 +41,7 @@ final class EntityEdits {
                 if (!Set.of("block_display", "item_display", "text_display", "marker")
                         .contains(o.entityType))
                     throw new IllegalArgumentException("Choose a block, item, text display or marker");
-                var tag = TagParser.parseCompoundFully(o.entityNbt);
+                var tag = Nbt.parseCompoundFully(o.entityNbt);
                 tag.putString("id", "minecraft:" + o.entityType);
                 tag.remove("UUID");
                 tag.remove("Passengers");
@@ -73,7 +71,7 @@ final class EntityEdits {
             switch (action) {
                 case "entity_delete" -> after = null;
                 case "entity_update" -> {
-                    after.merge(TagParser.parseCompoundFully(o.entityNbt));
+                    after.merge(Nbt.parseCompoundFully(o.entityNbt));
                     after.putString("id", Nbt.getStringOr(before, "id", ""));
                     after.put("UUID", before.get("UUID"));
                     after.remove("Passengers");

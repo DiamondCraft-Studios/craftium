@@ -74,15 +74,15 @@ public final class BlueprintFileVoxels {
     }
 
     private static Described sponge(CompoundTag root) {
-        int sx = root.getShort("Width").orElse((short) 0) & 0xffff,
-                sy = root.getShort("Height").orElse((short) 0) & 0xffff,
-                sz = root.getShort("Length").orElse((short) 0) & 0xffff;
+        int sx = Nbt.getShort(root, "Width").orElse((short) 0) & 0xffff,
+                sy = Nbt.getShort(root, "Height").orElse((short) 0) & 0xffff,
+                sz = Nbt.getShort(root, "Length").orElse((short) 0) & 0xffff;
         if (sx == 0 || sy == 0 || sz == 0 || root.get("Blocks") instanceof ByteArrayTag) return null;
         var data = root.get("Blocks") instanceof CompoundTag blocks ? blocks : root;
         var palette = Nbt.getCompoundOrEmpty(data, "Palette");
         var names = new java.util.HashMap<Integer, String>();
-        for (String key : palette.keySet()) names.put(Nbt.getIntOr(palette, key, 0), base(key));
-        byte[] bytes = data.getByteArray(Nbt.getIntOr(root, "Version", 2) >= 3 ? "Data" : "BlockData")
+        for (String key : Nbt.keySet(palette)) names.put(Nbt.getIntOr(palette, key, 0), base(key));
+        byte[] bytes = Nbt.getByteArray(data, Nbt.getIntOr(root, "Version", 2) >= 3 ? "Data" : "BlockData")
                 .orElse(new byte[0]);
         var builder = new BlueprintVoxels.Builder();
         int cursor = 0;

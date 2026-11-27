@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.core.*;
 import java.awt.Font;
 import java.awt.RenderingHints;
@@ -167,7 +168,7 @@ final class AdvancedTools {
                             p.put(v, p.material);
                     if (o.extendToGround) {
                         int y = at.y() - 1;
-                        while (y >= p.level.getMinY()
+                        while (y >= Compat.minY(p.level)
                                 && p.state(new Point(at.x(), y, at.z())).isAir())
                             p.put(new Point(at.x(), y--, at.z()), p.material);
                     }
@@ -327,7 +328,7 @@ final class AdvancedTools {
         }
 
         public int minY() {
-            return p.level.getMinY();
+            return Compat.minY(p.level);
         }
     }
 

@@ -11,7 +11,6 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.LevelResource;
 
@@ -29,7 +28,7 @@ public final class MissingBlocks {
         BLOCK = Registry.register(
                 BuiltInRegistries.BLOCK,
                 id,
-                new MissingBlock(BlockBehaviour.Properties.of().setId(key).strength(1.0F)));
+                new MissingBlock(Compat.blockProperties(key).strength(1.0F)));
         TYPE = Registry.register(
                 BuiltInRegistries.BLOCK_ENTITY_TYPE, id, Compat.blockEntityType(MissingBlockEntity::new, BLOCK));
     }

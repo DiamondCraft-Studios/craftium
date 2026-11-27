@@ -38,7 +38,7 @@ final class PaletteLibrary {
                 var saved = store().save(
                                 entry.name(),
                                 entry.author() == null || entry.author().isBlank()
-                                        ? player.getGameProfile().name()
+                                        ? Compat.profileName(player.getGameProfile())
                                         : entry.author(),
                                 player.getUUID().toString(),
                                 entry.blocks(),

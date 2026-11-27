@@ -16,7 +16,7 @@ final class BedrockBlocks {
         var tag = NbtUtils.writeBlockState(state);
         var properties = new TreeMap<String, String>();
         var source = Nbt.getCompoundOrEmpty(tag, "Properties");
-        for (String key : source.keySet()) properties.put(key, Nbt.getStringOr(source, key, ""));
+        for (String key : Nbt.keySet(source)) properties.put(key, Nbt.getStringOr(source, key, ""));
         return BedrockBlockTable.get().toBedrock(Nbt.getStringOr(tag, "Name", ""), properties);
     }
 

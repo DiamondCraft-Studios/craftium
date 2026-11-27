@@ -45,7 +45,7 @@ public final class MissingBlockRewrite {
                 }
                 var properties = new TreeMap<String, String>();
                 var tag = Nbt.getCompoundOrEmpty(entry, "Properties");
-                for (String property : tag.keySet()) properties.put(property, Nbt.getStringOr(tag, property, ""));
+                for (String property : Nbt.keySet(tag)) properties.put(property, Nbt.getStringOr(tag, property, ""));
                 keys[j] = table.intern(new MissingBlockTable.Entry(name, properties));
                 missing++;
             }
@@ -140,7 +140,7 @@ public final class MissingBlockRewrite {
     /** The palette number of each of the 4096 cells, or null when the section is one block throughout (it has no data then). */
     static int[] indices(CompoundTag states, int paletteSize) {
         if (paletteSize <= 1) return null;
-        long[] data = states.getLongArray("data").orElse(null);
+        long[] data = Nbt.getLongArray(states, "data").orElse(null);
         if (data == null) return null;
         int bits = bits(paletteSize), perLong = 64 / bits;
         long mask = (1L << bits) - 1;

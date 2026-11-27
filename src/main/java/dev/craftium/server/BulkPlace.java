@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -10,7 +11,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.lighting.LightEngine;
 
 /**
  * Writes the blocks of one chunk in a single pass. {@code Level.setBlock} brings the chunk's heightmaps and sky light sources up
@@ -72,10 +72,10 @@ public final class BulkPlace {
             positions.add(pos);
             before.add(old);
             after.add(wanted.state());
-            if (LightEngine.hasDifferentLightProperties(old, wanted.state())) lightChanged = true;
+            if (Compat.lightDiffers(level, pos, old, wanted.state())) lightChanged = true;
         }
         if (positions.isEmpty()) return;
-        chunk.markUnsaved();
+        Compat.markUnsaved(chunk);
         blocksWritten += positions.size();
         Heightmap.primeHeightmaps(chunk, HEIGHTMAPS);
         var chunkSource = level.getChunkSource();
@@ -85,8 +85,8 @@ public final class BulkPlace {
             boolean empty = sections[i].hasOnlyAir();
             if (empty == emptyBefore[i]) continue;
             lighting.updateSectionStatus(touched[i], empty);
-            chunkSource.onSectionEmptinessChanged(
-                    touched[i].getX() >> 4, touched[i].getY() >> 4, touched[i].getZ() >> 4, empty);
+            Compat.sectionEmptinessChanged(
+                    chunkSource, touched[i].getX() >> 4, touched[i].getY() >> 4, touched[i].getZ() >> 4, empty);
         }
         // The light engine reads these sources when it runs a check, so they are right before any check is queued.
         if (lightChanged) chunk.getSkyLightSources().fillFrom(chunk);
@@ -95,10 +95,10 @@ public final class BulkPlace {
             BlockPos pos = positions.get(i);
             var old = before.get(i);
             var state = after.get(i);
-            if (LightEngine.hasDifferentLightProperties(old, state)) lighting.checkBlock(pos);
+            if (Compat.lightDiffers(level, pos, old, state)) lighting.checkBlock(pos);
             level.setBlocksDirty(pos, old, state);
             if (send) level.sendBlockUpdated(pos, old, state, Block.UPDATE_CLIENTS);
-            level.updatePOIOnBlockStateChange(pos, old, state);
+            Compat.blockStateChanged(level, pos, old, state);
         }
     }
 }

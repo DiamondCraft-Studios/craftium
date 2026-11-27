@@ -1,5 +1,6 @@
 package dev.craftium.server;
 
+import dev.craftium.compat.Compat;
 import dev.craftium.compat.Nbt;
 import dev.craftium.core.*;
 import java.util.*;
@@ -349,9 +350,7 @@ final class StructureBuilder {
                     }
                     blocks.add(block);
                 }
-        root.putInt(
-                "DataVersion",
-                net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());
+        root.putInt("DataVersion", Compat.dataVersion());
         root.put("size", ints(sizeX, sizeY, sizeZ));
         root.put("palette", palette);
         root.put("blocks", blocks);
@@ -370,9 +369,7 @@ final class StructureBuilder {
     CompoundTag schematicNbt() {
         var root = new CompoundTag();
         root.putInt("Version", 2);
-        root.putInt(
-                "DataVersion",
-                net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());
+        root.putInt("DataVersion", Compat.dataVersion());
         root.putShort("Width", (short) sizeX);
         root.putShort("Height", (short) sizeY);
         root.putShort("Length", (short) sizeZ);
