@@ -15,3 +15,6 @@ project(':versions:26.2').name = 'mc-26.2'
 
 include('versions:1.21.10')
 project(':versions:1.21.10').name = 'mc-1.21.10'
+
+include('versions:1.21.1')
+project(':versions:1.21.1').name = 'mc-1.21.1'

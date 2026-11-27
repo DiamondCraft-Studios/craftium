@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "craftium",
+  "version": "${version}",
+  "name": "Craftium",
+  "description": "A creative building studio: selection, painting, sculpting and terrain tools in a familiar docked workspace.",
+  "authors": ["Craftium contributors"],
+  "license": "GPL-3.0-only",
+  "icon": "assets/craftium/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["dev.craftium.fabric.CraftiumFabric"],
+    "client": ["dev.craftium.fabric.CraftiumFabricClient"]
+  },
+  "mixins": ["craftium.mixins.json", {"config":"craftium.client.mixins.json","environment":"client"}],
+  "depends": {
+    "fabricloader": ">=0.17.0",
+    "minecraft": "1.21.1",
+    "java": ">=21",
+    "fabric-api": ">=0.116.0"
+  }
+}
